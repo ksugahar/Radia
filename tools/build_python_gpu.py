@@ -133,6 +133,12 @@ def cuda_libraries(cuda, windows):
             [("cudart", "libcudart.so.12"), ("cublas", "libcublas.so.12"), ("cusolver", "libcusolver.so.11")]}
 
 
+def hdiv_source_hashes():
+    """Bind nested CMake fragments as well as the numerical/host sources."""
+    return {p.relative_to(ROOT).as_posix(): sha(p)
+            for p in HDIV.rglob("*") if p.is_file()}
+
+
 def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
     """NGSolve owns host compile definitions/includes/link ABI; nvcc stays separate."""
     import shutil
@@ -159,6 +165,16 @@ def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
     if not binary.is_file():
         raise RuntimeError("HDiv host build did not produce the exact Python ABI artifact")
     (out / "hdiv-sdk-private.json").write_text(json.dumps({str(p): sha(p) for p in (ng, netgen)}, indent=2) + "\n")
+    archive = out / ("radia_hdiv_kernels.lib" if platform.system() == "Windows" else "libradia_hdiv_kernels.a")
+    if not archive.is_file():
+        raise RuntimeError("HDiv host build did not produce the shared numerical archive")
+    with archive.open("rb") as stream:
+        if stream.read(8) != b"!<arch>\n" or archive.stat().st_size <= 8:
+            raise RuntimeError("Invalid HDiv numerical archive")
+    # Build artifacts only: never add an archive or CUDA runtime to the wheel.
+    return {"cuda_object": {"name": cuda_object.name, "sha256": sha(cuda_object)},
+            "static_archive": {"name": archive.name, "sha256": sha(archive)}}
+
 
 
 def main():
@@ -189,7 +205,7 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     source_hashes = {str((CORE / name).relative_to(ROOT)).replace("\\", "/"): sha(CORE / name) for name in SOURCES}
     # HDiv sources have one owner and are also consumed by the MEX gateways.
-    source_hashes.update({p.relative_to(ROOT).as_posix(): sha(p) for p in HDIV.iterdir() if p.is_file()})
+    source_hashes.update(hdiv_source_hashes())
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
     header_hashes = {p.relative_to(include).as_posix(): sha(p) for p in (include / "pybind11").rglob("*") if p.is_file()}
     commands = []
@@ -209,7 +225,7 @@ def main():
             cuda_command += ["-Xcompiler", "-fPIC"]
         execute(cuda_command, out, module + "-cuda", commands)
         if module == "_hdiv_cuda":
-            build_hdiv_host(args, binary, obj, include, cuda, out, commands)
+            hdiv_artifacts = build_hdiv_host(args, binary, obj, include, cuda, out, commands)
         elif windows:
             command = [args.host_compiler, "/nologo", "/LD", "/EHsc", "/MD", "/O2", "/fp:precise", "/std:c++20", "/utf-8",
                        "/I" + str(include), "/I" + sysconfig.get_path("include"),
@@ -239,7 +255,8 @@ def main():
         private_receipt.write_text(json.dumps(dict(source_commit=commit, binary_sha256=sha(binary),
             admission=record, commands=commands[:], source_root=str(ROOT), cuda_root=str(cuda),
             host_compiler_path=str(args.host_compiler), pybind_include=str(include),
-            ngsolve_sdk_sha256=sha(out / "hdiv-sdk-private.json") if module == "_hdiv_cuda" else None), indent=2) + "\n", encoding="utf-8")
+            ngsolve_sdk_sha256=sha(out / "hdiv-sdk-private.json") if module == "_hdiv_cuda" else None,
+            hdiv_kernel_artifacts=hdiv_artifacts if module == "_hdiv_cuda" else None), indent=2) + "\n", encoding="utf-8")
         receipt = dict(schema="radia.native-build-provenance.v1", source_commit=commit, source_dirty=False,
                        binary_name=binary.name, binary_sha256=sha(binary), source_hashes=source_hashes,
                        pybind_header_hashes=header_hashes, python=sys.version, platform=platform.platform(),
