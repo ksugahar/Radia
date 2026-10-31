@@ -38,3 +38,10 @@ def test_measurement_rejects_wrong_material_identity_and_rotated_roi():
         measure_volume_fin(model, solution, rotated, quadrature_order=32, convention='explicit')
     with pytest.raises(ValueError, match='convention'):
         measure_volume_fin(model, solution, roi, quadrature_order=32, convention='')
+
+
+@pytest.mark.parametrize('nodes', [np.array([[-1, 0], [0, 2]]), np.array([[3, 0], [0, 2]])])
+def test_invalid_connectivity_rejected_before_native(nodes):
+    model = replace(topology(), branches=nodes)
+    with pytest.raises(ValueError, match='branch node index'):
+        solve_volume_fin(model, frequency_hz=5000., drive_current_peak_A=1., quadrature_order=32)
