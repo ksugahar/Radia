@@ -2798,16 +2798,26 @@ bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,i
     };
     for(int c:tc)if(!eligible(c))return false;
     for(int c:sc)if(!eligible(c))return false;
-    // Image pairs: every non-far P1 image pair (the far ones never reach
-    // here: ImageFarPair routes them first, exactly like direct far pairs)
-    // takes the graded rule.  No geometric radius: a near-coincident image
-    // (a host a small distance off the plane) and its direct term then share
-    // one rule, so value and shape derivative are continuous in the distance.
-    if (img!=0) return true;
     const double* a=kindT==0?&m_cellV[(size_t)hostT*12]:&m_faceV[(size_t)hostT*9];
     const double* b=kindS==0?&m_cellV[(size_t)hostS*12]:&m_faceV[(size_t)hostS*9];
-    for(int i=0;i<(kindT?3:4);++i)for(int j=0;j<(kindS?3:4);++j)
-        if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])return true;
+    if (img==0) {
+        for(int i=0;i<(kindT?3:4);++i)for(int j=0;j<(kindS?3:4);++j)
+            if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])return true;
+        return false;
+    }
+    // Image pair (target, T(source)) takes the rule of the same direct pair
+    // in the unfolded model: graded iff a mapped source vertex coincides with
+    // a target vertex.  Coincidence holds to roundoff only (a plane vertex
+    // reflects onto itself exactly, a sector vertex onto its partner), while
+    // distinct vertices are a whole element apart.
+    const double tol=1e-9*(m_size[tc[0]]+m_size[sc[0]]);
+    for(int j=0;j<(kindS?3:4);++j){
+        double corner[3];ImageApplyVector(img,b+3*j,corner);
+        for(int i=0;i<(kindT?3:4);++i){
+            const double dx=corner[0]-a[3*i],dy=corner[1]-a[3*i+1],dz=corner[2]-a[3*i+2];
+            if(dx*dx+dy*dy+dz*dz<=tol*tol)return true;
+        }
+    }
     return false;
 }
 
