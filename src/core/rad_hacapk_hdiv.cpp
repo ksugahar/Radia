@@ -391,6 +391,12 @@ static void rad_inv2x2(const double A[4], double Ai[4])    // inverse of a row-m
 // charge-Gram matches the independent analytic reference).  Shared by the tet analytic ctor (outer quad on the
 // tet itself) and the polytope ctor (outer quad on each centroid-fan sub-tet).
 #include "rad_charge_quadrature.h"
+#include "gpu/hdiv/hdiv_p1_diagonal_input.hpp"
+#define RADIA_P1_KERNEL
+#define RADIA_P1_FIELD rad_hdiv
+#include "gpu/hdiv/hdiv_p1_diagonal_math.inc"
+#undef RADIA_P1_FIELD
+#undef RADIA_P1_KERNEL
 
 static void ValidateImageVectors(const std::vector<int>& image_masks,
                                  const std::vector<double>& image_signs);
@@ -2235,6 +2241,19 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
+    // Only affine P1 self/touching pairs take the graded outer rule.
+    // Far, curved, higher-degree, image and derivative paths keep their rules.
+    double p1value;
+    if (P1TouchEntry(targets[0], sources[0], p1value)) {
+        bool eligible = true;
+        for (int lt=0; lt<nT && eligible; ++lt)
+            for (int ls=0; ls<nS; ++ls)
+                if (!P1TouchEntry(targets[lt], sources[ls], block[(size_t)lt*nS+ls])) {
+                    eligible=false; break;
+                }
+        if (eligible) return block;
+        std::fill(block.begin(), block.end(), 0.0);
+    }
     if (m_curved && CurvedDirectEnabled() && !CurvedHostsTouch(kindT, hostT, kindS, hostS))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS);
 
@@ -2700,8 +2719,37 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
     return rad_hdiv::TriPotential(V, p);
 }
 
+bool RadHACApKChargeGram::P1TouchEntry(int tgt,int src,double& value) const
+{
+    if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo) return false;
+    const auto eligible=[&](int charge){
+        const int* e=&m_expo[(size_t)3*charge];
+        return e[0]>=0 && e[1]>=0 && e[2]==0 &&
+            e[0]+e[1]<=(m_kind[charge]==1?1:0);
+    };
+    if (!eligible(tgt) || !eligible(src)) return false;
+    const auto vertices=[&](int charge){return m_kind[charge]==0?
+        &m_cellV[(size_t)m_host[charge]*12]:&m_faceV[(size_t)m_host[charge]*9];};
+    const double* a=vertices(tgt);const double* b=vertices(src);
+    bool touching=false;
+    for(int i=0;i<(m_kind[tgt]?3:4);++i)for(int j=0;j<(m_kind[src]?3:4);++j)
+        if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])touching=true;
+    if(!touching)return false;
+    const auto pack=[&](int charge){
+        radia_hdiv_python::P1Charge input;input.kind=m_kind[charge];
+        std::copy_n(vertices(charge),input.kind?9:12,input.vertices.begin());
+        std::copy_n(&m_expo[(size_t)3*charge],3,input.exponent.begin());
+        return radia_hdiv_python::p1ChargeSource(input);
+    };
+    value=radia_hdiv_p1_diagonal::pairEntry(pack(tgt),pack(src));
+    if(!std::isfinite(value))throw std::runtime_error("Nonfinite P1 touching integral");
+    return true;
+}
+
 double RadHACApKChargeGram::QuadDot(int tgt, int src) const
 {
+    double refined;
+    if(P1TouchEntry(tgt,src,refined))return refined;
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
     if (m_highorder && m_nmono[tgt] > 1) {
