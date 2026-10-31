@@ -83,7 +83,7 @@ def _input_cell_roi_heat(edges, sigma, supports, axes, currents, slabs):
     return power
 
 
-def test_mixed_volume_region_measurement_contract(record_property):
+def test_mixed_volume_region_measurement_contract(record_testsuite_property):
     # Different widths in every coordinate expose width/height interchange.
     edges = tuple(np.array(e)*1e-3 for e in (
         (-1.1, -.15, .9), (-.8, .2, 1.35), (-.4, .05, .65)))
@@ -129,7 +129,7 @@ def test_mixed_volume_region_measurement_contract(record_property):
             'green_partition_difference_H': measured['green_partition_difference_H'],
             'original_partial_L_H': solved.partial_inductance_H,
             'heat_partition_difference_W': measured['heat_partition_difference_W']}.items():
-        record_property(name, json.dumps(value, allow_nan=False))
+        record_testsuite_property(name, json.dumps(value, allow_nan=False))
     assert all(value > 0 for value in axis_norms), axis_norms
     assert all(value > 0 for value in expected.values()), expected
     np.testing.assert_allclose(
