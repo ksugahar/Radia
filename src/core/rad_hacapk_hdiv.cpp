@@ -2241,9 +2241,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
-    // Only affine P1 self/touching host pairs take the graded outer rule.
+    // Affine P1 pairs are served by the scalar QuadDot/QuadDotRefl route
+    // only (m_hoAnalyticBlock needs a degree>=2 face mode); a P1 block here
+    // would silently take the fixed outer rule.
     if (P1TouchHosts(kindT, hostT, kindS, hostS, 0))
-        return P1TouchBlock(kindT, hostT, kindS, hostS, 0);
+        throw std::logic_error("P1 graded pair reached the host-block route");
     if (m_curved && CurvedDirectEnabled() && !CurvedHostsTouch(kindT, hostT, kindS, hostS))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS);
 
@@ -2279,12 +2281,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
     // near-singular potential is integrated exactly like the direct touching pair of the full model.  An
     // on-plane face maps onto itself point by point, so its image self block is evaluated at the SAME outer
     // points by the SAME rule as its direct self block and the antisymmetric fold cancels to roundoff.
+    // Affine P1 pairs are served by the scalar QuadDot/QuadDotRefl route
+    // only (m_hoAnalyticBlock needs a degree>=2 face mode); a P1 block here
+    // would silently take the fixed outer rule.
+    if (P1TouchHosts(kindT, hostT, kindS, hostS, img))
+        throw std::logic_error("P1 graded pair reached the host-block route");
     if (m_curved && CurvedDirectEnabled() && !ImageHostsTouch(kindT, hostT, kindS, hostS, img))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS, img);
-    // A touching affine P1 image pair (an on-plane face and its own image, a
-    // cell across the mirror) is singular like the direct pair: same rule.
-    if (P1TouchHosts(kindT, hostT, kindS, hostS, img))
-        return P1TouchBlock(kindT, hostT, kindS, hostS, img);
 
     // Every target mode on one host owns the same outer points.  Map those
     // points through the inverse image once, evaluate every co-located
@@ -2475,7 +2478,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         for(double&x:b)x*=RAD_INV_FOUR_PI;
         return b;
     };
-    // Exact directional derivative of P1TouchBlock: the graded outer points
+    // Exact directional derivative of the graded rule (P1TouchEntryValue): the outer points
     // are affine images of FIXED reference points, so dx is the affine
     // velocity interpolation, the measure scales by its rate and the target
     // monomial (a reference coordinate) is constant.  The source potential
@@ -2787,24 +2790,12 @@ bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,i
     };
     for(int c:tc)if(!eligible(c))return false;
     for(int c:sc)if(!eligible(c))return false;
-    if (img!=0) {
-        // Image near field, not exact touching: a host a roundoff-to-small
-        // distance off the plane is nearly coincident with its own image, and
-        // a direct-minus-image fold only cancels when both terms take the same
-        // rule.  Graded rule once any image corner lies within the mean host
-        // size of a target corner (routing radius, not an accuracy criterion).
-        const double* a=kindT==0?&m_cellV[(size_t)hostT*12]:&m_faceV[(size_t)hostT*9];
-        const double* b=kindS==0?&m_cellV[(size_t)hostS*12]:&m_faceV[(size_t)hostS*9];
-        const double radius=0.5*(m_size[tc[0]]+m_size[sc[0]]);
-        for(int j=0;j<(kindS?3:4);++j){
-            double corner[3];ImageApplyVector(img,b+3*j,corner);
-            for(int i=0;i<(kindT?3:4);++i){
-                const double dx=corner[0]-a[3*i],dy=corner[1]-a[3*i+1],dz=corner[2]-a[3*i+2];
-                if(dx*dx+dy*dy+dz*dz<=radius*radius)return true;
-            }
-        }
-        return false;
-    }
+    // Image pairs: every non-far P1 image pair (the far ones never reach
+    // here: ImageFarPair routes them first, exactly like direct far pairs)
+    // takes the graded rule.  No geometric radius: a near-coincident image
+    // (a host a small distance off the plane) and its direct term then share
+    // one rule, so value and shape derivative are continuous in the distance.
+    if (img!=0) return true;
     const double* a=kindT==0?&m_cellV[(size_t)hostT*12]:&m_faceV[(size_t)hostT*9];
     const double* b=kindS==0?&m_cellV[(size_t)hostS*12]:&m_faceV[(size_t)hostS*9];
     for(int i=0;i<(kindT?3:4);++i)for(int j=0;j<(kindS?3:4);++j)
@@ -2836,16 +2827,6 @@ double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
     const double value=radia_hdiv_p1_diagonal::pairEntry(target,source);
     if(!std::isfinite(value))throw std::runtime_error("Nonfinite P1 touching integral");
     return value;
-}
-
-std::vector<double> RadHACApKChargeGram::P1TouchBlock(int kindT,int hostT,int kindS,int hostS,int img) const
-{
-    const auto& tc=kindT==0?m_hoCellCharges[hostT]:m_hoFaceCharges[hostT];
-    const auto& sc=kindS==0?m_hoCellCharges[hostS]:m_hoFaceCharges[hostS];
-    std::vector<double> block(tc.size()*sc.size());
-    for(size_t i=0;i<tc.size();++i)for(size_t j=0;j<sc.size();++j)
-        block[i*sc.size()+j]=P1TouchEntryValue(tc[i],sc[j],img);
-    return block;
 }
 
 double RadHACApKChargeGram::QuadDot(int tgt, int src) const
