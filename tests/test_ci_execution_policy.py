@@ -415,8 +415,10 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert "link the same objects/library from plain mex/matlab_add_mex" in policy
     assert all("mexcuda" not in line.lower() or "retired" in line.lower() for line in agents)
     assert "NGSolve-inherited DLLs" in policy
-    assert "numerical default: 1 thread" in policy
-    assert "TaskManager/OpenMP/MKL: explicit opt-in" in policy
+    assert "CPU numerical default: 1 thread for independent optimization runs" in policy
+    assert "multithreading supported, explicit 8-physical-core large-solve profile" in policy
+    assert "GPU-first; measure speed per case" in policy
+    assert "Log TaskManager/OpenMP/MKL limits" in policy
     assert "GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback" in policy
     assert "Text: UTF-8/LF" in policy
     assert "Keep management, sequential RNG" in policy
