@@ -296,19 +296,22 @@ def _ngsolve_affine(trafo, eltype, ndim):
     """Reconstruct the (affine) NGSolve element map P = P0 + Jng @ pt from its ElementTransformation, by fitting
     a few IntegrationRule evaluations.  pt is in NGSolve's reference frame.
 
-    NGSolve's scalar ``ElementTransformation`` path can return a transient,
-    uninitialised point on its first touch after a different element topology
-    was used in the same TaskManager.  Accept two consecutive finite,
-    bit-identical fits only; the retry is cheap compared with the subsequent
-    per-element change-of-basis and prevents a bad affine map from poisoning
-    the HDiv charge basis.
+    A mapped point's ``point`` is a borrowed view which does not keep its
+    mapped owner alive.  Hold that owner until its coordinates are copied;
+    reading ``trafo(p).point`` after the temporary owner dies is unsafe.
+    Accept two consecutive finite, bit-identical fits only; this stability
+    guard does not replace the ownership requirement.
     """
     ir = ng.IntegrationRule(eltype, 2)
     rp = np.array([list(p.point)[:ndim] for p in ir])
     A = np.hstack([rp, np.ones((len(rp), 1))])
     previous = None
     for attempt in range(16):
-        Pp = np.array([list(trafo(p).point) for p in ir])
+        points = []
+        for p in ir:
+            mapped = trafo(p)
+            points.append(np.array(mapped.point, dtype=float, copy=True))
+        Pp = np.array(points)
         X, *_ = np.linalg.lstsq(A, Pp, rcond=None)           # [Jng^T (ndim rows) ; P0]
         fitted = np.hstack([X[ndim, :], X[:ndim, :].T.ravel()])
         if (previous is not None and np.all(np.isfinite(fitted))
