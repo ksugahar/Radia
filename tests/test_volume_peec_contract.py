@@ -85,3 +85,9 @@ def test_native_geometry_preserves_support_and_series_resistance():
     np.testing.assert_allclose(geometry['lengths']/(
         geometry['sigmas']*geometry['widths']*geometry['heights']),
         model.resistance_ohm, rtol=2e-15)
+
+
+@pytest.mark.parametrize('order', [0,7,257,True,32.5])
+def test_volume_entry_never_selects_filament_default(order):
+    with pytest.raises(ValueError, match='finite-volume quadrature'):
+        bar().native_builder(quadrature_order=order)

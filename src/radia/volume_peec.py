@@ -62,6 +62,10 @@ class VolumePEECTopology:
         Native import/build identity remains the caller's responsibility.
         Missing/new-API-mismatched artifacts raise rather than select filaments.
         """
+        if (isinstance(quadrature_order, (bool, np.bool_))
+                or not isinstance(quadrature_order, (int, np.integer))
+                or not 8 <= quadrature_order <= 256):
+            raise ValueError('Explicit finite-volume quadrature order must be integer 8..256')
         from . import peec_matrices
         builder = peec_matrices.PEECBuilder(volume_order=quadrature_order)
         geometry = self.native_geometry()
