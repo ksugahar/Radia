@@ -2241,19 +2241,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
-    // Only affine P1 self/touching pairs take the graded outer rule.
-    // Far, curved, higher-degree, image and derivative paths keep their rules.
-    double p1value;
-    if (P1TouchEntry(targets[0], sources[0], p1value)) {
-        bool eligible = true;
-        for (int lt=0; lt<nT && eligible; ++lt)
-            for (int ls=0; ls<nS; ++ls)
-                if (!P1TouchEntry(targets[lt], sources[ls], block[(size_t)lt*nS+ls])) {
-                    eligible=false; break;
-                }
-        if (eligible) return block;
-        std::fill(block.begin(), block.end(), 0.0);
-    }
+    // Only affine P1 self/touching host pairs take the graded outer rule.
+    if (P1TouchHosts(kindT, hostT, kindS, hostS, 0))
+        return P1TouchBlock(kindT, hostT, kindS, hostS, 0);
     if (m_curved && CurvedDirectEnabled() && !CurvedHostsTouch(kindT, hostT, kindS, hostS))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS);
 
@@ -2291,6 +2281,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
     // points by the SAME rule as its direct self block and the antisymmetric fold cancels to roundoff.
     if (m_curved && CurvedDirectEnabled() && !ImageHostsTouch(kindT, hostT, kindS, hostS, img))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS, img);
+    // A touching affine P1 image pair (an on-plane face and its own image, a
+    // cell across the mirror) is singular like the direct pair: same rule.
+    if (P1TouchHosts(kindT, hostT, kindS, hostS, img))
+        return P1TouchBlock(kindT, hostT, kindS, hostS, img);
 
     // Every target mode on one host owns the same outer points.  Map those
     // points through the inverse image once, evaluate every co-located
@@ -2349,6 +2343,13 @@ std::vector<double> RadHACApKChargeGram::TetVolumeSelfBlockDirectionalDerivative
     if(!m_highorder||m_curved||m_hexmode||m_polyCombo)throw std::logic_error("TET volume derivative requires a flat polynomial TET charge Gram");
     if(host<0||host>=(int)m_hoCellCharges.size())throw std::out_of_range("TET host out of range");
     if(velocity.size()!=12)throw std::invalid_argument("vertex_velocity must have shape (4,3)");
+    // A P1 host takes the graded self rule of its value path: differentiate
+    // that rule (direct block only), never the fixed outer rule below.
+    if(P1TouchHosts(0,host,0,host,0)){
+        std::vector<double> cv(m_hoCellCharges.size()*12,0.0),fv(m_hoFaceCharges.size()*9,0.0);
+        std::copy(velocity.begin(),velocity.end(),cv.begin()+(size_t)host*12);
+        return TetChargeGramDirectionalDerivativeImpl(cv,fv,host,host,false);
+    }
     const auto& g=m_hoCellCharges[host];const int n=(int)g.size();std::vector<double> out((size_t)n*n),inner(n),innerv(n);
     const double* V0=&m_cellV[(size_t)host*12];double V[4][3],dV[4][3],E[9],dE[9],I[9],dI[9];
     for(int a=0;a<4;++a)for(int k=0;k<3;++k){V[a][k]=V0[3*a+k];dV[a][k]=velocity[3*a+k];}
@@ -2370,6 +2371,13 @@ std::vector<double> RadHACApKChargeGram::TetFaceSelfBlockDirectionalDerivative(
     if(!m_highorder||m_curved||m_hexmode||m_polyCombo)throw std::logic_error("TET face derivative requires a flat polynomial TET charge Gram");
     if(host<0||host>=(int)m_hoFaceCharges.size())throw std::out_of_range("TET face host out of range");
     if(velocity.size()!=9)throw std::invalid_argument("vertex_velocity must have shape (3,3)");
+    // A P1 host takes the graded self rule of its value path: differentiate
+    // that rule (direct block only), never the fixed outer rule below.
+    if(P1TouchHosts(1,host,1,host,0)){
+        std::vector<double> cv(m_hoCellCharges.size()*12,0.0),fv(m_hoFaceCharges.size()*9,0.0);
+        std::copy(velocity.begin(),velocity.end(),fv.begin()+(size_t)host*9);
+        return TetChargeGramDirectionalDerivativeImpl(cv,fv,(int)m_hoCellCharges.size()+host,(int)m_hoCellCharges.size()+host,false);
+    }
     const auto& g=m_hoFaceCharges[host];const int n=(int)g.size();std::vector<double> out((size_t)n*n),inner(n),innerv(n);
     const double* s=&m_faceV[(size_t)host*9];double V[3][3],dV[3][3],a[2][3],da[2][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k){V[i][k]=s[3*i+k];dV[i][k]=velocity[3*i+k];}for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=V[c+1][k]-V[0][k];da[c][k]=dV[c+1][k]-dV[0][k];}
     double G[4],dG[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){G[2*i+j]=dG[2*i+j]=0;for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}}
@@ -2390,7 +2398,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivative(
 
 std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
-    int selected_host_a,int selected_host_b) const
+    int selected_host_a,int selected_host_b,bool include_images) const
 {
     if(!m_highorder||m_curved||m_hexmode||m_wedgemode)
         throw std::logic_error("TET ChargeGram derivative requires a flat polynomial TET charge Gram");
@@ -2467,6 +2475,41 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         for(double&x:b)x*=RAD_INV_FOUR_PI;
         return b;
     };
+    // Exact directional derivative of P1TouchBlock: the graded outer points
+    // are affine images of FIXED reference points, so dx is the affine
+    // velocity interpolation, the measure scales by its rate and the target
+    // monomial (a reference coordinate) is constant.  The source potential
+    // and its derivative come from the same analytic moments as `directed`.
+    double gx8[8],gw8[8],gx12[12],gw12[12];
+    radia_hdiv_p1_diagonal::gradedRule<8>(gx8,gw8);
+    radia_hdiv_p1_diagonal::gradedRule<12>(gx12,gw12);
+    auto graded=[&](int kt,int ht,int ks,int hs,int img){
+        const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
+        const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
+        const int N=kt?12:8;const double*x=kt?gx12:gx8,*w=kt?gw12:gw8;
+        const double*s=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
+        const double*ds=kt==0?&cell_velocity[(size_t)ht*12]:&face_velocity[(size_t)ht*9];
+        double e[3][3]={},de[3][3]={};
+        for(int v=0;v<(kt?2:3);++v)for(int k=0;k<3;++k){e[v][k]=s[3*(v+1)+k]-s[k];de[v][k]=ds[3*(v+1)+k]-ds[k];}
+        double cr[3]={e[0][1]*e[1][2]-e[0][2]*e[1][1],e[0][2]*e[1][0]-e[0][0]*e[1][2],e[0][0]*e[1][1]-e[0][1]*e[1][0]};
+        const double measure=kt?std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]):
+            std::fabs(cr[0]*e[2][0]+cr[1]*e[2][1]+cr[2]*e[2][2]);
+        double p0[3]={s[0],s[1],s[2]},dp0[3],rate;target_kinematics(kt,ht,p0,dp0,rate);
+        std::vector<double>b((size_t)gt.size()*gs.size()),val,der,mono(gt.size());
+        for(int i=0;i<N;++i)for(int j=0;j<N;++j)for(int l=0;l<(kt?1:N);++l){
+            const double u=x[i],v=(1-u)*x[j],r=kt?0.:(1-u)*(1-x[j])*x[l];
+            const double weight=w[i]*w[j]*(1-u)*(kt?1.:w[l]*(1-u)*(1-x[j]))*measure;
+            double p[3],dp[3];
+            for(int k=0;k<3;++k){p[k]=s[k]+u*e[0][k]+v*e[1][k]+r*e[2][k];dp[k]=ds[k]+u*de[0][k]+v*de[1][k]+r*de[2][k];}
+            if(img!=0){double pm[3],dpm[3];ImageEvalPoint(img,p,pm);ImageEvalPoint(img,dp,dpm);std::copy_n(pm,3,p);std::copy_n(dpm,3,dp);}
+            source_inner(ks,hs,p,dp,val,der);
+            for(size_t t=0;t<gt.size();++t){const int*ex=&m_expo[(size_t)3*gt[t]];mono[t]=ex[0]?u:(ex[1]?v:1.);}
+            for(size_t t=0;t<gt.size();++t)for(size_t q=0;q<gs.size();++q)
+                b[t*gs.size()+q]+=weight*mono[t]*(der[q]+rate*val[q]);
+        }
+        for(double&y:b)y*=RAD_INV_FOUR_PI;
+        return b;
+    };
     const int nh=nc+nf;
     auto pair_block=[&](int ga,int gb){
         const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;
@@ -2474,7 +2517,15 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];
         const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];
         std::vector<double> block;
-        if(ga==gb&&!m_polyCombo)
+        if(P1TouchHosts(ka,ha,kb,hb,0)){
+            // Same symmetrization as the parent: 0.5*(AB + BA^T).
+            const auto ab=graded(ka,ha,kb,hb,0);
+            const auto ba=ga==gb?ab:graded(kb,hb,ka,ha,0);
+            block.resize((size_t)A.size()*B.size());
+            for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)
+                block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);
+        }
+        else if(ga==gb&&!m_polyCombo)
             block=ka==0
                 ?TetVolumeSelfBlockDirectionalDerivative(
                     ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,
@@ -2492,9 +2543,11 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         // Differentiate the same symmetrized IMA fold used by the parent
         // ChargeGram.  Image self-hosts are ordinary reflected pairs, never
         // singular self-panel terms.
-        for(size_t image=0;image<m_image_masks.size();++image){
-            const auto ab=directed(ka,ha,kb,hb,(int)image+1);
-            const auto ba=directed(kb,hb,ka,ha,(int)image+1);
+        for(size_t image=0;include_images&&image<m_image_masks.size();++image){
+            const int img=(int)image+1;
+            // Each direction takes the rule its parent image block took.
+            const auto ab=P1TouchHosts(ka,ha,kb,hb,img)?graded(ka,ha,kb,hb,img):directed(ka,ha,kb,hb,img);
+            const auto ba=P1TouchHosts(kb,hb,ka,ha,img)?graded(kb,hb,ka,ha,img):directed(kb,hb,ka,ha,img);
             for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)
                 block[i*B.size()+j]+=m_image_signs[image]*.5*
                     (ab[i*B.size()+j]+ba[j*A.size()+i]);
@@ -2719,37 +2772,86 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
     return rad_hdiv::TriPotential(V, p);
 }
 
-bool RadHACApKChargeGram::P1TouchEntry(int tgt,int src,double& value) const
+bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,int img) const
 {
     if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo) return false;
+    const auto& tc=kindT==0?m_hoCellCharges[hostT]:m_hoFaceCharges[hostT];
+    const auto& sc=kindS==0?m_hoCellCharges[hostS]:m_hoFaceCharges[hostS];
+    if (tc.empty() || sc.empty()) return false;
+    // Host-level: a host with any non-P1 mode keeps the established rule for
+    // ALL its modes, so a block never mixes two outer rules.
     const auto eligible=[&](int charge){
         const int* e=&m_expo[(size_t)3*charge];
         return e[0]>=0 && e[1]>=0 && e[2]==0 &&
             e[0]+e[1]<=(m_kind[charge]==1?1:0);
     };
-    if (!eligible(tgt) || !eligible(src)) return false;
-    const auto vertices=[&](int charge){return m_kind[charge]==0?
-        &m_cellV[(size_t)m_host[charge]*12]:&m_faceV[(size_t)m_host[charge]*9];};
-    const double* a=vertices(tgt);const double* b=vertices(src);
-    bool touching=false;
-    for(int i=0;i<(m_kind[tgt]?3:4);++i)for(int j=0;j<(m_kind[src]?3:4);++j)
-        if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])touching=true;
-    if(!touching)return false;
-    const auto pack=[&](int charge){
-        radia_hdiv_python::P1Charge input;input.kind=m_kind[charge];
-        std::copy_n(vertices(charge),input.kind?9:12,input.vertices.begin());
-        std::copy_n(&m_expo[(size_t)3*charge],3,input.exponent.begin());
-        return radia_hdiv_python::p1ChargeSource(input);
-    };
-    value=radia_hdiv_p1_diagonal::pairEntry(pack(tgt),pack(src));
+    for(int c:tc)if(!eligible(c))return false;
+    for(int c:sc)if(!eligible(c))return false;
+    if (img!=0) {
+        // Image near field, not exact touching: a host a roundoff-to-small
+        // distance off the plane is nearly coincident with its own image, and
+        // a direct-minus-image fold only cancels when both terms take the same
+        // rule.  Graded rule once any image corner lies within the mean host
+        // size of a target corner (routing radius, not an accuracy criterion).
+        const double* a=kindT==0?&m_cellV[(size_t)hostT*12]:&m_faceV[(size_t)hostT*9];
+        const double* b=kindS==0?&m_cellV[(size_t)hostS*12]:&m_faceV[(size_t)hostS*9];
+        const double radius=0.5*(m_size[tc[0]]+m_size[sc[0]]);
+        for(int j=0;j<(kindS?3:4);++j){
+            double corner[3];ImageApplyVector(img,b+3*j,corner);
+            for(int i=0;i<(kindT?3:4);++i){
+                const double dx=corner[0]-a[3*i],dy=corner[1]-a[3*i+1],dz=corner[2]-a[3*i+2];
+                if(dx*dx+dy*dy+dz*dz<=radius*radius)return true;
+            }
+        }
+        return false;
+    }
+    const double* a=kindT==0?&m_cellV[(size_t)hostT*12]:&m_faceV[(size_t)hostT*9];
+    const double* b=kindS==0?&m_cellV[(size_t)hostS*12]:&m_faceV[(size_t)hostS*9];
+    for(int i=0;i<(kindT?3:4);++i)for(int j=0;j<(kindS?3:4);++j)
+        if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])return true;
+    return false;
+}
+
+namespace {
+// Image entry (1/4pi) INT_tgt Phi_src(T^-1 x) == the direct entry of the
+// target mapped by the linear isometry T^-1 (ImageEvalPoint); the target
+// monomials are reference coordinates, unchanged by the vertex map.
+template<class Map> radia_hdiv_python::P1ChargeSource P1PackCharge(
+    int kind,const double* v,const int* exponent,Map map)
+{
+    radia_hdiv_python::P1Charge input;input.kind=kind;
+    for(int i=0;i<(kind?3:4);++i)map(v+3*i,&input.vertices[3*i]);
+    std::copy_n(exponent,3,input.exponent.begin());
+    return radia_hdiv_python::p1ChargeSource(input);
+}
+}
+
+double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
+{
+    const auto vertices=[&](int c){return m_kind[c]==0?&m_cellV[(size_t)m_host[c]*12]:&m_faceV[(size_t)m_host[c]*9];};
+    const auto target=P1PackCharge(m_kind[tgt],vertices(tgt),&m_expo[(size_t)3*tgt],
+        [&](const double* a,double* b){if(img!=0)ImageEvalPoint(img,a,b);else std::copy_n(a,3,b);});
+    const auto source=P1PackCharge(m_kind[src],vertices(src),&m_expo[(size_t)3*src],
+        [](const double* a,double* b){std::copy_n(a,3,b);});
+    const double value=radia_hdiv_p1_diagonal::pairEntry(target,source);
     if(!std::isfinite(value))throw std::runtime_error("Nonfinite P1 touching integral");
-    return true;
+    return value;
+}
+
+std::vector<double> RadHACApKChargeGram::P1TouchBlock(int kindT,int hostT,int kindS,int hostS,int img) const
+{
+    const auto& tc=kindT==0?m_hoCellCharges[hostT]:m_hoFaceCharges[hostT];
+    const auto& sc=kindS==0?m_hoCellCharges[hostS]:m_hoFaceCharges[hostS];
+    std::vector<double> block(tc.size()*sc.size());
+    for(size_t i=0;i<tc.size();++i)for(size_t j=0;j<sc.size();++j)
+        block[i*sc.size()+j]=P1TouchEntryValue(tc[i],sc[j],img);
+    return block;
 }
 
 double RadHACApKChargeGram::QuadDot(int tgt, int src) const
 {
-    double refined;
-    if(P1TouchEntry(tgt,src,refined))return refined;
+    if(P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],0))
+        return P1TouchEntryValue(tgt,src,0);
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
     if (m_highorder && m_nmono[tgt] > 1) {
@@ -2800,6 +2902,8 @@ double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int img) const
     // (isometry |x - T(y)| = |T^-1(x) - y|), so we map tgt's outer points by the INVERSE image transform and
     // evaluate the UNmapped source potential there.  Always the full analytic PhiAt (the image of a
     // charge straddling the mirror is singular at the plane -> needs the exact through-singularity potential).
+    if(img!=0&&P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],img))
+        return P1TouchEntryValue(tgt,src,img);
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
     double s = 0.0;
