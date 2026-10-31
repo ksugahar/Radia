@@ -2321,6 +2321,8 @@ def _prepare_gpu_charge_inputs(fes, *, backend):
         raise NotImplementedError("Device charge input currently requires pure 3D TET geometry")
     if p not in (1, 2) or mesh.GetCurveOrder() > 1:
         raise NotImplementedError("Device charge input currently requires affine TET HDiv order 1 or 2")
+    if mesh.deformation is not None:
+        raise NotImplementedError("Device charge input does not support live mesh deformation")
     if not 0 < fes.ndof <= 16384:
         raise ValueError("Device charge DOF budget exceeded")
     if not 0 < mesh.GetNE(ng.VOL) <= 4096:
