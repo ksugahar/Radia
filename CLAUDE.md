@@ -1,6 +1,6 @@
 # Claude Code - Radia Project Policy
 
-Investigations remain in Git.
+Investigations remain in Git. Text: UTF-8/LF; binary/hash-bound evidence unchanged.
 ## Mission
 Radia is AI-native, AI-operable electromagnetic CAE through MCP. Users set analysis plans, physical assumptions and acceptance criteria; AI assists tool operation and execution. Do not market autonomous AI design. Extend NGSolve only for missing engineering capability.
 Scope: (1) complete and validate HDiv-MMM topology optimization; (2) improve repository and `radia-mcp` quality, validation, build, CI, packaging and release operation.
@@ -30,13 +30,13 @@ Prefer established public abstractions over proprietary plumbing.
 - PARDISO is not used in principle: direct FE solves use `sparsecholesky`, never a PARDISO fallback; MKL serves dense BLAS/LAPACK/FFT only. Linear true residual <= RELATIVE_LIMIT (1e-6), else raise; nonlinear/validation gates stay unchanged.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
 - Radia core Green functions remain Laplace/MQS/Darwin kernels. Use HACApK for core compact interactions; do not restore core ExaFMM. NGSolve BEM and its multipole/FMM facilities may serve smooth free-space BEM and Biot-Savart work.
-- Python FE work follows caller-owned `ngsolve.TaskManager()`. Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
+- CPU FE work follows caller-owned `ngsolve.TaskManager()`. CPU exceptions: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned. GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback. GPU-route CPU work retains CPU rules.
 - Fail loudly on unsupported geometry, labels, ABI, convergence or backend state. Never silently substitute a numerically different route.
 ## Interfaces
 Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `cubit-mesh-export` toolbar, and normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: it deploys to the build host (editable) and the validation host (verified wheel), never to the JMAG evaluation host or retired execution targets; isolated CI tests are not deployment.
+- radia-mcp releases independently of Radia: it deploys to build (editable) and validation (verified wheel), never JMAG or retired targets; isolated CI is not deployment.
 - Routine editable updates: update the usual source, reconnect, check the live source and one harmless affected tool. Pure Python edits need no reinstall; relocation or dependency/metadata changes do.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with `pip install -e`; no dedicated branch, frozen snapshot or separate deployment approval is required for routine MCP experiments.
@@ -48,12 +48,12 @@ Python/MCP is the first-class AI interface. Operational workflows use MCP or hum
 The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`; resolve it with `bibliography_canonical_path` and correct verified entries there. Manuscript folders contain generated `.bbl` only, never local `.bib` copies: use `bibliography_make_bbl`, regenerate after changes and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-- CPU: Python (pybind11)/NGSolve (Windows: Visual Studio Build Tools); NGSolve TaskManager owns CPU parallel execution under the caller-owned region policy. An explicitly selected MEX CPU route must prove no CUDA context is created; no separate CPU-only MEX build.
+- CPU: Python/pybind11/NGSolve; numerical default: 1 thread. TaskManager/OpenMP/MKL: explicit opt-in; record limits. Prefer independent cases/trials; six-job cap. Builds separate. MEX CPU: prove no CUDA context; no CPU-only MEX build.
 - radia first: build C++/.cu kernels and shared host control once with CMake/nvcc; develop via pybind11 and link the same objects/library from plain mex/matlab_add_mex. mexcuda is retired; no fallback. Share domain data, validation/errors and lifecycle; bindings adapt ABI/types/memory/handles. `radia` owns EM domain code; `radia-simulink` depends one-way, without MATLAB runtime requirements in `radia`. Preserve same-kernel pybind11/MEX bitwise and CPU/GPU user-tolerance parity with independent physical validation. See [CUDA policy](docs/induction_heating/CUDA_VALIDATION.md).
-- MEX modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in MEX builds. MATLAB owns host scheduling, CUDA owns device execution; judge bounded OpenMP host work by numerical parity and transfer-inclusive timing.
+- MEX may use NGSolve-inherited DLLs and CPU host control. Never include, link, or use NGSolve TaskManager in MEX builds. MATLAB owns host scheduling, CUDA device execution; assess bounded OpenMP by parity and transfer-inclusive timing.
 - Windows builds: VS Build Tools 2022/MSVC 14.44, MATLAB-bundled CUDA 12.8; Linux `radia` GPU: nvcc 12.8; no other CUDA/compiler overrides. BLAS: MKL (x86), NVPL (aarch64). Python GPU runtime (2026-10-21): exact-version pip NVIDIA CUDA 12.8 runtime packages, loaded lazily on GPU paths only; wheels do not redistribute the CUDA runtime.
 - No implicit CPU/GPU/Python fallback: select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Record parity, artifact hashes and validation JSON; Poisson does not certify ICCG/AMS/HDiv-MMM.
-- `radia-simulink` (CPU/GPU) is Windows-only: built on the build host, accepted on its RTX GPU with independent review, GPU-deployed to a Windows A100 platform. Prove CPU/GPU agreement on small publishable cases before scaling; backend names are not speedup evidence. Data is HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8) plus NGSolve `.vol`/`.sol`; no MAT. Validate readers/writers above 2 GB, never split. Claim GPU portability only after validated architecture/PTX compatibility and a rebuild per OS/MATLAB ABI.
+- `radia-simulink` (CPU/GPU) is Windows-only: built on the build host, accepted on its RTX GPU with independent review, GPU-deployed to the validation host. Prove CPU/GPU agreement on small publishable cases before scaling; backend names are not speedup evidence. Data is HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8) plus NGSolve `.vol`/`.sol`; no MAT. Validate readers/writers above 2 GB, never split. Claim GPU portability only after validated architecture/PTX compatibility and a rebuild per OS/MATLAB ABI.
 
 ### MATLAB And Simulink
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit; record stable tool versions and regression-test upgrades. MATLAB Engine sessions never waive Toolkit model-edit, check, save/reopen or diagnostic gates. Close only owned sessions.
@@ -73,9 +73,9 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI and builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification.
+**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification.
 Deployment: radia uses bound editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
-Build owns preflight/native builds; consumers use verified same-source artifacts. NGSolve uses the metadata pin (6.2.2608).
+Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve uses metadata pin (6.2.2608).
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
 
@@ -102,12 +102,12 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Build owns CI, artifacts, validation and CPU/GPU development. Validation uses editable Radia, separate wheel QA and timing without Cubit/cme. CPU/GB200 compute is build-only unless authorized. JMAG evaluation runs no Radia. Timings are diagnostic.
+Build owns CPU/secondary GPU development, CI/formal artifacts. Validation is primary GPU development in isolated checkouts/venvs, separate from exact-wheel QA/runtime; no Cubit/cme. Source-build scope is unchanged. JMAG evaluation runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
-CPU/GPU jobs (2026-10-31): build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count existing jobs; bound CPU/threads and record resources, not admission gates. Validation GPU busy: overflow to a free build GPU slot is pre-authorized; <=1 GPU job/host, <=2 across both. Preserve artifact/architecture/ABI/runtime/owner scope; no install/configuration or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
+CPU/GPU jobs: build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL. GPU jobs use a separate slot, not a CPU slot; record host CPU use, avoid oversubscription. Validation GPU busy: overflow to a free build GPU slot is pre-authorized; <=1 GPU job/host, <=2 across both. Keep artifact/architecture/ABI/runtime/owner scope; no install/config or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
 Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.
-Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
-Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts, IPs and paths private.
+Compare CPU/GPU on the same host with recorded threads; 16-thread profiles are optional within resource scope, not default. Measure speed/setup/transfers/total time; save hardware/memory/versions in JSON.
+Historical timings retain provenance; neutral roles only. Keep host maps/originals/hashes/IPs/paths private; never relabel hosts.
 
 **POLICY**: Every benchmark script saves a machine-readable JSON result.
 
@@ -117,7 +117,7 @@ Historical measurements remain valid provenance: public evidence uses neutral ro
 
 ## Build And Release
 
-- Build ownership (2026-10-06): the build host builds solver candidates and release artifacts from an isolated reviewed checkout using current `Build.ps1`/CMake; remove superseded recipes. Other compute hosts consume the same hash-verified artifacts; never replace another session's runtime.
+- Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Validation may build isolated GPU development artifacts within authorized scope, never substitute them into exact-wheel QA or others' runtimes.
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves. History is provenance, not runtime.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
 - Use `release-quad` / `tools/release_quad.py` for build- and validation-role editable deployment plus CPU/GPU compute builds; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Publish only after owning-distribution CI, artifact hashes, native and required machine gates pass at the release source. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
