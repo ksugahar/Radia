@@ -30,8 +30,11 @@ using namespace radia;
  */
 class PyPEECBuilder {
 public:
-    PyPEECBuilder() : builder_(std::make_unique<PEECMatrixBuilder>()),
-                      matrices_built_(false) {}
+    explicit PyPEECBuilder(int volume_order=0) : builder_(std::make_unique<PEECMatrixBuilder>()),
+                      matrices_built_(false) {
+        if(volume_order) builder_->EnableVolumeKernel(volume_order);
+    }
+    double inductance_entry(int i,int j) const { return builder_->InductanceEntry(i,j); }
 
     /**
      * Add a conductor segment
@@ -1080,7 +1083,8 @@ Example:
 
         Constructs L, P, R, M_LS matrices from conductor segments.
         )doc")
-        .def(py::init<>(), "Create a new PEEC matrix builder")
+        .def(py::init<int>(), py::arg("volume_order")=0, "Explicit volume order 8..256; zero selects the original filament model")
+        .def("inductance_entry", &PyPEECBuilder::inductance_entry, py::arg("i"), py::arg("j"))
 
         .def("add_segment", &PyPEECBuilder::add_segment,
              py::arg("center"),
