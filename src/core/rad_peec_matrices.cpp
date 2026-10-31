@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <set>
 #include <queue>
+#include <limits>
+#include <stdexcept>
 
 #include "rad_parallel.h"
 
@@ -462,7 +464,13 @@ PEECMatrices PEECMatrixBuilder::Build(bool includeStar, double eps_eff) {
 
     PEECMatrices matrices;
 
-    int n_loop = static_cast<int>(segments_.size());
+    // All existing dense offsets use signed int. Check before narrowing,
+    // multiplying, allocating or entering parallel writes; never wrap n*n.
+    const auto dense_n = segments_.size();
+    const auto index_limit = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    if (dense_n && dense_n > index_limit / dense_n)
+        throw std::length_error("Dense PEEC exceeds signed 32-bit index budget; select a matrix-free operator explicitly");
+    int n_loop = static_cast<int>(dense_n);
     matrices.n_loop = n_loop;
 
     // Allocate and compute L
