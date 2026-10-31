@@ -2839,7 +2839,9 @@ double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
 
 double RadHACApKChargeGram::QuadDot(int tgt, int src) const
 {
-    if(P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],0))
+    // m_kind/m_host are empty on constant-charge routes: test m_highorder
+    // before evaluating them as P1TouchHosts arguments.
+    if(m_highorder&&P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],0))
         return P1TouchEntryValue(tgt,src,0);
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
@@ -2891,7 +2893,7 @@ double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int img) const
     // (isometry |x - T(y)| = |T^-1(x) - y|), so we map tgt's outer points by the INVERSE image transform and
     // evaluate the UNmapped source potential there.  Always the full analytic PhiAt (the image of a
     // charge straddling the mirror is singular at the plane -> needs the exact through-singularity potential).
-    if(img!=0&&P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],img))
+    if(img!=0&&m_highorder&&P1TouchHosts(m_kind[tgt],m_host[tgt],m_kind[src],m_host[src],img))
         return P1TouchEntryValue(tgt,src,img);
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
