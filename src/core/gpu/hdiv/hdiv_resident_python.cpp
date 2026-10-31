@@ -1,5 +1,6 @@
 #include "hdiv_resident_python_api.hpp"
 #include "hdiv_inverse_bh.hpp"
+#include "hdiv_p1_diagonal_input.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <cstdint>
@@ -64,6 +65,62 @@ std::shared_ptr<DeviceOperator> construct(py::list input,Array<std::uint64_t> pe
 void registerMaterialStaging(py::module_&);
 PYBIND11_MODULE(_hdiv_cuda,m) {
     registerMaterialStaging(m);
+    py::class_<P1Diagonal,std::shared_ptr<P1Diagonal>>(m,"_P1ChargeDiagonal",
+        "Private affine-TET P1 charge diagonal; raw physical weights, not a full HDiv operator.")
+      .def(py::init([](Array<std::int32_t> kinds,Array<std::int32_t> exponents,
+              Array<double> vertices,Array<std::uint64_t> offsets,
+              Array<double> points,Array<double> weights,py::object order,const std::string& backend){
+          if(backend!="gpu")throw py::value_error("P1 charge diagonal requires explicit backend='gpu'");
+          if(!py::isinstance<py::int_>(order)||py::isinstance<py::bool_>(order)||py::cast<int>(order)!=1)
+              throw py::value_error("P1 charge diagonal requires explicit integer order=1");
+          if(kinds.ndim()!=1||kinds.size()<=0||kinds.size()>4608||weights.ndim()!=1||
+             weights.size()<=0||weights.size()>kinds.size()*256||exponents.ndim()!=1||
+             vertices.ndim()!=1||offsets.ndim()!=1||points.ndim()!=1||
+             exponents.size()!=kinds.size()*3||vertices.size()!=kinds.size()*12||
+             offsets.size()!=kinds.size()+1||points.size()!=weights.size()*3)
+              throw py::value_error("P1 charge diagonal payload shape or budget mismatch");
+          std::size_t bytes=0;
+          const auto kind=snapshot(kinds,bytes),expo=snapshot(exponents,bytes);
+          const auto geometry=snapshot(vertices,bytes),physical=snapshot(points,bytes),w=snapshot(weights,bytes);
+          const auto partition=snapshot(offsets,bytes);
+          if(partition.front()!=0||partition.back()!=w.size())
+              throw py::value_error("P1 charge quadrature endpoints mismatch");
+          P1DiagonalInput input;input.order=1;input.charges.reserve(kind.size());input.quadrature.reserve(w.size());
+          for(std::size_t i=0;i<kind.size();++i){
+              if(partition[i]>partition[i+1])throw py::value_error("Decreasing charge quadrature offsets");
+              P1Charge charge;charge.kind=kind[i];charge.first=partition[i];
+              charge.count=partition[i+1]-partition[i];
+              std::copy_n(geometry.data()+12*i,12,charge.vertices.begin());
+              std::copy_n(expo.data()+3*i,3,charge.exponent.begin());input.charges.push_back(charge);
+          }
+          for(std::size_t i=0;i<w.size();++i)
+              input.quadrature.push_back({{physical[3*i],physical[3*i+1],physical[3*i+2]},w[i]});
+          input.validate();std::shared_ptr<P1Diagonal> owner;
+          {py::gil_scoped_release release;owner=create_p1_diagonal(input);}
+          pythonPublicationProbe();return owner;
+      }),py::arg("kinds"),py::arg("exponents"),py::arg("vertices"),py::arg("offsets"),
+         py::arg("points"),py::arg("weights"),py::arg("order"),py::arg("backend"))
+      .def("diagnostic_diagonal",[](P1Diagonal& owner){
+          radia_hmatrix_cuda::HostVector<double> values;
+          {py::gil_scoped_release release;values=owner.diagnostic_diagonal();}
+          pythonPublicationProbe();py::array_t<double> out(values.size());
+          std::copy(values.begin(),values.end(),out.mutable_data());return out;
+      })
+      .def("diagnostic_scale",[](P1Diagonal& owner){
+          radia_hmatrix_cuda::HostVector<double> values;
+          {py::gil_scoped_release release;values=owner.diagnostic_scale();}
+          pythonPublicationProbe();py::array_t<double> out(values.size());
+          std::copy(values.begin(),values.end(),out.mutable_data());return out;
+      })
+      .def("stats",[](P1Diagonal& owner){
+          const auto s=owner.stats();py::dict out;
+          out["charges"]=s.charges;out["owned_device_bytes"]=s.ownedDeviceBytes;
+          out["setup_peak_owned_device_bytes"]=s.setupPeakOwnedBytes;
+          out["setup_upload_bytes"]=s.setupUploadBytes;out["setup_download_bytes"]=s.setupDownloadBytes;
+          out["diagnostic_download_bytes"]=s.diagnosticDownloadBytes;out["closed"]=s.closed;
+          out["scope"]="affine-TET P1 charge physical Gram self diagonal only";return out;
+      })
+      .def("close",[](P1Diagonal& owner){py::gil_scoped_release release;owner.close();});
 #ifdef RADIA_HDIV_PYTHON_FAULT_INJECTION
     m.def("_diagnostic_failure",[](const std::string& kind,std::size_t at){
         using namespace radia_hmatrix_cuda;
