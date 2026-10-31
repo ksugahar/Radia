@@ -2253,6 +2253,93 @@ def _finish_charge_gram_backend(result, *, gram_backend, exact_dense_memory_mb):
     return B, G, M_mass
 
 
+def _flat_tet_charge_inputs(fes, quad, *, eps, leafsize, eta, far_quad,
+                            ho_far_factor, inner_quad, image_masks, image_signs,
+                            materialize_mass, internal_interfaces):
+    """Prepare NG-owned charge mapping and geometry, without Gram coefficients.
+
+    The caller validates topology and owns TaskManager. This is the common
+    input preparation for the CPU constructor and the GPU construction seam;
+    it does not construct a native charge-Gram object or certify a GPU route.
+    """
+    p = int(fes.globalorder)
+    # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
+    # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
+    # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
+    # max(quad-2, p+1); only passed to C++ when iq < quad (else inner = outer).  Validated to hold the same
+    # demag accuracy as inner=outer by the nearfar/operator goldens + the uniform-1/3 metric.
+    iq = inner_quad if inner_quad is not None else max(quad - 2, p + 1)
+    cb = _charge_basis(
+        fes, quad, materialize_mass=materialize_mass,
+        internal_interfaces=bool(internal_interfaces))
+    host, kind, expo = cb["host"], cb["kind"], cb["expo"]
+    cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
+    # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
+    rtp, rtw = _outer_tet(quad)
+    rsp, rsw = _outer_tri(quad)
+    # BDM1/BDM2 monomial-charge quadrature Gram.  By default, well-separated pairs
+    # use the low-order rule while near/self pairs keep subtraction quadrature.
+    kw = dict(cell_verts=cell_verts, face_verts=face_verts,
+              n_el=n_el, charge_host=_i32_buffer(host), charge_kind=_i32_buffer(kind),
+              charge_expo=_i32_buffer(expo),
+              ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
+              ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
+              eps=eps, leaf=leafsize, eta=eta)
+    if np.isfinite(ho_far_factor):
+        rtp_lo, rtw_lo = _outer_tet(far_quad)
+        rsp_lo, rsw_lo = _outer_tri(far_quad)
+        kw.update(ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
+                  ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
+                  ho_far_factor=ho_far_factor)
+    if iq < quad:
+        # Reuse the symmetric production rules when available.  In
+        # particular RT2 uses iq=4; a product Duffy inner rule would make the
+        # subtraction path depend on local simplex vertex order.
+        rtp_in, rtw_in = _outer_tet(iq)
+        rsp_in, rsw_in = _outer_tri(iq)
+        kw.update(ref_tet_pts_in=_f64_buffer(rtp_in), ref_tet_w_in=_f64_buffer(rtw_in),
+                  ref_tri_pts_in=_f64_buffer(rsp_in), ref_tri_w_in=_f64_buffer(rsw_in))
+    if image_masks:
+        kw.update(image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs))
+    return cb, kw
+
+
+def _prepare_gpu_charge_inputs(fes, *, backend):
+    """Stage the initial affine-TET P1/P2 device-build input, not a GPU operator.
+
+    Preserves the current hdiv_gpu charge-builder defaults, including separate
+    near/inner/far rules. NG owns the FE map and the caller owns TaskManager.
+    No CPU Gram coefficients, H-matrix, native constructor or CUDA allocation
+    is produced. Curved and non-TET geometry require their audited payloads;
+    they are rejected here rather than flattened or silently built on CPU.
+    """
+    if backend != "gpu":
+        raise ValueError("Device charge preparation requires explicit backend='gpu'")
+    mesh = fes.mesh
+    p = int(fes.globalorder)
+    if mesh.dim != 3 or _volume_vertex_counts(mesh) != {4}:
+        raise NotImplementedError("Device charge input currently requires pure 3D TET geometry")
+    if p not in (1, 2) or mesh.GetCurveOrder() > 1:
+        raise NotImplementedError("Device charge input currently requires affine TET HDiv order 1 or 2")
+    if mesh.deformation is not None:
+        raise NotImplementedError("Device charge input does not support live mesh deformation")
+    if not 0 < fes.ndof <= 16384:
+        raise ValueError("Device charge DOF budget exceeded")
+    if not 0 < mesh.GetNE(ng.VOL) <= 4096:
+        raise ValueError("Device charge element budget exceeded")
+    if mesh.GetNE(ng.BND) <= 0:
+        raise ValueError("Device charge input requires boundary surface elements")
+    validate_hdiv_configuration(mesh.dim, {4}, p, mesh.GetCurveOrder())
+    cb, inputs = _flat_tet_charge_inputs(
+        fes, max(2, 3*p), eps=1e-10, leafsize=64, eta=2., far_quad=3,
+        ho_far_factor=2., inner_quad=None, image_masks=[], image_signs=[],
+        materialize_mass=False, internal_interfaces=False)
+    B = cb["B"]
+    if B.shape[1] != fes.ndof or not 0 < B.shape[0] <= 4608:
+        raise ValueError("Device charge map dimensions exceed the resident scope")
+    return B, inputs
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, image_rot_angle=None,
@@ -2513,44 +2600,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
         return _finish_charge_gram_backend(_configure_cpp_operator(
             cbk["B"], G, cbk["M_mass"], cbk["M_mass_ngsolve"]),
             gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
-    # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
-    # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
-    # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
-    # max(quad-2, p+1); only passed to C++ when iq < quad (else inner = outer).  Validated to hold the same
-    # demag accuracy as inner=outer by the nearfar/operator goldens + the uniform-1/3 metric.
-    iq = inner_quad if inner_quad is not None else max(quad - 2, p + 1)
-    cb = _charge_basis(
-        fes, quad, materialize_mass=_materialize_mass,
-        internal_interfaces=bool(internal_interfaces))
-    B, M_mass, host, kind, expo = cb["B"], cb["M_mass"], cb["host"], cb["kind"], cb["expo"]
-    cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
-    # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
-    rtp, rtw = _outer_tet(quad)
-    rsp, rsw = _outer_tri(quad)
-    # BDM1/BDM2 monomial-charge quadrature Gram.  By default, well-separated pairs
-    # use the low-order rule while near/self pairs keep subtraction quadrature.
-    kw = dict(cell_verts=cell_verts, face_verts=face_verts,
-              n_el=n_el, charge_host=_i32_buffer(host), charge_kind=_i32_buffer(kind),
-              charge_expo=_i32_buffer(expo),
-              ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
-              ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
-              eps=eps, leaf=leafsize, eta=eta)
-    if np.isfinite(ho_far_factor):
-        rtp_lo, rtw_lo = _outer_tet(far_quad)
-        rsp_lo, rsw_lo = _outer_tri(far_quad)
-        kw.update(ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
-                  ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
-                  ho_far_factor=ho_far_factor)
-    if iq < quad:
-        # Reuse the symmetric production rules when available.  In
-        # particular RT2 uses iq=4; a product Duffy inner rule would make the
-        # subtraction path depend on local simplex vertex order.
-        rtp_in, rtw_in = _outer_tet(iq)
-        rsp_in, rsw_in = _outer_tri(iq)
-        kw.update(ref_tet_pts_in=_f64_buffer(rtp_in), ref_tet_w_in=_f64_buffer(rtw_in),
-                  ref_tri_pts_in=_f64_buffer(rsp_in), ref_tri_w_in=_f64_buffer(rsw_in))
-    if image_masks:
-        kw.update(image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs))
+    cb, kw = _flat_tet_charge_inputs(
+        fes, quad, eps=eps, leafsize=leafsize, eta=eta, far_quad=far_quad,
+        ho_far_factor=ho_far_factor, inner_quad=inner_quad,
+        image_masks=image_masks, image_signs=image_signs,
+        materialize_mass=_materialize_mass, internal_interfaces=internal_interfaces)
+    B, M_mass = cb["B"], cb["M_mass"]
     # RT2 admissible blocks can reach the historical ACA rank cap of 200 even
     # at eps=1e-10.  Defer that fill so the pybind build call can use the
     # production RT2 cap of 400.  BDM1 retains the established cap and direct

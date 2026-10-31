@@ -1,4 +1,4 @@
-# Host-only NGSolve staging. The CUDA object is compiled separately by the Radia builder.
+# Host-only NG staging links the reusable nvcc numerical archive.
 cmake_minimum_required(VERSION 3.24)
 project(radia_hdiv_python LANGUAGES CXX)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
@@ -8,16 +8,14 @@ foreach(required RADIA_CUDA_OBJECT RADIA_PYBIND_INCLUDE RADIA_PYTHON_SUFFIX RADI
     message(FATAL_ERROR "Missing explicit ${required}")
   endif()
 endforeach()
-if(NOT EXISTS "${RADIA_CUDA_OBJECT}")
-  message(FATAL_ERROR "Missing reviewed CUDA object")
-endif()
-add_library(_hdiv_cuda MODULE hdiv_resident_python.cpp hdiv_material_python.cpp "${RADIA_CUDA_OBJECT}")
-set_source_files_properties("${RADIA_CUDA_OBJECT}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/HDivKernels.cmake")
+add_library(_hdiv_cuda MODULE hdiv_resident_python.cpp hdiv_material_python.cpp)
+
 target_compile_features(_hdiv_cuda PRIVATE cxx_std_20)
 if(MSVC)
   target_compile_definitions(_hdiv_cuda PRIVATE WIN32 NOMINMAX)
   target_compile_options(_hdiv_cuda PRIVATE /fp:precise /utf-8)
 endif()
 target_include_directories(_hdiv_cuda PRIVATE "${RADIA_PYBIND_INCLUDE}" "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-target_link_libraries(_hdiv_cuda PRIVATE ngsolve Python3::Module "${RADIA_CUDART}" "${RADIA_CUBLAS}" "${RADIA_CUSOLVER}")
+target_link_libraries(_hdiv_cuda PRIVATE ngsolve Python3::Module radia_hdiv_kernels)
 set_target_properties(_hdiv_cuda PROPERTIES PREFIX "" SUFFIX "${RADIA_PYTHON_SUFFIX}" LIBRARY_OUTPUT_DIRECTORY "${RADIA_OUTPUT}" RUNTIME_OUTPUT_DIRECTORY "${RADIA_OUTPUT}")
