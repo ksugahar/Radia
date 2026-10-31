@@ -410,23 +410,37 @@
     ],
     "src/radia/volume_peec.py": [
       "tests/test_volume_peec_contract.py",
-      "tests/test_volume_peec_native_contract.py"
+      "tests/test_volume_peec_native_contract.py",
+      "tests/test_volume_fin_contract.py"
     ],
     "src/core/rad_peec_volume.cpp": [
       "tests/test_volume_peec_contract.py",
-      "tests/test_volume_peec_native_contract.py"
+      "tests/test_volume_peec_native_contract.py",
+      "tests/test_volume_fin_contract.py"
     ],
     "src/core/rad_peec_volume.h": [
       "tests/test_volume_peec_contract.py",
-      "tests/test_volume_peec_native_contract.py"
+      "tests/test_volume_peec_native_contract.py",
+      "tests/test_volume_fin_contract.py"
     ],
     "tests/test_volume_peec_contract.py": [
       "tests/test_volume_peec_contract.py",
-      "tests/test_volume_peec_native_contract.py"
+      "tests/test_volume_peec_native_contract.py",
+      "tests/test_volume_fin_contract.py"
     ],
     "tests/test_volume_peec_native_contract.py": [
       "tests/test_volume_peec_contract.py",
-      "tests/test_volume_peec_native_contract.py"
+      "tests/test_volume_peec_native_contract.py",
+      "tests/test_volume_fin_contract.py"
+    ],
+    "src/radia/volume_fin.py": [
+      "tests/test_volume_fin_contract.py"
+    ],
+    "src/radia/fin_observables.py": [
+      "tests/test_volume_fin_contract.py"
+    ],
+    "tests/test_volume_fin_contract.py": [
+      "tests/test_volume_fin_contract.py"
     ]
   },
   "profiles": {
@@ -594,7 +608,8 @@
         "tests/test_ih_ams_f1_surrogate.py",
         "tests/test_hdiv_gpu_mesh_integration.py",
         "tests/test_volume_peec_contract.py",
-        "tests/test_volume_peec_native_contract.py"
+        "tests/test_volume_peec_native_contract.py",
+        "tests/test_volume_fin_contract.py"
       ]
     },
     "sparsesolv": {
