@@ -2241,11 +2241,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
-    // Affine P1 pairs are served by the scalar QuadDot/QuadDotRefl route
-    // only (m_hoAnalyticBlock needs a degree>=2 face mode); a P1 block here
-    // would silently take the fixed outer rule.
-    if (P1TouchHosts(kindT, hostT, kindS, hostS, 0))
-        throw std::logic_error("P1 graded pair reached the host-block route");
+    // A mesh with any degree>=2 face mode turns host blocks on globally, so
+    // eligible P1 host pairs reach this route too: same graded rule as the
+    // scalar QuadDot/QuadDotRefl route.
+    if (P1TouchHosts(kindT, hostT, kindS, hostS, 0)) {
+        for (int lt = 0; lt < nT; ++lt)
+            for (int ls = 0; ls < nS; ++ls)
+                block[(size_t)lt*nS+ls] = P1TouchEntryValue(targets[lt], sources[ls], 0);
+        return block;
+    }
     if (m_curved && CurvedDirectEnabled() && !CurvedHostsTouch(kindT, hostT, kindS, hostS))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS);
 
@@ -2281,11 +2285,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
     // near-singular potential is integrated exactly like the direct touching pair of the full model.  An
     // on-plane face maps onto itself point by point, so its image self block is evaluated at the SAME outer
     // points by the SAME rule as its direct self block and the antisymmetric fold cancels to roundoff.
-    // Affine P1 pairs are served by the scalar QuadDot/QuadDotRefl route
-    // only (m_hoAnalyticBlock needs a degree>=2 face mode); a P1 block here
-    // would silently take the fixed outer rule.
-    if (P1TouchHosts(kindT, hostT, kindS, hostS, img))
-        throw std::logic_error("P1 graded pair reached the host-block route");
+    // A mesh with any degree>=2 face mode turns host blocks on globally, so
+    // eligible P1 host pairs reach this route too: same graded rule as the
+    // scalar QuadDot/QuadDotRefl route.
+    if (P1TouchHosts(kindT, hostT, kindS, hostS, img)) {
+        for (int lt = 0; lt < nT; ++lt)
+            for (int ls = 0; ls < nS; ++ls)
+                block[(size_t)lt*nS+ls] = P1TouchEntryValue(targets[lt], sources[ls], img);
+        return block;
+    }
     if (m_curved && CurvedDirectEnabled() && !ImageHostsTouch(kindT, hostT, kindS, hostS, img))
         return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS, img);
 

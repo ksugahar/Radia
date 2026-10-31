@@ -161,3 +161,25 @@ def test_image_value_and_derivative_are_continuous_off_the_plane(charge_inputs):
     fd = (_gram(moved(d + h))[1] - _gram(moved(d - h))[1]) / (2 * h)
     err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
     assert err < DETECTOR_REL, f"translation derivative vs central difference: max rel {err:.3e}"
+
+
+@pytest.mark.parametrize("images", [None, ([1], [1.0])], ids=["direct", "image"])
+def test_host_block_route_takes_graded_rule_on_mixed_degree_mesh(charge_inputs, images):
+    # One quadratic face mode turns analytic host blocks on for the whole mesh;
+    # the remaining P1 host pairs then go through QuadBlockHOTet(Image), and
+    # must reproduce the scalar-route entries of the pure P1 mesh.
+    kw = dict(charge_inputs)
+    if images:
+        kw.update(image_masks=np.array(images[0], dtype=np.int32), image_signs=np.array(images[1]))
+    kind, host = np.asarray(kw["charge_kind"]), np.asarray(kw["charge_host"])
+    modified = int(host[kind == 1].max())
+    mixed = dict(kw, charge_kind=np.append(kind, 1).astype(kind.dtype),
+                 charge_host=np.append(host, modified).astype(host.dtype),
+                 charge_expo=np.append(np.asarray(kw["charge_expo"]), [2, 0, 0]).astype(np.asarray(kw["charge_expo"]).dtype))
+    block = _rp._ChargeGramHMatrix(**mixed)
+    assert block.stats()["ho_analytic_block_available"] == 1.0, "fixture no longer reaches the host-block route"
+    scalar = _rp._ChargeGramHMatrix(**kw)
+    idx = [i for i in _subset(kw) if not (kind[i] == 1 and host[i] == modified)]
+    actual = np.array([[block.entry(i, j) for j in idx] for i in idx])
+    expected = np.array([[scalar.entry(i, j) for j in idx] for i in idx])
+    np.testing.assert_allclose(actual, expected, rtol=1e-13, atol=0.0)
