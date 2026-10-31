@@ -377,6 +377,11 @@ if(BUILD_TESTING)
     target_compile_definitions(test_hdiv_p1_diagonal_math PRIVATE RADIA_FIELD_SERIAL_ONLY)
     target_compile_features(test_hdiv_p1_diagonal_math PRIVATE cxx_std_17)
     add_test(NAME radia.hdiv_p1_diagonal_math.cpp COMMAND test_hdiv_p1_diagonal_math)
+    add_executable(test_hdiv_p1_touching_rule tests/cpp/test_hdiv_p1_touching_rule.cpp src/core/rad_hdiv_vim.cpp)
+    target_include_directories(test_hdiv_p1_touching_rule PRIVATE src/core/gpu/hdiv src/core)
+    target_compile_definitions(test_hdiv_p1_touching_rule PRIVATE RADIA_FIELD_SERIAL_ONLY)
+    target_compile_features(test_hdiv_p1_touching_rule PRIVATE cxx_std_17)
+    add_test(NAME radia.hdiv_p1_touching_rule.cpp COMMAND test_hdiv_p1_touching_rule)
 
     add_executable(test_ih_rotation_runtime
         tests/ih_rotation_runtime.cpp
