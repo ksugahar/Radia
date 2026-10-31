@@ -2,16 +2,17 @@
 
 Develop the reusable CPU and shared C++/CUDA kernels in `radia`, first exposed
 through Python/pybind11. `radia-simulink` exposes them through thin MATLAB
-mexcuda gateways and Simulink blocks. Follow the repository's current compiler,
+plain-MEX gateways (mex/matlab_add_mex) and Simulink blocks. Follow the repository's current compiler,
 runtime, explicit-backend, TaskManager and package-ownership policies.
 
 ## Shared numerical source
 
 Actively share reusable C++/CUDA numerical kernels, domain data structures,
 validation/error logic, lifecycle and host-control code between Python/pybind11
-and MATLAB/mexcuda. Do not maintain a second implementation of the same
-numerical algorithm merely for another binding. Shared domain source belongs
-to `radia`; `radia-simulink` depends on it one-way. `radia` must not require
+and MATLAB/plain MEX. Do not maintain a second implementation of the same
+numerical algorithm merely for another binding. Shared electromagnetic domain source belongs
+to `radia`; `radia-simulink` depends on it one-way. Independently released
+packages retain ownership of their own kernels. `radia` must not require
 MATLAB/MEX or `radia_simulink` imports, linking or runtime dependencies.
 
 Bindings remain thin adapters for ABI, types, memory ownership and checked
@@ -20,12 +21,33 @@ and MATLAB ownership/conversion details in their adapters. Preserve provider-
 owned allocation/destruction where applicable. Common host control does not
 mean common host scheduling: MATLAB scheduling/S-Function lifecycle, compiler/
 ABI build settings and package integration remain package-owned. Never bring
-NGSolve TaskManager into mexcuda paths through a shared source dependency.
+NGSolve TaskManager into MEX paths through a shared source dependency.
 
-On Windows, Python/pybind11 CUDA compilation uses nvcc directly with MSVC host
-C++; CPU/NGSolve C++ remains MSVC, and MATLAB uses mexcuda over shared kernels.
-Use the current reviewed Windows baseline, not independent per-binding compiler
-overrides. This policy authorizes no installation or host configuration change.
+Build Radia-owned `.cu` kernels and host wrappers once as a shared CMake/nvcc
+CUDA library. Develop first through pybind11; plain `mex` or `matlab_add_mex`
+links the same compiled objects/library. mexcuda is retired; no fallback.
+Record the common library hash and both bindings' link receipts: common source
+alone does not prove common compiled code. Owner-scoped implementation migration
+is separate from this policy; no existing route is certified by declaring it.
+
+On Windows use MATLAB-bundled nvcc/CUDA 12.8 and MSVC 14.44; CPU/NGSolve C++
+remains MSVC. Preserve the coordinated baseline review on MATLAB upgrades,
+rather than independent binding-specific compiler overrides. This policy
+performs no installation, compiler upgrade or host configuration change.
+
+Link `libmwgpu` only when an adapter uses `mxGPUArray`. Verify CUDA runtime and
+context identity/ownership across both bindings; do not assume unproven static-
+`cudart` sharing is safe. Keep MATLAB headers and GPU-array adapters outside the
+shared domain kernel. Explicit CPU MEX selection must still create no CUDA
+context. Shared host code does not transfer MATLAB scheduling ownership.
+
+Upstream NGSolve NVRTC is a separate, versioned/qualified route, not a fallback
+for Radia-owned kernels. CUDA may use cuBLAS, cuSPARSE and cuSOLVER within its
+explicitly selected, validated solver scope. Radia-owned native CPU math uses
+MKL on x86 (PARDISO remains off) or NVPL on aarch64, not OpenBLAS; this statement
+does not claim third-party wheel dependencies were rebuilt. CuPy is permitted
+for development/validation; production uses pybind11 rather than an implicit
+CuPy backend or fallback.
 
 Common source and same-kernel agreement do not provide an independent physical
 oracle. Keep pybind11/MEX bitwise parity and separately user-approved CPU/GPU

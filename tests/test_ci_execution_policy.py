@@ -321,7 +321,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "isolated exact-wheel QA" in normalized
     assert "radia-mcp stays build-editable/validation-wheel" in normalized
     assert "cubit-mesh-export is build-only" in normalized
-    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
+    assert "Use GPU workers for declared GPU builds and qualification" in normalized
     assert "retired targets stay excluded" in normalized
     assert "validation has no Cubit/cme" in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
@@ -367,12 +367,16 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "one heavy job at a time" in normalized.lower()
     assert "running jobs and available memory" in normalized
     assert "never stop another session's jobs" in normalized
-    assert "8 physical cores/job and 6 concurrent host-wide jobs need no per-job permission" in normalized
+    assert "build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional" in normalized
+    assert "no admission, owner-pool, idle-core or load gates" in normalized
     assert "Count existing jobs" in normalized
-    assert "No fixed owner pool" in normalized
-    assert "without oversubscribing CI/others" in normalized
-    assert "Outside-frame jobs need admission" in normalized
-    assert "GPU, remote, environment, deployment and publication work retain task-specific authorization" in normalized
+    assert "bound CPU/threads and record resources, not admission gates" in normalized
+    assert "overflow to a free build GPU slot is pre-authorized" in normalized
+    assert "<=1 GPU job/host, <=2 across both" in normalized
+    assert "Preserve artifact/architecture/ABI/runtime/owner scope" in normalized
+    assert "no install/configuration or unverified substitution" in normalized
+    assert "Never stop, repin or overwrite others' jobs/runtimes" in normalized
+    assert "Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization" in normalized
     assert "Use an isolated venv; preserve other/shared runtimes" in normalized
     assert "BelowNormal, owned no-breakaway containment and absolute deadlines" in normalized
     assert "Memory caps need specific justification" in normalized
@@ -405,7 +409,10 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert not re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", policy), "IPv4 address in public policy"
     assert "### Tests For AI-Authored Code" in policy
     assert "Investigations remain in Git" in policy
-    assert "Never include, link, or use NGSolve TaskManager in mexcuda builds" in policy
+    assert "Never include, link, or use NGSolve TaskManager in MEX builds" in policy
+    assert "mexcuda is retired; no fallback" in policy
+    assert "link the same objects/library from plain mex/matlab_add_mex" in policy
+    assert all("mexcuda" not in line.lower() or "retired" in line.lower() for line in agents)
     assert "Keep management, sequential RNG" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
