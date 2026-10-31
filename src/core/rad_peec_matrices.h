@@ -39,6 +39,7 @@
 
 #include "gmvect.h"
 #include "rad_constants.h"
+#include "rad_peec_volume.h"
 #include <vector>
 #include <complex>
 #include <memory>
@@ -220,6 +221,7 @@ class PEECMatrixBuilder {
 public:
     PEECMatrixBuilder();
     ~PEECMatrixBuilder();
+    void EnableVolumeKernel(int quadrature_order);
 
     // ========== Input geometry ==========
 
@@ -390,14 +392,15 @@ public:
     /**
      * @brief Return L(i, j) entry of the inductance matrix.
      *
-     * Dispatches to SelfInductance(i) when i == j and MutualInductance(i, j)
-     * otherwise. Exposed publicly for on-demand consumption by the HACApK
+     * Uses the same selected entry function as dense ComputeL, including
+     * the explicit finite-volume mode and same-parent cross-section averaging. Exposed publicly for on-demand consumption by the HACApK
      * PEEC adapter (see RadHACApKPEECManager::GetInteractionMatrixElement)
      * without forcing O(N^2) assembly of the full L matrix.
      */
     double InductanceEntry(int i, int j) const;
 
 private:
+    std::shared_ptr<const VolumeGreenRule> volume_rule_;
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;

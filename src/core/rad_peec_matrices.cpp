@@ -130,6 +130,11 @@ void PEECPanel::ComputeGeometry() {
 
 PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0), eps_r_(1.0) {}
 
+void PEECMatrixBuilder::EnableVolumeKernel(int order) {
+    if (!segments_.empty()) throw std::logic_error("Select volume kernel before adding geometry");
+    volume_rule_ = std::make_shared<VolumeGreenRule>(order);
+}
+
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
 
 void PEECMatrixBuilder::AddSegment(const PEECSegment& segment) {
@@ -522,49 +527,49 @@ void PEECMatrixBuilder::ComputeL(PEECMatrices& matrices) {
     ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
         const PEECSegment& si = segments_[(int)i];
 
-        // Self-inductance (exact Rosa/Grover for rect, exact Neumann for circ)
-        matrices.L[i * n + i] = SelfInductance(si);
-
-        // Mutual inductance (upper triangle)
-        for (int j = (int)i + 1; j < n; ++j) {
-            const PEECSegment& sj = segments_[j];
-            double Lij;
-
-            // For parallel sub-filaments of the same parent conductor,
-            // use exact cross-section-averaged mutual inductance (Ruehli
-            // 1972 Section 6, Gauss quadrature over both cross-sections).
-            // This eliminates the spurious circulating current artifact
-            // that filamentary Neumann gives for close parallel bars.
-            bool same_parent = (si.parent_segment >= 0 &&
-                                si.parent_segment == sj.parent_segment);
-            double dot = si.direction.x * sj.direction.x +
-                         si.direction.y * sj.direction.y +
-                         si.direction.z * sj.direction.z;
-            bool parallel = (std::abs(std::abs(dot) - 1.0) < 1e-3);
-
-            if (same_parent && parallel &&
-                si.cross_section_type == CrossSectionType::RECTANGULAR &&
-                si.width > 1e-15 && si.height > 1e-15) {
-                Lij = MutualInductanceRectBar(si, sj);
-            } else {
-                Lij = MutualInductance(si, sj);
-            }
-
-            matrices.L[i * n + j] = Lij;
-            matrices.L[j * n + i] = Lij;  // Symmetric
+        for (int j = (int)i; j < n; ++j) {
+            const double value = InductanceEntry((int)i, j);
+            matrices.L[i * n + j] = value;
+            matrices.L[j * n + i] = value;
         }
     });
 }
 
 double PEECMatrixBuilder::InductanceEntry(int i, int j) const {
-    // Public on-demand accessor for the HACApK PEEC adapter. Dispatches
-    // to SelfInductance (Grover/short-segment formula) for the diagonal
-    // and MutualInductance (parallel analytical / Gauss quadrature /
-    // fourfil) for off-diagonal entries.
-    int n = static_cast<int>(segments_.size());
-    if (i < 0 || i >= n || j < 0 || j >= n) return 0.0;
-    if (i == j) return SelfInductance(segments_[i]);
-    return MutualInductance(segments_[i], segments_[j]);
+    const int n = static_cast<int>(segments_.size());
+    if (i < 0 || i >= n || j < 0 || j >= n)
+        throw std::out_of_range("PEEC inductance entry index outside geometry");
+    if (i > j) std::swap(i, j);
+    const auto& a=segments_[i]; const auto& b=segments_[j];
+    if (volume_rule_) {
+        auto box=[](const PEECSegment& seg) {
+            if (seg.cross_section_type != CrossSectionType::RECTANGULAR)
+                throw std::invalid_argument("Volume mode requires Cartesian rectangular cells");
+            const double d[3]={seg.direction.x,seg.direction.y,seg.direction.z};
+            int axis=-1;
+            for(int k=0;k<3;++k) {
+                if(d[k]==1. || d[k]==-1.) { if(axis!=-1)throw std::invalid_argument("Cartesian axis required"); axis=k; }
+                else if(d[k]!=0.)throw std::invalid_argument("Cartesian axis required; no filament fallback");
+            }
+            if(axis<0)throw std::invalid_argument("Cartesian current axis required");
+            // Existing canonical bar frame: width is ref cross direction.
+            const double extent[3]={axis==0?seg.length:seg.height,
+                                    axis==1?seg.length:(axis==2?seg.width:seg.height),
+                                    axis==2?seg.length:seg.width};
+            const double c[3]={seg.center.x,seg.center.y,seg.center.z};
+            VolumeBox result;result.axis=axis;result.sign=d[axis]>0?1:-1;
+            for(int k=0;k<3;++k){result.lo[k]=c[k]-extent[k]/2;result.hi[k]=c[k]+extent[k]/2;}
+            return result;
+        };
+        return volume_rule_->Inductance(box(a),box(b));
+    }
+    if (i == j) return SelfInductance(a);
+    const double dot=a.direction.x*b.direction.x+a.direction.y*b.direction.y+a.direction.z*b.direction.z;
+    const bool same_parent=a.parent_segment>=0 && a.parent_segment==b.parent_segment;
+    if(same_parent && std::abs(std::abs(dot)-1.)<1.e-3 &&
+       a.cross_section_type==CrossSectionType::RECTANGULAR && a.width>1.e-15 && a.height>1.e-15)
+        return MutualInductanceRectBar(a,b);
+    return MutualInductance(a,b);
 }
 
 void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {

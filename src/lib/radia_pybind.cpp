@@ -6762,8 +6762,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
                             py::array_t<double, py::array::c_style | py::array::forcecast> lengths,
                             py::array_t<double, py::array::c_style | py::array::forcecast> widths,
                             py::array_t<double, py::array::c_style | py::array::forcecast> heights,
-                            py::array_t<double, py::array::c_style | py::array::forcecast> sigmas)
+                            py::array_t<double, py::array::c_style | py::array::forcecast> sigmas,
+                            int volume_order=0)
         {
+            if(volume_order) builder_.EnableVolumeKernel(volume_order);
             auto c = centers.unchecked<2>();
             auto d = directions.unchecked<2>();
             auto l = lengths.unchecked<1>();
@@ -6862,9 +6864,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
                        py::array_t<double, py::array::c_style | py::array::forcecast>,
                        py::array_t<double, py::array::c_style | py::array::forcecast>,
                        py::array_t<double, py::array::c_style | py::array::forcecast>,
-                       py::array_t<double, py::array::c_style | py::array::forcecast>>(),
+                       py::array_t<double, py::array::c_style | py::array::forcecast>, int>(),
              py::arg("centers"), py::arg("directions"), py::arg("lengths"),
-             py::arg("widths"), py::arg("heights"), py::arg("sigmas"))
+             py::arg("widths"), py::arg("heights"), py::arg("sigmas"),
+             py::arg("volume_order") = 0)
         .def("BuildHMatrix", &PyHACApKPEECManager::BuildHMatrix,
              py::arg("aca_eps") = -1.0, py::arg("leaf_size") = -1,
              py::arg("eta") = -1.0, py::arg("max_rank") = -1,
