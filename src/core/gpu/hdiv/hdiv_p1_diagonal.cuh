@@ -14,7 +14,7 @@ __global__ void p1ChargeDiagonal(const radia_hdiv_python::P1ChargeSource* source
         const radia_hdiv_python::PhysicalChargePoint* quadrature,std::size_t n,double* diagonal,
         double* scale,int* invalid){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n)return;
-    const double value=radia_hdiv_p1_diagonal::selfEntry(sources[i],quadrature);
+    const double value=radia_hdiv_p1_diagonal::pairEntry(sources[i],sources[i]);
     if(!isfinite(value)||value<=0.){atomicExch(invalid,1);return;}
     diagonal[i]=value;scale[i]=sqrt(value);
 }

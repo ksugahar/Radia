@@ -799,6 +799,7 @@ private:
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
+    bool P1TouchEntry(int tgt, int src, double& value) const;
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, T^-1(p)) -- tgt's outer points mapped by the INVERSE image
     // transform.  Uses Phi_{T(b)}(x) = Phi_b(T^-1(x)) (isometry), so only the eval point moves.
