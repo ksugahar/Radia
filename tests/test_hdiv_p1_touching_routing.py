@@ -137,3 +137,27 @@ def test_shape_derivative_matches_scaling_and_central_difference(charge_inputs, 
     fd = (plus - minus) / (2 * h)
     err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
     assert err < DETECTOR_REL, f"derivative vs central difference: max rel {err:.3e}"
+
+
+def test_image_value_and_derivative_are_continuous_off_the_plane(charge_inputs):
+    # Translate the mesh off the mirror plane by d: near images then stay on one
+    # rule, so the translation derivative matches a central difference taken
+    # anywhere in d (a geometric rule switch shows up here as a jump).
+    images = dict(image_masks=np.array([1], dtype=np.int32), image_signs=np.array([1.0]))
+    cells = np.asarray(charge_inputs["cell_verts"]).reshape(-1, 4, 3)
+    faces = np.asarray(charge_inputs["face_verts"]).reshape(-1, 3, 3)
+    shift = np.array([1.0, 0.0, 0.0])
+
+    def moved(d):
+        return dict(charge_inputs, **images, cell_verts=np.ascontiguousarray((cells + d * shift).ravel()),
+                    face_verts=np.ascontiguousarray((faces + d * shift).ravel()))
+
+    d, h = 0.37267799625, 1e-5
+    idx = _subset(charge_inputs)
+    gram, _ = _gram(moved(d))
+    D = np.asarray(gram.tet_charge_gram_directional_derivative(
+        np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+        np.ascontiguousarray(np.broadcast_to(shift, faces.shape))))[np.ix_(idx, idx)]
+    fd = (_gram(moved(d + h))[1] - _gram(moved(d - h))[1]) / (2 * h)
+    err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
+    assert err < DETECTOR_REL, f"translation derivative vs central difference: max rel {err:.3e}"
