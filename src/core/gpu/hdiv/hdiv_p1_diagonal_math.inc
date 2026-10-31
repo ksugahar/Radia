@@ -38,7 +38,7 @@ template<int N> RADIA_P1_KERNEL inline void gradedRule(double (&x)[N],double (&w
         w[i]=weight*6*a*(1-a);w[N-1-i]=weight*6*b*(1-b);
     }
 }
-template<int N=16> RADIA_P1_KERNEL inline double pairEntry(
+template<int N> RADIA_P1_KERNEL inline double pairEntryOrder(
         const radia_hdiv_python::P1ChargeSource& target,
         const radia_hdiv_python::P1ChargeSource& source){
     double x[N],w[N],edges[3][3]={};gradedRule<N>(x,w);
@@ -61,6 +61,15 @@ template<int N=16> RADIA_P1_KERNEL inline double pairEntry(
         total+=weight*mono*potentialAt(source,point);
     }
     return total*measure*0.07957747154594766788;
+}
+// Order per TARGET kind: a TET target is a 3-D tensor rule (N^3 potentials),
+// a TRI target 2-D (N^2). Measured host self entries vs GL48 on the oblique
+// tet: TET N=8 1.3e-6 at 1.4 ms (N=16 4e-11 at 15 ms); TRI N=12 <=1.7e-7.
+// Observed diagnostics, not an adopted tolerance.
+template<int NTri=12,int NTet=8> RADIA_P1_KERNEL inline double pairEntry(
+        const radia_hdiv_python::P1ChargeSource& target,
+        const radia_hdiv_python::P1ChargeSource& source){
+    return target.kind?pairEntryOrder<NTri>(target,source):pairEntryOrder<NTet>(target,source);
 }
 RADIA_P1_KERNEL inline double selfEntry(const radia_hdiv_python::P1ChargeSource& source,
         const radia_hdiv_python::PhysicalChargePoint* points){
