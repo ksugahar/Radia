@@ -237,7 +237,7 @@
         "tools/prepare_hdiv_mesh_receipt.py",
         "tools/check_python_gpu_coexistence.py"
       ],
-      "audit_sha256": "c5887869cdb2af19194800c7a21babeea343c28014a777dc00d8716868a6fecd",
+      "audit_sha256": "0af1a7b4ebfa9854ad2193a59a4525e554bc9863ee757c2238643181633678f9",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
