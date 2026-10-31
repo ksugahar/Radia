@@ -138,9 +138,12 @@ def test_hdiv_host_cmake_values_do_not_reinterpret_windows_path_escapes(tmp_path
     commands = []
     def execute(argv, output, label, saved):
         commands.append(argv)
-        if label == "_hdiv_cuda-host":binary.write_bytes(b"not executable")
+        if label == "_hdiv_cuda-host":
+            binary.write_bytes(b"not executable")
+            (out / "radia_hdiv_kernels.lib").write_bytes(b"!<arch>\nnot a real archive member")
     monkeypatch.setattr(builder, "execute", execute)
     cuda = tmp_path / "cuda toolkit"
+    (out / "hdiv.obj").write_bytes(b"not a real object")
     builder.build_hdiv_host(SimpleNamespace(host_compiler=compiler), binary,
                             out / "hdiv.obj", sdk, cuda, out, [])
     expected = {"CMAKE_CXX_COMPILER": compiler, "NGSolve_DIR": sdk, "Netgen_DIR": sdk,
