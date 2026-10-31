@@ -137,49 +137,53 @@ def test_cubit_mesh_export_publishes_only_from_its_successful_tag_ci():
 
 
 def test_optuna_manual_release_selects_one_fully_successful_ci_run():
-    workflow=OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8")
-    assert "workflow_dispatch:" in workflow
-    assert "workflow_run:" not in workflow
-    assert "ci_run_id:" in workflow
-    assert "candidate_sha256:" in workflow
-    assert 'STATUS" != "completed"' in workflow
-    assert 'CONCLUSION" != "success"' in workflow
-    assert 'EVENT" != "push"' in workflow
-    assert 'HEAD_BRANCH" != "main"' in workflow
-    assert (
-        'WORKFLOW_PATH" != ".github/workflows/radia-optuna.yml"'
-        in workflow
-    )
-    assert 'HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"' in workflow
-    assert '"build-test"' in workflow
-    assert '"radia-optuna installed-wheel MATLAB/Simulink E2E"' in workflow
-    assert "run-id: ${{ steps.source.outputs.run_id }}" in workflow
-    assert "ref: ${{ steps.source.outputs.sha }}" in workflow
-    assert (
-        'python3 packages/radia-optuna/verify_wheel.py "$WHL" '
-        "--release-candidate --json"
-        in workflow
-    )
-    assert '"packages/radia-optuna/matlab/optuna_mex.mexw64"' in workflow
-    assert (
-        '"radia_optuna/matlab/optuna_mex.mexw64": Path('
-        in workflow
-    )
-    assert '"radia_optuna/matlab/LICENSE": Path("LICENSE")' not in workflow
-    assert "target.write_bytes(archive.read(member))" in workflow
-    assert 'EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"' in workflow
-    assert 'ACTUAL_SHA256=$(sha256sum "$WHL"' in workflow
-    assert '"${ACTUAL_SHA256,,}" != "${CANDIDATE_SHA256,,}"' in workflow
-    assert "contents: write" in workflow
-    assert 'gh release create "$TAG_NAME" "$WHEEL"' in workflow
+    import yaml
+    document=yaml.safe_load(OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8"))
+    verify,publish=document["jobs"]["verify"],document["jobs"]["publish"]
+    assert "environment" not in verify
+    assert "id-token" not in document["permissions"]
+    assert document["permissions"] == {"actions":"read","contents":"read"}
+    assert publish["needs"] == "verify" and publish["environment"] == "pypi"
+    assert publish["permissions"] == {"actions":"read","contents":"write","id-token":"write"}
+    import importlib.util
+    ci=yaml.safe_load((ROOT/".github/workflows/radia-optuna.yml").read_text(encoding="utf-8"))
+    expected_jobs=(ci["jobs"]["build-test"].get("name","build-test"), ci["jobs"]["installed-wheel-matlab-e2e"]["name"])
+    spec=importlib.util.spec_from_file_location("optuna_policy_publisher", ROOT/"packages/radia-optuna/tools/verify_publication.py")
+    assert spec is not None and spec.loader is not None
+    gate=importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+    assert gate.REQUIRED_JOBS == expected_jobs
+    before=next(s for s in verify["steps"] if s.get("id")=="audit")
+    after=next(s for s in publish["steps"] if s.get("id")=="audit")
+    helper="packages/radia-optuna/tools/verify_publication.py"
+    assert helper in before["run"] and helper in after["run"]
+    assert "--approved-receipt proof/publication-proof.json" in after["run"]
+    download=next(s for s in publish["steps"] if s.get("uses","").startswith("actions/download-artifact"))
+    assert download["with"]["artifact-ids"] == "${{ needs.verify.outputs.proof_artifact_id }}"
+    assert verify["outputs"]["proof_artifact_id"] == "${{ steps.proof.outputs.artifact-id }}"
+    steps=publish["steps"]
+    assert steps.index(after) < next(i for i,s in enumerate(steps) if s.get("uses","").startswith("pypa/gh-action-pypi-publish"))
+    for job in (verify,publish):
+        checkout=next(s for s in job["steps"] if s.get("uses","").startswith("actions/checkout"))
+        assert checkout["with"]["ref"] == "${{ github.sha }}"
+        assert checkout["with"]["persist-credentials"] is False
 
 
 def test_optuna_manual_release_fails_loudly_when_ci_sha_has_no_tag():
-    workflow=OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8")
-    tag_check=workflow[workflow.index("- name: Confirm tag points"):]
-    tag_check=tag_check[:tag_check.index("- name: Check out the exact")]
-    assert 'echo "::error::No radia-optuna-v* tag points at $SHA"' in tag_check
-    assert "exit 1" in tag_check
+    import yaml
+    text=OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    document=yaml.safe_load(text)
+    publish=document["jobs"]["publish"]
+    for condition in ("github.event_name == 'workflow_dispatch'", "github.ref_type == 'tag'",
+                      "startsWith(github.ref, 'refs/tags/radia-optuna-v')", "needs.verify.result == 'success'"):
+        assert condition in publish["if"], condition
+    assert document["concurrency"] == {"group":"radia-optuna-release-${{ github.ref }}", "cancel-in-progress":False}
+    assert "workflow_run:" not in text
+    assert "--clobber" not in text and "skip-existing" not in text
+    assert "--verify-tag" in text
+    for job in document["jobs"].values():
+        assert not any(s.get("continue-on-error",False) for s in job["steps"])
+    pypi=next(s for s in publish["steps"] if s.get("uses","").startswith("pypa/gh-action-pypi-publish"))
+    assert pypi["if"] == "steps.audit.outputs.pypi_exists == 'false'"
 
 
 
