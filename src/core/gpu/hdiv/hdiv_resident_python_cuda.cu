@@ -2,6 +2,7 @@
 #include "hdiv_resident_python_api.hpp"
 #include "hmatrix_material_solver.cuh"
 #include "hmatrix_nonlinear_material.cuh"
+#include "hdiv_constant_diagonal.cuh"
 #include <mutex>
 #include <atomic>
 namespace radia_hdiv_python {

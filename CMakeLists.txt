@@ -368,6 +368,11 @@ set(RADIA_CORE_SOURCES
 # Solver-heavy accelerator validation remains under validation_test/.
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(test_hdiv_constant_diagonal_input tests/cpp/test_hdiv_constant_diagonal_input.cpp)
+    target_include_directories(test_hdiv_constant_diagonal_input PRIVATE src/core/gpu/hdiv)
+    target_compile_features(test_hdiv_constant_diagonal_input PRIVATE cxx_std_17)
+    add_test(NAME radia.hdiv_constant_diagonal_input.cpp COMMAND test_hdiv_constant_diagonal_input)
+
     add_executable(test_ih_rotation_runtime
         tests/ih_rotation_runtime.cpp
         src/runtime/ih/radia_ih_runtime.cpp

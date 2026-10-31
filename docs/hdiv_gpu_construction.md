@@ -107,6 +107,22 @@ attribute another process's allocations to this owner.
 
 ## Qualification
 
+The private `_ConstantChargeDiagonal` component accepts only explicit constant
+volume/surface charges on affine tetrahedra and flat triangles. The caller owns
+the physical quadrature points and measure-weighted weights; it must stage the
+same rule as the independent CPU Gram calculation. This entry does not assemble
+FE maps, choose a new quadrature rule, build a complete Gram matrix, or replace
+the public solver's CPU Gram construction. Nonzero monomial exponents fail.
+
+The CUDA kernel reuses the shared analytic constant-charge self entry, including
+its `1/(4*pi)` factor, and retains both physical diagonal and `sqrt(diagonal)`
+on device. The latter is the existing charge-space normalization scale, not an
+FE-system diagonal. Geometry/rules are uploaded once. Only explicit diagnostic
+methods download coefficients; construction downloads a status integer.
+Statistics distinguish retained bytes, setup buffer peak, setup transfers and
+diagnostic downloads. Stream/library overhead is outside the buffer byte count.
+Host admission tests do not establish numerical qualification of this component.
+
 Compare against the independent CPU entry/solve route using identical inputs
 and existing adopted numerical criteria. Include near/self, separated pairs,
 polynomial order, permutations and geometry rejection controls. Inject failures
