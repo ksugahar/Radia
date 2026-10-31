@@ -321,7 +321,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "isolated exact-wheel QA" in normalized
     assert "radia-mcp stays build-editable/validation-wheel" in normalized
     assert "cubit-mesh-export is build-only" in normalized
-    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
+    assert "Use GPU workers for declared GPU builds and qualification" in normalized
     assert "retired targets stay excluded" in normalized
     assert "validation has no Cubit/cme" in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
@@ -359,28 +359,33 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
-    assert "Build owns CI, artifacts, validation and CPU/GPU development" in normalized
-    assert "Validation uses editable Radia, separate wheel QA and timing without Cubit/cme" in normalized
+    assert "Build owns CPU/secondary GPU development, CI/formal artifacts" in normalized
+    assert "Validation is primary GPU development in isolated checkouts/venvs, separate from exact-wheel QA/runtime; no Cubit/cme" in normalized
     assert "JMAG evaluation runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
     assert "Timings are diagnostic" in normalized
     assert "one heavy job at a time" in normalized.lower()
     assert "running jobs and available memory" in normalized
     assert "never stop another session's jobs" in normalized
-    assert "8 physical cores/job and 6 concurrent host-wide jobs need no per-job permission" in normalized
-    assert "Count existing jobs" in normalized
-    assert "No fixed owner pool" in normalized
-    assert "without oversubscribing CI/others" in normalized
-    assert "Outside-frame jobs need admission" in normalized
-    assert "GPU, remote, environment, deployment and publication work retain task-specific authorization" in normalized
+    assert "build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional" in normalized
+    assert "no admission, owner-pool, idle-core or load gates" in normalized
+    assert "Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL" in normalized
+    assert "GPU jobs use a separate slot, not a CPU slot" in normalized
+    assert "record host CPU use, avoid oversubscription" in normalized
+    assert "overflow to a free build GPU slot is pre-authorized" in normalized
+    assert "<=1 GPU job/host, <=2 across both" in normalized
+    assert "Keep artifact/architecture/ABI/runtime/owner scope" in normalized
+    assert "no install/config or unverified substitution" in normalized
+    assert "Never stop, repin or overwrite others' jobs/runtimes" in normalized
+    assert "Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization" in normalized
     assert "Use an isolated venv; preserve other/shared runtimes" in normalized
     assert "BelowNormal, owned no-breakaway containment and absolute deadlines" in normalized
     assert "Memory caps need specific justification" in normalized
     assert "`owner.json` records owner/source/runtime/start/deadline/job count/resources" in normalized
     assert "never PR gates" in normalized
     assert "Measure speed" in normalized
-    assert "remain valid provenance" in normalized
-    assert "Keep hosts, IPs and paths private" in normalized
+    assert "Historical timings retain provenance" in normalized
+    assert "Keep host maps/originals/hashes/IPs/paths private; never relabel hosts" in normalized
 
 
 def test_agent_policies_stay_compact_and_share_one_policy_body():
@@ -405,7 +410,17 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert not re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", policy), "IPv4 address in public policy"
     assert "### Tests For AI-Authored Code" in policy
     assert "Investigations remain in Git" in policy
-    assert "Never include, link, or use NGSolve TaskManager in mexcuda builds" in policy
+    assert "Never include, link, or use NGSolve TaskManager in MEX builds" in policy
+    assert "mexcuda is retired; no fallback" in policy
+    assert "link the same objects/library from plain mex/matlab_add_mex" in policy
+    assert all("mexcuda" not in line.lower() or "retired" in line.lower() for line in agents)
+    assert "NGSolve-inherited DLLs" in policy
+    assert "CPU numerical default: 1 thread for independent optimization runs" in policy
+    assert "multithreading supported, explicit 8-physical-core large-solve profile" in policy
+    assert "GPU-first; measure speed per case" in policy
+    assert "Log TaskManager/OpenMP/MKL limits" in policy
+    assert "GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback" in policy
+    assert "Text: UTF-8/LF" in policy
     assert "Keep management, sequential RNG" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
@@ -507,3 +522,55 @@ def test_host_roles_agree_across_deployment_skills():
     assert any((guide.parent / link).resolve() ==
                (root / ".agents/skills/cubit-toolbar-acceptance/SKILL.md").resolve()
                and (guide.parent / link).is_file() for link in links)
+
+
+def _text_eol_module():
+    spec = importlib.util.spec_from_file_location(
+        "tracked_text_eol_contract", ROOT / "tools/check_text_line_endings.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_tracked_text_index_is_lf_and_attributes_preserve_evidence():
+    """Guards: CRLF/mixed source blobs fail CI; binary/evidence bytes survive.
+
+    Assumes: Git index is the publication input; working-copy autocrlf is not
+    a reason to rewrite sealed evidence or another owner's files.
+    """
+    attributes = (ROOT / '.gitattributes').read_text(encoding='utf8')
+    assert '* text=auto eol=lf' in attributes
+    assert 'validation_records/** -text' in attributes
+    result = _text_eol_module().check_index(ROOT)
+    assert result['passed'], result['violations']
+
+
+def test_text_eol_guard_rejects_crlf_and_mixed_including_cmd(tmp_path):
+    """Guards: the index guard actually fails and respects binary/-text overrides.
+
+    Assumes: synthetic Git blobs bypass checkout normalization deliberately;
+    fixtures here are not solver baselines or frozen historical evidence.
+    """
+    import subprocess
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    def index(name, payload):
+        oid = subprocess.run(['git', '-C', str(tmp_path), 'hash-object', '-w', '--stdin'],
+                             input=payload, capture_output=True, check=True).stdout.decode().strip()
+        subprocess.run(['git', '-C', str(tmp_path), 'update-index', '--add',
+                        '--cacheinfo', f'100644,{oid},{name}'], check=True)
+    index('.gitattributes', b'* text=auto eol=lf\n*.bin binary\nsealed.json -text\n')
+    # Attributes are also present in the checkout, as for a normal CI checkout.
+    (tmp_path / '.gitattributes').write_bytes(
+        b'* text=auto eol=lf\n*.bin binary\nsealed.json -text\n')
+    index('good.py', b'print("ok")\n')
+    index('binary.bin', b'\0\r\n')
+    index('sealed.json', b'{"historical": true}\r\n')
+    guard = _text_eol_module()
+    assert guard.check_index(tmp_path)['passed']
+    for name, content in [('bad.py', b'x=1\r\n'), ('bad.cmd', b'echo bad\r\n'),
+                          ('mixed.md', b'one\ntwo\r\n')]:
+        index(name, content)
+    result = guard.check_index(tmp_path)
+    assert not result['passed']
+    assert {v['path'] for v in result['violations']} == {'bad.py', 'bad.cmd', 'mixed.md'}
