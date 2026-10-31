@@ -172,13 +172,19 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
     out, matlab = tmp_path / "output", tmp_path / "private-matlab-location"
+    for relative in ("sys/cuda/win64/cuda/bin/nvcc.exe", "sys/cuda/win64/cuda/bin/nvcc.profile",
+                     "sys/cuda/win64/cuda/nvvm/bin/cicc.exe", "bin/win64/libdevice.10.bc",
+                     "sys/cuda/win64/cuda/include/cuda.h"):
+        fixture = matlab / relative
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_bytes(b"#define CUDA_VERSION 12080\n" if relative.endswith("cuda.h") else b"non-executable SDK input")
     admission = tmp_path / "private-admission.json"
     admission.write_text('{"private_secret":"do-not-publish"}')
     sha = "a" * 40
     monkeypatch.setattr(builder, "identity", lambda: sha)
     monkeypatch.setattr(builder, "admission", lambda *_: {"private_secret": "do-not-publish"})
     monkeypatch.setattr(builder.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(builder, "check_toolchain", lambda *_: (tmp_path / "nvcc", "CUDA12.8", "MSVC14.44"))
+    monkeypatch.setattr(builder, "check_toolchain", lambda root, *_: (root / "bin/nvcc.exe", "release 12.8, V12.8.61", "MSVC14.44"))
     sdk = tmp_path / "sdk"
     (sdk / "pybind11").mkdir(parents=True)
     (sdk / "pybind11/header.h").write_text("synthetic header")
@@ -205,6 +211,8 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
         private = Path(str(receipt).removesuffix(".build.json") + ".private-build.json")
         assert record["private_receipt_sha256"] == builder.sha(private)
         assert "do-not-publish" in private.read_text()
+        sdk_identity = json.loads(private.read_text())["cuda_sdk_identity"]
+        assert sdk_identity["files"]["libdevice"]["path"] == str(matlab / "bin/win64/libdevice.10.bc")
     assert "do-not-publish" in (out / "admission-private.json").read_text()
 
 
