@@ -120,4 +120,5 @@ No surrogate baseline, adoption block or adoption record is created now. The
 remaining independent formulation reference, convergence, residual applicability,
 user approval, native/GPU and exact-wheel steps are explicit deferrals, not
 waivers. The present claim is reproducible CPU reference production-entry
-execution plus a source-reviewed GPU campaign path, with adoption still pending.
+execution plus a GPU campaign path awaiting independent review and execution,
+with adoption still pending.
