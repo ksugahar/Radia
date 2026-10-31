@@ -799,7 +799,11 @@ private:
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
-    bool P1TouchEntry(int tgt, int src, double& value) const;
+    // Affine P1 self/touching direct pairs (img==0) and near-field image pairs (img>0) take the
+    // endpoint-graded outer rule; value, image and shape-derivative paths share this gate.
+    bool P1TouchHosts(int kindT, int hostT, int kindS, int hostS, int img) const;
+    std::vector<double> P1TouchBlock(int kindT, int hostT, int kindS, int hostS, int img) const;
+    double P1TouchEntryValue(int tgt, int src, int img) const;   // one entry of P1TouchBlock
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, T^-1(p)) -- tgt's outer points mapped by the INVERSE image
     // transform.  Uses Phi_{T(b)}(x) = Phi_b(T^-1(x)) (isometry), so only the eval point moves.
@@ -1431,7 +1435,7 @@ private:
     std::vector<double> TetChargeGramDirectionalDerivativeImpl(
         const std::vector<double>& cell_vertex_velocity,
         const std::vector<double>& face_vertex_velocity,
-        int selected_host_a,int selected_host_b) const;
+        int selected_host_a,int selected_host_b,bool include_images=true) const;
     std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int img = 0) const;
 
     // HIGH-ORDER (polynomial-charge) mode
