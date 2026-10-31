@@ -44,8 +44,9 @@ def load_inputs():
     return ns, calls, basis
 
 
-def space(order=1, curve=1, types=None, boundary=4, dofs=12, dim=3, elements=1):
-    mesh = SimpleNamespace(dim=dim, types={4} if types is None else types,
+def space(order=1, curve=1, types=None, boundary=4, dofs=12, dim=3, elements=1, deformation=None):
+    mesh = SimpleNamespace(dim=dim, deformation=deformation,
+                           types={4} if types is None else types,
                            GetCurveOrder=lambda: curve,
                            GetNE=lambda region: boundary if region == "boundary" else elements)
     return SimpleNamespace(mesh=mesh, globalorder=order, ndof=dofs)
@@ -74,7 +75,8 @@ def test_device_inputs_keep_production_near_inner_far_rules_without_gram(order, 
     ({"types": {8}}, NotImplementedError), ({"types": {6}}, NotImplementedError),
     ({"types": {4, 8}}, NotImplementedError), ({"curve": 2}, NotImplementedError),
     ({"order": 0}, NotImplementedError), ({"order": 3}, NotImplementedError),
-    ({"dim": 2}, NotImplementedError), ({"boundary": 0}, ValueError),
+    ({"dim": 2}, NotImplementedError),
+    ({"deformation": object()}, NotImplementedError), ({"boundary": 0}, ValueError),
     ({"elements": 0}, ValueError), ({"elements": 4097}, ValueError),
     ({"dofs": 0}, ValueError), ({"dofs": 16385}, ValueError)])
 def test_unsupported_input_rejected_before_fe_preparation(options, error):
