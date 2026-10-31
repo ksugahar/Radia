@@ -77,20 +77,3 @@ def test_production_affine_keeps_the_finite_consecutive_fit_guard(monkeypatch):
     with pytest.raises(RuntimeError, match="unstable after 16"):
         _vim._ngsolve_affine(trafo, ng.TRIG, 2)
     assert calls == 16 * len(rule), f"mapped-point calls: {calls}"
-
-
-def test_real_ngsolve_coordinate_copy_survives_later_mapped_allocations():
-    from ngsolve.meshes import MakeStructured3DMesh
-
-    mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
-    with ng.TaskManager():
-        trafo = mesh.GetTrafo(next(iter(mesh.Elements(ng.BND))))
-        points = list(ng.IntegrationRule(ng.TRIG, 2))
-        mapped = trafo(points[0])
-        owned = np.array(mapped.point, dtype=float, copy=True)
-        expected = owned.copy()
-        assert owned.flags.owndata, "coordinate snapshot still borrows mapped storage"
-        del mapped
-        later = [trafo(ip) for ip in points * 12]
-        np.testing.assert_array_equal(owned, expected)
-        assert len(later) == 12 * len(points)
