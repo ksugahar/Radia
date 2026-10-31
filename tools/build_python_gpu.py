@@ -73,6 +73,39 @@ def check_toolchain(cuda_root, host, architectures, windows):
     return nvcc, version, host_version
 
 
+def windows_cuda_layout(cuda_root, matlab_root, nvcc_version):
+    """Bind the bundled SDK and explicitly locate its relocated libdevice.
+
+    Keep the profile's working CICC/include configuration; profile bypass is
+    not required by this source change and needs actual compile evidence.
+    Returned paths/hashes belong only in the private build receipt.
+    """
+    cuda_root, matlab_root = Path(cuda_root).resolve(), Path(matlab_root).resolve()
+    if cuda_root != (matlab_root / "sys/cuda/win64/cuda").resolve():
+        raise RuntimeError("Windows CUDA SDK must be the explicit MATLAB-bundled root")
+    files = {"nvcc": cuda_root / "bin/nvcc.exe",
+             "profile": cuda_root / "bin/nvcc.profile",
+             "cicc": cuda_root / "nvvm/bin/cicc.exe",
+             "libdevice": matlab_root / "bin/win64/libdevice.10.bc",
+             "cuda_header": cuda_root / "include/cuda.h"}
+    for name, path in files.items():
+        if not path.is_file():
+            raise RuntimeError(f"Missing MATLAB-bundled CUDA SDK input: {name}")
+    release = re.search(r"release (\d+)\.(\d+),", nvcc_version)
+    header = re.search(r"^\s*#\s*define\s+CUDA_VERSION\s+(\d+)\b",
+                       files["cuda_header"].read_text(encoding="utf-8"), re.MULTILINE)
+    if not release or not header:
+        raise RuntimeError("Cannot determine bundled CUDA compiler/header ABI")
+    expected = int(release[1])*1000 + int(release[2])*10
+    if int(header[1]) != expected:
+        raise RuntimeError("Bundled CUDA header does not match the selected nvcc release")
+    flags = ["--libdevice-directory", str(files["libdevice"].parent)]
+    identity = {"header_version": int(header[1]),
+                "files": {name: {"path": str(path), "sha256": sha(path)}
+                          for name, path in files.items()}}
+    return flags, identity
+
+
 def headers():
     # The installed NGSolve/Netgen ABI owns pybind headers.
     import netgen
@@ -198,6 +231,8 @@ def main():
     if windows and (args.matlab_root is None or cuda != (args.matlab_root.resolve() / "sys/cuda/win64/cuda")):
         raise RuntimeError("Windows must use the explicitly named MATLAB-bundled CUDA")
     nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
+    cuda_sdk_flags, cuda_sdk_identity = (windows_cuda_layout(cuda, args.matlab_root, nvcc_version)
+                                         if windows else ([], None))
     include = headers()
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
@@ -216,6 +251,7 @@ def main():
         obj = out / (module + (".obj" if windows else ".o"))
         cuda_command = [nvcc, "-c", "-std=c++17", "-O2", "-ccbin", args.host_compiler,
                         "-I" + str(CORE), "-o", obj, CORE / cu]
+        cuda_command += cuda_sdk_flags
         cuda_command += ["-gencode=arch=compute_" + arch + ",code=sm_" + arch for arch in args.architectures]
         if windows:
             cuda_command += ["-Xcompiler", "/MD"]
@@ -256,7 +292,8 @@ def main():
             admission=record, commands=commands[:], source_root=str(ROOT), cuda_root=str(cuda),
             host_compiler_path=str(args.host_compiler), pybind_include=str(include),
             ngsolve_sdk_sha256=sha(out / "hdiv-sdk-private.json") if module == "_hdiv_cuda" else None,
-            hdiv_kernel_artifacts=hdiv_artifacts if module == "_hdiv_cuda" else None), indent=2) + "\n", encoding="utf-8")
+            hdiv_kernel_artifacts=hdiv_artifacts if module == "_hdiv_cuda" else None,
+            cuda_sdk_identity=cuda_sdk_identity), indent=2) + "\n", encoding="utf-8")
         receipt = dict(schema="radia.native-build-provenance.v1", source_commit=commit, source_dirty=False,
                        binary_name=binary.name, binary_sha256=sha(binary), source_hashes=source_hashes,
                        pybind_header_hashes=header_hashes, python=sys.version, platform=platform.platform(),

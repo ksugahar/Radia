@@ -90,7 +90,7 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     monkeypatch.setattr(builder, "identity", lambda: "a" * 40)
     monkeypatch.setattr(builder, "admission", lambda *a: {"owner": "fixture"})
     monkeypatch.setattr(builder.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(builder, "check_toolchain", lambda *a: (tmp_path / "nvcc", "CUDA12.8", "MSVC14.44"))
+    monkeypatch.setattr(builder, "check_toolchain", lambda root, *a: (root / "bin/nvcc.exe", "release 12.8, V12.8.61", "MSVC14.44"))
     sdk = tmp_path / "headers"; (sdk / "pybind11").mkdir(parents=True)
     (sdk / "pybind11/header.h").write_text("fixture")
     monkeypatch.setattr(builder, "headers", lambda: sdk)
@@ -101,6 +101,12 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
             if str(word).startswith("/OUT:"): Path(str(word)[5:]).write_bytes(b"not executable")
     monkeypatch.setattr(builder, "execute", execute)
     matlab = tmp_path / "matlab"
+    for relative in ("sys/cuda/win64/cuda/bin/nvcc.exe", "sys/cuda/win64/cuda/bin/nvcc.profile",
+                     "sys/cuda/win64/cuda/nvvm/bin/cicc.exe", "bin/win64/libdevice.10.bc",
+                     "sys/cuda/win64/cuda/include/cuda.h"):
+        fixture = matlab / relative
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_bytes(b"#define CUDA_VERSION 12080\n" if relative.endswith("cuda.h") else b"synthetic SDK input")
     monkeypatch.setattr(sys, "argv", ["builder", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl"),
         "--architectures", "75", "80", "--output", str(tmp_path / "built"),
@@ -112,6 +118,13 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     assert "-gencode=arch=compute_80,code=sm_80" in cuda, cuda
     assert not any("code=compute_" in arg for arg in cuda), cuda
     assert "/MD" in cuda, cuda
+    assert cuda[0] == str(matlab / "sys/cuda/win64/cuda/bin/nvcc.exe")
+    assert cuda[cuda.index("--libdevice-directory") + 1] == str(matlab / "bin/win64")
+    assert "--dont-use-profile" not in cuda
+    private = list((tmp_path / "built").glob("*.private-build.json"))
+    assert len(private) == 1
+    identity = json.loads(private[0].read_text())["cuda_sdk_identity"]
+    assert identity["files"]["libdevice"]["sha256"] == builder.sha(matlab / "bin/win64/libdevice.10.bc")
 
 
 @pytest.mark.parametrize("architectures", [["75"], ["80"], ["75", "75"], ["80", "75"], ["75", "80", "90"]])

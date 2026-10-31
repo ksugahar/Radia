@@ -77,6 +77,18 @@ archive is a build artifact, not a wheel payload or a new runtime dependency.
 Missing/invalid artifacts fail explicitly. Preserve the existing runtime,
 packaging, fault/lifecycle and numerical checks.
 
+## Bundled Windows CUDA SDK layout
+
+The selected MATLAB-bundled nvcc uses its own CICC/profile configuration, while
+libdevice is located in the MATLAB binary directory. Pass that directory
+explicitly using nvcc's documented `--libdevice-directory` option. Require the
+bundled compiler, profile, CICC, libdevice and matching-version CUDA header;
+record their paths/hashes privately. Do not select another toolkit via PATH or
+environment fallback. The profile is retained; a broader profile bypass requires
+separate compile evidence. Source fixtures do not certify this invocation.
+
+NVIDIA documents the option in its [CUDA 12.8 compiler driver manual](https://docs.nvidia.com/cuda/archive/12.8.0/cuda-compiler-driver-nvcc/index.html).
+
 ## Memory accounting and measurements
 
 Admit the maximum simultaneously live bytes, including geometry/rules,
