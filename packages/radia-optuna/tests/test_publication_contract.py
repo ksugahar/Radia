@@ -69,7 +69,8 @@ def artifact(data, name=FILENAME):
 class Services:
     def __init__(self):
         self.run = run(); self.jobs = jobs(); self.wheel = wheel(); self.archive = artifact(self.wheel)
-        self.artifacts = [{"id": 31, "name": "radia-optuna-wheel", "expired": False, "size_in_bytes": len(self.archive)}]
+        self.artifacts = [{"id": 31, "name": "radia-optuna-wheel", "expired": False, "size_in_bytes": len(self.archive),
+                           "digest": "sha256:" + gate.digest(self.archive)}]
         self.reference = {"ref": context()["ref"], "object": {"type": "tag", "sha": ANNOTATED}}
         self.pypi = None; self.release = None; self.asset = self.wheel; self.calls = []
 
@@ -264,3 +265,56 @@ def test_download_size_bound_is_checked_before_consuming_body(monkeypatch):
     monkeypatch.setattr(gate, "MAX_ARCHIVE", 2)
     with pytest.raises(gate.GateError, match="too large"):
         gate.Remote("token", Opener([Response(b"big")])).read("https://api.github.com/download", binary=True)
+
+
+@pytest.mark.parametrize("redirected", [False, True])
+def test_absence_requires_initial_endpoint_404(redirected):
+    endpoint = "https://api.github.com/download"
+    missing = error.HTTPError(endpoint, 404, "missing", Message(), None)
+    replies = [redirect("https://production.blob.core.windows.net/archive"), missing] if redirected else [missing]
+    opener = Opener(replies)
+    if redirected:
+        with pytest.raises(gate.GateError, match="absence is not established"):
+            gate.Remote("token", opener).read(endpoint, binary=True, absent=True)
+        assert len(opener.requests) == 2
+    else:
+        assert gate.Remote("token", opener).read(endpoint, binary=True, absent=True) is None
+
+
+@pytest.mark.parametrize("bad", [None, "", "sha256:", "sha256:" + "g"*64, "md5:" + "0"*64, 42])
+def test_artifact_digest_is_mandatory_and_valid(package, tmp_path, bad):
+    service = Services()
+    if bad is None:
+        service.artifacts[0].pop("digest")
+    else:
+        service.artifacts[0]["digest"] = bad
+    with pytest.raises(gate.GateError, match="Missing or invalid artifact archive digest"):
+        gate.verify(service, context(), 7, gate.digest(service.wheel), tmp_path/"out")
+    assert not (tmp_path/"out").exists()
+
+
+def test_valid_but_different_artifact_digest_is_rejected(package, tmp_path):
+    service = Services(); service.artifacts[0]["digest"] = "sha256:" + "0"*64
+    with pytest.raises(gate.GateError, match="Artifact archive digest mismatch"):
+        gate.verify(service, context(), 7, gate.digest(service.wheel), tmp_path/"out")
+    assert not (tmp_path/"out").exists()
+
+
+@pytest.mark.parametrize("change", ["different-hash", "yanked"])
+def test_pypi_resume_rejects_different_hash_or_yanked_independently(change):
+    expected = gate.digest(wheel())
+    item = {"filename": FILENAME, "digests": {"sha256": expected}, "yanked": False}
+    value = {"info": {"version": VERSION}, "urls": [item]}
+    assert gate.pypi_resume(value, FILENAME, expected, VERSION) is True
+    if change == "different-hash": item["digests"]["sha256"] = "0"*64
+    else: item["yanked"] = True
+    with pytest.raises(gate.GateError, match="PyPI bytes differ or are yanked"):
+        gate.pypi_resume(value, FILENAME, expected, VERSION)
+
+
+def test_wheel_unrecorded_member_is_rejected():
+    data = io.BytesIO(wheel())
+    with zipfile.ZipFile(data, "a") as archive:
+        archive.writestr("radia_optuna/unrecorded.py", b"unrecorded = True\n")
+    with pytest.raises(gate.GateError, match="Unrecorded wheel members"):
+        gate.wheel_source(data.getvalue(), SOURCE)

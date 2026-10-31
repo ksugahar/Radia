@@ -258,8 +258,10 @@ def verify(remote, context, run_id, expected_hash, destination, frozen=None):
     identity = run_identity(run, jobs, repo, source_sha, run_id)
     artifact = choose_artifact(remote.pages(prefix + f"/actions/runs/{run_id}/artifacts", "artifacts"))
     raw = remote.read("https://api.github.com" + prefix + f"/actions/artifacts/{artifact['id']}/zip", binary=True)
-    if artifact.get("digest"):
-        require(artifact["digest"] == "sha256:" + digest(raw), "Artifact archive digest mismatch")
+    archive_digest = artifact.get("digest")
+    require(isinstance(archive_digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", archive_digest),
+            "Missing or invalid artifact archive digest")
+    require(archive_digest == "sha256:" + digest(raw), "Artifact archive digest mismatch")
     filename, data = unpack_wheel(raw, version)
     require(digest(data) == expected_hash, "Wheel differs from accepted candidate SHA256")
     wheel_source(data, source_sha)
