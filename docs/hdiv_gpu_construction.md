@@ -83,7 +83,8 @@ The selected MATLAB-bundled nvcc uses its own CICC/profile configuration, while
 libdevice is located in the MATLAB binary directory. Pass that directory
 explicitly using nvcc's documented `--libdevice-directory` option. Require the
 bundled compiler, profile, CICC, libdevice and matching-version CUDA header;
-record their paths/hashes privately. Do not select another toolkit via PATH or
+record their paths/hashes privately and reject SDK changes during the build.
+Do not select another toolkit via PATH or
 environment fallback. The profile is retained; a broader profile bypass requires
 separate compile evidence. Source fixtures do not certify this invocation.
 

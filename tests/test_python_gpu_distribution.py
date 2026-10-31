@@ -85,7 +85,8 @@ def test_stage_validates_all_members_before_copying(tmp_path):
     assert list(package.iterdir()) == [], list(package.iterdir())
 
 
-def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mutate_sdk", [False, True])
+def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch, mutate_sdk):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "identity", lambda: "a" * 40)
     monkeypatch.setattr(builder, "admission", lambda *a: {"owner": "fixture"})
@@ -97,6 +98,8 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     commands = []
     def execute(cmd, out, label, saved):
         commands.append(list(map(str, cmd)))
+        if mutate_sdk and label.endswith("-cuda"):
+            (matlab / "bin/win64/libdevice.10.bc").write_bytes(b"changed SDK during compile fixture")
         for word in cmd:
             if str(word).startswith("/OUT:"): Path(str(word)[5:]).write_bytes(b"not executable")
     monkeypatch.setattr(builder, "execute", execute)
@@ -112,6 +115,11 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
         "--architectures", "75", "80", "--output", str(tmp_path / "built"),
         "--admission", str(tmp_path / "admission"), "--admission-sha256", "a" * 64,
         "--components", "_gpu_csr"])
+    if mutate_sdk:
+        with pytest.raises(RuntimeError, match="SDK inputs changed during build"):
+            builder.main()
+        assert not list((tmp_path / "built").glob("*.build.json"))
+        return
     builder.main()
     cuda = commands[0]
     assert "-gencode=arch=compute_75,code=sm_75" in cuda, cuda

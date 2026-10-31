@@ -287,6 +287,9 @@ def main():
             execute(command, out, module + "-host", commands)
         if identity() != commit or any(sha(ROOT / name) != digest for name, digest in source_hashes.items()):
             raise RuntimeError("Source changed during build")
+        if windows and any(not Path(item["path"]).is_file() or sha(item["path"]) != item["sha256"]
+                           for item in cuda_sdk_identity["files"].values()):
+            raise RuntimeError("Bundled CUDA SDK inputs changed during build")
         private_receipt = Path(str(binary) + ".private-build.json")
         private_receipt.write_text(json.dumps(dict(source_commit=commit, binary_sha256=sha(binary),
             admission=record, commands=commands[:], source_root=str(ROOT), cuda_root=str(cuda),
