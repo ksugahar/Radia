@@ -85,33 +85,54 @@ def test_stage_validates_all_members_before_copying(tmp_path):
     assert list(package.iterdir()) == [], list(package.iterdir())
 
 
-def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mutate_sdk", [False, True])
+def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch, mutate_sdk):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "identity", lambda: "a" * 40)
     monkeypatch.setattr(builder, "admission", lambda *a: {"owner": "fixture"})
     monkeypatch.setattr(builder.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(builder, "check_toolchain", lambda *a: (tmp_path / "nvcc", "CUDA12.8", "MSVC14.44"))
+    monkeypatch.setattr(builder, "check_toolchain", lambda root, *a: (root / "bin/nvcc.exe", "release 12.8, V12.8.61", "MSVC14.44"))
     sdk = tmp_path / "headers"; (sdk / "pybind11").mkdir(parents=True)
     (sdk / "pybind11/header.h").write_text("fixture")
     monkeypatch.setattr(builder, "headers", lambda: sdk)
     commands = []
     def execute(cmd, out, label, saved):
         commands.append(list(map(str, cmd)))
+        if mutate_sdk and label.endswith("-cuda"):
+            (matlab / "bin/win64/libdevice.10.bc").write_bytes(b"changed SDK during compile fixture")
         for word in cmd:
             if str(word).startswith("/OUT:"): Path(str(word)[5:]).write_bytes(b"not executable")
     monkeypatch.setattr(builder, "execute", execute)
     matlab = tmp_path / "matlab"
+    for relative in ("sys/cuda/win64/cuda/bin/nvcc.exe", "sys/cuda/win64/cuda/bin/nvcc.profile",
+                     "sys/cuda/win64/cuda/nvvm/bin/cicc.exe", "bin/win64/libdevice.10.bc",
+                     "sys/cuda/win64/cuda/include/cuda.h"):
+        fixture = matlab / relative
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_bytes(b"#define CUDA_VERSION 12080\n" if relative.endswith("cuda.h") else b"synthetic SDK input")
     monkeypatch.setattr(sys, "argv", ["builder", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl"),
         "--architectures", "75", "80", "--output", str(tmp_path / "built"),
         "--admission", str(tmp_path / "admission"), "--admission-sha256", "a" * 64,
         "--components", "_gpu_csr"])
+    if mutate_sdk:
+        with pytest.raises(RuntimeError, match="SDK inputs changed during build"):
+            builder.main()
+        assert not list((tmp_path / "built").glob("*.build.json"))
+        return
     builder.main()
     cuda = commands[0]
     assert "-gencode=arch=compute_75,code=sm_75" in cuda, cuda
     assert "-gencode=arch=compute_80,code=sm_80" in cuda, cuda
     assert not any("code=compute_" in arg for arg in cuda), cuda
     assert "/MD" in cuda, cuda
+    assert cuda[0] == str(matlab / "sys/cuda/win64/cuda/bin/nvcc.exe")
+    assert cuda[cuda.index("--libdevice-directory") + 1] == str(matlab / "bin/win64")
+    assert "--dont-use-profile" not in cuda
+    private = list((tmp_path / "built").glob("*.private-build.json"))
+    assert len(private) == 1
+    identity = json.loads(private[0].read_text())["cuda_sdk_identity"]
+    assert identity["files"]["libdevice"]["sha256"] == builder.sha(matlab / "bin/win64/libdevice.10.bc")
 
 
 @pytest.mark.parametrize("architectures", [["75"], ["80"], ["75", "75"], ["80", "75"], ["75", "80", "90"]])
@@ -138,9 +159,12 @@ def test_hdiv_host_cmake_values_do_not_reinterpret_windows_path_escapes(tmp_path
     commands = []
     def execute(argv, output, label, saved):
         commands.append(argv)
-        if label == "_hdiv_cuda-host":binary.write_bytes(b"not executable")
+        if label == "_hdiv_cuda-host":
+            binary.write_bytes(b"not executable")
+            (out / "radia_hdiv_kernels.lib").write_bytes(b"!<arch>\nnot a real archive member")
     monkeypatch.setattr(builder, "execute", execute)
     cuda = tmp_path / "cuda toolkit"
+    (out / "hdiv.obj").write_bytes(b"not a real object")
     builder.build_hdiv_host(SimpleNamespace(host_compiler=compiler), binary,
                             out / "hdiv.obj", sdk, cuda, out, [])
     expected = {"CMAKE_CXX_COMPILER": compiler, "NGSolve_DIR": sdk, "Netgen_DIR": sdk,

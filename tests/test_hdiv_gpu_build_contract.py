@@ -18,7 +18,8 @@ def builder():
     return module
 
 
-def test_hdiv_host_build_uses_installed_ngsolve_and_exact_pip_cuda(tmp_path, monkeypatch):
+@pytest.mark.parametrize("archive_contents", [b"!<arch>\nsynthetic fixture", None, b"malformed", b"!<arch>\n"])
+def test_hdiv_host_build_uses_installed_ngsolve_and_exact_pip_cuda(tmp_path, monkeypatch, archive_contents):
     b = builder()
     configs = {}
     for package, name in [("ngsolve", "NGSolveConfig.cmake"), ("netgen-mesher", "NetgenConfig.cmake")]:
@@ -31,14 +32,26 @@ def test_hdiv_host_build_uses_installed_ngsolve_and_exact_pip_cuda(tmp_path, mon
     import shutil
     monkeypatch.setattr(shutil, "which", lambda name: "/fixture/cmake")
     out = tmp_path / "out"; out.mkdir(); binary = out / "_hdiv_cuda.so"
+    cuda_object = out / "cuda.o"
+    cuda_object.write_bytes(b"synthetic CUDA object; never linked")
     commands = []
     def execute(command, output, label, recorded):
         recorded.append(list(map(str, command)))
         if "--build" in command:
             binary.write_bytes(b"synthetic artifact; never executed")
+            if archive_contents is not None:
+                (out / "libradia_hdiv_kernels.a").write_bytes(archive_contents)
     monkeypatch.setattr(b, "execute", execute)
-    b.build_hdiv_host(types.SimpleNamespace(host_compiler=Path("/explicit/g++")), binary,
-                      out / "cuda.o", tmp_path / "headers", tmp_path / "toolkit", out, commands)
+    args = (types.SimpleNamespace(host_compiler=Path("/explicit/g++")), binary,
+            cuda_object, tmp_path / "headers", tmp_path / "toolkit", out, commands)
+    if archive_contents is None or len(archive_contents) <= 8 or not archive_contents.startswith(b"!<arch>\n"):
+        with pytest.raises(RuntimeError, match="archive"):
+            b.build_hdiv_host(*args)
+        return
+    artifacts = b.build_hdiv_host(*args)
+    assert artifacts["cuda_object"] == {"name": "cuda.o", "sha256": b.sha(cuda_object)}
+    archive = out / "libradia_hdiv_kernels.a"
+    assert artifacts["static_archive"] == {"name": archive.name, "sha256": b.sha(archive)}
     configure, compile_host = commands
     assert "-DCMAKE_CXX_COMPILER=" + Path("/explicit/g++").as_posix() in configure
     assert "-DPython3_EXECUTABLE=" + Path(sys.executable).as_posix() in configure
@@ -98,3 +111,77 @@ def test_headers_follow_wheel_metadata_layout(tmp_path, monkeypatch):
     monkeypatch.setattr(b.metadata,"version",lambda _: "6.2.2608")
     monkeypatch.setattr(b.metadata,"distribution",lambda _:types.SimpleNamespace(files=[header.relative_to(tmp_path)],locate_file=lambda f:tmp_path/f))
     assert b.headers()==sdk.resolve()
+
+
+def test_nested_cmake_fragment_is_in_native_source_identity(tmp_path, monkeypatch):
+    b = builder()
+    hdiv = tmp_path / "src/core/gpu/hdiv"
+    nested = hdiv / "cmake/HDivKernels.cmake"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("first numerical archive recipe")
+    top = hdiv / "CMakeLists.txt"
+    top.write_text("host recipe")
+    monkeypatch.setattr(b, "ROOT", tmp_path)
+    monkeypatch.setattr(b, "HDIV", hdiv)
+    first = b.hdiv_source_hashes()
+    key = "src/core/gpu/hdiv/cmake/HDivKernels.cmake"
+    assert key in first and "src/core/gpu/hdiv/CMakeLists.txt" in first
+    nested.write_text("different numerical archive recipe")
+    second = b.hdiv_source_hashes()
+    assert first[key] != second[key]
+    assert first["src/core/gpu/hdiv/CMakeLists.txt"] == second["src/core/gpu/hdiv/CMakeLists.txt"]
+
+
+def sdk_fixture(tmp_path):
+    matlab = tmp_path / "MATLAB with spaces"
+    cuda = matlab / "sys/cuda/win64/cuda"
+    files = {"nvcc": cuda / "bin/nvcc.exe", "profile": cuda / "bin/nvcc.profile",
+             "cicc": cuda / "nvvm/bin/cicc.exe",
+             "libdevice": matlab / "bin/win64/libdevice.10.bc",
+             "cuda_header": cuda / "include/cuda.h"}
+    for name, path in files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"#define CUDA_VERSION 12080\n" if name == "cuda_header" else b"non-executable source fixture")
+    return matlab, cuda, files
+
+
+def test_bundled_sdk_flags_preserve_profile_and_bind_actual_inputs(tmp_path, monkeypatch):
+    b = builder()
+    matlab, cuda, files = sdk_fixture(tmp_path)
+    monkeypatch.setenv("CUDA_PATH", str(tmp_path / "unrelated SDK"))
+    flags, identity = b.windows_cuda_layout(cuda, matlab, "release 12.8, V12.8.61")
+    assert flags == ["--libdevice-directory", str(files["libdevice"].parent)]
+    assert "--dont-use-profile" not in flags
+    assert identity["header_version"] == 12080
+    assert set(identity["files"]) == set(files)
+    for name, path in files.items():
+        assert identity["files"][name] == {"path": str(path.resolve()), "sha256": b.sha(path)}
+
+
+@pytest.mark.parametrize("missing", ["nvcc", "profile", "cicc", "libdevice", "cuda_header"])
+def test_bundled_sdk_missing_input_never_selects_another_sdk(tmp_path, monkeypatch, missing):
+    b = builder()
+    matlab, cuda, files = sdk_fixture(tmp_path)
+    files[missing].unlink()
+    monkeypatch.setenv("CUDA_PATH", str(tmp_path / "unrelated SDK"))
+    with pytest.raises(RuntimeError, match="Missing.*" + missing):
+        b.windows_cuda_layout(cuda, matlab, "release 12.8, V12.8.61")
+
+
+@pytest.mark.parametrize("header,version,error", [
+    ("#define CUDA_VERSION 12020", "release 12.8, V12.8.61", "does not match"),
+    ("no version macro", "release 12.8, V12.8.61", "Cannot determine"),
+    ("#define CUDA_VERSION 12080", "unknown nvcc", "Cannot determine")])
+def test_bundled_sdk_version_mismatch_fails_before_build(tmp_path, header, version, error):
+    b = builder()
+    matlab, cuda, files = sdk_fixture(tmp_path)
+    files["cuda_header"].write_bytes(header.encode("utf-8"))
+    with pytest.raises(RuntimeError, match=error):
+        b.windows_cuda_layout(cuda, matlab, version)
+
+
+def test_bundled_sdk_root_is_not_a_standalone_toolkit(tmp_path):
+    b = builder()
+    matlab, _, _ = sdk_fixture(tmp_path)
+    with pytest.raises(RuntimeError, match="explicit MATLAB-bundled root"):
+        b.windows_cuda_layout(tmp_path / "standalone CUDA", matlab, "release 12.8, V12.8.61")
