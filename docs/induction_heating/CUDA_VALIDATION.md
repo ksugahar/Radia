@@ -56,9 +56,18 @@ bug can reproduce in both bindings. No new implementation is certified here.
 
 ## Routine execution and GPU overflow
 
+The validation host is the primary GPU development role; the build host is the
+secondary GPU development role and owns CPU development, CI and formal release
+artifact production. Validation-host GPU development uses isolated source
+checkouts and job environments, separate from exact-wheel QA and the deployed
+runtime. It does not expand normal deployment rights or permit Cubit/cme.
+This role assignment alone authorizes no install, remote operation, host
+configuration change or otherwise unapproved source-build route.
+
 CPU jobs using at most eight physical cores each, with at most six concurrent
 CPU jobs across the build host, are unconditionally pre-authorized. Count
-existing jobs, bound CPU/thread use, preserve deadlines and owned-process
+existing CI, build, validation and research jobs by job root/process tree (compiler
+children within one build are not separate jobs), bound CPU/thread use, preserve deadlines and owned-process
 containment, and record resource observations. Idle cores, CPU-load thresholds
 and fixed owner pools are not additional admission gates. Do not stop, repin or
 overwrite another owner's jobs or runtime.
@@ -66,7 +75,9 @@ overwrite another owner's jobs or runtime.
 If the validation-host GPU is busy, GPU execution may overflow to a free
 build-host GPU slot without another per-job grant for that routing. Count all
 existing GPU jobs: at most one per host, at most two across the two hosts;
-placing two on one host is not authorized by this rule. Retain the declared
+placing two on one host is not authorized by this rule. The build-host GPU job
+uses a separate slot and is not also counted in the six CPU-job slots. Record
+its actual host-control CPU threads/resources and avoid oversubscription. Retain the declared
 artifact, architecture, compiler/ABI, runtime, ownership and feature scope.
 Record the actual execution role, concurrent jobs and timings. This routing
 decision does not authorize installs, configuration changes or an unverified
@@ -117,3 +128,33 @@ reactive terms when comparing volume-current and surface-impedance models.
 
 These criteria do not change the linear true-residual gate, reference
 convergence requirements, baseline-regeneration or mutation procedures.
+
+Thin MEX gateways may depend on NGSolve-inherited DLLs. This permission does
+not permit including, linking or using NGSolve TaskManager in MEX builds;
+shared-library dependency and scheduling ownership are separate contracts.
+
+TaskManager governs CPU parallel regions only, including CPU assembly or
+preconditioning inside an explicitly selected GPU workflow. The caller-owned
+CPU rule and the documented p1 solver-owned exceptions remain CPU rules.
+GPU device execution follows upstream NGSolve device-matrix/NVRTC conventions;
+Radia does not extend TaskManager into a GPU execution model or add implicit
+CPU fallback. MEX TaskManager prohibitions remain unchanged.
+
+CPU numerical execution defaults to one thread. TaskManager, OpenMP and BLAS
+parallelism are explicit opt-ins with recorded limits. Prefer independent
+cases/trials for throughput, retaining the six-total-CPU-job and eight-physical-
+core-per-job bounds. Compiler children within one build are not independent
+jobs; numerical defaults do not change build parallelism or running jobs.
+A 16-thread CPU/GPU comparison is an optional declared profile requiring the
+appropriate resource scope, not the numerical default. Historical validated
+records, benchmark values and baselines remain unchanged.
+
+## Portable text contract
+
+Source, scripts, configuration, documentation and policies are UTF-8 with LF
+on Windows and Linux. Writers set encoding and LF explicitly. Git attributes
+set the default while preserving binary, raw data, signed artifacts and frozen
+hash-bound evidence; neither historical evidence nor another owner's WIP is
+normalized. Shell/batch files have no blanket CRLF exception. The tracked-index
+text contract rejects new CRLF/mixed blobs; fresh checkouts follow attributes.
+No global Git configuration change is required or authorized by this policy.
