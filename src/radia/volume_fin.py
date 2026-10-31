@@ -38,6 +38,45 @@ def _topology_hash(topology):
     return digest.hexdigest()
 
 
+def _validate_topology(topology):
+    """Validate the public DTO before entering unchecked native array access."""
+    from .volume_peec import VolumePEECTopology
+    if not isinstance(topology, VolumePEECTopology):
+        raise ValueError('VolumePEECTopology from build_volume_peec required')
+    n, nodes, cells = len(topology.branches), len(topology.nodes_m), len(topology.cell_indices)
+    shapes = dict(nodes_m=(nodes, 3), branches=(n, 2), support_boxes_m=(n, 2, 3),
+                  axes=(n,), signs=(n,), areas_m2=(n,), resistance_ohm=(n,),
+                  support_cells=(n, 2), half_resistance_ohm=(n, 2),
+                  cell_indices=(cells, 3), cell_boxes_m=(cells, 2, 3), sigma_S_per_m=(cells,))
+    if not n or not cells or nodes != cells+2:
+        raise ValueError('Nonempty connected volume with two contact nodes required')
+    for name, shape in shapes.items():
+        value = np.asarray(getattr(topology, name))
+        if value.shape != shape or not np.isfinite(value).all():
+            raise ValueError(f'Invalid finite topology field {name}: expected {shape}')
+    for name in ('branches', 'axes', 'signs', 'support_cells', 'cell_indices'):
+        if not np.issubdtype(getattr(topology, name).dtype, np.integer):
+            raise ValueError(f'Integer topology field {name} required')
+    if (np.any(topology.branches < 0) or np.any(topology.branches >= nodes)
+            or np.any(topology.branches[:, 0] == topology.branches[:, 1])):
+        raise ValueError('Invalid branch node index')
+    if (np.any(topology.support_cells < -1) or np.any(topology.support_cells >= cells)
+            or np.any(topology.axes < 0) or np.any(topology.axes > 2)
+            or np.any(abs(topology.signs) != 1)):
+        raise ValueError('Invalid support/material index or Cartesian orientation')
+    if any(np.any(getattr(topology, name) <= 0) for name in ('areas_m2','resistance_ohm','sigma_S_per_m')):
+        raise ValueError('Positive area, resistance and conductivity required')
+    if (np.any(topology.half_resistance_ohm < 0)
+            or np.any(topology.support_boxes_m[:, 1] <= topology.support_boxes_m[:, 0])
+            or np.any(topology.cell_boxes_m[:, 1] <= topology.cell_boxes_m[:, 0])):
+        raise ValueError('Positive support volume and nonnegative half resistance required')
+    for port in (topology.port_plus, topology.port_minus):
+        if isinstance(port, (bool, np.bool_)) or not isinstance(port, (int, np.integer)) or not 0 <= port < nodes:
+            raise ValueError('Invalid contact node index')
+    if topology.port_plus == topology.port_minus:
+        raise ValueError('Distinct physical contacts required')
+
+
 def solve_volume_fin(topology, *, frequency_hz, drive_current_peak_A,
                      quadrature_order):
     """Explicit MKL dense-MNA reference route, with original-system checks.
@@ -51,6 +90,7 @@ def solve_volume_fin(topology, *, frequency_hz, drive_current_peak_A,
         raise ValueError('Finite nonnegative frequency required')
     if not np.isfinite(drive) or abs(drive) == 0:
         raise ValueError('Finite nonzero peak drive current required')
+    _validate_topology(topology)
     n, nodes = len(topology.branches), len(topology.nodes_m)
     if max(n, nodes, n+nodes+1)**2 > np.iinfo(np.int32).max:
         raise ValueError('Dense MNA signed-index budget exceeded; no automatic fallback')
@@ -147,6 +187,7 @@ def measure_volume_fin(topology, solution, regions, *, quadrature_order, convent
     """
     from .fin_observables import allocate_fin_partial_inductance
     from . import peec_matrices
+    _validate_topology(topology)
     # Validate quadrature through the same public production guard.
     topology.native_builder(quadrature_order=quadrature_order)
     if solution.topology_sha256 != _topology_hash(topology):
