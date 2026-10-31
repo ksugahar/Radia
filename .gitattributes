@@ -1,8 +1,10 @@
+* text=auto eol=lf
+
 # Git hooks are executed by git's bundled bash; they MUST have LF line
 # endings even on Windows (a CRLF after `#!/bin/bash` becomes a "bad
 # interpreter" error).  tools/install_git_hooks.py normalizes on copy, but
 # keeping the tracked source LF also makes `core.hooksPath tools/git-hooks`
-# safe.  Scoped narrowly so the rest of the repo keeps its current behavior.
+# safe. Explicit binary and hash-bound evidence overrides below stay intact.
 tools/git-hooks/** text eol=lf
 
 # A result-bearing docs notebook records notebook_sha256 in its JSON sidecar
@@ -82,3 +84,6 @@ validation_test/peec_integration/verification/netgen_mesh_generation/*.vol binar
 validation_test/peec_integration/verification/netgen_mesh_generation/*.labels.json text eol=lf
 validation_test/gmsh_post/fixtures/*.msh text eol=lf
 validation_test/gmsh_post/fixtures/*.json text eol=lf
+
+# Preserve the original mixed-Omega solver mesh bytes.
+docs/hdiv_vim/c_type_three_formulation_mixed_omega_iron.vol binary
