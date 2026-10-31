@@ -5,6 +5,52 @@ through Python/pybind11. `radia-simulink` exposes them through thin MATLAB
 mexcuda gateways and Simulink blocks. Follow the repository's current compiler,
 runtime, explicit-backend, TaskManager and package-ownership policies.
 
+## Shared numerical source
+
+Actively share reusable C++/CUDA numerical kernels, domain data structures,
+validation/error logic, lifecycle and host-control code between Python/pybind11
+and MATLAB/mexcuda. Do not maintain a second implementation of the same
+numerical algorithm merely for another binding. Shared domain source belongs
+to `radia`; `radia-simulink` depends on it one-way. `radia` must not require
+MATLAB/MEX or `radia_simulink` imports, linking or runtime dependencies.
+
+Bindings remain thin adapters for ABI, types, memory ownership and checked
+handles. Share the reusable state/validation/lifetime semantics; keep Python
+and MATLAB ownership/conversion details in their adapters. Preserve provider-
+owned allocation/destruction where applicable. Common host control does not
+mean common host scheduling: MATLAB scheduling/S-Function lifecycle, compiler/
+ABI build settings and package integration remain package-owned. Never bring
+NGSolve TaskManager into mexcuda paths through a shared source dependency.
+
+On Windows, Python/pybind11 CUDA compilation uses nvcc directly with MSVC host
+C++; CPU/NGSolve C++ remains MSVC, and MATLAB uses mexcuda over shared kernels.
+Use the current reviewed Windows baseline, not independent per-binding compiler
+overrides. This policy authorizes no installation or host configuration change.
+
+Common source and same-kernel agreement do not provide an independent physical
+oracle. Keep pybind11/MEX bitwise parity and separately user-approved CPU/GPU
+numerical parity, plus analytic/independent formulation validation. A shared
+bug can reproduce in both bindings. No new implementation is certified here.
+
+## Routine execution and GPU overflow
+
+CPU jobs using at most eight physical cores each, with at most six concurrent
+CPU jobs across the build host, are unconditionally pre-authorized. Count
+existing jobs, bound CPU/thread use, preserve deadlines and owned-process
+containment, and record resource observations. Idle cores, CPU-load thresholds
+and fixed owner pools are not additional admission gates. Do not stop, repin or
+overwrite another owner's jobs or runtime.
+
+If the validation-host GPU is busy, GPU execution may overflow to a free
+build-host GPU slot without another per-job grant for that routing. Count all
+existing GPU jobs: at most one per host, at most two across the two hosts;
+placing two on one host is not authorized by this rule. Retain the declared
+artifact, architecture, compiler/ABI, runtime, ownership and feature scope.
+Record the actual execution role, concurrent jobs and timings. This routing
+decision does not authorize installs, configuration changes or an unverified
+artifact/architecture substitution. Other remote, environment, deployment and
+publication actions retain their existing authorization requirements.
+
 ## Physical accuracy and backend equivalence
 
 Physical acceptance compares declared engineering quantities with an independent
