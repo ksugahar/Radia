@@ -140,14 +140,23 @@ GPU device execution follows upstream NGSolve device-matrix/NVRTC conventions;
 Radia does not extend TaskManager into a GPU execution model or add implicit
 CPU fallback. MEX TaskManager prohibitions remain unchanged.
 
-CPU numerical execution defaults to one thread. TaskManager, OpenMP and BLAS
-parallelism are explicit opt-ins with recorded limits. Prefer independent
-cases/trials for throughput, retaining the six-total-CPU-job and eight-physical-
-core-per-job bounds. Compiler children within one build are not independent
-jobs; numerical defaults do not change build parallelism or running jobs.
-A 16-thread CPU/GPU comparison is an optional declared profile requiring the
-appropriate resource scope, not the numerical default. Historical validated
-records, benchmark values and baselines remain unchanged.
+CPU numerical execution defaults to one thread because optimization and
+parameter studies benefit from many independent single-thread trials. CPU
+multithreading is an officially supported feature: explicitly declare the
+eight-physical-core parallel target profile for one large solve and record
+TaskManager/OpenMP/MKL settings. This is not an unsupported exception. Retain
+the six-total-CPU-job limit (including CI/build/validation/research, not six
+additional jobs) and eight-physical-core-per-job bound. Compiler children within
+one build are not independent jobs; build parallelism stays separate.
+
+GPU is the primary speed-oriented route, with speed measured on the actual
+case including setup/transfers/total cost, never a universal speed guarantee.
+Backend selection remains explicit with no implicit fallback; caller-owned CPU
+TaskManager, GPU scheduling and the separate GPU-slot limits stay unchanged.
+One-thread records for individual tests, historical benchmarks and validated
+results remain evidence as executed: no relabelling or numerical rerun for this
+wording change. A 16-thread CPU/GPU comparison is an optional declared profile
+requiring appropriate resource scope, not a replacement numerical default.
 
 ## Portable text contract
 
