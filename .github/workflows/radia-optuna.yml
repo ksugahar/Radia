@@ -279,7 +279,7 @@ jobs:
           $venvPython = Join-Path $venv 'Scripts/python.exe'
           & $venvPython -m pip install --disable-pip-version-check --no-deps $wheels[0].FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $venvPython -I -c "import hashlib,json,sys,radia_optuna; from radia_optuna import matlab_path; w=sys.argv[1]; print(json.dumps({'schema':'radia.optuna.installed-wheel-identity.v1','sha':sys.argv[2],'wheel':w.replace('\','/').rsplit('/',1)[-1],'wheel_sha256':hashlib.sha256(open(w,'rb').read()).hexdigest(),'radia_optuna_file':radia_optuna.__file__,'matlab_path':str(matlab_path())},indent=2))" $wheels[0].FullName "${{ github.sha }}" | Out-File installed-wheel-identity.json -Encoding utf8
+          & $venvPython -I -c "import hashlib,json,pathlib,sys,radia_optuna; from radia_optuna import matlab_path; w=pathlib.Path(sys.argv[1]); identity={'schema':'radia.optuna.installed-wheel-identity.v1','sha':sys.argv[2],'wheel':w.name,'wheel_sha256':hashlib.sha256(w.read_bytes()).hexdigest(),'radia_optuna_file':radia_optuna.__file__,'matlab_path':str(matlab_path())}; pathlib.Path(sys.argv[3]).write_bytes((json.dumps(identity,indent=2)+chr(10)).encode('utf-8'))" $wheels[0].FullName "${{ github.sha }}" installed-wheel-identity.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installedMatlabPath = (& $venvPython -I -c 'from radia_optuna import matlab_path; print(matlab_path())').Trim()
           if (-not (Test-Path -LiteralPath $installedMatlabPath -PathType Container)) {
