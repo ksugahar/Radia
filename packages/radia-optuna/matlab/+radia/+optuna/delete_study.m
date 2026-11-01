@@ -1,5 +1,5 @@
 function delete_study(options)
-%DELETE_STUDY Delete one MAT-backed study and its recovery backup.
+%DELETE_STUDY Delete one HDF5-backed study and its recovery backup.
 arguments
     options.study_name (1,1) string
     options.storage (1,1) string

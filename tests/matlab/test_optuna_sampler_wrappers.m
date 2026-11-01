@@ -99,7 +99,7 @@ end
 end
 
 function testGPProposalResumesWithHyperparametersAndRandomState(testCase)
-path=string(tempname("C:\temp"))+".mat";
+path=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()deleteStudyArtifacts(path));
 continuous=radia.optuna.Study(Sampler=radia.optuna.GPSampler( ...
     Seed=31,NStartupTrials=3,CandidateCount=24,LocalSearchCount=1, ...
@@ -154,7 +154,7 @@ verifyEqual(testCase,multi,"tpe");
 end
 
 function testQMCSequenceResumesFromPersistedSamplerState(testCase)
-path=string(tempname("C:\temp"))+".mat";
+path=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()deleteStudyArtifacts(path));
 study=radia.optuna.Study(StoragePath=path,Sampler= ...
     radia.optuna.QMCSampler(QMCType="sobol",Seed=9));
@@ -170,7 +170,7 @@ clear cleanup
 end
 
 function testQueuedTrialSurvivesStorageReload(testCase)
-path=string(tempname("C:\temp"))+".mat";
+path=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()deleteStudyArtifacts(path));
 study=radia.optuna.Study(StoragePath=path);
 study.enqueueTrial(struct("x",0.375), ...

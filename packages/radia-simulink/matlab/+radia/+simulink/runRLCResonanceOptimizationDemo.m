@@ -28,7 +28,7 @@ if ~isfolder(options.OutputDirectory)
 end
 if strlength(options.StoragePath) == 0
     options.StoragePath = fullfile(options.OutputDirectory, ...
-        "rlc_resonance_study.mat");
+        "rlc_resonance_study.h5");
 end
 if strlength(options.ResultPath) == 0
     options.ResultPath = fullfile(options.OutputDirectory, ...

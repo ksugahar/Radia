@@ -59,14 +59,14 @@ Those products are references for the MATLAB and Simulink operating surface.
 They are not runtime dependencies and do not replace Optuna's algorithms.
 
 The algorithmic source of truth is pinned upstream `optuna==5.0.0`.
-MATLAB vectorization, MEX kernels, deterministic batching, table/MAT
+MATLAB vectorization, MEX kernels, deterministic batching, table/HDF5
 persistence, Simulink signals, and session tooling may improve performance and
 teaching value, but they must not silently change a shared Optuna algorithm.
 
 ### Native TPE optimization boundary (2026-09-08)
 
 MATLAB tables remain the authoritative trial database, including durable
-table/MAT persistence and the history exposed to Simulink. The MEX history is
+table/HDF5 persistence and the history exposed to Simulink. The MEX history is
 only a rebuildable computation cache. Rustuna is a design reference, not a
 runtime dependency or a new storage backend; do not introduce Rust/Cargo,
 discard persisted trials, or adopt Rustuna's RNG in this optimization lane.
@@ -122,7 +122,7 @@ Checksums matched. The native change alone was approximately flat for scalar
 (-0.74%) and +4.92% for grouped. Python varied materially between sessions,
 so these are descriptive ratios, not confidence bounds or universal claims.
 The Python-throughput target is met for these 100-trial workloads; larger
-histories, cold startup, peak memory, and durable table/MAT write costs remain
+histories, cold startup, peak memory, and durable table/HDF5 write costs remain
 outside this measurement. The experimental service workflow lives only on
 `codex/optuna-worker-b-service-benchmark`, not in the production diagnostic.
 
@@ -150,7 +150,7 @@ are observably different. Empty per-trial tables are no longer serialized.
 Versions 1-5 remain readable and migrate on the next explicit/automatic save.
 Older software cannot read schema 6: retain a pre-migration file copy if a
 downgrade is required. Use `radia.optuna.Study` for the public table API;
-consumers directly reading MAT internals must understand the versioned layout.
+consumers directly reading HDF5 internals must understand the versioned layout.
 AutoSave frequency, primary read-back validation, atomic replacement, and
 verified backup are unchanged. That change alone left native-history eligibility unchanged.
 
@@ -175,7 +175,7 @@ passed on worker-b before its benchmark. No release or deployment is implied.
 Eligible sequential scalar TPE studies now use the native history cache even
 with StoragePath configured. On initial attachment/resume, completed parameter
 records rebuild the distribution index, intersection/group decomposition and
-native observations once, without consuming RNG. The table/MAT history remains
+native observations once, without consuming RNG. The table/HDF5 history remains
 authoritative; the native cache is not a second database. Stored RNG restoration
 and AutoSave durability/frequency are unchanged. Generation bookkeeping uses the
 existing state counters instead of scanning trial history.
@@ -537,7 +537,7 @@ two-input/five-output subsystem for students and ordinary models: four scalar
 convenience signals plus one fixed-schema `OptunaMonitorBusV1`. It contains
 the generic Level-2 MATLAB S-Function as an advanced internal runtime, so the
 algorithm and checkpoint behavior are unchanged while top-level wiring stays
-small. Variable-length history and Pareto data remain in normalized MAT tables,
+small. Variable-length history and Pareto data remain in normalized HDF5-stored tables,
 so trial-budget changes never alter Bus width. The standalone advanced builder retains the stable six-input/eighteen-
 output ABI for models that truly consume every command and telemetry signal.
 
@@ -563,7 +563,7 @@ output ABI for models that truly consume every command and telemetry signal.
 - mask experiment controls: objective, sampler, seed, pruner, ordered search
   space, total budget, storage, direction, sample time, and target model.
 
-A new sampler/seed/search-space comparison receives a new MAT study path. A
+A new sampler/seed/search-space comparison receives a new HDF5 study path. A
 budget extension keeps the same path and resumes the existing history. Both
 workflows leave model wiring unchanged.
 
@@ -615,7 +615,7 @@ private entropy and must not mutate MATLAB's global random stream.
 For a persisted Simulink study, the resolved private seed and sampler state are
 part of the checkpoint: a budget-only extension restores both even when the
 mask seed remains empty. A changed sampler, seed, pruner, or direction must use
-a new MAT study path and fails loudly against incompatible saved metadata.
+a new HDF5 study path and fails loudly against incompatible saved metadata.
 
 Parallel modes are different products and must be named:
 

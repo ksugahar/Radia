@@ -43,7 +43,7 @@ algorithm without Python. Unified `TPESampler` owns both scalar and
 multi-objective TPE, and removed 4.x public APIs are not exposed. This is a
 MATLAB API, not a Python binary drop-in.
 MATLAB-only parallel
-execution, MAT/table storage, Simulink operation, and Radia adapters are
+execution, HDF5/table storage, Simulink operation, and Radia adapters are
 extensions rather than Optuna parity evidence.
 
 MATLAB-native orchestration is available through
@@ -66,9 +66,9 @@ The teaching model uses `buildOptunaStudyBlock`, a masked two-input/five-output
 facade over the stable advanced runtime. Four scalar outputs cover the common
 status view; the fifth is the fixed-schema `OptunaMonitorBusV1`, including the
 shared `RadiaMonitorHeaderV1` and scalar progress/failure telemetry. Change the
-mask and MAT study path to compare experiments; keep the path and raise the
+mask and HDF5 study path to compare experiments; keep the path and raise the
 total budget to resume the same experiment. Variable-length histories and
-Pareto points stay in normalized MAT tables, so `reviewOptunaStudy` and
+Pareto points stay in normalized HDF5-stored tables, so `reviewOptunaStudy` and
 `applyOptunaTrial` expose full saved results without adding signal lines.
 
 Release performance is measured on development/build host from raw JSON under

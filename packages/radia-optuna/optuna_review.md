@@ -25,7 +25,7 @@ MATLAB entries are executable-evidence mapped; none is closed by an assertion.
 There are zero partial, unmapped, or missing entries.
 
 That is a checked compatibility claim, not a Python binary-drop-in claim.
-MATLAB objects, MAT/table persistence, Simulink blocks, native MEX execution,
+MATLAB objects, HDF5/table persistence, Simulink blocks, native MEX execution,
 and parallel scheduling remain explicit MATLAB extensions.
 
 ## Optuna 5 replacements
