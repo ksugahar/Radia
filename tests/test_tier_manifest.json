@@ -441,12 +441,6 @@
     ],
     "tests/test_volume_fin_contract.py": [
       "tests/test_volume_fin_contract.py"
-    ],
-    "validation_test/induction_heating/fin_return_principle.py": [
-      "tests/test_ih_fin_physical_verdict.py"
-    ],
-    "tests/test_ih_fin_physical_verdict.py": [
-      "tests/test_ih_fin_physical_verdict.py"
     ]
   },
   "profiles": {
