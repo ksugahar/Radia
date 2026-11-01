@@ -49,6 +49,17 @@ def test_changed_release_tool_selects_its_regressions():
     assert len(selected) == len(set(selected))
 
 
+def test_changed_ih_fin_checker_selects_its_verdict_contract():
+    runner = runner_module()
+    paths, _ = runner.load_profile('fast-contracts')
+    checker = 'validation_test/induction_heating/fin_return_principle.py'
+    selected = runner.select_impact_tests(paths, [checker], profile_name='fast-contracts')
+    assert 'tests/test_ih_fin_physical_verdict.py' in selected, selected
+    sibling = runner.select_impact_tests(paths, ['validation_test/induction_heating/volume_fin_validation.py'],
+                                         profile_name='fast-contracts')
+    assert 'tests/test_ih_fin_physical_verdict.py' not in sibling, sibling
+
+
 def test_changed_test_selects_itself_but_not_unrelated_regressions():
     runner = runner_module()
     selected = runner.select_impact_tests([], ['tests/test_ci_preflight_remote.py'])
