@@ -11,8 +11,9 @@ Python (`cubit.cmd`), STEP import, NGSolve `.vol` export with the
 canonical `check-vol` gate, a persistent Cubit session (daemon), and
 the Sugahara lab's curated Cubit knowledge corpus.
 
-The live `tools/list` response is authoritative. Use `cubit_status`,
-`cubit_topics` for discovery; no Radia catalog or installation is required. For an
+The live `tools/list` response is authoritative. Use `cubit_status` for runtime
+identity and `cubit_docs(topic="all")` for documentation discovery; no Radia
+catalog or installation is required. For an
 offline local snapshot only, run `scripts/gen_tools_doc.py`; its output is not
 version-controlled.
 
