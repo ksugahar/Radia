@@ -171,13 +171,32 @@ def _moved_images(charge_inputs, d):
                 face_verts=np.ascontiguousarray((faces + [d, 0, 0]).ravel())), cells, faces
 
 
-@pytest.mark.parametrize("d", [1e-6, 1e-4])
+@pytest.mark.parametrize("d", [1e-6, 1e-5])
 def test_near_coincident_image_vertex_fails_loudly(charge_inputs, d):
     # Inside the supported gap bound but not coincident, the graded/outer rule
     # switch would be a finite value jump; the build must refuse before it.
     kw, _, _ = _moved_images(charge_inputs, d)
     with pytest.raises(ValueError, match="symmetry gap bound"):
         _rp._ChargeGramHMatrix(**kw)
+
+
+def test_reviewed_coincidence_counterexample_no_longer_jumps_silently(charge_inputs):
+    # The reviewed counterexample: two translations bracketing the 1e-9 image
+    # coincidence switch gave entries 4.2e-4 apart.  Below the switch the pair
+    # stays coincident and builds; just above it the build now refuses.
+    lower, upper = 7.445361009081802e-10, 7.4602681289318e-10
+    _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, lower)[0])
+    with pytest.raises(ValueError, match="symmetry gap bound"):
+        _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, upper)[0])
+
+
+def test_gap_bound_refuses_just_inside(charge_inputs):
+    # A mirrored vertex moves 2d; the bound is 1e-4 of the summed host sizes,
+    # so with the unit-cube face radius r the face-face refusal starts below
+    # d = 1e-4 r.  The supported side is covered by the continuity test below.
+    r = 0.74535599249993
+    with pytest.raises(ValueError, match="symmetry gap bound"):
+        _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, 0.9e-4 * r)[0])
 
 
 def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs):
@@ -193,7 +212,7 @@ def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs):
 def test_image_derivative_is_continuous_just_outside_the_gap_bound(charge_inputs):
     # Bracket on the positive-gap side, outside the fail-loud band, with h < d
     # still resolvable in FP64.
-    d, h = 4e-3, 2e-4
+    d, h = 4e-4, 2e-5
     idx = _subset(charge_inputs)
     kw, cells, faces = _moved_images(charge_inputs, d)
     gram, _ = _gram(kw)
