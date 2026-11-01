@@ -199,8 +199,10 @@ def test_gap_bound_refuses_just_inside(charge_inputs):
         _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, 0.9e-4 * r)[0])
 
 
-@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0), (1.0, 1e100, 1e100)],
-                         ids=["normal", "normal_plus_large_tangent", "normal_plus_huge_tangent"])
+@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0), (1.0, 1e100, 1e100),
+                                      (1e200, 0.0, 0.0), (1e-200, 0.0, 0.0)],
+                         ids=["normal", "normal_plus_large_tangent", "normal_plus_huge_tangent",
+                              "huge_normal", "tiny_normal"])
 def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs, velocity):
     # A large common tangential velocity keeps the symmetry and must not mask
     # the normal component.
@@ -213,13 +215,25 @@ def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs, velocity):
             np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
 
 
-def test_tangential_plane_motion_is_accepted(charge_inputs):
+@pytest.mark.parametrize("velocity", [(0.0, 1e13, -3.0), (0.0, 1e200, -3e200), (0.0, 1e-200, -3e-200)],
+                         ids=["large", "huge", "tiny"])
+def test_tangential_plane_motion_is_accepted(charge_inputs, velocity):
     kw, cells, faces = _moved_images(charge_inputs, 0.0)
     gram = _rp._ChargeGramHMatrix(**kw)
-    shift = np.array([0.0, 1e13, -3.0])
+    shift = np.array(velocity)
     gram.tet_charge_gram_directional_derivative(
         np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
         np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
+
+
+def test_non_finite_plane_velocity_fails_loudly(charge_inputs):
+    kw, cells, faces = _moved_images(charge_inputs, 0.0)
+    gram = _rp._ChargeGramHMatrix(**kw)
+    shift = np.array([0.0, np.inf, 0.0])
+    with pytest.raises(ValueError):
+        gram.tet_charge_gram_directional_derivative(
+            np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+            np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
 
 
 def test_far_translated_mesh_builds_on_the_vertex_grid(charge_inputs):
