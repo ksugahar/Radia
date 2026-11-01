@@ -212,6 +212,87 @@ verifyError(testCase, @() radia.optuna.OptimizationSession.load( ...
     "radia:optuna:SessionCallbackUnresolved");
 end
 
+function testSessionRebindsAllCallbacksAndResumesIdentically(testCase)
+parameter = radia.optuna.OptimizationParameter("x", Minimum=0, Maximum=1);
+objective = @(v) (v.x - 0.3)^2;
+output = @(varargin) false;
+plotA = @(varargin) false;
+plotB = @(varargin) false;
+constraint = @(v) v.x - 0.8;
+optionsFor = @(storage) radia.optuna.optimoptions(MaxTrials=5, ...
+    Sampler="random", Seed=41, Display="off", StoragePath=storage, ...
+    OutputFcn=output, PlotFcn={plotA, plotB}, ConstraintFcn=constraint);
+
+reference = radia.optuna.OptimizationSession(objective, parameter, ...
+    optionsFor(temporaryPath(testCase)));
+addTeardown(testCase, @() deleteIfPresent( ...
+    radia.optuna.OptimizationSession.sessionPathFor(reference.Options.StoragePath)));
+reference.start();
+reference.run();
+
+storage = temporaryPath(testCase);
+first = radia.optuna.OptimizationSession(objective, parameter, ...
+    optionsFor(storage));
+first.start();
+first.runNext();
+first.runNext();
+first.pause();
+sessionPath = first.save();
+addTeardown(testCase, @() deleteIfPresent(sessionPath));
+clear first
+recorded = radia.optuna.OptimizationSession.readSessionFile(sessionPath);
+verifyEqual(testCase, recorded.UnresolvedCallbacks.Slot, ...
+    ["ObjectiveFcn"; "OutputFcn"; "PlotFcn"; "PlotFcn"; "ConstraintFcn"]);
+verifyEqual(testCase, recorded.UnresolvedCallbacks.Position, [1; 1; 1; 2; 1]);
+
+resumed = radia.optuna.OptimizationSession.load(sessionPath, ...
+    ObjectiveFcn=objective, OutputFcn=output, PlotFcn={plotA, plotB}, ...
+    ConstraintFcn=constraint);
+verifyEqual(testCase, resumed.Options.OutputFcn, {output});
+verifyEqual(testCase, resumed.Options.PlotFcn, {plotA, plotB});
+verifyEqual(testCase, resumed.Options.ConstraintFcn, constraint);
+resumed.resume();
+resumed.run();
+verifyEqual(testCase, resumed.State, "completed");
+verifyEqual(testCase, resumed.Study.ParamTable.ValueNumeric, ...
+    reference.Study.ParamTable.ValueNumeric);
+verifyEqual(testCase, resumed.Study.TrialTable.Value, ...
+    reference.Study.TrialTable.Value);
+verifyEqual(testCase, resumed.Study.ConstraintTable.Value, ...
+    reference.Study.ConstraintTable.Value);
+end
+
+function testSessionRebindRejectsMissingWrongOrExtraCallbacks(testCase)
+parameter = radia.optuna.OptimizationParameter("x", Minimum=0, Maximum=1);
+objective = @(v) v.x;
+output = @(varargin) false;
+storage = temporaryPath(testCase);
+options = radia.optuna.optimoptions(MaxTrials=2, Sampler="random", ...
+    Seed=5, Display="off", StoragePath=storage, OutputFcn=output);
+session = radia.optuna.OptimizationSession(objective, parameter, options);
+sessionPath = session.save();
+addTeardown(testCase, @() deleteIfPresent(sessionPath));
+id = "radia:optuna:SessionCallbackUnresolved";
+load = @(varargin) radia.optuna.OptimizationSession.load( ...
+    sessionPath, varargin{:});
+% Missing required callbacks.
+verifyError(testCase, @() load(OutputFcn=output), id);
+verifyError(testCase, @() load(ObjectiveFcn=objective), id);
+% Wrong count for a recorded slot.
+verifyError(testCase, @() load(ObjectiveFcn=objective, ...
+    OutputFcn={output, output}), id);
+% Callback supplied for a slot that was not recorded.
+verifyError(testCase, @() load(ObjectiveFcn=objective, ...
+    OutputFcn=output, PlotFcn=output), id);
+verifyError(testCase, @() load(ObjectiveFcn=objective, ...
+    OutputFcn=output, ConstraintFcn=@(v) v.x), id);
+% Wrong type is not accepted as a callback.
+verifyError(testCase, @() load(ObjectiveFcn=objective, ...
+    OutputFcn="@(varargin)false"), id);
+restored = load(ObjectiveFcn=objective, OutputFcn=output);
+verifyEqual(testCase, restored.Options.OutputFcn, {output});
+end
+
 function value = objectiveValue(trial)
 x = trial.suggestFloat("x", -2, 2);
 y = trial.suggestFloat("y", -2, 2);

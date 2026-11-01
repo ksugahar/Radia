@@ -395,18 +395,23 @@ classdef OptimizationSession < handle
     methods (Static)
         function obj = load(path, options)
             %LOAD Rebuild a session from its HDF5 checkpoint.
-            %   Callbacks are stored only as unresolved descriptions, so
-            %   ObjectiveFcn must be passed explicitly (see
-            %   resolveStoredCallbacks).
+            %   Function handles are never restored from storage. The
+            %   caller re-binds every callback slot recorded at save:
+            %   ObjectiveFcn always, and OutputFcn, PlotFcn and
+            %   ConstraintFcn exactly when the checkpoint recorded them
+            %   (same count, in saved order). Missing, extra or miscounted
+            %   callbacks raise radia:optuna:SessionCallbackUnresolved.
             arguments
                 path (1,1) string
                 options.ObjectiveFcn = []
+                options.OutputFcn = []
+                options.PlotFcn = []
+                options.ConstraintFcn = []
                 options.ModelName (1,1) string = ""
             end
             data = radia.optuna.OptimizationSession.readSessionFile(path);
             [objectiveFcn, sessionOptions] = radia.optuna. ...
-                OptimizationSession.resolveStoredCallbacks(data, path, ...
-                options.ObjectiveFcn);
+                OptimizationSession.rebindCallbacks(data, path, options);
             modelName = options.ModelName;
             if strlength(modelName) == 0
                 modelName = data.ModelName;
@@ -462,35 +467,63 @@ classdef OptimizationSession < handle
     end
 
     methods (Static, Access=private)
-        function [objectiveFcn, options] = resolveStoredCallbacks( ...
-                data, path, objectiveFcn)
-            % PENDING DESIGN DECISION: no function handle or closure is
-            % restored from storage. A later "explicit rebind at load" or
-            % "closure-state HDF5" design replaces only this function and
-            % the descriptive record written by callbackRecord. Until then
-            % ObjectiveFcn must be passed explicitly, and stored
-            % OutputFcn/PlotFcn/ConstraintFcn entries refuse to load
-            % instead of being dropped.
+        function [objectiveFcn, options] = rebindCallbacks(data, path, supplied)
+            % Explicit re-binding at load: storage holds only descriptive
+            % callback records; every recorded slot must be supplied by the
+            % caller with the recorded count, and nothing else may be.
             callbacks = data.UnresolvedCallbacks;
-            optionRows = callbacks.Slot ~= "ObjectiveFcn";
-            if any(optionRows)
-                error("radia:optuna:SessionCallbackUnresolved", ...
-                    "'%s' records option callbacks that cannot be " + ...
-                    "restored from storage (%s). Callback restoration is " + ...
-                    "an open design decision; rebuild the session with " + ...
-                    "its constructor and live OptimizeOptions.", path, ...
-                    strjoin(callbacks.Slot(optionRows) + "=" + ...
-                    callbacks.Description(optionRows), ", "));
+            objectiveFcn = supplied.ObjectiveFcn;
+            if isempty(objectiveFcn) || ~isa(objectiveFcn, "function_handle") || ...
+                    ~isscalar(objectiveFcn)
+                fail("ObjectiveFcn", sum(callbacks.Slot == "ObjectiveFcn"), ...
+                    "a scalar function handle");
             end
-            if isempty(objectiveFcn)
-                stored = callbacks.Description(callbacks.Slot == "ObjectiveFcn");
-                error("radia:optuna:SessionCallbackUnresolved", ...
-                    "'%s' records ObjectiveFcn '%s' only as an unresolved " + ...
-                    "description; function handles are not restored from " + ...
-                    "storage. Pass ObjectiveFcn= explicitly to load.", ...
-                    path, strjoin(stored, ", "));
+            rebound = struct();
+            for slot = ["OutputFcn","PlotFcn","ConstraintFcn"]
+                value = supplied.(slot);
+                if isempty(value)
+                    handles = {};
+                elseif isa(value, "function_handle") && isscalar(value)
+                    handles = {value};
+                elseif slot ~= "ConstraintFcn" && iscell(value) && ...
+                        all(cellfun(@(h) isa(h, "function_handle") && ...
+                        isscalar(h), value))
+                    handles = reshape(value, 1, []);
+                else
+                    fail(slot, NaN, "function handles");
+                end
+                expected = sum(callbacks.Slot == slot);
+                if numel(handles) ~= expected
+                    fail(slot, expected, sprintf("%d handle(s)", numel(handles)));
+                end
+                if slot == "ConstraintFcn"
+                    if isempty(handles)
+                        rebound.(slot) = [];
+                    else
+                        rebound.(slot) = handles{1};
+                    end
+                else
+                    rebound.(slot) = handles;
+                end
             end
-            options = data.Options;
+            values = namedargs2cell( ...
+                radia.optuna.OptimizationSession.optionData(data.Options));
+            options = radia.optuna.OptimizeOptions(values{:}, ...
+                OutputFcn=rebound.OutputFcn, PlotFcn=rebound.PlotFcn, ...
+                ConstraintFcn=rebound.ConstraintFcn);
+
+            function fail(slot, expected, got)
+                rows = callbacks.Slot == slot;
+                recorded = strjoin(callbacks.Description(rows), ", ");
+                if strlength(recorded) == 0
+                    recorded = "<none>";
+                end
+                error("radia:optuna:SessionCallbackUnresolved", ...
+                    "'%s' recorded %g %s callback(s) (%s); load received %s. " + ...
+                    "Function handles are never restored from storage: " + ...
+                    "re-bind exactly the recorded callbacks by name.", ...
+                    path, expected, slot, recorded, got);
+            end
         end
 
         function record = callbackRecord(objectiveFcn, options)

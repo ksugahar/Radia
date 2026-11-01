@@ -155,6 +155,20 @@
       "test": "testSessionCallbacksStayUnresolved"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSessionRebindsAllCallbacksAndResumesIdentically"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSessionRebindRejectsMissingWrongOrExtraCallbacks"
+    },
+    {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
       "oracle": "optuna50_mcp_oracle.json",
