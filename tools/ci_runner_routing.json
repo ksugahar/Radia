@@ -240,9 +240,10 @@
         "src/radia/hdiv_gpu.py",
         "tools/python_gpu_payload.py",
         "tools/prepare_hdiv_mesh_receipt.py",
-        "tools/check_python_gpu_coexistence.py"
+        "tools/check_python_gpu_coexistence.py",
+        "validation_test/induction_heating/fin_return_principle.py"
       ],
-      "audit_sha256": "43d9572de6d61b665ed543e605c7865cc41abf71139b9b388cf20b99300bbe35",
+      "audit_sha256": "8426c0d457c73593aca30ae3c66003dc1e61edcbaf02c8f79e0355aafdd2873f",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
@@ -256,6 +257,10 @@
         ],
         "src/radia/hdiv_gpu.py": [
           "ngsolve"
+        ],
+        "validation_test/induction_heating/fin_return_principle.py": [
+          "ngsolve",
+          "netgen.occ"
         ]
       }
     }
