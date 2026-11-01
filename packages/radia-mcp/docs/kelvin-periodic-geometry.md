@@ -15,7 +15,7 @@ inventory or a past status response into a second procedural manual.
 
 | Purpose | Existing entry point | Read-only discovery |
 |---|---|---|
-| Cubit CAD, neutral capture and mesh export | `mcp-server-cubit` from `cubit-mesh-export` | `tools/list`, `cubit_status`, `cubit_topics` |
+| Cubit CAD, neutral capture and mesh export | `mcp-server-cubit` from `cubit-mesh-export` | `tools/list`, `cubit_status`, `cubit_docs(topic="all")` |
 | Kelvin formulation and solver-artifact guidance | `mcp-server-radia-ngsolve` from `radia-mcp` | `tools/list`, the registered status tool, `kelvin_transformation` and `kelvin_identify_post_hoc` |
 
 These are independent distributions. Cubit-only operation does not require
