@@ -3457,7 +3457,9 @@ rules, reject conflicting ownership/unsupported representations, and check ALL
 transfers against independently master-derived expectations. Translation changes
 corner positions, not displacement coefficients. Preserve non-target archive
 entries; do not require the intentionally corrected slave geometry to equal its
-original erroneous map. Failed export/publication is not a usable solver artifact.
+original erroneous map. Verify the complete companion `.vol.json` mapping record
+before publishing the final `.vol`; a sidecar alone is not a complete export.
+Failed export/publication is not a usable solver artifact.
 
 ## Consumer and persistence checks
 
@@ -3510,6 +3512,8 @@ p-convergence. Passing a geometry consumer is not field-accuracy adoption or
 release qualification of another exporter binary. A prior accepted case is not
 proof that a new analytic convergence lane has run. No search radius, serialization
 roundoff or another case's tolerance becomes an acceptance threshold automatically.
+Producer build success is not upload, CI, main integration, or verification of
+the installation actually used by an MCP client.
 
 See kelvin_identify_post_hoc(topic="curved_geometry") before using a post-hoc
 helper. Vertex pairing for a linear spherical H1 workflow is not qualification
