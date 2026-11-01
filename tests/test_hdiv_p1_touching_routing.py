@@ -222,7 +222,7 @@ def test_image_derivative_is_continuous_just_outside_the_gap_bound(charge_inputs
         np.ascontiguousarray(np.broadcast_to(shift, faces.shape))))[np.ix_(idx, idx)]
     fd = (_gram(_moved_images(charge_inputs, d + h)[0])[1] - _gram(_moved_images(charge_inputs, d - h)[0])[1]) / (2 * h)
     err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
-    assert err < 1e-4, f"translation derivative vs central difference at d={d}: max rel {err:.3e}"
+    assert err < DETECTOR_REL, f"translation derivative vs central difference at d={d}: max rel {err:.3e}"
 
 
 @pytest.mark.parametrize("images", [None, ([1], [1.0])], ids=["direct", "image"])
