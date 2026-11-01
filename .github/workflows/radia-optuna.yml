@@ -287,6 +287,13 @@ jobs:
           }
           "RADIA_OPTUNA_MATLAB_PATH=$installedMatlabPath" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Check the installed-wheel gate rejects omissions and sibling paths
+        shell: pwsh
+        run: |
+          $root = (Get-Location).Path.Replace("'", "''")
+          & matlab -batch "r = runtests('$root/packages/radia-optuna/tests/matlab/test_installed_wheel_hdf5_gate.m'); assert(numel(r) == 5 && all([r.Passed]), 'installed-wheel gate self-test failed');"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run the HDF5 storage tests against the installed wheel
         shell: pwsh
         run: |
