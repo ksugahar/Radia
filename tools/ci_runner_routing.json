@@ -132,6 +132,11 @@
       "target": "ci-light",
       "legacy_100": false
     },
+    "release-radia-optuna.yml:verify": {
+      "owner": "radia-optuna",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
     "release-radia-optuna.yml:publish": {
       "owner": "radia-optuna",
       "target": "github-hosted",
