@@ -64,7 +64,7 @@ These caches do not discard trials, change RNG consumption or select a
 different CPU/GPU backend. They are rebuilt after loading saved history.
 
 An empty `StoragePath` performs no persistence. To retain explicit checkpoints
-without writing a complete MAT snapshot at each mutation, configure
+without writing a complete HDF5 snapshot at each mutation, configure
 `StoragePath` with `AutoSave=false`, then call `study.save()` at the required
 checkpoint boundaries. Unsaved progress is lost if the process exits; the
 default automatic persistence contract is unchanged. Additional RAM retains
@@ -282,7 +282,7 @@ paths preserve its equations, transforms, state updates, boundary handling,
 defaults, extension points, and seeded random-consumption order. The active
 implementation uses the 5.0 design directly; removed 4.x APIs and state shims
 are not kept. MATLAB vectorization, parallel trial
-scheduling, table/MAT persistence, and Simulink telemetry are performance and
+scheduling, table/HDF5 persistence, and Simulink telemetry are performance and
 workflow extensions around that common algorithm rather than alternative
 default optimizers.
 
@@ -376,7 +376,7 @@ dimensions. The Sobol path uses a
 checked binary conversion of SciPy 1.17.1's Joe--Kuo criterion-6 direction
 numbers and does not import Python or SciPy at MATLAB runtime.
 
-MAT/table persistence remains a MATLAB extension. An explicit, versioned
+HDF5/table persistence remains a MATLAB extension. An explicit, versioned
 handoff is available when the same completed history must be opened by an
 upstream Optuna storage:
 
@@ -447,7 +447,7 @@ accepts the same choice per target as `--engine-session HOST=NAME`.
 
 This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
-tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
+tables after HDF5 reload. Shared Study/Trial MCP operations remain upstream.
 
 ### 0.4.0 release and CPU/GPU acceptance
 

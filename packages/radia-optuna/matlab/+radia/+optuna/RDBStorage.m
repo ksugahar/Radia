@@ -2,7 +2,7 @@ classdef RDBStorage < radia.optuna.BaseStorage
     %RDBSTORAGE Optuna 5.0 relational storage through its Python backend.
     %   SQLAlchemy schema ownership remains with pinned optuna==5.0.0. The
     %   MATLAB class converts only documented storage values and snapshots;
-    %   it never substitutes MAT-file storage for a relational database.
+    %   it never substitutes HDF5 file storage for a relational database.
 
     properties (SetAccess=immutable)
         url (1,1) string

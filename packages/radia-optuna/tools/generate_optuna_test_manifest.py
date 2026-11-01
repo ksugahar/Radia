@@ -18,6 +18,7 @@ CLASSIFICATION_BY_FILE = {
     "test_optuna_simulink_block.m": "matlab-integration",
     "test_optuna_sampler_wrappers.m": "matlab-integration",
     "test_optuna_reliability.m": "matlab-integration",
+    "test_optuna_hdf5_storage.m": "matlab-integration",
     "test_optuna_nsgaii_joint.m": "matlab-integration",
     "test_optuna_storage_bridge.m": "matlab-integration",
     "test_optuna_got_interface.m": "matlab-integration",
@@ -28,14 +29,18 @@ CLASSIFICATION_BY_FILE = {
 INTEGRATION_SCOPE = {
     "test_optuna_cuda.m": "mexcuda execution boundary, device failure and lifecycle",
     "test_optuna_table.m": (
-        "MATLAB table storage, MAT persistence, and SimulinkRunner integration"
+        "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration"
     ),
     "test_optuna_simulink_block.m": "MATLAB and Simulink block integration",
     "test_optuna_sampler_wrappers.m": (
         "MATLAB sampler-state persistence and AutoSampler policy integration"
     ),
     "test_optuna_reliability.m": (
-        "MATLAB MAT-file transaction, recovery, and sampler-state persistence"
+        "MATLAB HDF5-file transaction, recovery, and sampler-state persistence"
+    ),
+    "test_optuna_hdf5_storage.m": (
+        "MATLAB typed HDF5 Study/session storage, exact RNG resume, "
+        "unresolved callbacks, and fail-loud schema checks"
     ),
     "test_optuna_nsgaii_joint.m": (
         "MATLAB NSGA-II generation cache, parallel scheduling, and persistence"

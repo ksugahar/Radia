@@ -7,7 +7,7 @@ end
 storagePath = evaluatedMaskValue(blockPath, "storage_path");
 if strlength(storagePath) == 0
     error("radia:simulink:OptunaStudyStorage", ...
-        "Set Study MAT file before applying a trial.");
+        "Set Study HDF5 file before applying a trial.");
 end
 study = radia.optuna.loadStudy(storage=storagePath);
 if trialNumber == -1
@@ -21,14 +21,15 @@ elseif trialNumber < 0
     error("radia:simulink:OptunaStudySelection", ...
         "Trial must be nonnegative, or -1 for the best trial.");
 end
-sessionPath = storagePath + ".session.mat";
+sessionPath = radia.optuna.OptimizationSession.sessionPathFor(storagePath);
 modelName = evaluatedMaskValue(blockPath, "model_name");
 if strlength(modelName) == 0
     modelName = string(bdroot(blockPath));
 end
 if isfile(sessionPath)
     session = radia.optuna.OptimizationSession.load( ...
-        sessionPath, ModelName=modelName);
+        sessionPath, ModelName=modelName, ...
+        ObjectiveFcn=maskObjective(blockPath));
     session.selectTrial(trialNumber);
     values = session.applySelectedToModel( ...
         ModelName=modelName, Target="model");
@@ -65,6 +66,21 @@ for index = 1:numel(names)
     else
         assignin("base", char(name), value);
     end
+end
+end
+
+function objective = maskObjective(blockPath)
+% Session checkpoints never restore function handles; rebind the block's
+% configured objective explicitly, as the block itself does at start.
+variables = get_param(blockPath, "MaskWSVariables");
+match = find(strcmp({variables.Name}, "objective_fcn"), 1);
+if isempty(match)
+    error("radia:simulink:OptunaStudyMask", ...
+        "Block '%s' has no 'objective_fcn' mask parameter.", blockPath);
+end
+objective = variables(match).Value;
+if ~isa(objective, "function_handle")
+    objective = str2func(char(string(objective)));
 end
 end
 

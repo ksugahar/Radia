@@ -3,7 +3,7 @@ tests = functiontests(localfunctions);
 end
 
 function testNamedHistorySurvivesAppendImportAndReload(testCase)
-storage=string(tempname)+".mat";
+storage=string(tempname)+".h5";
 cleanup=onCleanup(@()deleteIfPresent(storage));
 study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(19), ...
     StoragePath=storage,AutoSave=false);
@@ -78,7 +78,7 @@ end
 end
 
 function testDefineByRunAndPersistence(testCase)
-path = string(tempname("C:\temp")) + ".mat";
+path = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@() deleteIfPresent(path));
 study = radia.optuna.Study(Name="table-study", StoragePath=path, ...
     Sampler=radia.optuna.RandomSampler(7));
@@ -120,7 +120,7 @@ end
 
 function testSamplerStateReplacementPreservesStorageContract(testCase)
 % MATLAB-only persistence contract, not an upstream behavioral oracle.
-path=string(tempname("C:/temp"))+".mat";
+path=string(tempname("C:/temp"))+".h5";
 cleanup=onCleanup(@()deleteIfPresent(path));
 study=radia.optuna.Study(StoragePath=path,AutoSave=false);
 study.recordSamplerState("a","v1",1,2,struct("payload",1));
@@ -175,7 +175,7 @@ verifyFalse(testCase,ismethod(trial,"set_system_attr"));
 end
 
 function testStudyUserAttributesPersist(testCase)
-path = string(tempname("C:\temp")) + ".mat";
+path = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@() deleteIfPresent(path));
 study = radia.optuna.Study(StoragePath=path, AutoSave=true);
 study.set_user_attr("owner", "radia");
@@ -338,7 +338,7 @@ closeIfLoaded(modelName);
 end
 
 function testCmaPartialGenerationSurvivesStudyReload(testCase)
-path = string(tempname("C:\temp")) + ".mat";
+path = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@() deleteIfPresent(path));
 continuous = radia.optuna.Study(Sampler=radia.optuna.CmaEsSampler( ...
     Seed=53, NStartupTrials=1, PopulationSize=4), AutoSave=false);
@@ -370,7 +370,7 @@ deleteIfPresent(path);
 end
 
 function testMultiObjectiveParetoFrontAndPersistence(testCase)
-path=string(tempname("C:\temp"))+".mat"; cleanup=onCleanup(@()deleteIfPresent(path));
+path=string(tempname("C:\temp"))+".h5"; cleanup=onCleanup(@()deleteIfPresent(path));
 study=radia.optuna.create_study(directions=["minimize","minimize"], ...
     storage=path, sampler=radia.optuna.RandomSampler(2));
 values=[0 3;1 2;2 1;3 3];
@@ -439,7 +439,7 @@ closeAndDelete(name, file);
 end
 
 function testConstraintTablePersists(testCase)
-path=string(tempname("C:\temp"))+".mat";
+path=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()deleteIfPresent(path));
 sampler=radia.optuna.TPESampler(Seed=31,NStartupTrials=1, ...
     ConstraintsFcn=@(trial)trial.Params.x-0.25);

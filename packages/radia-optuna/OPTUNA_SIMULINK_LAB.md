@@ -15,7 +15,7 @@ six-input/eighteen-output runtime stays inside the masked subsystem.
 | output `best trial` | Zero-based trial number of the current best result. |
 | output `monitor` | Fixed-schema `OptunaMonitorBusV1` for Bus Selector, Scope, SDI, and logging. |
 
-Sampler, seed, pruner, bounds, total trial budget, objective, and MAT study
+Sampler, seed, pruner, bounds, total trial budget, objective, and HDF5 study
 path are mask parameters. Pareto points, failed/pruned states, constraints,
 intermediate values, and all parameter values remain in the normalized study
 tables instead of becoming permanent top-level wiring. The monitor Bus carries
@@ -51,29 +51,29 @@ The mask button also assigns `radia_optuna_review` and
 ## 2. Perform a fair comparison without rewiring
 
 A different sampler, seed, pruner, or search space is a different experiment.
-Give it a new **Study MAT file** so its history is not mixed with the first
+Give it a new **Study HDF5 file** so its history is not mixed with the first
 experiment. Change exactly one factor, run again, and compare the two tables.
 
 For example, change sampler from `tpe` to `qmc`, seed from `20260829` to `17`,
 and use a new file only if that combination is the experiment being tested.
 For a one-factor comparison, keep every other field unchanged.
 
-To add trials to the same experiment, keep its MAT file and configuration,
+To add trials to the same experiment, keep its HDF5 file and configuration,
 increase **Total trial budget**, and run again. The completed history is
 preserved and only the additional trials execute. Neither operation changes a
 signal line.
 
 An empty seed draws fresh private entropy for a new study, matching upstream
-`seed=None`. The resolved seed and sampler state are stored in the MAT study;
+`seed=None`. The resolved seed and sampler state are stored in the HDF5 study;
 extending that same study reuses them, so the continuation is exact. Changing
-to a different explicit seed requires a new MAT study and fails loudly if the
+to a different explicit seed requires a new HDF5 study and fails loudly if the
 old path is reused.
 
 Record for every comparison:
 
 - MATLAB and `optuna_mex` versions;
 - sampler, seed, pruner, ordered search space, and total budget;
-- study MAT path;
+- study HDF5 path;
 - proposal order, trial states, best-so-far history, and selected result.
 
 An equal seed implies an equal sequential proposal sequence only when sampler

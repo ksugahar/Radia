@@ -1,5 +1,5 @@
 function summaries=get_all_study_summaries(storage,options)
-%GET_ALL_STUDY_SUMMARIES Summarize the zero-or-one study in MAT storage.
+%GET_ALL_STUDY_SUMMARIES Summarize the zero-or-one study in HDF5 storage.
 arguments
     storage (1,1) string
     options.include_best_trial (1,1) logical = true

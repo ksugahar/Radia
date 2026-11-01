@@ -798,9 +798,9 @@ end
 
 function testStudyManagementMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.study_management;
-source=string(tempname("C:\temp"))+".mat";
-target=string(tempname("C:\temp"))+".mat";
-multiTarget=string(tempname("C:\temp"))+".mat";
+source=string(tempname("C:\temp"))+".h5";
+target=string(tempname("C:\temp"))+".h5";
+multiTarget=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()cleanupStudyFiles([source,target,multiTarget]));
 study=radia.optuna.create_study(study_name="alpha", ...
     direction="maximize",storage=source);
@@ -1992,7 +1992,7 @@ function testTPEIntersectionTransitionsMatchUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_intersection_transitions;
 for persisted=[false,true]
 storage="";
-if persisted, storage=string(tempname('C:/temp'))+'.mat'; end
+if persisted, storage=string(tempname('C:/temp'))+'.h5'; end
 cleanup=onCleanup(@() cleanupStudyFiles(storage));
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
     Seed=contract.seed,NStartupTrials=contract.startup_trials), ...
@@ -2134,7 +2134,7 @@ contract=testCase.TestData.Oracle.tpe_group;
 expected=contract.sequence;
 for persisted=[false,true]
 storage="";
-if persisted, storage=string(tempname('C:/temp'))+'.mat'; end
+if persisted, storage=string(tempname('C:/temp'))+'.h5'; end
 cleanup=onCleanup(@() cleanupStudyFiles(storage));
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
     Seed=101,NStartupTrials=4,Multivariate=true,Group=true), ...
@@ -2600,7 +2600,7 @@ end
 
 function testGPTableResumeReplaysUpstreamHistory(testCase)
 expected=testCase.TestData.Oracle.gp_sampler_seed_53;
-path=string(tempname("C:\temp"))+".mat";
+path=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()cleanupStudyFiles(path));
 study=radia.optuna.Study(StoragePath=path,Sampler= ...
     radia.optuna.GPSampler(Seed=53,NStartupTrials=10));
