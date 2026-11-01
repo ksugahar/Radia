@@ -2817,7 +2817,7 @@ namespace {
 // Smallest supported separation, relative to the summed host sizes, between a
 // mapped source vertex and a target vertex that do not coincide.  Below it the
 // graded/outer rule switch would be a visible value jump, so it fails loudly.
-constexpr double kP1ImageGapFraction=1e-3;
+constexpr double kP1ImageGapFraction=1e-4;
 }
 
 bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,int img) const
