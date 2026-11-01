@@ -27,16 +27,16 @@ CLASSIFICATION_BY_FILE = {
 }
 
 INTEGRATION_SCOPE = {
-    "test_optuna_cuda.m": "mexcuda execution boundary, device failure and lifecycle",
+    "test_optuna_cuda.m": "plain MEX CUDA execution boundary, device failure and lifecycle",
     "test_optuna_table.m": (
-        "MATLAB table storage, MAT persistence, and SimulinkRunner integration"
+        "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration"
     ),
     "test_optuna_simulink_block.m": "MATLAB and Simulink block integration",
     "test_optuna_sampler_wrappers.m": (
         "MATLAB sampler-state persistence and AutoSampler policy integration"
     ),
     "test_optuna_reliability.m": (
-        "MATLAB MAT-file transaction, recovery, and sampler-state persistence"
+        "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence"
     ),
     "test_optuna_hdf5_storage.m": (
         "MATLAB typed HDF5 Study/session storage, exact RNG resume, "
