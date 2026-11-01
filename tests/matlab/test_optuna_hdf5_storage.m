@@ -12,8 +12,13 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(testCase)
-root = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabDirectory = fullfile(root, "packages", "radia-optuna", "matlab");
+% An installed-wheel run names its MATLAB directory explicitly; otherwise
+% the source tree beside this test is exercised.
+matlabDirectory = string(getenv("RADIA_OPTUNA_MATLAB_PATH"));
+if matlabDirectory == ""
+    root = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+    matlabDirectory = fullfile(root, "packages", "radia-optuna", "matlab");
+end
 entries = string(strsplit(path, pathsep));
 testCase.TestData.RemovePath = ~any(strcmpi(entries, string(matlabDirectory)));
 if testCase.TestData.RemovePath

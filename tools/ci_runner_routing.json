@@ -122,6 +122,11 @@
       "target": "gpu-rtx",
       "legacy_100": false
     },
+    "radia-optuna.yml:installed-wheel-hdf5-storage": {
+      "owner": "radia-optuna",
+      "target": "ci-native",
+      "legacy_100": true
+    },
     "radia.yml:ci-impact": {
       "owner": "radia",
       "target": "github-hosted",
