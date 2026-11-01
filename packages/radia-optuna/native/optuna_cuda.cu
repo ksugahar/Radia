@@ -1,8 +1,7 @@
 #include "optuna_cuda.hpp"
-#include "mex.h"
+#include "optuna_runtime.hpp"
 #include <cuda_runtime.h>
 #include <cub/device/device_segmented_radix_sort.cuh>
-#include "gpu/mxGPUArray.h"
 #include <algorithm>
 #include <cfloat>
 #include <climits>
@@ -18,6 +17,8 @@ namespace optuna_cuda {
 namespace {
 Statistics stats;
 bool gpu_enabled = true;
+RuntimeHooks runtime{};
+std::size_t active_buffers = 0;
 void check(cudaError_t code, const char* operation) {
     if (code != cudaSuccess)
         throw std::runtime_error(std::string("Optuna CUDA ") + operation +
@@ -53,68 +54,79 @@ struct Arena {
 };
 struct Workspace {
     void* data = nullptr;
-    mxArray* owner = nullptr;
+    void* owner = nullptr;
     std::size_t capacity = 0;
     std::vector<unsigned char> input;
     bool model_ready = false;
+    ~Workspace() { if (owner) runtime.release(owner); }
 };
-std::map<std::pair<int, int>, Workspace> workspaces;
+std::map<std::pair<int, int>, std::shared_ptr<Workspace>> workspaces;
 constexpr std::size_t max_cached_bytes = 64 * 1024 * 1024;
 void update_cached_bytes() {
     stats.cached_device_bytes = 0;
-    for (const auto& item : workspaces) stats.cached_device_bytes += item.second.capacity;
+    for (const auto& item : workspaces) stats.cached_device_bytes += item.second->capacity;
 }
 struct Buffer {
     void* data = nullptr;
-    Workspace* cached = nullptr;
-    bool stream_ordered = stats.stream_ordered_allocator;
+    void* owner = nullptr;
+    std::shared_ptr<Workspace> cached;
     explicit Buffer(std::size_t bytes, int slot = 0) {
         std::size_t capacity = 4096;
         while (capacity < bytes && capacity < max_cached_bytes) capacity *= 2;
         std::size_t other_bytes = 0;
         for (const auto& item : workspaces)
             if (item.first.first == stats.device && item.first.second != slot)
-                other_bytes += item.second.capacity;
+                other_bytes += item.second->capacity;
         if (bytes && bytes <= max_cached_bytes && capacity <= max_cached_bytes - other_bytes) {
             auto& workspace = workspaces[{stats.device, slot}];
-            if (workspace.owner && !mxGPUIsValidGPUData(workspace.owner)) {
-                // MATLAB owns allocation liveness, including device-reset epochs.
-                // Pointer attributes alone cannot detect reused addresses.
-                mxDestroyArray(workspace.owner);
-                workspace = Workspace{};
+            if (workspace && workspace->owner && !runtime.valid(workspace->owner)) {
+                // An invalid context epoch is not repaired by pointer reuse.
+                workspace.reset();
+                throw std::runtime_error("Optuna device allocation epoch expired");
             }
-            if (workspace.capacity < bytes) {
-                if (workspace.owner) mxDestroyArray(workspace.owner);
-                workspace = Workspace{};
-                const mwSize size = capacity;
-                auto* array = mxGPUCreateGPUArray(1, &size, mxUINT8_CLASS, mxREAL, MX_GPU_DO_NOT_INITIALIZE);
-                workspace.data = mxGPUGetData(array);
-                workspace.owner = mxGPUCreateMxArrayOnGPU(array);
-                mexMakeArrayPersistent(workspace.owner);
-                mxGPUDestroyGPUArray(array);
-                workspace.capacity = capacity;
+            // A live PreparedModel pins its outputs. A later build in the same
+            // slot must not overwrite it, even if the address/capacity matches.
+            if (workspace && workspace.use_count() > 1) workspace.reset();
+            if (!workspace || workspace->capacity < bytes) {
+                auto next = std::make_shared<Workspace>();
+                next->data = runtime.allocate(capacity, &next->owner);
+                if (!next->data || !next->owner)
+                    throw std::runtime_error("Optuna runtime returned an invalid allocation");
+                next->capacity = capacity;
+                workspace = std::move(next);
                 ++stats.device_allocation_calls;
             } else {
                 ++stats.workspace_reuses;
             }
-            cached = &workspace;
-            data = workspace.data;
+            cached = workspace;
+            data = workspace->data;
             update_cached_bytes();
+            ++active_buffers;
             return;
         }
-        if (bytes) check(stream_ordered ? cudaMallocAsync(&data, bytes, 0) :
-                                         cudaMalloc(&data, bytes), "allocate");
+        if (bytes) {
+            data = runtime.allocate(bytes, &owner);
+            if (!data || !owner) {
+                if (owner) runtime.release(owner);
+                throw std::runtime_error("Optuna runtime returned an invalid temporary allocation");
+            }
+        }
         if (bytes) ++stats.device_allocation_calls;
+        ++active_buffers;
     }
     ~Buffer() {
         if (data && !cached) {
-            if (stream_ordered) cudaFreeAsync(data, 0);
-            else cudaFree(data);
+            runtime.release(owner);
         }
+        --active_buffers;
     }
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
     template<class T> T* as(std::size_t offset = 0) {
+        if (cached && !runtime.valid(cached->owner))
+            throw std::runtime_error("Optuna prepared allocation epoch expired");
+        if (owner && !runtime.valid(owner))
+            throw std::runtime_error("Optuna temporary allocation epoch expired");
         return reinterpret_cast<T*>(static_cast<unsigned char*>(data) + offset);
     }
 };
@@ -457,14 +469,15 @@ std::vector<double> host_pdf(const std::vector<double>& samples,
     return result;
 }
 void initialize() {
-    mxInitGPU();
+    if (!runtime.initialize) throw std::logic_error("Optuna runtime adapter not installed");
+    runtime.initialize();
     check(cudaGetDevice(&stats.device), "get device");
     check(cudaRuntimeGetVersion(&stats.runtime_version), "runtime version");
     check(cudaDriverGetVersion(&stats.driver_version), "driver version");
     int pool_supported = 0;
     check(cudaDeviceGetAttribute(&pool_supported, cudaDevAttrMemoryPoolsSupported,
                                  stats.device), "memory pool support");
-    stats.stream_ordered_allocator = pool_supported != 0;
+    stats.stream_ordered_allocator = false; // allocator ownership belongs to adapter
 }
 struct DeviceMixture {
     std::size_t descriptors, data, normalization = 0;
@@ -745,9 +758,23 @@ void set_gpu(bool enabled) {
 Statistics statistics() { return stats; }
 void release_cached_memory() noexcept {
     if (workspaces.empty()) return; // CPU-only use never enters CUDA.
-    for (auto& item : workspaces)
-        if (item.second.owner) mxDestroyArray(item.second.owner);
     workspaces.clear();
     stats.cached_device_bytes = 0;
+}
+void install_runtime(RuntimeHooks hooks) {
+    if (!hooks.initialize || !hooks.allocate || !hooks.valid || !hooks.release)
+        throw std::invalid_argument("Optuna incomplete runtime hooks");
+    if (runtime.initialize) {
+        if (runtime.initialize != hooks.initialize || runtime.allocate != hooks.allocate ||
+            runtime.valid != hooks.valid || runtime.release != hooks.release)
+            throw std::logic_error("Optuna runtime adapter cannot be replaced");
+        return;
+    }
+    runtime = hooks; // registration alone makes no CUDA API call
+}
+void shutdown_runtime() {
+    if (active_buffers) throw std::logic_error("Optuna live buffers prevent runtime unload");
+    release_cached_memory();
+    runtime = {};
 }
 }

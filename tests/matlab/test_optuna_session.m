@@ -93,7 +93,7 @@ session.start();
 session.Study.ask();
 
 restored = radia.optuna.OptimizationSession.load( ...
-    storage + ".session.mat", ObjectiveFcn=@(v) v.x);
+    storage + ".session.h5", ObjectiveFcn=@(v) v.x);
 snapshot = restored.snapshot();
 verifyEqual(testCase, restored.State, "paused");
 verifyEqual(testCase, restored.StopReason, "recovered-stale-running");
@@ -192,7 +192,7 @@ end
 function [pathValue, cleanup] = temporaryStorage()
 directory = string(tempname("C:\temp"));
 mkdir(directory);
-pathValue = directory + "\study.mat";
+pathValue = directory + "\study.h5";
 cleanup = onCleanup(@() removeTemporaryDirectory(directory));
 end
 

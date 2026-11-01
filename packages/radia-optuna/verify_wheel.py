@@ -113,6 +113,7 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     payloads[str(MATLAB_PREFIX / "OPTUNA_SIMULINK_LAB.md")] = (
         PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md"
     )
+    payloads[str(MATLAB_PREFIX / "NATIVE_BUILD.md")] = PACKAGE_ROOT / "NATIVE_BUILD.md"
     evidence = json.loads(
         (PACKAGE_ROOT / "src/radia_optuna/evidence_manifest.json").read_text(encoding="utf-8")
     )
@@ -167,8 +168,10 @@ def _evidence_errors(archive, names, source_manifest):
 
 def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]:
     errors: list[str] = []
-    if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
-        errors.append(f"wheel must be tagged py3-none-win_amd64: {wheel.name}")
+    tag_match = re.fullmatch(r"radia_optuna-[^-]+-(cp\d+)-(cp\d+)-win_amd64\.whl", wheel.name)
+    if not tag_match or tag_match[1] != tag_match[2]:
+        errors.append(f"wheel must use its exact CPython ABI on win_amd64: {wheel.name}")
+    expected_tag = f"{tag_match[1]}-{tag_match[2]}-win_amd64" if tag_match else None
 
     source_project = tomllib.loads(
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -225,8 +228,28 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
                 .splitlines()
                 if line.startswith("Tag: ")
             ]
-            if wheel_tags != ["py3-none-win_amd64"]:
+            if wheel_tags != [expected_tag]:
                 errors.append(f"unexpected internal wheel tags: {wheel_tags}")
+        extensions = sorted(name for name in names if name.endswith('.pyd'))
+        expected_extension = (f"radia_optuna/_optuna_kernels.{tag_match[1]}-win_amd64.pyd"
+                              if tag_match else None)
+        if extensions != [expected_extension]:
+            errors.append(f"missing or incompatible exact-ABI kernel extension: {extensions}")
+        build_member = 'radia_optuna/native_build.json'
+        if build_member not in names:
+            errors.append('missing shared-object native build receipt')
+        elif expected_extension in names:
+            if not _is_windows_x64_pe(archive.read(expected_extension)):
+                errors.append('native Python extension is not Windows x64 PE')
+            build = json.loads(archive.read(build_member))
+            if not build.get('objects') or not build.get('archive_sha256'):
+                errors.append('missing common archive/object identity')
+            expected_hash = build.get('python_extension_sha256s', {}).get(PurePosixPath(expected_extension).name)
+            if hashlib.sha256(archive.read(expected_extension)).hexdigest() != expected_hash:
+                errors.append('native extension differs from shared-object receipt')
+            mex_member = 'radia_optuna/matlab/optuna_mex.mexw64'
+            if mex_member in names and hashlib.sha256(archive.read(mex_member)).hexdigest() != build.get('mex_sha256'):
+                errors.append('MEX differs from shared-object receipt')
 
         expected_fixed = {
             str(MATLAB_PREFIX / "optuna_mex.mexw64"),
@@ -382,7 +405,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
         "ok": True,
         "wheel": str(wheel.resolve()),
         "version": source_version,
-        "platform_tag": "py3-none-win_amd64",
+        "platform_tag": expected_tag,
         "matlab_file_count": len(matlab_files),
         "native_gateway": "optuna_mex",
         "native_command_count": source_manifest["native_command_count"],

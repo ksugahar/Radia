@@ -29,7 +29,18 @@ classdef OptimizationSession < handle
 
     properties (Constant, Access=private)
         SessionSchema = "radia.optuna.session"
-        SessionVersion = 1
+        SessionVersion = 2
+        OptionFields = ["MaxTrials","MaxTime","FunctionTolerance", ...
+            "MaxStallTrials","Display","UseParallel","ParallelMode", ...
+            "BatchSize","Sampler","Pruner","Seed","StoragePath", ...
+            "StudyName","Resume","Directions","CatchObjectiveErrors"]
+        ParameterFields = ["Name","Value","Minimum","Maximum","Free", ...
+            "Type","Transform","Step","Choices"]
+        CallbackFields = ["Slot","Position","Description","HandleType"]
+        SessionFields = ["Schema","Version","Parameters","Options", ...
+            "UnresolvedCallbacks","State","SelectedTrialNumber", ...
+            "StartedAt","UpdatedAt","StopReason","CheckpointRevision", ...
+            "ModelName"]
     end
 
     methods
@@ -373,43 +384,255 @@ classdef OptimizationSession < handle
             if strlength(folder) > 0 && ~isfolder(folder)
                 mkdir(folder);
             end
+            radia.optuna.Study.requireHdf5Path(path);
             obj.CheckpointRevision = obj.CheckpointRevision + 1;
             obj.UpdatedAt = datetime("now");
-            SessionData = obj.sessionData(); %#ok<NASGU>
-            builtin("save", path, "SessionData", "-mat");
+            radia.optuna.OptimizationSession.writeSessionFile( ...
+                path, obj.sessionData());
         end
     end
 
     methods (Static)
         function obj = load(path, options)
+            %LOAD Rebuild a session from its HDF5 checkpoint.
+            %   Function handles are never restored from storage. The
+            %   caller re-binds every callback slot recorded at save:
+            %   ObjectiveFcn always, and OutputFcn, PlotFcn and
+            %   ConstraintFcn exactly when the checkpoint recorded them
+            %   (same count, in saved order). Missing, extra or miscounted
+            %   callbacks raise radia:optuna:SessionCallbackUnresolved.
             arguments
                 path (1,1) string
                 options.ObjectiveFcn = []
+                options.OutputFcn = []
+                options.PlotFcn = []
+                options.ConstraintFcn = []
                 options.ModelName (1,1) string = ""
             end
-            loaded = builtin("load", path, "SessionData", "-mat");
-            if ~isfield(loaded, "SessionData")
-                error("radia:optuna:SessionStorage", ...
-                    "'%s' has no SessionData.", path);
-            end
-            data = loaded.SessionData;
-            if ~isfield(data, "Schema") || ...
-                    string(data.Schema) ~= "radia.optuna.session" || ...
-                    data.Version ~= 1
-                error("radia:optuna:SessionStorage", ...
-                    "'%s' is not a supported OptimizationSession.", path);
-            end
-            objectiveFcn = options.ObjectiveFcn;
-            if isempty(objectiveFcn)
-                objectiveFcn = data.ObjectiveFcn;
-            end
+            data = radia.optuna.OptimizationSession.readSessionFile(path);
+            [objectiveFcn, sessionOptions] = radia.optuna. ...
+                OptimizationSession.rebindCallbacks(data, path, options);
             modelName = options.ModelName;
-            if strlength(modelName) == 0 && isfield(data, "ModelName")
-                modelName = string(data.ModelName);
+            if strlength(modelName) == 0
+                modelName = data.ModelName;
             end
             obj = radia.optuna.OptimizationSession( ...
-                objectiveFcn, data.Parameters, data.Options, ...
+                objectiveFcn, data.Parameters, sessionOptions, ...
                 ModelName=modelName);
+        end
+
+        function path = sessionPathFor(storagePath)
+            %SESSIONPATHFOR Session checkpoint path next to a Study file.
+            path = string(storagePath) + ".session.h5";
+        end
+
+        function data = readSessionFile(path)
+            %READSESSIONFILE Read one typed HDF5 session checkpoint.
+            %   Parameters and Options are rebuilt through their public
+            %   constructors; UnresolvedCallbacks is descriptive only.
+            import radia.optuna.OptimizationSession
+            path = string(path);
+            fid = radia.optuna.internal.TypedHdf5.openFile(path, ...
+                OptimizationSession.SessionSchema, ...
+                OptimizationSession.SessionVersion);
+            closer = onCleanup(@() H5F.close(fid));
+            try
+                raw = radia.optuna.internal.TypedHdf5.readTree(fid, "SessionData");
+            catch exception
+                failure = MException("radia:optuna:SessionStorage", ...
+                    "'%s' has invalid typed SessionData: %s", ...
+                    path, exception.message);
+                throw(addCause(failure, exception))
+            end
+            OptimizationSession.requireFields(raw, ...
+                OptimizationSession.SessionFields, path, "SessionData");
+            OptimizationSession.requireFields(raw.Options, ...
+                OptimizationSession.OptionFields, path, "Options");
+            OptimizationSession.requireFields(raw.Parameters, ...
+                OptimizationSession.ParameterFields, path, "Parameters");
+            OptimizationSession.requireFields(raw.UnresolvedCallbacks, ...
+                OptimizationSession.CallbackFields, path, ...
+                "UnresolvedCallbacks");
+            if raw.Schema ~= OptimizationSession.SessionSchema || ...
+                    raw.Version ~= OptimizationSession.SessionVersion
+                error("radia:optuna:SessionStorage", ...
+                    "'%s' has an unsupported session schema.", path);
+            end
+            data = raw;
+            data.Parameters = OptimizationSession.parametersFromData( ...
+                raw.Parameters);
+            optionValues = namedargs2cell(raw.Options);
+            data.Options = radia.optuna.OptimizeOptions(optionValues{:});
+        end
+    end
+
+    methods (Static, Access=private)
+        function [objectiveFcn, options] = rebindCallbacks(data, path, supplied)
+            % Explicit re-binding at load: storage holds only descriptive
+            % callback records; every recorded slot must be supplied by the
+            % caller with the recorded count, and nothing else may be.
+            callbacks = data.UnresolvedCallbacks;
+            objectiveFcn = supplied.ObjectiveFcn;
+            if isempty(objectiveFcn) || ~isa(objectiveFcn, "function_handle") || ...
+                    ~isscalar(objectiveFcn)
+                fail("ObjectiveFcn", sum(callbacks.Slot == "ObjectiveFcn"), ...
+                    "a scalar function handle");
+            end
+            rebound = struct();
+            for slot = ["OutputFcn","PlotFcn","ConstraintFcn"]
+                value = supplied.(slot);
+                if isempty(value)
+                    handles = {};
+                elseif isa(value, "function_handle") && isscalar(value)
+                    handles = {value};
+                elseif slot ~= "ConstraintFcn" && iscell(value) && ...
+                        all(cellfun(@(h) isa(h, "function_handle") && ...
+                        isscalar(h), value))
+                    handles = reshape(value, 1, []);
+                else
+                    fail(slot, NaN, "function handles");
+                end
+                expected = sum(callbacks.Slot == slot);
+                if numel(handles) ~= expected
+                    fail(slot, expected, sprintf("%d handle(s)", numel(handles)));
+                end
+                if slot == "ConstraintFcn"
+                    if isempty(handles)
+                        rebound.(slot) = [];
+                    else
+                        rebound.(slot) = handles{1};
+                    end
+                else
+                    rebound.(slot) = handles;
+                end
+            end
+            values = namedargs2cell( ...
+                radia.optuna.OptimizationSession.optionData(data.Options));
+            options = radia.optuna.OptimizeOptions(values{:}, ...
+                OutputFcn=rebound.OutputFcn, PlotFcn=rebound.PlotFcn, ...
+                ConstraintFcn=rebound.ConstraintFcn);
+
+            function fail(slot, expected, got)
+                rows = callbacks.Slot == slot;
+                recorded = strjoin(callbacks.Description(rows), ", ");
+                if strlength(recorded) == 0
+                    recorded = "<none>";
+                end
+                error("radia:optuna:SessionCallbackUnresolved", ...
+                    "'%s' recorded %g %s callback(s) (%s); load received %s. " + ...
+                    "Function handles are never restored from storage: " + ...
+                    "re-bind exactly the recorded callbacks by name.", ...
+                    path, expected, slot, recorded, got);
+            end
+        end
+
+        function record = callbackRecord(objectiveFcn, options)
+            % Descriptive, non-restorable callback inventory in slot order.
+            slots = "ObjectiveFcn";
+            positions = 1;
+            handles = {objectiveFcn};
+            for slot = ["OutputFcn","PlotFcn"]
+                values = options.(slot);
+                for index = 1:numel(values)
+                    slots(end+1,1) = slot; %#ok<AGROW>
+                    positions(end+1,1) = index; %#ok<AGROW>
+                    handles{end+1,1} = values{index}; %#ok<AGROW>
+                end
+            end
+            if ~isempty(options.ConstraintFcn)
+                slots(end+1,1) = "ConstraintFcn";
+                positions(end+1,1) = 1;
+                handles{end+1,1} = options.ConstraintFcn;
+            end
+            descriptions = strings(numel(handles),1);
+            types = strings(numel(handles),1);
+            for index = 1:numel(handles)
+                descriptions(index) = string(func2str(handles{index}));
+                details = functions(handles{index});
+                types(index) = string(details.type);
+            end
+            record = struct("Slot", slots(:), "Position", positions(:), ...
+                "Description", descriptions, "HandleType", types);
+        end
+
+        function writeSessionFile(path, data)
+            folder = string(fileparts(path));
+            if strlength(folder) == 0
+                folder = string(pwd);
+            end
+            temporaryPath = string(tempname(folder)) + ".h5";
+            cleanup = onCleanup(@() ...
+                radia.optuna.OptimizationSession.removeFile(temporaryPath));
+            fid = radia.optuna.internal.TypedHdf5.createFile(temporaryPath, ...
+                radia.optuna.OptimizationSession.SessionSchema, ...
+                radia.optuna.OptimizationSession.SessionVersion);
+            try
+                radia.optuna.internal.TypedHdf5.writeTree(fid, "SessionData", data);
+                radia.optuna.internal.TypedHdf5.writeAttribute(fid, ...
+                    "SessionData", "index_base:SelectedTrialNumber", 0);
+                radia.optuna.internal.TypedHdf5.writeAttribute(fid, ...
+                    "SessionData", "restorable:UnresolvedCallbacks", 0);
+            catch exception
+                H5F.close(fid);
+                rethrow(exception)
+            end
+            H5F.close(fid);
+            radia.optuna.OptimizationSession.readSessionFile(temporaryPath);
+            [moved, message, messageId] = movefile(temporaryPath, path, "f");
+            if ~moved
+                error("radia:optuna:SessionStorage", ...
+                    "Unable to replace session checkpoint (%s): %s", ...
+                    messageId, message);
+            end
+            clear cleanup
+        end
+
+        function removeFile(path)
+            if isfile(path)
+                delete(path);
+            end
+        end
+
+        function data = parameterData(parameters)
+            fields = radia.optuna.OptimizationSession.ParameterFields;
+            values = cell(numel(fields), numel(parameters));
+            for index = 1:numel(parameters)
+                for field = 1:numel(fields)
+                    values{field, index} = parameters(index).(fields(field));
+                end
+            end
+            data = reshape(cell2struct(values, cellstr(fields), 1), 1, []);
+        end
+
+        function parameters = parametersFromData(data)
+            parameters = radia.optuna.OptimizationParameter.empty(1,0);
+            for index = 1:numel(data)
+                item = data(index);
+                parameters(index) = radia.optuna.OptimizationParameter( ...
+                    item.Name, Value=item.Value, Minimum=item.Minimum, ...
+                    Maximum=item.Maximum, Free=item.Free, Type=item.Type, ...
+                    Transform=item.Transform, Step=item.Step, ...
+                    Choices=item.Choices);
+            end
+        end
+
+        function data = optionData(options)
+            fields = radia.optuna.OptimizationSession.OptionFields;
+            values = cell(numel(fields), 1);
+            for index = 1:numel(fields)
+                values{index} = options.(fields(index));
+            end
+            data = cell2struct(values, cellstr(fields), 1);
+        end
+
+        function requireFields(value, expected, path, label)
+            if ~isstruct(value) || ...
+                    ~isequal(string(fieldnames(value)).', expected)
+                error("radia:optuna:SessionStorage", ...
+                    "'%s' %s fields do not match session schema version %d.", ...
+                    path, label, ...
+                    radia.optuna.OptimizationSession.SessionVersion);
+            end
         end
     end
 
@@ -652,7 +875,8 @@ classdef OptimizationSession < handle
             if strlength(obj.Options.StoragePath) == 0
                 path = "";
             else
-                path = obj.Options.StoragePath + ".session.mat";
+                path = radia.optuna.OptimizationSession.sessionPathFor( ...
+                    obj.Options.StoragePath);
             end
         end
 
@@ -660,9 +884,10 @@ classdef OptimizationSession < handle
             data = struct( ...
                 "Schema", obj.SessionSchema, ...
                 "Version", obj.SessionVersion, ...
-                "Parameters", obj.Parameters, ...
-                "Options", obj.Options, ...
-                "ObjectiveFcn", obj.ObjectiveFcn, ...
+                "Parameters", obj.parameterData(obj.Parameters), ...
+                "Options", obj.optionData(obj.Options), ...
+                "UnresolvedCallbacks", ...
+                    obj.callbackRecord(obj.ObjectiveFcn, obj.Options), ...
                 "State", obj.State, ...
                 "SelectedTrialNumber", obj.SelectedTrialNumber, ...
                 "StartedAt", obj.StartedAt, ...
@@ -677,25 +902,25 @@ classdef OptimizationSession < handle
             if strlength(path) == 0 || ~isfile(path)
                 return
             end
-            loaded = builtin("load", path, "SessionData", "-mat");
-            if ~isfield(loaded, "SessionData")
-                error("radia:optuna:SessionStorage", ...
-                    "'%s' has no SessionData.", path);
-            end
-            data = loaded.SessionData;
-            if string(data.Schema) ~= obj.SessionSchema || ...
-                    data.Version ~= obj.SessionVersion
-                error("radia:optuna:SessionStorage", ...
-                    "'%s' has an unsupported session schema.", path);
-            end
-            obj.State = string(data.State);
+            data = radia.optuna.OptimizationSession.readSessionFile(path);
+            % Constructor resume follows the same explicit re-binding
+            % contract as load: the live callbacks must cover exactly the
+            % recorded slots, checked before anything is persisted. The
+            % caller's current options (e.g. an extended MaxTrials) stay.
+            supplied = struct("ObjectiveFcn", obj.ObjectiveFcn, ...
+                "OutputFcn", {obj.Options.OutputFcn}, ...
+                "PlotFcn", {obj.Options.PlotFcn}, ...
+                "ConstraintFcn", obj.Options.ConstraintFcn);
+            radia.optuna.OptimizationSession.rebindCallbacks( ...
+                data, path, supplied);
+            obj.State = data.State;
             obj.SelectedTrialNumber = data.SelectedTrialNumber;
             obj.StartedAt = data.StartedAt;
             obj.UpdatedAt = data.UpdatedAt;
-            obj.StopReason = string(data.StopReason);
+            obj.StopReason = data.StopReason;
             obj.CheckpointRevision = data.CheckpointRevision;
-            if strlength(obj.ModelName) == 0 && isfield(data, "ModelName")
-                obj.ModelName = string(data.ModelName);
+            if strlength(obj.ModelName) == 0
+                obj.ModelName = data.ModelName;
             end
         end
     end

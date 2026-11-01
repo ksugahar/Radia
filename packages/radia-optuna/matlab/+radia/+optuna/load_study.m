@@ -1,5 +1,5 @@
 function study=load_study(options)
-%LOAD_STUDY Load one MAT-backed Optuna-compatible study.
+%LOAD_STUDY Load one HDF5-backed Optuna-compatible study.
 arguments
     options.study_name (1,1) string = ""
     options.storage (1,1) string

@@ -24,8 +24,8 @@ assertPathComesFromWheel(teachingBuilderPath, installedMatlabPath, ...
     "buildOptunaTeachingModel");
 assertPathComesFromWheel(mexPath, installedMatlabPath, "optuna_mex");
 cudaBefore = optuna_mex('api.info');
-assert(string(cudaBefore.execution)=="matlab-mexcuda", ...
-    "The installed wheel must contain the mexcuda gateway.");
+assert(string(cudaBefore.execution)=="matlab-mex-shared-cuda", ...
+    "The installed wheel must contain the plain MEX/shared-library gateway.");
 assert(~isempty(ver("simulink")), ...
     "radia:optuna:StandaloneSimulinkUnavailable", ...
     "Simulink is required for the installed-wheel acceptance test.");
@@ -96,7 +96,7 @@ failure = jsondecode(failureStudy.UserAttrTable.ValueJSON(failureRow));
 assert(string(failure.identifier) == "radia:optuna:StandaloneFailure");
 assert(string(failure.stage) == "postprocess");
 
-blockStudyFile = fullfile(scratchDirectory, "block-study.mat");
+blockStudyFile = fullfile(scratchDirectory, "block-study.h5");
 new_system(blockModelName);
 for pythonSampler=["gp","qmc"]
     rejected=false;
@@ -210,7 +210,7 @@ assert(blockWorkspace.getVariable("x") == applied.x);
 portsAfter = get_param(optimizationBlock, "PortConnectivity");
 assert(isequaln(portsAfter, portsBefore));
 
-sessionStudyFile = fullfile(scratchDirectory, "session-study.mat");
+sessionStudyFile = fullfile(scratchDirectory, "session-study.h5");
 parameter = radia.optuna.OptimizationParameter("x", ...
     Minimum=-1, Maximum=1);
 options = radia.optuna.optimoptions(MaxTrials=4, Sampler="random", ...
@@ -234,7 +234,7 @@ best = restoredSession.Study.bestSolution();
 restoredSession.selectTrial(best.trial_number);
 assert(isfinite(restoredSession.selectedParameters().x));
 
-teachingStudyFile = fullfile(scratchDirectory, "teaching-study.mat");
+teachingStudyFile = fullfile(scratchDirectory, "teaching-study.h5");
 createdTeachingModel = radia.simulink.buildOptunaTeachingModel( ...
     OutputPath=teachingModelFile, Exercise="quadratic", ...
     StoragePath=teachingStudyFile, Save=true);

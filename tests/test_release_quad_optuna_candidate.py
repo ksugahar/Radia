@@ -1,7 +1,7 @@
 """Optuna release and isolated acceptance contracts.
 
 Guards: Release artifact identity, isolated acceptance lifecycle, and the CI
-package-entry route to the supported mexcuda build without pybind dependencies,
+Python-first shared nvcc archive and plain MEX package-entry route,
 and the root build adapter and MATLAB test classification inputs.
 Assumes: Repository workflow and release tooling describe the public release
 contract; mocked transport tests do not certify native numerical correctness.
@@ -95,25 +95,18 @@ def test_genuine_optuna_build_runs_its_release_quad_candidate_contract():
     assert '"event": "push"' in source and '"headSha": head' in source
 
 
-def test_optuna_workflow_uses_supported_mexcuda_without_pybind():
+def test_optuna_workflow_uses_python_first_common_archive_and_plain_mex():
     root = Path(__file__).resolve().parents[1]
-    workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
-        encoding="utf-8"
-    )
-    assert "pip install pybind11" not in workflow
-    assert "addpath('$root/packages/radia-optuna/tools'); build_mexcuda;" in workflow
-    entry = (root / "packages/radia-optuna/tools/build_mexcuda.m").read_text(
-        encoding="utf-8"
-    )
-    assert "fileparts(fileparts(mfilename('fullpath')))" in entry
-    assert "binary = buildOptunaMex;" in entry
+    workflow = (root / ".github/workflows/radia-optuna.yml").read_text(encoding="utf-8")
+    assert "build_mexcuda" not in workflow
+    assert workflow.index("-Stage python") < workflow.index("validate_kernels.py") < workflow.index("-Stage matlab")
+    assert "validate_binding_parity" in workflow
     assert "runs-on: windows-latest" not in workflow
-    builder = (root / "packages/radia-optuna/buildOptunaMex.m").read_text(encoding="utf-8")
-    assert "mexcuda(" in builder
-    assert (
-        "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install "
-        "build wheel pytest optuna==5.0.0"
-    ) in workflow
+    cmake = (root / "packages/radia-optuna/CMakeLists.txt").read_text(encoding="utf-8")
+    assert "matlab_add_mex" in cmake
+    assert "target_link_libraries(_optuna_kernels PRIVATE optuna_kernels" in cmake
+    assert "LINK_TO optuna_kernels" in cmake
+    assert "optuna==5.0.0" in workflow
 
 
 def test_optuna_candidate_records_every_machine_for_one_exact_wheel(

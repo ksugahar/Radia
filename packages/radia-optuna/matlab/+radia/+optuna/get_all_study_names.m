@@ -1,5 +1,5 @@
 function names=get_all_study_names(storage)
-%GET_ALL_STUDY_NAMES Return the zero-or-one study name in a MAT storage.
+%GET_ALL_STUDY_NAMES Return the zero-or-one study name in an HDF5 storage.
 arguments
     storage (1,1) string
 end
