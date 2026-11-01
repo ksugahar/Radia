@@ -199,10 +199,13 @@ def test_gap_bound_refuses_just_inside(charge_inputs):
         _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, 0.9e-4 * r)[0])
 
 
-def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs):
+@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0)], ids=["normal", "normal_plus_large_tangent"])
+def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs, velocity):
+    # A large common tangential velocity keeps the symmetry and must not mask
+    # the normal component.
     kw, cells, faces = _moved_images(charge_inputs, 0.0)
     gram = _rp._ChargeGramHMatrix(**kw)
-    shift = np.array([1.0, 0.0, 0.0])
+    shift = np.array(velocity)
     with pytest.raises(Exception, match="normal motion of plane vertices"):
         gram.tet_charge_gram_directional_derivative(
             np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),

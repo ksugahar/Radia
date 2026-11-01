@@ -2526,6 +2526,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     // The graded image rule is valid only while every coinciding vertex pair
     // stays coincident; a velocity that separates them (normal motion of a
     // symmetry-plane vertex) leaves the supported domain, so it fails loudly.
+    constexpr double kVelocityRoundoff2=(16*std::numeric_limits<double>::epsilon())*(16*std::numeric_limits<double>::epsilon());
     auto require_image_coincidence_kept=[&](int kt,int ht,int ks,int hs,int img){
         const double*a=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
         const double*b=ks==0?&m_cellV[(size_t)hs*12]:&m_faceV[(size_t)hs*9];
@@ -2542,7 +2543,9 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
                     const double r=corner[k]-a[3*i+k],dv=dcorner[k]-da[3*i+k];
                     r2+=r*r;dv2+=dv*dv;v2+=da[3*i+k]*da[3*i+k]+dcorner[k]*dcorner[k];
                 }
-                if(r2<=tol*tol&&dv2>1e-24*v2)
+                // Roundoff-level mismatch only: a large common tangential
+                // velocity must not mask a normal mismatch.
+                if(r2<=tol*tol&&dv2>kVelocityRoundoff2*v2)
                     throw std::domain_error("P1 image derivative: velocity moves a "
                         "symmetry-plane vertex off its image; normal motion of "
                         "plane vertices is unsupported");
@@ -8398,7 +8401,7 @@ void RadHACApKChargeGram::ValidateP1ImageGaps() const
     if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo || m_image_masks.empty()) return;
     struct Key { long long x, y, z; bool operator==(const Key& o) const { return x==o.x && y==o.y && z==o.z; } };
     struct KeyHash { size_t operator()(const Key& k) const {
-        return (size_t)(k.x*73856093LL ^ k.y*19349663LL ^ k.z*83492791LL); } };
+        return (size_t)((uint64_t)k.x*73856093u ^ (uint64_t)k.y*19349663u ^ (uint64_t)k.z*83492791u); } };
     struct Vert { double p[3]; double lo, hi; };
     std::vector<Vert> verts;
     std::map<std::array<double,3>, size_t> index;
