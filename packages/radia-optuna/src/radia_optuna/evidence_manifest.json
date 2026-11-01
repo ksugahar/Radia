@@ -26,7 +26,7 @@
     },
     "test_manifest": {
       "path": "oracles/optuna_test_manifest.json",
-      "sha256": "ff8c3794f3a2f85f7d9e55087df59c16b94d713960a955f77db484bafc2cde43"
+      "sha256": "d1f4c37e33a9b6e55e2adfb20bfbcddf2be0035e7490744ac31659ab67bc51cf"
     },
     "cuda_oracle": {
       "path": "oracles/optuna50_cuda_oracle.json",
