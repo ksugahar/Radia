@@ -199,17 +199,39 @@ def test_gap_bound_refuses_just_inside(charge_inputs):
         _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, 0.9e-4 * r)[0])
 
 
-@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0)], ids=["normal", "normal_plus_large_tangent"])
+@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0), (1.0, 1e100, 1e100)],
+                         ids=["normal", "normal_plus_large_tangent", "normal_plus_huge_tangent"])
 def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs, velocity):
     # A large common tangential velocity keeps the symmetry and must not mask
     # the normal component.
     kw, cells, faces = _moved_images(charge_inputs, 0.0)
     gram = _rp._ChargeGramHMatrix(**kw)
     shift = np.array(velocity)
-    with pytest.raises(Exception, match="normal motion of plane vertices"):
+    with pytest.raises(ValueError, match="normal motion of plane vertices"):
         gram.tet_charge_gram_directional_derivative(
             np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
             np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
+
+
+def test_tangential_plane_motion_is_accepted(charge_inputs):
+    kw, cells, faces = _moved_images(charge_inputs, 0.0)
+    gram = _rp._ChargeGramHMatrix(**kw)
+    shift = np.array([0.0, 1e13, -3.0])
+    gram.tet_charge_gram_directional_derivative(
+        np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+        np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
+
+
+def test_far_translated_mesh_builds_on_the_vertex_grid(charge_inputs):
+    # A large common tangential offset (reviewed hash-overflow input) is a
+    # supported mesh; the grid keys are taken relative to the mesh minimum.
+    cells = np.asarray(charge_inputs["cell_verts"]).reshape(-1, 4, 3)
+    faces = np.asarray(charge_inputs["face_verts"]).reshape(-1, 3, 3)
+    off = np.array([0.0, 1e9, 0.0])
+    kw = dict(charge_inputs, image_masks=np.array([1], dtype=np.int32), image_signs=np.array([1.0]),
+              cell_verts=np.ascontiguousarray((cells + off).ravel()),
+              face_verts=np.ascontiguousarray((faces + off).ravel()))
+    _rp._ChargeGramHMatrix(**kw)
 
 
 def test_image_derivative_is_continuous_just_outside_the_gap_bound(charge_inputs):
