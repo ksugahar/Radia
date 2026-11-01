@@ -2491,23 +2491,16 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     // velocity interpolation, the measure scales by its rate and the target
     // monomial (a reference coordinate) is constant.  The source potential
     // and its derivative come from the same analytic moments as `directed`.
-    double gx8[8],gw8[8],gx12[12],gw12[12];
-    radia_hdiv_p1_diagonal::gradedRule<8>(gx8,gw8);
-    radia_hdiv_p1_diagonal::gradedRule<12>(gx12,gw12);
+    double gx16[16],gw16[16],gx24[24],gw24[24];
+    radia_hdiv_p1_diagonal::gradedRule<16>(gx16,gw16);
+    radia_hdiv_p1_diagonal::gradedRule<24>(gx24,gw24);
     auto graded=[&](int kt,int ht,int ks,int hs,int img){
         const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
         const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
-        const int N=kt?12:8;const double*x=kt?gx12:gx8,*w=kt?gw12:gw8;
-        const double*s0=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
-        const double*ds0=kt==0?&cell_velocity[(size_t)ht*12]:&face_velocity[(size_t)ht*9];
-        const double*sv=ks==0?&m_cellV[(size_t)hs*12]:&m_faceV[(size_t)hs*9];
-        // Same slots as pairEntryOrder: keys from the mapped target.
-        double key[12],s[12],ds[12];int perm[4];
-        for(int v=0;v<(kt?3:4);++v){
-            if(img!=0)ImageEvalPoint(img,s0+3*v,key+3*v);else std::copy_n(s0+3*v,3,key+3*v);
-        }
-        radia_hdiv_p1_diagonal::gradedSlots(key,kt?3:4,sv,ks?3:4,perm);
-        for(int v=0;v<(kt?3:4);++v){std::copy_n(s0+3*perm[v],3,s+3*v);std::copy_n(ds0+3*perm[v],3,ds+3*v);}
+        // Same orders as pairEntry.
+        const int N=kt?24:16;const double*x=kt?gx24:gx16,*w=kt?gw24:gw16;
+        const double*s=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
+        const double*ds=kt==0?&cell_velocity[(size_t)ht*12]:&face_velocity[(size_t)ht*9];
         double e[3][3]={},de[3][3]={};
         for(int v=0;v<(kt?2:3);++v)for(int k=0;k<3;++k){e[v][k]=s[3*(v+1)+k]-s[k];de[v][k]=ds[3*(v+1)+k]-ds[k];}
         double cr[3]={e[0][1]*e[1][2]-e[0][2]*e[1][1],e[0][2]*e[1][0]-e[0][0]*e[1][2],e[0][0]*e[1][1]-e[0][1]*e[1][0]};
@@ -2522,11 +2515,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
             for(int k=0;k<3;++k){p[k]=s[k]+u*e[0][k]+v*e[1][k]+r*e[2][k];dp[k]=ds[k]+u*de[0][k]+v*de[1][k]+r*de[2][k];}
             if(img!=0){double pm[3],dpm[3];ImageEvalPoint(img,p,pm);ImageEvalPoint(img,dp,dpm);std::copy_n(pm,3,p);std::copy_n(dpm,3,dp);}
             source_inner(ks,hs,p,dp,val,der);
-            // Monomials stay reference coordinates of the HOST vertex order:
-            // lambda of host vertex 1 (x), 2 (y) or 3 (z) at this point.
-            double lam[4]={1-u-v-r,u,v,r},host[4]={};
-            for(int k=0;k<(kt?3:4);++k)host[perm[k]]=lam[k];
-            for(size_t t=0;t<gt.size();++t){const int*ex=&m_expo[(size_t)3*gt[t]];mono[t]=ex[0]?host[1]:(ex[1]?host[2]:(ex[2]?host[3]:1.));}
+            for(size_t t=0;t<gt.size();++t){const int*ex=&m_expo[(size_t)3*gt[t]];mono[t]=ex[0]?u:(ex[1]?v:1.);}
             for(size_t t=0;t<gt.size();++t)for(size_t q=0;q<gs.size();++q)
                 b[t*gs.size()+q]+=weight*mono[t]*(der[q]+rate*val[q]);
         }
