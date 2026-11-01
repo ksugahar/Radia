@@ -1,66 +1,19 @@
-function binary = buildOptunaMex(outputDirectory)
-%BUILDOPTUNAMEX Compile CUDA numerical kernels and CPU host control together.
-% No NGSolve, TaskManager, Python, Radia solver, or external CUDA override.
+function binary = buildOptunaMex(python,buildDirectory,pythonVerification)
+%BUILDOPTUNAMEX Link a plain MSVC MEX to the Python-verified nvcc archive.
+% Build and verify the package Python kernel target first. No compiler fallback.
 arguments
-    outputDirectory (1,1) string = fullfile(fileparts(mfilename('fullpath')), 'matlab')
+    python (1,1) string
+    buildDirectory (1,1) string
+    pythonVerification (1,1) string
 end
-package = fileparts(mfilename('fullpath'));
-configuration = fullfile(matlabroot, 'toolbox', 'parallel', 'gpu', 'extern', ...
-    'src', 'mex', 'win64', 'nvcc_msvcpp2022.xml');
-assert(isfile(configuration), 'radia:optuna:Compiler', ...
-    'This target requires the MATLAB-supported MSVC 2022 mexcuda configuration.');
-toolchain = pinnedToolchain;
-if ~isfolder(outputDirectory), mkdir(outputDirectory); end
-mexcuda('-v', '-R2018a', '-f', configuration, ...
-    toolchain{:}, ...
-    'NVCCFLAGS=-std=c++20 --fmad=false --compiler-options=/openmp -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80', ...
-    '-DNOMINMAX', '-output', 'optuna_mex', '-outdir', outputDirectory, ...
-    fullfile(package, 'native', 'optuna_mex.cpp'), ...
-    fullfile(package, 'native', 'optuna_cuda.cu'));
-binary = fullfile(outputDirectory, "optuna_mex." + mexext);
-assert(isfile(binary), 'radia:optuna:Build', 'mexcuda did not produce optuna_mex.');
-end
-
-function options = pinnedToolchain
-% Fail before output creation; never edit MathWorks XML or process settings.
-assert(ispc, 'radia:optuna:Compiler', 'This build requires Windows Build Tools 2022.');
-conflicting = {'CUDA_PATH', 'CUDA_BIN_PATH', 'CUDA_ROOT', 'CUDA_LIB_PATH', ...
-    'MW_NVCC_PATH', 'MW_ALLOW_ANY_CUDA', 'MW_ALLOW_ANY_COMPILER', ...
-    'NVCC_CCBIN', 'NVCC_PREPEND_FLAGS', 'NVCC_APPEND_FLAGS', 'NVCC_FLAGS'};
-for k = 1:numel(conflicting)
-    assert(isempty(getenv(conflicting{k})), 'radia:optuna:ToolchainEnvironment', ...
-        'Unset %s in the isolated build process before building Optuna.', conflicting{k});
-end
-vswhere = fullfile(getenv('ProgramFiles(x86)'), 'Microsoft Visual Studio', ...
-    'Installer', 'vswhere.exe');
-assert(isfile(vswhere), 'radia:optuna:Compiler', 'Visual Studio Installer vswhere is required.');
-[status, installation] = system(sprintf('"%s" -products Microsoft.VisualStudio.Product.BuildTools -version "[17.0,18.0)" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath', vswhere));
-installation = strtrim(installation);
-assert(status == 0 && isfolder(installation), 'radia:optuna:Compiler', ...
-    'Visual Studio Build Tools 2022 is required.');
-versionFile = fullfile(installation, 'VC', 'Auxiliary', 'Build', ...
-    'Microsoft.VCToolsVersion.default.txt');
-assert(isfile(versionFile) && strcmp(strtrim(fileread(versionFile)), '14.44.35207'), ...
-    'radia:optuna:Compiler', 'Build Tools 2022 must default to MSVC 14.44.35207.');
-vcTools = fullfile(installation, 'VC', 'Tools', 'MSVC', '14.44.35207');
-assert(isfile(fullfile(vcTools, 'bin', 'HostX64', 'x64', 'cl.exe')), ...
-    'radia:optuna:Compiler', 'The pinned MSVC compiler is missing.');
-cuda = fullfile(matlabroot, 'sys', 'cuda', 'win64', 'cuda');
-nvcc = fullfile(cuda, 'bin', 'nvcc.exe');
-assert(isfile(nvcc), 'radia:optuna:CUDA', 'MATLAB-bundled nvcc is required.');
-[status, version] = system(sprintf('"%s" --version', nvcc));
-assert(status == 0 && ~isempty(regexp(version, 'release 12\.8[,\s]', 'once')), ...
-    'radia:optuna:CUDA', 'Only MATLAB-bundled CUDA 12.8 is supported.');
-assert(isfile(fullfile(cuda, 'lib', 'x64', 'cudart.lib')), ...
-    'radia:optuna:CUDA', 'MATLAB-bundled CUDA runtime import library is missing.');
-% Use the stock configuration with explicit supported build-variable values.
-% Keep stock COMPILER=nvcc: MEX strips quotes from a COMPILER override,
-% breaking CMDLINE100 when MATLAB is installed under Program Files. The
-% stock XML prepends CUDA_ROOT/bin to PATH, selecting the checked bundled nvcc.
-% Shipped CUDA keeps libdevice in MATLAB bin/win64 (stock XML convention).
-options = {['VCROOT=' installation], ['VCINSTALLDIR=' vcTools], ...
-    ['VCVARSALLDIR=' fullfile(installation, 'VC', 'Auxiliary', 'Build')], ...
-    ['CUDA_ROOT=' cuda], ...
-    ['CUDA_LIB_PATH=' fullfile(cuda, 'lib', 'x64')], ...
-    ['LIBDEVICE=' fullfile(matlabroot, 'bin', 'win64')]};
+assert(ispc && isfile(python) && isfile(pythonVerification), ...
+    'radia:optuna:Build','Explicit Python and verification receipt are required.');
+package=fileparts(mfilename('fullpath'));
+script=fullfile(package,'tools','build_native.ps1');
+command=sprintf('pwsh -NoProfile -File "%s" -Stage matlab -Python "%s" -MatlabRoot "%s" -BuildDirectory "%s" -PythonVerification "%s"', ...
+    script,python,matlabroot,buildDirectory,pythonVerification);
+[status,output]=system(command);fprintf('%s',output);
+assert(status==0,'radia:optuna:Build','Plain MEX/shared-library build failed.');
+binary=fullfile(package,'matlab',"optuna_mex."+mexext);
+assert(isfile(binary),'radia:optuna:Build','Plain MEX target is missing.');
 end

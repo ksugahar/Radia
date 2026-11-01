@@ -129,7 +129,7 @@ end
 
 function testCudaBuildBoundary(testCase)
 info=optuna_mex('api.info');
-verifyEqual(testCase,string(info.build_route),"mexcuda");
+verifyEqual(testCase,string(info.build_route),"nvcc-shared-library");
 verifyFalse(testCase,info.taskmanager);
 verifyNotEmpty(testCase,string(info.gpu_operations));
 end

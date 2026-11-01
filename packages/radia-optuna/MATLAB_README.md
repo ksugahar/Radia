@@ -14,8 +14,8 @@ Radia solver, NGSolve, oneMKL, Cubit, or Python binary dependency. Missing or
 incompatible native gateways fail loudly and never redirect through
 `radia_mex`.
 
-From the package source directory, call `buildOptunaMex` in MATLAB using its supported
-`mexcuda` toolchain. TPE density, candidate scoring and maximum selection
+Use the package Python-first nvcc archive and plain MEX link described in
+NATIVE_BUILD.md. TPE density, candidate scoring and maximum selection
 require Parallel Computing Toolbox and a supported NVIDIA GPU in GPU mode. Random
 consumption, candidate generation and study management execute on the host.
 The GPU path requires no Python runtime and rejects CPU-only gateway binaries.
@@ -110,7 +110,7 @@ this directory for upstream MIT license notices and provenance links.
 
 Use `radia.optuna.executionMode("cpu")` for OpenMP host evaluation or
 `radia.optuna.executionMode("gpu")` for CUDA evaluation (the default).
-Both use the same mexcuda-compiled gateway; ordinary mex builds remain unsupported.
+Both use the same nvcc library through the plain MSVC MEX gateway.
 The setting applies to the MATLAB process, including Simulink, and must be
 selected separately in each worker. CPU mode does not initialize CUDA. GPU
 errors raise without falling back. Query `radia.optuna.executionMode()` or

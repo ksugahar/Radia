@@ -188,15 +188,25 @@ if ($CudaMexOnly) {
 }
 if ($OptunaMexOnly) {
     if ($InstallToSitePackages -or $Rebuild) {
-        throw 'Optuna mexcuda build is isolated; install/rebuild switches are unsupported'
+        throw 'Optuna shared-library build is isolated; install/rebuild switches are unsupported'
     }
     $optunaRoot = $PSScriptRoot.Replace("'", "''")
     if ($RequireNativeProvenance) {
         $optunaStatus = & git -C $PSScriptRoot status --porcelain
         if ($LASTEXITCODE -ne 0 -or $optunaStatus) { throw 'Optuna provenance requires clean source' }
     }
-    & matlab -batch "addpath('$optunaRoot/packages/radia-optuna'); buildOptunaMex;"
-    if ($LASTEXITCODE -ne 0) { throw 'Optuna mexcuda build failed' }
+    # Python-first verification and build directory must be explicit.
+    $python = $env:RADIA_OPTUNA_BUILD_PYTHON
+    $directory = $env:RADIA_OPTUNA_BUILD_DIRECTORY
+    $verification = $env:RADIA_OPTUNA_PYTHON_VERIFICATION
+    if (!$python -or !$directory -or !$verification) {
+        throw 'Set RADIA_OPTUNA_BUILD_PYTHON, RADIA_OPTUNA_BUILD_DIRECTORY and RADIA_OPTUNA_PYTHON_VERIFICATION after package Python validation'
+    }
+    $python = $python.Replace("'", "''")
+    $directory = $directory.Replace("'", "''")
+    $verification = $verification.Replace("'", "''")
+    & matlab -batch "addpath('$optunaRoot/packages/radia-optuna'); buildOptunaMex('$python','$directory','$verification');"
+    if ($LASTEXITCODE -ne 0) { throw 'Optuna plain MEX/shared-library build failed' }
     if ($Test) {
         & matlab -batch "addpath('$optunaRoot/validation_test/optimization'); validate_optuna_cuda('$optunaRoot'); addpath('$optunaRoot/validation_test/radia_optuna'); validate_cuda('$optunaRoot','$optunaRoot/packages/radia-optuna/matlab','$optunaRoot/build-optuna-cuda/validation.json');"
         if ($LASTEXITCODE -ne 0) { throw 'Optuna CUDA validation failed' }

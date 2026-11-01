@@ -1,7 +1,8 @@
 #include "mex.h"
 #include "optuna_cuda.hpp"
+#include "optuna_runtime.hpp"
 #ifndef _OPENMP
-#error "Optuna mexcuda requires the OpenMP-enabled host compiler"
+#error "Optuna shared kernels require the OpenMP-enabled host compiler"
 #endif
 
 
@@ -589,7 +590,11 @@ void DestroyRegistered(Registry& registry, std::uint64_t handle,
 
 
 void Cleanup() {
-    optuna_cuda::release_cached_memory();
+    try {
+        optuna_cuda::shutdown_runtime();
+    } catch (const std::exception& error) {
+        mexErrMsgIdAndTxt("radia:optuna:mex:LiveBuffers", "%s", error.what());
+    }
     std::size_t unlock_count = 0;
     {
         std::lock_guard<std::mutex> guard(registry_mutex);
@@ -608,6 +613,7 @@ bool HandleInUse(std::uint64_t handle) {
 }
 
 void EnsureExitHandler() {
+    optuna_cuda::install_matlab_runtime();
     if (!exit_handler_registered) {
         mexAtExit(Cleanup);
         exit_handler_registered = true;
@@ -2268,7 +2274,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
         "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes", "cpu_preparation_calls", "cpu_cached_normalizer_values", "model_radix_sorts", "peak_sort_temporary_bytes"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
-    mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
+    mxSetField(plhs[0], 0, "build_route", mxCreateString("nvcc-shared-library"));
     mxSetField(plhs[0], 0, "taskmanager", mxCreateLogicalScalar(false));
     mxSetField(plhs[0], 0, "gpu_operations", mxCreateString("TPE bandwidth/category model construction, density preparation and candidate evaluation/selection"));
     mxSetField(plhs[0], 0, "host_operations", mxCreateString("Management, ordered RNG, candidate generation, Pareto and Sobol"));
@@ -2293,10 +2299,10 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     mxSetField(plhs[0], 0, "model_download_bytes", mxCreateDoubleScalar(static_cast<double>(stats.model_download_bytes)));
     mxSetField(plhs[0], 0, "cpu_preparation_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_preparation_calls)));
     mxSetField(plhs[0], 0, "cpu_cached_normalizer_values", mxCreateDoubleScalar(static_cast<double>(stats.cpu_cached_normalizer_values)));
-    mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
+    mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mex-shared-cuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
     mxSetField(plhs[0], 0, "allocator", mxCreateString(
-        stats.stream_ordered_allocator ? "cuda-stream-ordered" : "cudaMalloc"));
+        "runtime-adapter-owned"));
     mxSetField(plhs[0], 0, "density_launches", mxCreateDoubleScalar(static_cast<double>(stats.density_launches)));
     mxSetField(plhs[0], 0, "selection_launches", mxCreateDoubleScalar(static_cast<double>(stats.selection_launches)));
     mxSetField(plhs[0], 0, "host_to_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.host_to_device_bytes)));

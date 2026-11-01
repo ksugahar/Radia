@@ -1,8 +1,23 @@
 # Changelog
 
+## 0.5.0 (2026-11-01)
+
+- Replace the mexcuda build route with one nvcc-compiled CUDA object in a
+  CMake static library shared by Python/pybind11 and plain MSVC MEX adapters.
+  On reviewed source `0acab7dec`, Windows RTX 5000 checks passed the stored
+  CPU/GPU oracle cases, same-kernel density bitwise parity and existing MATLAB
+  compatibility tests. Publication requires final 0.5.0 artifacts to pass their
+  own exact-source installed-wheel acceptance; the historical measurements
+  below do not certify this route.
+- After an owned GPU context reset, stale prepared allocations fail loudly.
+  Explicit clear and rebuild preserved density bits, and the MATLAB host RNG
+  snapshot stayed unchanged. Silent rebuilding or CPU fallback is prohibited.
+  These checks do not certify address reuse, every exit exception path or CUDA
+  destructor ordering. These checks do not qualify the new route on A100.
+
 ## 0.4.0 (2026-10-13)
 
-- Select CPU/OpenMP or CUDA GPU execution explicitly within the same mexcuda module. GPU remains the compatible process default; device failures raise.
+- The 0.4.0 release selected CPU/OpenMP or CUDA GPU execution explicitly within the same mexcuda module. GPU was the compatible process default; device failures raised.
 - Cache eligible exact-name history and ranking without discarding trials or changing seeded random consumption.
 - Construct native TPE bandwidths, categorical probabilities and density normalizers on GPU; retain ordered sampling RNG on the host.
 - Reuse bounded device workspaces, use CUB sorting for large models and parallelize mixture exponentials with ordered final summation. Preserve reset, failure and unload behavior.

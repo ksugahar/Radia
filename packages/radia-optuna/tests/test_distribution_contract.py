@@ -19,8 +19,11 @@ import subprocess
 import tomllib
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
@@ -32,6 +35,50 @@ VERIFY_SPEC = importlib.util.spec_from_file_location(
 assert VERIFY_SPEC is not None and VERIFY_SPEC.loader is not None
 verify_wheel = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(verify_wheel)
+
+
+def test_cuda_runtime_metadata_pin_matches_loader_and_rejects_mismatch(monkeypatch, tmp_path):
+    """Guards: the optional runtime pin and fail-loud loader stay coherent.
+
+    Assumes: controlled distribution metadata and an import sentinel; no native
+    DLL or GPU is loaded. Actual runtime origins have separate execution gates.
+    """
+    metadata = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = [Requirement(value) for value in metadata["project"]["optional-dependencies"]["native"]]
+    runtime = next(r for r in requirements if canonicalize_name(r.name) == "nvidia-cuda-runtime-cu12")
+    specs = list(runtime.specifier)
+    assert len(specs) == 1 and specs[0].operator == "==", "Runtime must have one exact metadata pin"
+    version = specs[0].version
+    spec = importlib.util.spec_from_file_location(
+        "optuna_runtime_pin_contract", PACKAGE_ROOT / "src/radia_optuna/kernels.py"
+    )
+    assert spec is not None and spec.loader is not None
+    loader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loader)
+    dll = tmp_path / "cudart64_12.dll"
+    dll.write_bytes(b"source-contract sentinel, never loaded")
+    distribution = SimpleNamespace(version=version, files=[dll.name], locate_file=lambda _: dll)
+    sentinel = object()
+    imports = []
+
+    def native_import(name):
+        imports.append(name)
+        return sentinel
+
+    monkeypatch.setattr(loader, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(loader, "metadata", SimpleNamespace(distribution=lambda _: distribution))
+    monkeypatch.setattr(loader, "_loaded_path", lambda _: None)
+    monkeypatch.setattr(loader, "os", SimpleNamespace(
+        add_dll_directory=lambda _: SimpleNamespace(close=lambda: None)
+    ))
+    monkeypatch.setattr(loader, "importlib", SimpleNamespace(import_module=native_import))
+    assert loader.load("cpu") is sentinel, "Loader rejected its declared runtime pin"
+    assert imports == ["radia_optuna._optuna_kernels"]
+    loader._dll_handles.clear()
+    distribution.version = "0.0.0"
+    with pytest.raises(ImportError, match="requires CUDA runtime"):
+        loader.load("cpu")
+    assert imports == ["radia_optuna._optuna_kernels"], "Mismatched runtime reached native import"
 
 
 def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch, tmp_path):
@@ -203,99 +250,48 @@ def test_staging_refuses_a_partial_native_distribution():
     assert "optuna_upstream_compatibility.json" in setup_source
     assert "optuna50_api_coverage.json" in setup_source
     assert "THIRD_PARTY_NOTICES.md" in setup_source
-    assert 'return "py3", "none", "win_amd64"' in setup_source
-    assert '"bdist_wheel": bdist_wheel' in setup_source
+    assert "Extension(\"radia_optuna._optuna_kernels\"" in setup_source
+    assert '"build_ext": build_ext' in setup_source
 
 
-def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
-    compiler = (PACKAGE_ROOT / "buildOptunaMex.m").read_text(encoding="utf-8")
-    assert "mexcuda(" in compiler
-    assert "optuna_cuda.cu" in compiler
-    assert "optuna_mex.cpp" in compiler
-    assert "-allow-unsupported-compiler" not in compiler
-    # The standalone build must pin both compiler and CUDA provenance before
-    # creating output or invoking mexcuda; global environment/XML is untouched.
-    assert compiler.index("toolchain = pinnedToolchain;") < compiler.index("mkdir(")
-    assert compiler.index("toolchain = pinnedToolchain;") < compiler.index("mexcuda(")
-    assert "nvcc_msvcpp2022.xml" in compiler
-    assert "nvcc_msvcpp2026.xml" not in compiler
-    assert "Microsoft.VisualStudio.Product.BuildTools" in compiler
-    assert '[17.0,18.0)' in compiler
-    assert "Microsoft.VCToolsVersion.default.txt" in compiler
-    assert "'14.44.35207'" in compiler
-    assert "'sys', 'cuda', 'win64', 'cuda'" in compiler
-    assert r"release 12\.8[,\s]" in compiler
-    for variable in ("VCROOT", "VCINSTALLDIR", "VCVARSALLDIR",
-                     "CUDA_ROOT", "CUDA_LIB_PATH", "LIBDEVICE"):
-        assert f"'{variable}=" in compiler
-    for variable in ("CUDA_PATH", "MW_NVCC_PATH", "MW_ALLOW_ANY_CUDA",
-                     "MW_ALLOW_ANY_COMPILER", "NVCC_CCBIN",
-                     "NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_FLAGS"):
-        assert f"'{variable}'" in compiler
-    assert "isempty(getenv(conflicting{k}))" in compiler
-    assert "setenv(" not in compiler
-    assert "xmlwrite(" not in compiler
-    assert "radia-gpu" not in compiler
-    assert "py." not in compiler
-    assert "['COMPILER=" not in compiler
-    native = (PACKAGE_ROOT / "native/optuna_mex.cpp").read_text(encoding="utf-8")
-    assert "TaskManager" not in native
-    assert "ngsolve" not in native.lower()
-    assert "RADIA_OPTUNA_MEX_ONLY" not in native
+def test_native_source_boundary_is_matlab_free_and_uses_one_archive():
+    cmake = (PACKAGE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    kernel = (PACKAGE_ROOT / "native/optuna_cuda.cu").read_text(encoding="utf-8")
+    assert '"mex.h"' not in kernel and "mxGPU" not in kernel
+    assert "EXTERNAL_OBJECT TRUE" in cmake and "matlab_add_mex" in cmake
+    assert "LINK_TO optuna_kernels" in cmake
+    assert "target_link_libraries(_optuna_kernels PRIVATE optuna_kernels" in cmake
+    assert "find_package(NGSolve" not in cmake and "TaskManager" not in kernel
+    compiler = (PACKAGE_ROOT / "tools/build_native.py").read_text(encoding="utf-8")
+    assert compiler.count("native/optuna_cuda.cu") == 1
+    assert "--fmad=false" in compiler and "compute_80,code=compute_80" in compiler
+    assert "commands.insert(0,nvcc_command)" in compiler
+    assert "Python-first verification receipt required" in compiler
+    assert "MEX did not consume the identical Python-verified archive/objects" in compiler
+    assert not (PACKAGE_ROOT / "tools/build_mexcuda.m").exists()
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows CMD path-resolution contract")
-def test_stock_nvcc_command_resolves_bundled_path_with_spaces(tmp_path):
-    """Exercise stock CMDLINE100 under CMD without invoking a CUDA compiler."""
-    configurations = sorted(
-        (Path(os.environ["ProgramFiles"]) / "MATLAB").glob(
-            "R*/toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml"
-        )
-    )
-    if not configurations:
-        pytest.skip("Stock MATLAB mexcuda XML is unavailable")
-    # Read only the stock template attributes: MEX configurations can contain
-    # raw shell && inside attributes and are not strict XML documents.
-    xml = configurations[-1].read_text(encoding="utf-8-sig")
-    xml = re.sub(r"<!--.*?-->", "", xml, flags=re.S)
-    def attributes(tag):
-        body = re.search(rf"<{tag}\s+(.*?)/>", xml, flags=re.S).group(1)
-        return {key: html.unescape(value) for key, value in
-                re.findall(r'([A-Z_0-9]+)="([^"]*)"', body)}
-    variables = attributes("vars")
-    assert variables["COMPILER"] == "nvcc"
-    # Stand-ins distinguish bundled lookup from an external nvcc later on PATH.
-    cuda = tmp_path / "Program Files" / "MATLAB" / "sys" / "cuda"
-    bundled = cuda / "bin"
-    external = tmp_path / "external"
-    for directory, marker in ((bundled, "BUNDLED_NVCC"), (external, "EXTERNAL_NVCC")):
-        directory.mkdir(parents=True)
-        (directory / "nvcc.cmd").write_text(f"@echo {marker}\n@exit /b 0\n")
-    prefix = attributes("env")["PATH"].split(";")[:2]
-    assert prefix == [r"$CUDA_ROOT\nvvm\bin", r"$CUDA_ROOT\bin"]
-    env = dict(os.environ, PATH=";".join(
-        [part.replace("$CUDA_ROOT", str(cuda)) for part in prefix] + [str(external)]
-    ))
-    command = variables["CMDLINE100"].replace("$COMPILER", variables["COMPILER"])
-    command = re.sub(r"\$[A-Z_]+", "", command)
-    shell = os.environ.get("COMSPEC", r"C:\Windows\System32\cmd.exe")
-    result = subprocess.run([shell, "/d", "/c", command], env=env,
-                            capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0, result.stderr
-    assert "BUNDLED_NVCC" in result.stdout
-    assert "EXTERNAL_NVCC" not in result.stdout
-    # Negative control reproduces the CI's unquoted absolute compiler command.
-    broken = command.replace("nvcc", str(bundled / "nvcc.cmd"), 1)
-    result = subprocess.run([shell, "/d", "/c", broken], env=env,
-                            capture_output=True, text=True, timeout=10)
-    assert result.returncode != 0
+def test_private_kernel_loader_rejects_implicit_backend_before_native_import():
+    from radia_optuna.kernels import load
+    for mode in (None, "auto", "matlab", ""):
+        with pytest.raises(ValueError, match="explicit"):
+            load(mode)
+
+
+def test_native_builder_rejects_external_compiler_overrides():
+    spec=importlib.util.spec_from_file_location('optuna_build_boundary',PACKAGE_ROOT/'tools/build_native.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    module.reject_compiler_overrides({})
+    for key in ('CL','_CL_','CXXFLAGS','CUDAFLAGS','NVCC_PREPEND_FLAGS','MW_ALLOW_ANY_COMPILER'):
+        with pytest.raises(RuntimeError,match='Unsupported compiler override'):
+            module.reject_compiler_overrides({key:'unapproved'})
 
 
 def test_wheel_verifier_rejects_solver_boundary_leaks():
     verifier = (PACKAGE_ROOT / "verify_wheel.py").read_text(encoding="utf-8")
     for forbidden in ("radia_mex", "ngsolve", "netgen", "mkl_", "radia_pybind"):
         assert forbidden in verifier
-    assert "py3-none-win_amd64" in verifier
+    assert "exact CPython ABI" in verifier
     assert "optuna\\s*==\\s*5\\.0\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
