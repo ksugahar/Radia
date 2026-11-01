@@ -1,0 +1,7 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "hdiv-mmm/prolate",
+  "strict_labels": true,
+  "required": {"materials": ["magnetic_body"], "boundaries": ["exterior"]},
+  "allowed": {"materials": ["magnetic_body"], "boundaries": ["exterior"], "bboundaries": [], "bbboundaries": []}
+}

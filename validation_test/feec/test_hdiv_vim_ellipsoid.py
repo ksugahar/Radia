@@ -29,17 +29,21 @@ def _prolate_Nz_analytic(c, a=1.0):
     return (1.0 - e * e) / e ** 2 * ((1.0 / (2.0 * e)) * log((1.0 + e) / (1.0 - e)) - 1.0)
 
 
-def run_prolate_case(maxh=0.6, *, mesh_path=None):
-    """Run one production case at a mesh scale; return the production output.
+PROLATE_LABELS = (("magnetic_body",), ("exterior",))
 
-    Optional mesh_path retains identical mesh bytes across reproducibility runs.
+
+def run_prolate_case(maxh=0.6, *, mesh_path=None):
+    """Run one production case on the named prolate mesh; return the production output.
+
+    The solid is named magnetic_body / exterior before meshing. An existing mesh_path is
+    loaded instead of remeshed and must carry exactly those labels, else this raises.
     The analytic oracle belongs only to the heavy validation entry below.
     """
     from pathlib import Path
 
     c = 2.0
     geo = CSGeometry()
-    geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)))
+    geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)).mat("magnetic_body").bc("exterior"))
     with ng.TaskManager():
         if mesh_path is not None and Path(mesh_path).is_file():
             mesh = ng.Mesh(str(mesh_path))
@@ -47,6 +51,9 @@ def run_prolate_case(maxh=0.6, *, mesh_path=None):
             mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
             if mesh_path is not None:
                 mesh.ngmesh.Save(str(mesh_path))
+        labels = (tuple(mesh.GetMaterials()), tuple(sorted(set(mesh.GetBoundaries()))))
+        if labels != PROLATE_LABELS:
+            raise ValueError(f"prolate mesh labels: actual={labels}; expected={PROLATE_LABELS}")
         return Solve(mesh, mu_r=1000.0, H_ext=ng.CoefficientFunction((0, 0, 1.0)))
 
 
