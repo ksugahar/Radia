@@ -174,12 +174,10 @@ def _moved_images(charge_inputs, d):
 @pytest.mark.parametrize("d", [1e-6, 1e-4])
 def test_near_coincident_image_vertex_fails_loudly(charge_inputs, d):
     # Inside the supported gap bound but not coincident, the graded/outer rule
-    # switch would be a finite value jump; the entry must refuse instead.
+    # switch would be a finite value jump; the build must refuse before it.
     kw, _, _ = _moved_images(charge_inputs, d)
-    gram = _rp._ChargeGramHMatrix(**kw)
-    i = _constant_faces(kw)[0]
-    with pytest.raises(Exception, match="symmetry gap bound"):
-        gram.entry(i, i)
+    with pytest.raises(ValueError, match="symmetry gap bound"):
+        _rp._ChargeGramHMatrix(**kw)
 
 
 def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs):
