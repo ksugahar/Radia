@@ -38,12 +38,43 @@ template<int N> RADIA_P1_KERNEL inline void gradedRule(double (&x)[N],double (&w
         w[i]=weight*6*a*(1-a);w[N-1-i]=weight*6*b*(1-b);
     }
 }
+// Order-independent placement of the target vertices for the graded rule:
+// the rule collapses onto slot 1 and is not symmetric in its slots, so the
+// slots follow isometry-invariant keys of the PAIR geometry (squared
+// distance to the nearest, then sum of squared distances to all, source
+// vertices), not the mesh vertex numbering.  A touching vertex (key 0)
+// becomes the collapse apex; reflected or renumbered copies of the same
+// pair get the same rule.  Exact key ties keep the input order.
+// perm[slot] = input vertex index.
+RADIA_P1_KERNEL inline void gradedSlots(const double* t,int nt,const double* s,int ns,int (&perm)[4]){
+    double near[4],sum[4];int order[4];
+    for(int i=0;i<nt;++i){
+        near[i]=0.;sum[i]=0.;order[i]=i;
+        for(int j=0;j<ns;++j){
+            double d=0.;
+            for(int k=0;k<3;++k){const double x=t[3*i+k]-s[3*j+k];d+=x*x;}
+            if(j==0||d<near[i])near[i]=d;
+            sum[i]+=d;
+        }
+    }
+    for(int i=1;i<nt;++i)for(int j=i;j>0;--j){
+        const int a=order[j-1],b=order[j];
+        if(near[b]<near[a]||(near[b]==near[a]&&sum[b]<sum[a])){order[j-1]=b;order[j]=a;}
+        else break;
+    }
+    perm[1]=order[0];perm[0]=order[1];
+    for(int i=2;i<nt;++i)perm[i]=order[i];
+    for(int i=nt;i<4;++i)perm[i]=i;
+}
 template<int N> RADIA_P1_KERNEL inline double pairEntryOrder(
         const radia_hdiv_python::P1ChargeSource& target,
         const radia_hdiv_python::P1ChargeSource& source){
-    double x[N],w[N],edges[3][3]={};gradedRule<N>(x,w);
+    double x[N],w[N],edges[3][3]={},slot[4][3];gradedRule<N>(x,w);
+    int perm[4];gradedSlots(target.vertices,target.kind?3:4,source.vertices,source.kind?3:4,perm);
+    for(int v=0;v<(target.kind?3:4);++v)
+        for(int k=0;k<3;++k)slot[v][k]=target.vertices[3*perm[v]+k];
     for(int v=0;v<(target.kind?2:3);++v)
-        for(int k=0;k<3;++k)edges[v][k]=target.vertices[3*(v+1)+k]-target.vertices[k];
+        for(int k=0;k<3;++k)edges[v][k]=slot[v+1][k]-slot[0][k];
     double cross[3]={edges[0][1]*edges[1][2]-edges[0][2]*edges[1][1],
         edges[0][2]*edges[1][0]-edges[0][0]*edges[1][2],
         edges[0][0]*edges[1][1]-edges[0][1]*edges[1][0]};
@@ -54,7 +85,7 @@ template<int N> RADIA_P1_KERNEL inline double pairEntryOrder(
         const double u=x[i],v=(1-u)*x[j],r=target.kind?0.:(1-u)*(1-x[j])*x[l];
         double point[3],mono=target.constant;
         for(int k=0;k<3;++k){
-            point[k]=target.vertices[k]+u*edges[0][k]+v*edges[1][k]+r*edges[2][k];
+            point[k]=slot[0][k]+u*edges[0][k]+v*edges[1][k]+r*edges[2][k];
             if(target.linear)mono+=target.gradient[k]*(point[k]-target.center[k]);
         }
         const double weight=w[i]*w[j]*(1-u)*(target.kind?1.:w[l]*(1-u)*(1-x[j]));
