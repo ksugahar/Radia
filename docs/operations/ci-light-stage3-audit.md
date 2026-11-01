@@ -418,3 +418,19 @@ source-bound execution reports distinguish these runs and the unchanged-code
 compile evidence from any later exact-release native artifacts.
 The final test-path-only closure seal is
 `6a4402eac907a661e0222fbd8e8c15b046319def31fb1576162c58fc8da31bac`.
+
+## IH fin physical verdict contract
+
+The tier manifest maps `validation_test/induction_heating/fin_return_principle.py`
+and its contract `tests/test_ih_fin_physical_verdict.py` to that contract. The
+contract loads the checker by file path, so the checker is declared in
+`audited_dynamic_sources`. Its NGSolve, Netgen, h5py and Radia solver imports
+are function-local to the solve and mesh routes; the contract enters only
+`physical_verdict` and `PHYSICAL_TARGETS` (standard library and NumPy), so
+`ngsolve` and `netgen.occ` are declared deferred for that file. The prior seal
+`43d9572de6d61b665ed543e605c7865cc41abf71139b9b388cf20b99300bbe35` was
+reproduced on the merged base before the change; the closure grows from 74 to
+76 files (the contract and the checker). Runner labels, requirements, denied
+imports, the source-only guard and the profile budget are unchanged. The
+`audit_digest` seal is
+`8426c0d457c73593aca30ae3c66003dc1e61edcbaf02c8f79e0355aafdd2873f`.
