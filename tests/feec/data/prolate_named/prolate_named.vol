@@ -2589,6 +2589,16 @@ points
 #          pnum             index
 pointelements
 0
+materials
+1
+1 magnetic_body
+
+
+bcnames
+1
+1	exterior
+
+
 
 
 edgedescriptors
