@@ -142,7 +142,15 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
 
 
 def matlab_optimize_resume(storage_path: str, n_trials: int, *, parallel: bool = False) -> dict[str, Any]:
-    """Generate code that resumes a MAT-file-backed Study."""
+    """Generate Study resume code; the installed Study owns storage loading.
+
+    The HDF5 source contract requires a StoragePath ending in .h5 and an
+    HDF5-capable radia-optuna installation. Code generation does not verify
+    that runtime or convert older storage. Recreate the objective or runner
+    explicitly. OptimizationSession checkpoints instead require load with
+    explicit ObjectiveFcn and the recorded OutputFcn/PlotFcn/ConstraintFcn
+    callbacks; this Study helper does not restore session callbacks.
+    """
     if not storage_path.strip():
         raise ValueError("storage_path is required")
     if int(n_trials) <= 0:

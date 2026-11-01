@@ -595,7 +595,7 @@ def matlab_optuna_simulink_contract():
             "OptimizeOptions": "validated MATLAB options for sampler, pruner, seed, directions, callbacks, persistence, and named parallel mode",
             "OptimizationSession": "persistent configured/running/paused/completed/cancelled lifecycle with one-trial stepping, checkpoint restore, stale-RUNNING recovery, trial selection, and model application",
             "ObjectiveContext": "model-shaped objective services for intermediate reporting, pruning, and trial user attributes",
-            "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, MAT persistence, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
+            "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, HDF5 persistence in an HDF5-capable installation, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
             "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
             "FixedTrial": "objective evaluation against supplied parameters with upstream-oracled suggestions, warnings, attributes, and compatibility errors",
             "TrialPruned": "throw(radia.optuna.TrialPruned()) is caught by Study.optimize and matches upstream PRUNED state, last intermediate value, and callback behavior",
@@ -815,7 +815,21 @@ def matlab_optuna_simulink_contract():
                 },
             },
         },
-        "persistence": "MAT-file via Study.save or AutoSave; tables remain inspectable in MATLAB, while SimulinkRunner records versioned CAE trial/failure structs and artifact manifests. bestSolution derives a reloadable best snapshot from the tables.",
+        "persistence": (
+            "HDF5 source contract, not a live runtime capability check: require an "
+            "HDF5-capable radia-optuna installation before execution. Study.save "
+            "or AutoSave uses a caller-supplied StoragePath ending in .h5 (for "
+            "example Study.h5); the OptimizationSession checkpoint is "
+            "<StoragePath>.session.h5. OptimizationSession.load requires an "
+            "explicit ObjectiveFcn and the recorded OutputFcn, PlotFcn and "
+            "ConstraintFcn slots with their saved counts and order; function "
+            "handles are not reconstructed from storage. Tables remain "
+            "inspectable in MATLAB; SimulinkRunner records versioned CAE "
+            "trial/failure structs and artifact manifests. bestSolution derives "
+            "a best snapshot from the tables. Verify the installed source and "
+            "runtime; this description does not establish that a source "
+            "candidate has been merged, distributed or loaded."
+        ),
         "simulink_workflow": [
             "Create a radia.optuna.Study.",
             "Configure each Trial into Simulink.SimulationInput.",
