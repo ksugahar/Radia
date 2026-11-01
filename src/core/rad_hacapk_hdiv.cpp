@@ -2526,7 +2526,11 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     // The graded image rule is valid only while every coinciding vertex pair
     // stays coincident; a velocity that separates them (normal motion of a
     // symmetry-plane vertex) leaves the supported domain, so it fails loudly.
-    constexpr double kVelocityRoundoff2=(16*std::numeric_limits<double>::epsilon())*(16*std::numeric_limits<double>::epsilon());
+    // The image map is a z-axis rotation followed by axis flips, so z never
+    // mixes with x/y and, without rotation, no axis mixes at all.  Comparing
+    // each unmixed group against its own roundoff scale keeps a large common
+    // motion in another group from masking a forbidden normal mismatch.
+    constexpr double kVelocityRoundoff=64*std::numeric_limits<double>::epsilon();
     auto require_image_coincidence_kept=[&](int kt,int ht,int ks,int hs,int img){
         const double*a=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
         const double*b=ks==0?&m_cellV[(size_t)hs*12]:&m_faceV[(size_t)hs*9];
@@ -2535,17 +2539,26 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         const auto&tc=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
         const auto&sc=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
         const double tol=1e-9*(m_size[tc[0]]+m_size[sc[0]]);
+        const size_t ii=(size_t)img-1;
+        const bool rotated=ii<m_image_rot_angle.size()&&m_image_rot_angle[ii]!=0.0;
         for(int j=0;j<(ks?3:4);++j){
             double corner[3],dcorner[3];ImageApplyVector(img,b+3*j,corner);ImageApplyVector(img,db+3*j,dcorner);
             for(int i=0;i<(kt?3:4);++i){
-                double r2=0,dv2=0,v2=0;
-                for(int k=0;k<3;++k){
-                    const double r=corner[k]-a[3*i+k],dv=dcorner[k]-da[3*i+k];
-                    r2+=r*r;dv2+=dv*dv;v2+=da[3*i+k]*da[3*i+k]+dcorner[k]*dcorner[k];
-                }
-                // Roundoff-level mismatch only: a large common tangential
-                // velocity must not mask a normal mismatch.
-                if(r2<=tol*tol&&dv2>kVelocityRoundoff2*v2)
+                double r2=0;
+                for(int k=0;k<3;++k){const double r=corner[k]-a[3*i+k];r2+=r*r;}
+                if(r2>tol*tol)continue;
+                const double*vt=da+3*i;
+                auto mismatch=[&](int k0,int k1){
+                    double dv2=0,v2=0;
+                    for(int k=k0;k<k1;++k){
+                        const double dv=dcorner[k]-vt[k];
+                        dv2+=dv*dv;v2+=dcorner[k]*dcorner[k]+vt[k]*vt[k];
+                    }
+                    return dv2>kVelocityRoundoff*kVelocityRoundoff*v2;
+                };
+                const bool bad=rotated?(mismatch(0,2)||mismatch(2,3))
+                                      :(mismatch(0,1)||mismatch(1,2)||mismatch(2,3));
+                if(bad)
                     throw std::domain_error("P1 image derivative: velocity moves a "
                         "symmetry-plane vertex off its image; normal motion of "
                         "plane vertices is unsupported");
@@ -8426,7 +8439,23 @@ void RadHACApKChargeGram::ValidateP1ImageGaps() const
     for (size_t h = 0; h < m_hoFaceCharges.size(); ++h) addHost(1, m_hoFaceCharges[h], &m_faceV[h*9]);
     if (verts.empty()) return;
     const double cell = 2.0*kP1ImageGapFraction*hiMax;
-    auto key = [&](const double* p) { return Key{(long long)std::floor(p[0]/cell), (long long)std::floor(p[1]/cell), (long long)std::floor(p[2]/cell)}; };
+    if (!(std::isfinite(cell) && cell > 0.0))
+        throw std::domain_error("P1 image gap check: host sizes give no finite positive grid cell");
+    // Keys are taken relative to the mesh minimum and must stay well inside
+    // the signed 64-bit range (neighbor offsets add +-1).
+    double origin[3] = {verts[0].p[0], verts[0].p[1], verts[0].p[2]};
+    for (const auto& w : verts) for (int k = 0; k < 3; ++k) origin[k] = std::min(origin[k], w.p[k]);
+    constexpr double kMaxKey = 4.0e18;
+    auto key = [&](const double* p) {
+        long long c[3];
+        for (int k = 0; k < 3; ++k) {
+            const double t = std::floor((p[k]-origin[k])/cell);
+            if (!(std::fabs(t) < kMaxKey))
+                throw std::domain_error("P1 image gap check: mesh extent exceeds the vertex grid range");
+            c[k] = (long long)t;
+        }
+        return Key{c[0], c[1], c[2]};
+    };
     std::unordered_map<Key, std::vector<size_t>, KeyHash> grid;
     for (size_t i = 0; i < verts.size(); ++i) grid[key(verts[i].p)].push_back(i);
     for (size_t image = 0; image < m_image_masks.size(); ++image) {
