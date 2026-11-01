@@ -1,17 +1,17 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=77", "wheel", "cmake>=3.20", "ninja", "pybind11==3.0.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-optuna"
-version = "0.4.0"
-description = "MATLAB mexcuda optimization with Simulink integration, verified against Optuna 5.0.0"
+version = "0.5.0"
+description = "Shared native CPU/CUDA optimization with Python and MATLAB/Simulink adapters, verified against Optuna 5.0.0"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0 AND MIT AND BSD-3-Clause"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 authors = [{name = "Radia Development Team"}]
-keywords = ["matlab", "mexcuda", "cuda", "optuna", "optimization", "tpe", "simulink"]
+keywords = ["matlab", "pybind11", "cuda", "optuna", "optimization", "tpe", "simulink"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -23,6 +23,9 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+# Existing approved CUDA runtime pin from root [project.optional-dependencies]
+# and radia-simulink; no MATLAB runtime discovery from Python.
+native = ["nvidia-cuda-runtime-cu12==12.8.57; sys_platform == 'win32'"]
 # Required only by MATLAB features whose upstream Optuna 5.0.0 behavior is
 # deliberately executed through Python: GP acquisition, scrambled QMC,
 # parameter-importance/terminator evaluators, storage transports,
@@ -56,4 +59,4 @@ radia-optuna-bridge = "radia_optuna.bridge:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-radia_optuna = ["manifest.json", "evidence_manifest.json"]
+radia_optuna = ["manifest.json", "evidence_manifest.json", "native_build.json"]

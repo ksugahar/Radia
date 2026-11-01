@@ -113,11 +113,26 @@ jobs:
           "RADIA_OPTUNA_CI_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Build Optuna CUDA kernels with mexcuda
+      - name: Build and verify Python kernels before linking plain MEX
         shell: pwsh
         run: |
-          $root = (Get-Location).Path.Replace("'", "''")
-          & matlab -batch "addpath('$root/packages/radia-optuna/tools'); build_mexcuda;"
+          $root = (Get-Location).Path
+          $package = Join-Path $root 'packages/radia-optuna'
+          $requirements = (& $env:RADIA_OPTUNA_CI_PYTHON -c "import json,tomllib; d=tomllib.load(open('packages/radia-optuna/pyproject.toml','rb')); print(json.dumps(d['build-system']['requires']+d['project']['optional-dependencies']['test']+d['project']['optional-dependencies']['native']))") | ConvertFrom-Json
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install @requirements optuna==5.0.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $matlabRoot = Join-Path $env:ProgramFiles 'MATLAB/R2026a'
+          $build = Join-Path $root 'build-optuna-native'
+          & pwsh -NoProfile -File "$package/tools/build_native.ps1" -Stage python -Python $env:RADIA_OPTUNA_CI_PYTHON -MatlabRoot $matlabRoot -BuildDirectory $build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($mode in @('cpu','gpu')) {
+            & $env:RADIA_OPTUNA_CI_PYTHON "$package/validation_test/validate_kernels.py" --backend $mode --build-receipt "$build/python-build.json" --report "$build/python-$mode-verification.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & pwsh -NoProfile -File "$package/tools/build_native.ps1" -Stage matlab -Python $env:RADIA_OPTUNA_CI_PYTHON -MatlabRoot $matlabRoot -BuildDirectory $build -PythonVerification "$build/python-gpu-verification.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $escaped = $root.Replace("'", "''")
+          & matlab -batch "addpath('$escaped/packages/radia-optuna/matlab'); addpath('$escaped/packages/radia-optuna/validation_test'); validate_binding_parity('$escaped/build-optuna-native/python-cpu-verification.json','$escaped/build-optuna-native/parity-cpu.json'); validate_binding_parity('$escaped/build-optuna-native/python-gpu-verification.json','$escaped/build-optuna-native/parity-gpu.json');"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test, build, and verify radia-optuna wheel

@@ -1,11 +1,26 @@
 # radia-optuna
 
-The native gateway is built with MATLAB `mexcuda`. TPE Parzen density,
+Version 0.5.0 links plain MEX and private Python adapters to one nvcc library.
+Reviewed source `0acab7dec` passed stored CPU/GPU oracle, density bitwise parity
+and MATLAB compatibility checks on Windows with an RTX 5000. Publication
+requires exact-source acceptance of the final 0.5.0 artifacts and installed
+wheel. These source checks do not establish A100 qualification; see
+[NATIVE_BUILD.md](NATIVE_BUILD.md) for the tested scope.
+Compatibility criterion `OPTUNA-COMPATIBILITY-20261031-01` (user approved
+2026-10-31) uses independent Optuna 5.0.0: absolute density error at most
+1e-10, absolute candidate-value error at most 5e-11, and exact RNG consumption
+and tie selection. Fixture bytes and generation provenance remain unchanged.
+Criterion approval does not certify an artifact: final-source wheel validation,
+upstream-derived lightweight protection and numerical mutation failure followed
+by restored PASS must be recorded before an adoption claim. No new adoption
+record is asserted here.
+
+Published 0.4.0 evidence below remains historical. TPE Parzen density,
 candidate scoring and first-maximum selection can run on CPU or GPU in double
 precision. Select the execution explicitly in each MATLAB process:
 
 ```matlab
-radia.optuna.executionMode("cpu"); % OpenMP host kernels, same mexcuda binary
+radia.optuna.executionMode("cpu"); % OpenMP host kernels, same shared-kernel MEX binary
 radia.optuna.executionMode("gpu"); % CUDA kernels; the initial/default mode
 mode = radia.optuna.executionMode();
 ```
@@ -31,8 +46,8 @@ categorical probabilities and density normalizers on the device. The good
 model's sampling parameters return to the ordered host RNG; the bad model
 stays on device through scoring. Caller-supplied estimators retain their
 existing construction boundary. CPU host parallel
-kernels use OpenMP in the mexcuda build; ordered random consumption remains
-serial. Ordinary `mex` compilation remains prohibited. GPU users do not need
+kernels use OpenMP in the shared native library; ordered random consumption remains
+serial. Plain MSVC MEX links the prebuilt nvcc archive. GPU users do not need
 Python; optional upstream-backed features retain their requirements below.
 
 Study history remains fully in host memory. Public tables are generated on
@@ -56,7 +71,7 @@ default automatic persistence contract is unchanged. Additional RAM retains
 more history, but does not remove serialization or synchronous storage costs.
 
 `validation_test/optimization/benchmark_optuna_parameter_history.m` measures
-independent TPE with all history retained and CPU or GPU execution in the mexcuda
+independent TPE with all history retained and CPU or GPU execution in the shared native
 module. Its JSON includes module initialization, first-trial and warmed
 end-to-end times, MATLAB memory, and proposal arrays for differential
 comparison. Optional MAT fixtures reuse setup inputs only; sampling storage
@@ -79,7 +94,7 @@ provided more than one OpenMP worker is available. The team is bounded by the
 candidate count. Component summation and first-maximum selection remain ordered.
 Set `OMP_NUM_THREADS` before starting MATLAB; `api.info` reports
 `cpu_parallel_density_calls` and `cpu_max_density_threads` to verify actual use.
-CPU execution still requires only the same mexcuda binary and performs no CUDA
+CPU execution still requires only the same shared-kernel MEX binary and performs no CUDA
 initialization or transfers.
 
 [Formal OpenMP A100 measurements](../../validation_test/optimization/results_optuna_openmp_performance_a100_20261013.json)
@@ -243,7 +258,7 @@ checks idle-session receipts and exact trajectories before reporting speedups.
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
 
-From the package source directory, call `buildOptunaMex` in MATLAB.
+Use the Python-first package build described in [NATIVE_BUILD.md](NATIVE_BUILD.md).
 In the monorepo, `Build.ps1 -OptunaMexOnly -Test` also runs repository acceptance.
 MATLAB selects its supported CUDA toolkit and Visual Studio compiler.
 The focused acceptance saves `validation_test/optimization/results_optuna_cuda_100.json`,
@@ -599,8 +614,8 @@ PyPI, and attaches it to the matching GitHub Release.
 
 ## CUDA execution boundary (2026-10-11)
 
-Build `optuna_mex` by calling `buildOptunaMex` from the package source directory
-in MATLAB. The recipe calls `mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
+Build and verify the private Python target first, then link plain `optuna_mex`
+to the same archive (see NATIVE_BUILD.md). A CUDA-capable NVIDIA
 host and Parallel Computing Toolbox are required for GPU-mode density evaluations.
 No NGSolve, TaskManager, Radia CPU solver, or CPU-only MEX build is linked.
 

@@ -13,7 +13,7 @@ binary=string(java.io.File(which('optuna_mex')).getCanonicalPath());
 expected=string(java.io.File(fullfile(binaryDirectory,"optuna_mex."+mexext)).getCanonicalPath());
 assert(strcmpi(binary,expected), 'Unexpected MEX origin.');
 info=optuna_mex('api.info');
-assert(string(info.build_route)=="mexcuda" && ~info.taskmanager);
+assert(string(info.build_route)=="nvcc-shared-library" && ~info.taskmanager);
 suite=testsuite(fullfile(checkout,'tests','matlab','test_optuna_upstream_oracle.m'));
 selected=suite(~cellfun(@isempty,regexp({suite.Name}, ...
     'TPE|Random|Sobol|Mixed|MultiObjective|SingleDistribution')));

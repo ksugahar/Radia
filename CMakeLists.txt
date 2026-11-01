@@ -6,7 +6,7 @@ if(RADIA_BUILD_MATLAB_MEX)
 endif()
 unset(RADIA_BUILD_MATLAB_MEX CACHE)
 if(RADIA_BUILD_OPTUNA_MEX_ONLY)
-    message(FATAL_ERROR "Optuna CPU-only MEX build is retired. Use Build.ps1 -OptunaMexOnly (MATLAB mexcuda).")
+    message(FATAL_ERROR "Optuna CPU-only MEX build is retired. Use the package nvcc archive and plain MEX entry via Build.ps1 -OptunaMexOnly.")
 endif()
 unset(RADIA_BUILD_OPTUNA_MEX_ONLY CACHE)
 
