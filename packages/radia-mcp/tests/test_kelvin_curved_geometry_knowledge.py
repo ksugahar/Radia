@@ -1,6 +1,11 @@
 """Guards: shipped lookup scope/persistence warnings. Assumes: no solver accuracy claim."""
 import ast
+import asyncio
+import hashlib
+import json
+import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -74,3 +79,59 @@ def test_existing_server_dispatch_reaches_the_owned_lookup():
                  and isinstance(n.func, ast.Name) and n.func.id == getter]
         assert any(n.args and isinstance(n.args[0], ast.Name)
                    and n.args[0].id == 'topic' for n in calls), name
+
+
+def test_documentation_is_linked_to_existing_lookup_and_publication_limits():
+    """Guards: a private draft mistaken for delivered docs. Assumes: package-owned guide."""
+    package = Path(__file__).resolve().parents[1]
+    guide = package / 'docs/kelvin-periodic-geometry.md'
+    text = guide.read_text(encoding='utf-8')
+    assert 'docs/kelvin-periodic-geometry.md' in (package / 'README.md').read_text(encoding='utf-8')
+    for token in ('mcp-server-cubit', 'mcp-server-radia-ngsolve',
+                  'kelvin_transformation(topic="curved_geometry")',
+                  'kelvin_identify_post_hoc(topic="curved_geometry")',
+                  'model_capture.md', 'actual client', 'Static source tests',
+                  'Private engineering models'):
+        assert token in text, token
+    knowledge = get_kelvin_documentation('curved_geometry')
+    assert 'before publishing the final `.vol`' in knowledge
+    assert 'Producer build success is not upload, CI, main integration' in knowledge
+
+
+async def _kelvin_stdio_probe():
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    package = Path(__file__).resolve().parents[1]
+    server = package / 'src/radia_mcp/radia_ngsolve/server.py'
+    env = os.environ.copy()
+    env['PYTHONPATH'] = os.pathsep.join([str(package / 'src'), env.get('PYTHONPATH', '')])
+    params = StdioServerParameters(command=sys.executable,
+                                   args=['-B', '-m', 'radia_mcp.radia_ngsolve.server'],
+                                   cwd=str(package), env=env)
+    async with stdio_client(params) as streams:
+        async with ClientSession(*streams) as session:
+            await session.initialize()
+            listed = {t.name: t for t in (await session.list_tools()).tools}
+            for name in ('radia_ngsolve_status', 'kelvin_transformation', 'kelvin_identify_post_hoc'):
+                assert name in listed, name
+                assert listed[name].annotations.readOnlyHint is True, name
+            status = await session.call_tool('radia_ngsolve_status', {})
+            assert not status.isError
+            payload = status.structuredContent or json.loads(status.content[0].text)
+            provenance = payload['runtime_provenance']
+            assert Path(provenance['module_file']).resolve() == server.resolve()
+            assert provenance['module_file_sha256'] == hashlib.sha256(server.read_bytes()).hexdigest()
+            assert Path(provenance['python_executable']).resolve() == Path(sys.executable).resolve()
+            for name in ('kelvin_transformation', 'kelvin_identify_post_hoc'):
+                called = await session.call_tool(name, {'topic': 'curved_geometry'})
+                assert not called.isError, name
+                text = '\n'.join(c.text for c in called.content if c.type == 'text')
+                assert 'Curved periodic geometry: producer and consumer contract' in text
+                assert 'before publishing the final `.vol`' in text
+                assert 'Producer build success is not upload' in text
+
+
+def test_candidate_server_lists_and_serves_kelvin_knowledge_over_stdio():
+    """Guards: client-visible lookup and identity. Assumes: candidate server, not deployment."""
+    asyncio.run(asyncio.wait_for(_kelvin_stdio_probe(), timeout=60))
