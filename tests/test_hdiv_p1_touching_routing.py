@@ -226,10 +226,13 @@ def test_tangential_plane_motion_is_accepted(charge_inputs, velocity):
         np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
 
 
-def test_non_finite_plane_velocity_fails_loudly(charge_inputs):
+@pytest.mark.parametrize("bad", [np.inf, np.nan], ids=["inf", "nan"])
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_non_finite_plane_velocity_fails_loudly(charge_inputs, bad, axis):
     kw, cells, faces = _moved_images(charge_inputs, 0.0)
     gram = _rp._ChargeGramHMatrix(**kw)
-    shift = np.array([0.0, np.inf, 0.0])
+    shift = np.zeros(3)
+    shift[axis] = bad
     with pytest.raises(ValueError):
         gram.tet_charge_gram_directional_derivative(
             np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
