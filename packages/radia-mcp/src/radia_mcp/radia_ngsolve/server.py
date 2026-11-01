@@ -1159,6 +1159,10 @@ def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
     geometry), or when the mesh came from outside the Cubit panel
     pipeline.
 
+    Read topic="curved_geometry" before applying this to a curved archive.
+    In-memory vertex pairing is not geometry/persistence or HCurl qualification;
+    do not full-Netgen Load/Save a Cubit archive as an unqualified repair.
+
     Public Python API (call this from user code, NOT from the AI):
         from radia import add_kelvin_identification
         info = add_kelvin_identification(mesh)
@@ -1172,6 +1176,7 @@ def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
             "workflow"      - 3-step usage: detect_offset -> add -> verify
             "snippet"       - Copy-paste minimal example code
             "caveats"       - 1:1 mesh requirement, tolerance, idnr handling
+            "curved_geometry" - Producer/consumer scope, persistence and lifetime
             "verify"        - If vol_path given: load .vol and run helper
                               (returns the helper's diagnostic dict as text)
         vol_path: optional path to a .vol file to actually run the helper
@@ -1253,6 +1258,8 @@ def kelvin_transformation(topic: str = "all") -> str:
                                + the non-separable DtN build + band rational fit
                                (square C4v / cube O_h, 2D conformal disk)
             "identify"       - Periodic boundary Identify() best practices
+            "curved_geometry" - Named translation/q1-q3 tet geometry contract,
+                                route-specific persistence, HCurl and lifetime
             "tips"           - Common mistakes and performance tips
             "robustness"     - Robustness checklist (mesh copy, material scaling,
                                FreeDofs verification, symmetry models, GND)
