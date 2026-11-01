@@ -903,6 +903,16 @@ classdef OptimizationSession < handle
                 return
             end
             data = radia.optuna.OptimizationSession.readSessionFile(path);
+            % Constructor resume follows the same explicit re-binding
+            % contract as load: the live callbacks must cover exactly the
+            % recorded slots, checked before anything is persisted. The
+            % caller's current options (e.g. an extended MaxTrials) stay.
+            supplied = struct("ObjectiveFcn", obj.ObjectiveFcn, ...
+                "OutputFcn", {obj.Options.OutputFcn}, ...
+                "PlotFcn", {obj.Options.PlotFcn}, ...
+                "ConstraintFcn", obj.Options.ConstraintFcn);
+            radia.optuna.OptimizationSession.rebindCallbacks( ...
+                data, path, supplied);
             obj.State = data.State;
             obj.SelectedTrialNumber = data.SelectedTrialNumber;
             obj.StartedAt = data.StartedAt;
