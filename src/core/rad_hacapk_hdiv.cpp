@@ -13,6 +13,7 @@ extern "C" {
 #include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
 #include <unordered_map>
 #include <map>
+#include <array>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -8384,7 +8385,66 @@ void RadHACApKChargeGram::ExtractCoordinates()
 
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
 {
+    ValidateP1ImageGaps();
     return RadHACApKBase::BuildHMatrix(params);
+}
+
+// Serial, conservative pre-check of the P1TouchHosts image gap contract, so an
+// unsupported mesh fails before the parallel build instead of inside it.  Each
+// vertex carries the min/max size of the P1-eligible hosts that own it; a pair
+// is refused whenever ANY owning host pair could fall in the fail-loud band.
+void RadHACApKChargeGram::ValidateP1ImageGaps() const
+{
+    if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo || m_image_masks.empty()) return;
+    struct Key { long long x, y, z; bool operator==(const Key& o) const { return x==o.x && y==o.y && z==o.z; } };
+    struct KeyHash { size_t operator()(const Key& k) const {
+        return (size_t)(k.x*73856093LL ^ k.y*19349663LL ^ k.z*83492791LL); } };
+    struct Vert { double p[3]; double lo, hi; };
+    std::vector<Vert> verts;
+    std::map<std::array<double,3>, size_t> index;
+    double hiMax = 0.0;
+    auto addHost = [&](int kind, const std::vector<int>& charges, const double* v) {
+        if (charges.empty()) return;
+        double lo = std::numeric_limits<double>::infinity(), hi = 0.0;
+        for (int c : charges) {
+            const int* e = &m_expo[(size_t)3*c];
+            if (!(e[0]>=0 && e[1]>=0 && e[2]==0 && e[0]+e[1]<=(m_kind[c]==1?1:0))) return;
+            lo = std::min(lo, m_size[c]); hi = std::max(hi, m_size[c]);
+        }
+        hiMax = std::max(hiMax, hi);
+        for (int i = 0; i < (kind?3:4); ++i) {
+            const std::array<double,3> k{v[3*i], v[3*i+1], v[3*i+2]};
+            auto it = index.find(k);
+            if (it == index.end()) { index.emplace(k, verts.size()); verts.push_back({{k[0],k[1],k[2]}, lo, hi}); }
+            else { auto& w = verts[it->second]; w.lo = std::min(w.lo, lo); w.hi = std::max(w.hi, hi); }
+        }
+    };
+    for (size_t h = 0; h < m_hoCellCharges.size(); ++h) addHost(0, m_hoCellCharges[h], &m_cellV[h*12]);
+    for (size_t h = 0; h < m_hoFaceCharges.size(); ++h) addHost(1, m_hoFaceCharges[h], &m_faceV[h*9]);
+    if (verts.empty()) return;
+    const double cell = 2.0*kP1ImageGapFraction*hiMax;
+    auto key = [&](const double* p) { return Key{(long long)std::floor(p[0]/cell), (long long)std::floor(p[1]/cell), (long long)std::floor(p[2]/cell)}; };
+    std::unordered_map<Key, std::vector<size_t>, KeyHash> grid;
+    for (size_t i = 0; i < verts.size(); ++i) grid[key(verts[i].p)].push_back(i);
+    for (size_t image = 0; image < m_image_masks.size(); ++image) {
+        for (const auto& u : verts) {
+            double q[3]; ImageApplyVector((int)image+1, u.p, q);
+            const Key c = key(q);
+            for (long long dx=-1; dx<=1; ++dx) for (long long dy=-1; dy<=1; ++dy) for (long long dz=-1; dz<=1; ++dz) {
+                auto it = grid.find(Key{c.x+dx, c.y+dy, c.z+dz});
+                if (it == grid.end()) continue;
+                for (size_t j : it->second) {
+                    const auto& w = verts[j];
+                    const double r2 = (q[0]-w.p[0])*(q[0]-w.p[0]) + (q[1]-w.p[1])*(q[1]-w.p[1]) + (q[2]-w.p[2])*(q[2]-w.p[2]);
+                    const double tol = 1e-9*(u.lo+w.lo), gap = kP1ImageGapFraction*(u.hi+w.hi);
+                    if (r2 > tol*tol && r2 < gap*gap)
+                        throw std::domain_error("P1 image pair: a mapped vertex lies "
+                            "within the symmetry gap bound of a target vertex without "
+                            "coinciding; place symmetry-plane vertices on the plane");
+                }
+            }
+        }
+    }
 }
 
 void RadHACApKChargeGram::OnBuildStarting(const RadHACApKParams& params)
