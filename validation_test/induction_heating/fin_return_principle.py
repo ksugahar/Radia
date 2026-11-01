@@ -18,6 +18,8 @@ The postprocessed Cartesian vector Poisson potential is assembled separately.
 Exterior, h/p and quadrature convergence remain explicit obligations.
 """
 import argparse
+import math
+import numbers
 import hashlib
 import json
 import os
@@ -83,16 +85,32 @@ PHYSICAL_TARGETS = dict(R=.05, partial_L=.05, root_heat=.05, tip_heat=.05)
 def physical_verdict(candidate, reference, reference_resolved):
     """Compare regional quantities with the matched independent volume FEM.
 
-    Relative difference is abs(candidate-reference)/abs(reference).  A zero
-    reference or an unresolved FEM reference (convergence or uncertainty not
-    established) gives no verdict; within-limit raw values alone never adopt.
+    The four quantities are real and finite (allocated partial L may be
+    signed).  Relative difference is abs(candidate-reference)/abs(reference).
+    A zero reference or an unresolved FEM reference (convergence or
+    uncertainty not established) gives no verdict; within-limit raw values
+    alone never adopt.  reference_resolved must be a bool.
     """
+    if not isinstance(reference_resolved, bool):
+        raise TypeError(f'reference_resolved must be bool, got {type(reference_resolved).__name__}')
+
+    def real(name, side, value):
+        if isinstance(value, bool) or not isinstance(value, numbers.Real):
+            raise TypeError(f'{name}: {side} must be a real number, got {value!r}')
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError(f'{name}: {side} must be finite, got {value!r}')
+        return value
+
     differences = {}
     for name, limit in PHYSICAL_TARGETS.items():
-        value, ref = complex(candidate[name]), complex(reference[name])
+        value, ref = real(name, 'candidate', candidate[name]), real(name, 'reference', reference[name])
         if ref == 0:
             raise ValueError(f'{name}: zero reference is unresolved; no relative verdict')
-        differences[name] = dict(relative=abs(value - ref) / abs(ref), limit=limit)
+        relative = abs(value - ref) / abs(ref)
+        if not math.isfinite(relative):
+            raise ValueError(f'{name}: nonfinite relative difference {relative!r}')
+        differences[name] = dict(relative=relative, limit=limit)
     within = all(d['relative'] <= d['limit'] for d in differences.values())
     if not reference_resolved:
         status = 'NOT_ADOPTED: reference FEM convergence/uncertainty unresolved'
