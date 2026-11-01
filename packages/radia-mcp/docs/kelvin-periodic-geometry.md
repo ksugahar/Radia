@@ -43,6 +43,11 @@ kelvin_transformation(topic="identify")
 kelvin_identify_post_hoc(topic="curved_geometry")
 ```
 
+These calls select documentation only. The existing post-hoc tool also has a
+`verify` branch that loads a mesh and adds in-memory identifications; its
+tool-wide annotation therefore does not promise read-only behavior. Do not use
+that execution branch as a discovery, high-order geometry or persistence check.
+
 The lookup covers master-derived slave coefficients, q3 orientation parity,
 shared-entity ownership, complete pair/patch coverage and independent map checks.
 The final `.vol` requires its verified `.vol.json` companion record. Pair count,
