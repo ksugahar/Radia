@@ -3420,6 +3420,107 @@ See also differential_forms_maxwell('twisted').
 """
 
 
+KELVIN_CURVED_GEOMETRY = """
+# Curved periodic geometry: producer and consumer contract
+
+## Supported route and ownership
+
+Keep the pinned Netgen/NGSolve runtime unchanged. Do not rebuild or monkeypatch
+Netgen to compensate for an unqualified artifact or persistence route. Netgen/
+NGSolve owns spaces, Piola maps, orientations, quadrature and assembly;
+cubit-mesh-export owns Cubit export and its high-order geometry. MCP consumes
+checked artifacts through the existing tools; it does not implement a second
+mesher or coefficient repair pipeline.
+
+Consult the owning cubit-mesh-export README, "Explicit named periodic export",
+and its installed artifact provenance before selecting that producer route.
+The named-curved integration contract is one translation, name `kt`, group 1,
+type PERIODIC, for polynomial q1/q2/q3 tetrahedra with linear triangular/tetrahedral
+connectivity. This contract is not a claim that an older installed exporter has
+that feature. Independent high-order node connectivity, arbitrary orders, rotations
+and multiple chained periodic directions are not qualified by this recipe.
+Source/destination overlap on shared seam entities is rejected; do not hide it by
+assigning another identification number or independent slave refitting.
+
+## Producer checks before publication
+
+Declare master/slave BC patches, SI translation and matching distance explicitly;
+BC numbers, FaceDescriptor indices and CAD IDs are different identities. Export
+complete directed point pairs and matching triangular/entity coverage. A positive
+pair count is not a bijection or a high-order geometry check.
+
+Matching corners/copying surface triangles establishes topology only. Derive slave
+curved displacement coefficients from the master: reversed canonical edge direction
+negates the q3 odd mode; even edge modes and the symmetric q3 triangular face bubble
+retain their values. Apply the actual face permutation and shared-entity ownership
+rules, reject conflicting ownership/unsupported representations, and check ALL
+transfers against independently master-derived expectations. Translation changes
+corner positions, not displacement coefficients. Preserve non-target archive
+entries; do not require the intentionally corrected slave geometry to equal its
+original erroneous map. Verify the complete companion `.vol.json` mapping record
+before publishing the final `.vol`; a sidecar alone is not a complete export.
+Failed export/publication is not a usable solver artifact.
+
+## Consumer and persistence checks
+
+Use the versioned label contract and check-vol, then verify the saved name/type/
+group/direction/translation and complete patch-wise bijection WITHOUT adding or
+repairing identifications. Inspect material/domain ownership, curve order, mapped
+coordinates/derivatives and independent edge/face slave-DoF unions. Compare predicted
+compression with the actual periodic space and exercise nonconstant high-order
+modes. For HCurl compare paired tangential traces; full-vector/normal differences
+are separate observations, not the HCurl continuity condition.
+
+A curved section or GetCurveOrder alone cannot prove persistence. Full-Netgen
+Load/Save of an imported Cubit q3 archive has changed the physical map in checks
+with Netgen/NGSolve 6.2.2608. Treat this as a version/route-specific finding, not
+as a theorem about all Netgen versions. Do not use Load/Save as a production
+post-hoc-ID repair without independently qualifying every curved coefficient,
+non-target archive entry and reloaded map under the exact runtime.
+
+Native OCC/Netgen geometry reconstruction and Cubit archived coefficients are
+DIFFERENT persistence routes. Explicit Curve(q) with retained OCC geometry can
+reconstruct its own declared route; it is NOT a general repair for a geometry-less
+Cubit archive. Text serialization may round coordinates: retain actual differences
+and use the declared user criterion, not a universal byte/hash-equality requirement.
+Reload independently and compare the actual maps, not just order integers.
+
+Keep element transformations alive while evaluating mapped integration points:
+
+    trafo = mesh.GetTrafo(element)
+    mapped_point = trafo(reference_point)
+    # evaluate/use mapped_point here, while trafo remains alive
+    del mapped_point
+    del trafo
+
+Keep mesh/geometry owners alive too. Temporary GetTrafo expressions do not qualify
+object lifetime. Python FE execution remains under the caller-owned NGSolve
+TaskManager policy; a knowledge lookup creates no solver region or native job.
+
+## Diagnose geometry separately from formulation accuracy
+
+For polynomial q3 geometry and the default order-2 HCurl space WITH gradients,
+the constant-field pullback J^T c = grad_ref(c dot F) is representable. Compare
+full and periodic spaces on the same elements before blaming interpolation for
+a failed periodic constant trace. Do not apply this argument to nograds/altered
+spaces without a separate check. Preserve the transformation lifetime above.
+
+Translation-identical paired q3 maps do NOT prove exact spherical inversion:
+polynomial surface points can have |x_h| != R. Keep geometry/model consistency
+separate from pure FE error, true residual, gauge/source conservation and
+p-convergence. Passing a geometry consumer is not field-accuracy adoption or
+release qualification of another exporter binary. A prior accepted case is not
+proof that a new analytic convergence lane has run. No search radius, serialization
+roundoff or another case's tolerance becomes an acceptance threshold automatically.
+Producer build success is not upload, CI, main integration, or verification of
+the installation actually used by an MCP client.
+
+See kelvin_identify_post_hoc(topic="curved_geometry") before using a post-hoc
+helper. Vertex pairing for a linear spherical H1 workflow is not qualification
+of an arbitrary curved archive, named multipatch contract, or Periodic(HCurl).
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     if topic.lower().strip() == "gate_lifecycle":
@@ -3437,6 +3538,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "verified_recipe": KELVIN_VERIFIED_RECIPE,
         "adaptive": KELVIN_ADAPTIVE,
         "identify": KELVIN_IDENTIFY,
+        "curved_geometry": KELVIN_CURVED_GEOMETRY,
         "mesh_control": KELVIN_MESH_CONTROL,
         "tips": KELVIN_TIPS,
         "verification": KELVIN_VERIFICATION,
@@ -3456,7 +3558,8 @@ def get_kelvin_documentation(topic: str = "all") -> str:
     if topic == "all":
         return "\n\n".join(topics.values())
     elif topic in topics:
-        return topics[topic]
+        prefix = KELVIN_CURVED_GEOMETRY + "\n\n" if topic in {"identify", "mesh_control"} else ""
+        return prefix + topics[topic]
     else:
         return (
             f"Unknown topic: '{topic}'. "

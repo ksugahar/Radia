@@ -19,6 +19,10 @@ For standard client settings, safe editable updates and behavioral acceptance,
 see the [maintenance procedure](docs/maintenance.md) and
 [known-issue ledger](docs/maintenance-known-issues.md).
 
+For curved Kelvin artifacts, see the [MCP discovery and evidence guide](docs/kelvin-periodic-geometry.md).
+It connects the exporter-owned producer contract with the existing Kelvin lookup
+tools and distinguishes a published package from a verified client workflow.
+
 [![PyPI](https://img.shields.io/pypi/v/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
