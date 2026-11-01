@@ -163,6 +163,51 @@ def test_image_value_and_derivative_are_continuous_off_the_plane(charge_inputs):
     assert err < DETECTOR_REL, f"translation derivative vs central difference: max rel {err:.3e}"
 
 
+def _moved_images(charge_inputs, d):
+    cells = np.asarray(charge_inputs["cell_verts"]).reshape(-1, 4, 3)
+    faces = np.asarray(charge_inputs["face_verts"]).reshape(-1, 3, 3)
+    return dict(charge_inputs, image_masks=np.array([1], dtype=np.int32), image_signs=np.array([1.0]),
+                cell_verts=np.ascontiguousarray((cells + [d, 0, 0]).ravel()),
+                face_verts=np.ascontiguousarray((faces + [d, 0, 0]).ravel())), cells, faces
+
+
+@pytest.mark.parametrize("d", [1e-6, 1e-4])
+def test_near_coincident_image_vertex_fails_loudly(charge_inputs, d):
+    # Inside the supported gap bound but not coincident, the graded/outer rule
+    # switch would be a finite value jump; the entry must refuse instead.
+    kw, _, _ = _moved_images(charge_inputs, d)
+    gram = _rp._ChargeGramHMatrix(**kw)
+    i = _constant_faces(kw)[0]
+    with pytest.raises(Exception, match="symmetry gap bound"):
+        gram.entry(i, i)
+
+
+def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs):
+    kw, cells, faces = _moved_images(charge_inputs, 0.0)
+    gram = _rp._ChargeGramHMatrix(**kw)
+    shift = np.array([1.0, 0.0, 0.0])
+    with pytest.raises(Exception, match="normal motion of plane vertices"):
+        gram.tet_charge_gram_directional_derivative(
+            np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+            np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
+
+
+def test_image_derivative_is_continuous_just_outside_the_gap_bound(charge_inputs):
+    # Bracket on the positive-gap side, outside the fail-loud band, with h < d
+    # still resolvable in FP64.
+    d, h = 4e-3, 2e-4
+    idx = _subset(charge_inputs)
+    kw, cells, faces = _moved_images(charge_inputs, d)
+    gram, _ = _gram(kw)
+    shift = np.array([1.0, 0.0, 0.0])
+    D = np.asarray(gram.tet_charge_gram_directional_derivative(
+        np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+        np.ascontiguousarray(np.broadcast_to(shift, faces.shape))))[np.ix_(idx, idx)]
+    fd = (_gram(_moved_images(charge_inputs, d + h)[0])[1] - _gram(_moved_images(charge_inputs, d - h)[0])[1]) / (2 * h)
+    err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
+    assert err < 1e-4, f"translation derivative vs central difference at d={d}: max rel {err:.3e}"
+
+
 @pytest.mark.parametrize("images", [None, ([1], [1.0])], ids=["direct", "image"])
 def test_host_block_route_takes_graded_rule_on_mixed_degree_mesh(charge_inputs, images):
     # One quadratic face mode turns analytic host blocks on for the whole mesh;

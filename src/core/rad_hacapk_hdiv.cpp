@@ -2522,6 +2522,32 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         for(double&y:b)y*=RAD_INV_FOUR_PI;
         return b;
     };
+    // The graded image rule is valid only while every coinciding vertex pair
+    // stays coincident; a velocity that separates them (normal motion of a
+    // symmetry-plane vertex) leaves the supported domain, so it fails loudly.
+    auto require_image_coincidence_kept=[&](int kt,int ht,int ks,int hs,int img){
+        const double*a=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
+        const double*b=ks==0?&m_cellV[(size_t)hs*12]:&m_faceV[(size_t)hs*9];
+        const double*da=kt==0?&cell_velocity[(size_t)ht*12]:&face_velocity[(size_t)ht*9];
+        const double*db=ks==0?&cell_velocity[(size_t)hs*12]:&face_velocity[(size_t)hs*9];
+        const auto&tc=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
+        const auto&sc=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
+        const double tol=1e-9*(m_size[tc[0]]+m_size[sc[0]]);
+        for(int j=0;j<(ks?3:4);++j){
+            double corner[3],dcorner[3];ImageApplyVector(img,b+3*j,corner);ImageApplyVector(img,db+3*j,dcorner);
+            for(int i=0;i<(kt?3:4);++i){
+                double r2=0,dv2=0,v2=0;
+                for(int k=0;k<3;++k){
+                    const double r=corner[k]-a[3*i+k],dv=dcorner[k]-da[3*i+k];
+                    r2+=r*r;dv2+=dv*dv;v2+=da[3*i+k]*da[3*i+k]+dcorner[k]*dcorner[k];
+                }
+                if(r2<=tol*tol&&dv2>1e-24*v2)
+                    throw std::domain_error("P1 image derivative: velocity moves a "
+                        "symmetry-plane vertex off its image; normal motion of "
+                        "plane vertices is unsupported");
+            }
+        }
+    };
     const int nh=nc+nf;
     auto pair_block=[&](int ga,int gb){
         const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;
@@ -2557,6 +2583,8 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         // singular self-panel terms.
         for(size_t image=0;include_images&&image<m_image_masks.size();++image){
             const int img=(int)image+1;
+            if(P1TouchHosts(ka,ha,kb,hb,img))
+                require_image_coincidence_kept(ka,ha,kb,hb,img);
             // Each direction takes the rule its parent image block took.
             const auto ab=P1TouchHosts(ka,ha,kb,hb,img)?graded(ka,ha,kb,hb,img):directed(ka,ha,kb,hb,img);
             const auto ba=P1TouchHosts(kb,hb,ka,ha,img)?graded(kb,hb,ka,ha,img):directed(kb,hb,ka,ha,img);
@@ -2784,6 +2812,13 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
     return rad_hdiv::TriPotential(V, p);
 }
 
+namespace {
+// Smallest supported separation, relative to the summed host sizes, between a
+// mapped source vertex and a target vertex that do not coincide.  Below it the
+// graded/outer rule switch would be a visible value jump, so it fails loudly.
+constexpr double kP1ImageGapFraction=1e-3;
+}
+
 bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,int img) const
 {
     if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo) return false;
@@ -2809,17 +2844,25 @@ bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,i
     // Image pair (target, T(source)) takes the rule of the same direct pair
     // in the unfolded model: graded iff a mapped source vertex coincides with
     // a target vertex.  Coincidence holds to roundoff only (a plane vertex
-    // reflects onto itself exactly, a sector vertex onto its partner), while
-    // distinct vertices are a whole element apart.
-    const double tol=1e-9*(m_size[tc[0]]+m_size[sc[0]]);
+    // reflects onto itself exactly, a sector vertex onto its partner).  The
+    // two rules differ by a finite amount, so a near-coincident vertex would
+    // make the entry jump; such meshes are outside the supported domain.
+    const double scale=m_size[tc[0]]+m_size[sc[0]];
+    const double tol=1e-9*scale,gap=kP1ImageGapFraction*scale;
+    bool touch=false;
     for(int j=0;j<(kindS?3:4);++j){
         double corner[3];ImageApplyVector(img,b+3*j,corner);
         for(int i=0;i<(kindT?3:4);++i){
             const double dx=corner[0]-a[3*i],dy=corner[1]-a[3*i+1],dz=corner[2]-a[3*i+2];
-            if(dx*dx+dy*dy+dz*dz<=tol*tol)return true;
+            const double r2=dx*dx+dy*dy+dz*dz;
+            if(r2<=tol*tol)touch=true;
+            else if(r2<gap*gap)
+                throw std::domain_error("P1 image pair: a mapped vertex lies "
+                    "within the symmetry gap bound of a target vertex without "
+                    "coinciding; place symmetry-plane vertices on the plane");
         }
     }
-    return false;
+    return touch;
 }
 
 namespace {
