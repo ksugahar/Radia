@@ -131,8 +131,8 @@ study.fail(sameGeneration,"test cleanup");
 end
 
 function testGenerationCacheAndRngResumeDeterministically(testCase)
-primaryPath = string(tempname("C:\temp")) + ".mat";
-clonePath = string(tempname("C:\temp")) + ".mat";
+primaryPath = string(tempname("C:\temp")) + ".h5";
+clonePath = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@()cleanupStorage([primaryPath,clonePath]));
 
 sampler = radia.optuna.NSGAIISampler(Seed=51,PopulationSize=2, ...

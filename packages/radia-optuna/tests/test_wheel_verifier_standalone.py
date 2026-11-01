@@ -39,7 +39,13 @@ def test_detached_package_verifies_without_cpu_project(tmp_path):
     pe[60:64] = (64).to_bytes(4, "little")
     pe[64:70] = b"PE\0\0\x64\x86"
     (detached / "matlab/optuna_mex.mexw64").write_bytes(pe)
-    wheel = tmp_path / f"radia_optuna-{manifest['version']}-py3-none-win_amd64.whl"
+    tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
+    extension = f"_optuna_kernels.{tag}-win_amd64.pyd"
+    build = {"archive_sha256":"a"*64,"objects":{"optuna_cuda.cu.obj":"b"*64},
+             "python_extension_sha256s":{extension:hashlib.sha256(pe).hexdigest()},
+             "mex_sha256":hashlib.sha256(pe).hexdigest()}
+    (detached / "src/radia_optuna/native_build.json").write_text(json.dumps(build),encoding="utf-8")
+    wheel = tmp_path / f"radia_optuna-{manifest['version']}-{tag}-{tag}-win_amd64.whl"
     dist_info = f"radia_optuna-{manifest['version']}.dist-info"
     with zipfile.ZipFile(wheel, "w") as archive:
         for member, payload in verifier._source_payloads(manifest).items():
@@ -48,7 +54,8 @@ def test_detached_package_verifies_without_cpu_project(tmp_path):
             "Metadata-Version: 2.1\nName: radia-optuna\n"
             f"Version: {manifest['version']}\n"
             'Requires-Dist: optuna==5.0.0; extra == "upstream"\n\n'))
-        archive.writestr(f"{dist_info}/WHEEL", "Tag: py3-none-win_amd64\n")
+        archive.writestr(f"{dist_info}/WHEEL", f"Tag: {tag}-{tag}-win_amd64\n")
+        archive.writestr(f"radia_optuna/{extension}", pe)
     result = verifier.verify(wheel)
     assert result["ok"] is True, result
     assert result["source_fidelity_verified"] is True, result

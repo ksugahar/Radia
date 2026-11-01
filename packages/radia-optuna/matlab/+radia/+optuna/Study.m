@@ -81,7 +81,30 @@ classdef Study < handle
 
     properties (Constant, Access=private)
         StorageSchema = "radia.optuna.study"
-        StorageVersion = 6
+        StorageVersion = 7
+        StorageFields = ["Schema","Version","Name","Directions", ...
+            "NextTrialNumber","TrialTable","ParamTable", ...
+            "IntermediateTable","TrialIntermediateSnapshots", ...
+            "UserAttrTable","SystemAttrTable","ConstraintTable", ...
+            "ConstraintCountTable","UserAttrs","SystemAttrs", ...
+            "MetricNames","ObjectiveTable","SamplerStateTable", ...
+            "QueueParamTable"]
+        StorageColumns = struct( ...
+            "TrialTable", ["TrialNumber","State","Value","StartTime", ...
+                "EndTime","Duration_s","Params","ErrorMessage"], ...
+            "ParamTable", ["TrialNumber","Name","Kind","ValueNumeric", ...
+                "ValueText","Distribution"], ...
+            "IntermediateTable", ["TrialNumber","Step","Value","Timestamp"], ...
+            "TrialIntermediateSnapshots", ...
+                ["TrialNumber","Step","Value","Timestamp"], ...
+            "UserAttrTable", ["TrialNumber","Name","ValueJSON"], ...
+            "SystemAttrTable", ["TrialNumber","Name","ValueJSON"], ...
+            "ConstraintTable", ["TrialNumber","ConstraintIndex","Name","Value"], ...
+            "ConstraintCountTable", ["TrialNumber","Count"], ...
+            "ObjectiveTable", ["TrialNumber","ObjectiveIndex","Value"], ...
+            "SamplerStateTable", ["Sampler","Schema","Revision", ...
+                "TrialNumber","Generation","State","Timestamp"], ...
+            "QueueParamTable", ["TrialNumber","Name","Value"])
     end
 
     methods
@@ -106,6 +129,7 @@ classdef Study < handle
                     "Directions must contain only 'minimize' or 'maximize'.");
             end
             obj.StoragePath = options.StoragePath;
+            radia.optuna.Study.requireHdf5Path(obj.StoragePath);
             obj.AutoSave = options.AutoSave;
             if ~isempty(options.ProgressFcn) && ~isa(options.ProgressFcn, "function_handle")
                 error("radia:optuna:ProgressFcn", ...
@@ -764,15 +788,15 @@ classdef Study < handle
                 "MetricNames", obj.MetricNames, ...
                 "ObjectiveTable", obj.ObjectiveTable, ...
                 "SamplerStateTable", obj.SamplerStateTable, ...
-                "QueueParamTable",obj.QueueParamTable); %#ok<NASGU>
+                "QueueParamTable",obj.QueueParamTable);
             folder = fileparts(obj.StoragePath);
             if strlength(folder) > 0 && ~isfolder(folder)
                 mkdir(folder);
             end
             [targetPath, folder] = obj.resolvedStoragePath();
-            temporaryPath = string(tempname(folder)) + ".mat";
+            temporaryPath = string(tempname(folder)) + ".h5";
             cleanup = onCleanup(@() obj.removeTemporaryFile(temporaryPath));
-            builtin("save", temporaryPath, "StudyData", "-mat");
+            radia.optuna.Study.writeStorageFile(temporaryPath, StudyData);
             obj.readStudyData(temporaryPath);
             obj.replaceStorageFile(temporaryPath, targetPath, ...
                 targetPath + ".bak");
@@ -1466,77 +1490,36 @@ classdef Study < handle
             obj.Name = string(data.Name);
             obj.Directions = string(data.Directions);
             obj.NextTrialNumber = data.NextTrialNumber;
-            if isfield(data,"Version") && data.Version==6
-                count=height(data.TrialTable);
-                values=repmat({radia.optuna.Trial.emptyIntermediateTable()},count,1);
-                observations=data.TrialIntermediateSnapshots;
-                if ~isempty(observations)
-                    [~,owners]=ismember(observations.TrialNumber,data.TrialTable.TrialNumber);
-                    [orderedOwners,order]=sort(owners);
-                    starts=[1;find(diff(orderedOwners)~=0)+1];
-                    ends=[starts(2:end)-1;numel(order)];
-                    for index=1:numel(starts)
-                        rows=order(starts(index):ends(index));
-                        values{orderedOwners(starts(index))}= ...
-                            observations(rows,{'Step','Value','Timestamp'});
-                    end
+            count=height(data.TrialTable);
+            values=repmat({radia.optuna.Trial.emptyIntermediateTable()},count,1);
+            observations=data.TrialIntermediateSnapshots;
+            if ~isempty(observations)
+                [~,owners]=ismember(observations.TrialNumber,data.TrialTable.TrialNumber);
+                [orderedOwners,order]=sort(owners);
+                starts=[1;find(diff(orderedOwners)~=0)+1];
+                ends=[starts(2:end)-1;numel(order)];
+                for index=1:numel(starts)
+                    rows=order(starts(index):ends(index));
+                    values{orderedOwners(starts(index))}= ...
+                        observations(rows,{'Step','Value','Timestamp'});
                 end
-                data.TrialTable.IntermediateValues=values;
-                data.TrialTable=movevars(data.TrialTable,'IntermediateValues', ...
-                    'Before','ErrorMessage');
             end
+            data.TrialTable.IntermediateValues=values;
+            data.TrialTable=movevars(data.TrialTable,'IntermediateValues', ...
+                'Before','ErrorMessage');
             obj.TrialTable = data.TrialTable;
             obj.ParamTable = data.ParamTable;
             obj.IntermediateTable = data.IntermediateTable;
             obj.UserAttrTable = data.UserAttrTable;
-            if isfield(data,"SystemAttrTable")
-                obj.SystemAttrTable=data.SystemAttrTable;
-            end
-            if isfield(data, "ConstraintTable")
-                obj.ConstraintTable = data.ConstraintTable;
-                if ~ismember("Name",string( ...
-                        obj.ConstraintTable.Properties.VariableNames))
-                    obj.ConstraintTable.Name= ...
-                        string(obj.ConstraintTable.ConstraintIndex-1);
-                    obj.ConstraintTable=movevars(obj.ConstraintTable,"Name", ...
-                        "Before","Value");
-                end
-            end
-            if isfield(data, "ConstraintCountTable")
-                obj.ConstraintCountTable = data.ConstraintCountTable;
-            elseif ~isempty(obj.ConstraintTable)
-                numbers = unique(obj.ConstraintTable.TrialNumber,"stable");
-                counts = zeros(numel(numbers),1);
-                for index = 1:numel(numbers)
-                    counts(index) = sum( ...
-                        obj.ConstraintTable.TrialNumber == numbers(index));
-                end
-                obj.ConstraintCountTable = table(numbers,counts, ...
-                    'VariableNames',{'TrialNumber','Count'});
-            end
-            if isfield(data, "UserAttrs")
-                obj.UserAttrs = data.UserAttrs;
-            end
-            if isfield(data,"SystemAttrs")
-                obj.SystemAttrs=data.SystemAttrs;
-            end
-            if isfield(data,"MetricNames")
-                obj.MetricNames=string(data.MetricNames);
-            end
-            if isfield(data, "ObjectiveTable")
-                obj.ObjectiveTable = data.ObjectiveTable;
-            else
-                complete = obj.TrialTable.State == "COMPLETE" & ~isnan(obj.TrialTable.Value);
-                obj.ObjectiveTable = table(obj.TrialTable.TrialNumber(complete), ...
-                    ones(sum(complete),1), obj.TrialTable.Value(complete), ...
-                    'VariableNames',{'TrialNumber','ObjectiveIndex','Value'});
-            end
-            if isfield(data, "SamplerStateTable")
-                obj.SamplerStateTable = data.SamplerStateTable;
-            end
-            if isfield(data,"QueueParamTable")
-                obj.QueueParamTable=data.QueueParamTable;
-            end
+            obj.SystemAttrTable = data.SystemAttrTable;
+            obj.ConstraintTable = data.ConstraintTable;
+            obj.ConstraintCountTable = data.ConstraintCountTable;
+            obj.UserAttrs = data.UserAttrs;
+            obj.SystemAttrs = data.SystemAttrs;
+            obj.MetricNames = string(data.MetricNames);
+            obj.ObjectiveTable = data.ObjectiveTable;
+            obj.SamplerStateTable = data.SamplerStateTable;
+            obj.QueueParamTable = data.QueueParamTable;
             obj.invalidateIndex(obj.UserAttrIndex);
             obj.invalidateIndex(obj.SystemAttrIndex);
             obj.invalidateIndex(obj.ConstraintIndex);
@@ -2217,69 +2200,20 @@ classdef Study < handle
         end
 
         function data = readStudyData(obj, path)
-            loaded = builtin("load", path, "StudyData", "-mat");
-            if ~isfield(loaded, "StudyData") || ...
-                    ~isstruct(loaded.StudyData) || ~isscalar(loaded.StudyData)
-                error("radia:optuna:StorageFormat", ...
-                    "Storage '%s' does not contain one StudyData struct.", path);
-            end
-            data = loaded.StudyData;
-            hasSchema = isfield(data, "Schema");
-            hasVersion = isfield(data, "Version");
-            if xor(hasSchema, hasVersion)
+            data = radia.optuna.Study.readStorageFile(path);
+            if string(data.Schema) ~= obj.StorageSchema || ...
+                    data.Version ~= obj.StorageVersion
                 error("radia:optuna:StorageVersion", ...
-                    "Storage '%s' has an incomplete schema/version header.", ...
+                    "Storage '%s' has unsupported StudyData schema/version.", ...
                     path);
             end
-            if hasSchema
-                schema = string(data.Schema);
-                try
-                    version = double(data.Version);
-                catch
-                    error("radia:optuna:StorageVersion", ...
-                        "Storage '%s' has a nonnumeric version header.", path);
-                end
-                if ~isscalar(schema) || ~isscalar(version)
-                    error("radia:optuna:StorageVersion", ...
-                        "Storage '%s' has nonscalar schema/version headers.", ...
-                        path);
-                end
-                if schema ~= obj.StorageSchema || ~isfinite(version) || ...
-                        version ~= floor(version) || ...
-                        ~ismember(version, 1:obj.StorageVersion)
-                    error("radia:optuna:StorageVersion", ...
-                        "Storage '%s' has unsupported schema/version '%s'/%g.", ...
-                        path, schema, version);
-                end
-            end
-            required = ["Name", "Directions", "NextTrialNumber", ...
-                "TrialTable", "ParamTable", "IntermediateTable", ...
-                "UserAttrTable"];
-            for field = required
-                if ~isfield(data, field)
-                    error("radia:optuna:StorageFormat", ...
-                        "Storage '%s' is missing StudyData.%s.", path, field);
-                end
-            end
-            if hasVersion && version==6
-                trials=data.TrialTable;
-                if ~isfield(data,"TrialIntermediateSnapshots")
-                    error("radia:optuna:StorageFormat", ...
-                        "Storage '%s' lacks normalized trial snapshots.",path);
-                end
-                observations=data.TrialIntermediateSnapshots;
-                if ~istable(trials) || ~istable(observations) || ...
-                        ~all(ismember(["TrialNumber","ErrorMessage"], ...
-                        string(trials.Properties.VariableNames))) || ...
-                        ismember("IntermediateValues",string(trials.Properties.VariableNames)) || ...
-                        ~all(ismember(["TrialNumber","Step","Value","Timestamp"], ...
-                        string(observations.Properties.VariableNames))) || ...
-                        ~isdatetime(observations.Timestamp) || ...
-                        numel(unique(trials.TrialNumber))~=height(trials) || ...
-                        any(~ismember(observations.TrialNumber,trials.TrialNumber))
-                    error("radia:optuna:StorageFormat", ...
-                        "Storage '%s' has invalid normalized intermediate observations.",path);
-                end
+            trials=data.TrialTable;
+            observations=data.TrialIntermediateSnapshots;
+            if ~isdatetime(observations.Timestamp) || ...
+                    numel(unique(trials.TrialNumber))~=height(trials) || ...
+                    any(~ismember(observations.TrialNumber,trials.TrialNumber))
+                error("radia:optuna:StorageFormat", ...
+                    "Storage '%s' has invalid normalized intermediate observations.",path);
             end
         end
 
@@ -2301,7 +2235,7 @@ classdef Study < handle
 
         function copyValidStudyFile(obj, sourcePath, targetPath)
             folder = string(fileparts(targetPath));
-            temporaryPath = string(tempname(folder)) + ".mat";
+            temporaryPath = string(tempname(folder)) + ".h5";
             cleanup = onCleanup(@() obj.removeTemporaryFile(temporaryPath));
             [copied, message, messageId] = copyfile( ...
                 sourcePath, temporaryPath, "f");
@@ -2458,6 +2392,101 @@ classdef Study < handle
                 end
                 target(end+1,:)={number,storedName, ...
                     string(jsonencode(attrs.(name)))}; %#ok<AGROW>
+            end
+        end
+    end
+
+    methods (Static, Hidden)
+        function requireHdf5Path(path)
+            % Study storage is HDF5 only; refuse other extensions loudly.
+            path = string(path);
+            if strlength(path) > 0 && ~endsWith(lower(path), ".h5")
+                error("radia:optuna:StorageFormat", ...
+                    "Study storage '%s' must be an HDF5 file ending in .h5.", ...
+                    path);
+            end
+        end
+
+        function writeStorageFile(path, StudyData)
+            %WRITESTORAGEFILE Write StudyData as typed HDF5 (no MAT bytes).
+            %   Layout: root attributes schema/schema_version/encoding and
+            %   one typed tree group /StudyData (field order kept). Group
+            %   attributes "index_base:<Table>.<Column>" and
+            %   "units:<Table>.<Column>" document conventions: TrialNumber is
+            %   zero based (Optuna numbering), ObjectiveIndex and
+            %   ConstraintIndex are one based, Duration_s is in seconds.
+            fields = string(fieldnames(StudyData)).';
+            if ~isequal(fields, radia.optuna.Study.StorageFields)
+                error("radia:optuna:StorageFormat", ...
+                    "StudyData fields do not match schema version %d.", ...
+                    radia.optuna.Study.StorageVersion);
+            end
+            fid = radia.optuna.internal.TypedHdf5.createFile(path, ...
+                radia.optuna.Study.StorageSchema, ...
+                radia.optuna.Study.StorageVersion);
+            closer = onCleanup(@() H5F.close(fid));
+            radia.optuna.internal.TypedHdf5.writeTree(fid, "StudyData", StudyData);
+            tables = string(fieldnames(radia.optuna.Study.StorageColumns)).';
+            for tableName = tables
+                for column = string(StudyData.(tableName).Properties.VariableNames)
+                    key = tableName + "." + column;
+                    switch column
+                        case "TrialNumber"
+                            radia.optuna.internal.TypedHdf5.writeAttribute( ...
+                                fid, "StudyData", "index_base:" + key, 0);
+                        case {'ObjectiveIndex','ConstraintIndex'}
+                            radia.optuna.internal.TypedHdf5.writeAttribute( ...
+                                fid, "StudyData", "index_base:" + key, 1);
+                        case "Duration_s"
+                            radia.optuna.internal.TypedHdf5.writeAttribute( ...
+                                fid, "StudyData", "units:" + key, "s");
+                    end
+                end
+            end
+        end
+
+        function data = readStorageFile(path)
+            %READSTORAGEFILE Read and contract-check one HDF5 StudyData.
+            path = string(path);
+            fid = radia.optuna.internal.TypedHdf5.openFile(path, ...
+                radia.optuna.Study.StorageSchema, ...
+                radia.optuna.Study.StorageVersion);
+            closer = onCleanup(@() H5F.close(fid));
+            try
+                data = radia.optuna.internal.TypedHdf5.readTree(fid, "StudyData");
+            catch exception
+                failure = MException("radia:optuna:StorageFormat", ...
+                    "Storage '%s' has invalid typed StudyData: %s", ...
+                    path, exception.message);
+                throw(addCause(failure, exception))
+            end
+            if ~isstruct(data) || ~isscalar(data) || ~isequal( ...
+                    string(fieldnames(data)).', radia.optuna.Study.StorageFields)
+                error("radia:optuna:StorageFormat", ...
+                    "Storage '%s' StudyData fields do not match the schema.", ...
+                    path);
+            end
+            columns = radia.optuna.Study.StorageColumns;
+            for tableName = string(fieldnames(columns)).'
+                value = data.(tableName);
+                if ~istable(value) || ~isequal( ...
+                        string(value.Properties.VariableNames), ...
+                        columns.(tableName))
+                    error("radia:optuna:StorageFormat", ...
+                        "Storage '%s' table %s does not match the schema.", ...
+                        path, tableName);
+                end
+            end
+            if ~isstring(data.Schema) || ~isscalar(data.Schema) || ...
+                    ~isa(data.Version, "double") || ~isscalar(data.Version) || ...
+                    ~isstring(data.Name) || ~isscalar(data.Name) || ...
+                    ~isstring(data.Directions) || ~isstring(data.MetricNames) || ...
+                    ~isa(data.NextTrialNumber, "double") || ...
+                    ~isscalar(data.NextTrialNumber) || ...
+                    ~isstruct(data.UserAttrs) || ~isstruct(data.SystemAttrs)
+                error("radia:optuna:StorageFormat", ...
+                    "Storage '%s' StudyData scalar fields have invalid types.", ...
+                    path);
             end
         end
     end

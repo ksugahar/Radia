@@ -1,9 +1,9 @@
 {
   "schema": "radia-optuna.distribution.v1",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "oracle_version": "5.0.0",
   "matlab_namespace": "radia.optuna",
-  "matlab_file_count": 225,
+  "matlab_file_count": 228,
   "native_gateway": "optuna_mex",
   "native_command_count": 22,
   "native_sobol_max_dimension": 21201,
@@ -32,5 +32,8 @@
     "+radia/+optuna/SheetMetalRunner.m",
     "+radia/+optuna/+internal/runLTspiceTrial.m"
   ],
-  "compatibility_evidence": "evidence_manifest.json"
+  "compatibility_evidence": "evidence_manifest.json",
+  "native_build_manifest": "native_build.json",
+  "python_kernel": "_optuna_kernels",
+  "native_build_route": "nvcc-shared-library"
 }

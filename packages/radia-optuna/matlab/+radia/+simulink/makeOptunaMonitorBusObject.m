@@ -37,7 +37,7 @@ for index = 1:numel(payloadNames)
 end
 busObject = Simulink.Bus;
 busObject.Description = ...
-    "Scalar Optuna study telemetry; variable-length history stays in MAT tables";
+    "Scalar Optuna study telemetry; variable-length history stays in HDF5-stored tables";
 busObject.Elements = elements;
 if options.AssignToBase
     assignin("base", "OptunaMonitorBusV1", busObject);

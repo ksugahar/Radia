@@ -6,11 +6,11 @@ end
 storagePath = evaluatedMaskValue(blockPath, "storage_path");
 if strlength(storagePath) == 0
     error("radia:simulink:OptunaStudyStorage", ...
-        "Set Study MAT file before reviewing a study.");
+        "Set Study HDF5 file before reviewing a study.");
 end
 if ~isfile(storagePath) && ~isfile(storagePath + ".bak")
     error("radia:simulink:OptunaStudyStorage", ...
-        "Study MAT file '%s' does not exist.", storagePath);
+        "Study HDF5 file '%s' does not exist.", storagePath);
 end
 study = radia.optuna.loadStudy(storage=storagePath);
 review = struct( ...

@@ -21,7 +21,7 @@ end
 end
 
 function testConstraintCallbackFailureStillCommitsCompleteTrial(testCase)
-storagePath = string(tempname("C:\temp")) + ".mat";
+storagePath = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));
 sampler = radia.optuna.TPESampler( ...
     ConstraintsFcn=@(~)constraintCallbackFailure());
@@ -68,7 +68,7 @@ end
 
 function testStateCountCacheTracksMATLABStorageLifecycle(testCase)
 % Integration invariant, not an additional upstream parity claim.
-storagePath=string(tempname("C:\temp"))+".mat";
+storagePath=string(tempname("C:\temp"))+".h5";
 cleanup=onCleanup(@()deleteStudyStorage(storagePath));
 study=radia.optuna.Study(StoragePath=storagePath,AutoSave=false, ...
     Sampler=radia.optuna.RandomSampler(17));
@@ -102,7 +102,7 @@ verifyEqual(testCase,study.nonRunningTrialCount(),sum(counts(1:2)));
 end
 
 function testAtomicStorageSchemaAndBackupRecovery(testCase)
-storagePath = string(tempname("C:\temp")) + ".mat";
+storagePath = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));
 study = radia.optuna.Study(Name="recoverable", ...
     StoragePath=storagePath, Sampler=radia.optuna.RandomSampler(3));
@@ -112,10 +112,11 @@ study.tell(trial, 0.25);
 
 verifyTrue(testCase, isfile(storagePath));
 verifyTrue(testCase, isfile(storagePath + ".bak"));
-loaded = load(storagePath, "StudyData", "-mat");
-verifyEqual(testCase, string(loaded.StudyData.Schema), ...
+verifyTrue(testCase, logical(H5F.is_hdf5(char(storagePath))));
+verifyEqual(testCase, string(h5readatt(storagePath, "/", "schema")), ...
     "radia.optuna.study");
-verifyEqual(testCase, loaded.StudyData.Version, 6);
+verifyEqual(testCase, h5readatt(storagePath, "/", "schema_version"), ...
+    int64(7));
 
 overwriteFile(storagePath, "damaged primary");
 lastwarn("");
@@ -133,7 +134,7 @@ deleteStudyStorage(storagePath);
 end
 
 function testEmptyConstraintRecordSurvivesStorageRoundTrip(testCase)
-storagePath = string(tempname("C:\temp")) + ".mat";
+storagePath = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));
 study = radia.optuna.Study(StoragePath=storagePath, ...
     Sampler=radia.optuna.NSGAIISampler(PopulationSize=2));
@@ -171,7 +172,7 @@ verifyEqual(testCase,collision.Params.a_b_2,second);
 end
 
 function verifySamplerResume(testCase, samplerName)
-storagePath = string(tempname("C:\temp")) + ".mat";
+storagePath = string(tempname("C:\temp")) + ".h5";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));
 [continuousSampler, directions] = makeSampler(samplerName, 17);
 [persistedSampler, ~] = makeSampler(samplerName, 17);
@@ -249,7 +250,7 @@ error("radia:test:ConstraintCallback", ...
 end
 
 function testNormalizedSnapshotStoragePreservesPublicTables(testCase)
-path=string(tempname('C:/temp'))+'.mat';
+path=string(tempname('C:/temp'))+'.h5';
 cleanup=onCleanup(@() deleteStudyStorage(path));
 study=radia.optuna.Study(StoragePath=path,AutoSave=false, ...
     Sampler=radia.optuna.RandomSampler(17));
@@ -262,25 +263,17 @@ for index=1:4
 end
 expectedTrials=study.TrialTable; expectedIntermediate=study.IntermediateTable;
 study.save();
-raw=load(path,'StudyData');
-verifyEqual(testCase,raw.StudyData.Version,6);
-verifyFalse(testCase,ismember('IntermediateValues',raw.StudyData.TrialTable.Properties.VariableNames));
-verifyEqual(testCase,height(raw.StudyData.TrialIntermediateSnapshots),2);
+raw=radia.optuna.Study.readStorageFile(path);
+verifyEqual(testCase,raw.Version,7);
+verifyFalse(testCase,ismember('IntermediateValues',raw.TrialTable.Properties.VariableNames));
+verifyEqual(testCase,height(raw.TrialIntermediateSnapshots),2);
 restored=radia.optuna.Study(StoragePath=path,AutoSave=false);
 verifyEqual(testCase,restored.TrialTable,expectedTrials);
 verifyEqual(testCase,restored.IntermediateTable,expectedIntermediate);
-% A version-5 file keeps its old nested representation and migrates on save.
-StudyData=raw.StudyData; StudyData.Version=5;
-StudyData.TrialTable=expectedTrials;
-StudyData=rmfield(StudyData,'TrialIntermediateSnapshots');
-save(path,'StudyData','-mat');
-legacy=radia.optuna.Study(StoragePath=path,AutoSave=false);
-verifyEqual(testCase,legacy.TrialTable,expectedTrials);
-legacy.save();
+restored.save();
 % Invalid normalized ownership must recover the last verified backup.
-raw=load(path,'StudyData'); StudyData=raw.StudyData;
-StudyData.TrialIntermediateSnapshots.TrialNumber(1)=999;
-save(path,'StudyData','-mat');
+damaged=raw; damaged.TrialIntermediateSnapshots.TrialNumber(1)=999;
+delete(path); radia.optuna.Study.writeStorageFile(path,damaged);
 verifyWarning(testCase,@() radia.optuna.Study(StoragePath=path,AutoSave=false), ...
     'radia:optuna:RecoveredStorage');
 restored=radia.optuna.Study(StoragePath=path,AutoSave=false);

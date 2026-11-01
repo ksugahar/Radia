@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import shutil
+import hashlib
+import sysconfig
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import Extension, setup
+from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 from setuptools.command.build_py import build_py as _build_py
 
@@ -21,6 +24,8 @@ ORACLE_SOURCES = tuple(
     if record["path"].startswith("oracles/")
 )
 MEX_SOURCE = MATLAB_ROOT / "optuna_mex.mexw64"
+NATIVE_SOURCE = PACKAGE_ROOT / "src/radia_optuna" / ("_optuna_kernels" + sysconfig.get_config_var("EXT_SUFFIX"))
+BUILD_RECEIPT = PACKAGE_ROOT / "src/radia_optuna/native_build.json"
 CONTRACT_SOURCES = (
     MATLAB_ROOT / "optuna_upstream_compatibility.json",
     MATLAB_ROOT / "optuna50_api_coverage.json",
@@ -39,7 +44,7 @@ SIMULINK_SOURCES = (
     MATLAB_ROOT / "radia_optuna_sfun.m",
     MATLAB_ROOT / "radia_optuna_teaching.slx",
 )
-DOC_SOURCES = (PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md",)
+DOC_SOURCES = (PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md", PACKAGE_ROOT / "NATIVE_BUILD.md")
 
 
 class build_py(_build_py):
@@ -50,6 +55,8 @@ class build_py(_build_py):
             path for path in (
                 OPTUNA_SOURCE,
                 MEX_SOURCE,
+                NATIVE_SOURCE,
+                BUILD_RECEIPT,
                 *CONTRACT_SOURCES,
                 *ORACLE_SOURCES,
                 *SIMULINK_SOURCES,
@@ -90,11 +97,19 @@ class build_py(_build_py):
         )
 
 
-class bdist_wheel(_bdist_wheel):
-    """Tag the MATLAB MEX payload as Windows x64 at build time."""
+class build_ext(_build_ext):
+    """Stage only the CMake-built exact Python ABI; never rebuild/fallback."""
+    def run(self):
+        receipt=json.loads(BUILD_RECEIPT.read_text(encoding="utf-8"))
+        expected=receipt["python_extension_sha256s"].get(NATIVE_SOURCE.name)
+        if not expected or hashlib.sha256(NATIVE_SOURCE.read_bytes()).hexdigest()!=expected:
+            raise RuntimeError("Missing/tampered exact-ABI native extension")
+        if hashlib.sha256(MEX_SOURCE.read_bytes()).hexdigest()!=receipt["mex_sha256"]:
+            raise RuntimeError("MEX does not match the shared-object build receipt")
+        target=Path(self.get_ext_fullpath("radia_optuna._optuna_kernels"))
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(NATIVE_SOURCE,target)
 
-    def get_tag(self) -> tuple[str, str, str]:
-        return "py3", "none", "win_amd64"
 
-
-setup(cmdclass={"build_py": build_py, "bdist_wheel": bdist_wheel})
+setup(ext_modules=[Extension("radia_optuna._optuna_kernels", sources=[])],
+      cmdclass={"build_py": build_py, "build_ext": build_ext})

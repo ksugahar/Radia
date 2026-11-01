@@ -1,11 +1,12 @@
 function copy_study(options)
-%COPY_STUDY Copy one MAT-backed study to another storage file.
+%COPY_STUDY Copy one HDF5-backed study to another storage file.
 arguments
     options.from_study_name (1,1) string
     options.from_storage (1,1) string
     options.to_storage (1,1) string
     options.to_study_name (1,1) string = ""
 end
+radia.optuna.Study.requireHdf5Path(options.to_storage);
 source=radia.optuna.load_study(study_name=options.from_study_name, ...
     storage=options.from_storage);
 targetName=options.to_study_name;
@@ -14,18 +15,17 @@ if isfile(options.to_storage) || isfile(options.to_storage+".bak")
     error("radia:optuna:DuplicatedStudy", ...
         "Destination storage '%s' already exists.",options.to_storage);
 end
-loaded=builtin("load",source.StoragePath,"StudyData");
-loaded.StudyData.Name=targetName;
+StudyData=radia.optuna.Study.readStorageFile(source.StoragePath);
+StudyData.Name=targetName;
 folder=fileparts(options.to_storage);
 if strlength(folder)==0
     folder=string(pwd);
 elseif ~isfolder(folder)
     mkdir(folder);
 end
-temporary=string(tempname(folder))+".mat";
+temporary=string(tempname(folder))+".h5";
 cleanup=onCleanup(@()removeTemporary(temporary));
-StudyData=loaded.StudyData; %#ok<NASGU>
-builtin("save",temporary,"StudyData","-mat");
+radia.optuna.Study.writeStorageFile(temporary,StudyData);
 radia.optuna.Study(StoragePath=temporary,AutoSave=false);
 movefile(temporary,options.to_storage,"f");
 clear cleanup

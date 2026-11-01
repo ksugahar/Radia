@@ -17,7 +17,7 @@ for exercise = exercises
     path = folder + "/teaching_" + exercise + ".slx";
     actual = radia.simulink.buildOptunaTeachingModel( ...
         OutputPath=path, Exercise=exercise, ...
-        StoragePath=folder + "/study.mat");
+        StoragePath=folder + "/study.h5");
     verifyEqual(testCase, replace(actual, "/", "\"), ...
         replace(path, "/", "\"));
     verifyTrue(testCase, isfile(path));
@@ -90,8 +90,8 @@ function testMaskIterationNeedsNoRewiring(testCase)
 folder = string(tempname("C:\temp"));
 mkdir(folder);
 modelPath = folder + "/iteration.slx";
-studyA = folder + "/study-a.mat";
-studyB = folder + "/study-b.mat";
+studyA = folder + "/study-a.h5";
+studyB = folder + "/study-b.h5";
 radia.simulink.buildOptunaTeachingModel( ...
     OutputPath=modelPath, Exercise="quadratic", StoragePath=studyA);
 load_system(modelPath);
@@ -142,7 +142,7 @@ mkdir(folder);
 path = folder + "/run_" + exercise + ".slx";
 radia.simulink.buildOptunaTeachingModel( ...
     OutputPath=path, Exercise=exercise, ...
-    StoragePath=folder + "/study.mat");
+    StoragePath=folder + "/study.h5");
 [~, name] = fileparts(path);
 cleanup = onCleanup(@()cleanExercise(name, folder, exercise));
 load_system(path);

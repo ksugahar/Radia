@@ -32,7 +32,7 @@
       "classification": "matlab-integration",
       "file": "test_optuna_cuda.m",
       "oracle": null,
-      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "scope": "plain MEX CUDA execution boundary, device failure and lifecycle",
       "test": "testCpuParallelDensityAndSwitchValidation"
     },
     {
@@ -46,21 +46,21 @@
       "classification": "matlab-integration",
       "file": "test_optuna_cuda.m",
       "oracle": null,
-      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "scope": "plain MEX CUDA execution boundary, device failure and lifecycle",
       "test": "testCudaBuildBoundary"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_cuda.m",
       "oracle": null,
-      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "scope": "plain MEX CUDA execution boundary, device failure and lifecycle",
       "test": "testValidationAndRepeatedDeviceUse"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_cuda.m",
       "oracle": null,
-      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "scope": "plain MEX CUDA execution boundary, device failure and lifecycle",
       "test": "testExecutionFailureRestoresRandomState"
     },
     {
@@ -125,6 +125,62 @@
       "oracle": null,
       "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
       "test": "testOptimizeRefusesMultiobjectiveContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testStudyTypedRoundTrip"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testResumedTpeMatchesUninterruptedRun"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSchemaAndFormatMismatchFailLoudly"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSessionCallbacksStayUnresolved"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSessionRebindsAllCallbacksAndResumesIdentically"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testSessionRebindRejectsMissingWrongOrExtraCallbacks"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testConstructorResumeEnforcesRecordedCallbacks"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_hdf5_storage.m",
+      "oracle": null,
+      "scope": "MATLAB typed HDF5 Study/session storage, exact RNG resume, unresolved callbacks, and fail-loud schema checks",
+      "test": "testUnsupportedDiagnosticNamesLabelNotSearchPath"
     },
     {
       "classification": "upstream-mcp",
@@ -221,63 +277,63 @@
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testConstraintCallbackFailureStillCommitsCompleteTrial"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testUnsupportedConstrainedCMAFailsClosed"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testStaleRunningTrialRecoveryLeavesNoRunningRow"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testStateCountCacheTracksMATLABStorageLifecycle"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testAtomicStorageSchemaAndBackupRecovery"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testEmptyConstraintRecordSurvivesStorageRoundTrip"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testSamplerRandomStatesResumeDeterministically"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testParameterNameCollisionUsesDistinctMATLABKeys"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_reliability.m",
       "oracle": null,
-      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "scope": "MATLAB HDF5 storage transaction, recovery, and sampler-state persistence",
       "test": "testNormalizedSnapshotStoragePreservesPublicTables"
     },
     {
@@ -473,119 +529,119 @@
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testNamedHistorySurvivesAppendImportAndReload"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testCollidingParameterNamesKeepMatchingFrozenKeys"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testDefineByRunAndPersistence"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSamplerStateReplacementPreservesStorageContract"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testFloatPrecisionDiagnosticContract"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testTrialCompatibilityMetadata"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testStudyUserAttributesPersist"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testDistributionCodecReadsVersionedAndLegacyMetadata"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerContract"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerOptimizesStudy"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerRecordsCAETrialContract"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerClassifiesCAEFailureAndContinues"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testCmaPartialGenerationSurvivesStudyReload"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testMultiObjectiveParetoFrontAndPersistence"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerParallelTrials"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testSimulinkRunnerSteadyStateFailuresLeaveNoRunningTrials"
     },
     {
       "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "scope": "MATLAB table storage, HDF5 persistence, and SimulinkRunner integration",
       "test": "testConstraintTablePersists"
     },
     {

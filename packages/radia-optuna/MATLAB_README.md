@@ -14,8 +14,8 @@ Radia solver, NGSolve, oneMKL, Cubit, or Python binary dependency. Missing or
 incompatible native gateways fail loudly and never redirect through
 `radia_mex`.
 
-From the package source directory, call `buildOptunaMex` in MATLAB using its supported
-`mexcuda` toolchain. TPE density, candidate scoring and maximum selection
+Use the package Python-first nvcc archive and plain MEX link described in
+NATIVE_BUILD.md. TPE density, candidate scoring and maximum selection
 require Parallel Computing Toolbox and a supported NVIDIA GPU in GPU mode. Random
 consumption, candidate generation and study management execute on the host.
 The GPU path requires no Python runtime and rejects CPU-only gateway binaries.
@@ -43,7 +43,7 @@ algorithm without Python. Unified `TPESampler` owns both scalar and
 multi-objective TPE, and removed 4.x public APIs are not exposed. This is a
 MATLAB API, not a Python binary drop-in.
 MATLAB-only parallel
-execution, MAT/table storage, Simulink operation, and Radia adapters are
+execution, HDF5/table storage, Simulink operation, and Radia adapters are
 extensions rather than Optuna parity evidence.
 
 MATLAB-native orchestration is available through
@@ -66,9 +66,9 @@ The teaching model uses `buildOptunaStudyBlock`, a masked two-input/five-output
 facade over the stable advanced runtime. Four scalar outputs cover the common
 status view; the fifth is the fixed-schema `OptunaMonitorBusV1`, including the
 shared `RadiaMonitorHeaderV1` and scalar progress/failure telemetry. Change the
-mask and MAT study path to compare experiments; keep the path and raise the
+mask and HDF5 study path to compare experiments; keep the path and raise the
 total budget to resume the same experiment. Variable-length histories and
-Pareto points stay in normalized MAT tables, so `reviewOptunaStudy` and
+Pareto points stay in normalized HDF5-stored tables, so `reviewOptunaStudy` and
 `applyOptunaTrial` expose full saved results without adding signal lines.
 
 Release performance is measured on development/build host from raw JSON under
@@ -110,7 +110,7 @@ this directory for upstream MIT license notices and provenance links.
 
 Use `radia.optuna.executionMode("cpu")` for OpenMP host evaluation or
 `radia.optuna.executionMode("gpu")` for CUDA evaluation (the default).
-Both use the same mexcuda-compiled gateway; ordinary mex builds remain unsupported.
+Both use the same nvcc library through the plain MSVC MEX gateway.
 The setting applies to the MATLAB process, including Simulink, and must be
 selected separately in each worker. CPU mode does not initialize CUDA. GPU
 errors raise without falling back. Query `radia.optuna.executionMode()` or
