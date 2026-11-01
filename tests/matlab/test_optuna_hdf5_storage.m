@@ -293,6 +293,68 @@ restored = load(ObjectiveFcn=objective, OutputFcn=output);
 verifyEqual(testCase, restored.Options.OutputFcn, {output});
 end
 
+function testConstructorResumeEnforcesRecordedCallbacks(testCase)
+parameter = radia.optuna.OptimizationParameter("x", Minimum=0, Maximum=1);
+objective = @(v) v.x;
+output = @(varargin) false;
+storage = temporaryPath(testCase);
+sessionPath = radia.optuna.OptimizationSession.sessionPathFor(storage);
+addTeardown(testCase, @() deleteIfPresent(sessionPath));
+first = radia.optuna.OptimizationSession(objective, parameter, ...
+    radia.optuna.optimoptions(MaxTrials=2, Sampler="random", Seed=7, ...
+    Display="off", StoragePath=storage, OutputFcn=output));
+first.start();
+first.runNext();
+first.pause();
+clear first
+before = fileread_bytes(sessionPath);
+
+withoutOutput = radia.optuna.optimoptions(MaxTrials=4, Sampler="random", ...
+    Seed=7, Display="off", StoragePath=storage);
+verifyError(testCase, @() radia.optuna.OptimizationSession(objective, ...
+    parameter, withoutOutput), "radia:optuna:SessionCallbackUnresolved");
+verifyEqual(testCase, fileread_bytes(sessionPath), before, ...
+    "A rejected constructor resume must not rewrite the checkpoint.");
+extraPlot = radia.optuna.optimoptions(MaxTrials=4, Sampler="random", ...
+    Seed=7, Display="off", StoragePath=storage, OutputFcn=output, ...
+    PlotFcn=output);
+verifyError(testCase, @() radia.optuna.OptimizationSession(objective, ...
+    parameter, extraPlot), "radia:optuna:SessionCallbackUnresolved");
+
+extended = radia.optuna.optimoptions(MaxTrials=4, Sampler="random", ...
+    Seed=7, Display="off", StoragePath=storage, OutputFcn=output);
+resumed = radia.optuna.OptimizationSession(objective, parameter, extended);
+verifyEqual(testCase, resumed.Options.MaxTrials, 4);
+verifyEqual(testCase, resumed.Options.OutputFcn, {output});
+verifyEqual(testCase, resumed.snapshot().complete, 1);
+recorded = radia.optuna.OptimizationSession.readSessionFile(sessionPath);
+verifyEqual(testCase, recorded.UnresolvedCallbacks.Slot, ...
+    ["ObjectiveFcn"; "OutputFcn"]);
+verifyEqual(testCase, recorded.Options.MaxTrials, 4);
+end
+
+function testUnsupportedDiagnosticNamesLabelNotSearchPath(testCase)
+try
+    radia.optuna.internal.encodeTypedTree(struct("callback", {{@sin}}), ...
+        "ProbeLabel");
+    verifyFail(testCase, "encodeTypedTree accepted a function handle.");
+catch failure
+    verifyEqual(testCase, string(failure.identifier), ...
+        "radia:optuna:StorageUnsupported");
+    message = string(failure.message);
+    verifyTrue(testCase, contains(message, "ProbeLabel"), message);
+    verifyTrue(testCase, contains(message, "node "), message);
+    verifyFalse(testCase, contains(message, pathsep) || ...
+        contains(message, matlabroot) || contains(message, ":\"), message);
+end
+end
+
+function bytes = fileread_bytes(path)
+handle = fopen(path, "r");
+closer = onCleanup(@() fclose(handle));
+bytes = fread(handle, Inf, "*uint8");
+end
+
 function value = objectiveValue(trial)
 x = trial.suggestFloat("x", -2, 2);
 y = trial.suggestFloat("y", -2, 2);

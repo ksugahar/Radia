@@ -182,7 +182,8 @@ end
 
 function unsupported(label, index, what)
 error("radia:optuna:StorageUnsupported", ...
-    "Value '%s' (%s) has no HDF5 storage mapping.", path, what);
+    "Value '%s' node %d (%s) has no HDF5 storage mapping.", ...
+    label, index, what);
 end
 
 function bytes = utf8(text)
