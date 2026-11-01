@@ -2548,11 +2548,20 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
                 for(int k=0;k<3;++k){const double r=corner[k]-a[3*i+k];r2+=r*r;}
                 if(r2>tol*tol)continue;
                 const double*vt=da+3*i;
+                // Scale by the group's largest component so finite huge or
+                // tiny velocities neither overflow nor underflow the squares.
                 auto mismatch=[&](int k0,int k1){
+                    double scale=0;
+                    for(int k=k0;k<k1;++k)
+                        scale=std::max({scale,std::fabs(dcorner[k]),std::fabs(vt[k])});
+                    if(!(scale<=std::numeric_limits<double>::max()))
+                        throw std::domain_error("P1 image derivative: non-finite "
+                            "velocity at a symmetry-plane vertex");
+                    if(scale==0)return false;
                     double dv2=0,v2=0;
                     for(int k=k0;k<k1;++k){
-                        const double dv=dcorner[k]-vt[k];
-                        dv2+=dv*dv;v2+=dcorner[k]*dcorner[k]+vt[k]*vt[k];
+                        const double m=dcorner[k]/scale,t=vt[k]/scale,dv=m-t;
+                        dv2+=dv*dv;v2+=m*m+t*t;
                     }
                     return dv2>kVelocityRoundoff*kVelocityRoundoff*v2;
                 };
