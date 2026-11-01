@@ -48,17 +48,17 @@ verifyEqual(testCase, report.not_passed, names(5));
 end
 
 function testPathContainment(testCase)
-root = "C:/temp/run03/layout";
+root = "D:/wheels/site/layout";
 verifyTrue(testCase, installed_wheel_path_inside( ...
-    "C:\temp\run03\layout\+radia\+optuna\Study.m", root));
+    "D:\wheels\site\layout\+radia\+optuna\Study.m", root));
 verifyTrue(testCase, installed_wheel_path_inside( ...
-    "C:/temp/run03/layout/optuna_mex.mexw64", root + "/"));
+    "D:/wheels/site/layout/optuna_mex.mexw64", root + "/"));
 verifyFalse(testCase, installed_wheel_path_inside( ...
-    "C:/temp/run03/layout-sibling/+radia/+optuna/Study.m", root));
+    "D:/wheels/site/layout-sibling/+radia/+optuna/Study.m", root));
 verifyFalse(testCase, installed_wheel_path_inside(root, root));
 verifyFalse(testCase, installed_wheel_path_inside("", root));
 verifyError(testCase, @() installed_wheel_path_inside( ...
-    "C:/temp/run03/layout/../other/Study.m", root), ...
+    "D:/wheels/site/layout/../other/Study.m", root), ...
     "radia:optuna:InstalledWheelPath");
 end
 
