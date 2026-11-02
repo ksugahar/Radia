@@ -77,8 +77,8 @@ def test_device_inputs_keep_production_near_inner_far_rules_without_gram(order, 
     ({"order": 0}, NotImplementedError), ({"order": 3}, NotImplementedError),
     ({"dim": 2}, NotImplementedError),
     ({"deformation": object()}, NotImplementedError), ({"boundary": 0}, ValueError),
-    ({"elements": 0}, ValueError), ({"elements": 4097}, ValueError),
-    ({"dofs": 0}, ValueError), ({"dofs": 16385}, ValueError)])
+    ({"elements": 0}, ValueError), ({"elements": 2**31}, ValueError),
+    ({"dofs": 0}, ValueError), ({"dofs": 2**31}, ValueError)])
 def test_unsupported_input_rejected_before_fe_preparation(options, error):
     ns, calls, _ = load_inputs()
     with pytest.raises(error):
@@ -94,7 +94,7 @@ def test_backend_rejected_before_touching_space():
     assert calls == []
 
 
-@pytest.mark.parametrize("shape", [(0, 12), (4609, 12), (6, 11)])
+@pytest.mark.parametrize("shape", [(0, 12), (2**31, 12), (6, 11)])
 def test_charge_dimensions_fail_before_native_construction(shape):
     ns, _, basis = load_inputs()
     basis["B"] = SimpleNamespace(shape=shape)

@@ -41,7 +41,9 @@ struct ChargeMapInput {
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;
-    std::string compression;radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> counters;};
+    std::string compression;radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> counters;
+    // Device-flat route only: the checked pre-allocation charge budget, in publication order.
+    radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> budget;};
 class DeviceOperator {
 public:
     virtual ~DeviceOperator()=default;

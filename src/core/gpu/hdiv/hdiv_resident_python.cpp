@@ -2,6 +2,7 @@
 #include "hdiv_inverse_bh.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <climits>
 #include <cstdint>
 #include <algorithm>
 namespace py=pybind11;
@@ -112,7 +113,7 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
     if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
     const auto n=std::size_t(host.size());
-    if(host.ndim()!=1||n<1||n>4608||!dofs||dofs>16384||kind.ndim()!=1||std::size_t(kind.size())!=n||
+    if(host.ndim()!=1||n<1||n>std::size_t(INT_MAX)||!dofs||dofs>std::size_t(INT_MAX)||kind.ndim()!=1||std::size_t(kind.size())!=n||
        expo.ndim()!=1||std::size_t(expo.size())!=3*n)
         throw py::value_error("Flat charge payload shape mismatch");
     for(auto* rule:{&tet,&tri,&tetLow,&triLow})
@@ -295,6 +296,11 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           pythonPublicationProbe();py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;
           d["kernel_launches"]=a.launches;d["compression"]=a.compression;py::dict counters;
           for(const auto& c:a.counters)counters[py::str(c.first)]=c.second;d["hmatrix"]=counters;py::list ledger;
+          if(a.budget.empty())d["charge_budget"]=py::none();
+          else{py::dict terms;std::size_t total=0,top=0;std::string limiting;
+              for(const auto& t:a.budget){terms[py::str(t.first)]=t.second;total+=t.second;if(limiting.empty()||t.second>top){top=t.second;limiting=t.first;}}
+              py::dict b;b["schema"]="radia.hdiv-flat-charge-budget.v1";b["terms"]=terms;b["total_bytes"]=total;b["limiting_term"]=limiting;
+              b["excludes"]="ACA factor storage and the rank-sized plan buffers; their allocation sites check the live reserve";d["charge_budget"]=b;}
           for(const auto& t:a.transfers){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("apply",[](DeviceOperator& self,Array<double> x){

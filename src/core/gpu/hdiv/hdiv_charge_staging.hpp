@@ -146,7 +146,9 @@ inline FlatChargeTables stageFlatChargeTables(MaterialStagingContext& context){
         ++out.faces;
     }
     out.faceClasses=faceKey.size();
-    if(!out.faces||out.cells*cm+out.faces*fm>4608)throw std::invalid_argument("Device charge map outside the bounded flat-TET scope");
+    // Charge rows are int32 indices downstream; the device budget, not a fixed count, bounds the size.
+    constexpr std::size_t top=std::numeric_limits<int>::max();
+    if(!out.faces||!cm||!fm||out.faces>top/fm||out.cells>(top-out.faces*fm)/cm)throw std::invalid_argument("Device charge map outside the bounded flat-TET scope");
     return out;
 }
 }

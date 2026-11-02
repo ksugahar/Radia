@@ -75,12 +75,41 @@ def test_inconsistent_or_image_payloads_fail_before_the_device(change, error):
         gram(inputs)
 
 
+def charge_budget(compression, **change):
+    terms = dict(charge_prepare=900, charge_map=300, charge_map_scratch=200, resident_vectors=100,
+                 gram_dense=0, aca_batch_scratch=0)
+    terms["gram_dense" if compression == "dense" else "aca_batch_scratch"] = 400
+    terms.update(change)
+    return dict(schema="radia.hdiv-flat-charge-budget.v1", terms=terms, total_bytes=sum(terms.values()),
+                limiting_term=max(terms, key=terms.get), excludes="ACA factor storage")
+
+
 def ledger(arguments, *extra, drop=()):
     rows = [dict(payload=p, direction=d, bytes=8 if b is None else b)
             for (p, d), b in hdiv_gpu._expected_device_ledger(arguments).items() if p not in drop]
     return dict(route="device-flat-tet", charges=int(arguments["charge_host"].size),
                 compression=arguments["compression"], hmatrix={k: 0 for k in hdiv_gpu._ACA_COUNTERS},
+                charge_budget=charge_budget(arguments["compression"]),
                 transfer_ledger=rows + [dict(payload=p, direction=d, bytes=b) for p, d, b in extra])
+
+
+def test_charge_budget_requires_the_named_terms_of_the_selected_storage():
+    arguments = gram(staged())
+    accepted = hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)["charge_budget"]
+    assert tuple(accepted["terms"]) == hdiv_gpu._CHARGE_BUDGET_TERMS
+    assert accepted["limiting_term"] == "charge_prepare" and accepted["total_bytes"] == 1900
+    assert hdiv_gpu._checked_charge_budget(charge_budget("dense"), "dense")["terms"]["gram_dense"] == 400
+    wrong_total = charge_budget("aca")
+    wrong_total["total_bytes"] += 1
+    wrong_limit = dict(charge_budget("aca"), limiting_term="charge_map")
+    renamed = charge_budget("aca")
+    renamed["terms"] = {("charge_scratch" if k == "charge_map_scratch" else k): v for k, v in renamed["terms"].items()}
+    for bad in (None, dict(charge_budget("aca"), schema="v0"), wrong_total, wrong_limit, renamed,
+                charge_budget("aca", gram_dense=7), charge_budget("aca", aca_batch_scratch=0),
+                charge_budget("aca", charge_map=0), charge_budget("aca", resident_vectors=True),
+                charge_budget("aca", charge_prepare=9.0), charge_budget("dense")):
+        with pytest.raises(RuntimeError, match="charge budget"):
+            hdiv_gpu._checked_charge_budget(bad, "aca")
 
 
 def test_assembly_ledger_requires_the_exact_primitive_rows():
@@ -348,3 +377,31 @@ def test_python_counter_schema_matches_the_native_publication():
     block = block[:block.index("};")]
     native = re.findall(r'\{"([a-z_]+)",s\.', block)
     assert native == list(hdiv_gpu._ACA_COUNTERS), (native, hdiv_gpu._ACA_COUNTERS)
+
+
+def test_python_charge_budget_terms_match_the_native_publication():
+    source = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
+    budget = source[source.index("struct ChargeBudget"):source.index("class Operator")]
+    native = tuple(re.findall(r'"([a-z_]+)"', re.search(r"names\[count\]=\{([^}]*)\}", budget).group(1)))
+    assert native == hdiv_gpu._CHARGE_BUDGET_TERMS, (native, hdiv_gpu._CHARGE_BUDGET_TERMS)
+    assert int(re.search(r"static constexpr std::size_t count=(\d+);", budget).group(1)) == len(native)
+
+
+def test_flat_route_checks_the_budget_before_allocation_without_fixed_caps():
+    source = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
+    create = source[source.index("std::shared_ptr<DeviceOperator> createFlat("):]
+    create = create[:create.index("\n}\n")]
+    assert "4608" not in create and "16384" not in create, "fixed charge or DOF cap on the flat route"
+    assert create.index("chargeBudget(") < min(create.index("FlatGramOracle oracle"), create.index("FlatAcaOracle oracle")), \
+        "charge budget runs after oracle construction"
+    flat = source[source.index("Operator(const radia_hmatrix_cuda::Plan& plan,Oracle& oracle"):]
+    flat = flat[:flat.index("\n    }\n")]
+    assert "plan,nullptr,0)" in flat, "flat route keeps the combined 2 GiB setup cap"
+    assert flat.index("flatReserve(radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(") < flat.index("builder.build("), \
+        "charge-map scratch allocated before a reserve check"
+    for name, cap in (("hdiv_flat_gram.cuh", "n>4608"), ("hdiv_flat_charge_map.cuh", "cells>4096"),
+                      ("hdiv_flat_charge_map.cuh", "dofs>16384"), ("hdiv_charge_staging.hpp", ">4608")):
+        assert cap not in (HDIV / name).read_text(encoding="utf-8"), (name, cap)
+    aca = (HDIV / "hdiv_flat_aca.cuh").read_text(encoding="utf-8")
+    compress = aca[aca.index("void compress(){"):aca.index("perm.upload(")]
+    assert "flatReserve(live" in compress and "2*sizeof(double)" in compress, "ACA permutation uploaded outside the reserve"

@@ -2326,9 +2326,11 @@ def _prepare_gpu_charge_inputs(fes, *, backend):
         raise NotImplementedError("Device charge input currently requires affine TET HDiv order 1 or 2")
     if mesh.deformation is not None:
         raise NotImplementedError("Device charge input does not support live mesh deformation")
-    if not 0 < fes.ndof <= 16384:
+    # Structural int32 limits only; the native device charge budget bounds the size.
+    int32_max = 2**31 - 1
+    if not 0 < fes.ndof <= int32_max:
         raise ValueError("Device charge DOF budget exceeded")
-    if not 0 < mesh.GetNE(ng.VOL) <= 4096:
+    if not 0 < mesh.GetNE(ng.VOL) <= int32_max:
         raise ValueError("Device charge element budget exceeded")
     if mesh.GetNE(ng.BND) <= 0:
         raise ValueError("Device charge input requires boundary surface elements")
@@ -2338,7 +2340,7 @@ def _prepare_gpu_charge_inputs(fes, *, backend):
         ho_far_factor=2., inner_quad=None, image_masks=[], image_signs=[],
         materialize_mass=False, internal_interfaces=False)
     B = cb["B"]
-    if B.shape[1] != fes.ndof or not 0 < B.shape[0] <= 4608:
+    if B.shape[1] != fes.ndof or not 0 < B.shape[0] <= int32_max:
         raise ValueError("Device charge map dimensions exceed the resident scope")
     return B, inputs
 

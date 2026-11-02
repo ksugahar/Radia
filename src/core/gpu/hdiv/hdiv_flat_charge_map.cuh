@@ -2,6 +2,8 @@
 // NGSolve tabulates charge-projection tables per vertex-rank class on the
 // host; only those tables, the Gram vertices, DOF numbers and classes cross.
 #pragma once
+#include <climits>
+#include <cstdint>
 #include <cub/device/device_radix_sort.cuh>
 #include "hdiv_resident_python_api.hpp"
 #include "hdiv_flat_evaluation.cuh"
@@ -49,12 +51,25 @@ struct FlatChargeMapBuilder {
         return checkedProduct(checkedProduct(in.cellClass.size(),in.cellMonomials),in.cellWidth)+
                checkedProduct(checkedProduct(in.faceClass.size(),in.faceMonomials),in.faceWidth);
     }
+    // Every transient buffer build() allocates; the CUB size query allocates nothing.
+    static std::size_t scratchBound(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in){
+        using radia_hmatrix_cuda::checkedProduct;
+        const auto nnz=nonzeros(in);int bits=1;while((std::size_t(1)<<bits)<in.dofs)++bits;std::size_t scratch=0;
+        radia_hmatrix_cuda::check(cub::DeviceRadixSort::SortPairs(nullptr,scratch,static_cast<const unsigned*>(nullptr),static_cast<unsigned*>(nullptr),
+            static_cast<const unsigned*>(nullptr),static_cast<unsigned*>(nullptr),int(nnz),0,bits));
+        const auto doubles=checkedProduct(flat.cells.size()+flat.faces.size()+in.cellTables.size()+in.faceTables.size(),sizeof(double));
+        const auto ints=checkedProduct(in.cellClass.size()+in.cellDofs.size()+in.faceClass.size()+in.faceDofs.size()+1,sizeof(int));
+        const auto keys=checkedProduct(4*nnz,sizeof(unsigned));
+        if(doubles>SIZE_MAX-ints||doubles+ints>SIZE_MAX-keys||doubles+ints+keys>SIZE_MAX-scratch)throw std::overflow_error("Charge-map scratch overflow");
+        return doubles+ints+keys+scratch;
+    }
     // Fills B (charges x dofs) and B^T (dofs x charges) in caller-owned device maps.
     void build(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in,
         radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){
         using namespace radia_hmatrix_cuda;
         const auto cells=in.cellClass.size(),faces=in.faceClass.size(),cm=in.cellMonomials,fm=in.faceMonomials,cw=in.cellWidth,fw=in.faceWidth;
         const auto cellRows=cells*cm,rows=cellRows+faces*fm,cellEntries=cellRows*cw,nnz=nonzeros(in);
+        scratchBytes=scratchBound(flat,in);
         Buffer<double> cellVertices,faceVertices,cellTables,faceTables;Buffer<int> cellClass,cellDofs,faceClass,faceDofs,invalid;
         auto upload=[&](auto& buffer,const auto& values,const char* payload){buffer.upload(values);
             transfers.push_back({payload,"H2D",checkedProduct(values.size(),sizeof(values[0]))});};
@@ -82,17 +97,18 @@ struct FlatChargeMapBuilder {
             BT.indices.data,BT.values.data);check(cudaGetLastError());++launches;
         columnOffsets<<<unsigned((in.dofs+256)/256),256>>>(in.dofs,nnz,sortedKeys.data,BT.offsets.data);check(cudaGetLastError());++launches;
         check(cudaDeviceSynchronize());
-        scratchBytes=checkedProduct(flat.cells.size()+flat.faces.size()+in.cellTables.size()+in.faceTables.size(),sizeof(double))+
-            checkedProduct(in.cellClass.size()+in.cellDofs.size()+in.faceClass.size()+in.faceDofs.size()+1,sizeof(int))+
-            checkedProduct(4*nnz,sizeof(unsigned))+scratch;
     }
 };
 // Host bounds before any upload: the B rows must be the FlatInput charges in
 // order, every index is range-checked and every table value is finite.
 inline void validateFlatChargeMap(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in){
     const auto cells=in.cellClass.size(),faces=in.faceClass.size(),cm=in.cellMonomials,fm=in.faceMonomials,cw=in.cellWidth,fw=in.faceWidth;
-    if(!cells||cells>4096||!faces||!in.dofs||in.dofs>16384||!cm||cm>4||!fm||fm>6||!cw||cw>64||!fw||fw>cw)
+    // Structural limits only: int32 cells, faces, DOFs and charge rows; the CUB sort counts nonzeros as int.
+    constexpr std::size_t top=INT_MAX;
+    if(!cells||cells>top||!faces||faces>top||!in.dofs||in.dofs>top||!cm||cm>4||!fm||fm>6||!cw||cw>64||!fw||fw>cw)
         throw std::invalid_argument("Flat charge tables outside the bounded affine-TET scope");
+    if(faces>top/fm||cells>(top-faces*fm)/cm||FlatChargeMapBuilder::nonzeros(in)>top)
+        throw std::invalid_argument("Flat charge rows or map nonzeros exceed the checked int range");
     if(in.cellTables.empty()||in.cellTables.size()%(cm*cw)||in.cellTables.size()/(cm*cw)>24||
        in.faceTables.empty()||in.faceTables.size()%(fm*fw)||in.faceTables.size()/(fm*fw)>6)
         throw std::invalid_argument("Flat charge class tables outside the vertex-rank class bound");
