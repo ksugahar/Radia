@@ -74,19 +74,29 @@ template<class T>radia_hmatrix_cuda::HostVector<T> rows(Array<T> a,std::size_t w
     if(count>(hostSnapshotBudget-bytes)/sizeof(T))throw py::value_error("Resident host snapshot budget exceeded");
     bytes+=count*sizeof(T);return radia_hmatrix_cuda::HostVector<T>(a.data(),a.data()+count);
 }
-std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
-    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
-    if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
+radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<double> shapes,Array<double> vertices,
+    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,std::size_t& bytes){
     if(shapes.ndim()!=4||shapes.shape(3)!=3||elementDofs.ndim()!=2||elementPoints.ndim()!=2||elementClass.ndim()!=1)
         throw py::value_error("Flat evaluation tables require (classes,points,local,3) shapes and (elements,n) topology");
-    std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);radia_hdiv_bh::FlatEvaluationInput input;
+    radia_hdiv_bh::FlatEvaluationInput input;
     input.elements=std::size_t(elementClass.size());input.local=std::size_t(elementDofs.shape(1));input.rulePoints=std::size_t(elementPoints.shape(1));
     input.classes=std::size_t(shapes.shape(0));input.points=input.elements*input.rulePoints;input.dofs=dofs;
     if(std::size_t(shapes.shape(1))!=input.rulePoints||std::size_t(shapes.shape(2))!=input.local||std::size_t(elementDofs.shape(0))!=input.elements||std::size_t(elementPoints.shape(0))!=input.elements)
         throw py::value_error("Flat evaluation table dimensions disagree");
     input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,12,bytes,"vertices");
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
+    return input;
+}
+std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
+    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
+    if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
+    std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);
+    auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
     py::gil_scoped_release release;auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
+}
+void validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
+    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
+    std::size_t bytes=0;radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes));
 }
 std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> faces,Array<std::int32_t> host,
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
@@ -183,6 +193,10 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
            "Generate E, E^T and point measures on the device from NGSolve reference tables; no evaluation matrix crosses.")
+      .def_static("validate_flat_tables",&validateFlatTables,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
+           py::arg("element_points").noconvert(),py::arg("dofs"),
+           "Host-only scope check of the flat evaluation tables (same checks as from_flat_tables); no device context.")
       .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
           {py::gil_scoped_release release;route=self.route();rows=self.transfers();bytes=self.footprint();}
           pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;

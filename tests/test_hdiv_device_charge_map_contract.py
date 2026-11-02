@@ -37,7 +37,7 @@ def staged(cells=2, faces=1):
 
 def test_table_arguments_join_the_gram_binding_payload():
     inputs, tables, geometry = staged()
-    arguments = hdiv_gpu._device_gram_arguments(tables, inputs, geometry)
+    arguments = hdiv_gpu._device_gram_arguments(tables, inputs, geometry, None)
     assert set(hdiv_gpu._CHARGE_TABLE_KEYS) <= set(arguments)
     expected = hdiv_gpu._expected_device_ledger(arguments)
     assert expected[("charge_cell_tables", "H2D")] == tables["cell_tables"].nbytes
@@ -57,7 +57,7 @@ def test_staged_tables_must_reproduce_the_gram_geometry_and_order(damage, match)
     inputs, tables, geometry = staged()
     damage(inputs, tables, geometry)
     with pytest.raises(ValueError, match=match):
-        hdiv_gpu._device_gram_arguments(tables, inputs, geometry)
+        hdiv_gpu._device_gram_arguments(tables, inputs, geometry, None)
 
 
 def test_device_route_reports_charge_map_as_device_built():

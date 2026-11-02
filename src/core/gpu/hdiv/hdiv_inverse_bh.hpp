@@ -54,6 +54,8 @@ public:
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&);
 // E and E^T are generated on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
+// Host-only scope check of the flat tables (the same checks the context runs); no CUDA call.
+void validateFlatEvaluationScope(const FlatEvaluationInput&);
 MaterialEvaluation evaluateMaterial(const MaterialInput&,const Law&,const radia_hmatrix_cuda::HostVector<double>& state,const radia_hmatrix_cuda::HostVector<double>& direction);
 Samples evaluate(const Law&,const radia_hmatrix_cuda::HostVector<double>& amplitudes);
 }
