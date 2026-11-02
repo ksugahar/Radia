@@ -1,7 +1,9 @@
 """Pure-HEX device route against the CPU hex charge Gram.
 
 Guards: on an affine 2x2x2 cube and a bilinearly sheared 2x2x1 lattice
-(every cell a non-parallelepiped trilinear hex), BDM1 and BDM2, the staged
+(every cell a non-parallelepiped trilinear hex), both left-handed as NGSolve
+structures them (det J < 0), and the sheared lattice mirrored in z
+(det J > 0), BDM1 and BDM2, the staged
 device input reproduces the CPU hex charge order and Q2 lattices, and the
 device-built hex Gram entries (Duffy, product, far, affine analytic and
 composite near pairs), the energy operator B^T G B (device B from the
@@ -9,7 +11,8 @@ NGSolve moment tables), the reference mass and the linear material solve
 agree with the CPU route ``_build_charge_gram_hex`` (its default rules) and
 the NGSolve mass on the material rule. Dropping the symmetrized pair block,
 the pair-domain Duffy rule, the distorted composite near rule or the face
-normal orientation moves these far beyond the detectors.
+normal orientation, or the det J sign of the cell charge rows, moves these
+far beyond the detectors.
 Assumes: the CPU hex route is the reference on identical NGSolve inputs;
 this is parity of one discretization, not independent accuracy. The REL
 values are PROPOSED detectors, not adopted criteria. Optional GPU lane: skips
@@ -37,7 +40,12 @@ def _shear(x, y, z):
     return (x + 0.2*x*y, y + 0.2*y*z, z + 0.2*z*x)
 
 
-_MESHES = {"cube": dict(nx=2, ny=2, nz=2), "sheared": dict(nx=2, ny=2, nz=1, mapping=_shear)}
+def _mirrored_shear(x, y, z):
+    return _shear(x, y, -z)
+
+
+_MESHES = {"cube": dict(nx=2, ny=2, nz=2), "sheared": dict(nx=2, ny=2, nz=1, mapping=_shear),
+           "mirrored": dict(nx=2, ny=2, nz=1, mapping=_mirrored_shear)}
 
 
 @pytest.fixture(scope="module")
@@ -155,7 +163,7 @@ def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, ord
 
 
 @pytest.mark.parametrize("name,order,compression", [("cube", 1, "aca"), ("sheared", 1, "dense"),
-                                                    ("sheared", 2, "aca")])
+                                                    ("sheared", 2, "aca"), ("mirrored", 2, "dense")])
 def test_hex_device_linear_solve_matches_cpu_equation(meshes, request, cuda, name, order, compression):
     setup, B, gram, M = _case(meshes[name], order, cuda, compression)
     nd = setup["dofs"]
