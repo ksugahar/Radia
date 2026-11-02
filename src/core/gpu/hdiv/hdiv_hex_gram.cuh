@@ -210,7 +210,8 @@ __device__ inline bool hexQ2Inverse(const double* nodes,const double* target,dou
     const double tolerance=2e-11*fmax(scale,1.0)+1e-13;
     for(int it=0;it<20;++it){double X[3],J[3][3];hexMapJ(nodes,ref,X,J);
         const double res[3]={X[0]-target[0],X[1]-target[1],X[2]-target[2]};
-        if(sqrt(res[0]*res[0]+res[1]*res[1]+res[2]*res[2])<=tolerance)return true;
+        // Converged pre-images outside the source cube are clamped too (the CPU caller clamps every inverse).
+        if(sqrt(res[0]*res[0]+res[1]*res[1]+res[2]*res[2])<=tolerance){valid=true;break;}
         const double det=J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
         if(!isfinite(det)||fabs(det)<1e-18){if(!valid)return false;break;}
         valid=true;
