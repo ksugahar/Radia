@@ -248,7 +248,7 @@
         "tools/check_python_gpu_coexistence.py",
         "validation_test/induction_heating/fin_return_principle.py"
       ],
-      "audit_sha256": "bd9c65ad577dd1eb2ff3293a3c43f61790ab533db0a053aabf5d1ed1d63495e6",
+      "audit_sha256": "6e70226b9607b5fa990a4998f7d15db7e0c5451fd9e52e080094b929ead8ae1b",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
