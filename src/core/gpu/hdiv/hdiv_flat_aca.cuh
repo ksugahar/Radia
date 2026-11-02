@@ -227,7 +227,8 @@ public:
     const HostVector<std::size_t>& permutation()const{return partition.permutation;}
     void compress(){
         if(compressed)throw std::runtime_error("ACA oracle already compressed");
-        const auto n=block.charges();std::size_t live=FlatPrepared::workspaceBytes(block)+checkedProduct(n,sizeof(double));
+        // Prepared charges, sigma, the permutation and the active counter stay live through compression.
+        const auto n=block.charges();std::size_t live=flatSum(FlatPrepared::workspaceBytes(block),checkedProduct(n,2*sizeof(double))+sizeof(int));
         flatReserve(live,"Flat ACA GPU reserve would be exceeded");
         prepared.prepare(block,stream,transfers,launches,invalidCode);
         sigma.allocate(n);const FlatDevice device=prepared.device();
@@ -235,7 +236,6 @@ public:
         if((invalidCode=prepared.flag(stream,transfers,"energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite or nonpositive self-energy");
         Buffer<std::size_t> perm;perm.upload(partition.permutation);
         transfers.push_back({"aca_permutation","H2D",checkedProduct(n,sizeof(std::size_t))});
-        live+=checkedProduct(n,sizeof(std::size_t));
         rankOf.assign(partition.blocks.size(),0);
         HostVector<std::size_t> admissible{HostFaultAllocator<std::size_t>("aca.admissible")};
         for(std::size_t b=0;b<partition.blocks.size();++b)if(partition.blocks[b].admissible)admissible.push_back(b);
@@ -331,6 +331,7 @@ public:
         HostVector<AcaDenseSpan> spans{HostFaultAllocator<AcaDenseSpan>("aca.dense-spans")};std::size_t entries=0;
         for(const auto& s:p.deferredDense){spans.push_back({s.row,s.column,s.rows,s.columns,s.offset,entries});entries+=checkedProduct(s.rows,s.columns);}
         if(!spans.empty()){
+            flatReserve(checkedProduct(spans.size(),sizeof(AcaDenseSpan)),"Flat ACA dense-span upload would exceed the GPU reserve");
             Buffer<AcaDenseSpan> deviceSpans;deviceSpans.upload(spans);transfers.push_back({"aca_dense_spans","H2D",checkedProduct(spans.size(),sizeof(AcaDenseSpan))});
             const FlatDevice device=prepared.device();constexpr std::size_t batch=std::size_t(1)<<16;
             for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);

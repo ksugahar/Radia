@@ -6,10 +6,13 @@
 // deferred dense leaf (or the ACA leaves of hdiv_flat_aca.cuh) and never
 // leaves the device.
 #pragma once
+#include <climits>
 #include <cmath>
 #include <cstdlib>
 #include "hmatrix_resident.cuh"
 namespace radia_hmatrix_cuda {
+inline std::size_t flatSum(std::size_t a,std::size_t b){
+    if(a>std::numeric_limits<std::size_t>::max()-b)throw std::overflow_error("Flat device byte count overflow");return a+b;}
 struct FlatRulePoint {double xi[3],weight;};
 static_assert(sizeof(FlatRulePoint)==32,"hdiv_gpu._RULE_ROW_BYTES ledger contract");
 struct FlatCharge {
@@ -26,7 +29,9 @@ struct FlatBlock {
     std::size_t charges()const{return host.size();}
     void validate()const{
         const auto n=host.size();
-        if(!n||n>4608||kind.size()!=n||expo.size()!=3*n||cells.size()%12||faces.size()%9)
+        // Charge, cell and face indices are int32 on both sides of the binding.
+        if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%12||faces.size()%9||
+           cells.size()/12>std::size_t(INT_MAX)||faces.size()/9>std::size_t(INT_MAX))
             throw std::invalid_argument("Flat charge payload shape mismatch");
         if(tet.empty()||tri.empty()||tet.size()>4096||tri.size()>4096||tetLow.size()>4096||triLow.size()>4096)
             throw std::invalid_argument("Flat reference rule size outside budget");
@@ -213,11 +218,14 @@ struct FlatPrepared {
     Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
     Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
     std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;
+    // Every buffer prepare() allocates, uploads included, so one reserve check covers them.
     static std::size_t workspaceBytes(const FlatBlock& block){
         const auto n=block.charges();
         const std::size_t stride=std::max(block.tet.size(),block.tri.size()),lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
-        return checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+points+low+sizeof(int);
+        const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
+        const auto uploads=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double))+checkedProduct(n,5*sizeof(int))+rules;
+        return flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads);
     }
     int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
         check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
@@ -272,6 +280,7 @@ public:
         const FlatDevice device=prepared.device();
         // Bounded launches keep each kernel short on display-attached GPUs.
         const auto entries=checkedProduct(n,n);constexpr std::size_t batch=std::size_t(1)<<16;
+        if((entries+255)/256>std::size_t(INT_MAX))throw std::invalid_argument("Flat dense Gram exceeds the CUDA grid range");
         for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);
             assembleFlatGram<<<unsigned((here+127)/128),128,0,stream>>>(device,first,here,coefficients,prepared.invalid.data);
             check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;}

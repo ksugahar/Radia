@@ -6,12 +6,40 @@
 #include "hdiv_flat_aca.cuh"
 #include "hdiv_flat_charge_map.cuh"
 #include <mutex>
+#include <sstream>
 #include <atomic>
 namespace radia_hdiv_python {
 NewtonResult nonlinearBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&);
 NewtonResult nonlinearHostReferenceBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MaterialOperator&,const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&);
 
 namespace {
+// Named device bytes known before any allocation, summed as a conservative
+// setup bound. ACA factor storage and the rank-sized plan buffers are known
+// only after compression; their allocation sites keep live reserve checks.
+struct ChargeBudget {
+    static constexpr std::size_t count=6;
+    static constexpr const char* names[count]={"charge_prepare","charge_map","charge_map_scratch","resident_vectors","gram_dense","aca_batch_scratch"};
+    std::size_t bytes[count]{};
+    std::size_t total()const{std::size_t t=0;for(auto b:bytes)t=radia_hmatrix_cuda::flatSum(t,b);return t;}
+    std::size_t limiting()const{std::size_t k=0;for(std::size_t i=1;i<count;++i)if(bytes[i]>bytes[k])k=i;return k;}
+};
+ChargeBudget chargeBudget(const radia_hmatrix_cuda::FlatBlock& block,const FlatInput& input,const ChargeMapInput& charges,bool aca){
+    using radia_hmatrix_cuda::checkedProduct;using radia_hmatrix_cuda::flatSum;
+    const auto n=block.charges(),dofs=charges.dofs,nnz=radia_hdiv_bh::FlatChargeMapBuilder::nonzeros(charges);
+    ChargeBudget b;
+    b.bytes[0]=flatSum(radia_hmatrix_cuda::FlatPrepared::workspaceBytes(block),aca?checkedProduct(n,2*sizeof(double))+sizeof(int):0);
+    b.bytes[1]=flatSum(checkedProduct(flatSum(checkedProduct(2,nnz),n+dofs+2),sizeof(std::size_t)),checkedProduct(flatSum(checkedProduct(2,nnz),dofs),sizeof(double)));
+    b.bytes[2]=radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(input,charges);
+    b.bytes[3]=checkedProduct(flatSum(checkedProduct(5,n),1),sizeof(double));
+    b.bytes[4]=aca?0:checkedProduct(checkedProduct(n,n),sizeof(double));
+    b.bytes[5]=aca?radia_hmatrix_cuda::FlatAcaOracle::batchScratchBytes:0;
+    std::size_t free,total;radia_hmatrix_cuda::check(cudaMemGetInfo(&free,&total));
+    const auto reserve=std::max(std::size_t(2)<<30,total/5),available=free>reserve?free-reserve:0,need=b.total();
+    if(need>available){const auto k=b.limiting();std::ostringstream m;
+        m<<"Flat charge device budget exceeded: "<<need<<" bytes needed, "<<available<<" free above the reserve; limiting term "
+         <<ChargeBudget::names[k]<<" = "<<b.bytes[k]<<" bytes";throw std::runtime_error(m.str());}
+    return b;
+}
 class Operator final:public DeviceOperator {
     std::mutex mutex;
     radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::Resident> resident;
@@ -33,16 +61,21 @@ public:
     // The dense oracle allocates its workspace after B is built; ACA factors
     // and prepared charges are already live while the resident and B exist.
     template<class Oracle>
-    Operator(const radia_hmatrix_cuda::Plan& plan,Oracle& oracle,bool oracleLive,const FlatInput& flat,const ChargeMapInput& charges)
+    // The checked charge budget and the live reserve checks replace the fixed
+    // 2 GiB combined setup bound on this route.
+    Operator(const radia_hmatrix_cuda::Plan& plan,Oracle& oracle,bool oracleLive,const FlatInput& flat,const ChargeMapInput& charges,const ChargeBudget& budget)
       :dimension(charges.dofs) {
         radia_hdiv_bh::FlatChargeMapBuilder builder;
-        resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,nullptr,1);
+        resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,nullptr,0);
         resident->buildChargeMap(charges.dofs,builder.nonzeros(charges),
-            [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
+            [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){
+                radia_hmatrix_cuda::flatReserve(radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(flat,charges),"Charge-map build scratch would exceed the GPU reserve");
+                builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
         record={"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
         record.compression=flat.compression;
+        for(std::size_t i=0;i<ChargeBudget::count;++i)record.budget.push_back({ChargeBudget::names[i],budget.bytes[i]});
         planTransfer(plan);
         for(const auto& t:builder.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
         for(const auto& t:oracle.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
@@ -108,8 +141,7 @@ std::shared_ptr<DeviceOperator> create(std::size_t n,const radia_hmatrix_cuda::H
 }
 std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMapInput& charges) {
     const auto n=input.host.size();
-    if(!n||n>4608||!charges.dofs||charges.dofs>16384)
-        throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
+    if(!n||!charges.dofs)throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
     radia_hmatrix_cuda::FlatBlock block;
     block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
     block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
@@ -119,6 +151,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
     rule(input.tet,block.tet);rule(input.tri,block.tri);rule(input.tetLow,block.tetLow);rule(input.triLow,block.triLow);
     block.validate();radia_hdiv_bh::validateFlatChargeMap(input,charges);
+    const auto budget=chargeBudget(block,input,charges,input.compression=="aca");
     const auto owner=radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner");
     if(input.compression=="dense"){
         if(input.acaEps!=0||input.acaEta!=0||input.acaLeafSize||input.acaMaxRank||input.acaRankCapDense)
@@ -128,7 +161,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         radia_hmatrix_cuda::HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
         auto plan=radia_hmatrix_cuda::packLeaves(n,leaves,permutation,radia_hmatrix_cuda::HostVector<double>(n,1.));
         radia_hmatrix_cuda::FlatGramOracle oracle(block);
-        return std::allocate_shared<Operator>(owner,plan,oracle,false,input,charges);
+        return std::allocate_shared<Operator>(owner,plan,oracle,false,input,charges,budget);
     }
     if(input.compression=="aca"){
         radia_hmatrix_cuda::FlatAcaOptions options;options.eps=input.acaEps;options.eta=input.acaEta;
@@ -136,7 +169,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         // Ranks are known only after device compression; they size the plan.
         radia_hmatrix_cuda::FlatAcaOracle oracle(block,options);oracle.compress();
         auto plan=radia_hmatrix_cuda::packLeaves(n,oracle.leaves<LeafInput>(),oracle.permutation(),radia_hmatrix_cuda::HostVector<double>(n,1.));
-        auto result=std::allocate_shared<Operator>(owner,plan,oracle,true,input,charges);
+        auto result=std::allocate_shared<Operator>(owner,plan,oracle,true,input,charges,budget);
         const auto& s=oracle.stats;
         result->record.counters={{"elements",s.elements},{"clusters",s.clusters},{"dense_leaves",s.denseLeaves},
             {"lowrank_leaves",s.lowrankLeaves},{"admissible_blocks",s.admissibleBlocks},{"rank_cap_promotions",s.rankCapPromotions},

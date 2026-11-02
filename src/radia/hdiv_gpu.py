@@ -51,9 +51,15 @@ class PreparedHDivNonlinear:
       point state) plus CUB scratch must fit the live free memory above the
       reserve max(2 GiB, total/5); the error names the limiting term. E and
       E^T act matrix-free; the 343-point material state remains;
-    - charge Gram and charge map: at most 4608 charges, 4096 cells and
-      16384 DOFs; ACA leaf_size <= 4096 and max_rank <= 1024, with factor
-      and batch storage checked against the same reserve;
+    - charge Gram and charge map: no fixed charge, cell or DOF cap. Charge,
+      cell, face and DOF numbering is int32, and the charge-map nonzeros are
+      at most 2**31-1 (CUB item count). The device bytes in
+      ``stats()["charge_budget"]`` (prepared charges, B and B^T, the map
+      build scratch, resident O(n) vectors, and the dense n**2 Gram or the
+      ACA batch scratch) must fit the live free memory above the same
+      reserve; the error names the limiting term. ACA factor storage is
+      known only after compression and is checked live where it is
+      allocated. ACA leaf_size <= 4096 and max_rank <= 1024;
     - binding host snapshot of the tables: at most 512 MiB.
     """
 
@@ -171,6 +177,7 @@ class PreparedHDivNonlinear:
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
                 material_budget=getattr(self, "material_budget", None),
+                charge_budget=self.assembly["charge_budget"] if getattr(self, "assembly", None) else None,
                 operator=self._operator.stats() if self._operator is not None else None,
                 material=self._material.stats() if self._material is not None else None)
 
@@ -404,6 +411,7 @@ def _checked_device_assembly(assembly, arguments):
     if arguments["compression"] == "aca" and (set(counters) != set(_ACA_COUNTERS) or not all(
             type(v) is int and v >= 0 for v in counters.values())):
         raise RuntimeError("HDiv ACA Gram counters rejected: %r" % (counters,))
+    assembly["charge_budget"] = _checked_charge_budget(assembly.get("charge_budget"), arguments["compression"])
     expected = _expected_device_ledger(arguments)
     optional = set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca" else set()
     seen = {}
@@ -497,7 +505,7 @@ def _device_gram_arguments(tables, inputs, geometry, aca):
     return arguments
 
 
-def _prepare_device_components(path, order, native, *, aca, maximum_dofs=16384):
+def _prepare_device_components(path, order, native, *, aca):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
     ``native`` is the caller's verified ``_hdiv_cuda`` module: one preparation
@@ -513,8 +521,6 @@ def _prepare_device_components(path, order, native, *, aca, maximum_dofs=16384):
     aca = _checked_gram_aca(aca)
     mesh = ng.Mesh(str(path))
     fes = ng.HDiv(mesh, order=order)
-    if not 0 < fes.ndof <= maximum_dofs:
-        raise ValueError("HDiv workflow dimension exceeds bounded scope")
     evaluation = _device_evaluation_tables(path, fes, native)
     budget = _checked_material_budget(native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof))
     _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
@@ -529,6 +535,23 @@ def _require_budget_cover(assembly, stats):
     bound = stats.get("device_payload_bound_bytes")
     if type(bound) is not int or used > bound:
         raise RuntimeError("HDiv material allocations %r bytes exceed the preflight budget %r bytes" % (used, bound))
+
+
+_CHARGE_BUDGET_TERMS = ("charge_prepare", "charge_map", "charge_map_scratch", "resident_vectors", "gram_dense",
+                        "aca_batch_scratch")
+
+
+def _checked_charge_budget(budget, compression):
+    """Owned copy of the native pre-allocation charge budget; exactly one Gram storage term is nonzero."""
+    terms = budget.get("terms") if isinstance(budget, dict) else None
+    if (budget.get("schema") if isinstance(budget, dict) else None) != "radia.hdiv-flat-charge-budget.v1"             or not isinstance(terms, dict) or tuple(terms) != _CHARGE_BUDGET_TERMS:
+        raise RuntimeError("Unexpected HDiv charge budget: %r" % (budget,))
+    values = {name: terms[name] for name in _CHARGE_BUDGET_TERMS}
+    storage = "gram_dense" if compression == "dense" else "aca_batch_scratch"
+    if any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in values.values())             or any(values[name] <= 0 for name in _CHARGE_BUDGET_TERMS[:4] + (storage,))             or values["aca_batch_scratch" if storage == "gram_dense" else "gram_dense"] != 0             or budget.get("total_bytes") != sum(values.values())             or budget.get("limiting_term") != max(values, key=values.get):
+        raise RuntimeError("Inconsistent HDiv charge budget: %r" % (budget,))
+    return dict(terms=values, total_bytes=budget["total_bytes"], limiting_term=budget["limiting_term"],
+                excludes=budget.get("excludes"))
 
 
 _MATERIAL_BUDGET_TERMS = ("reference_tables", "incidence", "incidence_sort", "mass_triples", "mass_csr",
