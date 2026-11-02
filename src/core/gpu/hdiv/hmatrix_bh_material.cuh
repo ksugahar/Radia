@@ -27,10 +27,12 @@ class MappedMaterial {
     std::size_t nq,nd,nk,payloadBound=0,setupBytes=0,stateBytes=0,calls=0;
     std::size_t stateEpoch=0,tangentCalls=0;bool frozen=false;
     int device=0;double cap,barrier,last,initial;
-    DeviceMap E,ET;
-    Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,gradient,tangent,totals;
+    DeviceMap E,ET,M;
+    Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,gradient,tangent,totals,massDiagonal;
     Buffer<int> invalid;
     std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
+    // Reference mass exists only on the device-table route; persistent/transient bytes are exact allocation sizes.
+    bool hasMass=false;double massBound=0.;std::size_t massBytes=0,persistentBytes=0,transientBytes=0;
     void allocateState(const Law& law){
         m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);
         knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
@@ -62,16 +64,29 @@ public:
     MappedMaterial(const FlatEvaluationInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
         using namespace radia_hmatrix_cuda;
         validateFlatEvaluation(in);validateInverseBH(law,radia_hmatrix_cuda::HostVector<double>{0.});
-        const auto nonzeros=checkedProduct(3*nq,in.local);
+        const auto nonzeros=checkedProduct(3*nq,in.local),triples=checkedProduct(in.elements,checkedProduct(in.local,in.local));
         std::size_t bytes=0;auto add=[&](std::size_t count,std::size_t width){const auto size=checkedProduct(count,width);if(size>(std::size_t(512)<<20)-bytes)throw std::invalid_argument("Mapped material device payload exceeds 512 MiB");bytes+=size;};
         add(3*nq+1+nd+1+2*nonzeros,sizeof(std::size_t));add(4*nonzeros,sizeof(unsigned));
         add(2*nonzeros+law.knots.size()+law.coefficients.size()+law.integralBase.size()+18*nq+4*nd+2,sizeof(double));add(1,sizeof(int));
+        // Mass upper bound before its sparsity is known: CSR and diagonal plus the sort/run transients.
+        add(nd+1+triples,sizeof(std::size_t));add(2*nd+3*triples+1,sizeof(double));add(3*triples+2*triples+2,sizeof(int));
         payloadBound=bytes;check(cudaGetDevice(&device));
-        FlatEvaluationBuilder builder;builder.build(in,E,ET,weights);
-        routeName="device-flat-tet-evaluation";
+        FlatEvaluationBuilder builder;builder.build(in,E,ET,weights,M,massDiagonal);
+        routeName="device-flat-tet-evaluation";hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
+        massBytes=(nd+1+builder.massNonzeros)*sizeof(std::size_t)+(builder.massNonzeros+nd)*sizeof(double);
         for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}
         allocateState(law);setupBytes+=ledger.back().bytes;
+        for(auto* map:{&E,&ET,&M})persistentBytes+=(map->offsets.size+map->indices.size)*sizeof(std::size_t)+map->values.size*sizeof(double);
+        for(auto* buffer:{&m,&delta,&v,&dv,&amplitude,&samples,&weights,&knots,&c,&base,&field,&action,&pointEnergy,&gradient,&tangent,&totals,&massDiagonal})
+            persistentBytes+=buffer->size*sizeof(double);
+        persistentBytes+=invalid.size*sizeof(int);
     }
+    radia_hmatrix_cuda::MassOperand massOperand(){
+        if(!hasMass)throw std::invalid_argument("Material context has no device-built reference mass");
+        return {&M,massDiagonal.data,massBound,nd,massBytes,true};
+    }
+    MaterialFootprint footprint()const{return {persistentBytes,transientBytes};}
+    bool deviceMass()const{return hasMass;}
     const std::string& route()const{return routeName;}
     const radia_hmatrix_cuda::HostVector<LedgerRow>& transfers()const{return ledger;}
     std::size_t dofs()const{return nd;}

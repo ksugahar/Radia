@@ -2448,6 +2448,18 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
       "owners": [
         "radia",
@@ -3277,6 +3289,7 @@
             "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",
             "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
@@ -3406,6 +3419,7 @@
             "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",
             "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",

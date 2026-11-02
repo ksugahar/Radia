@@ -2,9 +2,9 @@
 
 NGSolve owns FE assembly; Radia owns charge-Gram preparation. The caller owns
 the TaskManager region. Construction prepares operators, never a CPU solution.
-The charge Gram and the material evaluation map are generated on the device
-from flat-TET geometry and NGSolve reference tables; the charge map and mass
-matrix are still host-built and reported as such.
+The charge Gram, the material evaluation map and the Newton reference mass
+are generated on the device from flat-TET geometry and NGSolve reference
+tables; the charge map is still host-built and reported as such.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ __all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
 
 # Host-built sparse operators this route still uploads. Reported in stats until
 # their device construction lands; never presented as device-resident.
-PENDING_HOST_OPERATORS = ("charge_map", "mass")
+PENDING_HOST_OPERATORS = ("charge_map",)
 
 import base64
 from importlib import metadata
@@ -86,7 +86,7 @@ class PreparedHDivNonlinear:
             setup = _prepare_device_components(path, order)
             self.dofs = setup["dofs"]
             B = setup["charge_map"]
-            self._mass, self._rhs = setup["mass"], setup["rhs_operator"]
+            self._rhs = setup["rhs_operator"]
             self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
                 **setup["charge_gram"], dofs=self.dofs,
                 offsets=B.indptr.astype(np.uint64), indices=B.indices.astype(np.uint64),
@@ -131,10 +131,9 @@ class PreparedHDivNonlinear:
             x = np.zeros(self.dofs) if initial is None else np.asarray(initial)
             if x.dtype != np.float64 or x.shape != (self.dofs,) or not np.isfinite(x).all():
                 raise ValueError("initial must be finite FP64 in the prepared FE numbering")
-            m = self._mass
+            # The reference mass is the material context's device-built E^T W E.
             result = self._operator.solve_nonlinear_material(self._material,
-                m.indptr.astype(np.uint64), m.indices.astype(np.uint64),
-                np.ascontiguousarray(m.data), np.ascontiguousarray(self._rhs @ field),
+                np.ascontiguousarray(self._rhs @ field),
                 np.ascontiguousarray(x), tolerance, linear_tolerance, max_iterations,
                 max_linear_iterations, preconditioner, degree, lower_fraction)
             return dict(result, backend="gpu", mesh_sha256=self.mesh_sha256,
@@ -398,7 +397,7 @@ def _prepare_device_components(path, order, *, maximum_dofs=16384):
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
     B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    return dict(_fe_forms(mesh, fes), charge_map=B, evaluation_tables=_device_evaluation_tables(path, fes),
+    return dict(_fe_sources(mesh, fes), charge_map=B, evaluation_tables=_device_evaluation_tables(path, fes),
                 charge_gram=_device_gram_arguments(B, inputs))
 
 
@@ -422,19 +421,12 @@ def _prepare_host_components(path, order, *, maximum_dofs=16384):
     return dict(_fe_components(path, mesh, fes), charge_map=B, snapshot=snapshot)
 
 
-def _fe_forms(mesh, fes):
-    """NG-owned mass and uniform-source operators shared by both routes."""
+def _fe_sources(mesh, fes):
+    """NG-owned uniform-source and mean-field operators (vectors, not matrices)."""
     import numpy as np
     import ngsolve as ng
-    from scipy.sparse import coo_matrix
     nd = fes.ndof
-    u, v = fes.TnT()
-    mass = ng.BilinearForm(fes, symmetric=True)
-    mass += ng.InnerProduct(u, v)*ng.dx
-    mass.Assemble()
-    rows, columns, values = mass.mat.COO()
-    M = coo_matrix((values, (rows, columns)), shape=(nd, nd)).tocsr()
-    M.sort_indices()
+    v = fes.TestFunction()
     rhs = np.empty((nd, 3), dtype=np.float64)
     for component in range(3):
         direction = tuple(float(i == component) for i in range(3))
@@ -446,7 +438,22 @@ def _fe_forms(mesh, fes):
     volume = float(ng.Integrate(1, mesh))
     if not math.isfinite(volume) or volume <= 0:
         raise ValueError("Invalid mesh volume")
-    return dict(dofs=nd, mass=M, rhs_operator=rhs, mean_operator=rhs.T/volume)
+    return dict(dofs=nd, rhs_operator=rhs, mean_operator=rhs.T/volume)
+
+
+def _fe_forms(mesh, fes):
+    """Sources plus the NG-assembled host mass (MATLAB publisher route only)."""
+    import ngsolve as ng
+    from scipy.sparse import coo_matrix
+    nd = fes.ndof
+    u, v = fes.TnT()
+    mass = ng.BilinearForm(fes, symmetric=True)
+    mass += ng.InnerProduct(u, v)*ng.dx
+    mass.Assemble()
+    rows, columns, values = mass.mat.COO()
+    M = coo_matrix((values, (rows, columns)), shape=(nd, nd)).tocsr()
+    M.sort_indices()
+    return dict(_fe_sources(mesh, fes), mass=M)
 
 
 def _fe_components(path, mesh, fes):
@@ -494,7 +501,8 @@ def _device_evaluation_tables(path, fes):
     return arguments
 
 
-# Device-generated evaluation ledger: reference tables in, one validity flag out.
+# Device-generated evaluation and mass ledger: reference tables in; validity flags,
+# the mass sparsity count and its Jacobi bound out.
 _DEVICE_EVALUATION_UPLOADS = ("element_vertices_m", "reference_shapes", "material_rule", "element_class",
                               "element_dofs", "element_points", "evaluation_invalid_flag")
 
@@ -503,6 +511,7 @@ def _checked_material_assembly(assembly, tables):
     """Reject any material ledger other than the exact device-built evaluation route.
 
     Covers material setup only; per-solve state uploads are outside this ledger.
+    Persistent and setup-transient device bytes must be reported as positive integers.
     """
     if assembly.get("route") != "device-flat-tet-evaluation":
         raise RuntimeError("Unexpected HDiv material assembly route: %r" % (assembly.get("route"),))
@@ -511,7 +520,12 @@ def _checked_material_assembly(assembly, tables):
              "element_dofs": tables["element_dofs"].nbytes, "element_points": tables["element_points"].nbytes,
              "evaluation_invalid_flag": 4}
     expected = {(name, "H2D"): sizes[name] for name in _DEVICE_EVALUATION_UPLOADS}
-    expected.update({("evaluation_flag", "D2H"): 4, ("inverse_bh_law", "H2D"): None})
+    expected.update({("evaluation_flag", "D2H"): 4, ("inverse_bh_law", "H2D"): None,
+                     ("mass_nonzeros", "D2H"): 4, ("mass_flag", "D2H"): 4, ("mass_spectral_bound", "D2H"): 8})
+    for name in ("persistent_device_bytes", "setup_transient_device_bytes"):
+        value = assembly.get(name)
+        if type(value) is not int or value <= 0:
+            raise RuntimeError("HDiv material %s rejected: %r" % (name, value))
     seen = {}
     for row in assembly["transfer_ledger"]:
         key, size = (row["payload"], row["direction"]), row["bytes"]

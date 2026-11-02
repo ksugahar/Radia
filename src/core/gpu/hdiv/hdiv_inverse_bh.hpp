@@ -28,6 +28,8 @@ struct FlatEvaluationInput {
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
 };
 struct LedgerRow {std::string payload,direction;std::size_t bytes=0;};
+// Exact device allocation sizes: kept for the context lifetime vs held only during setup.
+struct MaterialFootprint {std::size_t persistent=0,transient=0;};
 struct MaterialEvaluation {
     BoundaryVector<double> gradient,tangentAction;
     double energy=0,maximumMagnetization=0;std::size_t ownedDeviceBytes=0,linearizationEpoch=0;
@@ -43,6 +45,7 @@ public:
     // Setup transfers of this context; the route name says how E was built.
     virtual std::string route()=0;
     virtual radia_hmatrix_cuda::HostVector<LedgerRow> transfers()=0;
+    virtual MaterialFootprint footprint()=0;
     virtual void close()=0;
 };
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&);

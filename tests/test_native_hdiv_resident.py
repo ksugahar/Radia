@@ -215,13 +215,13 @@ def test_shared_hdiv_resident_native_gpu(tmp_path):
             target=np.array([.2,-.3,.1]);nonlinear_rhs=expected@target+(1+target@target)*target
             try:
                 for pre in ("reference-diagonal","reference-chebyshev-graph"):
-                    solution=obj.solve_nonlinear_material(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,30,1000,pre)
+                    solution=obj.solve_nonlinear_material_host_reference(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,30,1000,pre)
                     independent=expected@solution["x"]+(1+solution["x"]@solution["x"])*solution["x"]-nonlinear_rhs
                     assert np.linalg.norm(independent)/np.linalg.norm(nonlinear_rhs)<=1e-11
                     np.testing.assert_allclose(solution["x"],target,rtol=1e-10,atol=1e-12)
                 with pytest.raises(RuntimeError,match="Newton"):
-                    obj.solve_nonlinear_material(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,1,1000,"reference-diagonal")
-                recovered=obj.solve_nonlinear_material(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,30,1000,"reference-diagonal")
+                    obj.solve_nonlinear_material_host_reference(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,1,1000,"reference-diagonal")
+                recovered=obj.solve_nonlinear_material_host_reference(material,mi,mj,np.ones(3),nonlinear_rhs,np.zeros(3),1e-11,5e-14,30,1000,"reference-diagonal")
                 np.testing.assert_allclose(recovered["x"],target,rtol=1e-10,atol=1e-12)
             finally:material.close()
             for _ in range(100):

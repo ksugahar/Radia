@@ -34,7 +34,9 @@ public:
     virtual ~DeviceOperator()=default;
     virtual radia_hmatrix_cuda::HostVector<double> apply(const radia_hmatrix_cuda::HostVector<double>&)=0;
     virtual MaterialResult solve_linear(const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,double,double,int,bool,bool,int,double)=0;
-    virtual NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator&,const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
+    virtual NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
+    // Host-evaluation contexts only (validation consumers until they migrate to device tables).
+    virtual NewtonResult solve_nonlinear_host_reference(radia_hdiv_bh::MaterialOperator&,const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
     virtual Stats stats()=0;
     virtual Assembly assembly()=0;
     virtual void close()=0;
