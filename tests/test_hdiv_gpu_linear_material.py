@@ -1,6 +1,7 @@
 """Device linear material solve against the CPU-assembled equation.
 
-Guards: ``_ResidentHDiv.solve_linear`` with a ``_ResidentMass`` solves
+Covers conforming RT0 (order 0), BDM1 and BDM2, with ACA and the explicit
+exact dense device Gram. Guards: ``_ResidentHDiv.solve_linear`` with a ``_ResidentMass`` solves
 (B^T G B + inv_chi M) x = f with the device-built charge Gram, charge map and
 reference mass, for every mass preconditioner: the solution matches a dense
 solve of the same equation assembled from the CPU charge map, the CPU exact
@@ -33,7 +34,7 @@ def cuda():
     return _native("_hdiv_cuda")
 
 
-def _case(tmp_path, order, cuda):
+def _case(tmp_path, order, cuda, compression="aca"):
     import ngsolve as ng
     from netgen.csg import unit_cube
     import radia._radia_pybind as rp
@@ -44,7 +45,7 @@ def _case(tmp_path, order, cuda):
     with ng.TaskManager():
         mesh = ng.Mesh(str(path))
         fes = ng.HDiv(mesh, order=order)
-        setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None)
+        setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression=compression)
         B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
         gram = rp._ChargeGramHMatrix(**inputs, build=False)
         gram.build_exact_dense_normalized_gram(maximum_memory_mb=256)
@@ -57,9 +58,9 @@ def _case(tmp_path, order, cuda):
     return setup, np.linalg.solve(system, rhs), rhs
 
 
-@pytest.mark.parametrize("order", [1, 2])
-def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, cuda, order):
-    setup, expected, rhs = _case(tmp_path, order, cuda)
+@pytest.mark.parametrize("order,compression", [(0, "aca"), (0, "dense"), (1, "aca"), (2, "aca"), (2, "dense")])
+def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, cuda, order, compression):
+    setup, expected, rhs = _case(tmp_path, order, cuda, compression)
     nd = setup["dofs"]
     mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
@@ -72,8 +73,9 @@ def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, c
             assert result["relative_residual"] <= 1e-11 and result["preconditioner"] == preconditioner
             assert (result["preconditioner_graph_launches"] > 0) == preconditioner.endswith("-graph")
             assert relative <= LINEAR_REL, (
-                f"order={order} preconditioner={preconditioner} relative={relative:.3e} limit={LINEAR_REL:.0e} "
+                f"order={order} {compression} preconditioner={preconditioner} relative={relative:.3e} limit={LINEAR_REL:.0e} "
                 f"iterations={result['iterations']}")
+        assert operator.assembly()["compression"] == compression
         request.node.user_properties += [("dofs", nd), ("max_relative", max(worst.values()))]
         with pytest.raises(ValueError, match="Chebyshev"):
             operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 2000, "mass-diagonal", degree=8)

@@ -1,5 +1,6 @@
 function result=solveHDivElements(setup,appliedField,invChi,options)
-% Device HDiv linear isotropic material solve over a radia.hdiv-device-setup.v1.
+% Device HDiv linear isotropic material solve over a radia.hdiv-device-setup.v1
+% (affine TET RT0, BDM1 or BDM2; the setup selects the order and Gram compression).
 % Solves (B'*G*B + invChi*M) x = f(H0) with the device-built Gram, charge map
 % and reference mass; only vectors cross. Includes creation and destruction.
 arguments
@@ -26,7 +27,7 @@ result=struct('coefficients',solution.x,'mean_magnetization',setup.mean_operator
     'operator_owned_device_bytes',stats.owned_device_bytes,'solver_owned_device_bytes',solution.solver_owned_device_bytes, ...
     'setup_peak_device_bytes',assembly.setup_peak_device_bytes,'assembly',assembly, ...
     'order',setup.order,'dofs',setup.dofs,'mesh_sha256',setup.mesh_sha256,'backend','gpu', ...
-    'scope','Device affine-tetrahedral HDiv orders 1/2, linear isotropic material');
+    'gram_compression',assembly.compression,'scope','Device affine-tetrahedral HDiv orders 0/1/2, linear isotropic material');
 stage=tic;clear opOwner massOwner
 result.destroy_seconds=toc(stage);result.create_seconds=createSeconds;result.solve_transfer_seconds=solveSeconds;
 result.whole_seconds=toc(timer);

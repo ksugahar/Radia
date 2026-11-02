@@ -24,6 +24,8 @@ classdef PreparedHDivNonlinear < handle
                 options.NonlinearTolerance<=1e-6 && options.LinearTolerance<=1e-6, ...
                 'radia:gpu:SharedNewtonOptions','Invalid shared Newton accuracy or polynomial settings');
             setup=radia.gpu.readHDivDeviceSetup(setup);
+            assert(setup.order>=1,'radia:gpu:SharedNewtonOptions', ...
+                'The nonlinear material solve is BDM1/BDM2; RT0 (order 0) is linear only, as on the CPU');
             whole=tic;device=gpuDevice;
             phase=tic;law=radia.gpu.makeHDivBHMaterial(bhTable);lawSeconds=toc(phase);
             % Device budgets are checked natively before any resident allocation.
