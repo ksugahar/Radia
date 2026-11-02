@@ -9,24 +9,34 @@ Dropping the device touching branch reproduces the fixed-rule face self entry
 Assumes: the CPU entry is the reference; both sides share the pairEntry
 arithmetic and production potentials, so this is parity, not independent
 accuracy. No bitwise claim. PARITY_REL is a PROPOSED detector, not an adopted
-criterion. Optional GPU lane: skips visibly without the native binding.
+criterion. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR
+is set; a configured lane loads the binding through the provenance-checked
+loader and fails if it cannot.
 """
+
+import os
 
 import numpy as np
 import pytest
-
-ng = pytest.importorskip("ngsolve")
-cuda = pytest.importorskip("radia._hdiv_cuda", reason="Optional isolated native GPU binding")
-from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
-from radia import hdiv_gpu  # noqa: E402
-from radia.vim._vim import _prepare_gpu_charge_inputs, _rp  # noqa: E402
 
 PARITY_REL = 1e-10
 _GEOMETRY = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents",
              "tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule", "far_factor")
 
 
-def _staged(tmp_path, order):
+@pytest.fixture(scope="module")
+def cuda():
+    if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
+        pytest.skip("Optional GPU lane requires RADIA_HDIV_NATIVE_TEST_DIR")
+    from radia.gpu import _native
+    return _native("_hdiv_cuda")
+
+
+def _staged(tmp_path, order, cuda):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia import hdiv_gpu
+    from radia.vim._vim import _prepare_gpu_charge_inputs
     mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
     path = tmp_path / f"cube-{order}.vol"
     mesh.ngmesh.Save(str(path))
@@ -49,8 +59,9 @@ def _touching(device, i, j):
 
 
 @pytest.mark.parametrize("order", [1, 2])
-def test_device_flat_entries_match_cpu_charge_gram(tmp_path, record_property, order):
-    inputs, device = _staged(tmp_path, order)
+def test_device_flat_entries_match_cpu_charge_gram(tmp_path, record_property, cuda, order):
+    from radia.vim._vim import _rp
+    inputs, device = _staged(tmp_path, order, cuda)
     gram = _rp._ChargeGramHMatrix(**inputs)
     n = len(device["charge_host"])
     rows, cols = (a.ravel().astype(np.uint64) for a in np.meshgrid(np.arange(n), np.arange(n), indexing="ij"))
@@ -69,8 +80,8 @@ def test_device_flat_entries_match_cpu_charge_gram(tmp_path, record_property, or
         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={PARITY_REL:.0e}")
 
 
-def test_diagnostic_entries_fail_loudly(tmp_path):
-    _, device = _staged(tmp_path, 1)
+def test_diagnostic_entries_fail_loudly(tmp_path, cuda):
+    _, device = _staged(tmp_path, 1, cuda)
     n = len(device["charge_host"])
     pair = np.zeros(1, dtype=np.uint64)
     with pytest.raises(ValueError, match="backend"):
