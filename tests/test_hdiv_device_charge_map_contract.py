@@ -73,7 +73,7 @@ def test_flat_binding_takes_tables_not_charge_map_values():
     start = source.index('def_static("from_flat_charges"')
     names = re.findall(r'py::arg\("([a-z_]+)"\)', source[start:source.index('.def("assembly"', start)])
     assert names[10:] == ["dofs", "cell_class", "cell_dofs", "cell_tables", "cell_exponents", "face_class",
-                          "face_dofs", "face_tables", "face_exponents", "backend"], names
+                          "face_dofs", "face_tables", "face_exponents", "compression", "aca", "backend"], names
     assert not {"offsets", "indices", "values"} & set(names), names
     flat = source[source.index("std::shared_ptr<DeviceOperator> constructFlat("):start]
     assert not re.search(r"\bMapInput\b", flat[:flat.index("PYBIND11_MODULE")]), "flat binding still builds a host CSR"

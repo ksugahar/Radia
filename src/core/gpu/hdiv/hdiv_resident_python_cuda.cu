@@ -3,6 +3,7 @@
 #include "hmatrix_material_solver.cuh"
 #include "hmatrix_nonlinear_material.cuh"
 #include "hdiv_flat_gram.cuh"
+#include "hdiv_flat_aca.cuh"
 #include "hdiv_flat_charge_map.cuh"
 #include <mutex>
 #include <atomic>
@@ -29,15 +30,19 @@ public:
         record.transfers.push_back({"charge_map_csr_host_built","H2D",(map.offsets.size()+map.columns+1+2*map.indices.size())*index+2*map.values.size()*sizeof(double)});
     }
     // B and B^T are generated on the device from NGSolve tables; no CSR crosses.
-    Operator(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::FlatBlock& block,const FlatInput& flat,const ChargeMapInput& charges)
+    // The dense oracle allocates its workspace after B is built; ACA factors
+    // and prepared charges are already live while the resident and B exist.
+    template<class Oracle>
+    Operator(const radia_hmatrix_cuda::Plan& plan,Oracle& oracle,bool oracleLive,const FlatInput& flat,const ChargeMapInput& charges)
       :dimension(charges.dofs) {
-        radia_hmatrix_cuda::FlatGramOracle oracle(block);radia_hdiv_bh::FlatChargeMapBuilder builder;
+        radia_hdiv_bh::FlatChargeMapBuilder builder;
         resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,nullptr,1);
         resident->buildChargeMap(charges.dofs,builder.nonzeros(charges),
             [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
-        resident->setupPeakOwnedBytes=resident->ownedBytes+std::max(oracle.ownedBytes,builder.scratchBytes);
+        resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
         record={"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
+        record.compression=flat.compression;
         planTransfer(plan);
         for(const auto& t:builder.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
         for(const auto& t:oracle.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
@@ -114,11 +119,32 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
     rule(input.tet,block.tet);rule(input.tri,block.tri);rule(input.tetLow,block.tetLow);rule(input.triLow,block.triLow);
     block.validate();radia_hdiv_bh::validateFlatChargeMap(input,charges);
-    // One deferred dense leaf: device storage is allocated, never uploaded.
-    radia_hmatrix_cuda::HostVector<LeafInput> leaves;leaves.push_back(LeafInput{0,0,n,n,0,{},{},true});
-    radia_hmatrix_cuda::HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
-    auto plan=radia_hmatrix_cuda::packLeaves(n,leaves,permutation,radia_hmatrix_cuda::HostVector<double>(n,1.));
-    return std::allocate_shared<Operator>(radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner"),plan,block,input,charges);
+    const auto owner=radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner");
+    if(input.compression=="dense"){
+        if(input.acaEps!=0||input.acaEta!=0||input.acaLeafSize||input.acaMaxRank||input.acaRankCapDense)
+            throw std::invalid_argument("Dense flat Gram takes no ACA parameters");
+        // One deferred dense leaf: device storage is allocated, never uploaded.
+        radia_hmatrix_cuda::HostVector<LeafInput> leaves;leaves.push_back(LeafInput{0,0,n,n,0,{},{},true});
+        radia_hmatrix_cuda::HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
+        auto plan=radia_hmatrix_cuda::packLeaves(n,leaves,permutation,radia_hmatrix_cuda::HostVector<double>(n,1.));
+        radia_hmatrix_cuda::FlatGramOracle oracle(block);
+        return std::allocate_shared<Operator>(owner,plan,oracle,false,input,charges);
+    }
+    if(input.compression=="aca"){
+        radia_hmatrix_cuda::FlatAcaOptions options;options.eps=input.acaEps;options.eta=input.acaEta;
+        options.leafSize=input.acaLeafSize;options.maxRank=input.acaMaxRank;options.rankCapDense=input.acaRankCapDense;
+        // Ranks are known only after device compression; they size the plan.
+        radia_hmatrix_cuda::FlatAcaOracle oracle(block,options);oracle.compress();
+        auto plan=radia_hmatrix_cuda::packLeaves(n,oracle.leaves<LeafInput>(),oracle.permutation(),radia_hmatrix_cuda::HostVector<double>(n,1.));
+        auto result=std::allocate_shared<Operator>(owner,plan,oracle,true,input,charges);
+        const auto& s=oracle.stats;
+        result->record.counters={{"elements",s.elements},{"clusters",s.clusters},{"dense_leaves",s.denseLeaves},
+            {"lowrank_leaves",s.lowrankLeaves},{"admissible_blocks",s.admissibleBlocks},{"rank_cap_promotions",s.rankCapPromotions},
+            {"storage_promotions",s.storagePromotions},{"rank_sum",s.rankSum},{"max_rank",s.maxRank},{"aca_steps",s.steps},
+            {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients}};
+        return result;
+    }
+    throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense' or 'aca'");
 }
 } // namespace radia_hdiv_python
 

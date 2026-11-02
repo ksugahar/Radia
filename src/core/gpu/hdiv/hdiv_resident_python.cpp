@@ -92,8 +92,10 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
     Array<double> triLow,double farFactor,std::size_t dofs,Array<std::int32_t> cellClass,Array<std::int32_t> cellDofs,
     Array<double> cellTables,Array<std::int32_t> cellExponents,Array<std::int32_t> faceClass,Array<std::int32_t> faceDofs,
-    Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& backend) {
+    Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
+    if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
+    if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
     const auto n=std::size_t(host.size());
     if(host.ndim()!=1||n<1||n>4608||!dofs||dofs>16384||kind.ndim()!=1||std::size_t(kind.size())!=n||
        expo.ndim()!=1||std::size_t(expo.size())!=3*n)
@@ -114,7 +116,19 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     auto table=[&](Array<std::int32_t> a,const char* what){const auto v=rows(a,0,bytes,what);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     if(cells.ndim()!=1||faces.ndim()!=1)throw py::value_error("Geometry uses flat row-major coordinate vectors");
     FlatInput input{snapshot(cells,bytes),snapshot(faces,bytes),flat(tet),flat(tri),flat(tetLow),flat(triLow),
-        integers(host),integers(kind),integers(expo),farFactor};
+        integers(host),integers(kind),integers(expo),farFactor,compression};
+    if(compression=="aca"){
+        if(!py::isinstance<py::dict>(aca))throw py::value_error("aca must be a dictionary");
+        auto d=py::reinterpret_borrow<py::dict>(aca);
+        if(d.size()!=5)throw py::value_error("ACA schema requires eps,eta,leaf_size,max_rank,rank_cap");
+        for(const char* key:{"eps","eta","leaf_size","max_rank","rank_cap"})if(!d.contains(key))throw py::value_error("Missing ACA parameter");
+        if(!py::isinstance<py::float_>(d["eps"])||!py::isinstance<py::float_>(d["eta"]))throw py::value_error("ACA eps and eta require float values");
+        if(!py::isinstance<py::str>(d["rank_cap"]))throw py::value_error("ACA rank_cap must be 'dense' or 'fail'");
+        const auto cap=py::cast<std::string>(d["rank_cap"]);
+        if(cap!="dense"&&cap!="fail")throw py::value_error("ACA rank_cap must be 'dense' or 'fail'");
+        input.acaEps=py::cast<double>(d["eps"]);input.acaEta=py::cast<double>(d["eta"]);
+        input.acaLeafSize=integer(d,"leaf_size");input.acaMaxRank=integer(d,"max_rank");input.acaRankCapDense=cap=="dense";
+    }
     ChargeMapInput charges;charges.dofs=dofs;
     charges.cellMonomials=std::size_t(cellExponents.shape(0));charges.faceMonomials=std::size_t(faceExponents.shape(0));
     charges.cellWidth=std::size_t(cellDofs.shape(1));charges.faceWidth=std::size_t(faceDofs.shape(1));
@@ -246,11 +260,12 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("tri_low_rule").noconvert(),py::arg("far_factor"),py::arg("dofs"),py::arg("cell_class").noconvert(),
            py::arg("cell_dofs").noconvert(),py::arg("cell_tables").noconvert(),py::arg("cell_exponents").noconvert(),
            py::arg("face_class").noconvert(),py::arg("face_dofs").noconvert(),py::arg("face_tables").noconvert(),
-           py::arg("face_exponents").noconvert(),py::arg("backend"),
-           "Generate the flat-TET BDM1/BDM2 charge Gram, B and B^T on the device; only geometry, monomials, rules and NGSolve tables cross.")
+           py::arg("face_exponents").noconvert(),py::arg("compression"),py::arg("aca"),py::arg("backend"),
+           "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           pythonPublicationProbe();py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;
-          d["kernel_launches"]=a.launches;py::list ledger;
+          d["kernel_launches"]=a.launches;d["compression"]=a.compression;py::dict counters;
+          for(const auto& c:a.counters)counters[py::str(c.first)]=c.second;d["hmatrix"]=counters;py::list ledger;
           for(const auto& t:a.transfers){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("apply",[](DeviceOperator& self,Array<double> x){

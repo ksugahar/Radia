@@ -48,6 +48,8 @@ struct BorrowedLeaf {
     BorrowedValues a1,a2;bool deferred=false;
 };
 struct DeferredDenseSpan {std::size_t row,column,rows,columns,offset;};
+// Device-generated low-rank leaf of known rank: a1 at a (columns x rank), a2 at b (rows x rank).
+struct DeferredLowrankSpan {std::size_t row,column,rows,columns,rank,a,b;};
 struct CoefficientUpload {std::size_t destination,source,count;};
 struct Plan {
     std::size_t n=0,tmpCount=0,partialCount=0;
@@ -56,6 +58,7 @@ struct Plan {
     HostVector<double> coefficients{HostFaultAllocator<double>("plan.coefficients")},scale{HostFaultAllocator<double>("plan.scale")};
     HostVector<std::size_t> permutation{HostFaultAllocator<std::size_t>("plan.permutation")},rowOffsets{HostFaultAllocator<std::size_t>("plan.row-offsets")},partialIndices{HostFaultAllocator<std::size_t>("plan.partial-indices")};
     HostVector<DeferredDenseSpan> deferredDense{HostFaultAllocator<DeferredDenseSpan>("plan.deferred-dense")};
+    HostVector<DeferredLowrankSpan> deferredLowrank{HostFaultAllocator<DeferredLowrankSpan>("plan.deferred-lowrank")};
     HostVector<CoefficientUpload> uploads{HostFaultAllocator<CoefficientUpload>("plan.uploads")};
 };
 template<class LeafList,class IndexList,class ScaleList>
@@ -78,7 +81,8 @@ inline Plan packLeaves(std::size_t n,const LeafList& leaves,
             throw std::invalid_argument("Diagonal leaf must be square");
         if(leaf.row<leaf.column&&leaf.rows>leaf.column-leaf.row)
             throw std::invalid_argument("Upper leaf overlaps diagonal");
-        if(leaf.deferred&&(leaf.rank||!leaf.a1.empty()||!leaf.a2.empty()))throw std::invalid_argument("Invalid deferred dense storage");
+        if(leaf.deferred&&(!leaf.a1.empty()||!leaf.a2.empty()))throw std::invalid_argument("Invalid deferred leaf storage");
+        if(leaf.deferred&&leaf.rank&&leaf.rank>std::min(leaf.rows,leaf.columns))throw std::invalid_argument("Deferred low-rank leaf rank exceeds its block");
         if(!leaf.deferred&&(leaf.a1.size()!=checkedProduct(leaf.columns,leaf.rank?leaf.rank:leaf.rows)||
            leaf.a2.size()!=(leaf.rank?checkedProduct(leaf.rows,leaf.rank):0))
            )
@@ -96,7 +100,8 @@ inline Plan packLeaves(std::size_t n,const LeafList& leaves,
         const auto firstCount=checkedProduct(leaf.columns,leaf.rank?leaf.rank:leaf.rows),secondCount=leaf.rank?checkedProduct(leaf.rows,leaf.rank):0;
         if(firstCount>std::numeric_limits<std::size_t>::max()-secondCount||firstCount+secondCount>std::numeric_limits<std::size_t>::max()-p.coefficientCount)throw std::overflow_error("Coefficient offset overflow");
         const auto a=p.coefficientCount,b=a+firstCount;p.coefficientCount+=firstCount+secondCount;
-        if(leaf.deferred)p.deferredDense.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,a});
+        if(leaf.deferred&&leaf.rank)p.deferredLowrank.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,leaf.rank,a,b});
+        else if(leaf.deferred)p.deferredDense.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,a});
         else{
             p.uploads.push_back({a,p.coefficients.size(),firstCount+secondCount});
             if(!leaf.a1.empty())p.coefficients.insert(p.coefficients.end(),leaf.a1.begin(),leaf.a1.end());
@@ -273,7 +278,7 @@ public:
     std::size_t deferredDenseLeaves=0,deferredDenseCoefficients=0,coefficientUploadBytes=0;
     explicit Resident(const Plan& p,const SparseMap* map=nullptr,std::size_t concurrentWorkspace=0):n(p.n),count(p.directions.size()) {
         check(cudaGetDevice(&device));
-        materialized=p.deferredDense.empty();storedCoefficientCount=p.coefficientCount;coefficientUploadBytes=checkedProduct(p.coefficients.size(),sizeof(double));
+        materialized=p.deferredDense.empty()&&p.deferredLowrank.empty();storedCoefficientCount=p.coefficientCount;coefficientUploadBytes=checkedProduct(p.coefficients.size(),sizeof(double));
         deferredDenseLeaves=p.deferredDense.size();for(const auto& span:p.deferredDense)deferredDenseCoefficients+=checkedProduct(span.rows,span.columns);
         for(const auto& direction:p.directions)if(!direction.transpose){
             const auto dense=checkedProduct(direction.inputs,direction.outputs);
@@ -334,7 +339,7 @@ public:
         ownedBytes+=indices+values;dofs=columns;kernelsPerApplication=6;dofState.allocate(dofs);
     }
     template<class Oracle> void materializeDeferred(const Plan& p,Oracle& oracle){
-        valid(true);if(materialized||p.deferredDense.empty()||p.n!=n||p.coefficientCount!=coefficients.size)throw std::invalid_argument("Invalid deferred materialization state");
+        valid(true);if(materialized||(p.deferredDense.empty()&&p.deferredLowrank.empty())||p.n!=n||p.coefficientCount!=coefficients.size)throw std::invalid_argument("Invalid deferred materialization state");
         oracle.fillDense(p,coefficients.data,permutation.data,scale.data,stream);
         check(cudaStreamSynchronize(stream));materialized=true;
     }
