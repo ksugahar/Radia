@@ -3,7 +3,8 @@
 // HighOrderTetEntryStrategy without images: self and near pairs use the exact
 // analytic moment potentials, well-separated pairs the low double rule. Only
 // primitives cross to the device; the Gram is written into the resident
-// deferred dense leaf and never leaves the device.
+// deferred dense leaf (or the ACA leaves of hdiv_flat_aca.cuh) and never
+// leaves the device.
 #pragma once
 #include <cmath>
 #include <cstdlib>
@@ -206,30 +207,24 @@ __global__ void assembleFlatGram(FlatDevice d,std::size_t first,std::size_t coun
     if(!isfinite(value))atomicExch(invalid,1);
     matrix[row*d.n+col]=value;if(row!=col)matrix[col*d.n+row]=value;
 }
-// Deferred-dense oracle for Resident::materializeDeferred: writes the
-// normalized Gram and its sigma = sqrt(raw diagonal) on the resident stream.
-class FlatGramOracle {
-    const FlatBlock& block;
-public:
-    HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("flat.transfers")};
-    std::size_t ownedBytes=0,launches=0;int invalidCode=0;
-    explicit FlatGramOracle(const FlatBlock& b):block(b){block.validate();}
-    template<class Rule>static std::size_t ruleBytes(const Rule& r){return checkedProduct(r.size(),sizeof(FlatRulePoint));}
-    void fillDense(const Plan& p,double* coefficients,const std::size_t*,double* scale,cudaStream_t stream){
+// Prepared charges shared by the dense and ACA routes: geometry, rules and
+// the per-charge host maps live on the device; only primitives cross H2D.
+struct FlatPrepared {
+    Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
+    Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
+    std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;
+    static std::size_t workspaceBytes(const FlatBlock& block){
         const auto n=block.charges();
-        if(p.n!=n||p.directions.size()!=1||p.deferredDense.size()!=1||p.coefficientCount!=checkedProduct(n,n))
-            throw std::invalid_argument("Flat Gram requires one deferred dense charge block");
-        const auto& span=p.deferredDense[0];
-        if(span.row||span.column||span.rows!=n||span.columns!=n||span.offset)
-            throw std::invalid_argument("Flat Gram dense span mismatch");
-        for(std::size_t i=0;i<n;++i)if(p.permutation[i]!=i)throw std::invalid_argument("Flat Gram requires identity charge order");
         const std::size_t stride=std::max(block.tet.size(),block.tri.size()),lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
-        ownedBytes=checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+points+low+sizeof(int);
-        std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
-        if(free<=reserve||ownedBytes>free-reserve)throw std::runtime_error("Flat Gram GPU reserve would be exceeded");
-        Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
-        Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
+        return checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+points+low+sizeof(int);
+    }
+    int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
+        check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
+        check(cudaStreamSynchronize(stream));transfers.push_back({payload,"D2H",sizeof(int)});return value;}
+    void prepare(const FlatBlock& block,cudaStream_t stream,HostVector<FlatTransfer>& transfers,std::size_t& launches,int& invalidCode){
+        n=block.charges();farFactor=block.farFactor;
+        stride=std::max(block.tet.size(),block.tri.size());lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         auto upload=[&](auto& buffer,const auto& values,const char* payload){
             if(values.empty())return;buffer.upload(values);
             transfers.push_back({payload,"H2D",checkedProduct(values.size(),sizeof(values[0]))});};
@@ -245,19 +240,43 @@ public:
             tetLow.data,int(block.tetLow.size()),triLow.data,int(block.triLow.size()),stride,lowStride,
             charges.data,qp.data,qw.data,outerCount.data,lp.data,lw.data,lowCount.data,invalid.data);
         check(cudaGetLastError());++launches;
-        auto flag=[&](const char* payload){int value=0;check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
-            check(cudaStreamSynchronize(stream));transfers.push_back({payload,"D2H",sizeof(int)});return value;};
-        if((invalidCode=flag("prepare_flag"))!=0)
+        if((invalidCode=flag(stream,transfers,"prepare_flag"))!=0)
             throw std::invalid_argument(invalidCode==2?"Flat device Gram supports cell degree <= 1 and face degree <= 2 only"
                                                        :"Invalid flat charge host, kind, exponent or degenerate geometry");
-        const FlatDevice device{charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,block.farFactor};
+    }
+    FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor};}
+};
+inline void flatReserve(std::size_t bytes,const char* what){
+    std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
+    if(free<=reserve||bytes>free-reserve)throw std::runtime_error(what);
+}
+// Deferred-dense oracle for Resident::materializeDeferred: writes the
+// normalized Gram and its sigma = sqrt(raw diagonal) on the resident stream.
+class FlatGramOracle {
+    const FlatBlock& block;
+public:
+    HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("flat.transfers")};
+    std::size_t ownedBytes=0,launches=0;int invalidCode=0;
+    explicit FlatGramOracle(const FlatBlock& b):block(b){block.validate();}
+    template<class Rule>static std::size_t ruleBytes(const Rule& r){return checkedProduct(r.size(),sizeof(FlatRulePoint));}
+    void fillDense(const Plan& p,double* coefficients,const std::size_t*,double* scale,cudaStream_t stream){
+        const auto n=block.charges();
+        if(p.n!=n||p.directions.size()!=1||p.deferredDense.size()!=1||!p.deferredLowrank.empty()||p.coefficientCount!=checkedProduct(n,n))
+            throw std::invalid_argument("Flat Gram requires one deferred dense charge block");
+        const auto& span=p.deferredDense[0];
+        if(span.row||span.column||span.rows!=n||span.columns!=n||span.offset)
+            throw std::invalid_argument("Flat Gram dense span mismatch");
+        for(std::size_t i=0;i<n;++i)if(p.permutation[i]!=i)throw std::invalid_argument("Flat Gram requires identity charge order");
+        ownedBytes=FlatPrepared::workspaceBytes(block);flatReserve(ownedBytes,"Flat Gram GPU reserve would be exceeded");
+        FlatPrepared prepared;prepared.prepare(block,stream,transfers,launches,invalidCode);
+        const FlatDevice device=prepared.device();
         // Bounded launches keep each kernel short on display-attached GPUs.
         const auto entries=checkedProduct(n,n);constexpr std::size_t batch=std::size_t(1)<<16;
         for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);
-            assembleFlatGram<<<unsigned((here+127)/128),128,0,stream>>>(device,first,here,coefficients,invalid.data);
+            assembleFlatGram<<<unsigned((here+127)/128),128,0,stream>>>(device,first,here,coefficients,prepared.invalid.data);
             check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;}
-        analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients,scale,invalid.data);check(cudaGetLastError());++launches;
-        if((invalidCode=flag("energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite entry or nonpositive self-energy");
+        analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients,scale,prepared.invalid.data);check(cudaGetLastError());++launches;
+        if((invalidCode=prepared.flag(stream,transfers,"energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite entry or nonpositive self-energy");
         normalizeAnalytic<<<unsigned((entries+255)/256),256,0,stream>>>(n,coefficients,scale);check(cudaGetLastError());++launches;
         check(cudaStreamSynchronize(stream));
     }

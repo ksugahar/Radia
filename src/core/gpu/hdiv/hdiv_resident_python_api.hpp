@@ -22,10 +22,14 @@ struct NewtonStep {double residual=0,energy=0,alpha=0,linearResidual=0;int linea
 struct NewtonResult {radia_hdiv_bh::BoundaryVector<double> x;radia_hdiv_bh::BoundaryVector<NewtonStep> history;double residual=0,energy=0;std::size_t graphLaunches=0;};
 struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // Primitive flat-TET charge geometry; reference rules are (xi0,xi1,xi2,weight) rows.
+// compression is "dense" (one deferred dense block) or "aca" (device ACA
+// leaves on a geometric partition); the ACA parameters apply to "aca" only.
 struct FlatInput {
     radia_hmatrix_cuda::HostVector<double> cells,faces,tet,tri,tetLow,triLow;
     radia_hmatrix_cuda::HostVector<int> host,kind,expo;
     double farFactor=1e30;
+    std::string compression;
+    double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated
 // on the device from these and the FlatInput vertices; no B value crosses.
@@ -36,7 +40,8 @@ struct ChargeMapInput {
     radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
-struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;};
+struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;
+    std::string compression;radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> counters;};
 class DeviceOperator {
 public:
     virtual ~DeviceOperator()=default;

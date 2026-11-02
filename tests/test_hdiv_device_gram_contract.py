@@ -44,8 +44,10 @@ def gram(inputs):
     return hdiv_gpu._device_gram_arguments(charge, inputs, geometry)
 
 
-def test_staged_inputs_map_to_primitive_rows_without_hmatrix_parameters():
+def test_staged_inputs_map_to_primitive_rows_with_explicit_aca_parameters():
     arguments = gram(staged())
+    assert arguments["compression"] == "aca" and arguments["aca"] == hdiv_gpu._GRAM_ACA, arguments["aca"]
+    assert arguments["aca"] is not hdiv_gpu._GRAM_ACA, "callers must not share the module constant"
     assert arguments["tet_rule"].shape == (2, 4) and arguments["tri_rule"].shape == (1, 4)
     assert arguments["tri_rule"][0, 2] == 0 and arguments["tet_low_rule"][0, 3] == pytest.approx(1/6)
     assert arguments["far_factor"] == 2.
@@ -72,13 +74,15 @@ def ledger(arguments, *extra, drop=()):
     rows = [dict(payload=p, direction=d, bytes=8 if b is None else b)
             for (p, d), b in hdiv_gpu._expected_device_ledger(arguments).items() if p not in drop]
     return dict(route="device-flat-tet", charges=int(arguments["charge_host"].size),
+                compression=arguments["compression"], hmatrix={k: 0 for k in hdiv_gpu._ACA_COUNTERS},
                 transfer_ledger=rows + [dict(payload=p, direction=d, bytes=b) for p, d, b in extra])
 
 
 def test_assembly_ledger_requires_the_exact_primitive_rows():
     arguments = gram(staged())
     assert hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)["charges"] == 2
-    flags_only = dict(route="device-flat-tet", charges=2, transfer_ledger=[
+    flags_only = dict(route="device-flat-tet", charges=2, compression="aca",
+                      hmatrix={k: 0 for k in hdiv_gpu._ACA_COUNTERS}, transfer_ledger=[
         dict(payload="prepare_flag", direction="D2H", bytes=4),
         dict(payload="energy_flag", direction="D2H", bytes=4)])
     duplicate = ledger(arguments, ("tet_rule", "H2D", 64))
@@ -87,7 +91,12 @@ def test_assembly_ledger_requires_the_exact_primitive_rows():
     forged = [flags_only, duplicate, resized, ledger(arguments, drop=("resident_plan",)),
               ledger(arguments, ("host_hmatrix_coefficients", "H2D", 8)),
               ledger(arguments, ("cell_vertices_m", "D2H", 96)), dict(ledger(arguments), route="host-leaves"),
-              ledger(arguments, ("charge_map_csr_host_built", "H2D", 64)), ledger(arguments, drop=("charge_cell_tables",))]
+              ledger(arguments, ("charge_map_csr_host_built", "H2D", 64)), ledger(arguments, drop=("charge_cell_tables",)),
+              dict(ledger(arguments), compression="dense"), dict(ledger(arguments), hmatrix={}),
+              dict(ledger(arguments), hmatrix=dict({k: 0 for k in hdiv_gpu._ACA_COUNTERS}, rank_sum=-1)),
+              ledger(arguments, drop=("aca_permutation",)), ledger(arguments, ("aca_lowrank_factors", "D2H", 64)),
+              ledger(arguments, ("aca_leaf_status", "D2H", 0)),
+              ledger(arguments, ("aca_leaf_status", "D2H", 8), ("aca_leaf_status", "D2H", 8))]
     for bad in ("8", -8, True, 0):
         row = ledger(arguments)
         next(r for r in row["transfer_ledger"] if r["payload"] == "resident_plan")["bytes"] = bad
@@ -95,6 +104,14 @@ def test_assembly_ledger_requires_the_exact_primitive_rows():
     for case in forged:
         with pytest.raises(RuntimeError):
             hdiv_gpu._checked_device_assembly(case, arguments)
+
+
+def test_aca_metadata_rows_are_optional_but_positive():
+    arguments = gram(staged())
+    assert hdiv_gpu._checked_device_assembly(ledger(arguments, *[(p, d, 8) for p, d in hdiv_gpu._ACA_OPTIONAL_ROWS]),
+                                             arguments)["compression"] == "aca"
+    assert ("aca_permutation", "H2D") in hdiv_gpu._expected_device_ledger(arguments)
+    assert hdiv_gpu._expected_device_ledger(arguments)[("aca_permutation", "H2D")] == 8*2
 
 
 def test_disabled_far_split_has_no_low_rule_rows():
@@ -140,6 +157,17 @@ def test_device_gram_source_downloads_only_validity_flags():
     downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
     assert len(downloads) == 1 and "sizeof(int)" in downloads[0], downloads
     assert "cudaMemcpyToSymbol" not in source and "cudaMemcpyHostToDevice" not in source
+
+
+def test_device_aca_source_downloads_only_integer_metadata():
+    source = (HDIV / "hdiv_flat_aca.cuh").read_text(encoding="utf-8")
+    downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
+    assert len(downloads) == 2 and all("sizeof(int)" in d for d in downloads), downloads
+    assert {d.split(",")[1] for d in downloads} == {"active.data", "report.data"}, downloads
+    assert re.search(r"Buffer<int> active;", source) and re.search(r"Buffer<int> report;", source)
+    report = source[source.index("__global__ void acaReport"):source.index("struct AcaDenseSpan")]
+    assert "frobenius2" not in report and "maxAbs" not in report, "ACA report leaks norms"
+    assert "cudaMemcpyHostToDevice" not in source and "cudaMemcpyToSymbol" not in source
 
 
 def test_flat_binding_accepts_no_matrix_payload():

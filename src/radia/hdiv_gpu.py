@@ -135,7 +135,7 @@ class PreparedHDivNonlinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
-                gram_route="device-flat-tet",
+                gram_route="device-flat-tet", gram_compression=_GRAM_COMPRESSION,
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
                 operator=self._operator.stats() if self._operator is not None else None,
@@ -277,6 +277,17 @@ _DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "ch
 _CHARGE_TABLE_KEYS = ("cell_class", "cell_dofs", "cell_tables", "cell_exponents",
                       "face_class", "face_dofs", "face_tables", "face_exponents")
 _RULE_ROW_BYTES = 32  # FlatRulePoint: xi[3], weight as float64.
+# Device ACA of the charge Gram with the CPU charge-Gram H-matrix parameters
+# (radia.vim build_charge_gram eps, leaf size, eta). eps is the ACA stopping
+# parameter, not an operator error bound. A leaf reaching max_rank unconverged
+# is stored as an exact dense leaf of the same operator and counted.
+_GRAM_COMPRESSION = "aca"
+_GRAM_ACA = dict(eps=1e-10, eta=2.0, leaf_size=64, max_rank=200, rank_cap="dense")
+# Metadata rows that exist only when the partition has admissible blocks.
+_ACA_OPTIONAL_ROWS = (("aca_leaf_spans", "H2D"), ("aca_leaf_status", "D2H"), ("aca_active_count", "D2H"))
+_ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admissible_blocks",
+                 "rank_cap_promotions", "storage_promotions", "rank_sum", "max_rank", "aca_steps",
+                 "aca_batches", "factor_coefficients", "dense_coefficients")
 
 
 def _expected_device_ledger(arguments):
@@ -287,7 +298,9 @@ def _expected_device_ledger(arguments):
     Empty low rules (far split disabled) are absent rows, never zero-byte rows.
     The charge map crosses as NGSolve tables, classes and DOF numbers; its
     exponents are host-side layout checks and never uploaded. The resident
-    plan size is owned by the native side and required positive.
+    plan size is owned by the native side and required positive. The ACA
+    route adds its charge permutation, dense-leaf spans and integer leaf
+    rank/status and step counts; no Gram, sigma or factor value crosses.
     """
     sizes = {"cell_vertices_m": arguments["cell_vertices"].nbytes,
              "face_vertices_m": arguments["face_vertices"].nbytes,
@@ -307,6 +320,9 @@ def _expected_device_ledger(arguments):
     expected = {(name, "H2D"): sizes[name] for name in _DEVICE_GRAM_UPLOADS if sizes[name]}
     expected.update({("prepare_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
                      ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+    if arguments["compression"] == "aca":
+        expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
+                         ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -318,10 +334,21 @@ def _checked_device_assembly(assembly, arguments):
     charges = int(arguments["charge_host"].size)
     if assembly.get("route") != "device-flat-tet" or assembly.get("charges") != charges:
         raise RuntimeError("Unexpected HDiv Gram assembly route: %r" % (assembly.get("route"),))
+    if assembly.get("compression") != arguments["compression"]:
+        raise RuntimeError("HDiv Gram compression %r, requested %r"
+                           % (assembly.get("compression"), arguments["compression"]))
+    counters = assembly.get("hmatrix")
+    if arguments["compression"] == "aca" and (set(counters) != set(_ACA_COUNTERS) or not all(
+            type(v) is int and v >= 0 for v in counters.values())):
+        raise RuntimeError("HDiv ACA Gram counters rejected: %r" % (counters,))
     expected = _expected_device_ledger(arguments)
+    optional = set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca" else set()
     seen = {}
     for row in assembly["transfer_ledger"]:
         key, size = (row["payload"], row["direction"]), row["bytes"]
+        if key in optional and key not in seen and type(size) is int and size > 0:
+            seen[key] = size
+            continue
         if key in seen or key not in expected or type(size) is not int or size < 0:
             raise RuntimeError("HDiv device Gram transfer ledger row rejected: %r" % (row,))
         want = expected[key]
@@ -329,7 +356,7 @@ def _checked_device_assembly(assembly, arguments):
             raise RuntimeError("HDiv device Gram ledger bytes for %r: actual %r, expected %r"
                                % (key, size, "positive" if want is None else want))
         seen[key] = size
-    if set(seen) != set(expected):
+    if set(seen) - optional != set(expected):
         raise RuntimeError("HDiv device Gram transfer ledger missing rows: %r"
                            % (sorted(set(expected) - set(seen)),))
     return assembly
@@ -355,8 +382,9 @@ def _checked_charge_exponents(kind, exponents):
 def _device_gram_arguments(tables, inputs, geometry):
     """Map the staged flat-TET charge inputs and NGSolve tables to the device binding.
 
-    H-matrix parameters (eps, leaf, eta) do not apply to the dense device
-    block. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
+    The Gram is compressed by device ACA with the CPU charge-Gram H-matrix
+    parameters (``_GRAM_ACA``); only the geometric partition is built on the
+    host. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
     potentials, as on the CPU; higher degrees fail loudly on the device.
     The table staging must reproduce the Gram geometry and charge order
     exactly (``geometry`` is its cell and exterior-face vertex coordinates).
@@ -387,7 +415,8 @@ def _device_gram_arguments(tables, inputs, geometry):
         tet_rule=rule("tet", "", 3), tri_rule=rule("tri", "", 2),
         tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
         tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
-        far_factor=float(inputs["ho_far_factor"]) if far else 1e30)
+        far_factor=float(inputs["ho_far_factor"]) if far else 1e30,
+        compression=_GRAM_COMPRESSION, aca=dict(_GRAM_ACA))
     _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
     cells_m, faces_m = geometry
     if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
