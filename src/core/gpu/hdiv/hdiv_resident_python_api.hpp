@@ -2,6 +2,7 @@
 #pragma once
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 #include "hdiv_inverse_bh.hpp"
 namespace radia_hdiv_python {
@@ -20,6 +21,14 @@ struct NewtonOptions {double tolerance=1e-11,linearTolerance=5e-14;int maximumIt
 struct NewtonStep {double residual=0,energy=0,alpha=0,linearResidual=0;int linearIterations=0,backtracks=0;bool residualCertified=false;};
 struct NewtonResult {radia_hdiv_bh::BoundaryVector<double> x;radia_hdiv_bh::BoundaryVector<NewtonStep> history;double residual=0,energy=0;std::size_t graphLaunches=0;};
 struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
+// Primitive flat-TET charge geometry; reference rules are (xi0,xi1,xi2,weight) rows.
+struct FlatInput {
+    radia_hmatrix_cuda::HostVector<double> cells,faces,tet,tri,tetLow,triLow;
+    radia_hmatrix_cuda::HostVector<int> host,kind,expo;
+    double farFactor=1e30;
+};
+struct Transfer {std::string payload,direction;std::size_t bytes;};
+struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;};
 class DeviceOperator {
 public:
     virtual ~DeviceOperator()=default;
@@ -27,8 +36,11 @@ public:
     virtual MaterialResult solve_linear(const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,double,double,int,bool,bool,int,double)=0;
     virtual NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator&,const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
     virtual Stats stats()=0;
+    virtual Assembly assembly()=0;
     virtual void close()=0;
 };
 std::shared_ptr<DeviceOperator> create(std::size_t,const radia_hmatrix_cuda::HostVector<LeafInput>&,
     const radia_hmatrix_cuda::HostVector<std::size_t>&,const radia_hmatrix_cuda::HostVector<double>&,const MapInput&);
+// The charge Gram is generated on the device; no Gram coefficient crosses.
+std::shared_ptr<DeviceOperator> createFlat(const FlatInput&,const MapInput&);
 } // namespace radia_hdiv_python
