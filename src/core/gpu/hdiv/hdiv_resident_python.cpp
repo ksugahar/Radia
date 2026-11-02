@@ -53,8 +53,9 @@ radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<
     input.classes=std::size_t(shapes.shape(0));input.points=input.elements*input.rulePoints;input.dofs=dofs;
     if(std::size_t(shapes.shape(1))!=input.rulePoints||std::size_t(shapes.shape(2))!=input.local||std::size_t(elementDofs.shape(0))!=input.elements||std::size_t(elementPoints.shape(0))!=input.elements)
         throw py::value_error("Flat evaluation table dimensions disagree");
-    // Geometry rows: 12 (affine vertices) or 30 (curved P2 nodes) coordinates per element.
-    if(vertices.ndim()!=2||(vertices.shape(1)!=12&&vertices.shape(1)!=30))throw py::value_error("Evaluation geometry requires (elements,12) affine vertices or (elements,30) P2 nodes");
+    // Geometry rows: 12 (affine vertices), 30 (curved P2 TET nodes) or 81 (HEX Q2 lattice) coordinates per element.
+    if(vertices.ndim()!=2||(vertices.shape(1)!=12&&vertices.shape(1)!=30&&vertices.shape(1)!=81))
+        throw py::value_error("Evaluation geometry requires (elements,12) affine vertices, (elements,30) P2 nodes or (elements,81) HEX Q2 nodes");
     input.nodes=std::size_t(vertices.shape(1))/3;
     input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,0,bytes,"vertices");
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");

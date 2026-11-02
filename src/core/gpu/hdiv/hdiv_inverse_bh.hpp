@@ -25,8 +25,9 @@ struct MaterialInput {
 // TET evaluation tables: NGSolve reference shapes per vertex-rank class
 // (classes x rulePoints x local x 3), rule rows (xi0,xi1,xi2,weight), element
 // geometry, DOF and material-point numbers. No E values. Geometry holds
-// `nodes` points per element: 4 affine vertices in NGSolve order, or the 10
-// P2 nodes of a curved element (corners first, NGSolve reference frame).
+// `nodes` points per element: 4 affine vertices in NGSolve order, the 10
+// P2 nodes of a curved element (corners first, NGSolve reference frame), or
+// the 27-node Q2 lattice of a HEX (node ix + 3 iy + 9 iz at xi = (ix,iy,iz)/2).
 struct FlatEvaluationInput {
     std::size_t elements=0,local=0,rulePoints=0,classes=0,points=0,dofs=0,nodes=4;
     BoundaryVector<double> rule,shapes,vertices;
