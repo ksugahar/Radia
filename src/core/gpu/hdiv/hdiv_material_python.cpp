@@ -16,6 +16,11 @@ public:
         if(!context)throw std::invalid_argument("Material context is closed");
         return stageMaterialQuadrature(*context,first,count);
     }
+    FlatEvaluationTables flatTables(){
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!context)throw std::invalid_argument("Material context is closed");
+        return stageFlatEvaluationTables(*context);
+    }
     void close(){std::lock_guard<std::mutex> lock(mutex);context.reset();}
 };
 template<class T> py::array_t<T> ownedArray(const std::vector<T>& values){
@@ -38,6 +43,21 @@ py::dict publish(const MaterialQuadraturePayload& p){
     out["epoch"]=1; // Immutable mesh/space; no in-place update operation exists.
     return out;
 }
+template<class T> py::array_t<T> ownedRows(const std::vector<T>& values,std::size_t rows){
+    auto result=ownedArray(values);result.resize({py::ssize_t(rows),py::ssize_t(rows?values.size()/rows:0)});return result;
+}
+py::dict publishFlat(const FlatEvaluationTables& t){
+    py::dict out;
+    out["schema"]="radia.hdiv-flat-evaluation-tables.v1";
+    out["dofs"]=t.dofs;out["total_points"]=t.totalPoints;out["integration_order"]=t.integrationOrder;
+    out["rule"]=ownedRows(t.rule,t.rulePoints);
+    auto shapes=ownedArray(t.shapes);
+    shapes.resize({py::ssize_t(t.shapes.size()/(3*t.local*t.rulePoints)),py::ssize_t(t.rulePoints),py::ssize_t(t.local),py::ssize_t(3)});
+    out["reference_shapes"]=shapes;
+    out["vertices"]=ownedRows(t.vertices,t.elements);out["element_class"]=ownedArray(t.elementClass);
+    out["element_dofs"]=ownedRows(t.elementDofs,t.elements);out["element_points"]=ownedRows(t.elementPoints,t.elements);
+    return out;
+}
 }
 void registerMaterialStaging(py::module_& module){
     py::class_<MaterialOwner>(module,"_MaterialStagingContext")
@@ -47,5 +67,10 @@ void registerMaterialStaging(py::module_& module){
             {py::gil_scoped_release release;payload=self.quadrature(first,count);}
             return publish(payload);
         },py::arg("first_element")=0,py::arg("element_count")=std::numeric_limits<std::size_t>::max())
+        .def("flat_tables",[](MaterialOwner& self){
+            FlatEvaluationTables tables;
+            {py::gil_scoped_release release;tables=self.flatTables();}
+            return publishFlat(tables);
+        },"NGSolve reference HDiv shapes per vertex-rank class plus primitive TET topology; no evaluation matrix.")
         .def("close",&MaterialOwner::close,py::call_guard<py::gil_scoped_release>());
 }

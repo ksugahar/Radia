@@ -2,8 +2,9 @@
 
 NGSolve owns FE assembly; Radia owns charge-Gram preparation. The caller owns
 the TaskManager region. Construction prepares operators, never a CPU solution.
-The charge Gram is generated on the device from flat-TET geometry; the charge
-map, mass and evaluation matrices are still host-built and reported as such.
+The charge Gram and the material evaluation map are generated on the device
+from flat-TET geometry and NGSolve reference tables; the charge map and mass
+matrix are still host-built and reported as such.
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ __all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
 
 # Host-built sparse operators this route still uploads. Reported in stats until
 # their device construction lands; never presented as device-resident.
-PENDING_HOST_OPERATORS = ("charge_map", "mass", "evaluation")
+PENDING_HOST_OPERATORS = ("charge_map", "mass")
 
 import base64
 from importlib import metadata
@@ -84,7 +85,7 @@ class PreparedHDivNonlinear:
         try:
             setup = _prepare_device_components(path, order)
             self.dofs = setup["dofs"]
-            B, E = setup["charge_map"], setup["evaluation"]
+            B = setup["charge_map"]
             self._mass, self._rhs = setup["mass"], setup["rhs_operator"]
             self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
                 **setup["charge_gram"], dofs=self.dofs,
@@ -94,9 +95,10 @@ class PreparedHDivNonlinear:
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
                 native_law[name] = np.ascontiguousarray(native_law[name], dtype=np.float64).ravel()
-            self._material = _hdiv_cuda._ResidentBHMaterial(E.indptr.astype(np.uint64),
-                E.indices.astype(np.uint64), np.ascontiguousarray(E.data),
-                np.ascontiguousarray(setup["weights"]), self.dofs, native_law, backend="gpu")
+            self._material = _hdiv_cuda._ResidentBHMaterial.from_flat_tables(
+                **setup["evaluation_tables"], dofs=self.dofs, law=native_law, backend="gpu")
+            self.material_assembly = _checked_material_assembly(self._material.assembly(),
+                                                                setup["evaluation_tables"])
         except BaseException:
             self.close()
             raise
@@ -143,6 +145,7 @@ class PreparedHDivNonlinear:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
                 gram_route="device-flat-tet", pending_host_operators=PENDING_HOST_OPERATORS,
                 assembly=getattr(self, "assembly", None),
+                material_assembly=getattr(self, "material_assembly", None),
                 operator=self._operator.stats() if self._operator is not None else None,
                 material=self._material.stats() if self._material is not None else None)
 
@@ -395,7 +398,7 @@ def _prepare_device_components(path, order, *, maximum_dofs=16384):
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
     B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    return dict(_fe_components(path, mesh, fes), charge_map=B,
+    return dict(_fe_forms(mesh, fes), charge_map=B, evaluation_tables=_device_evaluation_tables(path, fes),
                 charge_gram=_device_gram_arguments(B, inputs))
 
 
@@ -419,15 +422,12 @@ def _prepare_host_components(path, order, *, maximum_dofs=16384):
     return dict(_fe_components(path, mesh, fes), charge_map=B, snapshot=snapshot)
 
 
-def _fe_components(path, mesh, fes):
-    """NG-owned mass, source and material-evaluation operators shared by both routes."""
+def _fe_forms(mesh, fes):
+    """NG-owned mass and uniform-source operators shared by both routes."""
     import numpy as np
     import ngsolve as ng
-    from scipy.sparse import coo_matrix, csc_matrix
-    from .gpu import _native
-    _hdiv_cuda = _native("_hdiv_cuda")
+    from scipy.sparse import coo_matrix
     nd = fes.ndof
-    order = fes.globalorder
     u, v = fes.TnT()
     mass = ng.BilinearForm(fes, symmetric=True)
     mass += ng.InnerProduct(u, v)*ng.dx
@@ -442,7 +442,22 @@ def _fe_components(path, mesh, fes):
         source += ng.InnerProduct(ng.CF(direction), v)*ng.dx
         source.Assemble()
         rhs[:, component] = source.vec.FV().NumPy()
-    staging = _hdiv_cuda._MaterialStagingContext(str(path), order)
+    # Same declared NG default volume rule as the existing CPU mean field.
+    volume = float(ng.Integrate(1, mesh))
+    if not math.isfinite(volume) or volume <= 0:
+        raise ValueError("Invalid mesh volume")
+    return dict(dofs=nd, mass=M, rhs_operator=rhs, mean_operator=rhs.T/volume)
+
+
+def _fe_components(path, mesh, fes):
+    """FE forms plus the NG-built evaluation CSR (MATLAB publisher route)."""
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from .gpu import _native
+    _hdiv_cuda = _native("_hdiv_cuda")
+    forms = _fe_forms(mesh, fes)
+    nd = forms["dofs"]
+    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
     try:
         payload = staging.quadrature()
     finally:
@@ -452,12 +467,64 @@ def _fe_components(path, mesh, fes):
     E = csc_matrix((payload["evaluation_values"], payload["evaluation_row_indices"],
         payload["evaluation_column_offsets"]), shape=(payload["evaluation_rows"], nd)).tocsr()
     E.sort_indices()
-    # Same declared NG default volume rule as the existing CPU mean field.
-    volume = float(ng.Integrate(1, mesh))
-    if not math.isfinite(volume) or volume <= 0:
-        raise ValueError("Invalid mesh volume")
-    return dict(dofs=nd, mass=M, rhs_operator=rhs, mean_operator=rhs.T/volume, evaluation=E,
-                weights=np.asarray(payload["weights"]), quadrature_order=payload["integration_order"])
+    return dict(forms, evaluation=E, weights=np.asarray(payload["weights"]),
+                quadrature_order=payload["integration_order"])
+
+
+def _device_evaluation_tables(path, fes):
+    """NGSolve reference-shape tables for device E construction; no evaluation matrix."""
+    import numpy as np
+    from .gpu import _native
+    _hdiv_cuda = _native("_hdiv_cuda")
+    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
+    try:
+        tables = staging.flat_tables()
+    finally:
+        staging.close()
+    if tables.get("schema") != "radia.hdiv-flat-evaluation-tables.v1" or tables["dofs"] != fes.ndof:
+        raise ValueError("Material and charge FE numbering mismatch")
+    arguments = dict(rule=np.ascontiguousarray(tables["rule"], dtype=np.float64),
+                     reference_shapes=np.ascontiguousarray(tables["reference_shapes"], dtype=np.float64),
+                     vertices=np.ascontiguousarray(tables["vertices"], dtype=np.float64),
+                     element_class=np.ascontiguousarray(tables["element_class"], dtype=np.int32),
+                     element_dofs=np.ascontiguousarray(tables["element_dofs"], dtype=np.int32),
+                     element_points=np.ascontiguousarray(tables["element_points"], dtype=np.int32))
+    if arguments["element_points"].size != tables["total_points"]:
+        raise ValueError("Device evaluation tables do not cover every material point")
+    return arguments
+
+
+# Device-generated evaluation ledger: reference tables in, one validity flag out.
+_DEVICE_EVALUATION_UPLOADS = ("element_vertices_m", "reference_shapes", "material_rule", "element_class",
+                              "element_dofs", "element_points", "evaluation_invalid_flag")
+
+
+def _checked_material_assembly(assembly, tables):
+    """Reject any material ledger other than the exact device-built evaluation route.
+
+    Covers material setup only; per-solve state uploads are outside this ledger.
+    """
+    if assembly.get("route") != "device-flat-tet-evaluation":
+        raise RuntimeError("Unexpected HDiv material assembly route: %r" % (assembly.get("route"),))
+    sizes = {"element_vertices_m": tables["vertices"].nbytes, "reference_shapes": tables["reference_shapes"].nbytes,
+             "material_rule": tables["rule"].nbytes, "element_class": tables["element_class"].nbytes,
+             "element_dofs": tables["element_dofs"].nbytes, "element_points": tables["element_points"].nbytes,
+             "evaluation_invalid_flag": 4}
+    expected = {(name, "H2D"): sizes[name] for name in _DEVICE_EVALUATION_UPLOADS}
+    expected.update({("evaluation_flag", "D2H"): 4, ("inverse_bh_law", "H2D"): None})
+    seen = {}
+    for row in assembly["transfer_ledger"]:
+        key, size = (row["payload"], row["direction"]), row["bytes"]
+        if key in seen or key not in expected or type(size) is not int or size < 0:
+            raise RuntimeError("HDiv material transfer ledger row rejected: %r" % (row,))
+        want = expected[key]
+        if (want is None and size <= 0) or (want is not None and size != want):
+            raise RuntimeError("HDiv material ledger bytes for %r: actual %r, expected %r"
+                               % (key, size, "positive" if want is None else want))
+        seen[key] = size
+    if set(seen) != set(expected):
+        raise RuntimeError("HDiv material transfer ledger missing rows: %r" % (sorted(set(expected) - set(seen)),))
+    return assembly
 
 
 def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,

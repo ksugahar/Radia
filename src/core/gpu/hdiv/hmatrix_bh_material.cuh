@@ -2,6 +2,7 @@
 // NGSolve supplies E and quadrature; no FE semantics or dense tangent fallback.
 #pragma once
 #include "hmatrix_inverse_bh.cuh"
+#include "hdiv_flat_evaluation.cuh"
 namespace radia_hdiv_bh {
 __global__ void materialAmplitudes(std::size_t n,const double* v,double* a){
     const auto q=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(q<n)a[q]=hypot(hypot(v[q],v[n+q]),v[2*n+q]);
@@ -29,6 +30,13 @@ class MappedMaterial {
     DeviceMap E,ET;
     Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,gradient,tangent,totals;
     Buffer<int> invalid;
+    std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
+    void allocateState(const Law& law){
+        m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);
+        knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
+        pointEnergy.allocate(nq);gradient.allocate(nd);tangent.allocate(nd);totals.allocate(2);invalid.allocate(1);
+        ledger.push_back({"inverse_bh_law","H2D",(law.knots.size()+law.coefficients.size()+law.integralBase.size())*sizeof(double)});
+    }
 public:
     MappedMaterial(const MaterialInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
     using namespace radia_hmatrix_cuda;
@@ -45,10 +53,27 @@ public:
         payloadBound=bytes;check(cudaGetDevice(&device));E.upload(e);ET.upload(transpose);
         setupBytes=(e.offsets.size()+e.indices.size()+transpose.offsets.size()+transpose.indices.size())*sizeof(std::size_t)+
             (e.values.size()+transpose.values.size()+in.weights.size()+law.knots.size()+law.coefficients.size()+law.integralBase.size())*sizeof(double);
-        m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);weights.upload(in.weights);
-        knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
-        pointEnergy.allocate(nq);gradient.allocate(nd);tangent.allocate(nd);totals.allocate(2);invalid.allocate(1);
+        routeName="host-evaluation";
+        ledger.push_back({"evaluation_csr_host_built","H2D",(e.offsets.size()+e.indices.size()+transpose.offsets.size()+transpose.indices.size())*sizeof(std::size_t)+
+            (e.values.size()+transpose.values.size())*sizeof(double)});
+        weights.upload(in.weights);ledger.push_back({"material_weights_host","H2D",in.weights.size()*sizeof(double)});allocateState(law);
     }
+    // E, E^T and the point measures are generated on the device from NGSolve reference tables.
+    MappedMaterial(const FlatEvaluationInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
+        using namespace radia_hmatrix_cuda;
+        validateFlatEvaluation(in);validateInverseBH(law,radia_hmatrix_cuda::HostVector<double>{0.});
+        const auto nonzeros=checkedProduct(3*nq,in.local);
+        std::size_t bytes=0;auto add=[&](std::size_t count,std::size_t width){const auto size=checkedProduct(count,width);if(size>(std::size_t(512)<<20)-bytes)throw std::invalid_argument("Mapped material device payload exceeds 512 MiB");bytes+=size;};
+        add(3*nq+1+nd+1+2*nonzeros,sizeof(std::size_t));add(4*nonzeros,sizeof(unsigned));
+        add(2*nonzeros+law.knots.size()+law.coefficients.size()+law.integralBase.size()+18*nq+4*nd+2,sizeof(double));add(1,sizeof(int));
+        payloadBound=bytes;check(cudaGetDevice(&device));
+        FlatEvaluationBuilder builder;builder.build(in,E,ET,weights);
+        routeName="device-flat-tet-evaluation";
+        for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}
+        allocateState(law);setupBytes+=ledger.back().bytes;
+    }
+    const std::string& route()const{return routeName;}
+    const radia_hmatrix_cuda::HostVector<LedgerRow>& transfers()const{return ledger;}
     std::size_t dofs()const{return nd;}
     MaterialStats stats()const{return {nq,nd,payloadBound,setupBytes,stateBytes,calls,1,stateEpoch,tangentCalls,false,frozen};}
     template<class StateAllocator,class DirectionAllocator=std::allocator<double>>

@@ -132,7 +132,8 @@ def test_device_gram_source_downloads_only_validity_flags():
 
 def test_flat_binding_accepts_no_matrix_payload():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
-    block = source[source.index('def_static("from_flat_charges"'):source.index('.def("assembly"')]
+    start = source.index('def_static("from_flat_charges"')
+    block = source[start:source.index('.def("assembly"', start)]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', block)
     assert names[:10] == ["cell_vertices", "face_vertices", "charge_host", "charge_kind",
                           "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule",

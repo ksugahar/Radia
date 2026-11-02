@@ -60,6 +60,31 @@ std::shared_ptr<DeviceOperator> construct(py::list input,Array<std::uint64_t> pe
     // Snapshots own all buffers while another Python thread can mutate inputs.
     py::gil_scoped_release release;auto owner=create(n,leaves,perm,physical,map);pythonPublicationProbe();return owner;
 }
+radia_hdiv_bh::Law lawFromDict(py::dict lawData,std::size_t& bytes){
+    for(const char* key:{"knots","coefficients","integral_base","cap","barrier_slope","last_field","initial_reluctivity"})if(!lawData.contains(key))throw py::value_error("Incomplete inverse BH law");
+    if(!py::isinstance<Array<double>>(lawData["knots"])||!py::isinstance<Array<double>>(lawData["coefficients"])||!py::isinstance<Array<double>>(lawData["integral_base"]))throw py::value_error("Inverse BH arrays require contiguous float64");
+    auto knots=py::cast<Array<double>>(lawData["knots"]),coefficients=py::cast<Array<double>>(lawData["coefficients"]),base=py::cast<Array<double>>(lawData["integral_base"]);
+    if(knots.ndim()!=1||knots.size()<2||knots.size()>4096||coefficients.ndim()!=1||coefficients.size()!=4*(knots.size()-1)||base.ndim()!=1||base.size()!=knots.size())throw py::value_error("Inverse BH law shape exceeded");
+    return radia_hdiv_bh::Law{snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(knots,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(coefficients,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(base,bytes),py::cast<double>(lawData["cap"]),py::cast<double>(lawData["barrier_slope"]),py::cast<double>(lawData["last_field"]),py::cast<double>(lawData["initial_reluctivity"])};
+}
+template<class T>radia_hmatrix_cuda::HostVector<T> rows(Array<T> a,std::size_t width,std::size_t& bytes,const char* what){
+    if(a.ndim()<1||(width&&(a.ndim()!=2||std::size_t(a.shape(1))!=width)))throw py::value_error(std::string("Flat evaluation table shape: ")+what);
+    const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<T>(v.begin(),v.end());
+}
+std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
+    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
+    if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
+    if(shapes.ndim()!=4||shapes.shape(3)!=3||elementDofs.ndim()!=2||elementPoints.ndim()!=2||elementClass.ndim()!=1)
+        throw py::value_error("Flat evaluation tables require (classes,points,local,3) shapes and (elements,n) topology");
+    std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);radia_hdiv_bh::FlatEvaluationInput input;
+    input.elements=std::size_t(elementClass.size());input.local=std::size_t(elementDofs.shape(1));input.rulePoints=std::size_t(elementPoints.shape(1));
+    input.classes=std::size_t(shapes.shape(0));input.points=input.elements*input.rulePoints;input.dofs=dofs;
+    if(std::size_t(shapes.shape(1))!=input.rulePoints||std::size_t(shapes.shape(2))!=input.local||std::size_t(elementDofs.shape(0))!=input.elements||std::size_t(elementPoints.shape(0))!=input.elements)
+        throw py::value_error("Flat evaluation table dimensions disagree");
+    input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,12,bytes,"vertices");
+    input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
+    py::gil_scoped_release release;auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
+}
 std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> faces,Array<std::int32_t> host,
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
     Array<double> triLow,double farFactor,std::size_t dofs,Array<std::uint64_t> offsets,Array<std::uint64_t> indices,
@@ -114,16 +139,20 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
           if(weights.ndim()!=1||weights.size()<1||weights.size()>65536||!dofs||dofs>16384||offsets.ndim()!=1||offsets.size()!=3*weights.size()+1||
              indices.ndim()!=1||values.ndim()!=1||indices.size()!=values.size()||values.size()>4000000)throw py::value_error("Mapped material payload shape or budget exceeded");
-        for(const char* key:{"knots","coefficients","integral_base","cap","barrier_slope","last_field","initial_reluctivity"})if(!lawData.contains(key))throw py::value_error("Incomplete inverse BH law");
-        if(!py::isinstance<Array<double>>(lawData["knots"])||!py::isinstance<Array<double>>(lawData["coefficients"])||!py::isinstance<Array<double>>(lawData["integral_base"]))throw py::value_error("Inverse BH arrays require contiguous float64");
-        auto knots=py::cast<Array<double>>(lawData["knots"]),coefficients=py::cast<Array<double>>(lawData["coefficients"]),base=py::cast<Array<double>>(lawData["integral_base"]);
-        if(knots.ndim()!=1||knots.size()<2||knots.size()>4096||coefficients.ndim()!=1||coefficients.size()!=4*(knots.size()-1)||base.ndim()!=1||base.size()!=knots.size())throw py::value_error("Inverse BH law shape exceeded");
-        std::size_t bytes=0;const auto rp=snapshot(offsets,bytes),ci=snapshot(indices,bytes);
+        std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);const auto rp=snapshot(offsets,bytes),ci=snapshot(indices,bytes);
         radia_hdiv_bh::MaterialInput input{std::size_t(weights.size()),dofs,{rp.begin(),rp.end()},{ci.begin(),ci.end()},snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(values,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(weights,bytes)};
-        radia_hdiv_bh::Law law{snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(knots,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(coefficients,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(base,bytes),py::cast<double>(lawData["cap"]),py::cast<double>(lawData["barrier_slope"]),py::cast<double>(lawData["last_field"]),py::cast<double>(lawData["initial_reluctivity"])};
 
           py::gil_scoped_release release;auto owner=radia_hdiv_bh::createMaterial(input,law);pythonPublicationProbe();return owner;
       }),py::arg("offsets").noconvert(),py::arg("indices").noconvert(),py::arg("values").noconvert(),py::arg("weights").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"))
+      .def_static("from_flat_tables",&constructFlatMaterial,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
+           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
+           "Generate E, E^T and point measures on the device from NGSolve reference tables; no evaluation matrix crosses.")
+      .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;
+          {py::gil_scoped_release release;route=self.route();rows=self.transfers();}
+          pythonPublicationProbe();py::dict d;d["route"]=route;py::list ledger;
+          for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
+          d["transfer_ledger"]=ledger;return d;})
       .def("evaluate",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state,Array<double> direction){
           const auto stats=self.stats();if(stats.closed)throw py::value_error("Material context is closed");
           if(state.ndim()!=1||std::size_t(state.size())!=stats.dofs||direction.ndim()!=1||(direction.size()!=0&&std::size_t(direction.size())!=stats.dofs))throw py::value_error("Material state or direction mismatch");
