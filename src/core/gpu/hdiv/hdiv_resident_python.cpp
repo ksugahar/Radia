@@ -87,12 +87,13 @@ radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
     return input;
 }
-std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
+template<bool Oracle>std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
     if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
     std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);
     auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
-    py::gil_scoped_release release;auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
+    py::gil_scoped_release release;
+    auto owner=Oracle?radia_hdiv_bh::createFlatMaterialOracle(input,law):radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
 }
 py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
@@ -193,10 +194,14 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
 
           py::gil_scoped_release release;auto owner=radia_hdiv_bh::createMaterial(input,law);pythonPublicationProbe();return owner;
       }),py::arg("offsets").noconvert(),py::arg("indices").noconvert(),py::arg("values").noconvert(),py::arg("weights").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"))
-      .def_static("from_flat_tables",&constructFlatMaterial,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+      .def_static("from_flat_tables",&constructFlatMaterial<false>,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
-           "Generate E, E^T and point measures on the device from NGSolve reference tables; no evaluation matrix crosses.")
+           "Matrix-free device E and E^T from resident NGSolve reference tables, with point measures and reference mass; no evaluation matrix exists or crosses.")
+      .def_static("_explicit_evaluation_oracle",&constructFlatMaterial<true>,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
+           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
+           "Diagnostic only, small cases: the same tables with an explicit device E/E^T, for matrix-free parity checks.")
       .def_static("validate_flat_tables",&validateFlatTables,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),
@@ -213,6 +218,12 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           pythonPublicationProbe();py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
           py::dict out;out["y"]=y;out["nonzeros"]=result.nonzeros;out["spectral_bound"]=result.bound;return out;
       },py::arg("x").noconvert(),"Diagnostic y=Mx of the device-built reference mass; vectors cross, the matrix never does.")
+      .def("evaluation_apply",[](radia_hdiv_bh::MaterialOperator& self,Array<double> x,bool transpose){
+          if(x.ndim()!=1)throw py::value_error("Evaluation action input must be one-dimensional");
+          std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hmatrix_cuda::HostVector<double> y;
+          {py::gil_scoped_release release;y=self.evaluationAction(input,transpose);}
+          pythonPublicationProbe();py::array_t<double> out(y.size());std::copy(y.begin(),y.end(),out.mutable_data());return out;
+      },py::arg("x").noconvert(),py::arg("transpose"),"Diagnostic E x (transpose=False) or E^T y (transpose=True); vectors cross, no evaluation matrix does.")
       .def("evaluate",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state,Array<double> direction){
           const auto stats=self.stats();if(stats.closed)throw py::value_error("Material context is closed");
           if(state.ndim()!=1||std::size_t(state.size())!=stats.dofs||direction.ndim()!=1||(direction.size()!=0&&std::size_t(direction.size())!=stats.dofs))throw py::value_error("Material state or direction mismatch");

@@ -172,10 +172,10 @@ def test_invalid_aca_parameters_fail_before_any_mesh_work(monkeypatch):
 
 
 def _budget(**change):
-    terms = dict(reference_tables=10, evaluation_E=400, evaluation_ET=300, transpose_sort=50,
-                 mass_triples=90, mass_csr=40, material_state=20)
+    terms = dict(reference_tables=10, incidence=400, incidence_sort=50,
+                 mass_triples=300, mass_csr=40, material_state=110)
     budget = dict(schema="radia.hdiv-flat-material-budget.v1", terms=terms, total_bytes=sum(terms.values()),
-                  limiting_term="evaluation_E", excludes="CUB scratch and the inverse-BH law")
+                  limiting_term="incidence", excludes="CUB scratch and the inverse-BH law")
     budget.update(change)
     return budget
 
@@ -189,13 +189,13 @@ def test_scope_check_budget_is_returned_as_an_owned_checked_copy(monkeypatch):
     monkeypatch.setattr(hdiv_gpu, "_fe_sources", lambda mesh, fes: dict(dofs=fes.ndof))
     setup = hdiv_gpu._prepare_device_components("mesh.vol", 2, native, aca=None)
     assert calls == ["mesh", "evaluation-staging", "material-scope", "charge-staging", "charge-tables"], calls
-    assert setup["material_budget"]["limiting_term"] == "evaluation_E" and setup["material_budget"]["total_bytes"] == 910
-    published["terms"]["evaluation_E"] = 1
-    assert setup["material_budget"]["terms"]["evaluation_E"] == 400, "budget must be an owned copy"
+    assert setup["material_budget"]["limiting_term"] == "incidence" and setup["material_budget"]["total_bytes"] == 910
+    published["terms"]["incidence"] = 1
+    assert setup["material_budget"]["terms"]["incidence"] == 400, "budget must be an owned copy"
 
 
 @pytest.mark.parametrize("change", [
-    dict(schema="radia.hdiv-flat-material-budget.v0"), dict(total_bytes=909), dict(limiting_term="evaluation_ET"),
+    dict(schema="radia.hdiv-flat-material-budget.v0"), dict(total_bytes=909), dict(limiting_term="mass_triples"),
     dict(terms=dict(reference_tables=10)), dict(terms=dict(_budget()["terms"], material_state=0)),
     dict(terms=dict(_budget()["terms"], material_state=True)), dict(terms=dict(_budget()["terms"], material_state=2.)),
     dict(terms=dict(reversed(list(_budget()["terms"].items()))))])
@@ -250,11 +250,11 @@ def test_material_context_and_its_live_budget_precede_the_gram(monkeypatch):
     prepared, law = _fake_workflow(monkeypatch, calls)
     prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
     assert calls == ["material", "operator"], calls
-    assert prepared.stats()["material_budget"]["limiting_term"] == "evaluation_E"
+    assert prepared.stats()["material_budget"]["limiting_term"] == "incidence"
     calls.clear()
-    budget_error = RuntimeError("Flat material device budget exceeded: limiting term evaluation_E")
+    budget_error = RuntimeError("Flat material device budget exceeded: limiting term incidence")
     prepared, law = _fake_workflow(monkeypatch, calls, material_fail=budget_error)
-    with pytest.raises(RuntimeError, match="limiting term evaluation_E"):
+    with pytest.raises(RuntimeError, match="limiting term incidence"):
         prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
     assert calls == ["material"], "no Gram may be built after a material budget failure"
 

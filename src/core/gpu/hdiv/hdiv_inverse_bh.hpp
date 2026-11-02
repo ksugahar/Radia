@@ -30,13 +30,14 @@ struct FlatEvaluationInput {
     BoundaryVector<double> rule,shapes,vertices;
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
 };
-// Device bytes of one flat material build and its resident state, from table
-// dimensions alone. Every builder buffer stays live until the build returns,
-// so the sum is the setup peak; CUB scratch is queried on the device and added
-// there. Mass terms are upper bounds (one stored entry per element triple).
+// Device bytes of one matrix-free flat material build and its resident state,
+// from table dimensions alone: no global E is stored. Builder transients are
+// counted as live together, so the sum bounds the setup peak; CUB scratch is
+// queried on the device and added there. Mass terms are upper bounds (one
+// stored entry per element triple).
 struct FlatEvaluationBudget {
-    static constexpr std::size_t count=7;
-    static constexpr const char* names[count]={"reference_tables","evaluation_E","evaluation_ET","transpose_sort",
+    static constexpr std::size_t count=6;
+    static constexpr const char* names[count]={"reference_tables","incidence","incidence_sort",
                                                "mass_triples","mass_csr","material_state"};
     std::size_t bytes[count]={};
     std::size_t total()const{
@@ -45,23 +46,26 @@ struct FlatEvaluationBudget {
     }
     std::size_t limiting()const{std::size_t at=0;for(std::size_t i=1;i<count;++i)if(bytes[i]>bytes[at])at=i;return at;}
 };
+inline std::size_t budgetProduct(std::size_t a,std::size_t b){
+    if(b&&a>std::numeric_limits<std::size_t>::max()/b)throw std::overflow_error("Flat material budget overflow");return a*b;
+}
+inline std::size_t budgetSum(std::initializer_list<std::size_t> terms){
+    std::size_t s=0;for(auto t:terms){if(t>std::numeric_limits<std::size_t>::max()-s)throw std::overflow_error("Flat material budget overflow");s+=t;}return s;
+}
 inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationInput& in,std::size_t lawDoubles){
-    constexpr auto top=std::numeric_limits<std::size_t>::max();
-    auto mul=[](std::size_t a,std::size_t b){if(b&&a>top/b)throw std::overflow_error("Flat material budget overflow");return a*b;};
-    auto add=[](std::initializer_list<std::size_t> terms){std::size_t s=0;
-        for(auto t:terms){if(t>top-s)throw std::overflow_error("Flat material budget overflow");s+=t;}return s;};
+    const auto mul=budgetProduct;const auto add=budgetSum;
     const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs;
-    const auto nnz=mul(mul(3,nq),local),triples=mul(ne,mul(local,local));
+    const auto slots=mul(ne,local),triples=mul(ne,mul(local,local));
     constexpr std::size_t index=sizeof(std::size_t),real=sizeof(double),small=sizeof(int),key=sizeof(unsigned long long);
     FlatEvaluationBudget b;
+    // Resident element tables (vertices, shapes, class, DOFs, points, slot order) plus the transient rule and flag.
     b.bytes[0]=add({mul(mul(12,ne),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
-                    mul(add({ne,mul(ne,local),mul(ne,rule),1}),small)});
-    b.bytes[1]=add({mul(add({mul(3,nq),1}),index),mul(nnz,index+real)});
-    b.bytes[2]=add({mul(add({nd,1}),index),mul(nnz,index+real)});
-    b.bytes[3]=mul(nnz,4*sizeof(unsigned));
-    b.bytes[4]=add({mul(triples,3*key+2*real+2*small),mul(nd,real),real,2*small});
-    b.bytes[5]=add({mul(add({nd,1}),index),mul(triples,index+real),mul(nd,real)});
-    b.bytes[6]=add({mul(add({mul(18,nq),mul(4,nd),2,lawDoubles}),real),small});
+                    mul(add({ne,slots,mul(ne,rule),1}),small),slots});
+    b.bytes[1]=add({mul(add({nd,1}),index),mul(slots,sizeof(unsigned))});
+    b.bytes[2]=mul(slots,3*sizeof(unsigned));
+    b.bytes[3]=add({mul(triples,3*key+2*real+2*small),mul(nd,real),real,2*small});
+    b.bytes[4]=add({mul(add({nd,1}),index),mul(triples,index+real),mul(nd,real)});
+    b.bytes[5]=add({mul(add({mul(18,nq),mul(4,nd),2,lawDoubles}),real),small});
     return b;
 }
 struct LedgerRow {std::string payload,direction;std::size_t bytes=0;};
@@ -86,11 +90,15 @@ public:
     virtual radia_hmatrix_cuda::HostVector<LedgerRow> transfers()=0;
     virtual MaterialFootprint footprint()=0;
     virtual MassAction massAction(const radia_hmatrix_cuda::HostVector<double>&)=0;
+    // Diagnostic E x or E^T y; vectors cross, no evaluation matrix does.
+    virtual radia_hmatrix_cuda::HostVector<double> evaluationAction(const radia_hmatrix_cuda::HostVector<double>&,bool transpose)=0;
     virtual void close()=0;
 };
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&);
-// E and E^T are generated on the device; no evaluation matrix crosses.
+// E and E^T act matrix-free on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
+// Small-case diagnostic oracle: the same tables with an explicit device E/E^T.
+std::shared_ptr<MaterialOperator> createFlatMaterialOracle(const FlatEvaluationInput&,const Law&);
 // Host-only scope check of the flat tables (the same checks the context runs) and
 // their device budget without CUB scratch or the law; no CUDA call.
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);

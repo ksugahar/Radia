@@ -27,7 +27,10 @@ class MappedMaterial {
     std::size_t nq,nd,nk,payloadBound=0,setupBytes=0,stateBytes=0,calls=0;
     std::size_t stateEpoch=0,tangentCalls=0;bool frozen=false;
     int device=0;double cap,barrier,last,initial;
-    DeviceMap E,ET,M;
+    // Explicit E/E^T: the host-evaluation route and the small-case oracle only.
+    DeviceMap E,ET,M;FlatEvaluationOperator flat;bool matrixFree=false;
+    void applyE(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.apply(x,y,stream);else E.apply(x,y,stream);}
+    void applyET(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.applyTranspose(x,y,stream);else ET.apply(x,y,stream);}
     Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,gradient,tangent,totals,massDiagonal;
     Buffer<int> invalid;
     std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
@@ -60,19 +63,24 @@ public:
             (e.values.size()+transpose.values.size())*sizeof(double)});
         weights.upload(in.weights);ledger.push_back({"material_weights_host","H2D",in.weights.size()*sizeof(double)});allocateState(law);
     }
-    // E, E^T and the point measures are generated on the device from NGSolve reference tables.
-    MappedMaterial(const FlatEvaluationInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
+    // Matrix-free E/E^T from NGSolve reference tables resident on the device, with the
+    // point measures and reference mass built there. explicitOracle additionally stores
+    // the explicit E/E^T, applies them and builds M from them: small-case diagnostic only.
+    MappedMaterial(const FlatEvaluationInput& in,const Law& law,bool explicitOracle=false):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
         using namespace radia_hmatrix_cuda;
         validateFlatEvaluation(in);validateInverseBH(law,radia_hmatrix_cuda::HostVector<double>{0.});
         // Dimension budget plus CUB scratch against live free memory; no fixed payload cap.
-        payloadBound=requireFlatEvaluationDevice(in,law.knots.size()+law.coefficients.size()+law.integralBase.size(),budget);
+        payloadBound=requireFlatEvaluationDevice(in,law.knots.size()+law.coefficients.size()+law.integralBase.size(),explicitOracle,budget);
         check(cudaGetDevice(&device));
-        FlatEvaluationBuilder builder;builder.build(in,E,ET,weights,M,massDiagonal);
-        routeName="device-flat-tet-evaluation";hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
+        FlatEvaluationBuilder builder;
+        if(explicitOracle)builder.build(in,flat,weights,M,massDiagonal,&E,&ET);else builder.build(in,flat,weights,M,massDiagonal);
+        matrixFree=!explicitOracle;routeName=explicitOracle?"device-flat-tet-explicit-oracle":"device-flat-tet-matrix-free";
+        hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
         massNonzeros=builder.massNonzeros;massBytes=(nd+1+massNonzeros)*sizeof(std::size_t)+(massNonzeros+nd)*sizeof(double);
         for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}
         allocateState(law);setupBytes+=ledger.back().bytes;
         for(auto* map:{&E,&ET,&M})persistentBytes+=(map->offsets.size+map->indices.size)*sizeof(std::size_t)+map->values.size*sizeof(double);
+        persistentBytes+=flat.bytes();
         for(auto* buffer:{&m,&delta,&v,&dv,&amplitude,&samples,&weights,&knots,&c,&base,&field,&action,&pointEnergy,&gradient,&tangent,&totals,&massDiagonal})
             persistentBytes+=buffer->size*sizeof(double);
         persistentBytes+=invalid.size*sizeof(int);
@@ -93,6 +101,18 @@ public:
         MassAction out;out.y.resize(nd);check(cudaMemcpy(out.y.data(),tangent.data,nd*sizeof(double),cudaMemcpyDeviceToHost));
         out.nonzeros=massNonzeros;out.bound=massBound;return out;
     }
+    // Diagnostic y=E x (transpose=false, x of size nd) or g=E^T y (transpose=true, y of size 3*nq).
+    radia_hmatrix_cuda::HostVector<double> evaluationAction(const radia_hmatrix_cuda::HostVector<double>& x,bool transpose){
+        using namespace radia_hmatrix_cuda;
+        const auto in=transpose?3*nq:nd,out=transpose?nd:3*nq;
+        if(x.size()!=in)throw std::invalid_argument("Evaluation action dimension mismatch");
+        for(double value:x)if(!std::isfinite(value))throw std::invalid_argument("Nonfinite evaluation action input");
+        int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mapped material belongs to another GPU");
+        double* input=transpose?field.data:delta.data;double* output=transpose?gradient.data:v.data;
+        check(cudaMemcpy(input,x.data(),in*sizeof(double),cudaMemcpyHostToDevice));
+        if(transpose)applyET(input,output,nullptr);else applyE(input,output,nullptr);
+        frozen=false;HostVector<double> y(out);check(cudaMemcpy(y.data(),output,out*sizeof(double),cudaMemcpyDeviceToHost));return y;
+    }
     const std::string& route()const{return routeName;}
     const radia_hmatrix_cuda::HostVector<LedgerRow>& transfers()const{return ledger;}
     std::size_t dofs()const{return nd;}
@@ -109,12 +129,12 @@ public:
         const bool hasDirection=!direction.empty();check(cudaMemcpy(m.data,state.data(),nd*sizeof(double),cudaMemcpyHostToDevice));
         if(hasDirection)check(cudaMemcpy(delta.data,direction.data(),nd*sizeof(double),cudaMemcpyHostToDevice));check(cudaStreamSynchronize(nullptr));const auto uploaded=(state.size()+direction.size())*sizeof(double);
         if(uploaded>std::numeric_limits<std::size_t>::max()-stateBytes)throw std::overflow_error("Material upload counter exhausted");stateBytes+=uploaded;
-        check(cudaMemset(invalid.data,0,sizeof(int)));E.apply(m.data,v.data,nullptr);if(hasDirection)E.apply(delta.data,dv.data,nullptr);
+        check(cudaMemset(invalid.data,0,sizeof(int)));applyE(m.data,v.data,nullptr);if(hasDirection)applyE(delta.data,dv.data,nullptr);
         const unsigned blocks=unsigned((nq+127)/128);materialAmplitudes<<<blocks,128>>>(nq,v.data,amplitude.data);check(cudaGetLastError());
         inverseLawKernel<<<blocks,128>>>(amplitude.data,nq,knots.data,nk,c.data,base.data,cap,barrier,last,initial,samples.data);check(cudaGetLastError());
         materialPointFields<<<blocks,128>>>(nq,v.data,hasDirection?dv.data:nullptr,amplitude.data,samples.data,weights.data,field.data,action.data,pointEnergy.data,invalid.data);check(cudaGetLastError());
         int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));if(failed)throw std::runtime_error("Invalid mapped inverse BH tangent or energy");
-        ET.apply(field.data,gradient.data,nullptr);if(hasDirection)ET.apply(action.data,tangent.data,nullptr);
+        applyET(field.data,gradient.data,nullptr);if(hasDirection)applyET(action.data,tangent.data,nullptr);
         materialEnergyReduction<<<1,1>>>(nq,pointEnergy.data,amplitude.data,totals.data);check(cudaGetLastError());
         MaterialEvaluation out;out.gradient.resize(nd);check(cudaMemcpy(out.gradient.data(),gradient.data,nd*sizeof(double),cudaMemcpyDeviceToHost));
         if(hasDirection){out.tangentAction.resize(nd);check(cudaMemcpy(out.tangentAction.data(),tangent.data,nd*sizeof(double),cudaMemcpyDeviceToHost));}
@@ -129,9 +149,9 @@ public:
         if(!frozen||!expectedEpoch||expectedEpoch!=stateEpoch)throw std::invalid_argument("Stale material linearization epoch");
         int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mapped material belongs to another GPU");
         if(tangentCalls==std::numeric_limits<std::size_t>::max())throw std::overflow_error("Material action counter exhausted");
-        E.apply(direction,dv.data,stream);
+        applyE(direction,dv.data,stream);
         materialPointFields<<<unsigned((nq+127)/128),128,0,stream>>>(nq,v.data,dv.data,amplitude.data,samples.data,weights.data,field.data,action.data,pointEnergy.data,invalid.data);check(cudaGetLastError());
-        ET.apply(action.data,output,stream);++tangentCalls;
+        applyET(action.data,output,stream);++tangentCalls;
     }
     radia_hmatrix_cuda::HostVector<double> tangentAction(const radia_hmatrix_cuda::HostVector<double>& direction,std::size_t expectedEpoch){
         using namespace radia_hmatrix_cuda;
