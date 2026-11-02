@@ -86,6 +86,14 @@ def test_unsupported_input_rejected_before_fe_preparation(options, error):
     assert calls == []
 
 
+def test_structural_int32_limit_reaches_fe_preparation_without_a_size_cap():
+    ns, calls, basis = load_inputs()
+    top = 2**31 - 1
+    basis["B"] = SimpleNamespace(shape=(top, top))
+    B, _ = ns["_prepare_gpu_charge_inputs"](space(dofs=top, elements=top), backend="gpu")
+    assert B is basis["B"] and calls[0] == ("validate", (3, {4}, 1, 1)), calls[:2]
+
+
 def test_backend_rejected_before_touching_space():
     ns, calls, _ = load_inputs()
     for backend in (None, "cpu", "auto"):
