@@ -8,7 +8,7 @@ NGSolve reference tables; no host-built sparse operator is uploaded.
 """
 from __future__ import annotations
 
-__all__ = ["PreparedHDivLinear", "PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
+__all__ = ["PreparedHDivLinear", "PreparedHDivNonlinear", "prepare_hdiv_device_setup", "prepare_hdiv_host_setup"]
 
 import base64
 from importlib import metadata
@@ -845,6 +845,34 @@ def _checked_material_assembly(assembly, tables, *, route="device-flat-tet-matri
     if set(seen) != set(expected):
         raise RuntimeError("HDiv material transfer ledger missing rows: %r" % (sorted(set(expected) - set(seen)),))
     return assembly
+
+
+def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
+                              mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+    """Return the owned primitive device-construction payload of a checked mesh.
+
+    Schema ``radia.hdiv-device-setup.v1``: NGSolve reference tables and charge
+    geometry for the device Gram, charge map, evaluation map and reference
+    mass, plus the NG-assembled source and mean-field vectors. No matrix and
+    no resident GPU object is created; the binding consumers (pybind11 and
+    the plain MEX) build every operator on the device from these arrays.
+    The caller owns TaskManager.
+    """
+    if backend != "gpu":
+        raise ValueError("Device setup requires explicit backend='gpu'")
+    if isinstance(order, bool) or order not in (1, 2):
+        raise ValueError("HDiv order must be 1 or 2")
+    aca = _checked_gram_aca(gram_aca)
+    from .gpu import _native
+    native = _native("_hdiv_cuda")
+    with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                                mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
+        setup = _prepare_device_components(path, order, native, aca=aca)
+    return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family="affine-tet", order=order,
+                dofs=setup["dofs"], mesh_sha256=mesh_hash, label_contract_sha256=contract_hash,
+                evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],
+                material_budget=setup["material_budget"], rhs_operator=setup["rhs_operator"],
+                mean_operator=setup["mean_operator"])
 
 
 def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
