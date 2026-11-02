@@ -61,7 +61,7 @@ public:
             [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
-        record={"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
+        record={flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
         record.compression=flat.compression;
         for(std::size_t i=0;i<ChargeBudget::count;++i)record.budget.push_back({ChargeBudget::names[i],budget.bytes[i]});
         planTransfer(plan);
@@ -100,6 +100,10 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
     block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
     block.expo.assign(input.expo.begin(),input.expo.end());block.farFactor=input.farFactor;
+    if(input.family!="affine-tet"&&input.family!="curved-tet")throw std::invalid_argument("Charge geometry family must be 'affine-tet' or 'curved-tet'");
+    block.curved=input.family=="curved-tet";
+    block.gl.assign(input.gl.begin(),input.gl.end());block.gw.assign(input.gw.begin(),input.gw.end());
+    block.cellNumbers.assign(input.cellNumbers.begin(),input.cellNumbers.end());block.faceNumbers.assign(input.faceNumbers.begin(),input.faceNumbers.end());
     auto rule=[](const radia_hmatrix_cuda::HostVector<double>& rows,auto& out){
         if(rows.size()%4)throw std::invalid_argument("Reference rule rows require (xi0,xi1,xi2,weight)");
         for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
@@ -184,7 +188,7 @@ std::atomic<unsigned> liveMassOwners{0};
 // point measures are released after the build, only M and its diagonal stay.
 class MassOwner final:public MassOperator {
     std::mutex mutex;radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::DeviceMap> M;radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::Buffer<double>> diagonal;
-    std::size_t nd=0,nonzeros=0,massBytes=0;double bound=0;bool counted=false;
+    std::size_t nd=0,nonzeros=0,massBytes=0;double bound=0;bool counted=false;std::string routeName;
     radia_hmatrix_cuda::HostVector<LedgerRow> ledger;MaterialFootprint bytes;int device=0;
     void live(){if(!M)throw std::invalid_argument("Mass context is closed");int current;radia_hmatrix_cuda::check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mass context belongs to another GPU");}
 public:
@@ -194,7 +198,7 @@ public:
         counted=true;
         try{
             validateFlatEvaluation(input);FlatEvaluationBudget budget;requireFlatEvaluationDevice(input,0,budget);
-            check(cudaGetDevice(&device));nd=input.dofs;
+            check(cudaGetDevice(&device));nd=input.dofs;routeName=input.nodes==10?"device-curved-tet-mass":"device-flat-tet-mass";
             auto map=makeHostUnique<DeviceMap>("python.mass-map");auto diag=makeHostUnique<Buffer<double>>("python.mass-diagonal");
             {FlatEvaluationOperator flat;Buffer<double> weights;FlatEvaluationBuilder builder;
                 builder.build(input,flat,weights,*map,*diag);
@@ -220,6 +224,7 @@ public:
     MaterialFootprint footprint()override{std::lock_guard<std::mutex> lock(mutex);live();return bytes;}
     std::size_t dofs()override{std::lock_guard<std::mutex> lock(mutex);return nd;}
     bool closed()override{std::lock_guard<std::mutex> lock(mutex);return !M;}
+    std::string route()override{std::lock_guard<std::mutex> lock(mutex);return routeName;}
     void close()override{std::lock_guard<std::mutex> lock(mutex);diagonal.reset();M.reset();if(counted){--liveMassOwners;counted=false;}}
 };
 }

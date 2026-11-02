@@ -170,6 +170,8 @@ def _fake_device_staging(monkeypatch, calls, validate):
     ng.HDiv = lambda mesh, order: fes
     vim = types.ModuleType("radia.vim._vim")
     vim._prepare_gpu_charge_inputs = lambda *a, **k: calls.append("charge-staging")
+    vim._prepare_gpu_curved_charge_inputs = lambda *a, **k: calls.append("curved-charge-staging")
+    vim._curve_mesh = lambda mesh, order: calls.append(("curve", order))
     for name, module in (("ngsolve", ng), ("radia", types.ModuleType("radia")),
                          ("radia.vim", types.ModuleType("radia.vim")), ("radia.vim._vim", vim)):
         monkeypatch.setitem(sys.modules, name, module)
@@ -277,14 +279,14 @@ def _fake_workflow(monkeypatch, calls, material_fail=None, used=900, bound=910):
 def test_material_context_and_its_live_budget_precede_the_gram(monkeypatch):
     calls = []
     prepared, law = _fake_workflow(monkeypatch, calls)
-    prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+    prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET), 1)
     assert calls == ["material", "operator"], calls
     assert prepared.stats()["material_budget"]["limiting_term"] == "incidence"
     calls.clear()
     budget_error = RuntimeError("Flat material device budget exceeded: limiting term incidence")
     prepared, law = _fake_workflow(monkeypatch, calls, material_fail=budget_error)
     with pytest.raises(RuntimeError, match="limiting term incidence"):
-        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET), 1)
     assert calls == ["material"], "no Gram may be built after a material budget failure"
 
 
@@ -292,7 +294,7 @@ def test_allocations_beyond_the_preflight_bound_fail_and_release(monkeypatch):
     calls = []
     prepared, law = _fake_workflow(monkeypatch, calls, used=911, bound=910)
     with pytest.raises(RuntimeError, match="exceed the preflight budget"):
-        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET), 1)
     assert calls == ["material", "material-close"], calls
 
 

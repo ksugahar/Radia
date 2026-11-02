@@ -22,11 +22,13 @@ struct MaterialInput {
     BoundaryVector<std::size_t> offsets,indices; // CSR component-major E, 3*points rows
     BoundaryVector<double> values,weights;
 };
-// Affine-TET evaluation tables: NGSolve reference shapes per vertex-rank class
+// TET evaluation tables: NGSolve reference shapes per vertex-rank class
 // (classes x rulePoints x local x 3), rule rows (xi0,xi1,xi2,weight), element
-// vertices in NGSolve order, DOF and material-point numbers. No E values.
+// geometry, DOF and material-point numbers. No E values. Geometry holds
+// `nodes` points per element: 4 affine vertices in NGSolve order, or the 10
+// P2 nodes of a curved element (corners first, NGSolve reference frame).
 struct FlatEvaluationInput {
-    std::size_t elements=0,local=0,rulePoints=0,classes=0,points=0,dofs=0;
+    std::size_t elements=0,local=0,rulePoints=0,classes=0,points=0,dofs=0,nodes=4;
     BoundaryVector<double> rule,shapes,vertices;
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
 };
@@ -58,8 +60,8 @@ inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationInput& in,s
     const auto slots=mul(ne,local),triples=mul(ne,mul(local,local));
     constexpr std::size_t index=sizeof(std::size_t),real=sizeof(double),small=sizeof(int),key=sizeof(unsigned long long);
     FlatEvaluationBudget b;
-    // Resident element tables (vertices, shapes, class, DOFs, points, slot order) plus the transient rule and flag.
-    b.bytes[0]=add({mul(mul(12,ne),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
+    // Resident element tables (geometry, shapes, rule, class, DOFs, points, slot order) plus the flag.
+    b.bytes[0]=add({mul(mul(3*in.nodes,ne),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
                     mul(add({ne,slots,mul(ne,rule),1}),small),slots});
     b.bytes[1]=add({mul(add({nd,1}),index),mul(slots,sizeof(unsigned))});
     b.bytes[2]=mul(slots,3*sizeof(unsigned));
@@ -107,6 +109,8 @@ public:
     virtual std::size_t dofs()=0;
     virtual bool closed()=0;
     virtual void close()=0;
+    // Geometry family of the device build: device-flat-tet-mass or device-curved-tet-mass.
+    virtual std::string route()=0;
 };
 std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput&);
 // Host-only scope check of the flat tables (the same checks the context runs) and

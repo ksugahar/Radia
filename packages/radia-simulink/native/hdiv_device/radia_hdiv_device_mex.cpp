@@ -97,6 +97,9 @@ radia_hdiv_bh::FlatEvaluationInput evaluationInput(const mxArray* s,std::size_t 
     const auto cls=integers(field(s,"element_class"),"element_class"),dofTable=integers(field(s,"element_dofs"),"element_dofs"),points=integers(field(s,"element_points"),"element_points");
     in.elements=cls.size();in.rulePoints=quotient(rule.size(),4,"rule");in.local=quotient(dofTable.size(),in.elements,"element_dofs");
     in.classes=quotient(shapes.size(),in.rulePoints*in.local*3,"reference_shapes");in.points=in.elements*in.rulePoints;in.dofs=dofs;
+    // Geometry: 4 affine vertices or 10 curved P2 nodes per element.
+    in.nodes=quotient(vertices.size(),3*in.elements,"vertices");
+    if(in.nodes!=4&&in.nodes!=10)throw std::invalid_argument("Evaluation geometry requires 4 affine vertices or 10 P2 nodes per element");
     in.rule.assign(rule.begin(),rule.end());in.shapes.assign(shapes.begin(),shapes.end());in.vertices.assign(vertices.begin(),vertices.end());
     in.elementClass.assign(cls.begin(),cls.end());in.elementDofs.assign(dofTable.begin(),dofTable.end());in.elementPoints.assign(points.begin(),points.end());
     return in;
@@ -118,6 +121,15 @@ std::shared_ptr<DeviceOperator> createOperator(const mxArray* s){
         reals(field(s,"tri_low_rule"),"tri_low_rule"),integers(field(s,"charge_host"),"charge_host"),
         integers(field(s,"charge_kind"),"charge_kind"),integers(field(s,"charge_exponents"),"charge_exponents"),
         scalar(field(s,"far_factor"),"far_factor"),text(field(s,"compression"),"compression")};
+    input.family=text(field(s,"family"),"family");
+    if(input.family!="affine-tet"&&input.family!="curved-tet")throw std::invalid_argument("family must be explicit 'affine-tet' or 'curved-tet'");
+    const bool curved=input.family=="curved-tet";
+    for(const char* name:{"cell_numbers","face_numbers","curve_gl","curve_gw","cell_mass_rule","face_mass_rule"})
+        if((mxGetField(s,0,name)!=nullptr)!=curved)throw std::invalid_argument(std::string(name)+" is required for family='curved-tet' and rejected for 'affine-tet'");
+    if(curved){
+        input.cellNumbers=integers(field(s,"cell_numbers"),"cell_numbers");input.faceNumbers=integers(field(s,"face_numbers"),"face_numbers");
+        input.gl=reals(field(s,"curve_gl"),"curve_gl");input.gw=reals(field(s,"curve_gw"),"curve_gw");
+    }
     if(input.compression=="aca"){
         const mxArray* aca=field(s,"aca");
         input.acaEps=scalar(field(aca,"eps"),"eps");input.acaEta=scalar(field(aca,"eta"),"eta");
@@ -131,6 +143,9 @@ std::shared_ptr<DeviceOperator> createOperator(const mxArray* s){
     charges.cellDofs=integers(field(s,"cell_dofs"),"cell_dofs");charges.faceDofs=integers(field(s,"face_dofs"),"face_dofs");
     charges.cellExponents=integers(field(s,"cell_exponents"),"cell_exponents");charges.faceExponents=integers(field(s,"face_exponents"),"face_exponents");
     charges.cellTables=reals(field(s,"cell_tables"),"cell_tables");charges.faceTables=reals(field(s,"face_tables"),"face_tables");
+    if(curved){charges.curved=true;
+        charges.cellRule=reals(field(s,"cell_mass_rule"),"cell_mass_rule");charges.faceRule=reals(field(s,"face_mass_rule"),"face_mass_rule");
+        quotient(charges.cellRule.size(),4,"cell_mass_rule");quotient(charges.faceRule.size(),4,"face_mass_rule");}
     charges.cellMonomials=quotient(charges.cellExponents.size(),3,"cell_exponents");charges.faceMonomials=quotient(charges.faceExponents.size(),2,"face_exponents");
     charges.cellWidth=quotient(charges.cellDofs.size(),charges.cellClass.size(),"cell_dofs");charges.faceWidth=quotient(charges.faceDofs.size(),charges.faceClass.size(),"face_dofs");
     return createFlat(input,charges);

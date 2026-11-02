@@ -73,7 +73,9 @@ def test_flat_binding_takes_tables_not_charge_map_values():
     start = source.index('def_static("from_flat_charges"')
     names = re.findall(r'py::arg\("([a-z_]+)"\)', source[start:source.index('.def("assembly"', start)])
     assert names[10:] == ["dofs", "cell_class", "cell_dofs", "cell_tables", "cell_exponents", "face_class",
-                          "face_dofs", "face_tables", "face_exponents", "compression", "aca", "backend"], names
+                          "face_dofs", "face_tables", "face_exponents", "compression", "aca", "backend",
+                          "family", "cell_numbers", "face_numbers", "curve_gl", "curve_gw", "cell_mass_rule",
+                          "face_mass_rule"], names
     assert not {"offsets", "indices", "values"} & set(names), names
     flat = source[source.index("std::shared_ptr<DeviceOperator> constructFlat("):start]
     assert not re.search(r"\bMapInput\b", flat[:flat.index("PYBIND11_MODULE")]), "flat binding still builds a host CSR"
@@ -105,7 +107,7 @@ def test_staging_checks_every_cell_and_face_against_its_class():
     for guard in ("not determined by the element vertex order", "not determined by the face vertex order",
                   "TET map differs from the device affine convention", "TET Jacobian differs from the device affine convention",
                   "normal trace is not carried by the boundary-element DOFs", "non-conforming or corrupt",
-                  "ET_TET", "ET_TRIG", "GetCurveOrder()>1"):
+                  "ET_TET", "ET_TRIG", "checkTriMap(", "p2_staging::checkTetMap("):
         assert guard in staging, guard
     validate = (HDIV / "hdiv_flat_charge_map.cuh").read_text(encoding="utf-8")
     assert "Charge map rows disagree with the Gram charge order" in validate

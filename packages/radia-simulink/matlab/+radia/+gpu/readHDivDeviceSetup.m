@@ -11,13 +11,16 @@ for name={'schema','backend','family','mesh_sha256','label_contract_sha256'}
     setup.(name{1})=char(value.(name{1}));
 end
 assert(strcmp(setup.schema,'radia.hdiv-device-setup.v1') && strcmp(setup.backend,'gpu') && ...
-    strcmp(setup.family,'affine-tet'),'radia:gpu:DeviceSetup','Unsupported device setup schema, backend or family');
+    any(strcmp(setup.family,{'affine-tet','curved-tet'})),'radia:gpu:DeviceSetup','Unsupported device setup schema, backend or family');
+curved=strcmp(setup.family,'curved-tet');
 assert(~isempty(regexp(setup.mesh_sha256,'^[0-9a-f]{64}$','once')) && ...
     ~isempty(regexp(setup.label_contract_sha256,'^[0-9a-f]{64}$','once')), ...
     'radia:gpu:DeviceSetup','Missing checked mesh/label identity');
 setup.order=double(value.order);setup.dofs=double(value.dofs);nd=setup.dofs;
 assert(isscalar(setup.order) && ismember(setup.order,[0 1 2]) && isscalar(nd) && nd>=1 && fix(nd)==nd, ...
     'radia:gpu:DeviceSetup','Invalid device setup order or dimension');
+% Curved P2 geometry carries orders 1 and 2 only, matching the CPU curved route.
+assert(~curved || ismember(setup.order,[1 2]),'radia:gpu:DeviceSetup','Curved device setup requires order 1 or 2');
 setup.rhs_operator=double(value.rhs_operator);setup.mean_operator=double(value.mean_operator);
 assert(isequal(size(setup.rhs_operator),[nd 3]) && isequal(size(setup.mean_operator),[3 nd]) && ...
     isreal(setup.rhs_operator) && isreal(setup.mean_operator) && ...
@@ -27,6 +30,16 @@ c=value.charges;
 setup.charges=tables(c,{'cell_vertices','face_vertices','tet_rule','tri_rule','tet_low_rule','tri_low_rule', ...
     'cell_tables','face_tables'},{'charge_host','charge_kind','charge_exponents','cell_class','cell_dofs', ...
     'cell_exponents','face_class','face_dofs','face_exponents'});
+curvedFields={'cell_numbers','face_numbers','curve_gl','curve_gw','cell_mass_rule','face_mass_rule'};
+assert(all(isfield(c,curvedFields)==curved),'radia:gpu:DeviceSetup', ...
+    'Curved geometry tables are required for curved-tet and rejected for affine-tet');
+if curved
+    extra=tables(c,{'curve_gl','curve_gw','cell_mass_rule','face_mass_rule'},{'cell_numbers','face_numbers'});
+    for name=fieldnames(extra)'
+        setup.charges.(name{1})=extra.(name{1});
+    end
+end
+setup.charges.family=setup.family;
 setup.charges.far_factor=double(c.far_factor);setup.charges.compression=char(c.compression);
 setup.charges.dofs=double(c.dofs);
 assert(setup.charges.dofs==nd,'radia:gpu:DeviceSetup','Charge numbering differs from the FE dimension');

@@ -31,20 +31,21 @@ struct FlatAcaPartition {
 // ascending input order; equal centres or zero extent end the split as a leaf.
 inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOptions& options){
     block.validate();options.validate();
-    const auto n=block.charges();const std::size_t cellCount=block.cells.size()/12,faceCount=block.faces.size()/9;
+    const auto n=block.charges();const std::size_t cellCount=block.cellCount(),faceCount=block.faceCount();
     constexpr std::size_t none=std::numeric_limits<std::size_t>::max();
     HostVector<std::size_t> cellElement(cellCount,none,HostFaultAllocator<std::size_t>("aca.cell-element")),
         faceElement(faceCount,none,HostFaultAllocator<std::size_t>("aca.face-element"));
     for(std::size_t a=0;a<n;++a)(block.kind[a]==0?cellElement:faceElement)[std::size_t(block.host[a])]=0;
     HostVector<double> centre{HostFaultAllocator<double>("aca.centre")},radius{HostFaultAllocator<double>("aca.radius")};
     std::size_t elements=0;
-    auto addElement=[&](const double* V,int vertices){
+    // Centre: corner mean; support radius: every geometry node (curved P2 nodes bound the curved host).
+    auto addElement=[&](const double* V,int vertices,int nodes){
         double c[3]={0,0,0};for(int i=0;i<vertices;++i)for(int k=0;k<3;++k)c[k]+=V[3*i+k];
         for(int k=0;k<3;++k)c[k]/=vertices;double r=0;
-        for(int i=0;i<vertices;++i){const double dx=V[3*i]-c[0],dy=V[3*i+1]-c[1],dz=V[3*i+2]-c[2];r=std::max(r,std::sqrt(dx*dx+dy*dy+dz*dz));}
+        for(int i=0;i<nodes;++i){const double dx=V[3*i]-c[0],dy=V[3*i+1]-c[1],dz=V[3*i+2]-c[2];r=std::max(r,std::sqrt(dx*dx+dy*dy+dz*dz));}
         centre.insert(centre.end(),c,c+3);radius.push_back(r);return elements++;};
-    for(std::size_t h=0;h<cellCount;++h)if(cellElement[h]!=none)cellElement[h]=addElement(block.cells.data()+12*h,4);
-    for(std::size_t h=0;h<faceCount;++h)if(faceElement[h]!=none)faceElement[h]=addElement(block.faces.data()+9*h,3);
+    for(std::size_t h=0;h<cellCount;++h)if(cellElement[h]!=none)cellElement[h]=addElement(block.cells.data()+block.cellStride()*h,4,int(block.cellStride()/3));
+    for(std::size_t h=0;h<faceCount;++h)if(faceElement[h]!=none)faceElement[h]=addElement(block.faces.data()+block.faceStride()*h,3,int(block.faceStride()/3));
     HostVector<std::size_t> offsets(elements+1,0,HostFaultAllocator<std::size_t>("aca.charge-offsets")),members(n,0,HostFaultAllocator<std::size_t>("aca.charge-members"));
     auto elementOf=[&](std::size_t a){return (block.kind[a]==0?cellElement:faceElement)[std::size_t(block.host[a])];};
     for(std::size_t a=0;a<n;++a)++offsets[elementOf(a)+1];
