@@ -26,9 +26,11 @@ struct P1ChargeSource {
 };
 // Radia's charge monomial frame, not an NGSolve FE/orientation map: the same
 // centred linear polynomial as CPU InitHOPolynomialCoefficients. Returns false
-// for a singular face frame; the caller checks finiteness.
+// for a singular face frame; the caller checks finiteness. Every field is
+// written: the device fills uninitialized buffer slots in place.
 RADIA_P1_HOST_DEVICE inline bool p1ChargeSourceInto(int kind,const double* vertices,const int* exponent,
         P1ChargeSource& out){
+    out=P1ChargeSource{};
     for(int i=0;i<12;++i)out.vertices[i]=vertices[i];
     out.kind=kind;
     out.linear=exponent[0]!=0||exponent[1]!=0;
