@@ -273,17 +273,11 @@
     "src/radia/ngsbem_peec.py": [
       "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py"
     ],
-    "src/core/rad_hacapk_hdiv.cpp": [
-      "tests/feec/test_hdiv_prolate_regression_lock.py"
-    ],
     "validation_test/feec/test_hdiv_vim_ellipsoid.py": [
-      "tests/feec/test_hdiv_prolate_regression_lock.py"
-    ],
-    "src/radia/vim/": [
-      "tests/feec/test_hdiv_prolate_regression_lock.py"
+      "tests/feec/test_hdiv_prolate_checked_input.py"
     ],
     "tests/feec/data/prolate_named/": [
-      "tests/feec/test_hdiv_prolate_regression_lock.py"
+      "tests/feec/test_hdiv_prolate_checked_input.py"
     ],
     "src/radia/esim_depth.py": [
       "tests/test_esim_finite_slab_regression.py"
@@ -503,7 +497,9 @@
         "validation_test/panels/test_kelvin_benchmark_direct.py",
         "validation_test/panels/test_scalar_linear_direct.py",
         "validation_test/induction_heating/test_ih_operator_physics_golden.py",
-        "validation_test/axifem/test_heat_axisym_e2e.py"
+        "validation_test/axifem/test_heat_axisym_e2e.py",
+        "tests/feec/test_hdiv_prolate_regression_lock.py",
+        "tests/test_hdiv_p1_touching_routing.py"
       ]
     },
     "solver-numerics": {
@@ -606,7 +602,7 @@
         "validation_test/induction_heating/test_fem_ams_parity.py",
         "tests/test_lamination_api.py",
         "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
-        "tests/feec/test_hdiv_prolate_regression_lock.py",
+        "tests/feec/test_hdiv_prolate_checked_input.py",
         "tests/test_esim_finite_slab_regression.py",
         "tests/test_ih_ams_f1_surrogate.py",
         "tests/test_hdiv_gpu_mesh_integration.py",

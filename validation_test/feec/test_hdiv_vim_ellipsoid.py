@@ -7,20 +7,23 @@ validated domain to smooth bodies with anisotropic demag.
 
 The C++ analytic charge Gram lands within ~0.3% of the analytic N_z, confirming the analytic surface
 integral is correct for a general (non-equilateral, curved-surface) triangulation.
+
+Input: the checked named 1338-TET fixture (maxh 1.0) shared with the regression lock, not a mesh
+generated inside the test; the 1.5% criterion is unchanged.
 """
+import hashlib
 import os
 import sys
 from math import log, sqrt
+from pathlib import Path
 
 import pytest
 
 pytest.importorskip("ngsolve")
-pytest.importorskip("netgen.csg")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 from radia.vim import Solve  # noqa: E402
 import ngsolve as ng  # noqa: E402
-from netgen.csg import CSGeometry, Ellipsoid, Pnt, Vec  # noqa: E402
 
 
 def _prolate_Nz_analytic(c, a=1.0):
@@ -30,27 +33,29 @@ def _prolate_Nz_analytic(c, a=1.0):
 
 
 PROLATE_LABELS = (("magnetic_body",), ("exterior",))
+PROLATE_FIXTURE = Path(__file__).resolve().parents[2] / "tests" / "feec" / "data" / "prolate_named"
+# Checked VOL handoff: mesh sha256 -> sha256 of its recorded strict label-check report
+# against prolate-label-contract.json. No other mesh reaches Solve.
+CHECKED_PROLATE_VOLS = {
+    "27c3778663b1124e37ee5268e8fbd998d62d3550de5572378cd3eaf3bd6c109d":
+        "a85188adc458c6e0faf3e79f4a7bbbffba745c2a1e37e5fd60a7ee3cd2de36c1",
+}
 
 
-def run_prolate_case(maxh=0.6, *, mesh_path=None):
-    """Run one production case on the named prolate mesh; return the production output.
+def run_prolate_case(mesh_path):
+    """Run one production case on a checked named prolate VOL; return the production output.
 
-    The solid is named magnetic_body / exterior before meshing. An existing mesh_path is
-    loaded instead of remeshed and must carry exactly those labels, else this raises.
-    The analytic oracle belongs only to the heavy validation entry below.
+    Only a VOL whose sha256 is in CHECKED_PROLATE_VOLS is loaded; any other file raises
+    before Solve. There is no generation, remeshing or save path. The loaded labels must
+    still be exactly PROLATE_LABELS. The analytic oracle belongs only to the heavy
+    validation entry below.
     """
-    from pathlib import Path
-
-    c = 2.0
-    geo = CSGeometry()
-    geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)).mat("magnetic_body").bc("exterior"))
+    digest = hashlib.sha256(Path(mesh_path).read_bytes()).hexdigest()
+    if digest not in CHECKED_PROLATE_VOLS:
+        raise ValueError(f"prolate mesh sha256: actual={digest}; expected one of "
+                         f"{sorted(CHECKED_PROLATE_VOLS)} (checked VOL handoff required)")
     with ng.TaskManager():
-        if mesh_path is not None and Path(mesh_path).is_file():
-            mesh = ng.Mesh(str(mesh_path))
-        else:
-            mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
-            if mesh_path is not None:
-                mesh.ngmesh.Save(str(mesh_path))
+        mesh = ng.Mesh(str(mesh_path))
         labels = (tuple(mesh.GetMaterials()), tuple(sorted(set(mesh.GetBoundaries()))))
         if labels != PROLATE_LABELS:
             raise ValueError(f"prolate mesh labels: actual={labels}; expected={PROLATE_LABELS}")
@@ -65,4 +70,4 @@ def assert_prolate_validation(Dw):
 
 
 def test_prolate_spheroid_demag_factor():
-    assert_prolate_validation(run_prolate_case(maxh=0.6)["demag"])
+    assert_prolate_validation(run_prolate_case(PROLATE_FIXTURE / "prolate_named.vol")["demag"])

@@ -23,7 +23,7 @@
     ],
     "backend": "CPU HDiv-VIM",
     "ngsolve_threads": 1,
-    "library_threads": 1,
+    "library_threads_requested": 1,
     "provenance": {
       "native_sha256": "20b92bdc14313c34bf95b587a0f677dc4d492d520b818a7b698c5b8aedc249ce",
       "ngsolve_version": "6.2.2608",
@@ -32,7 +32,7 @@
       "ndof": 9177,
       "heavy_demag_Nz": 0.1741530730157663,
       "thread_profile": "UNQUALIFIED: MKL pool reported 52 threads after the entry returned; NGSolve threads 1",
-      "approval": "user-approved regression baseline migration and rtol 1e-6 (2026-11-02; H-matrix/ACA and CG tol 1e-8 make 1e-12 non-reproducible); regression lock only, not physical accuracy adoption or CPU/GPU/thread qualification",
+      "approval": "user-approved regression baseline migration and rtol 1e-6 (2026-11-02); regression lock only, not physical accuracy adoption or CPU/GPU/thread qualification",
       "history": {
         "retired_fixture": "tests/feec/data/prolate_mavg_z (unnamed mesh 76c79f3fc6d9d61585b270c486265e1a4c763eb301a7befe86de4504a05c9852)",
         "retired_expected_M_avg_z": 5.710946852499634,
