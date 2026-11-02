@@ -5,6 +5,7 @@
 #include "hdiv_flat_gram.cuh"
 #include "hdiv_flat_aca.cuh"
 #include "hdiv_flat_charge_map.cuh"
+#include "hdiv_p1_diagonal.cuh"
 #include <mutex>
 #include <sstream>
 #include <atomic>
