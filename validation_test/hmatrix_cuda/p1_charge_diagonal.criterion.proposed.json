@@ -1,0 +1,45 @@
+{
+  "schema": "radia.hdiv-p1-diagonal-criterion-proposal.v1",
+  "status": "pending-user-approval",
+  "applied_by_driver": false,
+  "scope": "affine pure-TET P1 charge self diagonals only",
+  "quantity": {
+    "diagonal": "raw physical G_ii; volume m^5, surface m^3",
+    "scale": "sqrt(G_ii), compared to independent CPU charge_sigma",
+    "parity_error": "max over all 13 charges of abs(GPU_i-CPU_i)/abs(CPU_i), separately for each of six geometries",
+    "scale_error": "max over all 13 charges of abs(scaleGPU_i-scaleCPU_i)/abs(scaleCPU_i)"
+  },
+  "backend_port_proposal": {
+    "maximum_diagonal_relative_error": 1e-12,
+    "maximum_scale_relative_error": 1e-12,
+    "rationale": "Proposed FP64 port guard with margin over observed host shared-arithmetic error about 2e-15. New GPU results are not yet available. This is empirical, not a theorem or an adopted tolerance.",
+    "reference": "production CPU ChargeGram constructor/entry and charge_sigma; shared primitive potentials explicitly disclosed",
+    "shared_components": ["analytic constant potentials", "triangle first moments"],
+    "failure": "missing/incomplete case, nonfinite/nonpositive output, provider/source/hash mismatch, failed lifetime guard, or an approved limit exceeded blocks acceptance"
+  },
+  "formulation_reference": {
+    "status": "pending independent singular-self-integral reference audit",
+    "required": "independent integral evaluation without shared TriPotential/TriMoment1, or an approved cited analytic reference with symbolic verification",
+    "deferred_reason": "The existing adjacent-entry brute-force study is not a validated self-entry oracle. Direct same-node point clouds or dropping coincident nodes are not acceptable substitutes. No new reference method or citation is certified here.",
+    "citation_and_symbolic_verification": null
+  },
+  "convergence_proposal": {
+    "axis": "outer integration rule at fixed FE order 1 and fixed geometry",
+    "gpu_rule_orders_proposed": [3, 5, 6],
+    "already_executed_by_this_driver": [3],
+    "note": "Orders 3 and 4 use the same production symmetric rule and cannot be counted as two levels. This is quadrature convergence, not FE p-convergence. P2 is unsupported.",
+    "reference_error_norm": "per-charge relative self-energy error against the independently qualified reference, then category-wise maximum",
+    "minimum_rate": null,
+    "finest_error_threshold": null,
+    "theory_and_assumptions": null,
+    "plateau_policy": "unexplained saturation blocks acceptance; no waiver is implemented",
+    "status": "pending reference, theory, thresholds and user approval; not executed"
+  },
+  "linear_solver_residual": {
+    "status": "not applicable to this standalone constructor; no solve is performed",
+    "not_fabricated_as_zero": true,
+    "record_schema_resolution": "Existing adoption schema requires residual fields. Resolve applicability with schema owner/user before creating a record, or bind adoption to a future actual production solve with its measured residual. Never fill invented zero residuals."
+  },
+  "approval": null,
+  "excluded_claims": ["full Gram", "FE assembly", "H-matrix compression", "public solver switch", "full HDiv-MMM", "P2", "curved geometry", "scale", "speedup"]
+}
