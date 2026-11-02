@@ -420,6 +420,19 @@ if(BUILD_TESTING)
 	add_test(NAME radia.arc_section.cpp COMMAND test_rad_arc_section)
 	set_tests_properties(radia.arc_section.cpp PROPERTIES TIMEOUT 120)
 
+	# Header-only GPU reserve rule: buffers live together are checked together.
+	add_executable(test_hdiv_device_reserve
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_hdiv_device_reserve.cpp
+	)
+	target_include_directories(test_hdiv_device_reserve PRIVATE ${CORE_DIR})
+	target_compile_features(test_hdiv_device_reserve PRIVATE cxx_std_17)
+	if(MSVC)
+		target_compile_options(test_hdiv_device_reserve PRIVATE /W4 /permissive-)
+	else()
+		target_compile_options(test_hdiv_device_reserve PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
+	add_test(NAME radia.hdiv_device_reserve.cpp COMMAND test_hdiv_device_reserve)
+
 
 endif()
 

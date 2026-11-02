@@ -129,6 +129,9 @@
           "test_rad_arc_section": [
             "radia"
           ],
+          "test_hdiv_device_reserve": [
+            "radia"
+          ],
           "radia_motor_rom": [
             "radia"
           ],
@@ -2520,6 +2523,18 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "src/core/gpu/hdiv/hdiv_device_reserve.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
       "owners": [
         "radia",
@@ -3289,6 +3304,7 @@
             "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_device_reserve.hpp",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",
@@ -3419,6 +3435,7 @@
             "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_device_reserve.hpp",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",

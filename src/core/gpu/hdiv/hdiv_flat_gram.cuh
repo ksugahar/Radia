@@ -255,8 +255,8 @@ struct FlatPrepared {
     FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor};}
 };
 inline void flatReserve(std::size_t bytes,const char* what){
-    std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
-    if(free<=reserve||bytes>free-reserve)throw std::runtime_error(what);
+    std::size_t free,total;check(cudaMemGetInfo(&free,&total));
+    if(!fitsAboveReserve(free,total,bytes))throw std::runtime_error(what);
 }
 // Deferred-dense oracle for Resident::materializeDeferred: writes the
 // normalized Gram and its sigma = sqrt(raw diagonal) on the resident stream.

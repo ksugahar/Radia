@@ -34,7 +34,7 @@ ChargeBudget chargeBudget(const radia_hmatrix_cuda::FlatBlock& block,const FlatI
     b.bytes[4]=aca?0:checkedProduct(checkedProduct(n,n),sizeof(double));
     b.bytes[5]=aca?radia_hmatrix_cuda::FlatAcaOracle::batchScratchBytes:0;
     std::size_t free,total;radia_hmatrix_cuda::check(cudaMemGetInfo(&free,&total));
-    const auto reserve=std::max(std::size_t(2)<<30,total/5),available=free>reserve?free-reserve:0,need=b.total();
+    const auto reserve=radia_hmatrix_cuda::reserveBytes(total),available=free>reserve?free-reserve:0,need=b.total();
     if(need>available){const auto k=b.limiting();std::ostringstream m;
         m<<"Flat charge device budget exceeded: "<<need<<" bytes needed, "<<available<<" free above the reserve; limiting term "
          <<ChargeBudget::names[k]<<" = "<<b.bytes[k]<<" bytes";throw std::runtime_error(m.str());}
@@ -67,10 +67,8 @@ public:
       :dimension(charges.dofs) {
         radia_hdiv_bh::FlatChargeMapBuilder builder;
         resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,nullptr,0);
-        resident->buildChargeMap(charges.dofs,builder.nonzeros(charges),
-            [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){
-                radia_hmatrix_cuda::flatReserve(radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(flat,charges),"Charge-map build scratch would exceed the GPU reserve");
-                builder.build(flat,charges,B,BT);});
+        resident->buildChargeMap(charges.dofs,builder.nonzeros(charges),radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(flat,charges),
+            [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
         record={"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};

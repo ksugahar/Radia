@@ -397,8 +397,14 @@ def test_flat_route_checks_the_budget_before_allocation_without_fixed_caps():
     flat = source[source.index("Operator(const radia_hmatrix_cuda::Plan& plan,Oracle& oracle"):]
     flat = flat[:flat.index("\n    }\n")]
     assert "plan,nullptr,0)" in flat, "flat route keeps the combined 2 GiB setup cap"
-    assert flat.index("flatReserve(radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(") < flat.index("builder.build("), \
-        "charge-map scratch allocated before a reserve check"
+    assert "builder.nonzeros(charges),radia_hdiv_bh::FlatChargeMapBuilder::scratchBound(flat,charges)," in flat \
+        and "flatReserve(" not in flat, "charge-map scratch must be reserved together with the map, not separately"
+    resident = (HDIV / "hmatrix_resident.cuh").read_text(encoding="utf-8")
+    build_map = resident[resident.index("void buildChargeMap("):resident.index("void materializeDeferred(")]
+    # B, B^T, the DOF vector and the builder scratch are live together: one checked sum, one reserve test.
+    assert "fitsAboveReserve(free,total,checkedSum({indices,values,scratch}))" in build_map, build_map
+    assert build_map.index("fitsAboveReserve(") < build_map.index("build(chargeMap,chargeTranspose)"), build_map
+    assert "add_test(NAME radia.hdiv_device_reserve.cpp" in (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     for name, cap in (("hdiv_flat_gram.cuh", "n>4608"), ("hdiv_flat_charge_map.cuh", "cells>4096"),
                       ("hdiv_flat_charge_map.cuh", "dofs>16384"), ("hdiv_charge_staging.hpp", ">4608")):
         assert cap not in (HDIV / name).read_text(encoding="utf-8"), (name, cap)
