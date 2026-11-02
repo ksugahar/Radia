@@ -191,9 +191,9 @@ std::atomic<unsigned> liveMaterialOwners{0};
 class MaterialOwner final:public MaterialOperator {
     std::mutex mutex;radia_hmatrix_cuda::HostUnique<MappedMaterial> context;bool counted=false;
 public:
-    template<class Input,class... Mode>MaterialOwner(const Input& input,const Law& law,Mode... mode){
+    template<class Input>MaterialOwner(const Input& input,const Law& law){
         if(liveMaterialOwners.fetch_add(1)>=2){--liveMaterialOwners;throw std::invalid_argument("Material context count budget exceeded");}
-        try{context=radia_hmatrix_cuda::makeHostUnique<MappedMaterial>("python.material-object",input,law,mode...);counted=true;}catch(...){--liveMaterialOwners;throw;}
+        try{context=radia_hmatrix_cuda::makeHostUnique<MappedMaterial>("python.material-object",input,law);counted=true;}catch(...){--liveMaterialOwners;throw;}
     }
     ~MaterialOwner()override{close();}
     MaterialEvaluation evaluate(const radia_hmatrix_cuda::HostVector<double>& x,const radia_hmatrix_cuda::HostVector<double>& d)override{
@@ -225,7 +225,6 @@ public:
 }
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
-std::shared_ptr<MaterialOperator> createFlatMaterialOracle(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law,true);}
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
 }
 

@@ -98,7 +98,6 @@ std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&
 // E and E^T act matrix-free on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
 // Small-case diagnostic oracle: the same tables with an explicit device E/E^T.
-std::shared_ptr<MaterialOperator> createFlatMaterialOracle(const FlatEvaluationInput&,const Law&);
 // Host-only scope check of the flat tables (the same checks the context runs) and
 // their device budget without CUB scratch or the law; no CUDA call.
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);

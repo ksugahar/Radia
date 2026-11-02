@@ -88,13 +88,13 @@ radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
     return input;
 }
-template<bool Oracle>std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
+std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
     if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
     std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);
     auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
     py::gil_scoped_release release;
-    auto owner=Oracle?radia_hdiv_bh::createFlatMaterialOracle(input,law):radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
+    auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
 }
 py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
@@ -195,14 +195,10 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
 
           py::gil_scoped_release release;auto owner=radia_hdiv_bh::createMaterial(input,law);pythonPublicationProbe();return owner;
       }),py::arg("offsets").noconvert(),py::arg("indices").noconvert(),py::arg("values").noconvert(),py::arg("weights").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"))
-      .def_static("from_flat_tables",&constructFlatMaterial<false>,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+      .def_static("from_flat_tables",&constructFlatMaterial,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
            "Matrix-free device E and E^T from resident NGSolve reference tables, with point measures and reference mass; no evaluation matrix exists or crosses.")
-      .def_static("_explicit_evaluation_oracle",&constructFlatMaterial<true>,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
-           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
-           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
-           "Diagnostic only, small cases: the same tables with an explicit device E/E^T, for matrix-free parity checks.")
       .def_static("validate_flat_tables",&validateFlatTables,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),
