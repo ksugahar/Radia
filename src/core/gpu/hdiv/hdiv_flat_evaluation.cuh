@@ -2,8 +2,7 @@
 // and E^T, and device construction of the reference mass M = E^T W E with its
 // diagonal and Jacobi bound. NGSolve tabulates reference shapes per vertex-rank
 // class on the host; only those tables, the element vertices, DOF numbers and
-// point numbers cross, and they stay resident: no global E is stored. An
-// explicit E/E^T is built only for the small-case diagnostic oracle.
+// point numbers cross, and they stay resident: no global E is stored.
 #pragma once
 #include <cub/device/device_radix_sort.cuh>
 #include <cub/device/device_run_length_encode.cuh>
@@ -20,7 +19,7 @@ __device__ inline double affineTet(const double* V,double J[3][3]){
     return J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
 }
 // The one formula of E: contravariant Piola value of reference shape S, component c.
-// The setup check, E x, E^T y, the mass and the explicit oracle all call it.
+// The setup check, E x, E^T y and the mass all call it.
 __device__ inline double piolaValue(const double J[3][3],double det,const double* S,int c){
     return (J[c][0]*S[0]+J[c][1]*S[1]+J[c][2]*S[2])/det;
 }
@@ -30,22 +29,19 @@ __global__ void flatElementOrder(std::size_t ne,std::size_t local,const int* ele
     const int* dofs=elementDofs+e*local;unsigned char* o=order+e*local;
     for(std::size_t i=0;i<local;++i){std::size_t j=i;while(j>0&&dofs[o[j-1]]>dofs[i]){o[j]=o[j-1];--j;}o[j]=(unsigned char)i;}
 }
-// Point measures and the validity of every E value; with indices/values it also
-// writes the explicit rows (oracle only), each row in ascending DOF columns.
+// Point measures and the validity of every E value.
 __global__ void flatEvaluationEntries(std::size_t ne,std::size_t local,std::size_t rule,std::size_t nq,std::size_t classes,
-    const double* vertices,const int* elementClass,const int* elementDofs,const int* elementPoints,const unsigned char* order,const double* shapes,
-    const double* ruleRows,std::size_t* indices,double* values,double* weights,int* invalid){
+    const double* vertices,const int* elementClass,const int* elementPoints,const double* shapes,
+    const double* ruleRows,double* weights,int* invalid){
     const auto t=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(t>=ne*rule)return;
     const auto e=t/rule,k=t%rule;double J[3][3];const double det=affineTet(vertices+12*e,J);
     const int cls=elementClass[e],q=elementPoints[e*rule+k];
     if(!isfinite(det)||det==0.||cls<0||std::size_t(cls)>=classes||q<0||std::size_t(q)>=nq){atomicExch(invalid,1);return;}
     weights[q]=ruleRows[4*k+3]*fabs(det);
-    const int* dofs=elementDofs+e*local;const unsigned char* o=order+e*local;const double* S=shapes+(std::size_t(cls)*rule+k)*local*3;
-    for(int c=0;c<3;++c){const auto base=(std::size_t(c)*nq+std::size_t(q))*local;
-        for(std::size_t r=0;r<local;++r){const int i=o[r];const double v=piolaValue(J,det,S+3*i,c);
-            if(!isfinite(v))atomicExch(invalid,1);if(values){indices[base+r]=std::size_t(dofs[i]);values[base+r]=v;}}}
+    const double* S=shapes+(std::size_t(cls)*rule+k)*local*3;
+    for(int c=0;c<3;++c)for(std::size_t i=0;i<local;++i)if(!isfinite(piolaValue(J,det,S+3*i,c)))atomicExch(invalid,1);
 }
-// v = E x, one thread per material point: the explicit CSR row sum in the same order.
+// v = E x, one thread per material point, local slots in ascending DOF order.
 __global__ void flatEvaluationApply(std::size_t ne,std::size_t local,std::size_t rule,std::size_t nq,
     const double* vertices,const int* elementClass,const int* elementDofs,const int* elementPoints,const unsigned char* order,
     const double* shapes,const double* x,double* v){
@@ -59,8 +55,7 @@ __global__ void flatEvaluationApply(std::size_t ne,std::size_t local,std::size_t
 }
 // g = E^T y, one thread per DOF over its incident (element, slot) entries in
 // ascending element order: deterministic, with no floating-point atomics. For
-// each component the terms follow ascending (element, point), which is the
-// explicit E^T row order when point numbers ascend element by element.
+// each component the terms follow ascending (element, point).
 __global__ void flatEvaluationTransposeApply(std::size_t nd,std::size_t local,std::size_t rule,std::size_t nq,
     const double* vertices,const int* elementClass,const int* elementPoints,const double* shapes,
     const std::size_t* offsets,const unsigned* incidence,const double* y,double* g){
@@ -71,19 +66,11 @@ __global__ void flatEvaluationTransposeApply(std::size_t nd,std::size_t local,st
         for(std::size_t k=0;k<rule;++k)sum.addProduct(piolaValue(J,det,S+k*local*3,c),y[std::size_t(c)*nq+std::size_t(elementPoints[e*rule+k])]);}
     g[d]=sum.get();
 }
-__global__ void uniformOffsets(std::size_t rows,std::size_t width,std::size_t* offsets){
-    const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<=rows)offsets[i]=i*width;
-}
 __global__ void slotKeys(std::size_t count,const int* elementDofs,unsigned* keys,unsigned* entries){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<count){keys[i]=unsigned(elementDofs[i]);entries[i]=unsigned(i);}
 }
 __global__ void columnKeys(std::size_t nnz,const std::size_t* indices,unsigned* keys,unsigned* entries){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<nnz){keys[i]=unsigned(indices[i]);entries[i]=unsigned(i);}
-}
-// Stable radix order keeps rows ascending within each column (deterministic E^T).
-__global__ void transposeEntries(std::size_t nnz,std::size_t width,const unsigned* entries,const double* values,
-    std::size_t* indices,double* transposed){
-    const auto j=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(j<nnz){indices[j]=entries[j]/width;transposed[j]=values[entries[j]];}
 }
 __global__ void columnOffsets(std::size_t columns,std::size_t nnz,const unsigned* keys,std::size_t* offsets){
     const auto col=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(col>columns)return;
@@ -102,15 +89,6 @@ __global__ void flatMassEntries(std::size_t ne,std::size_t local,std::size_t rul
     for(std::size_t k=0;k<rule;++k){const double w=weights[elementPoints[e*rule+k]];const double* Sk=S+k*local*3;
         for(int c=0;c<3;++c)sum.addProduct(w,piolaValue(J,det,Sk+3*i,c)*piolaValue(J,det,Sk+3*j,c));}
     keys[t]=MassKey(dofs[i])*nd+MassKey(dofs[j]);entries[t]=sum.get();
-}
-// Oracle only: the same mass from the stored explicit E rows.
-__global__ void flatMassEntriesExplicit(std::size_t ne,std::size_t local,std::size_t rule,std::size_t nq,std::size_t nd,
-    const int* elementPoints,const std::size_t* indices,const double* values,const double* weights,MassKey* keys,double* entries){
-    const auto t=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(t>=ne*local*local)return;
-    const auto e=t/(local*local),r=(t/local)%local,s=t%local;radia_hmatrix_cuda::CompensatedDeviceSum sum;
-    for(std::size_t k=0;k<rule;++k){const auto q=std::size_t(elementPoints[e*rule+k]);const double w=weights[q];
-        for(int c=0;c<3;++c){const auto base=(std::size_t(c)*nq+q)*local;sum.addProduct(w,values[base+r]*values[base+s]);}}
-    const auto base=std::size_t(elementPoints[e*rule])*local;keys[t]=MassKey(indices[base+r])*nd+indices[base+s];entries[t]=sum.get();
 }
 // Sorted runs of equal (row,column) keys are summed in stable element order (deterministic).
 __global__ void flatMassReduce(std::size_t nnz,std::size_t nd,const MassKey* keys,const int* starts,const int* counts,
@@ -160,19 +138,15 @@ struct FlatEvaluationOperator {
 };
 struct FlatEvaluationTransfer {const char* payload;const char* direction;std::size_t bytes;};
 // Builds the matrix-free E tables, point measures and the reference mass CSR M
-// with its diagonal into caller-owned device storage; with E and ET (oracle
-// only) it also stores the explicit E (3*nq x nd, component-major rows) and
-// E^T, and builds M from them. Every transient buffer lives until build()
+// with its diagonal into caller-owned device storage. Every transient buffer lives until build()
 // returns, so transientBytes is their simultaneous total (driver-internal
 // allocations excluded); the resident tables are the operator's bytes().
 struct FlatEvaluationBuilder {
     template<class T>using Buffer=radia_hmatrix_cuda::Buffer<T>;
     radia_hmatrix_cuda::HostVector<FlatEvaluationTransfer> transfers;std::size_t launches=0,massNonzeros=0,transientBytes=0;double massBound=0.;
-    void build(const FlatEvaluationInput& in,FlatEvaluationOperator& op,Buffer<double>& weights,radia_hmatrix_cuda::DeviceMap& M,Buffer<double>& massDiagonal,
-               radia_hmatrix_cuda::DeviceMap* E=nullptr,radia_hmatrix_cuda::DeviceMap* ET=nullptr){
+    void build(const FlatEvaluationInput& in,FlatEvaluationOperator& op,Buffer<double>& weights,radia_hmatrix_cuda::DeviceMap& M,Buffer<double>& massDiagonal){
         using namespace radia_hmatrix_cuda;
         const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs,slots=checkedProduct(ne,local);
-        if(bool(E)!=bool(ET))throw std::invalid_argument("Explicit evaluation oracle needs both E and E^T");
         op.ne=ne;op.local=local;op.rule=rule;op.nq=nq;op.nd=nd;
         Buffer<double> ruleRows;Buffer<int> invalid;
         auto upload=[&](auto& buffer,const auto& values,const char* payload,bool resident){buffer.upload(values);const auto bytes=checkedProduct(values.size(),sizeof(values[0]));
@@ -183,10 +157,8 @@ struct FlatEvaluationBuilder {
         upload(invalid,HostVector<int>{0},"evaluation_invalid_flag",false);
         op.order.allocate(slots);weights.allocate(nq);
         flatElementOrder<<<unsigned((ne+127)/128),128>>>(ne,local,op.dofs.data,op.order.data);check(cudaGetLastError());++launches;
-        const auto nonzeros=checkedProduct(checkedProduct(3,nq),local);
-        if(E){E->rows=3*nq;E->offsets.allocate(3*nq+1);E->indices.allocate(nonzeros);E->values.allocate(nonzeros);}
-        flatEvaluationEntries<<<unsigned((ne*rule+127)/128),128>>>(ne,local,rule,nq,in.classes,op.vertices.data,op.classes.data,op.dofs.data,op.points.data,
-            op.order.data,op.shapes.data,ruleRows.data,E?E->indices.data:nullptr,E?E->values.data:nullptr,weights.data,invalid.data);check(cudaGetLastError());++launches;
+        flatEvaluationEntries<<<unsigned((ne*rule+127)/128),128>>>(ne,local,rule,nq,in.classes,op.vertices.data,op.classes.data,op.points.data,
+            op.shapes.data,ruleRows.data,weights.data,invalid.data);check(cudaGetLastError());++launches;
         int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));
         transfers.push_back({"evaluation_flag","D2H",sizeof(int)});
         if(failed)throw std::runtime_error("Device HDiv evaluation map has a degenerate element, invalid index or nonfinite shape");
@@ -200,31 +172,19 @@ struct FlatEvaluationBuilder {
             check(cub::DeviceRadixSort::SortPairs(temporary.data,bytes,keys.data,sortedKeys.data,entries.data,op.incidence.data,int(slots),0,bits));++launches;
             columnOffsets<<<unsigned((nd+256)/256),256>>>(nd,slots,sortedKeys.data,op.incidenceOffsets.data);check(cudaGetLastError());++launches;
         }
-        if(E){
-            uniformOffsets<<<unsigned((3*nq+256)/256),256>>>(3*nq,local,E->offsets.data);check(cudaGetLastError());++launches;
-            Buffer<unsigned> keys,sortedKeys,entries,sortedEntries;scratch(keys,nonzeros);scratch(sortedKeys,nonzeros);scratch(entries,nonzeros);scratch(sortedEntries,nonzeros);
-            columnKeys<<<unsigned((nonzeros+255)/256),256>>>(nonzeros,E->indices.data,keys.data,entries.data);check(cudaGetLastError());++launches;
-            std::size_t bytes=0;check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,keys.data,sortedKeys.data,entries.data,sortedEntries.data,int(nonzeros),0,bits));
-            Buffer<unsigned char> temporary;scratch(temporary,bytes);
-            check(cub::DeviceRadixSort::SortPairs(temporary.data,bytes,keys.data,sortedKeys.data,entries.data,sortedEntries.data,int(nonzeros),0,bits));++launches;
-            ET->rows=nd;ET->offsets.allocate(nd+1);ET->indices.allocate(nonzeros);ET->values.allocate(nonzeros);
-            transposeEntries<<<unsigned((nonzeros+255)/256),256>>>(nonzeros,local,sortedEntries.data,E->values.data,ET->indices.data,ET->values.data);check(cudaGetLastError());++launches;
-            columnOffsets<<<unsigned((nd+256)/256),256>>>(nd,nonzeros,sortedKeys.data,ET->offsets.data);check(cudaGetLastError());++launches;
-        }
-        buildMass(in,op,E,weights,M,massDiagonal,scratch);
+        buildMass(in,op,weights,M,massDiagonal,scratch);
         check(cudaDeviceSynchronize());
     }
 private:
-    template<class Scratch>void buildMass(const FlatEvaluationInput& in,FlatEvaluationOperator& op,radia_hmatrix_cuda::DeviceMap* E,Buffer<double>& weights,
+    template<class Scratch>void buildMass(const FlatEvaluationInput& in,FlatEvaluationOperator& op,Buffer<double>& weights,
                                           radia_hmatrix_cuda::DeviceMap& M,Buffer<double>& massDiagonal,Scratch& scratch){
         using namespace radia_hmatrix_cuda;
-        const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs;
+        const auto ne=in.elements,local=in.local,rule=in.rulePoints,nd=in.dofs;
         const auto triples=checkedProduct(ne,checkedProduct(local,local));
         Buffer<MassKey> keys,sortedKeys,uniqueKeys;Buffer<double> entries,sortedEntries,rowBound,bound;Buffer<int> counts,starts,runs,invalid;
         scratch(keys,triples);scratch(sortedKeys,triples);scratch(uniqueKeys,triples);scratch(entries,triples);scratch(sortedEntries,triples);
         scratch(counts,triples);scratch(starts,triples);scratch(runs,1);scratch(rowBound,nd);scratch(bound,1);scratch(invalid,1);
-        if(E)flatMassEntriesExplicit<<<unsigned((triples+255)/256),256>>>(ne,local,rule,nq,nd,op.points.data,E->indices.data,E->values.data,weights.data,keys.data,entries.data);
-        else flatMassEntries<<<unsigned((triples+255)/256),256>>>(ne,local,rule,nd,op.vertices.data,op.classes.data,op.dofs.data,op.points.data,op.order.data,
+        flatMassEntries<<<unsigned((triples+255)/256),256>>>(ne,local,rule,nd,op.vertices.data,op.classes.data,op.dofs.data,op.points.data,op.order.data,
                                                                op.shapes.data,weights.data,keys.data,entries.data);
         check(cudaGetLastError());++launches;
         int bits=1;while((std::size_t(1)<<bits)<nd*nd)++bits;std::size_t bytes=0;
@@ -281,24 +241,15 @@ inline void validateFlatEvaluation(const FlatEvaluationInput& in){
     for(std::size_t e=0;e<ne;++e)for(std::size_t i=0;i<local;++i)for(std::size_t j=0;j<i;++j)
         if(in.elementDofs[e*local+i]==in.elementDofs[e*local+j])throw std::invalid_argument("Duplicate evaluation local DOF");
 }
-// The explicit oracle keeps the former fixed small-case bounds; it is diagnostic only.
-inline std::size_t explicitOracleBytes(const FlatEvaluationInput& in){
-    using radia_hmatrix_cuda::checkedProduct;
-    const auto nnz=checkedProduct(checkedProduct(3,in.points),in.local);
-    if(in.points>65536||nnz>4000000)throw std::invalid_argument("Explicit evaluation oracle is bounded to small cases");
-    return checkedProduct(checkedProduct(3,in.points)+1+in.dofs+1,sizeof(std::size_t))+checkedProduct(nnz,2*(sizeof(std::size_t)+sizeof(double))+4*sizeof(unsigned));
-}
 // CUB scratch of FlatEvaluationBuilder, queried with null storage (no allocation).
 // All of it is live together until build() returns; the scan is sized for its
 // largest possible run count.
-inline std::size_t flatEvaluationSortScratch(const FlatEvaluationInput& in,bool explicitOracle){
+inline std::size_t flatEvaluationSortScratch(const FlatEvaluationInput& in){
     using namespace radia_hmatrix_cuda;
     const auto slots=checkedProduct(in.elements,in.local),triples=checkedProduct(in.elements,checkedProduct(in.local,in.local)),nd=in.dofs;
     int bits=1;while((std::size_t(1)<<bits)<nd)++bits;int massBits=1;while((std::size_t(1)<<massBits)<nd*nd)++massBits;
     std::size_t total=0,bytes=0;auto add=[&]{if(bytes>std::numeric_limits<std::size_t>::max()-total)throw std::overflow_error("Flat material budget overflow");total+=bytes;bytes=0;};
     check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,(const unsigned*)nullptr,(unsigned*)nullptr,(const unsigned*)nullptr,(unsigned*)nullptr,int(slots),0,bits));add();
-    if(explicitOracle){const auto nnz=checkedProduct(checkedProduct(3,in.points),in.local);
-        check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,(const unsigned*)nullptr,(unsigned*)nullptr,(const unsigned*)nullptr,(unsigned*)nullptr,int(nnz),0,bits));add();}
     check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,(const MassKey*)nullptr,(MassKey*)nullptr,(const double*)nullptr,(double*)nullptr,int(triples),0,massBits));add();
     check(cub::DeviceRunLengthEncode::Encode(nullptr,bytes,(const MassKey*)nullptr,(MassKey*)nullptr,(int*)nullptr,(int*)nullptr,int(triples)));add();
     check(cub::DeviceScan::ExclusiveSum(nullptr,bytes,(const int*)nullptr,(int*)nullptr,int(triples)));add();
@@ -306,20 +257,20 @@ inline std::size_t flatEvaluationSortScratch(const FlatEvaluationInput& in,bool 
     return total;
 }
 // Live preflight before any material allocation: the dimension budget plus CUB
-// scratch (and the oracle's explicit E/E^T) must fit the current free memory
+// scratch must fit the current free memory
 // above the shared reserve. The failure names the limiting term; nothing
 // spills to the host.
-inline std::size_t requireFlatEvaluationDevice(const FlatEvaluationInput& in,std::size_t lawDoubles,bool explicitOracle,FlatEvaluationBudget& budget){
+inline std::size_t requireFlatEvaluationDevice(const FlatEvaluationInput& in,std::size_t lawDoubles,FlatEvaluationBudget& budget){
     using namespace radia_hmatrix_cuda;
-    budget=flatEvaluationBudget(in,lawDoubles);const auto oracle=explicitOracle?explicitOracleBytes(in):0;
-    const auto scratch=flatEvaluationSortScratch(in,explicitOracle),need=budget.total();
-    if(scratch>std::numeric_limits<std::size_t>::max()-need-oracle)throw std::overflow_error("Flat material budget overflow");
+    budget=flatEvaluationBudget(in,lawDoubles);
+    const auto scratch=flatEvaluationSortScratch(in),need=budget.total();
+    if(scratch>std::numeric_limits<std::size_t>::max()-need)throw std::overflow_error("Flat material budget overflow");
     std::size_t free=0,total=0;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
     const auto available=free>reserve?free-reserve:0;
-    if(need+oracle+scratch>available){const auto at=budget.limiting();std::ostringstream message;
-        message<<"Flat material device budget exceeded: "<<need+oracle+scratch<<" bytes needed, "<<available<<" free above the reserve; limiting term "
+    if(need+scratch>available){const auto at=budget.limiting();std::ostringstream message;
+        message<<"Flat material device budget exceeded: "<<need+scratch<<" bytes needed, "<<available<<" free above the reserve; limiting term "
                <<FlatEvaluationBudget::names[at]<<" = "<<budget.bytes[at]<<" bytes";
         throw std::runtime_error(message.str());}
-    return need+oracle+scratch;
+    return need+scratch;
 }
 }

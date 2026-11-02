@@ -27,7 +27,7 @@ class MappedMaterial {
     std::size_t nq,nd,nk,payloadBound=0,setupBytes=0,stateBytes=0,calls=0;
     std::size_t stateEpoch=0,tangentCalls=0;bool frozen=false;
     int device=0;double cap,barrier,last,initial;
-    // Explicit E/E^T: the host-evaluation route and the small-case oracle only.
+    // Explicit E/E^T: the host-evaluation route only.
     DeviceMap E,ET,M;FlatEvaluationOperator flat;bool matrixFree=false;
     void applyE(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.apply(x,y,stream);else E.apply(x,y,stream);}
     void applyET(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.applyTranspose(x,y,stream);else ET.apply(x,y,stream);}
@@ -64,22 +64,21 @@ public:
         weights.upload(in.weights);ledger.push_back({"material_weights_host","H2D",in.weights.size()*sizeof(double)});allocateState(law);
     }
     // Matrix-free E/E^T from NGSolve reference tables resident on the device, with the
-    // point measures and reference mass built there. explicitOracle additionally stores
-    // the explicit E/E^T, applies them and builds M from them: small-case diagnostic only.
-    MappedMaterial(const FlatEvaluationInput& in,const Law& law,bool explicitOracle=false):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
+    // point measures and reference mass built there.
+    MappedMaterial(const FlatEvaluationInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
         using namespace radia_hmatrix_cuda;
         validateFlatEvaluation(in);validateInverseBH(law,radia_hmatrix_cuda::HostVector<double>{0.});
         // Dimension budget plus CUB scratch against live free memory; no fixed payload cap.
-        payloadBound=requireFlatEvaluationDevice(in,law.knots.size()+law.coefficients.size()+law.integralBase.size(),explicitOracle,budget);
+        payloadBound=requireFlatEvaluationDevice(in,law.knots.size()+law.coefficients.size()+law.integralBase.size(),budget);
         check(cudaGetDevice(&device));
         FlatEvaluationBuilder builder;
-        if(explicitOracle)builder.build(in,flat,weights,M,massDiagonal,&E,&ET);else builder.build(in,flat,weights,M,massDiagonal);
-        matrixFree=!explicitOracle;routeName=explicitOracle?"device-flat-tet-explicit-oracle":"device-flat-tet-matrix-free";
+        builder.build(in,flat,weights,M,massDiagonal);
+        matrixFree=true;routeName="device-flat-tet-matrix-free";
         hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
         massNonzeros=builder.massNonzeros;massBytes=(nd+1+massNonzeros)*sizeof(std::size_t)+(massNonzeros+nd)*sizeof(double);
         for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}
         allocateState(law);setupBytes+=ledger.back().bytes;
-        for(auto* map:{&E,&ET,&M})persistentBytes+=(map->offsets.size+map->indices.size)*sizeof(std::size_t)+map->values.size*sizeof(double);
+        persistentBytes+=(M.offsets.size+M.indices.size)*sizeof(std::size_t)+M.values.size*sizeof(double);
         persistentBytes+=flat.bytes();
         for(auto* buffer:{&m,&delta,&v,&dv,&amplitude,&samples,&weights,&knots,&c,&base,&field,&action,&pointEnergy,&gradient,&tangent,&totals,&massDiagonal})
             persistentBytes+=buffer->size*sizeof(double);
