@@ -19,7 +19,7 @@ static constexpr double DETECTOR_REL = 1e-5;
 
 static int check(const char* name, int kind, std::array<double, 12> vertices, double reference){
     radia_hdiv_python::P1Charge charge;
-    charge.kind=kind;charge.vertices=vertices;charge.exponent={0,0,0};charge.count=1;
+    charge.kind=kind;charge.vertices=vertices;charge.exponent={0,0,0};
     const auto source=radia_hdiv_python::p1ChargeSource(charge);
     // Unit-density integral / (4 pi); pairEntry carries the normalized charge constant twice.
     const double actual=radia_hdiv_p1_diagonal::pairEntry(source,source)/(source.constant*source.constant);

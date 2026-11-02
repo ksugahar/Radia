@@ -117,15 +117,19 @@ def test_flat_material_binding_takes_tables_not_evaluation_values():
     assert "validateFlatEvaluationScope(flatEvaluationInput(" in helper and "create" not in helper, helper
 
 
-def test_newton_binding_takes_no_mass_and_host_reference_is_separate():
+def test_device_binding_takes_no_host_matrix():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
-    device = source[source.index('.def("solve_nonlinear_material",'):source.index('.def("solve_nonlinear_material_host_reference"')]
+    device = source[source.index('.def("solve_nonlinear_material",'):source.index('.def("stats",[](DeviceOperator& self)')]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', device)
     assert names == ["material", "rhs", "initial", "nonlinear_tolerance", "linear_tolerance", "maximum_iterations",
                      "maximum_linear_iterations", "preconditioner", "degree", "lower_fraction"], names
+    # Host H-matrix leaves, host mass and host evaluation CSR routes are retired, not shimmed.
+    for retired in ("py::init(&construct)", '"solve_linear_material"', '"solve_nonlinear_material_host_reference"',
+                    '"_material_bh_evaluate"', "createMaterial(", "MaterialInput"):
+        assert retired not in source, retired
     owner = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
-    host = owner[owner.index("solveHostReference(radia_hmatrix_cuda::Resident& op"):]
-    assert "owns its reference mass; host reference rejected" in host.split("SparseMap reference")[0]
+    for retired in ("solveHostReference", "nonlinearHostReferenceBridge", "SparseMap", "host-leaves", "createMaterial("):
+        assert retired not in owner, retired
 
 
 def test_staging_checks_every_element_against_its_class_and_the_affine_map():

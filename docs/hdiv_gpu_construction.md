@@ -107,39 +107,24 @@ attribute another process's allocations to this owner.
 
 ## Qualification
 
-The private `_P1ChargeDiagonal` component requires explicit integer `order=1`
-and accepts constant volume charges on affine tetrahedra and constant/linear
-surface charges on flat triangles. These are charge coefficients, not FE DOFs.
-The caller owns the physical quadrature points and measure-weighted weights,
-with **no monomial folded into the weights**; it must stage the same rule as the
-independent CPU Gram calculation. The component applies the target monomial
-exactly once. This entry does not assemble
-FE maps, choose a new quadrature rule, build a complete Gram matrix, or replace
-the public solver's CPU Gram construction. Order 2, nonconstant volume charges,
-quadratic surface charges and unsupported exponents fail. Curved/deformed
-geometry and non-TET FE configurations must be rejected by the calling staging
-route; vertex-only payloads do not certify the original FE geometry.
-
-The CUDA kernel uses the shared constant potentials and `TriMoment1`, including
-the CPU `QuadDot` factor `1/(4*pi)`. For linear faces, the charge monomial is
-represented as `A + gradient . (x - center)` in the triangle's own reference
-vertex frame. Its source potential is `A*TriPotential + gradient . TriMoment1`
-with both geometry and evaluation point translated to the same center. The
-target factor is evaluated separately at each outer point. This is Radia's
-charge representation; NGSolve retains ownership of the FE/Piola/orientation map
-and the charge map B. A reference-vertex permutation also changes the polynomial
-basis and cannot be tested by moving vertices without transforming the charge.
-
-The shared entry arithmetic is instantiated with production CPU potentials for
-host algebraic controls and with production device potentials in CUDA. Those
-controls do not replace comparison against a separately built CPU Gram oracle.
-The component retains both physical diagonal and `sqrt(diagonal)`
-on device. The latter is the existing charge-space normalization scale, not an
-FE-system diagonal. Geometry/rules are uploaded once. Only explicit diagnostic
-methods download coefficients; construction downloads a status integer.
-Statistics distinguish retained bytes, setup buffer peak, setup transfers and
-diagnostic downloads. Stream/library overhead is outside the buffer byte count.
-Host admission tests do not establish numerical qualification of this component.
+The device flat Gram applies the same affine P1 self/touching rule as the CPU
+`ChargeGram`. A direct pair is graded when both hosts carry only cell-constant
+or face-degree-at-most-one charges and share a vertex with bitwise-equal
+coordinates; well-separated pairs are tested first, as on the CPU. Graded
+entries use the shared `pairEntry` arithmetic, instantiated with production
+CPU potentials on the host and production device potentials in CUDA; other
+near pairs keep the analytic moment potentials on the outer rule. Image pairs,
+curved geometry and mixed hex/wedge/polyhedral routes are outside the flat
+device domain and fail before construction. For linear faces the charge
+monomial is `A + gradient . (x - center)` in the triangle's own reference
+vertex frame; NGSolve retains ownership of the FE/Piola/orientation map and
+the charge map B. A reference-vertex permutation changes the polynomial basis
+and cannot be tested by moving vertices without transforming the charge.
+Shared arithmetic does not make the CPU and GPU entries bitwise identical.
+The private `_diagnostic_flat_charge_entries` returns raw device entries for
+explicit charge pairs from a fresh preparation, for comparison with the CPU
+`ChargeGram.entry`; pairs and values cross, no matrix does, and it is never on
+the construction path.
 
 Compare against the independent CPU entry/solve route using identical inputs
 and existing adopted numerical criteria. Include near/self, separated pairs,

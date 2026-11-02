@@ -94,13 +94,10 @@ public:
     virtual radia_hmatrix_cuda::HostVector<double> evaluationAction(const radia_hmatrix_cuda::HostVector<double>&,bool transpose)=0;
     virtual void close()=0;
 };
-std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&);
 // E and E^T act matrix-free on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
-// Small-case diagnostic oracle: the same tables with an explicit device E/E^T.
 // Host-only scope check of the flat tables (the same checks the context runs) and
 // their device budget without CUB scratch or the law; no CUDA call.
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);
-MaterialEvaluation evaluateMaterial(const MaterialInput&,const Law&,const radia_hmatrix_cuda::HostVector<double>& state,const radia_hmatrix_cuda::HostVector<double>& direction);
 Samples evaluate(const Law&,const radia_hmatrix_cuda::HostVector<double>& amplitudes);
 }
