@@ -954,6 +954,12 @@
       ]
     },
     {
+      "pattern": "tools/check_ninja_msvc_deps.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "tools/prepare_radia_acceptance.py",
       "owners": [
         "radia"
