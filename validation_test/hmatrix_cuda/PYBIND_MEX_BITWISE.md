@@ -17,8 +17,8 @@ construction; the comparator checks the object hash instead of a flag list.
 ## Case `device-flat-tet`
 
 `hdiv_device_parity.py make-input` writes the canonical input HDF5: the NGSolve
-device-construction tables of a Netgen unit cube (BDM2), device ACA with leaf
-size 16 so low-rank leaves are exercised, the production inverse-BH payload of a
+device-construction tables of a Netgen 6:1:1 bar (BDM2), device ACA with leaf
+size 32 so low-rank leaves are exercised, the production inverse-BH payload of a
 fixed soft-iron table, the input vectors and every solver control. Both
 producers read only this file and hash its bytes.
 
