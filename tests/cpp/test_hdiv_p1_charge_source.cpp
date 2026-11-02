@@ -1,6 +1,7 @@
 // Guards: the affine P1 charge frame shared by the CPU ChargeGram and the device
-// flat Gram (gradient, oblique frame, reference permutation, source moment) and
-// its loud rejection of singular or nonfinite faces.
+// flat Gram (gradient, oblique frame, reference permutation, source moment, every
+// field written when built in place over garbage) and its loud rejection of
+// singular or nonfinite faces.
 // Assumes: shared production potentials; algebraic controls, not independent accuracy validation.
 #include "hdiv_p1_diagonal_input.hpp"
 #include "rad_hdiv_vim.h"
@@ -55,11 +56,31 @@ int main(){
             if(permuted.gradient[1-axis]!=1.||permuted.gradient[axis]!=0.)
                 throw std::runtime_error("permuted reference gradient actual differs from expected swapped basis");
         }
+        // The device builds sources in place in uninitialized memory: every field must be written.
+        const double nan=std::numeric_limits<double>::quiet_NaN();
+        auto dirty=[&]{P1ChargeSource s;for(auto& v:s.vertices)v=nan;for(int k=0;k<3;++k)s.center[k]=s.gradient[k]=nan;
+                       s.constant=nan;s.kind=7;s.linear=true;return s;};
+        for(int kind=0;kind<2;++kind){
+            P1Charge constant;constant.kind=kind;constant.vertices={0,0,0,1,0,0,0,1,0,0,0,1};
+            auto inPlace=dirty();
+            if(!p1ChargeSourceInto(kind,constant.vertices.data(),constant.exponent.data(),inPlace))
+                throw std::runtime_error("constant charge source rejected");
+            if(inPlace.linear||inPlace.kind!=kind||inPlace.constant!=1.||inPlace.center[0]!=0.||inPlace.center[1]!=0.||
+               inPlace.center[2]!=0.||inPlace.gradient[0]!=0.||inPlace.gradient[1]!=0.||inPlace.gradient[2]!=0.)
+                throw std::runtime_error("in-place constant source kind="+std::to_string(kind)+" actual constant="+
+                    std::to_string(inPlace.constant)+" expected=1 with zero centre and gradient");
+        }
+        {
+            const auto face=unitFace(1);auto inPlace=dirty();const auto fresh=p1ChargeSource(face);
+            if(!p1ChargeSourceInto(1,face.vertices.data(),face.exponent.data(),inPlace)||inPlace.constant!=fresh.constant||
+               inPlace.gradient[1]!=fresh.gradient[1]||inPlace.center[2]!=fresh.center[2]||inPlace.vertices[11]!=fresh.vertices[11])
+                throw std::runtime_error("in-place linear face source differs from the fresh source");
+        }
         rejects("collinear face",[](auto& c){c.vertices[7]=0.;});
         rejects("coincident face vertices",[](auto& c){c.vertices[6]=1.;c.vertices[7]=0.;});
         rejects("nonfinite face",[](auto& c){c.vertices[0]=std::numeric_limits<double>::infinity();});
         rejects("NaN face",[](auto& c){c.vertices[4]=std::numeric_limits<double>::quiet_NaN();});
-        std::cout<<"both linear TRI frames, source moments, oblique and permuted frames, 4 rejections passed\n";
+        std::cout<<"both linear TRI frames, source moments, oblique and permuted frames, in-place constant and linear sources, 4 rejections passed\n";
         return 0;
     }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }
