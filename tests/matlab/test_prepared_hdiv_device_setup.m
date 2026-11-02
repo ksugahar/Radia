@@ -1,0 +1,43 @@
+function report=test_prepared_hdiv_device_setup(setup,bhTable,outPath)
+% Guards: the MATLAB device workflow (radia_hdiv_device) over a checked
+% radia.hdiv-device-setup.v1 solves, reuses prepared state, uploads the
+% setup once, rejects malformed setups before allocation and releases every
+% handle. Assumes: independent CPU certification is external (validation_test).
+modes={'reference-diagonal','reference-chebyshev-graph'};rows=cell(1,2);solutions=cell(1,2);
+for k=1:2
+    obj=radia.gpu.PreparedHDivNonlinear(setup,[1000 -2000 5000],bhTable,Preconditioner=modes{k}, ...
+        NonlinearTolerance=5e-14,LinearTolerance=5e-14);
+    cleanup=onCleanup(@()delete(obj));
+    before=obj.stats();first=obj.solve();second=obj.solve(1,first.coefficients);after=obj.stats();
+    assert(strcmp(first.mesh_sha256,setup.mesh_sha256) && strcmp(first.backend,'gpu'));
+    assert(first.nonlinear_relative_residual<=1e-11 && second.nonlinear_relative_residual<=1e-11, ...
+        'residuals %.3e %.3e',first.nonlinear_relative_residual,second.nonlinear_relative_residual);
+    assert(norm(first.coefficients-second.coefficients)<=1e-10*norm(first.coefficients));
+    assert(before.material.setup_upload_bytes==after.material.setup_upload_bytes);
+    rows{k}=struct('preconditioner',modes{k},'reported_residual',first.nonlinear_relative_residual, ...
+        'warm_reuse_residual',second.nonlinear_relative_residual,'setup_uploaded_once',true, ...
+        'mean_magnetization',first.mean_magnetization);
+    solutions{k}=first.coefficients;
+    clear cleanup obj
+    assert(radia_hdiv_device('live_count')==0);
+end
+linear=radia.gpu.solveHDivElements(setup,[0 0 1e5],.1,Tolerance=1e-11,MaxIterations=2000,Preconditioner='mass-cholesky');
+assert(linear.true_relative_residual<=1e-11 && radia_hdiv_device('live_count')==0);
+bad=setup;bad.order=3;reject(bad,bhTable);
+bad=setup;bad.evaluation.element_dofs=bad.evaluation.element_dofs(1:end-1);reject(bad,bhTable);
+bad=setup;bad.charges.cell_dofs=double(bad.charges.cell_dofs)+.5;reject(bad,bhTable);
+report=struct('accepted',true,'scope','MATLAB device prepared HDiv workflow; independent certification external', ...
+    'cases',[rows{:}],'linear_relative_residual',linear.true_relative_residual, ...
+    'final_live_count',radia_hdiv_device('live_count'));
+radia.gpu.writeHDivH5(string(outPath),struct('coefficients',[solutions{:}],'linear_coefficients',linear.coefficients), ...
+    struct('units','SI','labels',{{'body','exterior'}},'report',report));
+end
+function reject(setup,bh)
+failed=false;
+try
+    obj=radia.gpu.PreparedHDivNonlinear(setup,[1 0 0],bh);delete(obj);
+catch
+    failed=true;
+end
+assert(failed && radia_hdiv_device('live_count')==0,'Malformed device setup must fail before allocation');
+end

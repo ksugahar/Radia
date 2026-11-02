@@ -252,6 +252,7 @@ file_format_documents/
 # packages/radia-mcp/src/radia_mcp/mathematica/ must be tracked.
 *.m
 !matlab/**/*.m
+!packages/radia-simulink/matlab/**/*.m
 !tests/matlab/**/*.m
 !validation_test/**/*.m
 !validation_test/acoustics/benchmark_acoustic_mex_matlab.m
