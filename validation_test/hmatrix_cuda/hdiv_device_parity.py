@@ -1,7 +1,7 @@
 """Same-kernel pybind11 producer for the device HDiv frontend parity (PYBIND_MEX_BITWISE.md).
 
 ``make-input`` writes the canonical input HDF5 of case ``device-flat-tet``: the
-NGSolve device-construction tables of a Netgen unit cube (BDM2), the production
+NGSolve device-construction tables of a Netgen 6:1:1 bar (BDM2), the production
 inverse-BH payload of a fixed soft-iron table, every input vector and every
 solver control. ``pybind`` reads only that file, runs ``_hdiv_cuda`` and writes
 the pybind11 record. ``produceHDivDeviceMexRecord.m`` runs the plain MEX on the
@@ -22,9 +22,9 @@ CHARGE_FIELDS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind",
                  "tri_rule", "tet_low_rule", "tri_low_rule", "cell_class", "cell_dofs", "cell_tables",
                  "cell_exponents", "face_class", "face_dofs", "face_tables", "face_exponents")
 EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "element_dofs", "element_points")
-# Small leaves on a moderately refined cube give admissible blocks, so device ACA is exercised.
-ACA = dict(eps=1e-10, eta=2.0, leaf_size=16, max_rank=200, rank_cap="dense")
-MAXH = .25
+# A 6:1:1 bar gives well-separated clusters, so device ACA builds low-rank leaves (the unit cube did not).
+ACA = dict(eps=1e-10, eta=2.0, leaf_size=32, max_rank=200, rank_cap="dense")
+BAR, MAXH = (6., 1., 1.), .4
 # Soft-iron [H A/m, B T] rows; any strictly increasing origin-anchored table serves.
 BH_TABLE = ((0., 0.), (100., .5), (300., 1.), (1000., 1.4), (5000., 1.7), (20000., 1.9), (100000., 2.1))
 LINEAR = dict(inv_chi=.1, tolerance=1e-11, maximum_iterations=2000, preconditioner="mass-diagonal")
@@ -52,12 +52,14 @@ def make_input(out: Path, order: int) -> None:
     import h5py
     import ngsolve as ng
     import numpy as np
-    from netgen.csg import unit_cube
+    from netgen.csg import CSGeometry, OrthoBrick, Pnt
     from radia import hdiv_gpu
     from radia.gpu import _native
     from radia.vim._nonlinear import _bh_inverse_payload, _validate_bh_table
     mesh_path = out.with_suffix(".vol")
-    unit_cube.GenerateMesh(maxh=MAXH).Save(str(mesh_path))
+    geometry = CSGeometry()
+    geometry.Add(OrthoBrick(Pnt(0, 0, 0), Pnt(*BAR)))
+    geometry.GenerateMesh(maxh=MAXH).Save(str(mesh_path))
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(mesh_path, order, _native("_hdiv_cuda"), aca=dict(ACA),
                                                     compression="aca")
