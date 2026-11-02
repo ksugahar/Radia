@@ -205,17 +205,19 @@ class PreparedHDivLinear:
     charge map and reference mass M (the material quadrature mass of
     ``PreparedHDivNonlinear``); only vectors cross. The supported domain and
     the ``gram_aca`` contract are those of ``PreparedHDivNonlinear`` without
-    the inverse-BH law. ``inv_chi`` is per solve, so one prepared operator
-    serves several susceptibilities.
+    the inverse-BH law, plus conforming RT0 (``order=0``) and an explicit
+    exact ``gram_compression="dense"``. ``inv_chi`` is per solve, so one
+    prepared operator serves several susceptibilities.
     """
 
     def __init__(self, mesh_path, *, backend, label_contract, mesh_check_receipt,
-                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
+                 gram_compression="aca"):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
-        if isinstance(order, bool) or order not in (1, 2):
-            raise ValueError("HDiv order must be 1 or 2")
-        aca = _checked_gram_aca(gram_aca)
+        if isinstance(order, bool) or order not in (0, 1, 2):
+            raise ValueError("HDiv linear order must be 0 (RT0), 1 or 2")
+        aca = _checked_gram_compression(gram_compression, gram_aca)
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
@@ -223,13 +225,14 @@ class PreparedHDivLinear:
         self._operator = self._mass = None
         self._closed = False
         self.order = order
-        self.gram_aca = dict(aca)
+        self.gram_compression = gram_compression
+        self.gram_aca = None if aca is None else dict(aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
             try:
-                setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca)
+                setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, compression=gram_compression)
                 self.dofs = setup["dofs"]
                 self._rhs = setup["rhs_operator"]
                 self._mean = setup["mean_operator"]
@@ -277,7 +280,8 @@ class PreparedHDivLinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
-                gram_route="device-flat-tet", gram_compression=_GRAM_COMPRESSION, gram_aca=dict(self.gram_aca),
+                gram_route="device-flat-tet", gram_compression=self.gram_compression,
+                gram_aca=None if self.gram_aca is None else dict(self.gram_aca),
                 assembly=getattr(self, "assembly", None), mass_assembly=getattr(self, "mass_assembly", None),
                 charge_budget=self.assembly["charge_budget"] if getattr(self, "assembly", None) else None,
                 operator=self._operator.stats() if self._operator is not None else None,
@@ -437,6 +441,17 @@ _ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admi
                  "aca_batches", "factor_coefficients", "dense_coefficients")
 
 
+def _checked_gram_compression(compression, aca):
+    """Return the checked ACA parameters, or ``None`` for the explicit exact dense Gram."""
+    if compression == "dense":
+        if aca is not None:
+            raise ValueError("gram_aca is rejected for gram_compression='dense'")
+        return None
+    if compression != _GRAM_COMPRESSION:
+        raise ValueError("gram_compression must be explicit 'aca' or 'dense': %r" % (compression,))
+    return _checked_gram_aca(aca)
+
+
 def _checked_gram_aca(aca):
     """Return an owned copy of explicit device ACA parameters; ``None`` is the preset.
 
@@ -556,7 +571,7 @@ def _checked_charge_exponents(kind, exponents):
                          "charge %d kind %d exponents %r" % (first, int(kind[first]), expo[first].tolist()))
 
 
-def _device_gram_arguments(tables, inputs, geometry, aca):
+def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMPRESSION):
     """Map the staged flat-TET charge inputs and NGSolve tables to the device binding.
 
     The Gram is compressed by device ACA with the caller's checked parameters
@@ -593,7 +608,7 @@ def _device_gram_arguments(tables, inputs, geometry, aca):
         tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
         tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
         far_factor=float(inputs["ho_far_factor"]) if far else 1e30,
-        compression=_GRAM_COMPRESSION, aca=_checked_gram_aca(aca))
+        compression=compression, aca=_checked_gram_compression(compression, aca))
     _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
     cells_m, faces_m = geometry
     if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
@@ -611,7 +626,7 @@ def _device_gram_arguments(tables, inputs, geometry, aca):
     return arguments
 
 
-def _prepare_device_components(path, order, native, *, aca):
+def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
     ``native`` is the caller's verified ``_hdiv_cuda`` module: one preparation
@@ -624,7 +639,7 @@ def _prepare_device_components(path, order, native, *, aca):
     """
     import ngsolve as ng
     from radia.vim._vim import _prepare_gpu_charge_inputs
-    aca = _checked_gram_aca(aca)
+    aca = _checked_gram_compression(compression, aca)
     mesh = ng.Mesh(str(path))
     fes = ng.HDiv(mesh, order=order)
     evaluation = _device_evaluation_tables(path, fes, native)
@@ -632,7 +647,7 @@ def _prepare_device_components(path, order, native, *, aca):
     _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
     tables, geometry = _device_charge_tables(path, fes, native)
     return dict(_fe_sources(mesh, fes), evaluation_tables=evaluation, material_budget=budget,
-                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca))
+                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression))
 
 
 def _require_budget_cover(assembly, stats):
@@ -848,7 +863,8 @@ def _checked_material_assembly(assembly, tables, *, route="device-flat-tet-matri
 
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
-                              mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+                              mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
+                              gram_compression="aca"):
     """Return the owned primitive device-construction payload of a checked mesh.
 
     Schema ``radia.hdiv-device-setup.v1``: NGSolve reference tables and charge
@@ -856,18 +872,18 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
     mass, plus the NG-assembled source and mean-field vectors. No matrix and
     no resident GPU object is created; the binding consumers (pybind11 and
     the plain MEX) build every operator on the device from these arrays.
-    The caller owns TaskManager.
+    Order 0 is conforming RT0 (linear consumers only). The caller owns TaskManager.
     """
     if backend != "gpu":
         raise ValueError("Device setup requires explicit backend='gpu'")
-    if isinstance(order, bool) or order not in (1, 2):
-        raise ValueError("HDiv order must be 1 or 2")
-    aca = _checked_gram_aca(gram_aca)
+    if isinstance(order, bool) or order not in (0, 1, 2):
+        raise ValueError("HDiv device setup order must be 0 (RT0), 1 or 2")
+    aca = _checked_gram_compression(gram_compression, gram_aca)
     from .gpu import _native
     native = _native("_hdiv_cuda")
     with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                 mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
-        setup = _prepare_device_components(path, order, native, aca=aca)
+        setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression)
     return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family="affine-tet", order=order,
                 dofs=setup["dofs"], mesh_sha256=mesh_hash, label_contract_sha256=contract_hash,
                 evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],

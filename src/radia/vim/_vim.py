@@ -2308,7 +2308,7 @@ def _flat_tet_charge_inputs(fes, quad, *, eps, leafsize, eta, far_quad,
 
 
 def _prepare_gpu_charge_inputs(fes, *, backend):
-    """Stage the initial affine-TET P1/P2 device-build input, not a GPU operator.
+    """Stage the affine-TET RT0/BDM1/BDM2 device-build input, not a GPU operator.
 
     Preserves the current hdiv_gpu charge-builder defaults, including separate
     near/inner/far rules. NG owns the FE map and the caller owns TaskManager.
@@ -2322,8 +2322,8 @@ def _prepare_gpu_charge_inputs(fes, *, backend):
     p = int(fes.globalorder)
     if mesh.dim != 3 or _volume_vertex_counts(mesh) != {4}:
         raise NotImplementedError("Device charge input currently requires pure 3D TET geometry")
-    if p not in (1, 2) or mesh.GetCurveOrder() > 1:
-        raise NotImplementedError("Device charge input currently requires affine TET HDiv order 1 or 2")
+    if p not in (0, 1, 2) or mesh.GetCurveOrder() > 1:
+        raise NotImplementedError("Device charge input currently requires affine TET HDiv order 0, 1 or 2")
     if mesh.deformation is not None:
         raise NotImplementedError("Device charge input does not support live mesh deformation")
     # Structural int32 limits only; the native device charge budget bounds the size.

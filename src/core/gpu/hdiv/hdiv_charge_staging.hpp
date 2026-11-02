@@ -1,6 +1,7 @@
 // NGSolve-owned reference tables for device construction of the affine-TET charge map B.
 #pragma once
 #include "hdiv_material_staging.hpp"
+#include <algorithm>
 #include <array>
 #include <map>
 namespace radia::hdiv_cuda {
@@ -33,9 +34,10 @@ constexpr double cellVertexXi[4][3]={{1,0,0},{0,1,0},{0,0,1},{0,0,0}};
 inline FlatChargeTables stageFlatChargeTables(MaterialStagingContext& context){
     using namespace charge_staging;
     const auto& mesh=context.mesh;const auto& space=context.space;const int order=space->GetOrder();
-    if(mesh->GetCurveOrder()>1||order<1||order>2)throw std::invalid_argument("Device charge tables require affine TET geometry and P1/P2 HDiv");
+    if(mesh->GetCurveOrder()>1||order<0||order>2)throw std::invalid_argument("Device charge tables require affine TET geometry and RT0/P1/P2 HDiv");
     FlatChargeTables out;out.dofs=context.nd;out.cells=context.ne;
-    const int pv=order-1;
+    // Cell charge degree max(order-1,0) and face degree order, as the CPU charge basis.
+    const int pv=std::max(order-1,0);
     for(int i=0;i<=pv;++i)for(int j=0;j<=pv-i;++j)for(int k=0;k<=pv-i-j;++k){out.cellExponents.insert(out.cellExponents.end(),{i,j,k});}
     for(int i=0;i<=order;++i)for(int j=0;j<=order-i;++j){out.faceExponents.insert(out.faceExponents.end(),{i,j});}
     const std::size_t cm=out.cellExponents.size()/3,fm=out.faceExponents.size()/2;out.cellMonomials=cm;out.faceMonomials=fm;

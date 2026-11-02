@@ -7,7 +7,8 @@ _EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "
 
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
-                              mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+                              mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
+                              gram_compression="aca"):
     """Publish ``radia.hdiv-device-setup.v1`` for the plain MEX ``radia_hdiv_device``.
 
     Every table crosses as an owned flat C-order column (float64 or int32), the
@@ -19,7 +20,7 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
     from radia.hdiv_gpu import prepare_hdiv_device_setup as prepare
     data = prepare(mesh_path, backend=backend, label_contract=label_contract, mesh_check_receipt=mesh_check_receipt,
                    mesh_check_receipt_sha256=mesh_check_receipt_sha256, mesh_check_provenance=mesh_check_provenance,
-                   order=order, gram_aca=gram_aca)
+                   order=order, gram_aca=gram_aca, gram_compression=gram_compression)
 
     def flat(value, dtype):
         return np.array(value, dtype=dtype, order="C").reshape(-1, 1)

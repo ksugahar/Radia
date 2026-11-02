@@ -34,8 +34,8 @@ struct MaterialStagingContext {
         // int32 element, DOF and point numbering is the structural bound; device
         // budgets are checked where the tables are consumed.
         constexpr std::size_t count=std::numeric_limits<int>::max();
-        if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>2||order<1||order>2)
-            throw std::invalid_argument("Material quadrature requires bounded P1/P2 tetrahedral, hexahedral or pyramidal HDiv");
+        if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>2||order<0||order>2)
+            throw std::invalid_argument("Material quadrature requires bounded RT0/P1/P2 tetrahedral, hexahedral or pyramidal HDiv");
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
         nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         degree=std::max(6,2*order+2);ngcore::Flags irFlags;irFlags.SetFlag("order",degree);
