@@ -544,11 +544,16 @@ _CHARGE_BUDGET_TERMS = ("charge_prepare", "charge_map", "charge_map_scratch", "r
 def _checked_charge_budget(budget, compression):
     """Owned copy of the native pre-allocation charge budget; exactly one Gram storage term is nonzero."""
     terms = budget.get("terms") if isinstance(budget, dict) else None
-    if (budget.get("schema") if isinstance(budget, dict) else None) != "radia.hdiv-flat-charge-budget.v1"             or not isinstance(terms, dict) or tuple(terms) != _CHARGE_BUDGET_TERMS:
+    if (budget.get("schema") if isinstance(budget, dict) else None) != "radia.hdiv-flat-charge-budget.v1" \
+            or not isinstance(terms, dict) or tuple(terms) != _CHARGE_BUDGET_TERMS:
         raise RuntimeError("Unexpected HDiv charge budget: %r" % (budget,))
     values = {name: terms[name] for name in _CHARGE_BUDGET_TERMS}
     storage = "gram_dense" if compression == "dense" else "aca_batch_scratch"
-    if any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in values.values())             or any(values[name] <= 0 for name in _CHARGE_BUDGET_TERMS[:4] + (storage,))             or values["aca_batch_scratch" if storage == "gram_dense" else "gram_dense"] != 0             or budget.get("total_bytes") != sum(values.values())             or budget.get("limiting_term") != max(values, key=values.get):
+    if any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in values.values()) \
+            or any(values[name] <= 0 for name in _CHARGE_BUDGET_TERMS[:4] + (storage,)) \
+            or values["aca_batch_scratch" if storage == "gram_dense" else "gram_dense"] != 0 \
+            or budget.get("total_bytes") != sum(values.values()) \
+            or budget.get("limiting_term") != max(values, key=values.get):
         raise RuntimeError("Inconsistent HDiv charge budget: %r" % (budget,))
     return dict(terms=values, total_bytes=budget["total_bytes"], limiting_term=budget["limiting_term"],
                 excludes=budget.get("excludes"))
