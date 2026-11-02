@@ -3,8 +3,9 @@
 Expected failures on pinned NGSolve 6.2.2608: connected tet-pyramid-hex orders
 1/2 fail the unchanged 1e-11 constant-projection criterion (1.59e-11/1.78e-11).
 They remain hard failures so earlier mass/checker defects cannot be hidden by
-an overly broad xfail. GPU action is not executed after that failure. Rule-path
-parity is not geometric exactness; the NG pyramid rule loses ~1e-10 volume.
+an overly broad xfail. The device material route is affine-TET only, so no
+pyramid GPU action runs here. Rule-path parity is not geometric exactness; the
+NG pyramid rule loses ~1e-10 volume.
 """
 import json
 import subprocess
@@ -23,7 +24,7 @@ from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 
 @pytest.mark.parametrize("family", ["pyramid", "tet-pyramid-hex"])
 @pytest.mark.parametrize("order", [1, 2])
-def test_ng_pyramid_mapped_material_mass_and_gpu_action(tmp_path, record_property, family, order):
+def test_ng_pyramid_mapped_material_mass(tmp_path, record_property, family, order):
     mesh = connected_mesh(family)
     path = tmp_path / "material.vol"
     mesh.ngmesh.Save(str(path))
@@ -71,27 +72,11 @@ def test_ng_pyramid_mapped_material_mass_and_gpu_action(tmp_path, record_propert
         record_property("relative_mass_error",relative_mass)
         assert relative_mass <= 1e-11
         assert np.max(np.abs((E@x).reshape(3,-1).T-[.3,-.7,1.1])) <= 1e-11
-        # Analytic H(M)=2*M: exact energy/gradient/tangent from independent mass.
+        # Analytic H(M)=2*M reference for the standalone MEX publisher exchange below.
         law = dict(knots=np.array([0.,100.]),coefficients=np.array([0.,0.,2.,0.]),
                    integral_base=np.array([0.,10000.]),cap=90.,barrier_slope=1000.,
                    last_field=180.,initial_reluctivity=2.)
         direction = np.ascontiguousarray(np.random.default_rng(20261020).standard_normal(fes.ndof)*.01)
-        material = gpu._ResidentBHMaterial(E.indptr.astype(np.uint64),E.indices.astype(np.uint64),
-            np.ascontiguousarray(E.data),weights,fes.ndof,law,backend="gpu")
-        try:
-            before = material.stats()
-            evaluated = material.evaluate(x, direction)
-            gradient_error = np.linalg.norm(evaluated["gradient"]-2*(M@x))/np.linalg.norm(2*(M@x))
-            tangent_error = np.linalg.norm(evaluated["tangent_action"]-2*(M@direction))/np.linalg.norm(2*(M@direction))
-            energy_error = abs(evaluated["energy"]-float(x@(M@x)))/abs(float(x@(M@x)))
-            record_property("relative_gradient_error",gradient_error)
-            record_property("relative_tangent_error",tangent_error)
-            record_property("relative_energy_error",energy_error)
-            assert max(gradient_error,tangent_error,energy_error) <= 1e-11
-            assert material.stats()["setup_upload_bytes"] == before["setup_upload_bytes"]
-        finally:
-            material.close()
-        assert material.stats()["closed"]
         # Validation-only exchange for the independent standalone MEX publisher.
         # This reference mass projection is not a GPU-user setup prerequisite.
         fields = dict(E=E.tocsr(),weights=weights,x=x,direction=direction,

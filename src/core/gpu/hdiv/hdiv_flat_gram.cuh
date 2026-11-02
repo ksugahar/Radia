@@ -1,7 +1,9 @@
 // Flat-TET BDM1/BDM2 charge Gram generated on the device from host geometry,
 // charge monomials and reference rules. The entry dispatch mirrors the CPU
-// HighOrderTetEntryStrategy without images: self and near pairs use the exact
-// analytic moment potentials, well-separated pairs the low double rule. Only
+// HighOrderTetEntryStrategy without images: well-separated pairs take the low
+// double rule; self and touching pairs of affine P1 hosts the shared graded
+// outer rule (CPU P1TouchHosts/P1TouchEntryValue); other pairs the exact
+// analytic moment potentials on the outer rule. Only
 // primitives cross to the device; the Gram is written into the resident
 // deferred dense leaf (or the ACA leaves of hdiv_flat_aca.cuh) and never
 // leaves the device.
@@ -10,6 +12,12 @@
 #include <cmath>
 #include <cstdlib>
 #include "hmatrix_resident.cuh"
+#include "hdiv_p1_diagonal_input.hpp"
+#define RADIA_P1_KERNEL __device__
+#define RADIA_P1_FIELD rad_hdiv_cuda
+#include "hdiv_p1_diagonal_math.inc"
+#undef RADIA_P1_FIELD
+#undef RADIA_P1_KERNEL
 namespace radia_hmatrix_cuda {
 inline std::size_t flatSum(std::size_t a,std::size_t b){
     if(a>std::numeric_limits<std::size_t>::max()-b)throw std::overflow_error("Flat device byte count overflow");return a+b;}
@@ -98,6 +106,9 @@ __device__ inline double flatInnerPotential(const FlatCharge& q,const double p[3
 struct FlatDevice {
     const FlatCharge* charges;const double* points;const double* weights;const double* lowPoints;const double* lowWeights;
     std::size_t n,stride,lowStride;const int* outerCount;const int* lowCount;double farFactor;
+    // Per-charge graded-rule source and per-host flags: nonzero when a host
+    // carries any charge outside affine P1 (cell constant, face degree <= 1).
+    const radia_hdiv_python::P1ChargeSource* p1;const int* cellNonP1;const int* faceNonP1;
 };
 __device__ inline double flatQuadDot(const FlatDevice& d,std::size_t target,std::size_t source){
     const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
@@ -117,14 +128,25 @@ __device__ inline double flatQuadDotFar(const FlatDevice& d,std::size_t target,s
     }
     return sum*0.07957747154594766788;
 }
+// CPU P1TouchHosts for direct pairs: both hosts carry only affine P1 charges
+// and share a vertex with bitwise-equal coordinates (self pairs included).
+__device__ inline bool flatP1Touch(const FlatDevice& d,const FlatCharge& a,const FlatCharge& b){
+    if((a.kind==0?d.cellNonP1:d.faceNonP1)[a.host]||(b.kind==0?d.cellNonP1:d.faceNonP1)[b.host])return false;
+    for(int i=0;i<(a.kind?3:4);++i)for(int j=0;j<(b.kind?3:4);++j)
+        if(a.vertices[3*i]==b.vertices[3*j]&&a.vertices[3*i+1]==b.vertices[3*j+1]&&a.vertices[3*i+2]==b.vertices[3*j+2])return true;
+    return false;
+}
 __device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
-    if(a==b)return flatQuadDot(d,a,a);
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
-    if(d.farFactor<1e29){
+    if(a!=b&&d.farFactor<1e29){
         const double dx=qa.center[0]-qb.center[0],dy=qa.center[1]-qb.center[1],dz=qa.center[2]-qb.center[2];
         if(sqrt(dx*dx+dy*dy+dz*dz)>d.farFactor*(qa.size+qb.size))
             return 0.5*(flatQuadDotFar(d,a,b)+flatQuadDotFar(d,b,a));
     }
+    if(flatP1Touch(d,qa,qb))
+        return a==b?radia_hdiv_p1_diagonal::pairEntry(d.p1[a],d.p1[a])
+                   :0.5*(radia_hdiv_p1_diagonal::pairEntry(d.p1[a],d.p1[b])+radia_hdiv_p1_diagonal::pairEntry(d.p1[b],d.p1[a]));
+    if(a==b)return flatQuadDot(d,a,a);
     return 0.5*(flatQuadDot(d,a,b)+flatQuadDot(d,b,a));
 }
 // One thread per charge: host maps, monomial-folded outer/low rules and the
@@ -133,7 +155,8 @@ __global__ void prepareFlatCharges(std::size_t n,const double* cells,std::size_t
         const int* hosts,const int* kinds,const int* exponents,
         const FlatRulePoint* tet,int nt,const FlatRulePoint* tri,int nr,const FlatRulePoint* tetLow,int ntl,const FlatRulePoint* triLow,int nrl,
         std::size_t stride,std::size_t lowStride,FlatCharge* charges,double* points,double* weights,int* outerCount,
-        double* lowPoints,double* lowWeights,int* lowCount,int* invalid){
+        double* lowPoints,double* lowWeights,int* lowCount,radia_hdiv_python::P1ChargeSource* p1,
+        int* cellNonP1,int* faceNonP1,int* invalid){
     const auto a=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(a>=n)return;
     FlatCharge q{};q.kind=kinds[a];q.host=hosts[a];
     for(int k=0;k<3;++k)q.expo[k]=exponents[3*a+k];
@@ -203,6 +226,10 @@ __global__ void prepareFlatCharges(std::size_t n,const double* cells,std::size_t
     for(int k=0;k<nl;++k){double* P=lowPoints+3*(lowStride*a+k);map(low[k],P);
         lowWeights[lowStride*a+k]=low[k].weight*measure*flatMonomial(q,P);}
     lowCount[a]=nl;
+    // CPU P1TouchHosts eligibility, folded per host; the graded source uses the shared CPU frame.
+    if(q.expo[2]!=0||q.expo[0]+q.expo[1]>(q.kind==1?1:0))atomicExch((q.kind==0?cellNonP1:faceNonP1)+q.host,1);
+    else if(!radia_hdiv_python::p1ChargeSourceInto(q.kind,q.vertices,q.expo,p1[a])||!isfinite(p1[a].constant)||
+            !isfinite(p1[a].gradient[0])||!isfinite(p1[a].gradient[1])||!isfinite(p1[a].gradient[2])){atomicExch(invalid,1);return;}
     charges[a]=q;
 }
 __global__ void assembleFlatGram(FlatDevice d,std::size_t first,std::size_t count,double* matrix,int* invalid){
@@ -217,6 +244,7 @@ __global__ void assembleFlatGram(FlatDevice d,std::size_t first,std::size_t coun
 struct FlatPrepared {
     Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
     Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
+    Buffer<radia_hdiv_python::P1ChargeSource> p1;Buffer<int> cellNonP1,faceNonP1;
     std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;
     // Every buffer prepare() allocates, uploads included, so one reserve check covers them.
     static std::size_t workspaceBytes(const FlatBlock& block){
@@ -225,7 +253,9 @@ struct FlatPrepared {
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
         const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
         const auto uploads=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double))+checkedProduct(n,5*sizeof(int))+rules;
-        return flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads);
+        const auto p1=flatSum(checkedProduct(n,sizeof(radia_hdiv_python::P1ChargeSource)),
+            checkedProduct(block.cells.size()/12+block.faces.size()/9,sizeof(int)));
+        return flatSum(flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads),p1);
     }
     int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
         check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
@@ -243,16 +273,22 @@ struct FlatPrepared {
         charges.allocate(n);outerCount.allocate(n);lowCount.allocate(n);
         qp.allocate(checkedProduct(n,3*stride));qw.allocate(checkedProduct(n,stride));
         lp.allocate(checkedProduct(n,3*lowStride));lw.allocate(checkedProduct(n,lowStride));
+        // Every host flag is cleared on the device; a face-free or cell-free block keeps a one-int buffer.
+        const std::size_t cellCount=block.cells.size()/12,faceCount=block.faces.size()/9;
+        p1.allocate(n);cellNonP1.allocate(std::max<std::size_t>(1,cellCount));faceNonP1.allocate(std::max<std::size_t>(1,faceCount));
+        check(cudaMemsetAsync(cellNonP1.data,0,std::max<std::size_t>(1,cellCount)*sizeof(int),stream));
+        check(cudaMemsetAsync(faceNonP1.data,0,std::max<std::size_t>(1,faceCount)*sizeof(int),stream));
         prepareFlatCharges<<<unsigned((n+127)/128),128,0,stream>>>(n,cells.data,block.cells.size()/12,faces.data,block.faces.size()/9,
             hosts.data,kinds.data,exponents.data,tet.data,int(block.tet.size()),tri.data,int(block.tri.size()),
             tetLow.data,int(block.tetLow.size()),triLow.data,int(block.triLow.size()),stride,lowStride,
-            charges.data,qp.data,qw.data,outerCount.data,lp.data,lw.data,lowCount.data,invalid.data);
+            charges.data,qp.data,qw.data,outerCount.data,lp.data,lw.data,lowCount.data,p1.data,cellNonP1.data,faceNonP1.data,invalid.data);
         check(cudaGetLastError());++launches;
         if((invalidCode=flag(stream,transfers,"prepare_flag"))!=0)
             throw std::invalid_argument(invalidCode==2?"Flat device Gram supports cell degree <= 1 and face degree <= 2 only"
                                                        :"Invalid flat charge host, kind, exponent or degenerate geometry");
     }
-    FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor};}
+    FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor,
+        p1.data,cellNonP1.data,faceNonP1.data};}
 };
 inline void flatReserve(std::size_t bytes,const char* what){
     std::size_t free,total;check(cudaMemGetInfo(&free,&total));

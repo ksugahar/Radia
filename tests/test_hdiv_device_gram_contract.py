@@ -349,6 +349,19 @@ def test_device_gram_source_downloads_only_validity_flags():
     assert "cudaMemcpyToSymbol" not in source and "cudaMemcpyHostToDevice" not in source
 
 
+def test_diagnostic_entries_stay_off_the_construction_path():
+    source = (HDIV / "hdiv_flat_diagnostic.cuh").read_text(encoding="utf-8")
+    downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
+    assert len(downloads) == 1 and "count*sizeof(double)" in downloads[0], downloads
+    assert "cudaMemcpyHostToDevice" not in source and "Plan" not in source and "materializeDeferred" not in source
+    owner = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
+    create = owner[owner.index("std::shared_ptr<DeviceOperator> createFlat("):]
+    assert "flatDiagnosticEntries" not in create, "construction must not evaluate diagnostic entries"
+    users = sorted(p.name for p in (ROOT / "src").rglob("*") if p.is_file() and p.suffix in {".cu", ".cuh", ".cpp", ".hpp", ".h"}
+                   and '"hdiv_flat_diagnostic.cuh"' in p.read_text(encoding="utf-8", errors="replace"))
+    assert users == ["hdiv_resident_python_cuda.cu"], users
+
+
 def test_device_aca_source_downloads_only_integer_metadata():
     source = (HDIV / "hdiv_flat_aca.cuh").read_text(encoding="utf-8")
     downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)

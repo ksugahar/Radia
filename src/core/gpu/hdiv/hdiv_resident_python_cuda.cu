@@ -1,17 +1,16 @@
-// Same packing, scaling, sparse maps and kernels as the standalone MEX gateway.
+// Device-generated charge Gram, B and B^T; resident kernels shared with the standalone MEX gateway.
 #include "hdiv_resident_python_api.hpp"
 #include "hmatrix_material_solver.cuh"
 #include "hmatrix_nonlinear_material.cuh"
 #include "hdiv_flat_gram.cuh"
+#include "hdiv_flat_diagnostic.cuh"
 #include "hdiv_flat_aca.cuh"
 #include "hdiv_flat_charge_map.cuh"
-#include "hdiv_p1_diagonal.cuh"
 #include <mutex>
 #include <sstream>
 #include <atomic>
 namespace radia_hdiv_python {
 NewtonResult nonlinearBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&);
-NewtonResult nonlinearHostReferenceBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MaterialOperator&,const MapInput&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&);
 
 namespace {
 // Named device bytes known before any allocation, summed as a conservative
@@ -47,17 +46,6 @@ class Operator final:public DeviceOperator {
     const std::size_t dimension;
 public:
     Assembly record;
-    Operator(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::SparseMap& map)
-      :dimension(map.columns) {
-        // Keep the existing 2 GiB combined native setup bound, not a new cap.
-        resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,&map,1);
-        record={"host-leaves",plan.n,resident->ownedBytes,0,{}};
-        record.transfers.push_back({"host_hmatrix_coefficients","H2D",plan.coefficients.size()*sizeof(double)});
-        planTransfer(plan);
-        // The host-leaf route still uploads its host-built charge map (reported, not hidden).
-        const auto index=sizeof(std::size_t);
-        record.transfers.push_back({"charge_map_csr_host_built","H2D",(map.offsets.size()+map.columns+1+2*map.indices.size())*index+2*map.values.size()*sizeof(double)});
-    }
     // B and B^T are generated on the device from NGSolve tables; no CSR crosses.
     // The dense oracle allocates its workspace after B is built; ACA factors
     // and prepared charges are already live while the resident and B exist.
@@ -91,25 +79,8 @@ public:
         resident->upload(x);resident->apply(1);const auto y=resident->download();
         return {y.begin(),y.end()};
     }
-    MaterialResult solve_linear(const MapInput& input,const radia_hmatrix_cuda::HostVector<double>& rhs,
-        double invChi,double tolerance,int maxIterations,bool chebyshev,bool graph,int degree,double lower)override {
-        std::lock_guard<std::mutex> lock(mutex);
-        if(!resident)throw std::runtime_error("HDiv resident has been closed");
-        if(input.rows!=dimension||input.columns!=dimension||rhs.size()!=dimension)
-            throw std::invalid_argument("Material mass and RHS dimension mismatch");
-        radia_hmatrix_cuda::SparseMap mass;mass.rows=input.rows;mass.columns=input.columns;
-        mass.offsets.assign(input.offsets.begin(),input.offsets.end());
-        mass.indices.assign(input.indices.begin(),input.indices.end());mass.values.assign(input.values.begin(),input.values.end());
-        mass.validate();
-        const auto result=radia_hmatrix_cuda::solveLinearMaterial(*resident,mass,rhs,invChi,tolerance,
-            maxIterations,false,false,graph,chebyshev,degree,lower);
-        return {{result.x.begin(),result.x.end()},result.iterations,result.relativeResidual,result.ownedBytes,result.preconditionerGraphLaunches};
-    }
     NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options)override{
         std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return nonlinearBridge(*resident,material,rhs,initial,options);
-    }
-    NewtonResult solve_nonlinear_host_reference(radia_hdiv_bh::MaterialOperator& material,const MapInput& reference,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options)override{
-        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return nonlinearHostReferenceBridge(*resident,material,reference,rhs,initial,options);
     }
     Assembly assembly()override {std::lock_guard<std::mutex> lock(mutex);return record;}
     Stats stats()override {
@@ -119,28 +90,8 @@ public:
     void close()override {std::lock_guard<std::mutex> lock(mutex);resident.reset();}
 };
 }
-std::shared_ptr<DeviceOperator> create(std::size_t n,const radia_hmatrix_cuda::HostVector<LeafInput>& leaves,
-    const radia_hmatrix_cuda::HostVector<std::size_t>& permutation,const radia_hmatrix_cuda::HostVector<double>& scale,const MapInput& input) {
-    if(!n||n>4608||!input.columns||input.columns>16384||input.rows!=n||leaves.empty()||leaves.size()>65536)
-        throw std::invalid_argument("Unsupported bounded HDiv resident dimensions");
-    std::size_t partials=0;
-    for(const auto& leaf:leaves) {
-        if(!leaf.rows||!leaf.columns||leaf.rows>n||leaf.columns>n)
-            throw std::invalid_argument("Unsupported resident leaf dimensions");
-        const auto count=leaf.rows+(leaf.row==leaf.column?0:leaf.columns);
-        if(count>(std::size_t(1)<<24)-partials)
-            throw std::invalid_argument("Resident host partial workspace budget exceeded");
-        partials+=count;
-    }
-    auto plan=radia_hmatrix_cuda::packLeaves(n,leaves,permutation,scale);
-    radia_hmatrix_cuda::SparseMap map;map.rows=input.rows;map.columns=input.columns;
-    map.offsets.assign(input.offsets.begin(),input.offsets.end());
-    map.indices.assign(input.indices.begin(),input.indices.end());map.values.assign(input.values.begin(),input.values.end());
-    map.validate();return std::allocate_shared<Operator>(radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner"),plan,map);
-}
-std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMapInput& charges) {
-    const auto n=input.host.size();
-    if(!n||!charges.dofs)throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
+namespace {
+radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     radia_hmatrix_cuda::FlatBlock block;
     block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
     block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
@@ -149,7 +100,18 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         if(rows.size()%4)throw std::invalid_argument("Reference rule rows require (xi0,xi1,xi2,weight)");
         for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
     rule(input.tet,block.tet);rule(input.tri,block.tri);rule(input.tetLow,block.tetLow);rule(input.triLow,block.triLow);
-    block.validate();radia_hdiv_bh::validateFlatChargeMap(input,charges);
+    block.validate();return block;
+}
+}
+radia_hmatrix_cuda::HostVector<double> flatDiagnosticEntries(const FlatInput& input,const radia_hmatrix_cuda::HostVector<std::size_t>& rows,
+    const radia_hmatrix_cuda::HostVector<std::size_t>& cols){
+    if(input.host.empty())throw std::invalid_argument("Flat diagnostic entries require charges");
+    return radia_hmatrix_cuda::flatDiagnosticEntries(flatBlock(input),rows,cols);
+}
+std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMapInput& charges) {
+    const auto n=input.host.size();
+    if(!n||!charges.dofs)throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
+    const auto block=flatBlock(input);radia_hdiv_bh::validateFlatChargeMap(input,charges);
     const auto budget=chargeBudget(block,input,charges,input.compression=="aca");
     const auto owner=radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner");
     if(input.compression=="dense"){
@@ -182,8 +144,6 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
 
 radia_hdiv_bh::Samples radia_hdiv_bh::evaluate(const Law& law,const radia_hmatrix_cuda::HostVector<double>& a){return evaluateInverseBH(law,a);}
 
-radia_hdiv_bh::MaterialEvaluation radia_hdiv_bh::evaluateMaterial(const MaterialInput& input,const Law& law,const radia_hmatrix_cuda::HostVector<double>& state,const radia_hmatrix_cuda::HostVector<double>& direction){return evaluateMappedMaterial(input,law,state,direction);}
-
 namespace radia_hdiv_bh {
 namespace {
 std::atomic<unsigned> liveMaterialOwners{0};
@@ -205,14 +165,6 @@ public:
         std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");
         return radia_hmatrix_cuda::solveNonlinearMaterial(op,*context,rhs,initial,options);
     }
-    // Host-evaluation contexts have no device mass; a device-table context never accepts a host reference.
-    radia_hdiv_python::NewtonResult solveHostReference(radia_hmatrix_cuda::Resident& op,const radia_hdiv_python::MapInput& input,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const radia_hdiv_python::NewtonOptions& options){
-        std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");
-        if(context->deviceMass())throw std::invalid_argument("Device-table material owns its reference mass; host reference rejected");
-        if(input.rows!=op.dimension()||input.columns!=op.dimension())throw std::invalid_argument("Reference mass dimension mismatch");
-        radia_hmatrix_cuda::SparseMap reference;reference.rows=input.rows;reference.columns=input.columns;reference.offsets.assign(input.offsets.begin(),input.offsets.end());reference.indices.assign(input.indices.begin(),input.indices.end());reference.values.assign(input.values.begin(),input.values.end());reference.validate();
-        return radia_hmatrix_cuda::solveNonlinearMaterial(op,*context,reference,rhs,initial,options);
-    }
     MaterialStats stats()override{std::lock_guard<std::mutex> lock(mutex);if(context)return context->stats();MaterialStats out;out.closed=true;return out;}
     std::string route()override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->route();}
     radia_hmatrix_cuda::HostVector<LedgerRow> transfers()override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->transfers();}
@@ -222,14 +174,10 @@ public:
     void close()override{std::lock_guard<std::mutex> lock(mutex);context.reset();if(counted){--liveMaterialOwners;counted=false;}}
 };
 }
-std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
 }
 
 radia_hdiv_python::NewtonResult radia_hdiv_python::nonlinearBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options){
     auto* owner=dynamic_cast<radia_hdiv_bh::MaterialOwner*>(&material);if(!owner)throw std::invalid_argument("Material owner ABI mismatch");return owner->solve(op,rhs,initial,options);
-}
-radia_hdiv_python::NewtonResult radia_hdiv_python::nonlinearHostReferenceBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MaterialOperator& material,const MapInput& reference,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options){
-    auto* owner=dynamic_cast<radia_hdiv_bh::MaterialOwner*>(&material);if(!owner)throw std::invalid_argument("Material owner ABI mismatch");return owner->solveHostReference(op,reference,rhs,initial,options);
 }

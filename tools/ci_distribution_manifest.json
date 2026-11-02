@@ -2403,6 +2403,12 @@
       ]
     },
     {
+      "pattern": "tests/test_hdiv_gpu_p1_touching_parity.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "src/core/gpu/hdiv/analytic_matrix_build.cuh",
       "owners": [
         "radia",
