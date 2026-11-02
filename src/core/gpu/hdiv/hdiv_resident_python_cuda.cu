@@ -61,7 +61,7 @@ public:
             [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
-        record={flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
+        record={flat.family=="hex"?"device-hex":flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
         record.compression=flat.compression;
         for(std::size_t i=0;i<ChargeBudget::count;++i)record.budget.push_back({ChargeBudget::names[i],budget.bytes[i]});
         planTransfer(plan);
@@ -100,8 +100,20 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
     block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
     block.expo.assign(input.expo.begin(),input.expo.end());block.farFactor=input.farFactor;
-    if(input.family!="affine-tet"&&input.family!="curved-tet")throw std::invalid_argument("Charge geometry family must be 'affine-tet' or 'curved-tet'");
-    block.curved=input.family=="curved-tet";
+    if(input.family!="affine-tet"&&input.family!="curved-tet"&&input.family!="hex")
+        throw std::invalid_argument("Charge geometry family must be 'affine-tet', 'curved-tet' or 'hex'");
+    block.curved=input.family=="curved-tet";block.hex=input.family=="hex";
+    if(block.hex){
+        if(input.hexRules.size()%3||input.hexBands.size()!=2)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and two bands");
+        radia_hmatrix_cuda::HostVector<double>* points[4]={&block.ruleOut,&block.rulePair,&block.rulePair,&block.rulePair};
+        radia_hmatrix_cuda::HostVector<double>* weights[4]={&block.ruleOutW,&block.rulePairW,&block.rulePairW,&block.rulePairW};
+        points[1]=&block.ruleIn;weights[1]=&block.ruleInW;points[3]=&block.rulePairAffine;weights[3]=&block.rulePairAffineW;
+        int previous=0;
+        for(std::size_t i=0;i<input.hexRules.size();i+=3){const double r=input.hexRules[i];
+            if(!(r==0||r==1||r==2||r==3)||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..3");
+            previous=int(r);points[previous]->push_back(input.hexRules[i+1]);weights[previous]->push_back(input.hexRules[i+2]);}
+        block.nearGrade=input.hexBands[0];block.farInner=input.hexBands[1];
+    }else if(!input.hexRules.empty()||!input.hexBands.empty())throw std::invalid_argument("TET geometry takes no HEX rules");
     block.gl.assign(input.gl.begin(),input.gl.end());block.gw.assign(input.gw.begin(),input.gw.end());
     block.cellNumbers.assign(input.cellNumbers.begin(),input.cellNumbers.end());block.faceNumbers.assign(input.faceNumbers.begin(),input.faceNumbers.end());
     auto rule=[](const radia_hmatrix_cuda::HostVector<double>& rows,auto& out){
@@ -198,7 +210,7 @@ public:
         counted=true;
         try{
             validateFlatEvaluation(input);FlatEvaluationBudget budget;requireFlatEvaluationDevice(input,0,budget);
-            check(cudaGetDevice(&device));nd=input.dofs;routeName=input.nodes==10?"device-curved-tet-mass":"device-flat-tet-mass";
+            check(cudaGetDevice(&device));nd=input.dofs;routeName=input.nodes==27?"device-hex-mass":input.nodes==10?"device-curved-tet-mass":"device-flat-tet-mass";
             auto map=makeHostUnique<DeviceMap>("python.mass-map");auto diag=makeHostUnique<Buffer<double>>("python.mass-diagonal");
             {FlatEvaluationOperator flat;Buffer<double> weights;FlatEvaluationBuilder builder;
                 builder.build(input,flat,weights,*map,*diag);

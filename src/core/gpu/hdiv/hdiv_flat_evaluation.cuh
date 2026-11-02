@@ -11,6 +11,7 @@
 #include <cub/device/device_reduce.cuh>
 #include <sstream>
 #include "hmatrix_resident.cuh"
+#include "hdiv_hex_gram.cuh"
 namespace radia_hdiv_bh {
 // Joint (row,column) mass key row*nd+column: 64-bit, exact for any int32 DOF count.
 using MassKey=unsigned long long;
@@ -20,10 +21,11 @@ __device__ inline double affineTet(const double* V,double J[3][3]){
     return J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
 }
 // Element map Jacobian at rule row k: the affine TET (4 nodes, point
-// independent) or the isoparametric P2 TET (10 nodes, Jac[k][c] = dX_k/dxi_c,
-// the affine column convention). Returns det J.
+// independent), the isoparametric P2 TET (10 nodes) or the HEX Q2 lattice
+// (27 nodes), Jac[k][c] = dX_k/dxi_c, the affine column convention. Returns det J.
 __device__ inline double elementJacobian(const double* geometry,std::size_t nodes,std::size_t e,const double* ruleRow,double J[3][3]){
     if(nodes==4)return affineTet(geometry+12*e,J);
+    if(nodes==27){double X[3];radia_hmatrix_cuda::hexMapJ(geometry+81*e,ruleRow,X,J);return rad_hdiv_cuda::det3(J);}
     double X[3];rad_hdiv_cuda::CurvedTetEval(reinterpret_cast<const double(*)[3]>(geometry+30*e),ruleRow[0],ruleRow[1],ruleRow[2],X,J);
     return rad_hdiv_cuda::det3(J);
 }
@@ -32,7 +34,7 @@ __device__ inline double elementJacobian(const double* geometry,std::size_t node
 __device__ inline double piolaValue(const double J[3][3],double det,const double* S,int c){
     return (J[c][0]*S[0]+J[c][1]*S[1]+J[c][2]*S[2])/det;
 }
-// Local slots in ascending DOF order (stable insertion sort; local <= 64 on the host).
+// Local slots in ascending DOF order (stable insertion sort; local <= 128 on the host).
 __global__ void flatElementOrder(std::size_t ne,std::size_t local,const int* elementDofs,unsigned char* order){
     const auto e=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(e>=ne)return;
     const int* dofs=elementDofs+e*local;unsigned char* o=order+e*local;
@@ -164,7 +166,7 @@ struct FlatEvaluationBuilder {
         auto upload=[&](auto& buffer,const auto& values,const char* payload,bool resident){buffer.upload(values);const auto bytes=checkedProduct(values.size(),sizeof(values[0]));
             transfers.push_back({payload,"H2D",bytes});if(!resident)transientBytes+=bytes;};
         auto scratch=[&](auto& buffer,std::size_t count){buffer.allocate(count);transientBytes+=checkedProduct(count,sizeof(*buffer.data));};
-        upload(op.vertices,in.vertices,in.nodes==10?"element_p2_nodes_m":"element_vertices_m",true);upload(op.shapes,in.shapes,"reference_shapes",true);upload(op.ruleRows,in.rule,"material_rule",true);
+        upload(op.vertices,in.vertices,in.nodes==27?"element_q2_nodes_m":in.nodes==10?"element_p2_nodes_m":"element_vertices_m",true);upload(op.shapes,in.shapes,"reference_shapes",true);upload(op.ruleRows,in.rule,"material_rule",true);
         upload(op.classes,in.elementClass,"element_class",true);upload(op.dofs,in.elementDofs,"element_dofs",true);upload(op.points,in.elementPoints,"element_points",true);
         upload(invalid,HostVector<int>{0},"evaluation_invalid_flag",false);
         op.order.allocate(slots);weights.allocate(nq);
@@ -236,8 +238,11 @@ private:
 inline void validateFlatEvaluation(const FlatEvaluationInput& in){
     using radia_hmatrix_cuda::checkedProduct;
     const auto ne=in.elements,local=in.local,rule=in.rulePoints;constexpr std::size_t count=std::numeric_limits<int>::max();
-    if(!ne||!local||local>64||!rule||rule>4096||!in.classes||in.classes>24||!in.dofs||in.points!=checkedProduct(ne,rule)||(in.nodes!=4&&in.nodes!=10))
-        throw std::invalid_argument("Flat evaluation tables outside the affine/curved P2 TET scope");
+    // TET: 24 vertex-rank classes, local <= 64. HEX: classes follow the mesh's vertex orders, local <= 128.
+    const bool hex=in.nodes==27;
+    if(!ne||!local||local>(hex?128u:64u)||!rule||rule>4096||!in.classes||in.classes>(hex?1024u:24u)||!in.dofs||in.points!=checkedProduct(ne,rule)||
+       (in.nodes!=4&&in.nodes!=10&&!hex))
+        throw std::invalid_argument("Flat evaluation tables outside the affine/curved P2 TET and Q2 HEX scope");
     if(ne>count||in.dofs>count||in.points>count)throw std::invalid_argument("Flat evaluation tables exceed int32 element, DOF or point numbering");
     if(checkedProduct(ne,checkedProduct(local,local))>count)throw std::invalid_argument("Flat mass triples exceed the checked int CUB item count");
     if(in.vertices.size()!=3*in.nodes*ne||in.elementClass.size()!=ne||in.elementDofs.size()!=ne*local||in.elementPoints.size()!=ne*rule||

@@ -45,7 +45,7 @@ def _staged(tmp_path, order, cuda):
         mesh = ng.Mesh(str(path))
         fes = ng.HDiv(mesh, order=order)
         _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-        tables, geometry = hdiv_gpu._device_charge_tables(path, fes, cuda)
+        tables, geometry = hdiv_gpu._device_charge_tables(path, fes, cuda, 1, "affine-tet")
     arguments = hdiv_gpu._device_gram_arguments(tables, inputs, geometry, None)
     return inputs, {name: arguments[name] for name in _GEOMETRY}
 

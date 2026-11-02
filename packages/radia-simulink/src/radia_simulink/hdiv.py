@@ -4,8 +4,10 @@ _CHARGE_FIELDS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind"
                   "tri_rule", "tet_low_rule", "tri_low_rule", "cell_class", "cell_dofs", "cell_tables",
                   "cell_exponents", "face_class", "face_dofs", "face_tables", "face_exponents")
 _EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "element_dofs", "element_points")
-# Present only for the curved P2 family (``curve_order=2``); the MEX rejects them for affine-tet.
+# Present only for the curved P2 family (``curve_order=2``) or the HEX family; the MEX rejects them otherwise.
 _CURVED_CHARGE_FIELDS = ("cell_numbers", "face_numbers", "curve_gl", "curve_gw", "cell_mass_rule", "face_mass_rule")
+_HEX_CHARGE_FIELDS = ("hex_rules", "hex_bands")
+_FAMILY_FIELDS = {"affine-tet": (), "curved-tet": _CURVED_CHARGE_FIELDS, "hex": _HEX_CHARGE_FIELDS}
 
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
@@ -34,7 +36,7 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
         return flat(value, np.int32)
 
     gram = data["charge_gram"]
-    fields = _CHARGE_FIELDS + (_CURVED_CHARGE_FIELDS if data["family"] == "curved-tet" else ())
+    fields = _CHARGE_FIELDS + _FAMILY_FIELDS[data["family"]]
     charges = {name: ints(name, gram) if np.asarray(gram[name]).dtype.kind in "iu" else flat(gram[name], np.float64)
                for name in fields}
     aca, compression = gram["aca"], str(gram["compression"])

@@ -240,7 +240,7 @@ def test_production_material_stores_no_global_evaluation_matrix():
     source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
     flat = _block(source, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()")
     assert "builder.build(in,flat,weights,M,massDiagonal);" in flat and "&E" not in flat and "&ET" not in flat
-    assert 'matrixFree=true;routeName=in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";' in flat
+    assert 'matrixFree=true;routeName=in.nodes==27?"device-hex-matrix-free":in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";' in flat
     for method in ("MaterialEvaluation evaluate(", "void applyFrozenDevice("):
         body = source[source.index(method):]
         body = body[:body.index("\n    }\n")]
