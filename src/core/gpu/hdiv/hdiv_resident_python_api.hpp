@@ -27,6 +27,14 @@ struct FlatInput {
     radia_hmatrix_cuda::HostVector<int> host,kind,expo;
     double farFactor=1e30;
 };
+// NGSolve charge-projection tables per vertex-rank class: B rows are generated
+// on the device from these and the FlatInput vertices; no B value crosses.
+// Exponents are host-side layout checks against FlatInput and never uploaded.
+struct ChargeMapInput {
+    std::size_t dofs=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0;
+    radia_hmatrix_cuda::HostVector<double> cellTables,faceTables;
+    radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
+};
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;};
 class DeviceOperator {
@@ -43,6 +51,6 @@ public:
 };
 std::shared_ptr<DeviceOperator> create(std::size_t,const radia_hmatrix_cuda::HostVector<LeafInput>&,
     const radia_hmatrix_cuda::HostVector<std::size_t>&,const radia_hmatrix_cuda::HostVector<double>&,const MapInput&);
-// The charge Gram is generated on the device; no Gram coefficient crosses.
-std::shared_ptr<DeviceOperator> createFlat(const FlatInput&,const MapInput&);
+// The charge Gram, B and B^T are generated on the device; no Gram or B value crosses.
+std::shared_ptr<DeviceOperator> createFlat(const FlatInput&,const ChargeMapInput&);
 } // namespace radia_hdiv_python

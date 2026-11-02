@@ -29,12 +29,23 @@ def staged(far=True, n_el=1):
     return inputs
 
 
-class Map:
-    shape = (2, 7)
+def tables(inputs):
+    """Staged charge tables consistent with ``inputs`` (one cell, one face monomial)."""
+    expo = np.asarray(inputs["charge_expo"], dtype=np.int32)
+    return (dict(cell_class=np.zeros(1, np.int32), cell_dofs=np.arange(6, dtype=np.int32)[None],
+                 cell_tables=np.ones((1, 1, 6)), cell_exponents=expo[None, :3],
+                 face_class=np.zeros(1, np.int32), face_dofs=np.arange(3, dtype=np.int32)[None],
+                 face_tables=np.ones((1, 1, 3)), face_exponents=expo[None, 3:5]),
+            (np.asarray(inputs["cell_verts"], dtype=np.float64), np.asarray(inputs["face_verts"], dtype=np.float64)))
+
+
+def gram(inputs):
+    charge, geometry = tables(inputs)
+    return hdiv_gpu._device_gram_arguments(charge, inputs, geometry)
 
 
 def test_staged_inputs_map_to_primitive_rows_without_hmatrix_parameters():
-    arguments = hdiv_gpu._device_gram_arguments(Map, staged())
+    arguments = gram(staged())
     assert arguments["tet_rule"].shape == (2, 4) and arguments["tri_rule"].shape == (1, 4)
     assert arguments["tri_rule"][0, 2] == 0 and arguments["tet_low_rule"][0, 3] == pytest.approx(1/6)
     assert arguments["far_factor"] == 2.
@@ -44,7 +55,7 @@ def test_staged_inputs_map_to_primitive_rows_without_hmatrix_parameters():
 
 
 def test_missing_low_rules_disable_the_far_split():
-    arguments = hdiv_gpu._device_gram_arguments(Map, staged(far=False))
+    arguments = gram(staged(far=False))
     assert arguments["far_factor"] == 1e30 and arguments["tet_low_rule"].shape == (0, 4)
 
 
@@ -54,7 +65,7 @@ def test_inconsistent_or_image_payloads_fail_before_the_device(change, error):
     inputs = staged()
     inputs.update(change)
     with pytest.raises(error):
-        hdiv_gpu._device_gram_arguments(Map, inputs)
+        gram(inputs)
 
 
 def ledger(arguments, *extra, drop=()):
@@ -65,7 +76,7 @@ def ledger(arguments, *extra, drop=()):
 
 
 def test_assembly_ledger_requires_the_exact_primitive_rows():
-    arguments = hdiv_gpu._device_gram_arguments(Map, staged())
+    arguments = gram(staged())
     assert hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)["charges"] == 2
     flags_only = dict(route="device-flat-tet", charges=2, transfer_ledger=[
         dict(payload="prepare_flag", direction="D2H", bytes=4),
@@ -75,7 +86,8 @@ def test_assembly_ledger_requires_the_exact_primitive_rows():
     resized["transfer_ledger"][0]["bytes"] += 8
     forged = [flags_only, duplicate, resized, ledger(arguments, drop=("resident_plan",)),
               ledger(arguments, ("host_hmatrix_coefficients", "H2D", 8)),
-              ledger(arguments, ("cell_vertices_m", "D2H", 96)), dict(ledger(arguments), route="host-leaves")]
+              ledger(arguments, ("cell_vertices_m", "D2H", 96)), dict(ledger(arguments), route="host-leaves"),
+              ledger(arguments, ("charge_map_csr_host_built", "H2D", 64)), ledger(arguments, drop=("charge_cell_tables",))]
     for bad in ("8", -8, True, 0):
         row = ledger(arguments)
         next(r for r in row["transfer_ledger"] if r["payload"] == "resident_plan")["bytes"] = bad
@@ -86,7 +98,7 @@ def test_assembly_ledger_requires_the_exact_primitive_rows():
 
 
 def test_disabled_far_split_has_no_low_rule_rows():
-    arguments = hdiv_gpu._device_gram_arguments(Map, staged(far=False))
+    arguments = gram(staged(far=False))
     payloads = {p for p, _ in hdiv_gpu._expected_device_ledger(arguments)}
     assert not {"tet_low_rule", "tri_low_rule"} & payloads, sorted(payloads)
     hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)
@@ -100,7 +112,7 @@ def test_cell_exponents_are_bounded_before_any_sum(expo):
     inputs = staged()
     inputs["charge_expo"] = expo + [0, 0, 0]
     with pytest.raises(ValueError, match="cell degree <= 1"):
-        hdiv_gpu._device_gram_arguments(Map, inputs)
+        gram(inputs)
 
 
 @pytest.mark.parametrize("expo,ok", [
@@ -109,10 +121,10 @@ def test_face_exponents_accept_the_degree_two_border_only(expo, ok):
     inputs = staged()
     inputs["charge_expo"] = [1, 0, 0] + expo
     if ok:
-        assert hdiv_gpu._device_gram_arguments(Map, inputs)["charge_exponents"][3:].tolist() == expo
+        assert gram(inputs)["charge_exponents"][3:].tolist() == expo
     else:
         with pytest.raises(ValueError, match="face degree <= 2"):
-            hdiv_gpu._device_gram_arguments(Map, inputs)
+            gram(inputs)
 
 
 def test_native_guards_bound_components_before_the_degree_sum():
