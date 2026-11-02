@@ -4,8 +4,10 @@ Guards: changes to radia.vim.Solve affecting the computed M_avg[2]; operator,
 source-RHS and graded-P1 charge-Gram selector changes (the selector gate-off
 mutation was detected at this bound); loss of the magnetic_body / exterior labels.
 Assumes: frozen named 1338-element mesh 27c37786 checked against its versioned
-label contract, mu_r=1000, H_ext=(0,0,1) A/m, CPU, NGSolve/library threads=1.
-Heavy numerical tier: one recorded run took about 760 s; not a fast surrogate.
+label contract and pinned in the case's checked-VOL handoff, mu_r=1000,
+H_ext=(0,0,1) A/m, CPU, NGSolve threads=1; library threads=1 is the requested
+threadpool limit, not a measured all-library invariant.
+Runs in the solver-heavy lane: one recorded run took about 760 s; not a surrogate.
 The stored source/native hashes are provenance, not a current-code identity gate.
 This is past-output regression, not an independent analytic validation; the
 retired unnamed 76c lock is history only (see baseline provenance).
@@ -40,11 +42,14 @@ def test_prolate_solved_magnetization_lock():
     spec.loader.exec_module(case)
     expected_labels = (tuple(conditions["labels"]["materials"]), tuple(conditions["labels"]["boundaries"]))
     assert case.PROLATE_LABELS == expected_labels, f"helper labels: actual={case.PROLATE_LABELS}; expected={expected_labels}"
+    report = conditions["provenance"]["strict_label_check_report_sha256"]
+    pinned = case.CHECKED_PROLATE_VOLS.get(actual_mesh)
+    assert pinned == report, f"checked-VOL pin: actual={pinned}; expected={report}"
     previous_threads = ng.GetNumThreads()
     ng.SetNumThreads(1)
     try:
         with threadpool_limits(limits=1):
-            output = case.run_prolate_case(mesh_path=mesh)
+            output = case.run_prolate_case(mesh)
     finally:
         ng.SetNumThreads(previous_threads)
     helper.assert_regression({"M_avg_z": float(output["M_avg"][2])}, baseline, conditions=conditions)
