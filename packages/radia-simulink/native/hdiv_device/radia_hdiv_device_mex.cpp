@@ -103,7 +103,13 @@ radia_hdiv_bh::FlatEvaluationInput evaluationInput(const mxArray* s,std::size_t 
 }
 radia_hdiv_bh::Law law(const mxArray* s){
     auto vector=[&](const char* name){const auto v=reals(field(s,name),name);return radia_hdiv_bh::BoundaryVector<double>(v.begin(),v.end());};
-    return radia_hdiv_bh::Law{vector("knots"),vector("coefficients"),vector("integral_base"),scalar(field(s,"cap"),"cap"),
+    // makeHDivBHMaterial returns MATLAB's (knots-1)x4 pchip coefficients; the law is row-major.
+    const auto knots=vector("knots");const mxArray* c=field(s,"coefficients");const auto values=reals(c,"coefficients");
+    const std::size_t pieces=knots.empty()?0:knots.size()-1;
+    if(mxGetNumberOfDimensions(c)!=2||mxGetM(c)!=pieces||mxGetN(c)!=4)throw std::invalid_argument("Inverse BH coefficients must be (knots-1)x4");
+    radia_hdiv_bh::BoundaryVector<double> rows(4*pieces);
+    for(std::size_t i=0;i<pieces;++i)for(std::size_t k=0;k<4;++k)rows[4*i+k]=values[i+pieces*k];
+    return radia_hdiv_bh::Law{knots,rows,vector("integral_base"),scalar(field(s,"cap"),"cap"),
         scalar(field(s,"barrier_slope"),"barrier_slope"),scalar(field(s,"last_field"),"last_field"),scalar(field(s,"initial_reluctivity"),"initial_reluctivity")};
 }
 std::shared_ptr<DeviceOperator> createOperator(const mxArray* s){
