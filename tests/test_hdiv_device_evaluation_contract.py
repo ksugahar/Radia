@@ -49,7 +49,7 @@ def test_material_ledger_accepts_only_the_exact_table_rows():
               ledger(t, drop=("element_points",)), ledger(t, drop=("mass_spectral_bound",)),
               ledger(t, drop=("mass_nonzeros",)), ledger(t, law=0), resized,
               ledger(t, persistent=0), ledger(t, transient=True), ledger(t, persistent=4096.),
-              dict(ledger(t), route="host-evaluation")]
+              dict(ledger(t), route="host-evaluation"), dict(ledger(t), route="device-flat-tet-explicit-oracle")]
     for case in forged:
         with pytest.raises(RuntimeError):
             hdiv_gpu._checked_material_assembly(case, t)
