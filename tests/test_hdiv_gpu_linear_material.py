@@ -1,0 +1,87 @@
+"""Device linear material solve against the CPU-assembled equation.
+
+Guards: ``_ResidentHDiv.solve_linear`` with a ``_ResidentMass`` solves
+(B^T G B + inv_chi M) x = f with the device-built charge Gram, charge map and
+reference mass, for every mass preconditioner: the solution matches a dense
+solve of the same equation assembled from the CPU charge map, the CPU exact
+dense normalized Gram and the NGSolve mass. Dropping or rescaling the
+inv_chi M term, or a wrong device mass, moves the solution far beyond the
+detector. Chebyshev settings without a Chebyshev mode are rejected.
+Assumes: the CPU pieces are the reference on identical staged inputs; this is
+parity of one discretization, not independent accuracy. LINEAR_REL is a
+PROPOSED detector, not an adopted criterion. Optional GPU lane: skips visibly
+unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane loads the binding
+through the provenance-checked loader and fails if it cannot.
+"""
+
+import os
+
+import numpy as np
+import pytest
+
+LINEAR_REL = 1e-8
+INV_CHI = 0.1
+PRECONDITIONERS = ("mass-diagonal", "mass-cholesky", "mass-polynomial", "mass-polynomial-graph",
+                   "mass-chebyshev", "mass-chebyshev-graph")
+
+
+@pytest.fixture(scope="module")
+def cuda():
+    if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
+        pytest.skip("Optional GPU lane requires RADIA_HDIV_NATIVE_TEST_DIR")
+    from radia.gpu import _native
+    return _native("_hdiv_cuda")
+
+
+def _case(tmp_path, order, cuda):
+    import ngsolve as ng
+    from netgen.csg import unit_cube
+    import radia._radia_pybind as rp
+    from radia import hdiv_gpu
+    from radia.vim._vim import _prepare_gpu_charge_inputs
+    path = tmp_path / f"cube-{order}.vol"
+    unit_cube.GenerateMesh(maxh=.5).Save(str(path))
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(path))
+        fes = ng.HDiv(mesh, order=order)
+        setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None)
+        B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
+        gram = rp._ChargeGramHMatrix(**inputs, build=False)
+        gram.build_exact_dense_normalized_gram(maximum_memory_mb=256)
+        mass = hdiv_gpu._fe_forms(mesh, fes)["mass"]
+    nd = fes.ndof
+    columns = [B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(B[:, k].toarray().ravel())))
+               for k in range(nd)]
+    system = np.column_stack(columns) + INV_CHI*mass.toarray()
+    rhs = setup["rhs_operator"] @ np.array([0., 0., 1e5])
+    return setup, np.linalg.solve(system, rhs), rhs
+
+
+@pytest.mark.parametrize("order", [1, 2])
+def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, cuda, order):
+    setup, expected, rhs = _case(tmp_path, order, cuda)
+    nd = setup["dofs"]
+    mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
+    operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
+    try:
+        worst = {}
+        for preconditioner in PRECONDITIONERS:
+            result = operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 2000, preconditioner)
+            relative = np.linalg.norm(result["x"] - expected)/np.linalg.norm(expected)
+            worst[preconditioner] = float(relative)
+            assert result["relative_residual"] <= 1e-11 and result["preconditioner"] == preconditioner
+            assert (result["preconditioner_graph_launches"] > 0) == preconditioner.endswith("-graph")
+            assert relative <= LINEAR_REL, (
+                f"order={order} preconditioner={preconditioner} relative={relative:.3e} limit={LINEAR_REL:.0e} "
+                f"iterations={result['iterations']}")
+        request.node.user_properties += [("dofs", nd), ("max_relative", max(worst.values()))]
+        with pytest.raises(ValueError, match="Chebyshev"):
+            operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 2000, "mass-diagonal", degree=8)
+        with pytest.raises(ValueError, match="preconditioner"):
+            operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 2000, "reference-diagonal")
+        mass.close()
+        with pytest.raises((ValueError, RuntimeError), match="closed"):
+            operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 2000, "mass-diagonal")
+    finally:
+        mass.close()
+        operator.close()
