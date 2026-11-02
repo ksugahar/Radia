@@ -69,7 +69,10 @@ radia_hdiv_bh::Law lawFromDict(py::dict lawData,std::size_t& bytes){
 }
 template<class T>radia_hmatrix_cuda::HostVector<T> rows(Array<T> a,std::size_t width,std::size_t& bytes,const char* what){
     if(a.ndim()<1||(width&&(a.ndim()!=2||std::size_t(a.shape(1))!=width)))throw py::value_error(std::string("Flat evaluation table shape: ")+what);
-    const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<T>(v.begin(),v.end());
+    // C-contiguous tables of any rank are copied flat, row-major.
+    const auto count=std::size_t(a.size());
+    if(count>(hostSnapshotBudget-bytes)/sizeof(T))throw py::value_error("Resident host snapshot budget exceeded");
+    bytes+=count*sizeof(T);return radia_hmatrix_cuda::HostVector<T>(a.data(),a.data()+count);
 }
 std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
