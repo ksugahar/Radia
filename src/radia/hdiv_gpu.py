@@ -36,6 +36,24 @@ class PreparedHDivNonlinear:
     are problem dependent and are never chosen automatically; ``None``
     selects the documented CPU charge-Gram preset ``GRAM_ACA_PRESET``.
     ``stats()`` reports the parameters actually used.
+
+    Supported domain (every bound fails loudly before device allocation):
+
+    - affine tetrahedra, HDiv order 1 or 2, one soft-iron law with at most
+      4096 table rows;
+    - material rule: NGSolve ``IntegrationRule(TET, 2*max(6, 2*order+2))``
+      (343 points per element), shared with the CPU route and never reduced;
+    - material: no fixed element, DOF or point cap. Numbering is int32, and
+      the evaluation entries ``3*points*local`` and mass triples
+      ``elements*local**2`` are each at most 2**31-1 (CUB item counts). The
+      device bytes in ``stats()["material_budget"]`` (E, E^T, transpose
+      sort, mass triples, mass CSR, state, tables) plus CUB scratch must fit
+      the live free memory above the reserve max(2 GiB, total/5); the error
+      names the limiting term. The explicit E and E^T dominate;
+    - charge Gram and charge map: at most 4608 charges, 4096 cells and
+      16384 DOFs; ACA leaf_size <= 4096 and max_rank <= 1024, with factor
+      and batch storage checked against the same reserve;
+    - binding host snapshot of the tables: at most 512 MiB.
     """
 
     @classmethod
@@ -91,16 +109,19 @@ class PreparedHDivNonlinear:
             setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca)
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
-            self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
-                **setup["charge_gram"], dofs=self.dofs, backend="gpu")
-            self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
+            self.material_budget = setup["material_budget"]
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
                 native_law[name] = np.ascontiguousarray(native_law[name], dtype=np.float64).ravel()
+            # The material is built first: its live device budget check runs before the Gram.
             self._material = _hdiv_cuda._ResidentBHMaterial.from_flat_tables(
                 **setup["evaluation_tables"], dofs=self.dofs, law=native_law, backend="gpu")
             self.material_assembly = _checked_material_assembly(self._material.assembly(),
                                                                 setup["evaluation_tables"])
+            _require_budget_cover(self.material_assembly, self._material.stats())
+            self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
+                **setup["charge_gram"], dofs=self.dofs, backend="gpu")
+            self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
         except BaseException:
             self.close()
             raise
@@ -148,6 +169,7 @@ class PreparedHDivNonlinear:
                 gram_aca=dict(self.gram_aca) if hasattr(self, "gram_aca") else None,
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
+                material_budget=getattr(self, "material_budget", None),
                 operator=self._operator.stats() if self._operator is not None else None,
                 material=self._material.stats() if self._material is not None else None)
 
@@ -481,7 +503,9 @@ def _prepare_device_components(path, order, native, *, aca, maximum_dofs=16384):
     verifies the native and CUDA library closure once, not per staging helper.
     The material tables pass the native host-only scope check before any
     charge staging or Gram construction, so an unsupported material rule
-    fails before the costly device work.
+    fails before the costly device work. The check returns the material
+    device byte budget (``material_budget``); the live free-memory check
+    runs when the material context is constructed.
     """
     import ngsolve as ng
     from radia.vim._vim import _prepare_gpu_charge_inputs
@@ -491,11 +515,38 @@ def _prepare_device_components(path, order, native, *, aca, maximum_dofs=16384):
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
     evaluation = _device_evaluation_tables(path, fes, native)
-    native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof)
+    budget = _checked_material_budget(native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof))
     _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
     tables, geometry = _device_charge_tables(path, fes, native)
-    return dict(_fe_sources(mesh, fes), evaluation_tables=evaluation,
+    return dict(_fe_sources(mesh, fes), evaluation_tables=evaluation, material_budget=budget,
                 charge_gram=_device_gram_arguments(tables, inputs, geometry, aca))
+
+
+def _require_budget_cover(assembly, stats):
+    """Exact persistent plus setup-transient allocations must not exceed the native preflight bound."""
+    used = assembly["persistent_device_bytes"] + assembly["setup_transient_device_bytes"]
+    bound = stats.get("device_payload_bound_bytes")
+    if type(bound) is not int or used > bound:
+        raise RuntimeError("HDiv material allocations %r bytes exceed the preflight budget %r bytes" % (used, bound))
+
+
+_MATERIAL_BUDGET_TERMS = ("reference_tables", "evaluation_E", "evaluation_ET", "transpose_sort",
+                          "mass_triples", "mass_csr", "material_state")
+
+
+def _checked_material_budget(budget):
+    """Owned copy of the native material byte budget; the limiting term is the largest."""
+    terms = budget.get("terms") if isinstance(budget, dict) else None
+    if (budget.get("schema") if isinstance(budget, dict) else None) != "radia.hdiv-flat-material-budget.v1" \
+            or not isinstance(terms, dict) or tuple(terms) != _MATERIAL_BUDGET_TERMS:
+        raise RuntimeError("Unexpected HDiv material budget: %r" % (budget,))
+    values = {name: terms[name] for name in _MATERIAL_BUDGET_TERMS}
+    if any(isinstance(v, bool) or not isinstance(v, int) or v <= 0 for v in values.values()) \
+            or budget.get("total_bytes") != sum(values.values()) \
+            or budget.get("limiting_term") != max(values, key=values.get):
+        raise RuntimeError("Inconsistent HDiv material budget: %r" % (budget,))
+    return dict(terms=values, total_bytes=budget["total_bytes"], limiting_term=budget["limiting_term"],
+                excludes=budget.get("excludes"))
 
 
 def _prepare_host_components(path, order, *, maximum_dofs=16384):

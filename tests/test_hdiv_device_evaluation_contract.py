@@ -89,7 +89,7 @@ def test_device_mass_is_symmetric_by_construction_and_checked_on_device():
     build = source[source.index("void buildMass"):]
     for guard in ("not symmetric", "nonpositive diagonal", "invalid sparsity pattern", "Invalid device mass spectral bound"):
         assert guard in build, guard
-    assert "Flat mass entry budget exceeded" in source
+    assert "Flat mass triples exceed the checked int CUB item count" in source
 
 
 def test_newton_reuses_one_prepared_mass_operand():
@@ -110,7 +110,7 @@ def test_flat_material_binding_takes_tables_not_evaluation_values():
                      "element_points", "dofs", "law", "backend"], names
     scope = source[source.index('.def_static("validate_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
     assert re.findall(r'py::arg\("([a-z_]+)"\)', scope) == names[:-2], "scope check takes the same tables, no law"
-    helper = source[source.index("void validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructFlat(")]
+    helper = source[source.index("py::dict validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructFlat(")]
     assert "validateFlatEvaluationScope(flatEvaluationInput(" in helper and "create" not in helper, helper
 
 
@@ -139,3 +139,51 @@ def test_reference_mass_diagnostic_moves_vectors_only():
     action = source[source.index("MassAction massAction("):source.index("template<class StateAllocator")]
     assert action.count("cudaMemcpy(") == 2 and "nd*sizeof(double)" in action, action
     assert "has no device-built reference mass" in action and "M.apply(" in action
+
+
+def _block(source, start, end):
+    return source[source.index(start):source.index(end)]
+
+
+def test_flat_material_scope_has_structural_bounds_not_fixed_size_caps():
+    evaluation = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
+    material = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
+    staging = (HDIV / "hdiv_material_staging.hpp").read_text(encoding="utf-8")
+    blocks = dict(scope=_block(evaluation, "inline void validateFlatEvaluation(", "inline std::size_t flatEvaluationSortScratch("),
+                  flat_context=_block(material, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()"),
+                  staging_context=_block(staging, "MaterialStagingContext(const std::string& path", "inline MaterialQuadraturePayload stageMaterialQuadrature"))
+    for name, block in blocks.items():
+        for cap in ("16384", "65536", "4000000", "2000000", "512)<<20", "ne>4096"):
+            assert cap not in block, (name, cap)
+    for name in ("scope", "staging_context"):
+        assert "std::numeric_limits<int>::max()" in blocks[name], name
+    assert "requireFlatEvaluationDevice(in," in blocks["flat_context"], "flat context must run the live budget check"
+
+
+def test_mass_keys_are_64_bit_through_sort_reduce_and_row_search():
+    source = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
+    assert "using MassKey=unsigned long long;" in source
+    for kernel, nxt in (("flatMassEntries", "flatMassReduce"), ("flatMassReduce", "flatMassRowOffsets"),
+                        ("flatMassRowOffsets", "flatMassFind")):
+        body = _block(source, "__global__ void " + kernel, nxt)
+        assert "const MassKey* keys" in body or "MassKey* keys" in body, kernel
+        assert "unsigned* keys" not in body and "unsigned(" not in body, kernel
+    mass = source[source.index("void buildMass"):]
+    assert "Buffer<MassKey> keys,sortedKeys,uniqueKeys;" in mass and "Buffer<unsigned> keys" not in mass
+
+
+def test_every_cub_item_count_is_a_dimension_the_scope_check_bounds():
+    source = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
+    builder = _block(source, "struct FlatEvaluationBuilder", "// Host bounds before any upload")
+    calls = re.findall(r"cub::(\w+::\w+)\(([^;]*)\)\);", builder)
+    assert len(calls) == 10, calls
+    counts = {call[1].split(",")[6 if call[0].endswith("SortPairs") else -1].strip() for call in calls}
+    assert counts == {"int(nonzeros)", "int(triples)", "nnz", "int(nd)"}, counts
+    scope = _block(source, "inline void validateFlatEvaluation(", "inline std::size_t flatEvaluationSortScratch(")
+    for guard in ("Flat evaluation entries exceed the checked int CUB item count",
+                  "Flat mass triples exceed the checked int CUB item count",
+                  "exceed int32 element, DOF or point numbering"):
+        assert guard in scope, guard
+    scratch = _block(source, "inline std::size_t flatEvaluationSortScratch(", "inline std::size_t requireFlatEvaluationDevice(")
+    queried = sorted(re.findall(r"cub::(\w+::\w+)\(nullptr", scratch))
+    assert queried == sorted(c[0] for c in calls if c[1].startswith("nullptr")), "budget scratch must query every builder CUB call"

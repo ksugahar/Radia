@@ -94,9 +94,13 @@ std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<dou
     auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
     py::gil_scoped_release release;auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
 }
-void validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
+py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
-    std::size_t bytes=0;radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes));
+    std::size_t bytes=0;const auto budget=radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes));
+    py::dict terms;for(std::size_t i=0;i<budget.count;++i)terms[radia_hdiv_bh::FlatEvaluationBudget::names[i]]=budget.bytes[i];
+    py::dict out;out["schema"]="radia.hdiv-flat-material-budget.v1";out["terms"]=terms;out["total_bytes"]=budget.total();
+    out["limiting_term"]=radia_hdiv_bh::FlatEvaluationBudget::names[budget.limiting()];
+    out["excludes"]="CUB scratch and the inverse-BH law; both are added at construction";return out;
 }
 std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> faces,Array<std::int32_t> host,
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
@@ -196,7 +200,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       .def_static("validate_flat_tables",&validateFlatTables,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),
-           "Host-only scope check of the flat evaluation tables (same checks as from_flat_tables); no device context.")
+           "Host-only scope check of the flat evaluation tables (same checks as from_flat_tables) and their device byte budget; no device context.")
       .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
           {py::gil_scoped_release release;route=self.route();rows=self.transfers();bytes=self.footprint();}
           pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;

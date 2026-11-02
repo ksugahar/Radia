@@ -31,17 +31,20 @@ struct MaterialStagingContext {
     int degree=0;
     MaterialStagingContext(const std::string& path,int order){
         mesh=std::make_shared<ngcomp::MeshAccess>(path);ne=std::size_t(mesh->GetNE(ngfem::VOL));
-        if(mesh->GetDimension()!=3||!ne||ne>4096||mesh->GetDeformation()||mesh->GetCurveOrder()>2||order<1||order>2)
+        // int32 element, DOF and point numbering is the structural bound; device
+        // budgets are checked where the tables are consumed.
+        constexpr std::size_t count=std::numeric_limits<int>::max();
+        if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>2||order<1||order>2)
             throw std::invalid_argument("Material quadrature requires bounded P1/P2 tetrahedral, hexahedral or pyramidal HDiv");
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
-        nd=std::size_t(space->GetNDof());if(!nd||nd>16384)throw std::invalid_argument("Material DOF budget exceeded");
+        nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         degree=std::max(6,2*order+2);ngcore::Flags irFlags;irFlags.SetFlag("order",degree);
         materialSpace=ngcomp::CreateFESpace("irspace",mesh,irFlags);if(!materialSpace)throw std::runtime_error("NGSolve integration space unavailable");materialSpace->Update();materialSpace->FinalizeUpdate();
         // NGSolve v6.2.2608 IntegrationRuleSpace uses IntegrationRule(type,2*order).
         // https://github.com/NGSolve/ngsolve/blob/v6.2.2608/comp/irspace.cpp
         // Retain the exported factory; its constructor is not a Windows DLL export.
         totalPoints=std::size_t(materialSpace->GetNDof());
-        if(!totalPoints||totalPoints>2000000)throw std::invalid_argument("Material total-point budget exceeded");
+        if(!totalPoints||totalPoints>count)throw std::invalid_argument("Material point numbering exceeds int32");
         for(std::size_t e=0;e<ne;++e){
             const auto type=mesh->GetElType(ngfem::ElementId(ngfem::VOL,int(e)));
             if(type!=ngfem::ET_TET&&type!=ngfem::ET_HEX&&type!=ngfem::ET_PYRAMID)

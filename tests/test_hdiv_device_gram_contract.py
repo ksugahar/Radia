@@ -171,6 +171,102 @@ def test_invalid_aca_parameters_fail_before_any_mesh_work(monkeypatch):
     assert calls == [], calls
 
 
+def _budget(**change):
+    terms = dict(reference_tables=10, evaluation_E=400, evaluation_ET=300, transpose_sort=50,
+                 mass_triples=90, mass_csr=40, material_state=20)
+    budget = dict(schema="radia.hdiv-flat-material-budget.v1", terms=terms, total_bytes=sum(terms.values()),
+                  limiting_term="evaluation_E", excludes="CUB scratch and the inverse-BH law")
+    budget.update(change)
+    return budget
+
+
+def test_scope_check_budget_is_returned_as_an_owned_checked_copy(monkeypatch):
+    calls, published = [], _budget()
+    native = _fake_device_staging(monkeypatch, calls, lambda **a: calls.append("material-scope") or published)
+    sys.modules["radia.vim._vim"]._prepare_gpu_charge_inputs = lambda *a, **k: calls.append("charge-staging") or (None, None)
+    monkeypatch.setattr(hdiv_gpu, "_device_charge_tables", lambda *a: calls.append("charge-tables") or (None, None))
+    monkeypatch.setattr(hdiv_gpu, "_device_gram_arguments", lambda *a: "gram")
+    monkeypatch.setattr(hdiv_gpu, "_fe_sources", lambda mesh, fes: dict(dofs=fes.ndof))
+    setup = hdiv_gpu._prepare_device_components("mesh.vol", 2, native, aca=None)
+    assert calls == ["mesh", "evaluation-staging", "material-scope", "charge-staging", "charge-tables"], calls
+    assert setup["material_budget"]["limiting_term"] == "evaluation_E" and setup["material_budget"]["total_bytes"] == 910
+    published["terms"]["evaluation_E"] = 1
+    assert setup["material_budget"]["terms"]["evaluation_E"] == 400, "budget must be an owned copy"
+
+
+@pytest.mark.parametrize("change", [
+    dict(schema="radia.hdiv-flat-material-budget.v0"), dict(total_bytes=909), dict(limiting_term="evaluation_ET"),
+    dict(terms=dict(reference_tables=10)), dict(terms=dict(_budget()["terms"], material_state=0)),
+    dict(terms=dict(_budget()["terms"], material_state=True)), dict(terms=dict(_budget()["terms"], material_state=2.)),
+    dict(terms=dict(reversed(list(_budget()["terms"].items()))))])
+def test_material_budget_publication_is_rejected_when_inconsistent(change):
+    budget = _budget(**change)
+    if "terms" in change and "total_bytes" not in change and all(type(v) is int for v in budget["terms"].values()):
+        budget["total_bytes"] = sum(budget["terms"].values())
+    with pytest.raises(RuntimeError, match="HDiv material budget"):
+        hdiv_gpu._checked_material_budget(budget)
+
+
+class _Owner:
+    def __init__(self, calls, name, fail=None, stats=None):
+        calls.append(name)
+        if fail:
+            raise fail
+        self.calls, self.name, self._stats = calls, name, stats or {}
+
+    def assembly(self):
+        return {}
+
+    def stats(self):
+        return self._stats
+
+    def close(self):
+        self.calls.append(self.name + "-close")
+
+
+def _fake_workflow(monkeypatch, calls, material_fail=None, used=900, bound=910):
+    native = types.SimpleNamespace(
+        _ResidentBHMaterial=types.SimpleNamespace(from_flat_tables=lambda **a: _Owner(
+            calls, "material", material_fail, dict(device_payload_bound_bytes=bound))),
+        _ResidentHDiv=types.SimpleNamespace(from_flat_charges=lambda **a: _Owner(calls, "operator")))
+    package = types.ModuleType("hdivfake")
+    gpu = types.ModuleType("hdivfake.gpu")
+    gpu._native = lambda name: native
+    monkeypatch.setitem(sys.modules, "hdivfake", package)
+    monkeypatch.setitem(sys.modules, "hdivfake.gpu", gpu)
+    monkeypatch.setattr(hdiv_gpu, "__package__", "hdivfake")
+    monkeypatch.setattr(hdiv_gpu, "_prepare_device_components", lambda *a, **k: dict(
+        dofs=4, rhs_operator=None, material_budget=_budget(), charge_gram={}, evaluation_tables={}))
+    monkeypatch.setattr(hdiv_gpu, "_checked_material_assembly", lambda assembly, tables: dict(
+        persistent_device_bytes=used - 100, setup_transient_device_bytes=100))
+    monkeypatch.setattr(hdiv_gpu, "_checked_device_assembly", lambda assembly, gram: {})
+    prepared = hdiv_gpu.PreparedHDivNonlinear.__new__(hdiv_gpu.PreparedHDivNonlinear)
+    law = dict(knots=[0., 1.], coefficients=[0.] * 4, integral_base=[0., 0.])
+    return prepared, law
+
+
+def test_material_context_and_its_live_budget_precede_the_gram(monkeypatch):
+    calls = []
+    prepared, law = _fake_workflow(monkeypatch, calls)
+    prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+    assert calls == ["material", "operator"], calls
+    assert prepared.stats()["material_budget"]["limiting_term"] == "evaluation_E"
+    calls.clear()
+    budget_error = RuntimeError("Flat material device budget exceeded: limiting term evaluation_E")
+    prepared, law = _fake_workflow(monkeypatch, calls, material_fail=budget_error)
+    with pytest.raises(RuntimeError, match="limiting term evaluation_E"):
+        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+    assert calls == ["material"], "no Gram may be built after a material budget failure"
+
+
+def test_allocations_beyond_the_preflight_bound_fail_and_release(monkeypatch):
+    calls = []
+    prepared, law = _fake_workflow(monkeypatch, calls, used=911, bound=910)
+    with pytest.raises(RuntimeError, match="exceed the preflight budget"):
+        prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET))
+    assert calls == ["material", "material-close"], calls
+
+
 def test_aca_metadata_rows_are_optional_but_positive():
     arguments = gram(staged())
     assert hdiv_gpu._checked_device_assembly(ledger(arguments, *[(p, d, 8) for p, d in hdiv_gpu._ACA_OPTIONAL_ROWS]),
