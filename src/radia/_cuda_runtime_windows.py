@@ -59,10 +59,7 @@ def _libraries(pins):
 
 
 def prepare_cuda_runtime():
-    """Verify pip RECORD digests and actual DLL paths on cold and warm calls.
-
-    Bytes are re-hashed whenever a file's stat identity changes; Windows also
-    denies writes to a mapped DLL image.
+    """Verify pip RECORD bytes and actual DLL paths on cold and warm calls.
 
     This registers directories; loading remains the native module's task. A
     second call after native import verifies its actual Windows dependencies.

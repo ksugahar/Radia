@@ -166,7 +166,9 @@ def test_windows_rechecks_record_bytes_on_warm_calls(tmp_path, monkeypatch):
         windows.prepare_cuda_runtime()
 
 
-def test_record_digest_is_rehashed_whenever_stat_identity_changes(tmp_path, monkeypatch):
+def test_record_digest_rehashes_a_same_size_rewrite_with_restored_times(tmp_path, monkeypatch):
+    """Guards: RECORD bytes are re-read on every call; a same-size rewrite with
+    restored atime/mtime (identical stat identity on Windows) still fails."""
     import os
     runtime = load("_cuda_runtime")
     path = tmp_path / "libtest.so.12"
@@ -184,13 +186,13 @@ def test_record_digest_is_rehashed_whenever_stat_identity_changes(tmp_path, monk
     monkeypatch.setattr(runtime.hashlib, "file_digest", lambda *a: reads.append(1) or digest(*a))
     for _ in range(3):
         runtime._library_paths({"cuda-fixture": "12.8.1"})
-    assert len(reads) == 1, reads
-    stamp = path.stat().st_mtime_ns
+    assert len(reads) == 3, reads
+    before = path.stat()
     path.write_bytes(b"fixture library BYTES")  # same size, different bytes
-    os.utime(path, ns=(stamp + 10**9, stamp + 10**9))
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
     with pytest.raises(ImportError, match="RECORD mismatch"):
         runtime._library_paths({"cuda-fixture": "12.8.1"})
-    assert len(reads) == 2, reads
+    assert len(reads) == 4, reads
 
 
 def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, monkeypatch):
