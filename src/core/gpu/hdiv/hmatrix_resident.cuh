@@ -10,6 +10,7 @@
 #include <utility>
 #include <memory>
 #include "hmatrix_host_fault.hpp"
+#include "hdiv_device_reserve.hpp"
 #include "hmatrix_leaf_coverage.hpp"
 
 namespace radia_hmatrix_cuda {
@@ -326,14 +327,16 @@ public:
     }
     // Device-built charge map: the builder fills B and B^T in place on this
     // device; no host CSR exists. Owned bytes match the uploaded-map route.
-    template<class Build> void buildChargeMap(std::size_t columns,std::size_t nonzeros,Build&& build){
+    // B, B^T, the DOF vector and the builder scratch are reserved together.
+    template<class Build> void buildChargeMap(std::size_t columns,std::size_t nonzeros,std::size_t scratch,Build&& build){
         valid(true);if(dofs||!columns||columns>2147483647u)throw std::invalid_argument("Invalid device charge-map state");
         const auto indices=checkedProduct(checkedProduct(2,nonzeros)+n+columns+2,sizeof(std::size_t));
         const auto values=checkedProduct(checkedProduct(2,nonzeros)+columns,sizeof(double));
-        if(indices>std::numeric_limits<std::size_t>::max()-values||indices+values>std::numeric_limits<std::size_t>::max()-ownedBytes)
+        if(checkedSum({indices,values})>std::numeric_limits<std::size_t>::max()-ownedBytes)
             throw std::overflow_error("Device allocation overflow");
-        std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
-        if(free<=reserve||indices+values>free-reserve)throw std::runtime_error("GPU charge-map memory reserve would be exceeded");
+        std::size_t free,total;check(cudaMemGetInfo(&free,&total));
+        if(!fitsAboveReserve(free,total,checkedSum({indices,values,scratch})))
+            throw std::runtime_error("GPU charge-map memory reserve would be exceeded by the map, DOF vector and builder scratch together");
         build(chargeMap,chargeTranspose);
         if(chargeMap.rows!=n||chargeTranspose.rows!=columns)throw std::runtime_error("Device charge-map dimension mismatch");
         ownedBytes+=indices+values;dofs=columns;kernelsPerApplication=6;dofState.allocate(dofs);
