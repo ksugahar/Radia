@@ -90,7 +90,7 @@ class PreparedHDivNonlinear:
                 **setup["charge_gram"], dofs=self.dofs,
                 offsets=B.indptr.astype(np.uint64), indices=B.indices.astype(np.uint64),
                 values=np.ascontiguousarray(B.data), backend="gpu")
-            self.assembly = _checked_device_assembly(self._operator.assembly(), B.shape[0])
+            self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
                 native_law[name] = np.ascontiguousarray(native_law[name], dtype=np.float64).ravel()
@@ -275,19 +275,75 @@ def _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
 _DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "charge_kind",
                         "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule",
                         "tri_low_rule", "invalid_flag")
+_RULE_ROW_BYTES = 32  # FlatRulePoint: xi[3], weight as float64.
 
 
-def _checked_device_assembly(assembly, charges):
-    """Reject any assembly ledger that is not the primitive-only device route."""
+def _expected_device_ledger(arguments):
+    """Exact (payload, direction) -> bytes of the Gram-construction ledger.
+
+    Covers the Gram and the charge-map upload only; mass, evaluation and
+    preconditioner uploads of the full workflow are outside this ledger.
+    Empty low rules (far split disabled) are absent rows, never zero-byte rows.
+    The resident plan and host-built charge map sizes are owned by the native
+    side and are required present with positive bytes.
+    """
+    sizes = {"cell_vertices_m": arguments["cell_vertices"].nbytes,
+             "face_vertices_m": arguments["face_vertices"].nbytes,
+             "charge_host": arguments["charge_host"].nbytes,
+             "charge_kind": arguments["charge_kind"].nbytes,
+             "charge_exponents": arguments["charge_exponents"].nbytes,
+             "tet_rule": len(arguments["tet_rule"])*_RULE_ROW_BYTES,
+             "tri_rule": len(arguments["tri_rule"])*_RULE_ROW_BYTES,
+             "tet_low_rule": len(arguments["tet_low_rule"])*_RULE_ROW_BYTES,
+             "tri_low_rule": len(arguments["tri_low_rule"])*_RULE_ROW_BYTES,
+             "invalid_flag": 4}
+    expected = {(name, "H2D"): sizes[name] for name in _DEVICE_GRAM_UPLOADS if sizes[name]}
+    expected.update({("prepare_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
+                     ("resident_plan", "H2D"): None, ("charge_map_csr_host_built", "H2D"): None})
+    return expected
+
+
+def _checked_device_assembly(assembly, arguments):
+    """Reject any Gram assembly ledger other than the exact primitive-only device route.
+
+    The charge_map_csr_host_built row is accepted as declared pending work of
+    this partial slice; it is not matrix-residency compliance.
+    """
+    charges = int(arguments["charge_host"].size)
     if assembly.get("route") != "device-flat-tet" or assembly.get("charges") != charges:
         raise RuntimeError("Unexpected HDiv Gram assembly route: %r" % (assembly.get("route"),))
-    rows = [(row["payload"], row["direction"]) for row in assembly["transfer_ledger"]]
-    allowed = {("resident_plan", "H2D"), ("charge_map_csr_host_built", "H2D"),
-               ("prepare_flag", "D2H"), ("energy_flag", "D2H")}
-    allowed |= {(name, "H2D") for name in _DEVICE_GRAM_UPLOADS}
-    if any(row not in allowed for row in rows) or not {("prepare_flag", "D2H"), ("energy_flag", "D2H")} <= set(rows):
-        raise RuntimeError("HDiv device Gram transfer ledger mismatch: %r" % (rows,))
+    expected = _expected_device_ledger(arguments)
+    seen = {}
+    for row in assembly["transfer_ledger"]:
+        key, size = (row["payload"], row["direction"]), row["bytes"]
+        if key in seen or key not in expected or type(size) is not int or size < 0:
+            raise RuntimeError("HDiv device Gram transfer ledger row rejected: %r" % (row,))
+        want = expected[key]
+        if (want is None and size <= 0) or (want is not None and size != want):
+            raise RuntimeError("HDiv device Gram ledger bytes for %r: actual %r, expected %r"
+                               % (key, size, "positive" if want is None else want))
+        seen[key] = size
+    if set(seen) != set(expected):
+        raise RuntimeError("HDiv device Gram transfer ledger missing rows: %r"
+                           % (sorted(set(expected) - set(seen)),))
     return assembly
+
+
+def _checked_charge_exponents(kind, exponents):
+    """Bound every exponent before any degree sum (cell <= 1, face <= 2, face z = 0)."""
+    import numpy as np
+    if exponents.shape != (3*kind.size,) or not np.isin(kind, (0, 1)).all():
+        raise ValueError("Charge kinds/exponents disagree: kinds %r, exponents %r"
+                         % (kind.shape, exponents.shape))
+    expo = exponents.reshape(-1, 3).astype(np.int64)
+    limit = np.where(kind == 0, 1, 2)[:, None]
+    bad = (expo < 0) | (expo > limit)
+    bad[:, 2] |= (kind == 1) & (expo[:, 2] != 0)
+    bad = bad.any(axis=1) | (expo.sum(axis=1) > limit[:, 0])
+    if bad.any():
+        first = int(np.flatnonzero(bad)[0])
+        raise ValueError("Device charge Gram supports cell degree <= 1 and face degree <= 2: "
+                         "charge %d kind %d exponents %r" % (first, int(kind[first]), expo[first].tolist()))
 
 
 def _device_gram_arguments(B, inputs):
@@ -326,6 +382,7 @@ def _device_gram_arguments(B, inputs):
         far_factor=float(inputs["ho_far_factor"]) if far else 1e30)
     if arguments["charge_host"].size != B.shape[0]:
         raise ValueError("Charge map rows do not match the staged charges")
+    _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
     return arguments
 
 
