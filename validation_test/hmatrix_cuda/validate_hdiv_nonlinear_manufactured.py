@@ -107,7 +107,7 @@ def main():
                     rhs=np.ascontiguousarray(G._apply_configured_demag_compensated(target,16)+gradient(target))
                     try:
                         for pre in ['reference-diagonal','reference-chebyshev-graph']:
-                            solution=obj.solve_nonlinear_material(material,mass.indptr.astype(np.uint64),mass.indices.astype(np.uint64),np.ascontiguousarray(mass.data),rhs,np.zeros(fes.ndof),5e-14,5e-14,40,10000,pre)
+                            solution=obj.solve_nonlinear_material_host_reference(material,mass.indptr.astype(np.uint64),mass.indices.astype(np.uint64),np.ascontiguousarray(mass.data),rhs,np.zeros(fes.ndof),5e-14,5e-14,40,10000,pre)
                             x=np.asarray(solution['x'])
                             coefficient=float(np.linalg.norm(x-target)/np.linalg.norm(target))
                             residual=float(np.linalg.norm(G._apply_configured_demag_compensated(x,16)+gradient(x)-rhs)/np.linalg.norm(rhs))

@@ -188,7 +188,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     core = {path for path in CONTRACT.include_closure(ROOT, sorted(seeds), "src/core")
             if path.startswith("src/core/")}
     assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
-    assert len(core - gpu_sources) == 30
+    assert len(core - gpu_sources) == 31
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):

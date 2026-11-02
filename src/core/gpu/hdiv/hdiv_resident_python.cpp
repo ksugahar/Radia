@@ -116,6 +116,14 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
 }
 }
 void registerMaterialStaging(py::module_&);
+static int newtonMode(const std::string& preconditioner){
+    if(preconditioner=="reference-diagonal")return 0;if(preconditioner=="reference-chebyshev")return 1;if(preconditioner=="reference-chebyshev-graph")return 2;
+    throw py::value_error("Unsupported explicit Newton reference preconditioner");
+}
+static py::dict publishNewton(const NewtonResult& result){
+    pythonPublicationProbe();py::array_t<double> solution(result.x.size());std::copy(result.x.begin(),result.x.end(),solution.mutable_data());pythonPublicationProbe();py::dict out;out["x"]=solution;out["relative_residual"]=result.residual;out["energy"]=result.energy;out["newton_iterations"]=result.history.size();out["preconditioner_graph_launches"]=result.graphLaunches;
+    pythonPublicationProbe();py::list history;for(const auto& s:result.history){pythonPublicationProbe();py::dict row;row["relative_residual"]=s.residual;row["energy"]=s.energy;row["alpha"]=s.alpha;row["linear_relative_residual"]=s.linearResidual;row["linear_iterations"]=s.linearIterations;row["backtracks"]=s.backtracks;row["original_residual_certified"]=s.residualCertified;history.append(row);}out["history"]=history;return out;
+}
 PYBIND11_MODULE(_hdiv_cuda,m) {
     registerMaterialStaging(m);
 #ifdef RADIA_HDIV_PYTHON_FAULT_INJECTION
@@ -151,9 +159,9 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
            "Generate E, E^T and point measures on the device from NGSolve reference tables; no evaluation matrix crosses.")
-      .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;
-          {py::gil_scoped_release release;route=self.route();rows=self.transfers();}
-          pythonPublicationProbe();py::dict d;d["route"]=route;py::list ledger;
+      .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
+          {py::gil_scoped_release release;route=self.route();rows=self.transfers();bytes=self.footprint();}
+          pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
           for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("evaluate",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state,Array<double> direction){
@@ -252,16 +260,25 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       },py::arg("mass_offsets").noconvert(),py::arg("mass_indices").noconvert(),py::arg("mass_values").noconvert(),
         py::arg("rhs").noconvert(),py::arg("inv_chi"),py::arg("tolerance"),py::arg("max_iterations"),
         py::arg("preconditioner"),py::arg("graph")=false,py::arg("degree")=32,py::arg("lower_fraction")=.01)
-      .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<std::uint64_t> offsets,Array<std::uint64_t> indices,Array<double> values,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
+      .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
+          const auto n=self.stats().dimension;
+          if(rhs.ndim()!=1||std::size_t(rhs.size())!=n||initial.ndim()!=1||std::size_t(initial.size())!=n)throw py::value_error("Newton payload dimensions exceeded");
+          const int mode=newtonMode(preconditioner);
+          std::size_t bytes=0;
+          const auto b=snapshot(rhs,bytes),x=snapshot(initial,bytes);NewtonOptions options{tolerance,linearTolerance,maximumIterations,maximumLinearIterations,mode,degree,lower};NewtonResult result;
+          {py::gil_scoped_release release;result=self.solve_nonlinear(material,b,x,options);}
+          return publishNewton(result);
+      },py::arg("material"),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01)
+      .def("solve_nonlinear_material_host_reference",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<std::uint64_t> offsets,Array<std::uint64_t> indices,Array<double> values,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
           const auto n=self.stats().dimension;
           if(offsets.ndim()!=1||std::size_t(offsets.size())!=n+1||indices.ndim()!=1||values.ndim()!=1||indices.size()!=values.size()||values.size()>4000000||rhs.ndim()!=1||std::size_t(rhs.size())!=n||initial.ndim()!=1||std::size_t(initial.size())!=n)throw py::value_error("Newton payload dimensions exceeded");
-          int mode;if(preconditioner=="reference-diagonal")mode=0;else if(preconditioner=="reference-chebyshev")mode=1;else if(preconditioner=="reference-chebyshev-graph")mode=2;else throw py::value_error("Unsupported explicit Newton reference preconditioner");
+          const int mode=newtonMode(preconditioner);
           std::size_t bytes=0;const auto rp=snapshot(offsets,bytes),ci=snapshot(indices,bytes);MapInput reference{n,n,{rp.begin(),rp.end()},{ci.begin(),ci.end()},snapshot(values,bytes)};
           const auto b=snapshot(rhs,bytes),x=snapshot(initial,bytes);NewtonOptions options{tolerance,linearTolerance,maximumIterations,maximumLinearIterations,mode,degree,lower};NewtonResult result;
-          {py::gil_scoped_release release;result=self.solve_nonlinear(material,reference,b,x,options);}
-          pythonPublicationProbe();py::array_t<double> solution(result.x.size());std::copy(result.x.begin(),result.x.end(),solution.mutable_data());pythonPublicationProbe();py::dict out;out["x"]=solution;out["relative_residual"]=result.residual;out["energy"]=result.energy;out["newton_iterations"]=result.history.size();out["preconditioner_graph_launches"]=result.graphLaunches;
-          pythonPublicationProbe();py::list history;for(const auto& s:result.history){pythonPublicationProbe();py::dict row;row["relative_residual"]=s.residual;row["energy"]=s.energy;row["alpha"]=s.alpha;row["linear_relative_residual"]=s.linearResidual;row["linear_iterations"]=s.linearIterations;row["backtracks"]=s.backtracks;row["original_residual_certified"]=s.residualCertified;history.append(row);}out["history"]=history;return out;
-      },py::arg("material"),py::arg("reference_offsets").noconvert(),py::arg("reference_indices").noconvert(),py::arg("reference_values").noconvert(),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01)
+          {py::gil_scoped_release release;result=self.solve_nonlinear_host_reference(material,reference,b,x,options);}
+          return publishNewton(result);
+      },py::arg("material"),py::arg("reference_offsets").noconvert(),py::arg("reference_indices").noconvert(),py::arg("reference_values").noconvert(),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01,
+         "Host-evaluation material contexts only; a device-table context rejects a host reference mass.")
       .def("stats",[](DeviceOperator& self){Stats s;{py::gil_scoped_release release;s=self.stats();}
           pythonPublicationProbe();py::dict d;d["dimension"]=s.dimension;d["owned_device_bytes"]=s.owned_bytes;d["applications"]=s.applications;d["closed"]=s.closed;d["backend"]="gpu";return d;})
       .def("close",&DeviceOperator::close,py::call_guard<py::gil_scoped_release>());

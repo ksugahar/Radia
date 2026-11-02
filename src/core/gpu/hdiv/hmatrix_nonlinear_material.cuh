@@ -9,14 +9,14 @@ template<class A,class B>inline double newtonDot(const std::vector<double,A>& a,
         correction+=(std::abs(sum)>=std::abs(product)?(sum-value)+product:(product-value)+sum)+std::fma(a[i],b[i],-product);sum=value;}return sum+correction;
 }
 template<class A>inline double newtonNorm(const std::vector<double,A>& a){double norm=0;for(double x:a)norm=std::hypot(norm,x);return norm;}
-template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::NewtonResult solveNonlinearMaterial(Resident& op,radia_hdiv_bh::MappedMaterial& material,
-    const SparseMap& referenceMass,const std::vector<double,RhsAllocator>& rhs,const std::vector<double,StateAllocator>& initial,const radia_hdiv_python::NewtonOptions& options){
+template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::NewtonResult solveNonlinearMaterialOperand(Resident& op,radia_hdiv_bh::MappedMaterial& material,
+    const MassOperand& referenceMass,const std::vector<double,RhsAllocator>& rhs,const std::vector<double,StateAllocator>& initial,const radia_hdiv_python::NewtonOptions& options){
     const auto n=op.dimension();
-    if(!op.isDemag()||material.dofs()!=n||rhs.size()!=n||initial.size()!=n||referenceMass.rows!=n||referenceMass.columns!=n||
+    if(!op.isDemag()||material.dofs()!=n||rhs.size()!=n||initial.size()!=n||!referenceMass.map||!referenceMass.diagonal||referenceMass.n!=n||
        !std::isfinite(options.tolerance)||options.tolerance<=0||options.tolerance>1e-6||!std::isfinite(options.linearTolerance)||options.linearTolerance<=0||options.linearTolerance>1e-6||
        options.maximumIterations<1||options.maximumIterations>100||options.maximumLinearIterations<1||options.maximumLinearIterations>100000||options.preconditioner<0||options.preconditioner>2||options.degree<1||options.degree>64||!std::isfinite(options.lowerFraction)||options.lowerFraction<=0||options.lowerFraction>=1)
         throw std::invalid_argument("Invalid shared Newton options or dimensions");
-    referenceMass.validate();
+    if(options.preconditioner!=0&&!referenceMass.hasBound)throw std::invalid_argument("Reference mass lacks its spectral bound");
     for(double v:rhs)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite Newton RHS");
     for(double v:initial)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite Newton initial state");
     radia_hdiv_python::NewtonResult result;result.x.assign(initial.begin(),initial.end());
@@ -36,7 +36,7 @@ template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::Newto
         auto action=[&](const double* x,double* y,cudaStream_t stream){material.applyFrozenDevice(x,y,stream,epoch);};
         const bool chebyshev=options.preconditioner!=0,graph=options.preconditioner==2;
         // referenceMass is an explicitly chosen SPD preconditioner, never the nonlinear Jacobian.
-        const auto linear=solveLinearMaterial(op,referenceMass,r,1.,options.linearTolerance,options.maximumLinearIterations,false,false,graph,chebyshev,options.degree,options.lowerFraction,action);
+        const auto linear=solveMaterialOperand(op,referenceMass,r,1.,options.linearTolerance,options.maximumLinearIterations,nullptr,false,graph,chebyshev,options.degree,options.lowerFraction,action);
         result.graphLaunches+=linear.preconditionerGraphLaunches;HostVector<double> delta(linear.x.begin(),linear.x.end(),HostFaultAllocator<double>("newton.direction"));
         const double decrement=newtonDot(r,delta);if(!std::isfinite(decrement)||decrement<=0)throw std::runtime_error("Newton direction is not descending");
         double alpha=1;int backtracks=0;bool accepted=false,certified=false;HostVector<double> candidate(n,HostFaultAllocator<double>("newton.trial"));
@@ -52,5 +52,16 @@ template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::Newto
         result.history.push_back({result.residual,result.energy,alpha,linear.relativeResidual,linear.iterations,backtracks,certified});result.x=std::move(candidate);
     }
     throw std::runtime_error("Shared Newton unreachable convergence state");
+}
+// Checked host reference mass (MATLAB gateway), uploaded once per Newton solve.
+template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::NewtonResult solveNonlinearMaterial(Resident& op,radia_hdiv_bh::MappedMaterial& material,
+    const SparseMap& referenceMass,const std::vector<double,RhsAllocator>& rhs,const std::vector<double,StateAllocator>& initial,const radia_hdiv_python::NewtonOptions& options){
+    if(referenceMass.rows!=op.dimension()||referenceMass.columns!=op.dimension())throw std::invalid_argument("Invalid shared Newton options or dimensions");
+    HostMass prepared(referenceMass,true);return solveNonlinearMaterialOperand(op,material,prepared.operand(),rhs,initial,options);
+}
+// Device-built reference mass owned by the flat material context; no host mass crosses.
+template<class RhsAllocator,class StateAllocator>inline radia_hdiv_python::NewtonResult solveNonlinearMaterial(Resident& op,radia_hdiv_bh::MappedMaterial& material,
+    const std::vector<double,RhsAllocator>& rhs,const std::vector<double,StateAllocator>& initial,const radia_hdiv_python::NewtonOptions& options){
+    return solveNonlinearMaterialOperand(op,material,material.massOperand(),rhs,initial,options);
 }
 }

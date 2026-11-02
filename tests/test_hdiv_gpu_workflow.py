@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 import sys
 import threading
-import types
 
 import numpy as np
 import pytest
@@ -41,13 +40,14 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     owner.order = 1
     owner.mesh_sha256 = "fixture"
     owner._rhs = np.eye(3)
-    owner._mass = types.SimpleNamespace(indptr=np.arange(4), indices=np.arange(3), data=np.ones(3))
     calls = []
 
     class Native:
         def solve_nonlinear_material(self, material, *args):
+            # Device-table material owns its reference mass: rhs and initial lead, no sparse arrays.
+            assert all(np.ndim(value) == 0 for value in args[2:]), args
             calls.append((material, args))
-            return dict(x=args[3].copy(), relative_residual=0.)
+            return dict(x=args[0].copy(), relative_residual=0.)
 
         def close(self):
             calls.append("operator_closed")

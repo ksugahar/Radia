@@ -47,64 +47,59 @@ struct MaterialPreconditionGraph {
     void launch(cudaStream_t stream){check(cudaGraphLaunch(executable,stream));}
 };
 struct MaterialSolution {HostVector<double> x;int iterations=0;double relativeResidual=0;std::size_t ownedBytes=0,preconditionerGraphLaunches=0;};
+__global__ void scaledDiagonal(std::size_t n,double invChi,const double* mass,double* d){auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<n)d[i]=invChi*mass[i];}
+// Checked host mass uploaded once (linear route and the MATLAB gateway).
+struct HostMass {
+    DeviceMap map;Buffer<double> diagonal;double bound=1.;std::size_t n=0,bytes=0;bool hasBound=false;
+    HostMass(const SparseMap& mass,bool needBound){
+        n=mass.rows;mass.validate();if(mass.columns!=n)throw std::invalid_argument("Material mass must be square");
+        const auto transpose=mass.transpose();HostVector<double> diag(n,0.);
+        // PCG requires a symmetric mass. No silent symmetrization is permitted.
+        for(std::size_t row=0;row<n;++row){
+            if(mass.offsets[row+1]-mass.offsets[row]!=transpose.offsets[row+1]-transpose.offsets[row])throw std::invalid_argument("Material mass is not symmetric");
+            for(auto k=mass.offsets[row],t=transpose.offsets[row];k<mass.offsets[row+1];++k,++t){
+                if(mass.indices[k]!=transpose.indices[t]||std::abs(mass.values[k]-transpose.values[t])>1.e-13*std::max(1.,std::max(std::abs(mass.values[k]),std::abs(transpose.values[t]))))throw std::invalid_argument("Material mass is not symmetric");
+                if(mass.indices[k]==row)diag[row]=mass.values[k];
+            }
+            if(!std::isfinite(diag[row])||diag[row]<=0)throw std::invalid_argument("Invalid RHS or material diagonal");
+        }
+        if(needBound){
+            double value=0.;
+            for(std::size_t row=0;row<n;++row){double sum=0.;for(auto k=mass.offsets[row];k<mass.offsets[row+1];++k)sum+=std::abs(mass.values[k]/diag[row]);value=std::max(value,sum);}
+            if(!std::isfinite(value)||value<1.)throw std::invalid_argument("Invalid sparse polynomial spectral bound");
+            bound=value;hasBound=true;
+        }
+        bytes=(mass.offsets.size()+mass.indices.size())*sizeof(std::size_t)+(mass.values.size()+n)*sizeof(double);
+        map.upload(mass);diagonal.upload(diag);
+    }
+    MassOperand operand(){return {&map,diagonal.data,bound,n,bytes,hasBound};}
+};
 template<class Allocator>
-inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,bool massCholesky=false,bool massPolynomial=false,bool polynomialGraph=false,bool massChebyshev=false,int chebyshevDegree=8,double chebyshevLowerFraction=.1,const std::function<void(const double*,double*,cudaStream_t)>& materialAction={}){
+inline MaterialSolution solveMaterialOperand(Resident& op,const MassOperand& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,const double* massFactorData,bool massPolynomial,bool polynomialGraph,bool massChebyshev,int chebyshevDegree,double chebyshevLowerFraction,const std::function<void(const double*,double*,cudaStream_t)>& materialAction){
     const auto n=op.dimension();
-    if(!op.isDemag()||mass.rows!=n||mass.columns!=n||rhs.size()!=n||n>2147483647u||!std::isfinite(invChi)||invChi<=0||!std::isfinite(tolerance)||tolerance<=0||tolerance>1.e-6||maxIterations<1||maxIterations>100000)
+    if(!op.isDemag()||!mass.map||!mass.diagonal||mass.n!=n||rhs.size()!=n||n>2147483647u||!std::isfinite(invChi)||invChi<=0||!std::isfinite(tolerance)||tolerance<=0||tolerance>1.e-6||maxIterations<1||maxIterations>100000)
         throw std::invalid_argument("Invalid linear material PCG configuration");
     if(polynomialGraph&&!massPolynomial&&!massChebyshev)throw std::invalid_argument("Material graph requires fixed polynomial preconditioner");
     if(chebyshevDegree<1||chebyshevDegree>64||!std::isfinite(chebyshevLowerFraction)||chebyshevLowerFraction<=0||chebyshevLowerFraction>=1)throw std::invalid_argument("Invalid fixed Chebyshev configuration");
-    mass.validate();const auto transpose=mass.transpose();HostVector<double> diag(n,0.);
-    // PCG requires a symmetric mass. No silent symmetrization is permitted.
-    for(std::size_t row=0;row<n;++row){
-        if(mass.offsets[row+1]-mass.offsets[row]!=transpose.offsets[row+1]-transpose.offsets[row])throw std::invalid_argument("Material mass is not symmetric");
-        for(auto k=mass.offsets[row],t=transpose.offsets[row];k<mass.offsets[row+1];++k,++t){
-            if(mass.indices[k]!=transpose.indices[t]||std::abs(mass.values[k]-transpose.values[t])>1.e-13*std::max(1.,std::max(std::abs(mass.values[k]),std::abs(transpose.values[t]))))throw std::invalid_argument("Material mass is not symmetric");
-            if(mass.indices[k]==row)diag[row]=invChi*mass.values[k];
-        }
-        if(!std::isfinite(rhs[row])||!std::isfinite(diag[row])||diag[row]<=0)throw std::invalid_argument("Invalid RHS or material diagonal");
-    }
+    if((massPolynomial||massChebyshev)&&(!mass.hasBound||!std::isfinite(mass.bound)||mass.bound<1.))throw std::invalid_argument("Invalid sparse polynomial spectral bound");
+    for(double v:rhs)if(!std::isfinite(v))throw std::invalid_argument("Invalid RHS or material diagonal");
     // Eight fixed damped-Jacobi steps from zero are a symmetric polynomial
     // inverse action: D^-1/2 omega sum_{j=0}^7(I-omega Ahat)^j D^-1/2.
     // Ahat=invChi D^-1/2 M D^-1/2. Its spectral maximum is bounded by
     // the infinity norm of the similar D^-1 invChi M. omega=1/bound
     // makes I-omega Ahat positive semidefinite, hence this inverse action
     // is strictly SPD even without claiming an exact mass inverse.
-    double polynomialOmega=1.,spectralBound=1.;
-    if(massPolynomial||massChebyshev){
-        double bound=0.;
-        for(std::size_t row=0;row<n;++row){double sum=0.;for(auto k=mass.offsets[row];k<mass.offsets[row+1];++k)sum+=std::abs(invChi*mass.values[k]/diag[row]);bound=std::max(bound,sum);}
-        if(!std::isfinite(bound)||bound<1.)throw std::invalid_argument("Invalid sparse polynomial spectral bound");
-        polynomialOmega=1./bound;spectralBound=bound;
-    }
-    MaterialSolution result;result.ownedBytes=checkedProduct(n,8*sizeof(double))+(mass.offsets.size()+mass.indices.size())*sizeof(std::size_t)+mass.values.size()*sizeof(double);
+    const double spectralBound=(massPolynomial||massChebyshev)?mass.bound:1.,polynomialOmega=1./spectralBound;
+    MaterialSolution result;result.ownedBytes=checkedProduct(n,8*sizeof(double))+mass.bytes;
     if(massChebyshev)result.ownedBytes+=checkedProduct(n,sizeof(double));
     std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
     if(free<=reserve||result.ownedBytes>free-reserve)throw std::runtime_error("Material PCG GPU memory reserve exceeded");
-    auto stream=op.executionStream();BlasHandle blas(stream);DeviceMap m;m.upload(mass);
-    Buffer<double> b,x,r,z,p,ap,mx,d;b.upload(rhs);d.upload(diag);
+    auto stream=op.executionStream();BlasHandle blas(stream);DeviceMap& m=*mass.map;
+    Buffer<double> b,x,r,z,p,ap,mx,d;b.upload(rhs);d.allocate(n);
+    scaledDiagonal<<<unsigned((n+255)/256),256,0,stream>>>(n,invChi,mass.diagonal,d.data);check(cudaGetLastError());
     for(auto* v:{&x,&r,&z,&p,&ap,&mx})v->allocate(n);
     Buffer<double> chebyshevDirection;if(massChebyshev)chebyshevDirection.allocate(n);
-    Buffer<double> massFactor,factorWorkspace;Buffer<int> factorInfo;
-    if(massCholesky){
-        const auto factorBytes=checkedProduct(checkedProduct(n,n),sizeof(double));
-        if(factorBytes>(std::size_t(2)<<30))throw std::invalid_argument("Mass Cholesky factor exceeds bounded 2 GiB");
-        check(cudaMemGetInfo(&free,&total));
-        if(free<=reserve||factorBytes>free-reserve)throw std::runtime_error("Mass Cholesky factor reserve exceeded");
-        HostVector<double> dense(checkedProduct(n,n),0.);
-        for(std::size_t row=0;row<n;++row)for(auto k=mass.offsets[row];k<mass.offsets[row+1];++k)dense[row*n+mass.indices[k]]=mass.values[k];
-        massFactor.upload(dense);SolverHandle solver(stream);int workspace=0;
-        solverCheck(cusolverDnDpotrf_bufferSize(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),&workspace));
-        if(workspace<0)throw std::runtime_error("Invalid mass factor workspace");
-        const auto workspaceBytes=checkedProduct(std::size_t(workspace),sizeof(double))+sizeof(int);
-        check(cudaMemGetInfo(&free,&total));
-        if(free<=reserve||workspaceBytes>free-reserve)throw std::runtime_error("Mass Cholesky workspace reserve exceeded");
-        factorWorkspace.allocate(std::size_t(workspace));factorInfo.allocate(1);
-        solverCheck(cusolverDnDpotrf(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),factorWorkspace.data,workspace,factorInfo.data));
-        int info=0;check(cudaMemcpyAsync(&info,factorInfo.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
-        if(info!=0)throw std::runtime_error("Mass Cholesky rejected non-SPD mass; no fallback");
-        result.ownedBytes+=factorBytes+workspaceBytes;
-    }
+    const bool massCholesky=massFactorData!=nullptr;
     check(cudaMemsetAsync(x.data,0,n*sizeof(double),stream));check(cudaMemcpyAsync(r.data,b.data,n*sizeof(double),cudaMemcpyDeviceToDevice,stream));
     auto dot=[&](const double* a,const double* b){double v;blasCheck(cublasDdot(blas.value,int(n),a,1,b,1,&v));if(!std::isfinite(v))throw std::runtime_error("Nonfinite PCG reduction");return v;};
     auto apply=[&](const double* v){op.applyDevice(v,ap.data);if(materialAction)materialAction(v,mx.data,stream);else m.apply(v,mx.data,stream);materialSum<<<unsigned((n+255)/256),256,0,stream>>>(n,invChi,mx.data,ap.data);check(cudaGetLastError());};
@@ -145,8 +140,8 @@ inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,c
             polynomialSubmit();
         }else if(massCholesky){
             check(cudaMemcpyAsync(z.data,r.data,n*sizeof(double),cudaMemcpyDeviceToDevice,stream));
-            blasCheck(cublasDtrsv(blas.value,CUBLAS_FILL_MODE_LOWER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,int(n),massFactor.data,int(n),z.data,1));
-            blasCheck(cublasDtrsv(blas.value,CUBLAS_FILL_MODE_LOWER,CUBLAS_OP_T,CUBLAS_DIAG_NON_UNIT,int(n),massFactor.data,int(n),z.data,1));
+            blasCheck(cublasDtrsv(blas.value,CUBLAS_FILL_MODE_LOWER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,int(n),massFactorData,int(n),z.data,1));
+            blasCheck(cublasDtrsv(blas.value,CUBLAS_FILL_MODE_LOWER,CUBLAS_OP_T,CUBLAS_DIAG_NON_UNIT,int(n),massFactorData,int(n),z.data,1));
         }else{pcgPrecondition<<<unsigned((n+255)/256),256,0,stream>>>(n,d.data,r.data,z.data);check(cudaGetLastError());}
     };
     const double b2=dot(b.data,b.data);if(b2<0)throw std::runtime_error("Invalid RHS norm");
@@ -180,5 +175,34 @@ inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,c
     result.relativeResidual=b2>0?std::sqrt(dot(r.data,r.data)/b2):std::sqrt(dot(r.data,r.data));
     if(result.relativeResidual>tolerance||!std::isfinite(result.relativeResidual))throw std::runtime_error("Material PCG true residual rejected");
     result.x.resize(n);check(cudaMemcpyAsync(result.x.data(),x.data,n*sizeof(double),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));return result;
+}
+template<class Allocator>
+inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,bool massCholesky=false,bool massPolynomial=false,bool polynomialGraph=false,bool massChebyshev=false,int chebyshevDegree=8,double chebyshevLowerFraction=.1,const std::function<void(const double*,double*,cudaStream_t)>& materialAction={}){
+    const auto n=op.dimension();
+    if(!op.isDemag()||mass.rows!=n||mass.columns!=n||rhs.size()!=n)throw std::invalid_argument("Invalid linear material PCG configuration");
+    HostMass prepared(mass,massPolynomial||massChebyshev);
+    Buffer<double> massFactor,factorWorkspace;Buffer<int> factorInfo;std::size_t factorBytesOwned=0;
+    if(massCholesky){
+        std::size_t free,total;const auto stream=op.executionStream();
+        const auto factorBytes=checkedProduct(checkedProduct(n,n),sizeof(double));
+        if(factorBytes>(std::size_t(2)<<30))throw std::invalid_argument("Mass Cholesky factor exceeds bounded 2 GiB");
+        check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
+        if(free<=reserve||factorBytes>free-reserve)throw std::runtime_error("Mass Cholesky factor reserve exceeded");
+        HostVector<double> dense(checkedProduct(n,n),0.);
+        for(std::size_t row=0;row<n;++row)for(auto k=mass.offsets[row];k<mass.offsets[row+1];++k)dense[row*n+mass.indices[k]]=mass.values[k];
+        massFactor.upload(dense);SolverHandle solver(stream);int workspace=0;
+        solverCheck(cusolverDnDpotrf_bufferSize(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),&workspace));
+        if(workspace<0)throw std::runtime_error("Invalid mass factor workspace");
+        const auto workspaceBytes=checkedProduct(std::size_t(workspace),sizeof(double))+sizeof(int);
+        check(cudaMemGetInfo(&free,&total));
+        if(free<=reserve||workspaceBytes>free-reserve)throw std::runtime_error("Mass Cholesky workspace reserve exceeded");
+        factorWorkspace.allocate(std::size_t(workspace));factorInfo.allocate(1);
+        solverCheck(cusolverDnDpotrf(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),factorWorkspace.data,workspace,factorInfo.data));
+        int info=0;check(cudaMemcpyAsync(&info,factorInfo.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+        if(info!=0)throw std::runtime_error("Mass Cholesky rejected non-SPD mass; no fallback");
+        factorBytesOwned=factorBytes+workspaceBytes;
+    }
+    auto result=solveMaterialOperand(op,prepared.operand(),rhs,invChi,tolerance,maxIterations,massCholesky?massFactor.data:nullptr,massPolynomial,polynomialGraph,massChebyshev,chebyshevDegree,chebyshevLowerFraction,materialAction);
+    result.ownedBytes+=factorBytesOwned;return result;
 }
 }

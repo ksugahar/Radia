@@ -249,6 +249,9 @@ struct DeviceMap {
     }
     void abandon(){offsets.data=nullptr;indices.data=nullptr;values.data=nullptr;}
 };
+// Device-resident SPD mass operand: CSR, unscaled diagonal M_ii and the infinity
+// norm of D^-1 M (independent of inv_chi). The owner keeps the buffers alive.
+struct MassOperand {DeviceMap* map=nullptr;const double* diagonal=nullptr;double bound=1.;std::size_t n=0,bytes=0;bool hasBound=false;};
 } // namespace radia_hmatrix_cuda
 #include "analytic_matrix_build.cuh"
 #include "hdiv_curved_gram.cuh"
