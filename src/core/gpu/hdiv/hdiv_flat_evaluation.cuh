@@ -7,8 +7,11 @@
 #include <cub/device/device_run_length_encode.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_reduce.cuh>
+#include <sstream>
 #include "hmatrix_resident.cuh"
 namespace radia_hdiv_bh {
+// Joint (row,column) mass key row*nd+column: 64-bit, exact for any int32 DOF count.
+using MassKey=unsigned long long;
 __global__ void flatEvaluationEntries(std::size_t ne,std::size_t local,std::size_t rule,std::size_t nq,std::size_t classes,
     const double* vertices,const int* elementClass,const int* elementDofs,const int* elementPoints,const double* shapes,
     const double* ruleRows,std::size_t* indices,double* values,double* weights,int* invalid){
@@ -46,21 +49,21 @@ __global__ void columnOffsets(std::size_t columns,std::size_t nnz,const unsigned
 // One thread per element-local pair: M_e(r,s)=sum_k sum_c w_q (E_cqr E_cqs).
 // The product E_cqr E_cqs commutes exactly, so M is symmetric by construction.
 __global__ void flatMassEntries(std::size_t ne,std::size_t local,std::size_t rule,std::size_t nq,std::size_t nd,
-    const int* elementPoints,const std::size_t* indices,const double* values,const double* weights,unsigned* keys,double* entries){
+    const int* elementPoints,const std::size_t* indices,const double* values,const double* weights,MassKey* keys,double* entries){
     const auto t=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(t>=ne*local*local)return;
     const auto e=t/(local*local),r=(t/local)%local,s=t%local;radia_hmatrix_cuda::CompensatedDeviceSum sum;
     for(std::size_t k=0;k<rule;++k){const auto q=std::size_t(elementPoints[e*rule+k]);const double w=weights[q];
         for(int c=0;c<3;++c){const auto base=(std::size_t(c)*nq+q)*local;sum.addProduct(w,values[base+r]*values[base+s]);}}
-    const auto base=std::size_t(elementPoints[e*rule])*local;keys[t]=unsigned(indices[base+r]*nd+indices[base+s]);entries[t]=sum.get();
+    const auto base=std::size_t(elementPoints[e*rule])*local;keys[t]=MassKey(indices[base+r])*nd+indices[base+s];entries[t]=sum.get();
 }
 // Sorted runs of equal (row,column) keys are summed in stable element order (deterministic).
-__global__ void flatMassReduce(std::size_t nnz,std::size_t nd,const unsigned* keys,const int* starts,const int* counts,
+__global__ void flatMassReduce(std::size_t nnz,std::size_t nd,const MassKey* keys,const int* starts,const int* counts,
     const double* entries,std::size_t* indices,double* values){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=nnz)return;radia_hmatrix_cuda::CompensatedDeviceSum sum;
     for(int k=0;k<counts[i];++k)sum.add(entries[starts[i]+k]);indices[i]=keys[i]%nd;values[i]=sum.get();
 }
-__global__ void flatMassRowOffsets(std::size_t nd,std::size_t nnz,const unsigned* keys,std::size_t* offsets){
-    const auto row=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(row>nd)return;const auto key=row*nd;
+__global__ void flatMassRowOffsets(std::size_t nd,std::size_t nnz,const MassKey* keys,std::size_t* offsets){
+    const auto row=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(row>nd)return;const auto key=MassKey(row)*nd;
     std::size_t lo=0,hi=nnz;while(lo<hi){const auto mid=lo+(hi-lo)/2;if(keys[mid]<key)lo=mid+1;else hi=mid;}offsets[row]=lo;
 }
 __device__ inline bool flatMassFind(const std::size_t* offsets,const std::size_t* indices,std::size_t row,std::size_t column,std::size_t& at){
@@ -123,7 +126,7 @@ private:
         using namespace radia_hmatrix_cuda;
         const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs;
         const auto triples=checkedProduct(ne,checkedProduct(local,local));
-        Buffer<unsigned> keys,sortedKeys,uniqueKeys;Buffer<double> entries,sortedEntries,rowBound,bound;Buffer<int> counts,starts,runs,invalid;
+        Buffer<MassKey> keys,sortedKeys,uniqueKeys;Buffer<double> entries,sortedEntries,rowBound,bound;Buffer<int> counts,starts,runs,invalid;
         scratch(keys,triples);scratch(sortedKeys,triples);scratch(uniqueKeys,triples);scratch(entries,triples);scratch(sortedEntries,triples);
         scratch(counts,triples);scratch(starts,triples);scratch(runs,1);scratch(rowBound,nd);scratch(bound,1);scratch(invalid,1);
         flatMassEntries<<<unsigned((triples+255)/256),256>>>(ne,local,rule,nq,nd,points.data,E.indices.data,E.values.data,weights.data,keys.data,entries.data);
@@ -159,12 +162,17 @@ private:
     }
 };
 // Host bounds before any upload: every index is checked against its range.
+// No element, DOF or point cap: int32 tables and the int item counts of the
+// CUB sort/encode/scan calls are the structural bound, and the live device
+// budget (requireFlatEvaluationDevice) decides what fits.
 inline void validateFlatEvaluation(const FlatEvaluationInput& in){
-    const auto ne=in.elements,local=in.local,rule=in.rulePoints;
-    if(!ne||ne>4096||!local||local>64||!rule||rule>4096||!in.classes||in.classes>24||!in.dofs||in.dofs>16384||in.points!=ne*rule||in.points>65536)
-        throw std::invalid_argument("Flat evaluation tables outside the bounded affine-TET scope");
-    if(radia_hmatrix_cuda::checkedProduct(3*in.points,local)>4000000)throw std::invalid_argument("Flat evaluation entry budget exceeded");
-    if(radia_hmatrix_cuda::checkedProduct(ne,local*local)>4000000)throw std::invalid_argument("Flat mass entry budget exceeded");
+    using radia_hmatrix_cuda::checkedProduct;
+    const auto ne=in.elements,local=in.local,rule=in.rulePoints;constexpr std::size_t count=std::numeric_limits<int>::max();
+    if(!ne||!local||local>64||!rule||rule>4096||!in.classes||in.classes>24||!in.dofs||in.points!=checkedProduct(ne,rule))
+        throw std::invalid_argument("Flat evaluation tables outside the affine-TET scope");
+    if(ne>count||in.dofs>count||in.points>count)throw std::invalid_argument("Flat evaluation tables exceed int32 element, DOF or point numbering");
+    if(checkedProduct(checkedProduct(3,in.points),local)>count)throw std::invalid_argument("Flat evaluation entries exceed the checked int CUB item count");
+    if(checkedProduct(ne,checkedProduct(local,local))>count)throw std::invalid_argument("Flat mass triples exceed the checked int CUB item count");
     if(in.vertices.size()!=12*ne||in.elementClass.size()!=ne||in.elementDofs.size()!=ne*local||in.elementPoints.size()!=ne*rule||
        in.rule.size()!=4*rule||in.shapes.size()!=in.classes*rule*local*3)throw std::invalid_argument("Flat evaluation table shape mismatch");
     for(double v:in.vertices)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite evaluation vertex");
@@ -177,5 +185,35 @@ inline void validateFlatEvaluation(const FlatEvaluationInput& in){
     for(int q:in.elementPoints){if(q<0||std::size_t(q)>=in.points||seen[q])throw std::invalid_argument("Evaluation points must cover each material point once");seen[q]=1;}
     for(std::size_t e=0;e<ne;++e)for(std::size_t i=0;i<local;++i)for(std::size_t j=0;j<i;++j)
         if(in.elementDofs[e*local+i]==in.elementDofs[e*local+j])throw std::invalid_argument("Duplicate evaluation local DOF");
+}
+// CUB scratch of FlatEvaluationBuilder, queried with null storage (no allocation).
+// All of it is live together until build() returns; the scan is sized for its
+// largest possible run count.
+inline std::size_t flatEvaluationSortScratch(const FlatEvaluationInput& in){
+    using namespace radia_hmatrix_cuda;
+    const auto nnz=checkedProduct(checkedProduct(3,in.points),in.local),triples=checkedProduct(in.elements,checkedProduct(in.local,in.local)),nd=in.dofs;
+    int bits=1;while((std::size_t(1)<<bits)<nd)++bits;int massBits=1;while((std::size_t(1)<<massBits)<nd*nd)++massBits;
+    std::size_t total=0,bytes=0;auto add=[&]{if(bytes>std::numeric_limits<std::size_t>::max()-total)throw std::overflow_error("Flat material budget overflow");total+=bytes;bytes=0;};
+    check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,(const unsigned*)nullptr,(unsigned*)nullptr,(const unsigned*)nullptr,(unsigned*)nullptr,int(nnz),0,bits));add();
+    check(cub::DeviceRadixSort::SortPairs(nullptr,bytes,(const MassKey*)nullptr,(MassKey*)nullptr,(const double*)nullptr,(double*)nullptr,int(triples),0,massBits));add();
+    check(cub::DeviceRunLengthEncode::Encode(nullptr,bytes,(const MassKey*)nullptr,(MassKey*)nullptr,(int*)nullptr,(int*)nullptr,int(triples)));add();
+    check(cub::DeviceScan::ExclusiveSum(nullptr,bytes,(const int*)nullptr,(int*)nullptr,int(triples)));add();
+    check(cub::DeviceReduce::Max(nullptr,bytes,(const double*)nullptr,(double*)nullptr,int(nd)));add();
+    return total;
+}
+// Live preflight before any material allocation: the dimension budget plus CUB
+// scratch must fit the current free memory above the shared reserve. The
+// failure names the limiting term; nothing spills to the host.
+inline std::size_t requireFlatEvaluationDevice(const FlatEvaluationInput& in,std::size_t lawDoubles,FlatEvaluationBudget& budget){
+    using namespace radia_hmatrix_cuda;
+    budget=flatEvaluationBudget(in,lawDoubles);const auto scratch=flatEvaluationSortScratch(in),need=budget.total();
+    if(scratch>std::numeric_limits<std::size_t>::max()-need)throw std::overflow_error("Flat material budget overflow");
+    std::size_t free=0,total=0;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
+    const auto available=free>reserve?free-reserve:0;
+    if(need+scratch>available){const auto at=budget.limiting();std::ostringstream message;
+        message<<"Flat material device budget exceeded: "<<need+scratch<<" bytes needed, "<<available<<" free above the reserve; limiting term "
+               <<FlatEvaluationBudget::names[at]<<" = "<<budget.bytes[at]<<" bytes";
+        throw std::runtime_error(message.str());}
+    return need+scratch;
 }
 }

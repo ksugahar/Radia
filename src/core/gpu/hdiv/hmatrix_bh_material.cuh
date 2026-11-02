@@ -32,7 +32,7 @@ class MappedMaterial {
     Buffer<int> invalid;
     std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
     // Reference mass exists only on the device-table route; persistent/transient bytes are exact allocation sizes.
-    bool hasMass=false;double massBound=0.;std::size_t massBytes=0,massNonzeros=0,persistentBytes=0,transientBytes=0;
+    bool hasMass=false;double massBound=0.;std::size_t massBytes=0,massNonzeros=0,persistentBytes=0,transientBytes=0;FlatEvaluationBudget budget;
     void allocateState(const Law& law){
         m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);
         knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
@@ -64,13 +64,9 @@ public:
     MappedMaterial(const FlatEvaluationInput& in,const Law& law):nq(in.points),nd(in.dofs),nk(law.knots.size()),cap(law.cap),barrier(law.barrierSlope),last(law.lastField),initial(law.initialReluctivity){
         using namespace radia_hmatrix_cuda;
         validateFlatEvaluation(in);validateInverseBH(law,radia_hmatrix_cuda::HostVector<double>{0.});
-        const auto nonzeros=checkedProduct(3*nq,in.local),triples=checkedProduct(in.elements,checkedProduct(in.local,in.local));
-        std::size_t bytes=0;auto add=[&](std::size_t count,std::size_t width){const auto size=checkedProduct(count,width);if(size>(std::size_t(512)<<20)-bytes)throw std::invalid_argument("Mapped material device payload exceeds 512 MiB");bytes+=size;};
-        add(3*nq+1+nd+1+2*nonzeros,sizeof(std::size_t));add(4*nonzeros,sizeof(unsigned));
-        add(2*nonzeros+law.knots.size()+law.coefficients.size()+law.integralBase.size()+18*nq+4*nd+2,sizeof(double));add(1,sizeof(int));
-        // Mass upper bound before its sparsity is known: CSR and diagonal plus the sort/run transients.
-        add(nd+1+triples,sizeof(std::size_t));add(2*nd+3*triples+1,sizeof(double));add(3*triples+2*triples+2,sizeof(int));
-        payloadBound=bytes;check(cudaGetDevice(&device));
+        // Dimension budget plus CUB scratch against live free memory; no fixed payload cap.
+        payloadBound=requireFlatEvaluationDevice(in,law.knots.size()+law.coefficients.size()+law.integralBase.size(),budget);
+        check(cudaGetDevice(&device));
         FlatEvaluationBuilder builder;builder.build(in,E,ET,weights,M,massDiagonal);
         routeName="device-flat-tet-evaluation";hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
         massNonzeros=builder.massNonzeros;massBytes=(nd+1+massNonzeros)*sizeof(std::size_t)+(massNonzeros+nd)*sizeof(double);

@@ -1,6 +1,9 @@
 // Shared inverse-BH scalar contract, in SI A/m; common mu0 omitted from energy.
 #pragma once
 #include <cstddef>
+#include <initializer_list>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 #include <memory>
 #include <string>
@@ -27,6 +30,40 @@ struct FlatEvaluationInput {
     BoundaryVector<double> rule,shapes,vertices;
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
 };
+// Device bytes of one flat material build and its resident state, from table
+// dimensions alone. Every builder buffer stays live until the build returns,
+// so the sum is the setup peak; CUB scratch is queried on the device and added
+// there. Mass terms are upper bounds (one stored entry per element triple).
+struct FlatEvaluationBudget {
+    static constexpr std::size_t count=7;
+    static constexpr const char* names[count]={"reference_tables","evaluation_E","evaluation_ET","transpose_sort",
+                                               "mass_triples","mass_csr","material_state"};
+    std::size_t bytes[count]={};
+    std::size_t total()const{
+        std::size_t sum=0;for(auto b:bytes){if(b>std::numeric_limits<std::size_t>::max()-sum)throw std::overflow_error("Flat material budget overflow");sum+=b;}
+        return sum;
+    }
+    std::size_t limiting()const{std::size_t at=0;for(std::size_t i=1;i<count;++i)if(bytes[i]>bytes[at])at=i;return at;}
+};
+inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationInput& in,std::size_t lawDoubles){
+    constexpr auto top=std::numeric_limits<std::size_t>::max();
+    auto mul=[](std::size_t a,std::size_t b){if(b&&a>top/b)throw std::overflow_error("Flat material budget overflow");return a*b;};
+    auto add=[](std::initializer_list<std::size_t> terms){std::size_t s=0;
+        for(auto t:terms){if(t>top-s)throw std::overflow_error("Flat material budget overflow");s+=t;}return s;};
+    const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs;
+    const auto nnz=mul(mul(3,nq),local),triples=mul(ne,mul(local,local));
+    constexpr std::size_t index=sizeof(std::size_t),real=sizeof(double),small=sizeof(int),key=sizeof(unsigned long long);
+    FlatEvaluationBudget b;
+    b.bytes[0]=add({mul(mul(12,ne),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
+                    mul(add({ne,mul(ne,local),mul(ne,rule),1}),small)});
+    b.bytes[1]=add({mul(add({mul(3,nq),1}),index),mul(nnz,index+real)});
+    b.bytes[2]=add({mul(add({nd,1}),index),mul(nnz,index+real)});
+    b.bytes[3]=mul(nnz,4*sizeof(unsigned));
+    b.bytes[4]=add({mul(triples,3*key+2*real+2*small),mul(nd,real),real,2*small});
+    b.bytes[5]=add({mul(add({nd,1}),index),mul(triples,index+real),mul(nd,real)});
+    b.bytes[6]=add({mul(add({mul(18,nq),mul(4,nd),2,lawDoubles}),real),small});
+    return b;
+}
 struct LedgerRow {std::string payload,direction;std::size_t bytes=0;};
 // Exact device allocation sizes: kept for the context lifetime vs held only during setup.
 struct MaterialFootprint {std::size_t persistent=0,transient=0;};
@@ -54,8 +91,9 @@ public:
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput&,const Law&);
 // E and E^T are generated on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
-// Host-only scope check of the flat tables (the same checks the context runs); no CUDA call.
-void validateFlatEvaluationScope(const FlatEvaluationInput&);
+// Host-only scope check of the flat tables (the same checks the context runs) and
+// their device budget without CUB scratch or the law; no CUDA call.
+FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);
 MaterialEvaluation evaluateMaterial(const MaterialInput&,const Law&,const radia_hmatrix_cuda::HostVector<double>& state,const radia_hmatrix_cuda::HostVector<double>& direction);
 Samples evaluate(const Law&,const radia_hmatrix_cuda::HostVector<double>& amplitudes);
 }
