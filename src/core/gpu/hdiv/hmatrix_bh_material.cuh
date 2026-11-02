@@ -32,7 +32,7 @@ class MappedMaterial {
     Buffer<int> invalid;
     std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
     // Reference mass exists only on the device-table route; persistent/transient bytes are exact allocation sizes.
-    bool hasMass=false;double massBound=0.;std::size_t massBytes=0,persistentBytes=0,transientBytes=0;
+    bool hasMass=false;double massBound=0.;std::size_t massBytes=0,massNonzeros=0,persistentBytes=0,transientBytes=0;
     void allocateState(const Law& law){
         m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);
         knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
@@ -73,7 +73,7 @@ public:
         payloadBound=bytes;check(cudaGetDevice(&device));
         FlatEvaluationBuilder builder;builder.build(in,E,ET,weights,M,massDiagonal);
         routeName="device-flat-tet-evaluation";hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
-        massBytes=(nd+1+builder.massNonzeros)*sizeof(std::size_t)+(builder.massNonzeros+nd)*sizeof(double);
+        massNonzeros=builder.massNonzeros;massBytes=(nd+1+massNonzeros)*sizeof(std::size_t)+(massNonzeros+nd)*sizeof(double);
         for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}
         allocateState(law);setupBytes+=ledger.back().bytes;
         for(auto* map:{&E,&ET,&M})persistentBytes+=(map->offsets.size+map->indices.size)*sizeof(std::size_t)+map->values.size*sizeof(double);
@@ -87,6 +87,16 @@ public:
     }
     MaterialFootprint footprint()const{return {persistentBytes,transientBytes};}
     bool deviceMass()const{return hasMass;}
+    MassAction massAction(const radia_hmatrix_cuda::HostVector<double>& x){
+        using namespace radia_hmatrix_cuda;
+        if(!hasMass)throw std::invalid_argument("Material context has no device-built reference mass");
+        if(x.size()!=nd)throw std::invalid_argument("Reference mass action dimension mismatch");
+        for(double v:x)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite reference mass input");
+        int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mapped material belongs to another GPU");
+        check(cudaMemcpy(delta.data,x.data(),nd*sizeof(double),cudaMemcpyHostToDevice));M.apply(delta.data,tangent.data,nullptr);
+        MassAction out;out.y.resize(nd);check(cudaMemcpy(out.y.data(),tangent.data,nd*sizeof(double),cudaMemcpyDeviceToHost));
+        out.nonzeros=massNonzeros;out.bound=massBound;return out;
+    }
     const std::string& route()const{return routeName;}
     const radia_hmatrix_cuda::HostVector<LedgerRow>& transfers()const{return ledger;}
     std::size_t dofs()const{return nd;}

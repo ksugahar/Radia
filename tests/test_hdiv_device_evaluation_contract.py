@@ -128,3 +128,10 @@ def test_staging_checks_every_element_against_its_class_and_the_affine_map():
                   "TET Jacobian differs from the device affine convention", "Material global sample coverage mismatch",
                   "ET_TET", "GetCurveOrder()>1"):
         assert guard in staging, guard
+
+
+def test_reference_mass_diagnostic_moves_vectors_only():
+    source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
+    action = source[source.index("MassAction massAction("):source.index("template<class StateAllocator")]
+    assert action.count("cudaMemcpy(") == 2 and "nd*sizeof(double)" in action, action
+    assert "has no device-built reference mass" in action and "M.apply(" in action

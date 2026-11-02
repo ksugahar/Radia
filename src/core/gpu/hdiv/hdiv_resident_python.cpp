@@ -174,6 +174,13 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
           for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
+      .def("reference_mass_apply",[](radia_hdiv_bh::MaterialOperator& self,Array<double> x){
+          if(x.ndim()!=1)throw py::value_error("Reference mass input must be one-dimensional");
+          std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hdiv_bh::MassAction result;
+          {py::gil_scoped_release release;result=self.massAction(input);}
+          pythonPublicationProbe();py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
+          py::dict out;out["y"]=y;out["nonzeros"]=result.nonzeros;out["spectral_bound"]=result.bound;return out;
+      },py::arg("x").noconvert(),"Diagnostic y=Mx of the device-built reference mass; vectors cross, the matrix never does.")
       .def("evaluate",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state,Array<double> direction){
           const auto stats=self.stats();if(stats.closed)throw py::value_error("Material context is closed");
           if(state.ndim()!=1||std::size_t(state.size())!=stats.dofs||direction.ndim()!=1||(direction.size()!=0&&std::size_t(direction.size())!=stats.dofs))throw py::value_error("Material state or direction mismatch");
