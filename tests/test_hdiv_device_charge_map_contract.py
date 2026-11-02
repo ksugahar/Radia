@@ -85,7 +85,7 @@ def test_device_charge_builder_downloads_only_its_validity_flag():
     assert len(downloads) == 1 and "sizeof(int)" in downloads[0], downloads
     assert "cudaMemcpyHostToDevice" not in source and "SortPairs" in source
     operator = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
-    flat = operator[operator.index("const FlatInput& flat,const ChargeMapInput& charges)"):operator.index("void planTransfer")]
+    flat = operator[operator.index("const FlatInput& flat,const ChargeMapInput& charges"):operator.index("void planTransfer")]
     assert "buildChargeMap" in flat and "SparseMap" not in flat and "charge_map_csr_host_built" not in flat, flat
 
 
