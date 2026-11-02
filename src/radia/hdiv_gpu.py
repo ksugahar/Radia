@@ -44,12 +44,13 @@ class PreparedHDivNonlinear:
     - material rule: NGSolve ``IntegrationRule(TET, 2*max(6, 2*order+2))``
       (343 points per element), shared with the CPU route and never reduced;
     - material: no fixed element, DOF or point cap. Numbering is int32, and
-      the evaluation entries ``3*points*local`` and mass triples
-      ``elements*local**2`` are each at most 2**31-1 (CUB item counts). The
-      device bytes in ``stats()["material_budget"]`` (E, E^T, transpose
-      sort, mass triples, mass CSR, state, tables) plus CUB scratch must fit
-      the live free memory above the reserve max(2 GiB, total/5); the error
-      names the limiting term. The explicit E and E^T dominate;
+      the mass triples ``elements*local**2`` are at most 2**31-1 (CUB item
+      count). The
+      device bytes in ``stats()["material_budget"]`` (resident element
+      tables, DOF incidence and its sort, mass triples, mass CSR, material
+      point state) plus CUB scratch must fit the live free memory above the
+      reserve max(2 GiB, total/5); the error names the limiting term. E and
+      E^T act matrix-free; the 343-point material state remains;
     - charge Gram and charge map: at most 4608 charges, 4096 cells and
       16384 DOFs; ACA leaf_size <= 4096 and max_rank <= 1024, with factor
       and batch storage checked against the same reserve;
@@ -530,8 +531,8 @@ def _require_budget_cover(assembly, stats):
         raise RuntimeError("HDiv material allocations %r bytes exceed the preflight budget %r bytes" % (used, bound))
 
 
-_MATERIAL_BUDGET_TERMS = ("reference_tables", "evaluation_E", "evaluation_ET", "transpose_sort",
-                          "mass_triples", "mass_csr", "material_state")
+_MATERIAL_BUDGET_TERMS = ("reference_tables", "incidence", "incidence_sort", "mass_triples", "mass_csr",
+                          "material_state")
 
 
 def _checked_material_budget(budget):
@@ -680,7 +681,7 @@ def _checked_material_assembly(assembly, tables):
     Covers material setup only; per-solve state uploads are outside this ledger.
     Persistent and setup-transient device bytes must be reported as positive integers.
     """
-    if assembly.get("route") != "device-flat-tet-evaluation":
+    if assembly.get("route") != "device-flat-tet-matrix-free":
         raise RuntimeError("Unexpected HDiv material assembly route: %r" % (assembly.get("route"),))
     sizes = {"element_vertices_m": tables["vertices"].nbytes, "reference_shapes": tables["reference_shapes"].nbytes,
              "material_rule": tables["rule"].nbytes, "element_class": tables["element_class"].nbytes,

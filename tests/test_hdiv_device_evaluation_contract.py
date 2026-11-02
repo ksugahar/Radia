@@ -34,13 +34,13 @@ def ledger(t, *extra, drop=(), law=24, persistent=4096, transient=2048):
              (("evaluation_flag", 4), ("mass_nonzeros", 4), ("mass_flag", 4), ("mass_spectral_bound", 8)) if p not in drop]
     rows += [dict(payload="inverse_bh_law", direction="H2D", bytes=law)]
     rows += [dict(payload=p, direction=d, bytes=b) for p, d, b in extra]
-    return dict(route="device-flat-tet-evaluation", transfer_ledger=rows,
+    return dict(route="device-flat-tet-matrix-free", transfer_ledger=rows,
                 persistent_device_bytes=persistent, setup_transient_device_bytes=transient)
 
 
 def test_material_ledger_accepts_only_the_exact_table_rows():
     t = tables()
-    assert hdiv_gpu._checked_material_assembly(ledger(t), t)["route"] == "device-flat-tet-evaluation"
+    assert hdiv_gpu._checked_material_assembly(ledger(t), t)["route"] == "device-flat-tet-matrix-free"
     resized = ledger(t)
     resized["transfer_ledger"][1]["bytes"] += 8
     forged = [ledger(t, ("evaluation_csr_host_built", "H2D", 64)), ledger(t, ("material_weights_host", "H2D", 8)),
@@ -104,10 +104,13 @@ def test_newton_reuses_one_prepared_mass_operand():
 
 def test_flat_material_binding_takes_tables_not_evaluation_values():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
-    block = source[source.index('def_static("from_flat_tables"'):source.index('.def_static("validate_flat_tables"')]
+    block = source[source.index('def_static("from_flat_tables"'):source.index('.def_static("_explicit_evaluation_oracle"')]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', block)
     assert names == ["rule", "reference_shapes", "vertices", "element_class", "element_dofs",
                      "element_points", "dofs", "law", "backend"], names
+    assert "&constructFlatMaterial<false>" in block, "production binding must build the matrix-free context"
+    oracle = source[source.index('.def_static("_explicit_evaluation_oracle"'):source.index('.def_static("validate_flat_tables"')]
+    assert re.findall(r'py::arg\("([a-z_]+)"\)', oracle) == names and "&constructFlatMaterial<true>" in oracle, oracle
     scope = source[source.index('.def_static("validate_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
     assert re.findall(r'py::arg\("([a-z_]+)"\)', scope) == names[:-2], "scope check takes the same tables, no law"
     helper = source[source.index("py::dict validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructFlat(")]
@@ -136,8 +139,11 @@ def test_staging_checks_every_element_against_its_class_and_the_affine_map():
 
 def test_reference_mass_diagnostic_moves_vectors_only():
     source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
-    action = source[source.index("MassAction massAction("):source.index("template<class StateAllocator")]
+    action = source[source.index("MassAction massAction("):source.index("// Diagnostic y=E x")]
     assert action.count("cudaMemcpy(") == 2 and "nd*sizeof(double)" in action, action
+    evaluation = source[source.index("// Diagnostic y=E x"):source.index("const std::string& route()")]
+    assert evaluation.count("cudaMemcpy(") == 2 and "in*sizeof(double)" in evaluation and "out*sizeof(double)" in evaluation, evaluation
+    assert "frozen=false" in evaluation, "a diagnostic action overwrites the point field, so it must drop the linearization"
     assert "has no device-built reference mass" in action and "M.apply(" in action
 
 
@@ -149,7 +155,7 @@ def test_flat_material_scope_has_structural_bounds_not_fixed_size_caps():
     evaluation = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
     material = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
     staging = (HDIV / "hdiv_material_staging.hpp").read_text(encoding="utf-8")
-    blocks = dict(scope=_block(evaluation, "inline void validateFlatEvaluation(", "inline std::size_t flatEvaluationSortScratch("),
+    blocks = dict(scope=_block(evaluation, "inline void validateFlatEvaluation(", "// The explicit oracle keeps"),
                   flat_context=_block(material, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()"),
                   staging_context=_block(staging, "MaterialStagingContext(const std::string& path", "inline MaterialQuadraturePayload stageMaterialQuadrature"))
     for name, block in blocks.items():
@@ -176,14 +182,46 @@ def test_every_cub_item_count_is_a_dimension_the_scope_check_bounds():
     source = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
     builder = _block(source, "struct FlatEvaluationBuilder", "// Host bounds before any upload")
     calls = re.findall(r"cub::(\w+::\w+)\(([^;]*)\)\);", builder)
-    assert len(calls) == 10, calls
+    assert len(calls) == 12, calls
     counts = {call[1].split(",")[6 if call[0].endswith("SortPairs") else -1].strip() for call in calls}
-    assert counts == {"int(nonzeros)", "int(triples)", "nnz", "int(nd)"}, counts
-    scope = _block(source, "inline void validateFlatEvaluation(", "inline std::size_t flatEvaluationSortScratch(")
-    for guard in ("Flat evaluation entries exceed the checked int CUB item count",
-                  "Flat mass triples exceed the checked int CUB item count",
+    # slots <= triples; nnz <= triples; nonzeros exists only in the bounded explicit oracle.
+    assert counts == {"int(slots)", "int(nonzeros)", "int(triples)", "nnz", "int(nd)"}, counts
+    scope = _block(source, "inline void validateFlatEvaluation(", "// The explicit oracle keeps")
+    for guard in ("Flat mass triples exceed the checked int CUB item count",
                   "exceed int32 element, DOF or point numbering"):
         assert guard in scope, guard
+    oracle = _block(source, "inline std::size_t explicitOracleBytes(", "// CUB scratch of FlatEvaluationBuilder")
+    assert "in.points>65536||nnz>4000000" in oracle, oracle
     scratch = _block(source, "inline std::size_t flatEvaluationSortScratch(", "inline std::size_t requireFlatEvaluationDevice(")
     queried = sorted(re.findall(r"cub::(\w+::\w+)\(nullptr", scratch))
     assert queried == sorted(c[0] for c in calls if c[1].startswith("nullptr")), "budget scratch must query every builder CUB call"
+
+
+def test_matrix_free_evaluation_has_one_piola_formula_and_no_float_atomics():
+    source = (HDIV / "hdiv_flat_evaluation.cuh").read_text(encoding="utf-8")
+    assert source.count("(J[c][0]*S[0]+J[c][1]*S[1]+J[c][2]*S[2])/det") == 1, "one Piola formula for every E consumer"
+    for kernel, nxt in (("flatEvaluationEntries", "flatEvaluationApply"), ("flatEvaluationApply", "flatEvaluationTransposeApply"),
+                        ("flatEvaluationTransposeApply", "uniformOffsets"), ("flatMassEntries", "flatMassEntriesExplicit")):
+        body = _block(source, "__global__ void " + kernel + "(", "__global__ void " + nxt + "(")
+        assert "piolaValue(J,det," in body and "affineTet(vertices+12*e,J)" in body, kernel
+    transpose = _block(source, "__global__ void flatEvaluationTransposeApply(", "__global__ void uniformOffsets(")
+    assert "atomic" not in transpose and "incidence[at]" in transpose, "E^T must be a deterministic gather"
+
+
+def test_production_material_stores_no_global_evaluation_matrix():
+    source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
+    flat = _block(source, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()")
+    assert "if(explicitOracle)builder.build(in,flat,weights,M,massDiagonal,&E,&ET);else builder.build(in,flat,weights,M,massDiagonal);" in flat
+    assert 'routeName=explicitOracle?"device-flat-tet-explicit-oracle":"device-flat-tet-matrix-free"' in flat
+    for method in ("MaterialEvaluation evaluate(", "void applyFrozenDevice("):
+        body = source[source.index(method):]
+        body = body[:body.index("\n    }\n")]
+        assert "E.apply(" not in body and "ET.apply(" not in body and "applyE(" in body and "applyET(" in body, method
+
+
+def test_python_budget_terms_match_the_native_publication():
+    header = (HDIV / "hdiv_inverse_bh.hpp").read_text(encoding="utf-8")
+    names = re.search(r"names\[count\]=\{([^}]*)\}", header).group(1)
+    native = tuple(re.findall(r'"([a-z_]+)"', names))
+    assert native == hdiv_gpu._MATERIAL_BUDGET_TERMS, (native, hdiv_gpu._MATERIAL_BUDGET_TERMS)
+    assert int(re.search(r"static constexpr std::size_t count=(\d+);", header).group(1)) == len(native)

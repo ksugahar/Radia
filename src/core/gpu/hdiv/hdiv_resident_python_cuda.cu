@@ -158,9 +158,9 @@ std::atomic<unsigned> liveMaterialOwners{0};
 class MaterialOwner final:public MaterialOperator {
     std::mutex mutex;radia_hmatrix_cuda::HostUnique<MappedMaterial> context;bool counted=false;
 public:
-    template<class Input>MaterialOwner(const Input& input,const Law& law){
+    template<class Input,class... Mode>MaterialOwner(const Input& input,const Law& law,Mode... mode){
         if(liveMaterialOwners.fetch_add(1)>=2){--liveMaterialOwners;throw std::invalid_argument("Material context count budget exceeded");}
-        try{context=radia_hmatrix_cuda::makeHostUnique<MappedMaterial>("python.material-object",input,law);counted=true;}catch(...){--liveMaterialOwners;throw;}
+        try{context=radia_hmatrix_cuda::makeHostUnique<MappedMaterial>("python.material-object",input,law,mode...);counted=true;}catch(...){--liveMaterialOwners;throw;}
     }
     ~MaterialOwner()override{close();}
     MaterialEvaluation evaluate(const radia_hmatrix_cuda::HostVector<double>& x,const radia_hmatrix_cuda::HostVector<double>& d)override{
@@ -186,11 +186,13 @@ public:
     radia_hmatrix_cuda::HostVector<LedgerRow> transfers()override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->transfers();}
     MaterialFootprint footprint()override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->footprint();}
     MassAction massAction(const radia_hmatrix_cuda::HostVector<double>& x)override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->massAction(x);}
+    radia_hmatrix_cuda::HostVector<double> evaluationAction(const radia_hmatrix_cuda::HostVector<double>& x,bool transpose)override{std::lock_guard<std::mutex> lock(mutex);if(!context)throw std::invalid_argument("Material context is closed");return context->evaluationAction(x,transpose);}
     void close()override{std::lock_guard<std::mutex> lock(mutex);context.reset();if(counted){--liveMaterialOwners;counted=false;}}
 };
 }
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
+std::shared_ptr<MaterialOperator> createFlatMaterialOracle(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law,true);}
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
 }
 
