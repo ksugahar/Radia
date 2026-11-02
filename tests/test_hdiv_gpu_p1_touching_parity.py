@@ -59,7 +59,7 @@ def _touching(device, i, j):
 
 
 @pytest.mark.parametrize("order", [1, 2])
-def test_device_flat_entries_match_cpu_charge_gram(tmp_path, record_property, cuda, order):
+def test_device_flat_entries_match_cpu_charge_gram(tmp_path, request, cuda, order):
     from radia.vim._vim import _rp
     inputs, device = _staged(tmp_path, order, cuda)
     gram = _rp._ChargeGramHMatrix(**inputs)
@@ -71,8 +71,8 @@ def test_device_flat_entries_match_cpu_charge_gram(tmp_path, record_property, cu
     relative = np.abs(actual - expected)/scale
     touching = np.array([[_touching(device, i, j) for j in range(n)] for i in range(n)])
     worst = np.unravel_index(np.argmax(relative), relative.shape)
-    record_property("charges", n)
-    record_property("max_relative", float(relative.max()))
+    # user_properties, not record_property: the tier runner writes xunit2 JUnit under warnings-as-errors.
+    request.node.user_properties += [("charges", n), ("max_relative", float(relative.max()))]
     # Both classes must be present, or the counterexample is unobservable.
     assert touching.any() and (~touching).any(), touching
     assert relative.max() <= PARITY_REL, (
