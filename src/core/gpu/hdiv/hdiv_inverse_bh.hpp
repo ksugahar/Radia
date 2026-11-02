@@ -109,7 +109,7 @@ public:
     virtual std::size_t dofs()=0;
     virtual bool closed()=0;
     virtual void close()=0;
-    // Geometry family of the device build: device-flat-tet-mass or device-curved-tet-mass.
+    // Geometry family of the device build: device-flat-tet-mass, device-curved-tet-mass or device-hex-mass.
     virtual std::string route()=0;
 };
 std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput&);

@@ -19,12 +19,12 @@ public:
     FlatEvaluationTables flatTables(){
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
-        return stageFlatEvaluationTables(*context);
+        return isHexMesh(*context)?stageHexEvaluationTables(*context):stageFlatEvaluationTables(*context);
     }
     FlatChargeTables chargeTables(){
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
-        return stageFlatChargeTables(*context);
+        return isHexMesh(*context)?stageHexChargeTables(*context):stageFlatChargeTables(*context);
     }
     void close(){std::lock_guard<std::mutex> lock(mutex);context.reset();}
 };
@@ -54,7 +54,7 @@ template<class T> py::array_t<T> ownedRows(const std::vector<T>& values,std::siz
 py::dict publishFlat(const FlatEvaluationTables& t){
     py::dict out;
     out["schema"]="radia.hdiv-flat-evaluation-tables.v1";
-    out["family"]=t.nodes==10?"curved-tet":"affine-tet";
+    out["family"]=t.nodes==27?"hex":t.nodes==10?"curved-tet":"affine-tet";
     out["dofs"]=t.dofs;out["total_points"]=t.totalPoints;out["integration_order"]=t.integrationOrder;
     out["rule"]=ownedRows(t.rule,t.rulePoints);
     auto shapes=ownedArray(t.shapes);
@@ -67,7 +67,7 @@ py::dict publishFlat(const FlatEvaluationTables& t){
 py::dict publishCharge(const FlatChargeTables& t){
     py::dict out;
     out["schema"]="radia.hdiv-flat-charge-tables.v1";
-    out["family"]=t.curved?"curved-tet":"affine-tet";
+    out["family"]=t.hex?"hex":t.curved?"curved-tet":"affine-tet";
     out["dofs"]=t.dofs;
     auto tables=[](const std::vector<double>& v,std::size_t monomials,std::size_t width){auto a=ownedArray(v);
         a.resize({py::ssize_t(monomials*width?v.size()/(monomials*width):0),py::ssize_t(monomials),py::ssize_t(width)});return a;};
@@ -93,11 +93,11 @@ void registerMaterialStaging(py::module_& module){
             FlatEvaluationTables tables;
             {py::gil_scoped_release release;tables=self.flatTables();}
             return publishFlat(tables);
-        },"NGSolve reference HDiv shapes per vertex-rank class plus primitive TET geometry (affine vertices or curved P2 nodes); no evaluation matrix.")
+        },"NGSolve reference HDiv shapes per vertex-rank class plus primitive geometry (affine TET vertices, curved P2 TET nodes or HEX Q2 lattices); no evaluation matrix.")
         .def("charge_tables",[](MaterialOwner& self){
             FlatChargeTables tables;
             {py::gil_scoped_release release;tables=self.chargeTables();}
             return publishCharge(tables);
-        },"NGSolve charge tables per vertex-rank class (affine projections or curved moments) plus cell/exterior-face DOFs and geometry; no charge map.")
+        },"NGSolve charge tables per vertex-rank class (affine TET projections, curved TET moments or HEX reference projections) plus cell/exterior-face DOFs and geometry; no charge map.")
         .def("close",&MaterialOwner::close,py::call_guard<py::gil_scoped_release>());
 }

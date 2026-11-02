@@ -24,7 +24,9 @@ struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // family "affine-tet": cells/faces hold 4/3 vertices per host. "curved-tet":
 // cells/faces hold the 10/6 P2 nodes of the isoparametric map (corners
 // first), the mesh vertex numbers decide touching hosts and (gl,gw) is the
-// [0,1] Gauss rule of the touching Duffy potentials.
+// [0,1] Gauss rule of the touching Duffy potentials. "hex": cells/faces hold
+// the 27/9-node Q2 lattices, charges are reference monomials and hexRules /
+// hexBands carry the CPU hex Gram rules; TET rules stay empty.
 // compression is "dense" (one deferred dense block) or "aca" (device ACA
 // leaves on a geometric partition); the ACA parameters apply to "aca" only.
 struct FlatInput {
@@ -36,6 +38,9 @@ struct FlatInput {
     std::string family="affine-tet";
     radia_hmatrix_cuda::HostVector<int> cellNumbers,faceNumbers;
     radia_hmatrix_cuda::HostVector<double> gl,gw;
+    // HEX: rows (rule, point, weight) with rule 0 outer, 1 radial inner,
+    // 2 pair product, 3 affine pair product; bands = (near_grade, far_inner).
+    radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated
 // on the device from these and the FlatInput geometry; no B value crosses.
@@ -44,11 +49,13 @@ struct FlatInput {
 // Curved: tables are the reference moments R and the device solves the
 // per-host monomial Gram G_e X = R on NGSolve's declared mass rules
 // (cellRule/faceRule rows), so B = G_e^{-1} R carries the curved measure.
+// HEX: tables are the reference-measure projections and B rows are the class
+// tables unscaled (the Piola Jacobians cancel in the reference-frame charges).
 struct ChargeMapInput {
     std::size_t dofs=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0;
     radia_hmatrix_cuda::HostVector<double> cellTables,faceTables,cellRule,faceRule;
     radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
-    bool curved=false;
+    bool curved=false,hex=false;
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;

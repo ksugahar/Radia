@@ -20,7 +20,7 @@ inline HostVector<double> flatDiagnosticEntries(const FlatBlock& block,const Hos
     cudaStream_t stream=nullptr;check(cudaStreamCreateWithFlags(&stream,cudaStreamNonBlocking));
     struct Guard {cudaStream_t s;~Guard(){cudaStreamSynchronize(s);cudaStreamDestroy(s);}} guard{stream};
     HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("flat.diagnostic-transfers")};std::size_t launches=0;int code=0;
-    FlatPrepared prepared;prepared.prepare(block,stream,transfers,launches,code);
+    FlatPrepared prepared;prepared.prepare(block,stream,transfers,launches,code,false);
     Buffer<std::size_t> r,c;Buffer<double> values;r.upload(rows);c.upload(cols);values.allocate(count);
     flatPairEntries<<<unsigned((count+127)/128),128,0,stream>>>(prepared.device(),r.data,c.data,count,values.data);check(cudaGetLastError());
     HostVector<double> out(count);

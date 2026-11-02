@@ -18,7 +18,7 @@ namespace radia::hdiv_cuda {
 // The geometry is the 10/6 P2 nodes and the mesh vertex numbers.
 struct FlatChargeTables {
     std::size_t dofs=0,cells=0,faces=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0,cellClasses=0,faceClasses=0;
-    bool curved=false;
+    bool curved=false,hex=false;
     std::vector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents,cellNumbers,faceNumbers;
     std::vector<double> cellTables,faceTables,cellVertices,faceVertices,cellRule,faceRule;
 };
@@ -212,3 +212,4 @@ inline FlatChargeTables stageFlatChargeTables(MaterialStagingContext& context){
     return out;
 }
 }
+#include "hdiv_hex_staging.hpp"

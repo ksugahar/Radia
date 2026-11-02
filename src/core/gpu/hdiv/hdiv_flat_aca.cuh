@@ -44,8 +44,16 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
         for(int k=0;k<3;++k)c[k]/=vertices;double r=0;
         for(int i=0;i<nodes;++i){const double dx=V[3*i]-c[0],dy=V[3*i+1]-c[1],dz=V[3*i+2]-c[2];r=std::max(r,std::sqrt(dx*dx+dy*dy+dz*dz));}
         centre.insert(centre.end(),c,c+3);radius.push_back(r);return elements++;};
-    for(std::size_t h=0;h<cellCount;++h)if(cellElement[h]!=none)cellElement[h]=addElement(block.cells.data()+block.cellStride()*h,4,int(block.cellStride()/3));
-    for(std::size_t h=0;h<faceCount;++h)if(faceElement[h]!=none)faceElement[h]=addElement(block.faces.data()+block.faceStride()*h,3,int(block.faceStride()/3));
+    // HEX lattices: the corner mean of nodes {0,2,6,8,18,20,24,26} ({0,2,6,8} on a quad), radius over all nodes.
+    auto addHex=[&](const double* L,int corners){static constexpr int node[8]={0,2,6,8,18,20,24,26};double C[24];
+        for(int i=0;i<corners;++i)for(int k=0;k<3;++k)C[3*i+k]=L[3*node[i]+k];
+        double c[3]={0,0,0};for(int i=0;i<corners;++i)for(int k=0;k<3;++k)c[k]+=C[3*i+k];for(int k=0;k<3;++k)c[k]/=corners;double r=0;
+        for(int i=0;i<(corners==8?27:9);++i){const double dx=L[3*i]-c[0],dy=L[3*i+1]-c[1],dz=L[3*i+2]-c[2];r=std::max(r,std::sqrt(dx*dx+dy*dy+dz*dz));}
+        centre.insert(centre.end(),c,c+3);radius.push_back(r);return elements++;};
+    for(std::size_t h=0;h<cellCount;++h)if(cellElement[h]!=none)cellElement[h]=block.hex?addHex(block.cells.data()+81*h,8)
+        :addElement(block.cells.data()+block.cellStride()*h,4,int(block.cellStride()/3));
+    for(std::size_t h=0;h<faceCount;++h)if(faceElement[h]!=none)faceElement[h]=block.hex?addHex(block.faces.data()+27*h,4)
+        :addElement(block.faces.data()+block.faceStride()*h,3,int(block.faceStride()/3));
     HostVector<std::size_t> offsets(elements+1,0,HostFaultAllocator<std::size_t>("aca.charge-offsets")),members(n,0,HostFaultAllocator<std::size_t>("aca.charge-members"));
     auto elementOf=[&](std::size_t a){return (block.kind[a]==0?cellElement:faceElement)[std::size_t(block.host[a])];};
     for(std::size_t a=0;a<n;++a)++offsets[elementOf(a)+1];
@@ -231,7 +239,7 @@ public:
         // Prepared charges, sigma, the permutation and the active counter stay live through compression.
         const auto n=block.charges();std::size_t live=flatSum(FlatPrepared::workspaceBytes(block),checkedProduct(n,2*sizeof(double))+sizeof(int));
         flatReserve(live,"Flat ACA GPU reserve would be exceeded");
-        prepared.prepare(block,stream,transfers,launches,invalidCode);
+        prepared.prepare(block,stream,transfers,launches,invalidCode,false);
         sigma.allocate(n);const FlatDevice device=prepared.device();
         acaSigma<<<unsigned((n+127)/128),128,0,stream>>>(device,sigma.data,prepared.invalid.data);check(cudaGetLastError());++launches;
         if((invalidCode=prepared.flag(stream,transfers,"energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite or nonpositive self-energy");

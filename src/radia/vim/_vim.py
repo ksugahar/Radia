@@ -1625,6 +1625,22 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
                 })
 
 
+# Pair-domain Duffy and product points per dimension of the CPU hex Gram (all and affine-affine pairs).
+_HEX_GLPAIR_N = 6
+
+
+def _hex_gram_rule_counts(fes, glout_n=None, glin_n=None):
+    """Default 1D outer and radial-inner point counts of the hex charge Gram (CPU and device share them)."""
+    p = int(fes.globalorder)
+    mapped_bdm2 = (p == 2 and
+                   _hex_mapping_affinity_report(fes.mesh)["nonaffine_cell_count"] > 0)
+    default_outer = 4 if p == 1 else (
+        9 if mapped_bdm2 else (6 if fes.mesh.GetCurveOrder() >= 2 else 5))
+    default_inner = 5 if p == 1 else (12 if mapped_bdm2 else 7)
+    return (default_outer if glout_n is None else int(glout_n),
+            default_inner if glin_n is None else int(glin_n))
+
+
 def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            image_rot_angle=(),
@@ -1690,13 +1706,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     -- every apply of the Gram routes through the exactly-symmetric matvec, so they are never read)."""
     t0 = time.perf_counter()
     p = int(fes.globalorder)
-    mapped_bdm2 = (p == 2 and
-                   _hex_mapping_affinity_report(fes.mesh)["nonaffine_cell_count"] > 0)
-    default_outer = 4 if p == 1 else (
-        9 if mapped_bdm2 else (6 if fes.mesh.GetCurveOrder() >= 2 else 5))
-    glout_n = default_outer if glout_n is None else int(glout_n)
-    default_inner = 5 if p == 1 else (12 if mapped_bdm2 else 7)
-    glin_n = default_inner if glin_n is None else int(glin_n)
+    glout_n, glin_n = _hex_gram_rule_counts(fes, glout_n, glin_n)
     # NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded outer rule of self / touching
     # sub pairs is decoupled from glout_n (shared by the far tensor product, whose cost grows like n^6),
     # touching hosts are always graded (near_grade 1.0 + the C++ shared-node test), and touching pairs take
@@ -1713,7 +1723,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # sector lattice the same generalized spectrum at all three, and the CEFC 2020 quadrupole field moves by
     # 4e-6 (relative) between 8 and 6 points -- against a 6^6 / 8^6 = 5.6x cheaper near block.  8 remains an
     # explicit choice for entry-level accuracy studies (7e-5 -> 6e-6 on distorted hosts).
-    glpair_n = 6 if glpair_n is None else int(glpair_n)
+    glpair_n = _HEX_GLPAIR_N if glpair_n is None else int(glpair_n)
     if glpair_n < 2:
         raise ValueError("_build_charge_gram_hex: glpair_n must be >= 2 (got %r)" % (glpair_n,))
     # glpair_affine_n = the same rule for pairs whose BOTH hosts are affine (2026-09-07).  With affine
@@ -1721,7 +1731,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # distorted host converges only ~10x per two points (tapered sector lattice: 7e-5 at 6, 6e-6 at 8),
     # so the affine-affine pairs -- most pairs of a swept magnet mesh -- can always take the smaller count.
     # Both defaults are 6 now; the knob stays so an accuracy study can raise glpair_n alone.
-    glpair_affine_n = 6 if glpair_affine_n is None else int(glpair_affine_n)
+    glpair_affine_n = _HEX_GLPAIR_N if glpair_affine_n is None else int(glpair_affine_n)
     if glpair_affine_n < 2:
         raise ValueError("_build_charge_gram_hex: glpair_affine_n must be >= 2 (got %r)" % (glpair_affine_n,))
     if near_inner not in ("exact", "site"):
@@ -2434,6 +2444,55 @@ def _prepare_gpu_curved_charge_inputs(fes, *, backend):
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32), rules=rules, ho_far_factor=_CURVED_FAR_FACTOR)
 
+
+
+def _prepare_gpu_hex_charge_inputs(fes, *, backend):
+    """Stage the pure-HEX BDM1/BDM2 device-build input, not a GPU operator.
+
+    Geometry, charge order and Gram rules are those of the CPU hex route
+    (``_build_charge_gram_hex`` defaults): 27/9-node Q2 lattices from the
+    same NGSolve-linear interpolation or GetTrafo, reference-measure
+    monomials grouped by host (cells, then exterior quads), and the 1D outer,
+    radial-inner and pair-domain rules with near_grade = far_inner = 1. No
+    charge map, Gram coefficient or CUDA allocation is produced. The caller
+    curves the mesh and owns TaskManager.
+    """
+    if backend != "gpu":
+        raise ValueError("Device charge preparation requires explicit backend='gpu'")
+    mesh = fes.mesh
+    p = int(fes.globalorder)
+    if mesh.dim != 3 or _volume_vertex_counts(mesh) != {8}:
+        raise NotImplementedError("HEX device charge input requires pure 3D HEX geometry")
+    if p not in (1, 2) or mesh.GetCurveOrder() > 2:
+        raise NotImplementedError("HEX device charge input requires HDiv order 1 or 2 on a linear or Curve(2) mesh")
+    if mesh.deformation is not None:
+        raise NotImplementedError("Device charge input does not support live mesh deformation")
+    int32_max = 2**31 - 1
+    if not 0 < fes.ndof <= int32_max or not 0 < mesh.GetNE(ng.VOL) <= int32_max:
+        raise ValueError("Device charge DOF or element budget exceeded")
+    validate_hdiv_configuration(mesh.dim, {8}, p, mesh.GetCurveOrder())
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = _exterior_bnd_elements(mesh)
+    if not bels:
+        raise ValueError("Device charge input requires exterior boundary surface elements")
+    linear = mesh.GetCurveOrder() < 2
+    ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
+    ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
+    mons_v, mons_s = _mons_hex(p), _mons_quad(p)
+    host = [c for c in range(len(vels)) for _ in mons_v] + [f for f in range(len(bels)) for _ in mons_s]
+    kind = [0]*(len(vels)*len(mons_v)) + [1]*(len(bels)*len(mons_s))
+    expo = [i for _ in vels for m in mons_v for i in m] + [i for _ in bels for (a, b) in mons_s for i in (a, b, 0)]
+    glout_n, glin_n = _hex_gram_rule_counts(fes)
+    return dict(
+        family="hex", n_el=len(vels),
+        cell_nodes=np.concatenate([(_hex_q2_lattice_nodes_ngsolve_linear(mesh, e) if linear
+                                    else _trafo_lattice_nodes(mesh, e, ir_hex)).ravel() for e in vels]),
+        face_nodes=np.concatenate([(_quad_q2_lattice_nodes_ngsolve_linear(mesh, e) if linear
+                                    else _trafo_lattice_nodes(mesh, e, ir_quad)).ravel() for e in bels]),
+        charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
+        charge_expo=np.array(expo, dtype=np.int32),
+        rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N)),
+        near_grade=1.0, far_inner=1.0)
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,

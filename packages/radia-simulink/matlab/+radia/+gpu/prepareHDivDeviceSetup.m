@@ -12,7 +12,8 @@ arguments
     options.MeshCheckProvenance (1,1) struct
     options.GramACA (1,1) struct=struct()
     options.GramCompression (1,:) char {mustBeMember(options.GramCompression,{'aca','dense'})}='aca'
-    % 1: affine TET; 2: NGSolve Curve(2) isoparametric P2 TET (orders 1 and 2).
+    % 1: linear geometry; 2: NGSolve Curve(2) (orders 1 and 2). A pure-TET mesh
+    % is affine-tet or curved-tet by curve order; a pure-HEX mesh is hex at either.
     options.CurveOrder (1,1) double {mustBeMember(options.CurveOrder,[1 2])}=1
 end
 keywords=struct('backend','gpu','label_contract',options.LabelContract, ...
@@ -26,6 +27,6 @@ end
 result=radia.internal.callPython("radia_simulink.hdiv","prepare_hdiv_device_setup",{meshPath},Keywords=keywords);
 setup=radia.gpu.readHDivDeviceSetup(result.value);
 families={'affine-tet','curved-tet'};
-assert(setup.order==order && strcmp(setup.family,families{options.CurveOrder}),'radia:gpu:DeviceSetup', ...
+assert(setup.order==order && any(strcmp(setup.family,{families{options.CurveOrder},'hex'})),'radia:gpu:DeviceSetup', ...
     'Device setup order or geometry family differs from the request');
 end

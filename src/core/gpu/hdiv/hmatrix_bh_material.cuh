@@ -73,7 +73,7 @@ public:
         check(cudaGetDevice(&device));
         FlatEvaluationBuilder builder;
         builder.build(in,flat,weights,M,massDiagonal);
-        matrixFree=true;routeName=in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";
+        matrixFree=true;routeName=in.nodes==27?"device-hex-matrix-free":in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";
         hasMass=true;massBound=builder.massBound;transientBytes=builder.transientBytes;
         massNonzeros=builder.massNonzeros;massBytes=(nd+1+massNonzeros)*sizeof(std::size_t)+(massNonzeros+nd)*sizeof(double);
         for(const auto& t:builder.transfers){ledger.push_back({t.payload,t.direction,t.bytes});if(std::string(t.direction)=="H2D")setupBytes+=t.bytes;}

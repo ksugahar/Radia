@@ -172,6 +172,8 @@ def _fake_device_staging(monkeypatch, calls, validate):
     vim._prepare_gpu_charge_inputs = lambda *a, **k: calls.append("charge-staging")
     vim._prepare_gpu_curved_charge_inputs = lambda *a, **k: calls.append("curved-charge-staging")
     vim._curve_mesh = lambda mesh, order: calls.append(("curve", order))
+    vim._volume_vertex_counts = lambda mesh: frozenset({4})
+    vim._prepare_gpu_hex_charge_inputs = lambda *a, **k: calls.append("hex-charge-staging")
     for name, module in (("ngsolve", ng), ("radia", types.ModuleType("radia")),
                          ("radia.vim", types.ModuleType("radia.vim")), ("radia.vim._vim", vim)):
         monkeypatch.setitem(sys.modules, name, module)
@@ -267,7 +269,8 @@ def _fake_workflow(monkeypatch, calls, material_fail=None, used=900, bound=910):
     monkeypatch.setitem(sys.modules, "hdivfake.gpu", gpu)
     monkeypatch.setattr(hdiv_gpu, "__package__", "hdivfake")
     monkeypatch.setattr(hdiv_gpu, "_prepare_device_components", lambda *a, **k: dict(
-        dofs=4, rhs_operator=None, material_budget=_budget(), charge_gram={}, evaluation_tables={}))
+        dofs=4, family="affine-tet", rhs_operator=None, material_budget=_budget(), charge_gram={},
+        evaluation_tables={}))
     monkeypatch.setattr(hdiv_gpu, "_checked_material_assembly", lambda assembly, tables: dict(
         persistent_device_bytes=used - 100, setup_transient_device_bytes=100))
     monkeypatch.setattr(hdiv_gpu, "_checked_device_assembly", lambda assembly, gram: {})
@@ -426,3 +429,66 @@ def test_flat_route_checks_the_budget_before_allocation_without_fixed_caps():
     aca = (HDIV / "hdiv_flat_aca.cuh").read_text(encoding="utf-8")
     compress = aca[aca.index("void compress(){"):aca.index("perm.upload(")]
     assert "flatReserve(live" in compress and "2*sizeof(double)" in compress, "ACA permutation uploaded outside the reserve"
+
+
+def hex_staged(cell=(2, 2, 2), face=(2, 2, 0)):
+    """One HEX cell and one exterior quad with the CPU hex rules (lattices agree exactly)."""
+    rule = (np.array([.25, .75]), np.array([.5, .5]))
+    inputs = dict(family="hex", n_el=1, cell_nodes=np.arange(81.), face_nodes=np.arange(27.),
+                  charge_host=[0, 0], charge_kind=[0, 1], charge_expo=list(cell) + list(face),
+                  rules=dict(out=rule, inner=rule, pair=rule, pair_affine=rule), near_grade=1., far_inner=1.)
+    charge = dict(cell_class=np.zeros(1, np.int32), cell_dofs=np.arange(6, dtype=np.int32)[None],
+                  cell_tables=np.ones((1, 1, 6)), cell_exponents=np.array([cell], np.int32),
+                  face_class=np.zeros(1, np.int32), face_dofs=np.arange(3, dtype=np.int32)[None],
+                  face_tables=np.ones((1, 1, 3)), face_exponents=np.array([face[:2]], np.int32))
+    return inputs, charge, (np.arange(81.), np.arange(27.))
+
+
+def test_hex_rules_cross_as_indexed_rows_with_bands_and_no_tet_rule():
+    inputs, charge, geometry = hex_staged()
+    arguments = hdiv_gpu._device_gram_arguments(charge, inputs, geometry, None)
+    assert arguments["family"] == "hex" and arguments["far_factor"] == 1e30
+    assert arguments["hex_rules"].shape == (8, 3) and arguments["hex_rules"][:, 0].tolist() == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert arguments["hex_bands"].tolist() == [1., 1.]
+    assert all(arguments[name].shape == (0, 4) for name in ("tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule"))
+    ledger = hdiv_gpu._expected_device_ledger(dict(arguments, compression="dense"))
+    assert ("cell_q2_nodes_m", "H2D") in ledger and ("hex_invalid_flag", "H2D") in ledger
+    assert not {p for p, _ in ledger} & {"cell_vertices_m", "tet_rule", "charge_kind", "charge_map_cell_vertices_m"}
+
+
+@pytest.mark.parametrize("cell,face,ok", [
+    ((2, 2, 2), (2, 2, 0), True), ((3, 0, 0), (0, 0, 0), False), ((0, 0, 0), (0, 0, 1), False),
+    ((-1, 0, 0), (0, 0, 0), False), ((0, 0, 0), (3, 0, 0), False)])
+def test_hex_exponents_are_bounded_per_axis_not_by_total_degree(cell, face, ok):
+    inputs, charge, geometry = hex_staged(cell, face)
+    if ok:
+        assert hdiv_gpu._device_gram_arguments(charge, inputs, geometry, None)["charge_exponents"].tolist() == \
+            list(cell) + list(face)
+    else:
+        with pytest.raises(ValueError, match="HEX axis degree <= 2"):
+            hdiv_gpu._device_gram_arguments(charge, inputs, geometry, None)
+
+
+def test_hex_lattice_disagreement_fails_before_the_device():
+    inputs, charge, (cells, faces) = hex_staged()
+    with pytest.raises(ValueError, match="hex geometry and the CPU route disagree"):
+        hdiv_gpu._device_gram_arguments(charge, inputs, (cells + 1e-6, faces), None)
+
+
+@pytest.mark.parametrize("counts,order,error", [
+    ({4, 8}, 1, "pure TET or pure HEX"), ({6}, 1, "pure TET or pure HEX"), ({8}, 0, "RT0 is affine TET only")])
+def test_mixed_meshes_and_hex_rt0_fail_loudly(monkeypatch, counts, order, error):
+    vim = types.ModuleType("radia.vim._vim")
+    vim._volume_vertex_counts = lambda mesh: frozenset(counts)
+    for name, module in (("radia", types.ModuleType("radia")), ("radia.vim", types.ModuleType("radia.vim")),
+                         ("radia.vim._vim", vim)):
+        monkeypatch.setitem(sys.modules, name, module)
+    with pytest.raises(NotImplementedError, match=error):
+        hdiv_gpu._mesh_family(None, 1, order)
+
+
+def test_hex_gram_downloads_only_flags_and_table_sizes():
+    source = (HDIV / "hdiv_hex_gram.cuh").read_text(encoding="utf-8")
+    downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
+    assert sorted(d.split(",")[2].strip() for d in downloads) == ["sizeof(int)", "sizeof(x)", "sizeof(y)"], downloads
+    assert "cudaMemcpyToSymbol" not in source and "cudaMemcpyHostToDevice" not in source

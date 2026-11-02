@@ -21,6 +21,7 @@
 #include "hdiv_p1_diagonal_math.inc"
 #undef RADIA_P1_FIELD
 #undef RADIA_P1_KERNEL
+#include "hdiv_hex_gram.cuh"
 namespace radia_hmatrix_cuda {
 inline std::size_t flatSum(std::size_t a,std::size_t b){
     if(a>std::numeric_limits<std::size_t>::max()-b)throw std::overflow_error("Flat device byte count overflow");return a+b;}
@@ -42,9 +43,18 @@ struct FlatBlock {
     bool curved=false;
     HostVector<double> gl{HostFaultAllocator<double>("flat.gl")},gw{HostFaultAllocator<double>("flat.gw")};
     HostVector<int> cellNumbers{HostFaultAllocator<int>("flat.cell-numbers")},faceNumbers{HostFaultAllocator<int>("flat.face-numbers")};
+    // HEX hosts: cells/faces hold the 27/9-node Q2 lattices, charges are
+    // reference monomials grouped by host, and the four [0,1] Gauss rules
+    // (outer tensor, radial inner, pair product, affine pair product) with the
+    // near band and the radial reach of the CPU hex Gram.
+    bool hex=false;double nearGrade=1.0,farInner=1.0;
+    HostVector<double> ruleOut{HostFaultAllocator<double>("hex.out")},ruleOutW{HostFaultAllocator<double>("hex.out-w")},
+        ruleIn{HostFaultAllocator<double>("hex.in")},ruleInW{HostFaultAllocator<double>("hex.in-w")},
+        rulePair{HostFaultAllocator<double>("hex.pair")},rulePairW{HostFaultAllocator<double>("hex.pair-w")},
+        rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")};
     std::size_t charges()const{return host.size();}
-    std::size_t cellStride()const{return curved?30:12;}
-    std::size_t faceStride()const{return curved?18:9;}
+    std::size_t cellStride()const{return hex?81:curved?30:12;}
+    std::size_t faceStride()const{return hex?27:curved?18:9;}
     std::size_t cellCount()const{return cells.size()/cellStride();}
     std::size_t faceCount()const{return faces.size()/faceStride();}
     void validate()const{
@@ -53,6 +63,7 @@ struct FlatBlock {
         if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%cellStride()||faces.size()%faceStride()||
            cellCount()>std::size_t(INT_MAX)||faceCount()>std::size_t(INT_MAX))
             throw std::invalid_argument("Flat charge payload shape mismatch");
+        if(hex){validateHex();return;}
         if(curved){
             if(gl.empty()||gl.size()>64||gw.size()!=gl.size()||cellNumbers.size()!=4*cellCount()||faceNumbers.size()!=3*faceCount())
                 throw std::invalid_argument("Curved charge geometry requires 4/3 vertex numbers per host and one Duffy rule of 1..64 points");
@@ -85,6 +96,33 @@ struct FlatBlock {
         const char* oneSided=std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
         if(oneSided&&oneSided[0]!='\0'&&oneSided[0]!='0')
             throw std::invalid_argument("RADIA_HDIV_HO_FAR_ONESIDED has no device Gram route");
+    }
+    void validateHex()const{
+        if(curved||!tet.empty()||!tri.empty()||!tetLow.empty()||!triLow.empty()||farFactor<1e29||!gl.empty()||!gw.empty()||
+           !cellNumbers.empty()||!faceNumbers.empty())
+            throw std::invalid_argument("HEX charge geometry takes no TET rules, far split, curved Duffy rule or vertex numbers");
+        for(const auto* rule:{&ruleOut,&ruleIn,&rulePair,&rulePairAffine}){const auto& w=rule==&ruleOut?ruleOutW:rule==&ruleIn?ruleInW:rule==&rulePair?rulePairW:rulePairAffineW;
+            if(rule->empty()||rule->size()>std::size_t(hexRuleCap)||w.size()!=rule->size())throw std::invalid_argument("HEX rules require 1..16 Gauss points each");
+            for(std::size_t k=0;k<rule->size();++k)if(!std::isfinite((*rule)[k])||!std::isfinite(w[k])||!((*rule)[k]>0)||!((*rule)[k]<1)||!(w[k]>0))
+                throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");}
+        if(rulePair.size()<2||rulePairAffine.size()<2)throw std::invalid_argument("HEX pair rules require at least 2 points");
+        if(!std::isfinite(nearGrade)||!(nearGrade>0)||!std::isfinite(farInner)||!(farInner>0))throw std::invalid_argument("HEX near band and radial reach must be positive");
+        for(const auto* coordinates:{&cells,&faces})for(double v:*coordinates)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite HEX host lattice");
+        const std::size_t cellTotal=cellCount(),faceTotal=faceCount();int order=1;
+        for(std::size_t a=0;a<charges();++a){const int k=kind[a],h=host[a];
+            if((k!=0&&k!=1)||h<0||std::size_t(h)>=(k==0?cellTotal:faceTotal))throw std::invalid_argument("HEX charge kind or host index out of range");
+            for(int c=0;c<3;++c){if(expo[3*a+c]<0||expo[3*a+c]>2)throw std::invalid_argument("HEX charge exponent outside BDM1/BDM2 support");order=std::max(order,expo[3*a+c]);}
+            if(k==1&&expo[3*a+2]!=0)throw std::invalid_argument("HEX face charges carry two reference exponents");}
+        // Per-host counts are bounded by the tensor monomials of the order: BDM1 Duffy blocks hold at most 8 x 8.
+        HostVector<int> first{HostFaultAllocator<int>("hex.validate-first")},count{HostFaultAllocator<int>("hex.validate-count")},global{HostFaultAllocator<int>("hex.validate-global")};
+        HexPrepared::layout(*this,first,count,global,order);
+        const int monomials=(order+1)*(order+1);
+        for(std::size_t g=0;g<count.size();++g)if(count[g]>(g<cellTotal?monomials*(order+1):monomials))
+            throw std::invalid_argument("HEX host carries more charges than its tensor monomials");
+        // CPU diagnostic knobs that change the HEX dispatch have no device route.
+        for(const char* knob:{"RADIA_HDIV_HEX_PAIR_DUFFY","RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR","RADIA_HDIV_HEX_MAX_ANISOTROPY",
+                              "RADIA_HDIV_HEX_FAR_ONESIDED","RADIA_HDIV_HEX_GLPAIR_W_N"}){const char* value=std::getenv(knob);
+            if(value&&value[0]!='\0')throw std::invalid_argument(std::string(knob)+" has no device HEX Gram route");}
     }
 };
 __device__ inline double flatPow(double base,int exponent){double r=1.0;for(int i=0;i<exponent;++i)r*=base;return r;}
@@ -131,6 +169,7 @@ struct FlatDevice {
     const radia_hdiv_python::P1ChargeSource* p1;const int* cellNonP1;const int* faceNonP1;
     // Curved P2 hosts: node tables and the touching Duffy rule.
     bool curved;const double* cellNodes;const double* faceNodes;const double* gl;const double* gw;int nq;
+    bool hex;HexDevice hexd;
 };
 __device__ inline double flatQuadDot(const FlatDevice& d,std::size_t target,std::size_t source){
     const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
@@ -188,6 +227,7 @@ __device__ inline double curvedDirectDot(const FlatDevice& d,std::size_t target,
     return sum*0.07957747154594766788;
 }
 __device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
+    if(d.hex)return hexEntry(d.hexd,a,b);
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
     if(a!=b&&d.farFactor<1e29){
         const double dx=qa.center[0]-qb.center[0],dy=qa.center[1]-qb.center[1],dz=qa.center[2]-qb.center[2];
@@ -339,10 +379,16 @@ struct FlatPrepared {
     Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
     Buffer<radia_hdiv_python::P1ChargeSource> p1;Buffer<int> cellNonP1,faceNonP1;
     Buffer<double> gl,gw;Buffer<int> cellNumbers,faceNumbers;
-    std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;bool curved=false;
-    // Every buffer prepare() allocates, uploads included, so one reserve check covers them.
+    std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;bool curved=false,hex=false;HexPrepared hexPrepared;
+    // Every buffer prepare() allocates, uploads included, so one reserve check
+    // covers them; the HEX pair table is sized and checked inside prepare().
     static std::size_t workspaceBytes(const FlatBlock& block){
         const auto n=block.charges();
+        if(block.hex){const std::size_t hosts=block.cellCount()+block.faceCount(),nOut=block.ruleOut.size();
+            const auto lattices=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double));
+            const auto perHost=checkedProduct(hosts,checkedProduct(4*nOut*nOut*nOut+8,sizeof(double))+2*sizeof(int)+1+2*sizeof(std::size_t));
+            const auto coefficients=checkedProduct(checkedProduct(block.cellCount(),27*84)+checkedProduct(block.faceCount(),9*35),sizeof(double));
+            return flatSum(flatSum(lattices,perHost),flatSum(coefficients,checkedProduct(n,4*sizeof(int))+sizeof(int)));}
         const std::size_t stride=std::max(block.tet.size(),block.tri.size()),lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
         const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
@@ -356,8 +402,13 @@ struct FlatPrepared {
     int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
         check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
         check(cudaStreamSynchronize(stream));transfers.push_back({payload,"D2H",sizeof(int)});return value;}
-    void prepare(const FlatBlock& block,cudaStream_t stream,HostVector<FlatTransfer>& transfers,std::size_t& launches,int& invalidCode){
-        n=block.charges();farFactor=block.farFactor;curved=block.curved;
+    // allPairs: the dense route tabulates every HEX host pair; ACA and the
+    // diagnostic only the near candidates and evaluate far entries on demand.
+    void prepare(const FlatBlock& block,cudaStream_t stream,HostVector<FlatTransfer>& transfers,std::size_t& launches,int& invalidCode,bool allPairs){
+        n=block.charges();farFactor=block.farFactor;curved=block.curved;hex=block.hex;
+        if(hex){hexPrepared.prepare(block,allPairs,stream,[&](const char* payload,const char* direction,std::size_t bytes){
+                transfers.push_back({payload,direction,bytes});},launches,invalidCode);
+            invalid.upload(HostVector<int>{0});transfers.push_back({"invalid_flag","H2D",sizeof(int)});return;}
         stride=std::max(block.tet.size(),block.tri.size());lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         auto upload=[&](auto& buffer,const auto& values,const char* payload){
             if(values.empty())return;buffer.upload(values);
@@ -390,7 +441,7 @@ struct FlatPrepared {
                                                        :"Invalid flat charge host, kind, exponent or degenerate geometry");
     }
     FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor,
-        p1.data,cellNonP1.data,faceNonP1.data,curved,cells.data,faces.data,gl.data,gw.data,int(gl.size)};}
+        p1.data,cellNonP1.data,faceNonP1.data,curved,cells.data,faces.data,gl.data,gw.data,int(gl.size),hex,hexPrepared.d};}
 };
 inline void flatReserve(std::size_t bytes,const char* what){
     std::size_t free,total;check(cudaMemGetInfo(&free,&total));
@@ -414,7 +465,7 @@ public:
             throw std::invalid_argument("Flat Gram dense span mismatch");
         for(std::size_t i=0;i<n;++i)if(p.permutation[i]!=i)throw std::invalid_argument("Flat Gram requires identity charge order");
         ownedBytes=FlatPrepared::workspaceBytes(block);flatReserve(ownedBytes,"Flat Gram GPU reserve would be exceeded");
-        FlatPrepared prepared;prepared.prepare(block,stream,transfers,launches,invalidCode);
+        FlatPrepared prepared;prepared.prepare(block,stream,transfers,launches,invalidCode,true);
         const FlatDevice device=prepared.device();
         // Bounded launches keep each kernel short on display-attached GPUs.
         const auto entries=checkedProduct(n,n);constexpr std::size_t batch=std::size_t(1)<<16;
