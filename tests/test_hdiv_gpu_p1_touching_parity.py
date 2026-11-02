@@ -4,8 +4,9 @@ Guards: the device flatEntry takes the same rule as the CPU
 HighOrderTetEntryStrategy on identical staged inputs: the endpoint-graded P1
 outer rule for self and vertex-touching pairs of affine P1 hosts (BDM1), the
 established rule for every pair of a BDM2 host, and the far rule first.
-Dropping the device touching branch reproduces the fixed-rule face self entry
-(about 0.5 % off); widening it to BDM2 hosts moves those entries.
+Dropping the device touching branch falls back to the fixed rule (measured
+1.4 % off on a self entry of this mesh); widening it to BDM2 hosts moves
+those entries.
 Assumes: the CPU entry is the reference; both sides share the pairEntry
 arithmetic and production potentials, so this is parity, not independent
 accuracy. No bitwise claim. PARITY_REL is a PROPOSED detector, not an adopted
