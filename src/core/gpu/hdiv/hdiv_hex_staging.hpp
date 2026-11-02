@@ -1,11 +1,12 @@
 // NGSolve-owned reference tables and Q2 lattices of HEX meshes for device
 // construction of the charge map B, the evaluation map E and the charge Gram.
 // The CPU hex charge basis integrates the charges in the reference measure
-// (the Piola Jacobians cancel), so B rows are geometry independent: per
-// vertex-rank class, cell rows are the reference-cube projection of
+// (the Piola Jacobians cancel up to sgn det J), so B rows depend on the
+// geometry only through that sign: per vertex-rank class and orientation,
+// cell rows are sgn det J times the reference-cube projection of
 // -div_ref phi onto the tensor monomials, face rows the reference-square
-// projection of phi_ref . nu over the boundary element's own (u,v). No B, E
-// or Gram value is produced here.
+// projection of phi_ref . nu over the boundary element's own (u,v), which
+// carries no sign. No B, E or Gram value is produced here.
 #pragma once
 #include <algorithm>
 #include <array>
@@ -35,14 +36,20 @@ inline void latticeOf(ngfem::ElementTransformation& trafo,int dimension,std::vec
         for(double v:point){if(!std::isfinite(v))throw std::runtime_error("Nonfinite HEX lattice node");out.push_back(v);}}
 }
 // The Q2 lattice reproduces NGSolve's affine, trilinear or Curve(2) hex map
-// (all inside the tensor Q2 span); the device requires det J > 0.
-inline void checkHexMap(ngfem::ElementTransformation& trafo,const double* nodes){
-    double size=0;for(int i=1;i<27;++i)for(int d=0;d<3;++d)size=std::max(size,std::abs(nodes[3*i+d]-nodes[d]));
+// (all inside the tensor Q2 span). NGSolve orients hexes either way (its
+// structured meshes are left-handed); det J must keep one sign per element,
+// which is returned.
+inline int checkHexMap(ngfem::ElementTransformation& trafo,const double* nodes){
+    int sign=0;double size=0;for(int i=1;i<27;++i)for(int d=0;d<3;++d)size=std::max(size,std::abs(nodes[3*i+d]-nodes[d]));
     for(const auto& ip:{ngfem::IntegrationPoint(.137,.239,.361),ngfem::IntegrationPoint(.713,.211,.557),ngfem::IntegrationPoint(.319,.823,.173)}){
         ngfem::MappedIntegrationPoint<3,3> mip(ip,trafo);const double xi[3]={ip(0),ip(1),ip(2)};double X[3],J[3][3];const double det=hexMap(nodes,xi,X,J);
         for(int c=0;c<3;++c)if(std::abs(X[c]-mip.GetPoint()(c))>1e-12*std::max(1.,size))throw std::runtime_error("NGSolve HEX map differs from the device Q2 lattice convention");
-        if(!(det>0)||std::abs(det-mip.GetJacobiDet())>1e-10*det)throw std::runtime_error("Device HEX route requires a positive Jacobian matching NGSolve's map");
+        const int s=det>0?1:det<0?-1:0;
+        if(!s||(sign&&s!=sign)||!(std::abs(det-mip.GetJacobiDet())<=1e-10*std::abs(det)))
+            throw std::runtime_error("Device HEX route requires a Jacobian of one nonzero sign matching NGSolve's map");
+        sign=s;
     }
+    return sign;
 }
 inline int rankKey(const int* numbers,int count){
     int key=0;for(int v=0;v<count;++v){int rank=0;for(int w=0;w<count;++w)rank+=numbers[w]<numbers[v];key=count*key+rank;}return key;
@@ -96,20 +103,21 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
         const auto vertexNumbers=mesh->GetElement(eid).Vertices();int numbers[8];
         for(int v=0;v<8;++v){numbers[v]=vertexNumbers[v];cellVertexNumbers[8*e+v]=numbers[v];}
         auto& trafo=mesh->GetTrafo(eid,heap);
-        const auto at=out.cellVertices.size();latticeOf(trafo,3,out.cellVertices);checkHexMap(trafo,out.cellVertices.data()+at);
+        const auto at=out.cellVertices.size();latticeOf(trafo,3,out.cellVertices);const int orientation=checkHexMap(trafo,out.cellVertices.data()+at);
         ngbla::Vector<> div(local);ngbla::Matrix<> shape(local,3);std::vector<double> probe;
         for(const auto& ip:probes){fe.CalcDivShape(ip,div);fe.CalcShape(ip,shape);
             for(std::size_t i=0;i<local;++i){probe.push_back(div(i));for(int c=0;c<3;++c)probe.push_back(shape(i,c));}}
-        const int key=rankKey(numbers,8);auto found=std::find(classKey.begin(),classKey.end(),key);const std::size_t cls=std::size_t(found-classKey.begin());
+        const int key=2*rankKey(numbers,8)+(orientation<0);auto found=std::find(classKey.begin(),classKey.end(),key);const std::size_t cls=std::size_t(found-classKey.begin());
         if(found==classKey.end()){
             classKey.push_back(key);classProbe.insert(classProbe.end(),probe.begin(),probe.end());
-            // T = Mref^{-1} R with R = -int m(xi) div_ref phi(xi) dxi on the unit cube.
+            // T = Mref^{-1} R with R = -sgn(det J) int m(xi) div_ref phi(xi) dxi on the unit cube,
+            // as int (-div u) m dx = sgn(det J) int (-div_ref phi) m dxi under the Piola map.
             std::vector<double> M(cm*cm,0.),R(cm*local,0.),m(cm);
             for(const auto& ip:cubeRule){const double xi[3]={ip(0),ip(1),ip(2)};monomials(out.cellExponents.data(),cm,3,xi,m.data());fe.CalcDivShape(ip,div);
                 for(std::size_t a=0;a<cm;++a){for(std::size_t b=0;b<cm;++b)M[a*cm+b]+=ip.Weight()*m[a]*m[b];
                     for(std::size_t i=0;i<local;++i)R[a*local+i]-=ip.Weight()*m[a]*div(i);}}
             solveSmall(M,R,cm,local);
-            for(double v:R)if(!std::isfinite(v))throw std::runtime_error("Nonfinite HEX charge cell table");
+            for(double& v:R){v*=orientation;if(!std::isfinite(v))throw std::runtime_error("Nonfinite HEX charge cell table");}
             out.cellTables.insert(out.cellTables.end(),R.begin(),R.end());
         }else{const double* reference=classProbe.data()+cls*probe.size();
             for(std::size_t i=0;i<probe.size();++i)if(std::abs(probe[i]-reference[i])>1e-12*(1+std::abs(reference[i])))
