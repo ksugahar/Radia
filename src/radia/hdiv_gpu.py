@@ -2,17 +2,13 @@
 
 NGSolve owns FE assembly; Radia owns charge-Gram preparation. The caller owns
 the TaskManager region. Construction prepares operators, never a CPU solution.
-The charge Gram, the material evaluation map and the Newton reference mass
-are generated on the device from flat-TET geometry and NGSolve reference
-tables; the charge map is still host-built and reported as such.
+The charge Gram, the charge map B/B^T, the material evaluation map and the
+Newton reference mass are generated on the device from flat-TET geometry and
+NGSolve reference tables; no host-built sparse operator is uploaded.
 """
 from __future__ import annotations
 
 __all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
-
-# Host-built sparse operators this route still uploads. Reported in stats until
-# their device construction lands; never presented as device-resident.
-PENDING_HOST_OPERATORS = ("charge_map",)
 
 import base64
 from importlib import metadata
@@ -85,12 +81,9 @@ class PreparedHDivNonlinear:
         try:
             setup = _prepare_device_components(path, order)
             self.dofs = setup["dofs"]
-            B = setup["charge_map"]
             self._rhs = setup["rhs_operator"]
             self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
-                **setup["charge_gram"], dofs=self.dofs,
-                offsets=B.indptr.astype(np.uint64), indices=B.indices.astype(np.uint64),
-                values=np.ascontiguousarray(B.data), backend="gpu")
+                **setup["charge_gram"], dofs=self.dofs, backend="gpu")
             self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
@@ -142,7 +135,7 @@ class PreparedHDivNonlinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
-                gram_route="device-flat-tet", pending_host_operators=PENDING_HOST_OPERATORS,
+                gram_route="device-flat-tet",
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
                 operator=self._operator.stats() if self._operator is not None else None,
@@ -273,21 +266,28 @@ def _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
         yield snapshot, hashlib.sha256(mesh_bytes).hexdigest(), hashlib.sha256(contract_bytes).hexdigest()
 
 
-# Device-generated Gram ledger: primitives in, two validity flags out.
+# Device-generated Gram and charge-map ledger: primitives and NGSolve tables
+# in, three validity flags out.
 _DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "charge_kind",
                         "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule",
-                        "tri_low_rule", "invalid_flag")
+                        "tri_low_rule", "invalid_flag", "charge_map_cell_vertices_m",
+                        "charge_map_face_vertices_m", "charge_cell_tables", "charge_face_tables",
+                        "charge_cell_class", "charge_cell_dofs", "charge_face_class",
+                        "charge_face_dofs", "charge_map_invalid_flag")
+_CHARGE_TABLE_KEYS = ("cell_class", "cell_dofs", "cell_tables", "cell_exponents",
+                      "face_class", "face_dofs", "face_tables", "face_exponents")
 _RULE_ROW_BYTES = 32  # FlatRulePoint: xi[3], weight as float64.
 
 
 def _expected_device_ledger(arguments):
     """Exact (payload, direction) -> bytes of the Gram-construction ledger.
 
-    Covers the Gram and the charge-map upload only; mass, evaluation and
+    Covers the Gram and the device charge map only; mass, evaluation and
     preconditioner uploads of the full workflow are outside this ledger.
     Empty low rules (far split disabled) are absent rows, never zero-byte rows.
-    The resident plan and host-built charge map sizes are owned by the native
-    side and are required present with positive bytes.
+    The charge map crosses as NGSolve tables, classes and DOF numbers; its
+    exponents are host-side layout checks and never uploaded. The resident
+    plan size is owned by the native side and required positive.
     """
     sizes = {"cell_vertices_m": arguments["cell_vertices"].nbytes,
              "face_vertices_m": arguments["face_vertices"].nbytes,
@@ -298,18 +298,22 @@ def _expected_device_ledger(arguments):
              "tri_rule": len(arguments["tri_rule"])*_RULE_ROW_BYTES,
              "tet_low_rule": len(arguments["tet_low_rule"])*_RULE_ROW_BYTES,
              "tri_low_rule": len(arguments["tri_low_rule"])*_RULE_ROW_BYTES,
-             "invalid_flag": 4}
+             "invalid_flag": 4,
+             "charge_map_cell_vertices_m": arguments["cell_vertices"].nbytes,
+             "charge_map_face_vertices_m": arguments["face_vertices"].nbytes,
+             "charge_map_invalid_flag": 4}
+    sizes.update(("charge_" + name, arguments[name].nbytes) for name in _CHARGE_TABLE_KEYS
+                 if not name.endswith("exponents"))
     expected = {(name, "H2D"): sizes[name] for name in _DEVICE_GRAM_UPLOADS if sizes[name]}
     expected.update({("prepare_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
-                     ("resident_plan", "H2D"): None, ("charge_map_csr_host_built", "H2D"): None})
+                     ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     return expected
 
 
 def _checked_device_assembly(assembly, arguments):
     """Reject any Gram assembly ledger other than the exact primitive-only device route.
 
-    The charge_map_csr_host_built row is accepted as declared pending work of
-    this partial slice; it is not matrix-residency compliance.
+    A host-built charge-map row is rejected like any other unexpected payload.
     """
     charges = int(arguments["charge_host"].size)
     if assembly.get("route") != "device-flat-tet" or assembly.get("charges") != charges:
@@ -348,12 +352,14 @@ def _checked_charge_exponents(kind, exponents):
                          "charge %d kind %d exponents %r" % (first, int(kind[first]), expo[first].tolist()))
 
 
-def _device_gram_arguments(B, inputs):
-    """Map the staged flat-TET charge inputs to the device Gram binding.
+def _device_gram_arguments(tables, inputs, geometry):
+    """Map the staged flat-TET charge inputs and NGSolve tables to the device binding.
 
     H-matrix parameters (eps, leaf, eta) do not apply to the dense device
     block. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
     potentials, as on the CPU; higher degrees fail loudly on the device.
+    The table staging must reproduce the Gram geometry and charge order
+    exactly (``geometry`` is its cell and exterior-face vertex coordinates).
     """
     import numpy as np
     if len(inputs.get("image_masks", ())):
@@ -382,9 +388,20 @@ def _device_gram_arguments(B, inputs):
         tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
         tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
         far_factor=float(inputs["ho_far_factor"]) if far else 1e30)
-    if arguments["charge_host"].size != B.shape[0]:
-        raise ValueError("Charge map rows do not match the staged charges")
     _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
+    cells_m, faces_m = geometry
+    if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
+        raise ValueError("Charge tables and Gram geometry disagree")
+    ne, nf = tables["cell_class"].size, tables["face_class"].size
+    cm, fm = len(tables["cell_exponents"]), len(tables["face_exponents"])
+    face_expo = np.c_[tables["face_exponents"], np.zeros(fm, dtype=np.int32)]
+    layout = (np.r_[np.repeat(np.arange(ne), cm), np.repeat(np.arange(nf), fm)],
+              np.r_[np.zeros(ne*cm, dtype=np.int32), np.ones(nf*fm, dtype=np.int32)],
+              np.r_[np.tile(np.ravel(tables["cell_exponents"]), ne), np.tile(face_expo.ravel(), nf)])
+    staged = (arguments["charge_host"], arguments["charge_kind"], arguments["charge_exponents"])
+    if not all(np.array_equal(a, b) for a, b in zip(layout, staged)):
+        raise ValueError("Charge tables and Gram charge order disagree")
+    arguments.update((name, tables[name]) for name in _CHARGE_TABLE_KEYS)
     return arguments
 
 
@@ -396,9 +413,10 @@ def _prepare_device_components(path, order, *, maximum_dofs=16384):
     fes = ng.HDiv(mesh, order=order)
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
-    B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    return dict(_fe_sources(mesh, fes), charge_map=B, evaluation_tables=_device_evaluation_tables(path, fes),
-                charge_gram=_device_gram_arguments(B, inputs))
+    _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
+    tables, geometry = _device_charge_tables(path, fes)
+    return dict(_fe_sources(mesh, fes), evaluation_tables=_device_evaluation_tables(path, fes),
+                charge_gram=_device_gram_arguments(tables, inputs, geometry))
 
 
 def _prepare_host_components(path, order, *, maximum_dofs=16384):
@@ -499,6 +517,29 @@ def _device_evaluation_tables(path, fes):
     if arguments["element_points"].size != tables["total_points"]:
         raise ValueError("Device evaluation tables do not cover every material point")
     return arguments
+
+
+def _device_charge_tables(path, fes):
+    """NGSolve charge-projection tables for device B construction; no charge map.
+
+    Returns the binding tables and, for the host-side consistency check only,
+    the staged cell and exterior-face vertex coordinates.
+    """
+    import numpy as np
+    from .gpu import _native
+    _hdiv_cuda = _native("_hdiv_cuda")
+    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
+    try:
+        staged = staging.charge_tables()
+    finally:
+        staging.close()
+    if staged.get("schema") != "radia.hdiv-flat-charge-tables.v1" or staged["dofs"] != fes.ndof:
+        raise ValueError("Charge tables and charge FE numbering mismatch")
+    tables = {name: np.ascontiguousarray(staged[name], dtype=np.float64 if name.endswith("tables") else np.int32)
+              for name in _CHARGE_TABLE_KEYS}
+    geometry = tuple(np.ascontiguousarray(staged[name], dtype=np.float64).reshape(-1)
+                     for name in ("cell_vertices", "face_vertices"))
+    return tables, geometry
 
 
 # Device-generated evaluation and mass ledger: reference tables in; validity flags,

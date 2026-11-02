@@ -1,5 +1,5 @@
 // Thin Python owner/publisher for the shared NGSolve material staging boundary.
-#include "hdiv_material_staging.hpp"
+#include "hdiv_charge_staging.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <mutex>
@@ -20,6 +20,11 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
         return stageFlatEvaluationTables(*context);
+    }
+    FlatChargeTables chargeTables(){
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!context)throw std::invalid_argument("Material context is closed");
+        return stageFlatChargeTables(*context);
     }
     void close(){std::lock_guard<std::mutex> lock(mutex);context.reset();}
 };
@@ -58,6 +63,19 @@ py::dict publishFlat(const FlatEvaluationTables& t){
     out["element_dofs"]=ownedRows(t.elementDofs,t.elements);out["element_points"]=ownedRows(t.elementPoints,t.elements);
     return out;
 }
+py::dict publishCharge(const FlatChargeTables& t){
+    py::dict out;
+    out["schema"]="radia.hdiv-flat-charge-tables.v1";
+    out["dofs"]=t.dofs;
+    auto tables=[](const std::vector<double>& v,std::size_t monomials,std::size_t width){auto a=ownedArray(v);
+        a.resize({py::ssize_t(monomials*width?v.size()/(monomials*width):0),py::ssize_t(monomials),py::ssize_t(width)});return a;};
+    out["cell_tables"]=tables(t.cellTables,t.cellMonomials,t.cellWidth);out["face_tables"]=tables(t.faceTables,t.faceMonomials,t.faceWidth);
+    out["cell_class"]=ownedArray(t.cellClass);out["cell_dofs"]=ownedRows(t.cellDofs,t.cells);
+    out["face_class"]=ownedArray(t.faceClass);out["face_dofs"]=ownedRows(t.faceDofs,t.faces);
+    out["cell_exponents"]=ownedRows(t.cellExponents,t.cellMonomials);out["face_exponents"]=ownedRows(t.faceExponents,t.faceMonomials);
+    out["cell_vertices"]=ownedRows(t.cellVertices,t.cells);out["face_vertices"]=ownedRows(t.faceVertices,t.faces);
+    return out;
+}
 }
 void registerMaterialStaging(py::module_& module){
     py::class_<MaterialOwner>(module,"_MaterialStagingContext")
@@ -72,5 +90,10 @@ void registerMaterialStaging(py::module_& module){
             {py::gil_scoped_release release;tables=self.flatTables();}
             return publishFlat(tables);
         },"NGSolve reference HDiv shapes per vertex-rank class plus primitive TET topology; no evaluation matrix.")
+        .def("charge_tables",[](MaterialOwner& self){
+            FlatChargeTables tables;
+            {py::gil_scoped_release release;tables=self.chargeTables();}
+            return publishCharge(tables);
+        },"NGSolve charge-projection tables per vertex-rank class plus cell/exterior-face DOFs; no charge map.")
         .def("close",&MaterialOwner::close,py::call_guard<py::gil_scoped_release>());
 }

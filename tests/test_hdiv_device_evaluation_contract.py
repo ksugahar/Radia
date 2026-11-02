@@ -56,7 +56,7 @@ def test_material_ledger_accepts_only_the_exact_table_rows():
 
 
 def test_device_route_reports_evaluation_and_mass_as_device_built():
-    assert hdiv_gpu.PENDING_HOST_OPERATORS == ("charge_map",)
+    assert not hasattr(hdiv_gpu, "PENDING_HOST_OPERATORS"), "no host-built operator remains on this route"
     source = (ROOT / "src/radia/hdiv_gpu.py").read_text(encoding="utf-8")
     prepare = source[source.index("def _prepare_device_components"):source.index("def _prepare_host_components")]
     assert "_device_evaluation_tables" in prepare and "_fe_components" not in prepare, prepare

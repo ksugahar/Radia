@@ -380,18 +380,23 @@
       "tests/test_hdiv_gpu_build_contract.py",
       "tests/test_hdiv_gpu_mesh_integration.py",
       "tests/test_hdiv_device_gram_contract.py",
-      "tests/test_hdiv_device_evaluation_contract.py"
+      "tests/test_hdiv_device_evaluation_contract.py",
+      "tests/test_hdiv_device_charge_map_contract.py"
     ],
     "src/core/gpu/hdiv/": [
       "tests/test_hdiv_gpu_build_contract.py",
       "tests/test_hdiv_device_gram_contract.py",
-      "tests/test_hdiv_device_evaluation_contract.py"
+      "tests/test_hdiv_device_evaluation_contract.py",
+      "tests/test_hdiv_device_charge_map_contract.py"
     ],
     "tests/test_hdiv_device_gram_contract.py": [
       "tests/test_hdiv_device_gram_contract.py"
     ],
     "tests/test_hdiv_device_evaluation_contract.py": [
       "tests/test_hdiv_device_evaluation_contract.py"
+    ],
+    "tests/test_hdiv_device_charge_map_contract.py": [
+      "tests/test_hdiv_device_charge_map_contract.py"
     ],
     "tests/test_hdiv_gpu_workflow.py": [
       "tests/test_hdiv_gpu_workflow.py"

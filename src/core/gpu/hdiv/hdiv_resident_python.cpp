@@ -90,29 +90,39 @@ std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<dou
 }
 std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> faces,Array<std::int32_t> host,
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
-    Array<double> triLow,double farFactor,std::size_t dofs,Array<std::uint64_t> offsets,Array<std::uint64_t> indices,
-    Array<double> values,const std::string& backend) {
-    static_assert(sizeof(std::size_t)==sizeof(std::uint64_t));
+    Array<double> triLow,double farFactor,std::size_t dofs,Array<std::int32_t> cellClass,Array<std::int32_t> cellDofs,
+    Array<double> cellTables,Array<std::int32_t> cellExponents,Array<std::int32_t> faceClass,Array<std::int32_t> faceDofs,
+    Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& backend) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
     const auto n=std::size_t(host.size());
     if(host.ndim()!=1||n<1||n>4608||!dofs||dofs>16384||kind.ndim()!=1||std::size_t(kind.size())!=n||
-       expo.ndim()!=1||std::size_t(expo.size())!=3*n||offsets.ndim()!=1||std::size_t(offsets.size())!=n+1||
-       indices.ndim()!=1||values.ndim()!=1||indices.size()!=values.size())
+       expo.ndim()!=1||std::size_t(expo.size())!=3*n)
         throw py::value_error("Flat charge payload shape mismatch");
     for(auto* rule:{&tet,&tri,&tetLow,&triLow})
         if(rule->ndim()!=2||rule->shape(1)!=4)throw py::value_error("Reference rules require (points,4) float64 rows");
+    if(cellClass.ndim()!=1||faceClass.ndim()!=1||cellDofs.ndim()!=2||faceDofs.ndim()!=2||cellTables.ndim()!=3||faceTables.ndim()!=3||
+       cellExponents.ndim()!=2||cellExponents.shape(1)!=3||faceExponents.ndim()!=2||faceExponents.shape(1)!=2||
+       cellDofs.shape(0)!=cellClass.size()||faceDofs.shape(0)!=faceClass.size()||cellTables.shape(1)!=cellExponents.shape(0)||
+       faceTables.shape(1)!=faceExponents.shape(0)||cellTables.shape(2)!=cellDofs.shape(1)||faceTables.shape(2)!=faceDofs.shape(1))
+        throw py::value_error("Flat charge tables require (classes,monomials,width) tables and (hosts,width) DOFs");
     std::size_t bytes=0;
-    const auto rp=snapshot(offsets,bytes),ci=snapshot(indices,bytes);
-    MapInput map{n,dofs,{rp.begin(),rp.end()},{ci.begin(),ci.end()},snapshot(values,bytes)};
     auto flat=[&](Array<double> a){
         const auto count=std::size_t(a.size());
         if(count>(hostSnapshotBudget-bytes)/sizeof(double))throw py::value_error("Resident host snapshot budget exceeded");
         bytes+=count*sizeof(double);return radia_hmatrix_cuda::HostVector<double>(a.data(),a.data()+count);};
     auto integers=[&](Array<std::int32_t> a){const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
+    auto table=[&](Array<std::int32_t> a,const char* what){const auto v=rows(a,0,bytes,what);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     if(cells.ndim()!=1||faces.ndim()!=1)throw py::value_error("Geometry uses flat row-major coordinate vectors");
     FlatInput input{snapshot(cells,bytes),snapshot(faces,bytes),flat(tet),flat(tri),flat(tetLow),flat(triLow),
         integers(host),integers(kind),integers(expo),farFactor};
-    py::gil_scoped_release release;auto owner=createFlat(input,map);pythonPublicationProbe();return owner;
+    ChargeMapInput charges;charges.dofs=dofs;
+    charges.cellMonomials=std::size_t(cellExponents.shape(0));charges.faceMonomials=std::size_t(faceExponents.shape(0));
+    charges.cellWidth=std::size_t(cellDofs.shape(1));charges.faceWidth=std::size_t(faceDofs.shape(1));
+    charges.cellTables=rows(cellTables,0,bytes,"cell_tables");charges.faceTables=rows(faceTables,0,bytes,"face_tables");
+    charges.cellClass=integers(cellClass);charges.faceClass=integers(faceClass);
+    charges.cellDofs=table(cellDofs,"cell_dofs");charges.faceDofs=table(faceDofs,"face_dofs");
+    charges.cellExponents=table(cellExponents,"cell_exponents");charges.faceExponents=table(faceExponents,"face_exponents");
+    py::gil_scoped_release release;auto owner=createFlat(input,charges);pythonPublicationProbe();return owner;
 }
 }
 void registerMaterialStaging(py::module_&);
@@ -226,9 +236,11 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       .def_static("from_flat_charges",&constructFlat,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),
            py::arg("charge_host").noconvert(),py::arg("charge_kind").noconvert(),py::arg("charge_exponents").noconvert(),
            py::arg("tet_rule").noconvert(),py::arg("tri_rule").noconvert(),py::arg("tet_low_rule").noconvert(),
-           py::arg("tri_low_rule").noconvert(),py::arg("far_factor"),py::arg("dofs"),py::arg("offsets").noconvert(),
-           py::arg("indices").noconvert(),py::arg("values").noconvert(),py::arg("backend"),
-           "Generate the flat-TET BDM1/BDM2 charge Gram on the device; only geometry, monomials and rules cross.")
+           py::arg("tri_low_rule").noconvert(),py::arg("far_factor"),py::arg("dofs"),py::arg("cell_class").noconvert(),
+           py::arg("cell_dofs").noconvert(),py::arg("cell_tables").noconvert(),py::arg("cell_exponents").noconvert(),
+           py::arg("face_class").noconvert(),py::arg("face_dofs").noconvert(),py::arg("face_tables").noconvert(),
+           py::arg("face_exponents").noconvert(),py::arg("backend"),
+           "Generate the flat-TET BDM1/BDM2 charge Gram, B and B^T on the device; only geometry, monomials, rules and NGSolve tables cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           pythonPublicationProbe();py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;
           d["kernel_launches"]=a.launches;py::list ledger;
