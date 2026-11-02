@@ -177,7 +177,11 @@
       "tests/test_matlab_python_parity_manifest.py"
     ],
     "Build.ps1": [
-      "tests/test_build_failure_propagation.py"
+      "tests/test_build_failure_propagation.py",
+      "tests/test_ninja_msvc_deps.py"
+    ],
+    "tools/check_ninja_msvc_deps.py": [
+      "tests/test_ninja_msvc_deps.py"
     ],
     "validation_test/accelerator/benchmark_beam_transfer_mex_python.py": [
       "tests/test_beam_transfer_mex_pybind_validation.py"
