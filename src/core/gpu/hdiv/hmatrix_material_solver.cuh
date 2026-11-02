@@ -176,33 +176,47 @@ inline MaterialSolution solveMaterialOperand(Resident& op,const MassOperand& mas
     if(result.relativeResidual>tolerance||!std::isfinite(result.relativeResidual))throw std::runtime_error("Material PCG true residual rejected");
     result.x.resize(n);check(cudaMemcpyAsync(result.x.data(),x.data,n*sizeof(double),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));return result;
 }
-template<class Allocator>
-inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,bool massCholesky=false,bool massPolynomial=false,bool polynomialGraph=false,bool massChebyshev=false,int chebyshevDegree=8,double chebyshevLowerFraction=.1,const std::function<void(const double*,double*,cudaStream_t)>& materialAction={}){
-    const auto n=op.dimension();
-    if(!op.isDemag()||mass.rows!=n||mass.columns!=n||rhs.size()!=n)throw std::invalid_argument("Invalid linear material PCG configuration");
-    HostMass prepared(mass,massPolynomial||massChebyshev);
-    Buffer<double> massFactor,factorWorkspace;Buffer<int> factorInfo;std::size_t factorBytesOwned=0;
-    if(massCholesky){
-        std::size_t free,total;const auto stream=op.executionStream();
+__global__ void densifyMassRows(std::size_t n,const std::size_t* offsets,const std::size_t* indices,const double* values,double* dense){
+    auto row=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(row>=n)return;
+    for(auto k=offsets[row];k<offsets[row+1];++k)dense[row*n+indices[k]]=values[k];
+}
+// Dense lower Cholesky factor of the device-resident mass, densified and
+// factored on the device; no mass entry or factor crosses to the host.
+struct MassCholeskyFactor {
+    Buffer<double> factor,workspace;Buffer<int> info;std::size_t bytes=0;
+    MassCholeskyFactor(const MassOperand& mass,cudaStream_t stream){
+        const auto n=mass.n;std::size_t free,total;
         const auto factorBytes=checkedProduct(checkedProduct(n,n),sizeof(double));
         if(factorBytes>(std::size_t(2)<<30))throw std::invalid_argument("Mass Cholesky factor exceeds bounded 2 GiB");
         check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
         if(free<=reserve||factorBytes>free-reserve)throw std::runtime_error("Mass Cholesky factor reserve exceeded");
-        HostVector<double> dense(checkedProduct(n,n),0.);
-        for(std::size_t row=0;row<n;++row)for(auto k=mass.offsets[row];k<mass.offsets[row+1];++k)dense[row*n+mass.indices[k]]=mass.values[k];
-        massFactor.upload(dense);SolverHandle solver(stream);int workspace=0;
-        solverCheck(cusolverDnDpotrf_bufferSize(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),&workspace));
-        if(workspace<0)throw std::runtime_error("Invalid mass factor workspace");
-        const auto workspaceBytes=checkedProduct(std::size_t(workspace),sizeof(double))+sizeof(int);
+        factor.allocate(checkedProduct(n,n));check(cudaMemsetAsync(factor.data,0,factorBytes,stream));
+        densifyMassRows<<<unsigned((n+255)/256),256,0,stream>>>(n,mass.map->offsets.data,mass.map->indices.data,mass.map->values.data,factor.data);check(cudaGetLastError());
+        SolverHandle solver(stream);int size=0;
+        solverCheck(cusolverDnDpotrf_bufferSize(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),factor.data,int(n),&size));
+        if(size<0)throw std::runtime_error("Invalid mass factor workspace");
+        const auto workspaceBytes=checkedProduct(std::size_t(size),sizeof(double))+sizeof(int);
         check(cudaMemGetInfo(&free,&total));
         if(free<=reserve||workspaceBytes>free-reserve)throw std::runtime_error("Mass Cholesky workspace reserve exceeded");
-        factorWorkspace.allocate(std::size_t(workspace));factorInfo.allocate(1);
-        solverCheck(cusolverDnDpotrf(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),massFactor.data,int(n),factorWorkspace.data,workspace,factorInfo.data));
-        int info=0;check(cudaMemcpyAsync(&info,factorInfo.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
-        if(info!=0)throw std::runtime_error("Mass Cholesky rejected non-SPD mass; no fallback");
-        factorBytesOwned=factorBytes+workspaceBytes;
+        workspace.allocate(std::size_t(size));info.allocate(1);
+        solverCheck(cusolverDnDpotrf(solver.value,CUBLAS_FILL_MODE_LOWER,int(n),factor.data,int(n),workspace.data,size,info.data));
+        int status=0;check(cudaMemcpyAsync(&status,info.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+        if(status!=0)throw std::runtime_error("Mass Cholesky rejected non-SPD mass; no fallback");
+        bytes=factorBytes+workspaceBytes;
     }
-    auto result=solveMaterialOperand(op,prepared.operand(),rhs,invChi,tolerance,maxIterations,massCholesky?massFactor.data:nullptr,massPolynomial,polynomialGraph,massChebyshev,chebyshevDegree,chebyshevLowerFraction,materialAction);
-    result.ownedBytes+=factorBytesOwned;return result;
+};
+// Explicit linear material preconditioner over the device-resident mass.
+enum class MassPreconditioner {diagonal,cholesky,polynomial,polynomialGraph,chebyshev,chebyshevGraph};
+template<class Allocator>
+inline MaterialSolution solveLinearMaterial(Resident& op,const MassOperand& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,MassPreconditioner preconditioner,int chebyshevDegree=8,double chebyshevLowerFraction=.1){
+    const auto n=op.dimension();
+    if(!op.isDemag()||!mass.map||mass.n!=n||rhs.size()!=n)throw std::invalid_argument("Invalid linear material PCG configuration");
+    using P=MassPreconditioner;
+    const bool polynomial=preconditioner==P::polynomial||preconditioner==P::polynomialGraph,chebyshev=preconditioner==P::chebyshev||preconditioner==P::chebyshevGraph;
+    const bool graph=preconditioner==P::polynomialGraph||preconditioner==P::chebyshevGraph;
+    HostUnique<MassCholeskyFactor> factor;
+    if(preconditioner==P::cholesky)factor=makeHostUnique<MassCholeskyFactor>("material.mass-cholesky",mass,op.executionStream());
+    auto result=solveMaterialOperand(op,mass,rhs,invChi,tolerance,maxIterations,factor?factor->factor.data:nullptr,polynomial,graph,chebyshev,chebyshevDegree,chebyshevLowerFraction,{});
+    if(factor)result.ownedBytes+=factor->bytes;return result;
 }
 }

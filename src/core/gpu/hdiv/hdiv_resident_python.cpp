@@ -65,6 +65,13 @@ std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<dou
     py::gil_scoped_release release;
     auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
 }
+std::shared_ptr<radia_hdiv_bh::MassOperator> constructFlatMass(Array<double> rule,Array<double> shapes,Array<double> vertices,
+    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,const std::string& backend){
+    if(backend!="gpu")throw py::value_error("Mass context requires explicit backend='gpu'");
+    std::size_t bytes=0;auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
+    py::gil_scoped_release release;
+    auto owner=radia_hdiv_bh::createFlatMass(input);pythonPublicationProbe();return owner;
+}
 py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
     std::size_t bytes=0;const auto budget=radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes));
@@ -128,6 +135,11 @@ void registerMaterialStaging(py::module_&);
 static int newtonMode(const std::string& preconditioner){
     if(preconditioner=="reference-diagonal")return 0;if(preconditioner=="reference-chebyshev")return 1;if(preconditioner=="reference-chebyshev-graph")return 2;
     throw py::value_error("Unsupported explicit Newton reference preconditioner");
+}
+static int massMode(const std::string& preconditioner){
+    if(preconditioner=="mass-diagonal")return 0;if(preconditioner=="mass-cholesky")return 1;if(preconditioner=="mass-polynomial")return 2;
+    if(preconditioner=="mass-polynomial-graph")return 3;if(preconditioner=="mass-chebyshev")return 4;if(preconditioner=="mass-chebyshev-graph")return 5;
+    throw py::value_error("Unsupported material preconditioner");
 }
 static py::dict publishNewton(const NewtonResult& result){
     pythonPublicationProbe();py::array_t<double> solution(result.x.size());std::copy(result.x.begin(),result.x.end(),solution.mutable_data());pythonPublicationProbe();py::dict out;out["x"]=solution;out["relative_residual"]=result.residual;out["energy"]=result.energy;out["newton_iterations"]=result.history.size();out["preconditioner_graph_launches"]=result.graphLaunches;
@@ -201,6 +213,27 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       },py::arg("direction").noconvert(),py::arg("linearization_epoch"))
       .def("stats",[](radia_hdiv_bh::MaterialOperator& self){const auto s=self.stats();pythonPublicationProbe();py::dict out;out["dofs"]=s.dofs;out["points"]=s.points;out["device_payload_bound_bytes"]=s.devicePayloadBound;out["setup_upload_bytes"]=s.setupUploadBytes;out["state_upload_bytes"]=s.stateUploadBytes;out["evaluations"]=s.evaluations;out["epoch"]=s.epoch;out["closed"]=s.closed;out["linearization_epoch"]=s.linearizationEpoch;out["linearization_valid"]=s.linearizationValid;out["tangent_applications"]=s.tangentApplications;return out;})
       .def("close",&radia_hdiv_bh::MaterialOperator::close,py::call_guard<py::gil_scoped_release>());
+
+    py::class_<radia_hdiv_bh::MassOperator,std::shared_ptr<radia_hdiv_bh::MassOperator>>(m,"_ResidentMass")
+      .def_static("from_flat_tables",&constructFlatMass,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
+           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
+           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("backend"),
+           "Device-built reference mass M from resident NGSolve reference tables for the linear material solve; no mass entry crosses.")
+      .def("assembly",[](radia_hdiv_bh::MassOperator& self){radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
+          {py::gil_scoped_release release;rows=self.transfers();bytes=self.footprint();}
+          pythonPublicationProbe();py::dict d;d["route"]="device-flat-tet-mass";d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
+          for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
+          d["transfer_ledger"]=ledger;return d;})
+      .def("reference_mass_apply",[](radia_hdiv_bh::MassOperator& self,Array<double> x){
+          if(x.ndim()!=1)throw py::value_error("Reference mass input must be one-dimensional");
+          std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hdiv_bh::MassAction result;
+          {py::gil_scoped_release release;result=self.massAction(input);}
+          pythonPublicationProbe();py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
+          py::dict out;out["y"]=y;out["nonzeros"]=result.nonzeros;out["spectral_bound"]=result.bound;return out;
+      },py::arg("x").noconvert(),"Diagnostic y=Mx of the device-built reference mass; vectors cross, the matrix never does.")
+      .def("stats",[](radia_hdiv_bh::MassOperator& self){std::size_t dofs;bool closed;{py::gil_scoped_release release;dofs=self.dofs();closed=self.closed();}
+          pythonPublicationProbe();py::dict d;d["dofs"]=dofs;d["closed"]=closed;d["backend"]="gpu";return d;})
+      .def("close",&radia_hdiv_bh::MassOperator::close,py::call_guard<py::gil_scoped_release>());
 
     m.def("_inverse_bh_samples",[](Array<double> knots,Array<double> coefficients,Array<double> base,
         Array<double> amplitudes,double cap,double barrier,double last,double initial,const std::string& backend){
@@ -278,6 +311,22 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           {py::gil_scoped_release release;result=self.solve_nonlinear(material,b,x,options);}
           return publishNewton(result);
       },py::arg("material"),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01)
+      .def("solve_linear",[](DeviceOperator& self,radia_hdiv_bh::MassOperator& mass,Array<double> rhs,double invChi,double tolerance,int maximumIterations,const std::string& preconditioner,py::object degree,py::object lower){
+          const auto n=self.stats().dimension;
+          if(rhs.ndim()!=1||std::size_t(rhs.size())!=n)throw py::value_error("Linear material RHS dimension mismatch");
+          const int mode=massMode(preconditioner);LinearOptions options{invChi,tolerance,maximumIterations,mode};
+          if(!degree.is_none()||!lower.is_none()){
+              if(mode<4)throw py::value_error("Chebyshev settings require mass-chebyshev");
+              if(!degree.is_none())options.degree=py::cast<int>(degree);if(!lower.is_none())options.lowerFraction=py::cast<double>(lower);}
+          std::size_t bytes=0;const auto b=snapshot(rhs,bytes);LinearResult result;
+          {py::gil_scoped_release release;result=self.solve_linear(mass,b,options);}
+          pythonPublicationProbe();py::array_t<double> x(result.x.size());std::copy(result.x.begin(),result.x.end(),x.mutable_data());
+          py::dict out;out["x"]=x;out["iterations"]=result.iterations;out["relative_residual"]=result.relativeResidual;
+          out["solver_owned_device_bytes"]=result.ownedBytes;out["preconditioner"]=preconditioner;out["preconditioner_graph_launches"]=result.graphLaunches;
+          out["chebyshev_degree"]=mode>=4?options.degree:0;out["chebyshev_lower_fraction"]=mode>=4?options.lowerFraction:0.;return out;
+      },py::arg("mass"),py::arg("rhs").noconvert(),py::arg("inv_chi"),py::arg("tolerance"),py::arg("maximum_iterations"),py::arg("preconditioner"),
+        py::arg("degree")=py::none(),py::arg("lower_fraction")=py::none(),
+        "Linear material PCG on (B^T G B + inv_chi M) x = rhs with the device-built mass context; only vectors cross.")
       .def("stats",[](DeviceOperator& self){Stats s;{py::gil_scoped_release release;s=self.stats();}
           pythonPublicationProbe();py::dict d;d["dimension"]=s.dimension;d["owned_device_bytes"]=s.owned_bytes;d["applications"]=s.applications;d["closed"]=s.closed;d["backend"]="gpu";return d;})
       .def("close",&DeviceOperator::close,py::call_guard<py::gil_scoped_release>());

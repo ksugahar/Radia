@@ -8,7 +8,7 @@ NGSolve reference tables; no host-built sparse operator is uploaded.
 """
 from __future__ import annotations
 
-__all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
+__all__ = ["PreparedHDivLinear", "PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
 
 import base64
 from importlib import metadata
@@ -196,6 +196,112 @@ class PreparedHDivNonlinear:
 
     def __exit__(self, *_):
         self.close()
+
+
+class PreparedHDivLinear:
+    """Persistent GPU linear isotropic material solve on a checked body mesh.
+
+    Solves (B^T G B + inv_chi M) x = f(H0) with the device-built charge Gram,
+    charge map and reference mass M (the material quadrature mass of
+    ``PreparedHDivNonlinear``); only vectors cross. The supported domain and
+    the ``gram_aca`` contract are those of ``PreparedHDivNonlinear`` without
+    the inverse-BH law. ``inv_chi`` is per solve, so one prepared operator
+    serves several susceptibilities.
+    """
+
+    def __init__(self, mesh_path, *, backend, label_contract, mesh_check_receipt,
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+        if backend != "gpu":
+            raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
+        if isinstance(order, bool) or order not in (1, 2):
+            raise ValueError("HDiv order must be 1 or 2")
+        aca = _checked_gram_aca(gram_aca)
+        import numpy as np
+        from .gpu import _native
+        _hdiv_cuda = _native("_hdiv_cuda")
+        self._lock = threading.RLock()
+        self._operator = self._mass = None
+        self._closed = False
+        self.order = order
+        self.gram_aca = dict(aca)
+        with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                                    mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
+            self.mesh_sha256 = mesh_hash
+            self.label_contract_sha256 = contract_hash
+            try:
+                setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca)
+                self.dofs = setup["dofs"]
+                self._rhs = setup["rhs_operator"]
+                self._mean = setup["mean_operator"]
+                # The mass is built first: its live device budget check runs before the Gram.
+                self._mass = _hdiv_cuda._ResidentMass.from_flat_tables(
+                    **setup["evaluation_tables"], dofs=self.dofs, backend="gpu")
+                self.mass_assembly = _checked_material_assembly(self._mass.assembly(), setup["evaluation_tables"],
+                                                                route="device-flat-tet-mass")
+                self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
+                    **setup["charge_gram"], dofs=self.dofs, backend="gpu")
+                self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
+            except BaseException:
+                self.close()
+                raise
+
+    def solve(self, applied_field, inv_chi, *, tolerance=1e-10, max_iterations=1000,
+              preconditioner="mass-diagonal", degree=None, lower_fraction=None):
+        """Solve a uniform applied H (A/m); return owned coefficients and the mean magnetization.
+
+        The native PCG recertifies the true residual of the original linear
+        equation; Chebyshev settings are accepted only with a Chebyshev mode.
+        """
+        if preconditioner not in _LINEAR_PRECONDITIONERS:
+            raise ValueError("Unsupported explicit linear material preconditioner")
+        for value in (inv_chi, tolerance):
+            if isinstance(value, bool) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value <= 0:
+                raise ValueError("inv_chi and tolerance must be finite and positive")
+        if tolerance > 1e-6:
+            raise ValueError("True residual tolerance must be at most 1e-6")
+        if isinstance(max_iterations, bool) or not isinstance(max_iterations, numbers.Integral) or max_iterations < 1:
+            raise ValueError("max_iterations must be a positive integer")
+        import numpy as np
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Prepared HDiv workflow has been closed")
+            field = np.asarray(applied_field, dtype=np.float64)
+            if field.shape != (3,) or not np.isfinite(field).all():
+                raise ValueError("applied_field must contain three finite H components in A/m")
+            result = self._operator.solve_linear(self._mass, np.ascontiguousarray(self._rhs @ field), float(inv_chi),
+                                                 float(tolerance), int(max_iterations), preconditioner,
+                                                 degree, lower_fraction)
+            return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
+                        mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
+
+    def stats(self):
+        with self._lock:
+            return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
+                gram_route="device-flat-tet", gram_compression=_GRAM_COMPRESSION, gram_aca=dict(self.gram_aca),
+                assembly=getattr(self, "assembly", None), mass_assembly=getattr(self, "mass_assembly", None),
+                charge_budget=self.assembly["charge_budget"] if getattr(self, "assembly", None) else None,
+                operator=self._operator.stats() if self._operator is not None else None,
+                mass=self._mass.stats() if self._mass is not None else None)
+
+    def close(self):
+        with self._lock:
+            try:
+                if self._mass is not None:
+                    self._mass.close()
+            finally:
+                if self._operator is not None:
+                    self._operator.close()
+                self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+
+_LINEAR_PRECONDITIONERS = ("mass-diagonal", "mass-cholesky", "mass-polynomial", "mass-polynomial-graph",
+                           "mass-chebyshev", "mass-chebyshev-graph")
 
 
 def _strict_json(data):
@@ -703,21 +809,25 @@ _DEVICE_EVALUATION_UPLOADS = ("element_vertices_m", "reference_shapes", "materia
                               "element_dofs", "element_points", "evaluation_invalid_flag")
 
 
-def _checked_material_assembly(assembly, tables):
+def _checked_material_assembly(assembly, tables, *, route="device-flat-tet-matrix-free"):
     """Reject any material ledger other than the exact device-built evaluation route.
 
     Covers material setup only; per-solve state uploads are outside this ledger.
     Persistent and setup-transient device bytes must be reported as positive integers.
+    The mass-only context (``route="device-flat-tet-mass"``) runs the same build
+    without the inverse-BH law.
     """
-    if assembly.get("route") != "device-flat-tet-matrix-free":
+    if assembly.get("route") != route:
         raise RuntimeError("Unexpected HDiv material assembly route: %r" % (assembly.get("route"),))
     sizes = {"element_vertices_m": tables["vertices"].nbytes, "reference_shapes": tables["reference_shapes"].nbytes,
              "material_rule": tables["rule"].nbytes, "element_class": tables["element_class"].nbytes,
              "element_dofs": tables["element_dofs"].nbytes, "element_points": tables["element_points"].nbytes,
              "evaluation_invalid_flag": 4}
     expected = {(name, "H2D"): sizes[name] for name in _DEVICE_EVALUATION_UPLOADS}
-    expected.update({("evaluation_flag", "D2H"): 4, ("inverse_bh_law", "H2D"): None,
-                     ("mass_nonzeros", "D2H"): 4, ("mass_flag", "D2H"): 4, ("mass_spectral_bound", "D2H"): 8})
+    expected.update({("evaluation_flag", "D2H"): 4, ("mass_nonzeros", "D2H"): 4, ("mass_flag", "D2H"): 4,
+                     ("mass_spectral_bound", "D2H"): 8})
+    if route == "device-flat-tet-matrix-free":
+        expected[("inverse_bh_law", "H2D")] = None
     for name in ("persistent_device_bytes", "setup_transient_device_bytes"):
         value = assembly.get(name)
         if type(value) is not int or value <= 0:

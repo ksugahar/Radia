@@ -11,6 +11,7 @@
 #include <atomic>
 namespace radia_hdiv_python {
 NewtonResult nonlinearBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&);
+LinearResult linearBridge(radia_hmatrix_cuda::Resident&,radia_hdiv_bh::MassOperator&,const radia_hmatrix_cuda::HostVector<double>&,const LinearOptions&);
 
 namespace {
 // Named device bytes known before any allocation, summed as a conservative
@@ -81,6 +82,9 @@ public:
     }
     NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options)override{
         std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return nonlinearBridge(*resident,material,rhs,initial,options);
+    }
+    LinearResult solve_linear(radia_hdiv_bh::MassOperator& mass,const radia_hmatrix_cuda::HostVector<double>& rhs,const LinearOptions& options)override{
+        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return linearBridge(*resident,mass,rhs,options);
     }
     Assembly assembly()override {std::lock_guard<std::mutex> lock(mutex);return record;}
     Stats stats()override {
@@ -174,10 +178,65 @@ public:
     void close()override{std::lock_guard<std::mutex> lock(mutex);context.reset();if(counted){--liveMaterialOwners;counted=false;}}
 };
 }
+namespace {
+std::atomic<unsigned> liveMassOwners{0};
+// The same device builder as the material context; its evaluation tables and
+// point measures are released after the build, only M and its diagonal stay.
+class MassOwner final:public MassOperator {
+    std::mutex mutex;radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::DeviceMap> M;radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::Buffer<double>> diagonal;
+    std::size_t nd=0,nonzeros=0,massBytes=0;double bound=0;bool counted=false;
+    radia_hmatrix_cuda::HostVector<LedgerRow> ledger;MaterialFootprint bytes;int device=0;
+    void live(){if(!M)throw std::invalid_argument("Mass context is closed");int current;radia_hmatrix_cuda::check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mass context belongs to another GPU");}
+public:
+    explicit MassOwner(const FlatEvaluationInput& input){
+        using namespace radia_hmatrix_cuda;
+        if(liveMassOwners.fetch_add(1)>=2){--liveMassOwners;throw std::invalid_argument("Mass context count budget exceeded");}
+        counted=true;
+        try{
+            validateFlatEvaluation(input);FlatEvaluationBudget budget;requireFlatEvaluationDevice(input,0,budget);
+            check(cudaGetDevice(&device));nd=input.dofs;
+            auto map=makeHostUnique<DeviceMap>("python.mass-map");auto diag=makeHostUnique<Buffer<double>>("python.mass-diagonal");
+            {FlatEvaluationOperator flat;Buffer<double> weights;FlatEvaluationBuilder builder;
+                builder.build(input,flat,weights,*map,*diag);
+                nonzeros=builder.massNonzeros;bound=builder.massBound;
+                bytes.transient=builder.transientBytes+flat.bytes()+weights.size*sizeof(double);
+                for(const auto& t:builder.transfers)ledger.push_back({t.payload,t.direction,t.bytes});}
+            massBytes=(nd+1+nonzeros)*sizeof(std::size_t)+(nonzeros+nd)*sizeof(double);bytes.persistent=massBytes;
+            M=std::move(map);diagonal=std::move(diag);
+        }catch(...){--liveMassOwners;counted=false;throw;}
+    }
+    ~MassOwner()override{close();}
+    radia_hmatrix_cuda::MassOperand operand(){live();return {M.get(),diagonal->data,bound,nd,massBytes,true};}
+    std::mutex& guard(){return mutex;}
+    MassAction massAction(const radia_hmatrix_cuda::HostVector<double>& x)override{
+        using namespace radia_hmatrix_cuda;std::lock_guard<std::mutex> lock(mutex);live();
+        if(x.size()!=nd)throw std::invalid_argument("Reference mass action dimension mismatch");
+        for(double v:x)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite reference mass input");
+        Buffer<double> in,out;in.upload(x);out.allocate(nd);M->apply(in.data,out.data,nullptr);check(cudaDeviceSynchronize());
+        MassAction result;result.y.resize(nd);check(cudaMemcpy(result.y.data(),out.data,nd*sizeof(double),cudaMemcpyDeviceToHost));
+        result.nonzeros=nonzeros;result.bound=bound;return result;
+    }
+    radia_hmatrix_cuda::HostVector<LedgerRow> transfers()override{std::lock_guard<std::mutex> lock(mutex);live();return ledger;}
+    MaterialFootprint footprint()override{std::lock_guard<std::mutex> lock(mutex);live();return bytes;}
+    std::size_t dofs()override{std::lock_guard<std::mutex> lock(mutex);return nd;}
+    bool closed()override{std::lock_guard<std::mutex> lock(mutex);return !M;}
+    void close()override{std::lock_guard<std::mutex> lock(mutex);diagonal.reset();M.reset();if(counted){--liveMassOwners;counted=false;}}
+};
+}
+std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput& input){return std::allocate_shared<MassOwner>(radia_hmatrix_cuda::HostFaultAllocator<MassOwner>("python.mass-owner"),input);}
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
 }
 
 radia_hdiv_python::NewtonResult radia_hdiv_python::nonlinearBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options){
     auto* owner=dynamic_cast<radia_hdiv_bh::MaterialOwner*>(&material);if(!owner)throw std::invalid_argument("Material owner ABI mismatch");return owner->solve(op,rhs,initial,options);
+}
+radia_hdiv_python::LinearResult radia_hdiv_python::linearBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MassOperator& mass,const radia_hmatrix_cuda::HostVector<double>& rhs,const LinearOptions& options){
+    auto* owner=dynamic_cast<radia_hdiv_bh::MassOwner*>(&mass);if(!owner)throw std::invalid_argument("Mass owner ABI mismatch");
+    if(options.preconditioner<0||options.preconditioner>5)throw std::invalid_argument("Unsupported material preconditioner");
+    std::lock_guard<std::mutex> lock(owner->guard());
+    const auto solution=radia_hmatrix_cuda::solveLinearMaterial(op,owner->operand(),rhs,options.invChi,options.tolerance,options.maximumIterations,
+        radia_hmatrix_cuda::MassPreconditioner(options.preconditioner),options.degree,options.lowerFraction);
+    LinearResult out;out.x.assign(solution.x.begin(),solution.x.end());out.iterations=solution.iterations;
+    out.relativeResidual=solution.relativeResidual;out.ownedBytes=solution.ownedBytes;out.graphLaunches=solution.preconditionerGraphLaunches;return out;
 }

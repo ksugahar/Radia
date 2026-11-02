@@ -63,10 +63,29 @@ def test_device_route_reports_evaluation_and_mass_as_device_built():
     assert "_fe_sources(" in prepare and "_fe_forms(" not in prepare, prepare
     sources = source[source.index("def _fe_sources"):source.index("def _fe_forms")]
     assert "BilinearForm" not in sources, sources
-    initialize = source[source.index("    def _initialize"):source.index("    def solve")]
+    nonlinear = source[source.index("class PreparedHDivNonlinear"):source.index("class PreparedHDivLinear")]
+    initialize = nonlinear[nonlinear.index("    def _initialize"):nonlinear.index("    def solve")]
     assert "from_flat_tables" in initialize and "E.indptr" not in initialize and "_mass" not in initialize, initialize
-    solve = source[source.index("    def solve"):source.index("    def stats")]
+    solve = nonlinear[nonlinear.index("    def solve"):nonlinear.index("    def stats")]
     assert "solve_nonlinear_material(" in solve and "indptr" not in solve and "_host_reference" not in solve, solve
+    linear = source[source.index("class PreparedHDivLinear"):source.index("_LINEAR_PRECONDITIONERS = (")]
+    assert "_ResidentMass.from_flat_tables(" in linear and "_fe_forms(" not in linear and "indptr" not in linear, linear
+    assert ".solve_linear(self._mass," in linear, linear
+
+
+def test_mass_ledger_is_the_material_build_without_the_law():
+    t = tables()
+    mass = ledger(t)
+    mass["route"] = "device-flat-tet-mass"
+    mass["transfer_ledger"] = [row for row in mass["transfer_ledger"] if row["payload"] != "inverse_bh_law"]
+    assert hdiv_gpu._checked_material_assembly(mass, t, route="device-flat-tet-mass")["route"] == "device-flat-tet-mass"
+    # A law row on the mass route, or a law-less ledger on the material route, is rejected.
+    with pytest.raises(RuntimeError, match="inverse_bh_law"):
+        hdiv_gpu._checked_material_assembly(dict(ledger(t), route="device-flat-tet-mass"), t, route="device-flat-tet-mass")
+    with pytest.raises(RuntimeError, match="missing rows"):
+        hdiv_gpu._checked_material_assembly(dict(mass, route="device-flat-tet-matrix-free"), t)
+    with pytest.raises(RuntimeError, match="route"):
+        hdiv_gpu._checked_material_assembly(mass, t)
 
 
 def test_device_material_builder_downloads_only_scalar_flags_and_counts():
@@ -119,10 +138,15 @@ def test_flat_material_binding_takes_tables_not_evaluation_values():
 
 def test_device_binding_takes_no_host_matrix():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
-    device = source[source.index('.def("solve_nonlinear_material",'):source.index('.def("stats",[](DeviceOperator& self)')]
+    device = source[source.index('.def("solve_nonlinear_material",'):source.index('.def("solve_linear",')]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', device)
     assert names == ["material", "rhs", "initial", "nonlinear_tolerance", "linear_tolerance", "maximum_iterations",
                      "maximum_linear_iterations", "preconditioner", "degree", "lower_fraction"], names
+    linear = source[source.index('.def("solve_linear",'):source.index('.def("stats",[](DeviceOperator& self)')]
+    names = re.findall(r'py::arg\("([a-z_]+)"\)', linear)
+    assert names == ["mass", "rhs", "inv_chi", "tolerance", "maximum_iterations", "preconditioner", "degree",
+                     "lower_fraction"], names
+    assert "radia_hdiv_bh::MassOperator& mass" in linear and "SparseMap" not in linear, linear
     # Host H-matrix leaves, host mass and host evaluation CSR routes are retired, not shimmed.
     for retired in ("py::init(&construct)", '"solve_linear_material"', '"solve_nonlinear_material_host_reference"',
                     '"_material_bh_evaluate"', "createMaterial(", "MaterialInput"):

@@ -96,6 +96,19 @@ public:
 };
 // E and E^T act matrix-free on the device; no evaluation matrix crosses.
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
+// Device-built reference mass alone, for the linear material solve: no law and
+// no material point state. Vectors cross for diagnostics; the mass never does.
+class MassOperator {
+public:
+    virtual ~MassOperator()=default;
+    virtual MassAction massAction(const radia_hmatrix_cuda::HostVector<double>&)=0;
+    virtual radia_hmatrix_cuda::HostVector<LedgerRow> transfers()=0;
+    virtual MaterialFootprint footprint()=0;
+    virtual std::size_t dofs()=0;
+    virtual bool closed()=0;
+    virtual void close()=0;
+};
+std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput&);
 // Host-only scope check of the flat tables (the same checks the context runs) and
 // their device budget without CUB scratch or the law; no CUDA call.
 FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);

@@ -14,6 +14,11 @@ struct LeafInput {
 struct NewtonOptions {double tolerance=1e-11,linearTolerance=5e-14;int maximumIterations=40,maximumLinearIterations=10000,preconditioner=0,degree=32;double lowerFraction=.01;};
 struct NewtonStep {double residual=0,energy=0,alpha=0,linearResidual=0;int linearIterations=0,backtracks=0;bool residualCertified=false;};
 struct NewtonResult {radia_hdiv_bh::BoundaryVector<double> x;radia_hdiv_bh::BoundaryVector<NewtonStep> history;double residual=0,energy=0;std::size_t graphLaunches=0;};
+// Linear material solve A=B^T G B+inv_chi M over a device-built mass context.
+// preconditioner: 0 mass-diagonal, 1 mass-cholesky, 2 mass-polynomial, 3 mass-polynomial-graph,
+// 4 mass-chebyshev, 5 mass-chebyshev-graph.
+struct LinearOptions {double invChi=0,tolerance=0;int maximumIterations=0,preconditioner=0,degree=8;double lowerFraction=.1;};
+struct LinearResult {radia_hdiv_bh::BoundaryVector<double> x;int iterations=0;double relativeResidual=0;std::size_t ownedBytes=0,graphLaunches=0;};
 struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // Primitive flat-TET charge geometry; reference rules are (xi0,xi1,xi2,weight) rows.
 // compression is "dense" (one deferred dense block) or "aca" (device ACA
@@ -43,6 +48,7 @@ public:
     virtual ~DeviceOperator()=default;
     virtual radia_hmatrix_cuda::HostVector<double> apply(const radia_hmatrix_cuda::HostVector<double>&)=0;
     virtual NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
+    virtual LinearResult solve_linear(radia_hdiv_bh::MassOperator&,const radia_hmatrix_cuda::HostVector<double>&,const LinearOptions&)=0;
     virtual Stats stats()=0;
     virtual Assembly assembly()=0;
     virtual void close()=0;
