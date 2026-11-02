@@ -10,6 +10,7 @@
 #include "hmatrix_resident.cuh"
 namespace radia_hmatrix_cuda {
 struct FlatRulePoint {double xi[3],weight;};
+static_assert(sizeof(FlatRulePoint)==32,"hdiv_gpu._RULE_ROW_BYTES ledger contract");
 struct FlatCharge {
     double vertices[12],inverse[9],center[3],polyCenter[3],size,a,b[3],c[9];
     int kind,host,expo[3],degree;
@@ -35,6 +36,17 @@ struct FlatBlock {
                 throw std::invalid_argument("Nonfinite reference rule");
         for(const auto* coordinates:{&cells,&faces})for(double v:*coordinates)
             if(!std::isfinite(v))throw std::invalid_argument("Nonfinite flat charge geometry");
+        // Per-component exponent bounds come before any sum, so no exponent can overflow a degree.
+        const std::size_t cellCount=cells.size()/12,faceCount=faces.size()/9;
+        for(std::size_t a=0;a<n;++a){
+            const int k=kind[a],h=host[a],limit=k==0?1:2;
+            if((k!=0&&k!=1)||h<0||std::size_t(h)>=(k==0?cellCount:faceCount))
+                throw std::invalid_argument("Flat charge kind or host index out of range");
+            for(int c=0;c<3;++c)if(expo[3*a+c]<0||expo[3*a+c]>limit)
+                throw std::invalid_argument("Flat charge exponent outside BDM1/BDM2 support");
+            if((k==1&&expo[3*a+2]!=0)||expo[3*a]+expo[3*a+1]+expo[3*a+2]>limit)
+                throw std::invalid_argument("Flat device Gram supports cell degree <= 1 and face degree <= 2 only");
+        }
         // The device has no one-sided far rule; that diagnostic route stays CPU-only.
         const char* oneSided=std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
         if(oneSided&&oneSided[0]!='\0'&&oneSided[0]!='0')
@@ -119,11 +131,14 @@ __global__ void prepareFlatCharges(std::size_t n,const double* cells,std::size_t
     const auto a=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(a>=n)return;
     FlatCharge q{};q.kind=kinds[a];q.host=hosts[a];
     for(int k=0;k<3;++k)q.expo[k]=exponents[3*a+k];
-    q.degree=q.expo[0]+q.expo[1]+q.expo[2];
     if((q.kind!=0&&q.kind!=1)||q.host<0||q.expo[0]<0||q.expo[1]<0||q.expo[2]<0||
        (q.kind==0&&std::size_t(q.host)>=cellCount)||(q.kind==1&&(std::size_t(q.host)>=faceCount||q.expo[2]!=0))){atomicExch(invalid,1);return;}
     // BDM1/BDM2: cell degree <= 1, face degree <= 2. Higher modes need the Duffy/ladder kernels.
-    if(q.degree>(q.kind==0?1:2)){atomicExch(invalid,2);return;}
+    // Bound each component before summing; this backstops FlatBlock::validate.
+    const int limit=q.kind==0?1:2;
+    if(q.expo[0]>limit||q.expo[1]>limit||q.expo[2]>limit){atomicExch(invalid,2);return;}
+    q.degree=q.expo[0]+q.expo[1]+q.expo[2];
+    if(q.degree>limit){atomicExch(invalid,2);return;}
     const int vertexCount=q.kind==0?4:3;const double* V=q.kind==0?cells+12*std::size_t(q.host):faces+9*std::size_t(q.host);
     for(int i=0;i<3*vertexCount;++i)q.vertices[i]=V[i];
     double measure,beta[3][3]={};int coordinates;

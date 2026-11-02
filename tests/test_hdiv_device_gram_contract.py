@@ -57,24 +57,70 @@ def test_inconsistent_or_image_payloads_fail_before_the_device(change, error):
         hdiv_gpu._device_gram_arguments(Map, inputs)
 
 
-def ledger(*extra):
-    rows = [(name, "H2D") for name in hdiv_gpu._DEVICE_GRAM_UPLOADS]
-    rows += [("resident_plan", "H2D"), ("charge_map_csr_host_built", "H2D"),
-             ("prepare_flag", "D2H"), ("energy_flag", "D2H"), *extra]
-    return dict(route="device-flat-tet", charges=4,
-                transfer_ledger=[dict(payload=p, direction=d, bytes=8) for p, d in rows])
+def ledger(arguments, *extra, drop=()):
+    rows = [dict(payload=p, direction=d, bytes=8 if b is None else b)
+            for (p, d), b in hdiv_gpu._expected_device_ledger(arguments).items() if p not in drop]
+    return dict(route="device-flat-tet", charges=int(arguments["charge_host"].size),
+                transfer_ledger=rows + [dict(payload=p, direction=d, bytes=b) for p, d, b in extra])
 
 
-def test_assembly_ledger_rejects_host_coefficients_and_gram_downloads():
-    assert hdiv_gpu._checked_device_assembly(ledger(), 4)["charges"] == 4
-    for forged in (ledger(("host_hmatrix_coefficients", "H2D")), ledger(("cell_vertices_m", "D2H")),
-                   dict(ledger(), route="host-leaves")):
+def test_assembly_ledger_requires_the_exact_primitive_rows():
+    arguments = hdiv_gpu._device_gram_arguments(Map, staged())
+    assert hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)["charges"] == 2
+    flags_only = dict(route="device-flat-tet", charges=2, transfer_ledger=[
+        dict(payload="prepare_flag", direction="D2H", bytes=4),
+        dict(payload="energy_flag", direction="D2H", bytes=4)])
+    duplicate = ledger(arguments, ("tet_rule", "H2D", 64))
+    resized = ledger(arguments)
+    resized["transfer_ledger"][0]["bytes"] += 8
+    forged = [flags_only, duplicate, resized, ledger(arguments, drop=("resident_plan",)),
+              ledger(arguments, ("host_hmatrix_coefficients", "H2D", 8)),
+              ledger(arguments, ("cell_vertices_m", "D2H", 96)), dict(ledger(arguments), route="host-leaves")]
+    for bad in ("8", -8, True, 0):
+        row = ledger(arguments)
+        next(r for r in row["transfer_ledger"] if r["payload"] == "resident_plan")["bytes"] = bad
+        forged.append(row)
+    for case in forged:
         with pytest.raises(RuntimeError):
-            hdiv_gpu._checked_device_assembly(forged, 4)
-    missing = ledger()
-    missing["transfer_ledger"] = [r for r in missing["transfer_ledger"] if r["payload"] != "energy_flag"]
-    with pytest.raises(RuntimeError, match="ledger"):
-        hdiv_gpu._checked_device_assembly(missing, 4)
+            hdiv_gpu._checked_device_assembly(case, arguments)
+
+
+def test_disabled_far_split_has_no_low_rule_rows():
+    arguments = hdiv_gpu._device_gram_arguments(Map, staged(far=False))
+    payloads = {p for p, _ in hdiv_gpu._expected_device_ledger(arguments)}
+    assert not {"tet_low_rule", "tri_low_rule"} & payloads, sorted(payloads)
+    hdiv_gpu._checked_device_assembly(ledger(arguments), arguments)
+    with pytest.raises(RuntimeError, match="rejected"):
+        hdiv_gpu._checked_device_assembly(ledger(arguments, ("tet_low_rule", "H2D", 0)), arguments)
+
+
+@pytest.mark.parametrize("expo", [
+    [2**31 - 1, 2**31 - 1, 0], [2**31 - 1, 0, 0], [-1, 0, 0], [0, -2**31, 0], [1, 1, 0], [0, 0, 2]])
+def test_cell_exponents_are_bounded_before_any_sum(expo):
+    inputs = staged()
+    inputs["charge_expo"] = expo + [0, 0, 0]
+    with pytest.raises(ValueError, match="cell degree <= 1"):
+        hdiv_gpu._device_gram_arguments(Map, inputs)
+
+
+@pytest.mark.parametrize("expo,ok", [
+    ([2, 0, 0], True), ([1, 1, 0], True), ([0, 0, 1], False), ([2, 1, 0], False), ([3, 0, 0], False)])
+def test_face_exponents_accept_the_degree_two_border_only(expo, ok):
+    inputs = staged()
+    inputs["charge_expo"] = [1, 0, 0] + expo
+    if ok:
+        assert hdiv_gpu._device_gram_arguments(Map, inputs)["charge_exponents"][3:].tolist() == expo
+    else:
+        with pytest.raises(ValueError, match="face degree <= 2"):
+            hdiv_gpu._device_gram_arguments(Map, inputs)
+
+
+def test_native_guards_bound_components_before_the_degree_sum():
+    source = (HDIV / "hdiv_flat_gram.cuh").read_text(encoding="utf-8")
+    kernel = source[source.index("__global__ void prepareFlatCharges"):source.index("__global__ void assembleFlatGram")]
+    assert kernel.index("q.expo[2]>limit") < kernel.index("q.degree=q.expo[0]+q.expo[1]+q.expo[2]"), "device sums before bounding"
+    validate = source[source.index("void validate()const"):source.index("__device__ inline double flatPow")]
+    assert "expo[3*a+c]>limit" in validate, "host FlatBlock::validate lacks per-component exponent bounds"
 
 
 def test_device_gram_source_downloads_only_validity_flags():
