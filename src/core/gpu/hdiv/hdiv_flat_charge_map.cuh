@@ -1,6 +1,7 @@
-// Device construction of the affine-TET HDiv charge map B and B^T.
-// NGSolve tabulates charge-projection tables per vertex-rank class on the
-// host; only those tables, the Gram vertices, DOF numbers and classes cross.
+// Device construction of the TET HDiv charge map B and B^T.
+// NGSolve tabulates charge-projection tables (affine) or reference moments
+// (curved P2) per vertex-rank class on the host; only those tables, the Gram
+// geometry, DOF numbers, classes and the curved mass rules cross.
 #pragma once
 #include <climits>
 #include <cstdint>
@@ -8,17 +9,57 @@
 #include "hdiv_resident_python_api.hpp"
 #include "hdiv_flat_evaluation.cuh"
 namespace radia_hdiv_bh {
-// Rows: cell monomials (cell-major), then exterior-face monomials. Cell rows
-// scale by 1/det J, face rows by 1/|(F1-F0)x(F2-F0)|; columns ascend per row.
+// Curved P2 hosts: x solves G x = s r for one table column r, with
+// G_ab = sum_q w_q m_a m_b |dX| on the declared mass rule (cells |det J| in xi,
+// faces |X_e0 x X_e1| in the boundary element's eta) and s = sign det J on
+// cells. One thread per (host, column); every column recomputes the same G
+// and pivots identically (the host solveSmall elimination).
+__device__ inline double curvedChargeMonomial(const int* e,const double* x,bool cell){
+    double m=1.;for(int c=0;c<(cell?3:2);++c)for(int k=0;k<e[c];++k)m*=x[c];return m;
+}
+__global__ void curvedChargeTables(std::size_t cells,std::size_t faces,std::size_t cm,std::size_t fm,std::size_t cw,std::size_t fw,
+    std::size_t cellClasses,std::size_t faceClasses,const double* cellNodes,const double* faceNodes,const int* cellClass,const int* faceClass,
+    const double* cellMoments,const double* faceMoments,const double* cellRule,int cellPoints,const double* faceRule,int facePoints,
+    const int* cellExponents,const int* faceExponents,double* cellOut,double* faceOut,int* invalid){
+    const auto t=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;const auto cellColumns=cells*cw;if(t>=cellColumns+faces*fw)return;
+    const bool cell=t<cellColumns;const auto n=cell?cm:fm,width=cell?cw:fw;
+    const auto host=cell?t/cw:(t-cellColumns)/fw,column=cell?t%cw:(t-cellColumns)%fw;
+    const int cls=cell?cellClass[host]:faceClass[host];
+    if(cls<0||std::size_t(cls)>=(cell?cellClasses:faceClasses)){atomicExch(invalid,1);return;}
+    double G[36]={},x[6];int sign=0;
+    const double* rule=cell?cellRule:faceRule;const int points=cell?cellPoints:facePoints;const int* exponents=cell?cellExponents:faceExponents;
+    for(int q=0;q<points;++q){const double* row=rule+4*q;double X[3],measure;
+        if(cell){double Jac[3][3];rad_hdiv_cuda::CurvedTetEval(reinterpret_cast<const double(*)[3]>(cellNodes+30*host),row[0],row[1],row[2],X,Jac);
+            const double det=rad_hdiv_cuda::det3(Jac);const int s=det>0.?1:det<0.?-1:0;
+            if(!isfinite(det)||!s||(sign&&s!=sign)){atomicExch(invalid,1);return;}sign=s;measure=fabs(det);}
+        else rad_hdiv_cuda::CurvedTriMapMeasure(reinterpret_cast<const double(*)[3]>(faceNodes+18*host),row[0],row[1],X,measure);
+        if(!isfinite(measure)||!(measure>0.)){atomicExch(invalid,1);return;}
+        double m[6];for(std::size_t a=0;a<n;++a)m[a]=curvedChargeMonomial(exponents+(cell?3:2)*a,row,cell);
+        for(std::size_t a=0;a<n;++a)for(std::size_t b=0;b<n;++b)G[a*n+b]+=row[3]*measure*m[a]*m[b];
+    }
+    const double* R=(cell?cellMoments:faceMoments)+std::size_t(cls)*n*width;
+    for(std::size_t a=0;a<n;++a)x[a]=(cell?double(sign):1.)*R[a*width+column];
+    for(std::size_t c=0;c<n;++c){std::size_t p=c;for(std::size_t r=c+1;r<n;++r)if(fabs(G[r*n+c])>fabs(G[p*n+c]))p=r;
+        if(!(fabs(G[p*n+c])>0.)){atomicExch(invalid,1);return;}
+        if(p!=c){for(std::size_t j=0;j<n;++j){const double v=G[c*n+j];G[c*n+j]=G[p*n+j];G[p*n+j]=v;}const double v=x[c];x[c]=x[p];x[p]=v;}
+        for(std::size_t r=0;r<n;++r){if(r==c)continue;const double f=G[r*n+c]/G[c*n+c];if(f==0.)continue;
+            for(std::size_t j=c;j<n;++j)G[r*n+j]-=f*G[c*n+j];x[r]-=f*x[c];}}
+    double* out=(cell?cellOut:faceOut)+host*n*width;
+    for(std::size_t a=0;a<n;++a){const double v=x[a]/G[a*n+a];if(!isfinite(v))atomicExch(invalid,1);out[a*width+column]=v;}
+}
+// Rows: cell monomials (cell-major), then exterior-face monomials; columns
+// ascend per row. Affine: class tables, cell rows scaled by 1/det J, face rows
+// by 1/|(F1-F0)x(F2-F0)|. Curved: per-host tables from curvedChargeTables.
 __global__ void flatChargeEntries(std::size_t cells,std::size_t faces,std::size_t cm,std::size_t fm,std::size_t cw,std::size_t fw,
     std::size_t cellClasses,std::size_t faceClasses,const double* cellVertices,const double* faceVertices,const int* cellClass,
-    const int* cellDofs,const int* faceClass,const int* faceDofs,const double* cellTables,const double* faceTables,
+    const int* cellDofs,const int* faceClass,const int* faceDofs,const double* cellTables,const double* faceTables,bool perHost,
     std::size_t* indices,double* values,int* invalid){
     const auto r=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;const auto cellRows=cells*cm;if(r>=cellRows+faces*fm)return;
     const bool cell=r<cellRows;const auto host=cell?r/cm:(r-cellRows)/fm,a=cell?r%cm:(r-cellRows)%fm;
     const auto width=cell?cw:fw,base=cell?r*cw:cellRows*cw+(r-cellRows)*fw;
     double scale;int cls;
-    if(cell){const double* V=cellVertices+12*host;double J[3][3];
+    if(perHost){scale=1.;cls=int(host);}
+    else if(cell){const double* V=cellVertices+12*host;double J[3][3];
         for(int c=0;c<3;++c)for(int d=0;d<3;++d)J[c][d]=V[3*d+c]-V[9+c];
         scale=J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
         cls=cellClass[host];if(!isfinite(scale)||scale==0.||cls<0||std::size_t(cls)>=cellClasses){atomicExch(invalid,1);return;}}
@@ -57,8 +98,12 @@ struct FlatChargeMapBuilder {
         const auto nnz=nonzeros(in);int bits=1;while((std::size_t(1)<<bits)<in.dofs)++bits;std::size_t scratch=0;
         radia_hmatrix_cuda::check(cub::DeviceRadixSort::SortPairs(nullptr,scratch,static_cast<const unsigned*>(nullptr),static_cast<unsigned*>(nullptr),
             static_cast<const unsigned*>(nullptr),static_cast<unsigned*>(nullptr),int(nnz),0,bits));
-        const auto doubles=checkedProduct(flat.cells.size()+flat.faces.size()+in.cellTables.size()+in.faceTables.size(),sizeof(double));
-        const auto ints=checkedProduct(in.cellClass.size()+in.cellDofs.size()+in.faceClass.size()+in.faceDofs.size()+1,sizeof(int));
+        // Curved: rules, exponents and the per-host tables (cells x cm x cw plus faces x fm x fw).
+        const auto hostTables=in.curved?nonzeros(in):std::size_t(0);
+        const auto doubles=checkedProduct(flat.cells.size()+flat.faces.size()+in.cellTables.size()+in.faceTables.size()+
+                                          in.cellRule.size()+in.faceRule.size()+hostTables,sizeof(double));
+        const auto ints=checkedProduct(in.cellClass.size()+in.cellDofs.size()+in.faceClass.size()+in.faceDofs.size()+1+
+                                       (in.curved?in.cellExponents.size()+in.faceExponents.size():0),sizeof(int));
         const auto keys=checkedProduct(4*nnz,sizeof(unsigned));
         if(doubles>SIZE_MAX-ints||doubles+ints>SIZE_MAX-keys||doubles+ints+keys>SIZE_MAX-scratch)throw std::overflow_error("Charge-map scratch overflow");
         return doubles+ints+keys+scratch;
@@ -78,14 +123,25 @@ struct FlatChargeMapBuilder {
         upload(cellClass,in.cellClass,"charge_cell_class");upload(cellDofs,in.cellDofs,"charge_cell_dofs");
         upload(faceClass,in.faceClass,"charge_face_class");upload(faceDofs,in.faceDofs,"charge_face_dofs");
         upload(invalid,HostVector<int>{0},"charge_map_invalid_flag");
+        const auto cellClasses=in.cellTables.size()/(cm*cw),faceClasses=in.faceTables.size()/(fm*fw);
+        Buffer<double> cellRule,faceRule,hostCell,hostFace;Buffer<int> cellExponents,faceExponents;
+        if(in.curved){
+            upload(cellRule,in.cellRule,"charge_cell_mass_rule");upload(faceRule,in.faceRule,"charge_face_mass_rule");
+            upload(cellExponents,in.cellExponents,"charge_cell_exponents");upload(faceExponents,in.faceExponents,"charge_face_exponents");
+            hostCell.allocate(cells*cm*cw);hostFace.allocate(faces*fm*fw);const auto columns=cells*cw+faces*fw;
+            curvedChargeTables<<<unsigned((columns+127)/128),128>>>(cells,faces,cm,fm,cw,fw,cellClasses,faceClasses,cellVertices.data,faceVertices.data,
+                cellClass.data,faceClass.data,cellTables.data,faceTables.data,cellRule.data,int(in.cellRule.size()/4),faceRule.data,int(in.faceRule.size()/4),
+                cellExponents.data,faceExponents.data,hostCell.data,hostFace.data,invalid.data);check(cudaGetLastError());++launches;
+        }
         B.rows=rows;B.offsets.allocate(rows+1);B.indices.allocate(nnz);B.values.allocate(nnz);
-        flatChargeEntries<<<unsigned((rows+127)/128),128>>>(cells,faces,cm,fm,cw,fw,in.cellTables.size()/(cm*cw),in.faceTables.size()/(fm*fw),
-            cellVertices.data,faceVertices.data,cellClass.data,cellDofs.data,faceClass.data,faceDofs.data,cellTables.data,faceTables.data,
+        flatChargeEntries<<<unsigned((rows+127)/128),128>>>(cells,faces,cm,fm,cw,fw,in.curved?cells:cellClasses,in.curved?faces:faceClasses,
+            cellVertices.data,faceVertices.data,cellClass.data,cellDofs.data,faceClass.data,faceDofs.data,
+            in.curved?hostCell.data:cellTables.data,in.curved?hostFace.data:faceTables.data,in.curved,
             B.indices.data,B.values.data,invalid.data);check(cudaGetLastError());++launches;
         flatChargeOffsets<<<unsigned((rows+256)/256),256>>>(rows,cellRows,cw,fw,B.offsets.data);check(cudaGetLastError());++launches;
         int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));
         transfers.push_back({"charge_map_flag","D2H",sizeof(int)});
-        if(failed)throw std::runtime_error("Device HDiv charge map has a degenerate cell or face, invalid class or nonfinite value");
+        if(failed)throw std::runtime_error("Device HDiv charge map has a degenerate or inverted cell or face, invalid class, singular curved Gram or nonfinite value");
         Buffer<unsigned> keys,sortedKeys,entries,sortedEntries;keys.allocate(nnz);sortedKeys.allocate(nnz);entries.allocate(nnz);sortedEntries.allocate(nnz);
         columnKeys<<<unsigned((nnz+255)/256),256>>>(nnz,B.indices.data,keys.data,entries.data);check(cudaGetLastError());++launches;
         int bits=1;while((std::size_t(1)<<bits)<in.dofs)++bits;std::size_t scratch=0;
@@ -100,20 +156,29 @@ struct FlatChargeMapBuilder {
     }
 };
 // Host bounds before any upload: the B rows must be the FlatInput charges in
-// order, every index is range-checked and every table value is finite.
+// order, every index is range-checked and every table value is finite. The
+// curved map requires the curved Gram geometry (10/6 P2 nodes per host).
 inline void validateFlatChargeMap(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in){
     const auto cells=in.cellClass.size(),faces=in.faceClass.size(),cm=in.cellMonomials,fm=in.faceMonomials,cw=in.cellWidth,fw=in.faceWidth;
     // Structural limits only: int32 cells, faces, DOFs and charge rows; the CUB sort counts nonzeros as int.
     constexpr std::size_t top=INT_MAX;
     if(!cells||cells>top||!faces||faces>top||!in.dofs||in.dofs>top||!cm||cm>4||!fm||fm>6||!cw||cw>64||!fw||fw>cw)
-        throw std::invalid_argument("Flat charge tables outside the bounded affine-TET scope");
+        throw std::invalid_argument("Charge tables outside the bounded TET scope");
+    if(in.curved!=(flat.family=="curved-tet"))throw std::invalid_argument("Charge map and Gram geometry families disagree");
+    const std::size_t cellStride=in.curved?30:12,faceStride=in.curved?18:9;
+    if(in.curved){
+        auto rule=[](const auto& rows,int dimension){if(rows.empty()||rows.size()%4||rows.size()/4>4096)return false;
+            for(std::size_t k=0;k<rows.size();k+=4){if(!std::isfinite(rows[k])||!std::isfinite(rows[k+1])||!std::isfinite(rows[k+2])||!std::isfinite(rows[k+3])||!(rows[k+3]>0))return false;
+                if(dimension==2&&rows[k+2]!=0.)return false;}return true;};
+        if(!rule(in.cellRule,3)||!rule(in.faceRule,2))throw std::invalid_argument("Curved charge mass rules require finite (xi,weight>0) rows");
+    }else if(!in.cellRule.empty()||!in.faceRule.empty())throw std::invalid_argument("Affine charge tables take no curved mass rules");
     if(faces>top/fm||cells>(top-faces*fm)/cm||FlatChargeMapBuilder::nonzeros(in)>top)
         throw std::invalid_argument("Flat charge rows or map nonzeros exceed the checked int range");
     if(in.cellTables.empty()||in.cellTables.size()%(cm*cw)||in.cellTables.size()/(cm*cw)>24||
        in.faceTables.empty()||in.faceTables.size()%(fm*fw)||in.faceTables.size()/(fm*fw)>6)
         throw std::invalid_argument("Flat charge class tables outside the vertex-rank class bound");
     const auto rows=cells*cm+faces*fm;
-    if(rows!=flat.host.size()||flat.kind.size()!=rows||flat.expo.size()!=3*rows||flat.cells.size()!=12*cells||flat.faces.size()!=9*faces||
+    if(rows!=flat.host.size()||flat.kind.size()!=rows||flat.expo.size()!=3*rows||flat.cells.size()!=cellStride*cells||flat.faces.size()!=faceStride*faces||
        in.cellDofs.size()!=cells*cw||in.faceDofs.size()!=faces*fw||in.cellExponents.size()!=3*cm||in.faceExponents.size()!=2*fm)
         throw std::invalid_argument("Flat charge table shape mismatch");
     for(std::size_t r=0;r<rows;++r){const bool cell=r<cells*cm;const auto host=cell?r/cm:(r-cells*cm)/fm,a=cell?r%cm:(r-cells*cm)%fm;

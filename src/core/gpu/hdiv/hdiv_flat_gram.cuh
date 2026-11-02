@@ -1,9 +1,12 @@
-// Flat-TET BDM1/BDM2 charge Gram generated on the device from host geometry,
+// TET BDM1/BDM2 charge Gram generated on the device from host geometry,
 // charge monomials and reference rules. The entry dispatch mirrors the CPU
 // HighOrderTetEntryStrategy without images: well-separated pairs take the low
-// double rule; self and touching pairs of affine P1 hosts the shared graded
-// outer rule (CPU P1TouchHosts/P1TouchEntryValue); other pairs the exact
-// analytic moment potentials on the outer rule. Only
+// double rule. Affine: self and touching pairs of affine P1 hosts the shared
+// graded outer rule (CPU P1TouchHosts/P1TouchEntryValue); other pairs the
+// exact analytic moment potentials on the outer rule. Curved P2: touching
+// hosts (shared edge, or a shared vertex with a face) the symmetrized curved
+// Duffy potentials, other near pairs the one-sided high-rule tensor product
+// (CPU direct curved block); P1TouchHosts is off for curved, as on the CPU. Only
 // primitives cross to the device; the Gram is written into the resident
 // deferred dense leaf (or the ACA leaves of hdiv_flat_aca.cuh) and never
 // leaves the device.
@@ -25,7 +28,7 @@ struct FlatRulePoint {double xi[3],weight;};
 static_assert(sizeof(FlatRulePoint)==32,"hdiv_gpu._RULE_ROW_BYTES ledger contract");
 struct FlatCharge {
     double vertices[12],inverse[9],center[3],polyCenter[3],size,a,b[3],c[9];
-    int kind,host,expo[3],degree;
+    int kind,host,expo[3],degree,numbers[4];
 };
 struct FlatTransfer {const char* payload;const char* direction;std::size_t bytes;};
 struct FlatBlock {
@@ -34,13 +37,30 @@ struct FlatBlock {
     HostVector<FlatRulePoint> tet{HostFaultAllocator<FlatRulePoint>("flat.tet")},tri{HostFaultAllocator<FlatRulePoint>("flat.tri")},
         tetLow{HostFaultAllocator<FlatRulePoint>("flat.tet-low")},triLow{HostFaultAllocator<FlatRulePoint>("flat.tri-low")};
     double farFactor=1e30;
+    // Curved P2 hosts: cells/faces hold 10/6 P2 nodes, mesh vertex numbers
+    // decide touching and (gl,gw) is the [0,1] Duffy Gauss rule.
+    bool curved=false;
+    HostVector<double> gl{HostFaultAllocator<double>("flat.gl")},gw{HostFaultAllocator<double>("flat.gw")};
+    HostVector<int> cellNumbers{HostFaultAllocator<int>("flat.cell-numbers")},faceNumbers{HostFaultAllocator<int>("flat.face-numbers")};
     std::size_t charges()const{return host.size();}
+    std::size_t cellStride()const{return curved?30:12;}
+    std::size_t faceStride()const{return curved?18:9;}
+    std::size_t cellCount()const{return cells.size()/cellStride();}
+    std::size_t faceCount()const{return faces.size()/faceStride();}
     void validate()const{
         const auto n=host.size();
         // Charge, cell and face indices are int32 on both sides of the binding.
-        if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%12||faces.size()%9||
-           cells.size()/12>std::size_t(INT_MAX)||faces.size()/9>std::size_t(INT_MAX))
+        if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%cellStride()||faces.size()%faceStride()||
+           cellCount()>std::size_t(INT_MAX)||faceCount()>std::size_t(INT_MAX))
             throw std::invalid_argument("Flat charge payload shape mismatch");
+        if(curved){
+            if(gl.empty()||gl.size()>64||gw.size()!=gl.size()||cellNumbers.size()!=4*cellCount()||faceNumbers.size()!=3*faceCount())
+                throw std::invalid_argument("Curved charge geometry requires 4/3 vertex numbers per host and one Duffy rule of 1..64 points");
+            for(std::size_t k=0;k<gl.size();++k)if(!std::isfinite(gl[k])||!std::isfinite(gw[k])||!(gl[k]>0)||!(gl[k]<1)||!(gw[k]>0))
+                throw std::invalid_argument("Curved Duffy rule requires interior [0,1] points and positive weights");
+            for(const auto* numbers:{&cellNumbers,&faceNumbers})for(int v:*numbers)if(v<0)throw std::invalid_argument("Curved host vertex numbers must be nonnegative");
+        }else if(!gl.empty()||!gw.empty()||!cellNumbers.empty()||!faceNumbers.empty())
+            throw std::invalid_argument("Affine charge geometry takes no curved Duffy rule or vertex numbers");
         if(tet.empty()||tri.empty()||tet.size()>4096||tri.size()>4096||tetLow.size()>4096||triLow.size()>4096)
             throw std::invalid_argument("Flat reference rule size outside budget");
         if(!(farFactor>0)||std::isnan(farFactor))throw std::invalid_argument("Invalid far-pair factor");
@@ -51,10 +71,10 @@ struct FlatBlock {
         for(const auto* coordinates:{&cells,&faces})for(double v:*coordinates)
             if(!std::isfinite(v))throw std::invalid_argument("Nonfinite flat charge geometry");
         // Per-component exponent bounds come before any sum, so no exponent can overflow a degree.
-        const std::size_t cellCount=cells.size()/12,faceCount=faces.size()/9;
+        const std::size_t cellTotal=cellCount(),faceTotal=faceCount();
         for(std::size_t a=0;a<n;++a){
             const int k=kind[a],h=host[a],limit=k==0?1:2;
-            if((k!=0&&k!=1)||h<0||std::size_t(h)>=(k==0?cellCount:faceCount))
+            if((k!=0&&k!=1)||h<0||std::size_t(h)>=(k==0?cellTotal:faceTotal))
                 throw std::invalid_argument("Flat charge kind or host index out of range");
             for(int c=0;c<3;++c)if(expo[3*a+c]<0||expo[3*a+c]>limit)
                 throw std::invalid_argument("Flat charge exponent outside BDM1/BDM2 support");
@@ -109,6 +129,8 @@ struct FlatDevice {
     // Per-charge graded-rule source and per-host flags: nonzero when a host
     // carries any charge outside affine P1 (cell constant, face degree <= 1).
     const radia_hdiv_python::P1ChargeSource* p1;const int* cellNonP1;const int* faceNonP1;
+    // Curved P2 hosts: node tables and the touching Duffy rule.
+    bool curved;const double* cellNodes;const double* faceNodes;const double* gl;const double* gw;int nq;
 };
 __device__ inline double flatQuadDot(const FlatDevice& d,std::size_t target,std::size_t source){
     const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
@@ -136,12 +158,45 @@ __device__ inline bool flatP1Touch(const FlatDevice& d,const FlatCharge& a,const
         if(a.vertices[3*i]==b.vertices[3*j]&&a.vertices[3*i+1]==b.vertices[3*j+1]&&a.vertices[3*i+2]==b.vertices[3*j+2])return true;
     return false;
 }
+// CPU CurvedHostsTouch: two shared mesh vertices, or one when a face is involved.
+__device__ inline bool curvedHostsTouch(const FlatCharge& a,const FlatCharge& b){
+    int shared=0;for(int i=0;i<(a.kind?3:4);++i)for(int j=0;j<(b.kind?3:4);++j)if(a.numbers[i]==b.numbers[j]){++shared;break;}
+    return shared>=2||(shared==1&&(a.kind||b.kind));
+}
+// Target outer rule against the singularity-resolving curved Duffy potential of the source host.
+__device__ inline double curvedDuffyDot(const FlatDevice& d,std::size_t target,std::size_t source){
+    const auto& s=d.charges[source];const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
+    const double* nodes=s.kind?d.faceNodes+18*std::size_t(s.host):d.cellNodes+30*std::size_t(s.host);
+    for(int k=0;k<d.outerCount[target];++k){const double* p=P+3*k;
+        const double inner=s.kind?rad_hdiv_cuda::CurvedTriPotential(reinterpret_cast<const double(*)[3]>(nodes),s.expo[0],s.expo[1],p,d.gl,d.gw,d.nq,true)
+            :rad_hdiv_cuda::CurvedTetPotential(reinterpret_cast<const double(*)[3]>(nodes),s.expo[0],s.expo[1],s.expo[2],p,d.gl,d.gw,d.nq,true);
+        sum+=W[k]*inner;}
+    return sum*0.07957747154594766788;
+}
+// CPU QuadBlockHOCurvedDirect: high outer rule of both hosts, target-major sums.
+__device__ inline double curvedDirectDot(const FlatDevice& d,std::size_t target,std::size_t source){
+    const auto* Px=d.points+3*d.stride*target;const auto* Wx=d.weights+d.stride*target;
+    const auto* Py=d.points+3*d.stride*source;const auto* Wy=d.weights+d.stride*source;double sum=0.0;
+    for(int i=0;i<d.outerCount[target];++i){double inner=0.0;
+        for(int j=0;j<d.outerCount[source];++j){
+            const double dx=Px[3*i]-Py[3*j],dy=Px[3*i+1]-Py[3*j+1],dz=Px[3*i+2]-Py[3*j+2];
+            const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
+            inner+=Wy[j]/r;
+        }
+        sum+=Wx[i]*inner;
+    }
+    return sum*0.07957747154594766788;
+}
 __device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
     if(a!=b&&d.farFactor<1e29){
         const double dx=qa.center[0]-qb.center[0],dy=qa.center[1]-qb.center[1],dz=qa.center[2]-qb.center[2];
         if(sqrt(dx*dx+dy*dy+dz*dz)>d.farFactor*(qa.size+qb.size))
             return 0.5*(flatQuadDotFar(d,a,b)+flatQuadDotFar(d,b,a));
+    }
+    if(d.curved){
+        if(curvedHostsTouch(qa,qb))return a==b?curvedDuffyDot(d,a,a):0.5*(curvedDuffyDot(d,a,b)+curvedDuffyDot(d,b,a));
+        return curvedDirectDot(d,a,b);
     }
     if(flatP1Touch(d,qa,qb))
         return a==b?radia_hdiv_p1_diagonal::pairEntry(d.p1[a],d.p1[a])
@@ -232,6 +287,44 @@ __global__ void prepareFlatCharges(std::size_t n,const double* cells,std::size_t
             !isfinite(p1[a].gradient[0])||!isfinite(p1[a].gradient[1])||!isfinite(p1[a].gradient[2])){atomicExch(invalid,1);return;}
     charges[a]=q;
 }
+// One thread per curved charge (CPU curved high-order constructor): centre is
+// the corner mean, size the P2-node bounding radius, and every rule point is
+// mapped with weight (rule weight x curved measure) x reference monomial.
+__global__ void prepareCurvedCharges(std::size_t n,const double* cellNodes,std::size_t cellCount,const double* faceNodes,std::size_t faceCount,
+        const int* cellNumbers,const int* faceNumbers,const int* hosts,const int* kinds,const int* exponents,
+        const FlatRulePoint* tet,int nt,const FlatRulePoint* tri,int nr,const FlatRulePoint* tetLow,int ntl,const FlatRulePoint* triLow,int nrl,
+        std::size_t stride,std::size_t lowStride,FlatCharge* charges,double* points,double* weights,int* outerCount,
+        double* lowPoints,double* lowWeights,int* lowCount,int* invalid){
+    const auto a=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(a>=n)return;
+    FlatCharge q{};q.kind=kinds[a];q.host=hosts[a];
+    for(int k=0;k<3;++k)q.expo[k]=exponents[3*a+k];
+    if((q.kind!=0&&q.kind!=1)||q.host<0||q.expo[0]<0||q.expo[1]<0||q.expo[2]<0||
+       (q.kind==0&&std::size_t(q.host)>=cellCount)||(q.kind==1&&(std::size_t(q.host)>=faceCount||q.expo[2]!=0))){atomicExch(invalid,1);return;}
+    const int limit=q.kind==0?1:2;
+    if(q.expo[0]>limit||q.expo[1]>limit||q.expo[2]>limit){atomicExch(invalid,2);return;}
+    q.degree=q.expo[0]+q.expo[1]+q.expo[2];
+    if(q.degree>limit){atomicExch(invalid,2);return;}
+    const int corners=q.kind==0?4:3,nodes=q.kind==0?10:6;
+    const double* X=q.kind==0?cellNodes+30*std::size_t(q.host):faceNodes+18*std::size_t(q.host);
+    const int* numbers=q.kind==0?cellNumbers+4*std::size_t(q.host):faceNumbers+3*std::size_t(q.host);
+    for(int i=0;i<corners;++i){q.numbers[i]=numbers[i];for(int k=0;k<3;++k)q.vertices[3*i+k]=X[3*i+k];}
+    for(int i=0;i<corners;++i)for(int k=0;k<3;++k)q.center[k]+=X[3*i+k]/double(corners);
+    for(int i=0;i<nodes;++i){const double dx=X[3*i]-q.center[0],dy=X[3*i+1]-q.center[1],dz=X[3*i+2]-q.center[2];
+        const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r>q.size)q.size=r;}
+    auto mapped=[&](const FlatRulePoint& r,double* P,double& w){double measure;
+        if(q.kind==0)rad_hdiv_cuda::CurvedTetMapMeasure(reinterpret_cast<const double(*)[3]>(X),r.xi[0],r.xi[1],r.xi[2],P,measure);
+        else rad_hdiv_cuda::CurvedTriMapMeasure(reinterpret_cast<const double(*)[3]>(X),r.xi[0],r.xi[1],P,measure);
+        double mono=flatPow(r.xi[0],q.expo[0])*flatPow(r.xi[1],q.expo[1]);if(q.kind==0)mono*=flatPow(r.xi[2],q.expo[2]);
+        if(!isfinite(measure)||!(measure>0))atomicExch(invalid,1);
+        w=r.weight*measure*mono;};
+    const FlatRulePoint* outer=q.kind==0?tet:tri;const int no=q.kind==0?nt:nr;
+    for(int k=0;k<no;++k)mapped(outer[k],points+3*(stride*a+k),weights[stride*a+k]);
+    outerCount[a]=no;
+    const FlatRulePoint* low=q.kind==0?tetLow:triLow;const int nl=q.kind==0?ntl:nrl;
+    for(int k=0;k<nl;++k)mapped(low[k],lowPoints+3*(lowStride*a+k),lowWeights[lowStride*a+k]);
+    lowCount[a]=nl;
+    charges[a]=q;
+}
 __global__ void assembleFlatGram(FlatDevice d,std::size_t first,std::size_t count,double* matrix,int* invalid){
     const auto i=first+std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=first+count)return;
     const auto row=i/d.n,col=i%d.n;if(row>col)return;
@@ -245,7 +338,8 @@ struct FlatPrepared {
     Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
     Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
     Buffer<radia_hdiv_python::P1ChargeSource> p1;Buffer<int> cellNonP1,faceNonP1;
-    std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;
+    Buffer<double> gl,gw;Buffer<int> cellNumbers,faceNumbers;
+    std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;bool curved=false;
     // Every buffer prepare() allocates, uploads included, so one reserve check covers them.
     static std::size_t workspaceBytes(const FlatBlock& block){
         const auto n=block.charges();
@@ -254,31 +348,39 @@ struct FlatPrepared {
         const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
         const auto uploads=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double))+checkedProduct(n,5*sizeof(int))+rules;
         const auto p1=flatSum(checkedProduct(n,sizeof(radia_hdiv_python::P1ChargeSource)),
-            checkedProduct(block.cells.size()/12+block.faces.size()/9,sizeof(int)));
-        return flatSum(flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads),p1);
+            checkedProduct(block.cellCount()+block.faceCount(),sizeof(int)));
+        const auto curved=flatSum(checkedProduct(block.gl.size()+block.gw.size(),sizeof(double)),
+            checkedProduct(block.cellNumbers.size()+block.faceNumbers.size(),sizeof(int)));
+        return flatSum(flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads),flatSum(p1,curved));
     }
     int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
         check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
         check(cudaStreamSynchronize(stream));transfers.push_back({payload,"D2H",sizeof(int)});return value;}
     void prepare(const FlatBlock& block,cudaStream_t stream,HostVector<FlatTransfer>& transfers,std::size_t& launches,int& invalidCode){
-        n=block.charges();farFactor=block.farFactor;
+        n=block.charges();farFactor=block.farFactor;curved=block.curved;
         stride=std::max(block.tet.size(),block.tri.size());lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         auto upload=[&](auto& buffer,const auto& values,const char* payload){
             if(values.empty())return;buffer.upload(values);
             transfers.push_back({payload,"H2D",checkedProduct(values.size(),sizeof(values[0]))});};
-        upload(cells,block.cells,"cell_vertices_m");upload(faces,block.faces,"face_vertices_m");
+        upload(cells,block.cells,curved?"cell_p2_nodes_m":"cell_vertices_m");upload(faces,block.faces,curved?"face_p2_nodes_m":"face_vertices_m");
         upload(hosts,block.host,"charge_host");upload(kinds,block.kind,"charge_kind");upload(exponents,block.expo,"charge_exponents");
         upload(tet,block.tet,"tet_rule");upload(tri,block.tri,"tri_rule");upload(tetLow,block.tetLow,"tet_low_rule");upload(triLow,block.triLow,"tri_low_rule");
         upload(invalid,HostVector<int>{0},"invalid_flag");
+        if(curved){upload(gl,block.gl,"curve_gauss_points");upload(gw,block.gw,"curve_gauss_weights");
+            upload(cellNumbers,block.cellNumbers,"cell_vertex_numbers");upload(faceNumbers,block.faceNumbers,"face_vertex_numbers");}
         charges.allocate(n);outerCount.allocate(n);lowCount.allocate(n);
         qp.allocate(checkedProduct(n,3*stride));qw.allocate(checkedProduct(n,stride));
         lp.allocate(checkedProduct(n,3*lowStride));lw.allocate(checkedProduct(n,lowStride));
         // Every host flag is cleared on the device; a face-free or cell-free block keeps a one-int buffer.
-        const std::size_t cellCount=block.cells.size()/12,faceCount=block.faces.size()/9;
+        const std::size_t cellCount=block.cellCount(),faceCount=block.faceCount();
         p1.allocate(n);cellNonP1.allocate(std::max<std::size_t>(1,cellCount));faceNonP1.allocate(std::max<std::size_t>(1,faceCount));
         check(cudaMemsetAsync(cellNonP1.data,0,std::max<std::size_t>(1,cellCount)*sizeof(int),stream));
         check(cudaMemsetAsync(faceNonP1.data,0,std::max<std::size_t>(1,faceCount)*sizeof(int),stream));
-        prepareFlatCharges<<<unsigned((n+127)/128),128,0,stream>>>(n,cells.data,block.cells.size()/12,faces.data,block.faces.size()/9,
+        if(curved)prepareCurvedCharges<<<unsigned((n+127)/128),128,0,stream>>>(n,cells.data,cellCount,faces.data,faceCount,
+            cellNumbers.data,faceNumbers.data,hosts.data,kinds.data,exponents.data,tet.data,int(block.tet.size()),tri.data,int(block.tri.size()),
+            tetLow.data,int(block.tetLow.size()),triLow.data,int(block.triLow.size()),stride,lowStride,
+            charges.data,qp.data,qw.data,outerCount.data,lp.data,lw.data,lowCount.data,invalid.data);
+        else prepareFlatCharges<<<unsigned((n+127)/128),128,0,stream>>>(n,cells.data,cellCount,faces.data,faceCount,
             hosts.data,kinds.data,exponents.data,tet.data,int(block.tet.size()),tri.data,int(block.tri.size()),
             tetLow.data,int(block.tetLow.size()),triLow.data,int(block.triLow.size()),stride,lowStride,
             charges.data,qp.data,qw.data,outerCount.data,lp.data,lw.data,lowCount.data,p1.data,cellNonP1.data,faceNonP1.data,invalid.data);
@@ -288,7 +390,7 @@ struct FlatPrepared {
                                                        :"Invalid flat charge host, kind, exponent or degenerate geometry");
     }
     FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor,
-        p1.data,cellNonP1.data,faceNonP1.data};}
+        p1.data,cellNonP1.data,faceNonP1.data,curved,cells.data,faces.data,gl.data,gw.data,int(gl.size)};}
 };
 inline void flatReserve(std::size_t bytes,const char* what){
     std::size_t free,total;check(cudaMemGetInfo(&free,&total));

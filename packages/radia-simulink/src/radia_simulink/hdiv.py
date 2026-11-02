@@ -4,11 +4,13 @@ _CHARGE_FIELDS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind"
                   "tri_rule", "tet_low_rule", "tri_low_rule", "cell_class", "cell_dofs", "cell_tables",
                   "cell_exponents", "face_class", "face_dofs", "face_tables", "face_exponents")
 _EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "element_dofs", "element_points")
+# Present only for the curved P2 family (``curve_order=2``); the MEX rejects them for affine-tet.
+_CURVED_CHARGE_FIELDS = ("cell_numbers", "face_numbers", "curve_gl", "curve_gw", "cell_mass_rule", "face_mass_rule")
 
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
                               mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                              gram_compression="aca"):
+                              gram_compression="aca", curve_order=1):
     """Publish ``radia.hdiv-device-setup.v1`` for the plain MEX ``radia_hdiv_device``.
 
     Every table crosses as an owned flat C-order column (float64 or int32), the
@@ -20,7 +22,7 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
     from radia.hdiv_gpu import prepare_hdiv_device_setup as prepare
     data = prepare(mesh_path, backend=backend, label_contract=label_contract, mesh_check_receipt=mesh_check_receipt,
                    mesh_check_receipt_sha256=mesh_check_receipt_sha256, mesh_check_provenance=mesh_check_provenance,
-                   order=order, gram_aca=gram_aca, gram_compression=gram_compression)
+                   order=order, gram_aca=gram_aca, gram_compression=gram_compression, curve_order=curve_order)
 
     def flat(value, dtype):
         return np.array(value, dtype=dtype, order="C").reshape(-1, 1)
@@ -32,8 +34,9 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
         return flat(value, np.int32)
 
     gram = data["charge_gram"]
+    fields = _CHARGE_FIELDS + (_CURVED_CHARGE_FIELDS if data["family"] == "curved-tet" else ())
     charges = {name: ints(name, gram) if np.asarray(gram[name]).dtype.kind in "iu" else flat(gram[name], np.float64)
-               for name in _CHARGE_FIELDS}
+               for name in fields}
     aca, compression = gram["aca"], str(gram["compression"])
     charges.update(far_factor=float(gram["far_factor"]), compression=compression, dofs=float(data["dofs"]),
                    aca=np.zeros((0, 0)) if compression == "dense" else dict(eps=float(aca["eps"]), eta=float(aca["eta"]),

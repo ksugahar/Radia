@@ -3,8 +3,8 @@
 NGSolve owns FE assembly; Radia owns charge-Gram preparation. The caller owns
 the TaskManager region. Construction prepares operators, never a CPU solution.
 The charge Gram, the charge map B/B^T, the material evaluation map and the
-Newton reference mass are generated on the device from flat-TET geometry and
-NGSolve reference tables; no host-built sparse operator is uploaded.
+Newton reference mass are generated on the device from affine or P2-curved TET
+geometry and NGSolve reference tables; no host-built sparse operator is uploaded.
 """
 from __future__ import annotations
 
@@ -39,8 +39,9 @@ class PreparedHDivNonlinear:
 
     Supported domain (every bound fails loudly before device allocation):
 
-    - affine tetrahedra, HDiv order 1 or 2, one soft-iron law with at most
-      4096 table rows;
+    - affine tetrahedra (``curve_order=1``) or NGSolve ``Curve(2)``
+      isoparametric P2 tetrahedra (``curve_order=2``), HDiv order 1 or 2,
+      one soft-iron law with at most 4096 table rows;
     - material rule: NGSolve ``IntegrationRule(TET, 2*max(6, 2*order+2))``
       (343 points per element), shared with the CPU route and never reduced;
     - material: no fixed element, DOF or point cap. Numbering is int32, and
@@ -65,7 +66,7 @@ class PreparedHDivNonlinear:
 
     @classmethod
     def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, mesh_check_receipt,
-                      mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+                      mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1):
         """Use the existing Radia CPU polynomial construction, without a CPU solve.
 
         Rows are [H in A/m, B in tesla]; one uniform soft-iron law is supported.
@@ -74,6 +75,7 @@ class PreparedHDivNonlinear:
             raise ValueError("This workflow requires explicit backend='gpu'")
         if isinstance(order, bool) or order not in (1, 2):
             raise ValueError("HDiv order must be 1 or 2")
+        curve_order = _checked_curve_order(curve_order, order)
         aca = _checked_gram_aca(gram_aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
@@ -87,23 +89,24 @@ class PreparedHDivNonlinear:
             prepared = cls.__new__(cls)
             prepared.mesh_sha256 = mesh_hash
             prepared.label_contract_sha256 = contract_hash
-            prepared._initialize(snapshot, law, order, aca)
+            prepared._initialize(snapshot, law, order, aca, curve_order)
             return prepared
 
     def __init__(self, mesh_path, law, *, backend, label_contract, mesh_check_receipt,
-                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (1, 2):
             raise ValueError("HDiv order must be 1 or 2")
+        curve_order = _checked_curve_order(curve_order, order)
         aca = _checked_gram_aca(gram_aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
-            self._initialize(snapshot, law, order, aca)
+            self._initialize(snapshot, law, order, aca, curve_order)
 
-    def _initialize(self, path, law, order, aca):
+    def _initialize(self, path, law, order, aca, curve_order):
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
@@ -111,9 +114,10 @@ class PreparedHDivNonlinear:
         self._operator = self._material = None
         self._closed = False
         self.order = order
+        self.family = _FAMILIES[curve_order]
         self.gram_aca = dict(aca)
         try:
-            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca)
+            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, curve_order=curve_order)
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
             self.material_budget = setup["material_budget"]
@@ -172,7 +176,8 @@ class PreparedHDivNonlinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
-                gram_route="device-flat-tet", gram_compression=_GRAM_COMPRESSION,
+                family=getattr(self, "family", None), gram_route=_gram_route(getattr(self, "family", None)),
+                gram_compression=_GRAM_COMPRESSION,
                 gram_aca=dict(self.gram_aca) if hasattr(self, "gram_aca") else None,
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
@@ -206,17 +211,18 @@ class PreparedHDivLinear:
     ``PreparedHDivNonlinear``); only vectors cross. The supported domain and
     the ``gram_aca`` contract are those of ``PreparedHDivNonlinear`` without
     the inverse-BH law, plus conforming RT0 (``order=0``) and an explicit
-    exact ``gram_compression="dense"``. ``inv_chi`` is per solve, so one
-    prepared operator serves several susceptibilities.
+    exact ``gram_compression="dense"``. RT0 is affine only. ``inv_chi`` is
+    per solve, so one prepared operator serves several susceptibilities.
     """
 
     def __init__(self, mesh_path, *, backend, label_contract, mesh_check_receipt,
                  mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                 gram_compression="aca"):
+                 gram_compression="aca", curve_order=1):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (0, 1, 2):
             raise ValueError("HDiv linear order must be 0 (RT0), 1 or 2")
+        curve_order = _checked_curve_order(curve_order, order)
         aca = _checked_gram_compression(gram_compression, gram_aca)
         import numpy as np
         from .gpu import _native
@@ -225,6 +231,7 @@ class PreparedHDivLinear:
         self._operator = self._mass = None
         self._closed = False
         self.order = order
+        self.family = _FAMILIES[curve_order]
         self.gram_compression = gram_compression
         self.gram_aca = None if aca is None else dict(aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
@@ -232,7 +239,8 @@ class PreparedHDivLinear:
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
             try:
-                setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, compression=gram_compression)
+                setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, compression=gram_compression,
+                                                   curve_order=curve_order)
                 self.dofs = setup["dofs"]
                 self._rhs = setup["rhs_operator"]
                 self._mean = setup["mean_operator"]
@@ -240,7 +248,7 @@ class PreparedHDivLinear:
                 self._mass = _hdiv_cuda._ResidentMass.from_flat_tables(
                     **setup["evaluation_tables"], dofs=self.dofs, backend="gpu")
                 self.mass_assembly = _checked_material_assembly(self._mass.assembly(), setup["evaluation_tables"],
-                                                                route="device-flat-tet-mass")
+                                                                mass=True)
                 self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
                     **setup["charge_gram"], dofs=self.dofs, backend="gpu")
                 self.assembly = _checked_device_assembly(self._operator.assembly(), setup["charge_gram"])
@@ -280,7 +288,7 @@ class PreparedHDivLinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
-                gram_route="device-flat-tet", gram_compression=self.gram_compression,
+                family=self.family, gram_route=_gram_route(self.family), gram_compression=self.gram_compression,
                 gram_aca=None if self.gram_aca is None else dict(self.gram_aca),
                 assembly=getattr(self, "assembly", None), mass_assembly=getattr(self, "mass_assembly", None),
                 charge_budget=self.assembly["charge_budget"] if getattr(self, "assembly", None) else None,
@@ -306,6 +314,22 @@ class PreparedHDivLinear:
 
 _LINEAR_PRECONDITIONERS = ("mass-diagonal", "mass-cholesky", "mass-polynomial", "mass-polynomial-graph",
                            "mass-chebyshev", "mass-chebyshev-graph")
+# Geometry family per NGSolve curve order: affine TET, or isoparametric P2 TET
+# (Mesh.Curve(2), the CPU curved route's geometry).
+_FAMILIES = {1: "affine-tet", 2: "curved-tet"}
+
+
+def _checked_curve_order(curve_order, order):
+    """Explicit curve order; curved P2 carries HDiv orders 1 and 2 only, as the CPU curved route."""
+    if isinstance(curve_order, bool) or curve_order not in _FAMILIES:
+        raise ValueError("curve_order must be 1 (affine TET) or 2 (isoparametric P2 TET): %r" % (curve_order,))
+    if curve_order == 2 and order not in (1, 2):
+        raise ValueError("Curved P2 TET requires HDiv order 1 or 2")
+    return int(curve_order)
+
+
+def _gram_route(family):
+    return None if family is None else ("device-curved-tet" if family == "curved-tet" else "device-flat-tet")
 
 
 def _strict_json(data):
@@ -426,6 +450,12 @@ _DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "ch
                         "charge_face_dofs", "charge_map_invalid_flag")
 _CHARGE_TABLE_KEYS = ("cell_class", "cell_dofs", "cell_tables", "cell_exponents",
                       "face_class", "face_dofs", "face_tables", "face_exponents")
+# Curved P2 additions: corner numbers for touching, and the mass rules of the
+# per-host device Gram solve of the charge map.
+_CURVED_CHARGE_KEYS = ("cell_numbers", "face_numbers", "cell_mass_rule", "face_mass_rule")
+_CURVED_GRAM_UPLOADS = ("curve_gauss_points", "curve_gauss_weights", "cell_vertex_numbers", "face_vertex_numbers",
+                        "charge_cell_mass_rule", "charge_face_mass_rule", "charge_cell_exponents",
+                        "charge_face_exponents")
 _RULE_ROW_BYTES = 32  # FlatRulePoint: xi[3], weight as float64.
 # Device ACA of the charge Gram. The preset carries the CPU charge-Gram H-matrix
 # parameters (radia.vim build_charge_gram eps, leaf size, eta); it is a starting
@@ -492,7 +522,10 @@ def _expected_device_ledger(arguments):
     plan size is owned by the native side and required positive. The ACA
     route adds its charge permutation, dense-leaf spans and integer leaf
     rank/status and step counts; no Gram, sigma or factor value crosses.
+    The curved P2 family uploads P2 nodes in place of vertices, plus its
+    Duffy rule, corner numbers, charge mass rules and exponents.
     """
+    curved = arguments.get("family") == "curved-tet"
     sizes = {"cell_vertices_m": arguments["cell_vertices"].nbytes,
              "face_vertices_m": arguments["face_vertices"].nbytes,
              "charge_host": arguments["charge_host"].nbytes,
@@ -507,8 +540,17 @@ def _expected_device_ledger(arguments):
              "charge_map_face_vertices_m": arguments["face_vertices"].nbytes,
              "charge_map_invalid_flag": 4}
     sizes.update(("charge_" + name, arguments[name].nbytes) for name in _CHARGE_TABLE_KEYS
-                 if not name.endswith("exponents"))
-    expected = {(name, "H2D"): sizes[name] for name in _DEVICE_GRAM_UPLOADS if sizes[name]}
+                 if curved or not name.endswith("exponents"))
+    uploads = _DEVICE_GRAM_UPLOADS
+    if curved:
+        sizes.update(cell_p2_nodes_m=sizes.pop("cell_vertices_m"), face_p2_nodes_m=sizes.pop("face_vertices_m"),
+                     curve_gauss_points=arguments["curve_gl"].nbytes, curve_gauss_weights=arguments["curve_gw"].nbytes,
+                     cell_vertex_numbers=arguments["cell_numbers"].nbytes,
+                     face_vertex_numbers=arguments["face_numbers"].nbytes,
+                     charge_cell_mass_rule=arguments["cell_mass_rule"].nbytes,
+                     charge_face_mass_rule=arguments["face_mass_rule"].nbytes)
+        uploads = ("cell_p2_nodes_m", "face_p2_nodes_m") + uploads[2:] + _CURVED_GRAM_UPLOADS
+    expected = {(name, "H2D"): sizes[name] for name in uploads if sizes[name]}
     expected.update({("prepare_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
                      ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     if arguments["compression"] == "aca":
@@ -523,7 +565,8 @@ def _checked_device_assembly(assembly, arguments):
     A host-built charge-map row is rejected like any other unexpected payload.
     """
     charges = int(arguments["charge_host"].size)
-    if assembly.get("route") != "device-flat-tet" or assembly.get("charges") != charges:
+    if assembly.get("route") != _gram_route(arguments.get("family", "affine-tet")) \
+            or assembly.get("charges") != charges:
         raise RuntimeError("Unexpected HDiv Gram assembly route: %r" % (assembly.get("route"),))
     if assembly.get("compression") != arguments["compression"]:
         raise RuntimeError("HDiv Gram compression %r, requested %r"
@@ -571,48 +614,88 @@ def _checked_charge_exponents(kind, exponents):
                          "charge %d kind %d exponents %r" % (first, int(kind[first]), expo[first].tolist()))
 
 
+def _rule_rows(points, weights, width):
+    """(points, 4) rows of xi and weight, the native FlatRulePoint layout."""
+    import numpy as np
+    points = np.asarray(points, dtype=np.float64).reshape(-1, width)
+    weights = np.asarray(weights, dtype=np.float64).reshape(-1)
+    if len(points) != len(weights):
+        raise ValueError("Reference rule points and weights disagree")
+    rows = np.zeros((len(points), 4))
+    rows[:, :width], rows[:, 3] = points, weights
+    return rows
+
+
+# Two evaluations of the same NGSolve P2 map (vectorized CPU-route trafo and the
+# native staging's mapped points) agree to roundoff, never to a modelling error.
+_P2_GEOMETRY_ROUNDOFF = 1e-12
+
+
 def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMPRESSION):
-    """Map the staged flat-TET charge inputs and NGSolve tables to the device binding.
+    """Map the staged TET charge inputs and NGSolve tables to the device binding.
 
     The Gram is compressed by device ACA with the caller's checked parameters
     (``_checked_gram_aca``); only the geometric partition is built on the
     host. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
     potentials, as on the CPU; higher degrees fail loudly on the device.
     The table staging must reproduce the Gram geometry and charge order
-    exactly (``geometry`` is its cell and exterior-face vertex coordinates).
+    (``geometry`` is its cell and exterior-face coordinates): exactly for
+    affine vertices; for curved P2 nodes to roundoff, with identical corner
+    numbers. The curved family carries the CPU curved route's rules
+    (``_curved_gram_rules``), far factor and Duffy rule, and the device
+    consumes the staged P2 nodes that also build its charge map.
     """
     import numpy as np
     if len(inputs.get("image_masks", ())):
         raise NotImplementedError("Device charge Gram has no image route")
-    cells = np.ascontiguousarray(inputs["cell_verts"], dtype=np.float64).reshape(-1)
-    faces = np.ascontiguousarray(inputs["face_verts"], dtype=np.float64).reshape(-1)
-    if cells.size != 12*int(inputs["n_el"]):
-        raise ValueError("Charge cell geometry does not match n_el")
-
-    def rule(kind, suffix, width):
-        points = np.asarray(inputs["ref_%s_pts%s" % (kind, suffix)], dtype=np.float64).reshape(-1, width)
-        weights = np.asarray(inputs["ref_%s_w%s" % (kind, suffix)], dtype=np.float64).reshape(-1)
-        if len(points) != len(weights):
-            raise ValueError("Reference rule points and weights disagree")
-        rows = np.zeros((len(points), 4))
-        rows[:, :width], rows[:, 3] = points, weights
-        return rows
-
-    far = "ho_far_factor" in inputs and bool(np.isfinite(inputs["ho_far_factor"]))
-    arguments = dict(
-        cell_vertices=cells, face_vertices=faces,
-        charge_host=np.ascontiguousarray(inputs["charge_host"], dtype=np.int32),
-        charge_kind=np.ascontiguousarray(inputs["charge_kind"], dtype=np.int32),
-        charge_exponents=np.ascontiguousarray(inputs["charge_expo"], dtype=np.int32),
-        tet_rule=rule("tet", "", 3), tri_rule=rule("tri", "", 2),
-        tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
-        tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
-        far_factor=float(inputs["ho_far_factor"]) if far else 1e30,
-        compression=compression, aca=_checked_gram_compression(compression, aca))
-    _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
+    curved = inputs.get("family") == "curved-tet"
+    common = dict(charge_host=np.ascontiguousarray(inputs["charge_host"], dtype=np.int32),
+                  charge_kind=np.ascontiguousarray(inputs["charge_kind"], dtype=np.int32),
+                  charge_exponents=np.ascontiguousarray(inputs["charge_expo"], dtype=np.int32),
+                  compression=compression, aca=_checked_gram_compression(compression, aca))
     cells_m, faces_m = geometry
-    if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
-        raise ValueError("Charge tables and Gram geometry disagree")
+    if curved:
+        cells_py = np.ascontiguousarray(inputs["cell_nodes"], dtype=np.float64).reshape(-1)
+        faces_py = np.ascontiguousarray(inputs["face_nodes"], dtype=np.float64).reshape(-1)
+        if cells_py.size != 30*int(inputs["n_el"]) or cells_m.shape != cells_py.shape \
+                or faces_m.shape != faces_py.shape:
+            raise ValueError("Curved charge tables and Gram geometry disagree in size")
+        scale = max(float(np.abs(cells_py).max()), float(np.abs(faces_py).max()), np.finfo(float).tiny)
+        deviation = max(float(np.abs(cells_m - cells_py).max()), float(np.abs(faces_m - faces_py).max()))
+        if deviation > _P2_GEOMETRY_ROUNDOFF*scale:
+            raise ValueError("Staged P2 geometry and the CPU curved route disagree: %r m at scale %r m"
+                             % (deviation, scale))
+        numbers = (np.ravel(tables["cell_numbers"]), np.ravel(tables["face_numbers"]))
+        if not (np.array_equal(numbers[0], inputs["cell_vertices"]) and np.array_equal(numbers[1], inputs["face_vertices"])):
+            raise ValueError("Staged and CPU curved corner numbers disagree")
+        rules = inputs["rules"]
+        arguments = dict(common, cell_vertices=cells_m, face_vertices=faces_m,
+                         tet_rule=_rule_rows(*rules["tet"], 3), tri_rule=_rule_rows(*rules["tri"], 2),
+                         tet_low_rule=_rule_rows(*rules["tet_lo"], 3), tri_low_rule=_rule_rows(*rules["tri_lo"], 2),
+                         far_factor=float(inputs["ho_far_factor"]), family="curved-tet",
+                         cell_numbers=np.ascontiguousarray(numbers[0], dtype=np.int32),
+                         face_numbers=np.ascontiguousarray(numbers[1], dtype=np.int32),
+                         curve_gl=np.ascontiguousarray(rules["gl"], dtype=np.float64),
+                         curve_gw=np.ascontiguousarray(rules["gw"], dtype=np.float64),
+                         cell_mass_rule=tables["cell_mass_rule"], face_mass_rule=tables["face_mass_rule"])
+    else:
+        cells = np.ascontiguousarray(inputs["cell_verts"], dtype=np.float64).reshape(-1)
+        faces = np.ascontiguousarray(inputs["face_verts"], dtype=np.float64).reshape(-1)
+        if cells.size != 12*int(inputs["n_el"]):
+            raise ValueError("Charge cell geometry does not match n_el")
+
+        def rule(kind, suffix, width):
+            return _rule_rows(inputs["ref_%s_pts%s" % (kind, suffix)], inputs["ref_%s_w%s" % (kind, suffix)], width)
+
+        far = "ho_far_factor" in inputs and bool(np.isfinite(inputs["ho_far_factor"]))
+        arguments = dict(common, cell_vertices=cells, face_vertices=faces,
+                         tet_rule=rule("tet", "", 3), tri_rule=rule("tri", "", 2),
+                         tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
+                         tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
+                         far_factor=float(inputs["ho_far_factor"]) if far else 1e30)
+        if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
+            raise ValueError("Charge tables and Gram geometry disagree")
+    _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
     ne, nf = tables["cell_class"].size, tables["face_class"].size
     cm, fm = len(tables["cell_exponents"]), len(tables["face_exponents"])
     face_expo = np.c_[tables["face_exponents"], np.zeros(fm, dtype=np.int32)]
@@ -626,8 +709,12 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
     return arguments
 
 
-def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION):
+def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION, curve_order=1):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
+
+    ``curve_order=2`` curves the FE mesh and the native staging mesh with
+    NGSolve ``Curve(2)``; sources, mean field, tables and geometry then all
+    refer to the isoparametric P2 mesh.
 
     ``native`` is the caller's verified ``_hdiv_cuda`` module: one preparation
     verifies the native and CUDA library closure once, not per staging helper.
@@ -638,14 +725,20 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     runs when the material context is constructed.
     """
     import ngsolve as ng
-    from radia.vim._vim import _prepare_gpu_charge_inputs
+    from radia.vim._vim import _curve_mesh, _prepare_gpu_charge_inputs, _prepare_gpu_curved_charge_inputs
     aca = _checked_gram_compression(compression, aca)
+    curve_order = _checked_curve_order(curve_order, order)
     mesh = ng.Mesh(str(path))
+    if curve_order == 2:
+        _curve_mesh(mesh, 2)
     fes = ng.HDiv(mesh, order=order)
-    evaluation = _device_evaluation_tables(path, fes, native)
+    evaluation = _device_evaluation_tables(path, fes, native, curve_order)
     budget = _checked_material_budget(native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof))
-    _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    tables, geometry = _device_charge_tables(path, fes, native)
+    if curve_order == 2:
+        inputs = _prepare_gpu_curved_charge_inputs(fes, backend="gpu")
+    else:
+        _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
+    tables, geometry = _device_charge_tables(path, fes, native, curve_order)
     return dict(_fe_sources(mesh, fes), evaluation_tables=evaluation, material_budget=budget,
                 charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression))
 
@@ -776,16 +869,18 @@ def _fe_components(path, mesh, fes):
                 quadrature_order=payload["integration_order"])
 
 
-def _device_evaluation_tables(path, fes, native):
+def _device_evaluation_tables(path, fes, native, curve_order=1):
     """NGSolve reference-shape tables for device E construction; no evaluation matrix."""
     import numpy as np
-    staging = native._MaterialStagingContext(str(path), fes.globalorder)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order)
     try:
         tables = staging.flat_tables()
     finally:
         staging.close()
     if tables.get("schema") != "radia.hdiv-flat-evaluation-tables.v1" or tables["dofs"] != fes.ndof:
         raise ValueError("Material and charge FE numbering mismatch")
+    if tables.get("family") != _FAMILIES[curve_order]:
+        raise ValueError("Evaluation tables family %r, requested %r" % (tables.get("family"), _FAMILIES[curve_order]))
     arguments = dict(rule=np.ascontiguousarray(tables["rule"], dtype=np.float64),
                      reference_shapes=np.ascontiguousarray(tables["reference_shapes"], dtype=np.float64),
                      vertices=np.ascontiguousarray(tables["vertices"], dtype=np.float64),
@@ -797,22 +892,28 @@ def _device_evaluation_tables(path, fes, native):
     return arguments
 
 
-def _device_charge_tables(path, fes, native):
-    """NGSolve charge-projection tables for device B construction; no charge map.
+def _device_charge_tables(path, fes, native, curve_order=1):
+    """NGSolve charge tables for device B construction; no charge map.
 
-    Returns the binding tables and, for the host-side consistency check only,
-    the staged cell and exterior-face vertex coordinates.
+    Returns the binding tables and the staged cell and exterior-face
+    geometry: affine vertices (host-side consistency check only) or curved P2
+    nodes, which the curved device Gram consumes. Curved tables add the
+    corner numbers and the charge mass rules.
     """
     import numpy as np
-    staging = native._MaterialStagingContext(str(path), fes.globalorder)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order)
     try:
         staged = staging.charge_tables()
     finally:
         staging.close()
     if staged.get("schema") != "radia.hdiv-flat-charge-tables.v1" or staged["dofs"] != fes.ndof:
         raise ValueError("Charge tables and charge FE numbering mismatch")
-    tables = {name: np.ascontiguousarray(staged[name], dtype=np.float64 if name.endswith("tables") else np.int32)
-              for name in _CHARGE_TABLE_KEYS}
+    if staged.get("family") != _FAMILIES[curve_order]:
+        raise ValueError("Charge tables family %r, requested %r" % (staged.get("family"), _FAMILIES[curve_order]))
+    keys = _CHARGE_TABLE_KEYS + (_CURVED_CHARGE_KEYS if curve_order == 2 else ())
+    tables = {name: np.ascontiguousarray(staged[name], dtype=np.float64
+                                         if name.endswith(("tables", "rule")) else np.int32)
+              for name in keys}
     geometry = tuple(np.ascontiguousarray(staged[name], dtype=np.float64).reshape(-1)
                      for name in ("cell_vertices", "face_vertices"))
     return tables, geometry
@@ -824,24 +925,31 @@ _DEVICE_EVALUATION_UPLOADS = ("element_vertices_m", "reference_shapes", "materia
                               "element_dofs", "element_points", "evaluation_invalid_flag")
 
 
-def _checked_material_assembly(assembly, tables, *, route="device-flat-tet-matrix-free"):
+def _checked_material_assembly(assembly, tables, *, mass=False):
     """Reject any material ledger other than the exact device-built evaluation route.
 
     Covers material setup only; per-solve state uploads are outside this ledger.
     Persistent and setup-transient device bytes must be reported as positive integers.
-    The mass-only context (``route="device-flat-tet-mass"``) runs the same build
-    without the inverse-BH law.
+    The mass-only context (``mass=True``) runs the same build without the
+    inverse-BH law. Curved P2 tables (10 nodes per element) upload P2 nodes
+    in place of vertices and report the curved route.
     """
+    curved = tables["vertices"].shape[-1] == 30
+    route = "device-%s-tet-%s" % ("curved" if curved else "flat", "mass" if mass else "matrix-free")
     if assembly.get("route") != route:
         raise RuntimeError("Unexpected HDiv material assembly route: %r" % (assembly.get("route"),))
     sizes = {"element_vertices_m": tables["vertices"].nbytes, "reference_shapes": tables["reference_shapes"].nbytes,
              "material_rule": tables["rule"].nbytes, "element_class": tables["element_class"].nbytes,
              "element_dofs": tables["element_dofs"].nbytes, "element_points": tables["element_points"].nbytes,
              "evaluation_invalid_flag": 4}
-    expected = {(name, "H2D"): sizes[name] for name in _DEVICE_EVALUATION_UPLOADS}
+    names = _DEVICE_EVALUATION_UPLOADS
+    if curved:
+        sizes["element_p2_nodes_m"] = sizes.pop("element_vertices_m")
+        names = ("element_p2_nodes_m",) + names[1:]
+    expected = {(name, "H2D"): sizes[name] for name in names}
     expected.update({("evaluation_flag", "D2H"): 4, ("mass_nonzeros", "D2H"): 4, ("mass_flag", "D2H"): 4,
                      ("mass_spectral_bound", "D2H"): 8})
-    if route == "device-flat-tet-matrix-free":
+    if not mass:
         expected[("inverse_bh_law", "H2D")] = None
     for name in ("persistent_device_bytes", "setup_transient_device_bytes"):
         value = assembly.get(name)
@@ -864,7 +972,7 @@ def _checked_material_assembly(assembly, tables, *, route="device-flat-tet-matri
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
                               mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                              gram_compression="aca"):
+                              gram_compression="aca", curve_order=1):
     """Return the owned primitive device-construction payload of a checked mesh.
 
     Schema ``radia.hdiv-device-setup.v1``: NGSolve reference tables and charge
@@ -872,19 +980,23 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
     mass, plus the NG-assembled source and mean-field vectors. No matrix and
     no resident GPU object is created; the binding consumers (pybind11 and
     the plain MEX) build every operator on the device from these arrays.
-    Order 0 is conforming RT0 (linear consumers only). The caller owns TaskManager.
+    Order 0 is conforming RT0 (linear consumers only). ``curve_order=2``
+    selects the isoparametric P2 family ``curved-tet`` (orders 1 and 2); its
+    payload adds the curved Gram and charge-map tables. The caller owns TaskManager.
     """
     if backend != "gpu":
         raise ValueError("Device setup requires explicit backend='gpu'")
     if isinstance(order, bool) or order not in (0, 1, 2):
         raise ValueError("HDiv device setup order must be 0 (RT0), 1 or 2")
+    curve_order = _checked_curve_order(curve_order, order)
     aca = _checked_gram_compression(gram_compression, gram_aca)
     from .gpu import _native
     native = _native("_hdiv_cuda")
     with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                 mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
-        setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression)
-    return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family="affine-tet", order=order,
+        setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression,
+                                           curve_order=curve_order)
+    return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family=_FAMILIES[curve_order], order=order,
                 dofs=setup["dofs"], mesh_sha256=mesh_hash, label_contract_sha256=contract_hash,
                 evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],
                 material_budget=setup["material_budget"], rhs_operator=setup["rhs_operator"],

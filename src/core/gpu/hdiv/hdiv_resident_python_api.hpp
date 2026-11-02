@@ -20,7 +20,11 @@ struct NewtonResult {radia_hdiv_bh::BoundaryVector<double> x;radia_hdiv_bh::Boun
 struct LinearOptions {double invChi=0,tolerance=0;int maximumIterations=0,preconditioner=0,degree=8;double lowerFraction=.1;};
 struct LinearResult {radia_hdiv_bh::BoundaryVector<double> x;int iterations=0;double relativeResidual=0;std::size_t ownedBytes=0,graphLaunches=0;};
 struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
-// Primitive flat-TET charge geometry; reference rules are (xi0,xi1,xi2,weight) rows.
+// Primitive TET charge geometry; reference rules are (xi0,xi1,xi2,weight) rows.
+// family "affine-tet": cells/faces hold 4/3 vertices per host. "curved-tet":
+// cells/faces hold the 10/6 P2 nodes of the isoparametric map (corners
+// first), the mesh vertex numbers decide touching hosts and (gl,gw) is the
+// [0,1] Gauss rule of the touching Duffy potentials.
 // compression is "dense" (one deferred dense block) or "aca" (device ACA
 // leaves on a geometric partition); the ACA parameters apply to "aca" only.
 struct FlatInput {
@@ -29,14 +33,22 @@ struct FlatInput {
     double farFactor=1e30;
     std::string compression;
     double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;
+    std::string family="affine-tet";
+    radia_hmatrix_cuda::HostVector<int> cellNumbers,faceNumbers;
+    radia_hmatrix_cuda::HostVector<double> gl,gw;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated
-// on the device from these and the FlatInput vertices; no B value crosses.
-// Exponents are host-side layout checks against FlatInput and never uploaded.
+// on the device from these and the FlatInput geometry; no B value crosses.
+// Exponents check the layout against FlatInput on the host; only the curved map uploads them.
+// Affine: tables are the reference projections, scaled per host on the device.
+// Curved: tables are the reference moments R and the device solves the
+// per-host monomial Gram G_e X = R on NGSolve's declared mass rules
+// (cellRule/faceRule rows), so B = G_e^{-1} R carries the curved measure.
 struct ChargeMapInput {
     std::size_t dofs=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0;
-    radia_hmatrix_cuda::HostVector<double> cellTables,faceTables;
+    radia_hmatrix_cuda::HostVector<double> cellTables,faceTables,cellRule,faceRule;
     radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
+    bool curved=false;
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;

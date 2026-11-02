@@ -10,7 +10,7 @@ class MaterialOwner {
     std::mutex mutex;
     std::unique_ptr<MaterialStagingContext> context;
 public:
-    MaterialOwner(const std::string& path,int order):context(std::make_unique<MaterialStagingContext>(path,order)){}
+    MaterialOwner(const std::string& path,int order,int curveOrder):context(std::make_unique<MaterialStagingContext>(path,order,curveOrder)){}
     MaterialQuadraturePayload quadrature(std::size_t first,std::size_t count){
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
@@ -54,6 +54,7 @@ template<class T> py::array_t<T> ownedRows(const std::vector<T>& values,std::siz
 py::dict publishFlat(const FlatEvaluationTables& t){
     py::dict out;
     out["schema"]="radia.hdiv-flat-evaluation-tables.v1";
+    out["family"]=t.nodes==10?"curved-tet":"affine-tet";
     out["dofs"]=t.dofs;out["total_points"]=t.totalPoints;out["integration_order"]=t.integrationOrder;
     out["rule"]=ownedRows(t.rule,t.rulePoints);
     auto shapes=ownedArray(t.shapes);
@@ -66,6 +67,7 @@ py::dict publishFlat(const FlatEvaluationTables& t){
 py::dict publishCharge(const FlatChargeTables& t){
     py::dict out;
     out["schema"]="radia.hdiv-flat-charge-tables.v1";
+    out["family"]=t.curved?"curved-tet":"affine-tet";
     out["dofs"]=t.dofs;
     auto tables=[](const std::vector<double>& v,std::size_t monomials,std::size_t width){auto a=ownedArray(v);
         a.resize({py::ssize_t(monomials*width?v.size()/(monomials*width):0),py::ssize_t(monomials),py::ssize_t(width)});return a;};
@@ -74,12 +76,14 @@ py::dict publishCharge(const FlatChargeTables& t){
     out["face_class"]=ownedArray(t.faceClass);out["face_dofs"]=ownedRows(t.faceDofs,t.faces);
     out["cell_exponents"]=ownedRows(t.cellExponents,t.cellMonomials);out["face_exponents"]=ownedRows(t.faceExponents,t.faceMonomials);
     out["cell_vertices"]=ownedRows(t.cellVertices,t.cells);out["face_vertices"]=ownedRows(t.faceVertices,t.faces);
+    if(t.curved){out["cell_numbers"]=ownedRows(t.cellNumbers,t.cells);out["face_numbers"]=ownedRows(t.faceNumbers,t.faces);
+        out["cell_mass_rule"]=ownedRows(t.cellRule,t.cellRule.size()/4);out["face_mass_rule"]=ownedRows(t.faceRule,t.faceRule.size()/4);}
     return out;
 }
 }
 void registerMaterialStaging(py::module_& module){
     py::class_<MaterialOwner>(module,"_MaterialStagingContext")
-        .def(py::init<const std::string&,int>(),py::arg("mesh_path"),py::arg("order"),py::call_guard<py::gil_scoped_release>())
+        .def(py::init<const std::string&,int,int>(),py::arg("mesh_path"),py::arg("order"),py::arg("curve_order")=1,py::call_guard<py::gil_scoped_release>())
         .def("quadrature",[](MaterialOwner& self,std::size_t first,std::size_t count){
             MaterialQuadraturePayload payload;
             {py::gil_scoped_release release;payload=self.quadrature(first,count);}
@@ -89,11 +93,11 @@ void registerMaterialStaging(py::module_& module){
             FlatEvaluationTables tables;
             {py::gil_scoped_release release;tables=self.flatTables();}
             return publishFlat(tables);
-        },"NGSolve reference HDiv shapes per vertex-rank class plus primitive TET topology; no evaluation matrix.")
+        },"NGSolve reference HDiv shapes per vertex-rank class plus primitive TET geometry (affine vertices or curved P2 nodes); no evaluation matrix.")
         .def("charge_tables",[](MaterialOwner& self){
             FlatChargeTables tables;
             {py::gil_scoped_release release;tables=self.chargeTables();}
             return publishCharge(tables);
-        },"NGSolve charge-projection tables per vertex-rank class plus cell/exterior-face DOFs; no charge map.")
+        },"NGSolve charge tables per vertex-rank class (affine projections or curved moments) plus cell/exterior-face DOFs and geometry; no charge map.")
         .def("close",&MaterialOwner::close,py::call_guard<py::gil_scoped_release>());
 }

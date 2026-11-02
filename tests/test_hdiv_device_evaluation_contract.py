@@ -78,10 +78,10 @@ def test_mass_ledger_is_the_material_build_without_the_law():
     mass = ledger(t)
     mass["route"] = "device-flat-tet-mass"
     mass["transfer_ledger"] = [row for row in mass["transfer_ledger"] if row["payload"] != "inverse_bh_law"]
-    assert hdiv_gpu._checked_material_assembly(mass, t, route="device-flat-tet-mass")["route"] == "device-flat-tet-mass"
+    assert hdiv_gpu._checked_material_assembly(mass, t, mass=True)["route"] == "device-flat-tet-mass"
     # A law row on the mass route, or a law-less ledger on the material route, is rejected.
     with pytest.raises(RuntimeError, match="inverse_bh_law"):
-        hdiv_gpu._checked_material_assembly(dict(ledger(t), route="device-flat-tet-mass"), t, route="device-flat-tet-mass")
+        hdiv_gpu._checked_material_assembly(dict(ledger(t), route="device-flat-tet-mass"), t, mass=True)
     with pytest.raises(RuntimeError, match="missing rows"):
         hdiv_gpu._checked_material_assembly(dict(mass, route="device-flat-tet-matrix-free"), t)
     with pytest.raises(RuntimeError, match="route"):
@@ -161,7 +161,7 @@ def test_staging_checks_every_element_against_its_class_and_the_affine_map():
     staging = source[source.index("inline FlatEvaluationTables stageFlatEvaluationTables"):]
     for guard in ("not determined by the element vertex order", "TET map differs from the device affine convention",
                   "TET Jacobian differs from the device affine convention", "Material global sample coverage mismatch",
-                  "ET_TET", "GetCurveOrder()>1"):
+                  "ET_TET", "p2_staging::checkTetMap("):
         assert guard in staging, guard
 
 
@@ -230,7 +230,8 @@ def test_matrix_free_evaluation_has_one_piola_formula_and_no_float_atomics():
     for kernel, nxt in (("flatEvaluationEntries", "flatEvaluationApply"), ("flatEvaluationApply", "flatEvaluationTransposeApply"),
                         ("flatEvaluationTransposeApply", "slotKeys"), ("flatMassEntries", "flatMassReduce")):
         body = _block(source, "__global__ void " + kernel + "(", "__global__ void " + nxt + "(")
-        assert "piolaValue(J,det," in body and "affineTet(vertices+12*e,J)" in body, kernel
+        # One geometry entry for affine vertices and curved P2 nodes.
+        assert "piolaValue(J,det," in body and "elementJacobian(vertices,nodes,e,ruleRows+4*k,J)" in body, kernel
     transpose = _block(source, "__global__ void flatEvaluationTransposeApply(", "__global__ void slotKeys(")
     assert "atomic" not in transpose and "incidence[at]" in transpose, "E^T must be a deterministic gather"
 
@@ -239,7 +240,7 @@ def test_production_material_stores_no_global_evaluation_matrix():
     source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
     flat = _block(source, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()")
     assert "builder.build(in,flat,weights,M,massDiagonal);" in flat and "&E" not in flat and "&ET" not in flat
-    assert 'matrixFree=true;routeName="device-flat-tet-matrix-free";' in flat
+    assert 'matrixFree=true;routeName=in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";' in flat
     for method in ("MaterialEvaluation evaluate(", "void applyFrozenDevice("):
         body = source[source.index(method):]
         body = body[:body.index("\n    }\n")]

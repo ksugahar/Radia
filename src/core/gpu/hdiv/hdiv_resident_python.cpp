@@ -53,7 +53,10 @@ radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<
     input.classes=std::size_t(shapes.shape(0));input.points=input.elements*input.rulePoints;input.dofs=dofs;
     if(std::size_t(shapes.shape(1))!=input.rulePoints||std::size_t(shapes.shape(2))!=input.local||std::size_t(elementDofs.shape(0))!=input.elements||std::size_t(elementPoints.shape(0))!=input.elements)
         throw py::value_error("Flat evaluation table dimensions disagree");
-    input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,12,bytes,"vertices");
+    // Geometry rows: 12 (affine vertices) or 30 (curved P2 nodes) coordinates per element.
+    if(vertices.ndim()!=2||(vertices.shape(1)!=12&&vertices.shape(1)!=30))throw py::value_error("Evaluation geometry requires (elements,12) affine vertices or (elements,30) P2 nodes");
+    input.nodes=std::size_t(vertices.shape(1))/3;
+    input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,0,bytes,"vertices");
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
     return input;
 }
@@ -84,7 +87,9 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
     Array<double> triLow,double farFactor,std::size_t dofs,Array<std::int32_t> cellClass,Array<std::int32_t> cellDofs,
     Array<double> cellTables,Array<std::int32_t> cellExponents,Array<std::int32_t> faceClass,Array<std::int32_t> faceDofs,
-    Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend) {
+    Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend,
+    const std::string& family,py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,
+    py::object cellMassRule,py::object faceMassRule) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
     if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
     if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
@@ -107,8 +112,20 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     auto integers=[&](Array<std::int32_t> a){const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     auto table=[&](Array<std::int32_t> a,const char* what){const auto v=rows(a,0,bytes,what);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     if(cells.ndim()!=1||faces.ndim()!=1)throw py::value_error("Geometry uses flat row-major coordinate vectors");
+    if(family!="affine-tet"&&family!="curved-tet")throw py::value_error("family must be explicit 'affine-tet' or 'curved-tet'");
+    const bool curved=family=="curved-tet";
+    for(const auto* value:{&cellNumbers,&faceNumbers,&curveGl,&curveGw,&cellMassRule,&faceMassRule})
+        if(value->is_none()==curved)throw py::value_error("Curved geometry arrays are required for family='curved-tet' and rejected for 'affine-tet'");
     FlatInput input{snapshot(cells,bytes),snapshot(faces,bytes),flat(tet),flat(tri),flat(tetLow),flat(triLow),
         integers(host),integers(kind),integers(expo),farFactor,compression};
+    input.family=family;
+    auto typed=[](const py::object& value,const char* what,auto tag){using T=decltype(tag);
+        if(!py::isinstance<Array<T>>(value))throw py::value_error(std::string(what)+" requires a contiguous array of the declared dtype");
+        return py::cast<Array<T>>(value);};
+    if(curved){
+        input.cellNumbers=integers(typed(cellNumbers,"cell_numbers",std::int32_t{}));input.faceNumbers=integers(typed(faceNumbers,"face_numbers",std::int32_t{}));
+        input.gl=flat(typed(curveGl,"curve_gl",double{}));input.gw=flat(typed(curveGw,"curve_gw",double{}));
+    }
     if(compression=="aca"){
         if(!py::isinstance<py::dict>(aca))throw py::value_error("aca must be a dictionary");
         auto d=py::reinterpret_borrow<py::dict>(aca);
@@ -128,6 +145,10 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     charges.cellClass=integers(cellClass);charges.faceClass=integers(faceClass);
     charges.cellDofs=table(cellDofs,"cell_dofs");charges.faceDofs=table(faceDofs,"face_dofs");
     charges.cellExponents=table(cellExponents,"cell_exponents");charges.faceExponents=table(faceExponents,"face_exponents");
+    if(curved){charges.curved=true;
+        auto rule=[&](const py::object& value,const char* what){auto a=typed(value,what,double{});
+            if(a.ndim()!=2||a.shape(1)!=4)throw py::value_error(std::string(what)+" requires (points,4) float64 rows");return flat(a);};
+        charges.cellRule=rule(cellMassRule,"cell_mass_rule");charges.faceRule=rule(faceMassRule,"face_mass_rule");}
     py::gil_scoped_release release;auto owner=createFlat(input,charges);pythonPublicationProbe();return owner;
 }
 }
@@ -219,9 +240,9 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
            py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("backend"),
            "Device-built reference mass M from resident NGSolve reference tables for the linear material solve; no mass entry crosses.")
-      .def("assembly",[](radia_hdiv_bh::MassOperator& self){radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
-          {py::gil_scoped_release release;rows=self.transfers();bytes=self.footprint();}
-          pythonPublicationProbe();py::dict d;d["route"]="device-flat-tet-mass";d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
+      .def("assembly",[](radia_hdiv_bh::MassOperator& self){radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;std::string route;
+          {py::gil_scoped_release release;rows=self.transfers();bytes=self.footprint();route=self.route();}
+          pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
           for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("reference_mass_apply",[](radia_hdiv_bh::MassOperator& self,Array<double> x){
@@ -252,8 +273,13 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
     m.doc()="Private shared B^T G B CUDA component; explicit shared material PCG; no FE assembly or nonlinear MMM solver";
     m.def("_diagnostic_flat_charge_entries",[](Array<double> cells,Array<double> faces,Array<std::int32_t> host,Array<std::int32_t> kind,
         Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,Array<double> triLow,double farFactor,
-        Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend){
+        Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend,const std::string& family,
+        py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw){
         if(backend!="gpu")throw py::value_error("Flat diagnostic entries require explicit backend='gpu'");
+        if(family!="affine-tet"&&family!="curved-tet")throw py::value_error("family must be explicit 'affine-tet' or 'curved-tet'");
+        const bool curved=family=="curved-tet";
+        for(const auto* value:{&cellNumbers,&faceNumbers,&curveGl,&curveGw})
+            if(value->is_none()==curved)throw py::value_error("Curved geometry arrays are required for family='curved-tet' and rejected for 'affine-tet'");
         const auto n=std::size_t(host.size());
         if(host.ndim()!=1||n<1||n>std::size_t(INT_MAX)||kind.ndim()!=1||std::size_t(kind.size())!=n||expo.ndim()!=1||std::size_t(expo.size())!=3*n||
            cells.ndim()!=1||faces.ndim()!=1||rows.ndim()!=1||cols.ndim()!=1||rows.size()!=cols.size()||rows.size()<1||rows.size()>65536)
@@ -268,6 +294,9 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         auto integers=[&](Array<std::int32_t> a){const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
         FlatInput input{snapshot(cells,bytes),snapshot(faces,bytes),flat(tet),flat(tri),flat(tetLow),flat(triLow),
             integers(host),integers(kind),integers(expo),farFactor,"dense"};
+        input.family=family;
+        if(curved){input.cellNumbers=integers(py::cast<Array<std::int32_t>>(cellNumbers));input.faceNumbers=integers(py::cast<Array<std::int32_t>>(faceNumbers));
+            input.gl=flat(py::cast<Array<double>>(curveGl));input.gw=flat(py::cast<Array<double>>(curveGw));}
         const auto r=snapshot(rows,bytes),c=snapshot(cols,bytes);
         radia_hmatrix_cuda::HostVector<std::size_t> rr(r.begin(),r.end()),cc(c.begin(),c.end());radia_hmatrix_cuda::HostVector<double> values;
         {py::gil_scoped_release release;values=flatDiagnosticEntries(input,rr,cc);}
@@ -276,6 +305,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       py::arg("charge_kind").noconvert(),py::arg("charge_exponents").noconvert(),py::arg("tet_rule").noconvert(),
       py::arg("tri_rule").noconvert(),py::arg("tet_low_rule").noconvert(),py::arg("tri_low_rule").noconvert(),
       py::arg("far_factor"),py::arg("rows").noconvert(),py::arg("cols").noconvert(),py::arg("backend"),
+      py::arg("family")="affine-tet",py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
+      py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),
       "Diagnostic raw (unnormalized) device flat-Gram entries for explicit charge pairs; pairs and values cross, no matrix does.");
     py::class_<DeviceOperator,std::shared_ptr<DeviceOperator>>(m,"_ResidentHDiv")
       .def_static("from_flat_charges",&constructFlat,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),
@@ -285,6 +316,9 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("cell_dofs").noconvert(),py::arg("cell_tables").noconvert(),py::arg("cell_exponents").noconvert(),
            py::arg("face_class").noconvert(),py::arg("face_dofs").noconvert(),py::arg("face_tables").noconvert(),
            py::arg("face_exponents").noconvert(),py::arg("compression"),py::arg("aca"),py::arg("backend"),
+           py::arg("family")="affine-tet",py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
+           py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("cell_mass_rule")=py::none(),
+           py::arg("face_mass_rule")=py::none(),
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           pythonPublicationProbe();py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;

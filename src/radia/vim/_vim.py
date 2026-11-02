@@ -258,6 +258,18 @@ def _curved_outer_rules(order):
     raise ValueError("curved HDiv production order must be 1 or 2")
 
 
+def _curved_gram_rules(order, *, far_quad=3, curve_gauss=8):
+    """Curved-TET charge-Gram rules shared by the CPU constructor and the device route.
+
+    Returns the high outer rules, the permutation-invariant low rules of
+    well-separated pairs and the Gauss-Legendre Duffy rule on (0,1).
+    """
+    (rtp, rtw), (rsp, rsw) = _curved_outer_rules(order)
+    gx, gw = _g01(int(curve_gauss))
+    return dict(tet=(rtp, rtw), tri=(rsp, rsw), tet_lo=_outer_tet(far_quad), tri_lo=_outer_tri(far_quad),
+                gl=gx, gw=gw)
+
+
 def _outer_tet(quad):
     """Permutation-invariant outer TET rules for production BDM1/BDM2.
 
@@ -2345,6 +2357,84 @@ def _prepare_gpu_charge_inputs(fes, *, backend):
     return B, inputs
 
 
+_CURVED_FAR_FACTOR = 2.0
+
+
+def _curved_tet_charge_inputs(fes, quad, *, eps, leafsize, eta, far_quad, ho_far_factor, curve_gauss,
+                              image_masks, image_signs, materialize_mass):
+    """Curved (P2) analogue of `_flat_tet_charge_inputs`: NG-owned charge map and P2 geometry.
+
+    Returns the curved charge basis and the native ChargeGram keywords
+    without ``build``; no Gram coefficient is computed here. The caller
+    curves the mesh and owns TaskManager.
+    """
+    p = int(fes.globalorder)
+    cbk = _charge_basis_curved(fes, quad, materialize_mass=materialize_mass)
+    rules = _curved_gram_rules(p, far_quad=far_quad, curve_gauss=curve_gauss)
+    (rtp, rtw), (rsp, rsw), gx, gw = rules["tet"], rules["tri"], rules["gl"], rules["gw"]
+    # Keep a permutation-invariant low rule for smooth, well-separated Gram blocks.  The persistent
+    # field evaluator retains curved P2 elements directly and does not reuse this approximation.
+    (rtp_lo, rtw_lo), (rsp_lo, rsw_lo) = rules["tet_lo"], rules["tri_lo"]
+    kw = dict(
+        cell_nodes=cbk["cell_nodes"], face_nodes=cbk["face_nodes"],
+        cell_vertices=cbk["cell_vertices"], face_vertices=cbk["face_vertices"],
+        n_el=cbk["n_el"], curve_order=2,
+        charge_host=_i32_buffer(cbk["host"]), charge_kind=_i32_buffer(cbk["kind"]),
+        charge_expo=_i32_buffer(cbk["expo"]),
+        ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
+        ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
+        curve_gl=_f64_buffer(gx), curve_gw=_f64_buffer(gw),
+        image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs),
+        eps=eps, leaf=leafsize, eta=eta,
+        ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
+        ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
+        ho_far_factor=ho_far_factor)
+    return cbk, kw
+
+
+def _prepare_gpu_curved_charge_inputs(fes, *, backend):
+    """Stage the curved (P2) TET BDM1/BDM2 device-build input, not a GPU operator.
+
+    The geometry, charge order and Gram rules are those of the CPU curved
+    route (``build_charge_gram(curve_order=2)``): P2 nodes through GetTrafo,
+    exterior faces only, high/low/Duffy rules from ``_curved_gram_rules`` and
+    the far factor 2. No charge map, Gram coefficient or CUDA allocation is
+    produced; the device builds B and G from NGSolve tables. The caller curves
+    the mesh and owns TaskManager.
+    """
+    if backend != "gpu":
+        raise ValueError("Device charge preparation requires explicit backend='gpu'")
+    mesh = fes.mesh
+    p = int(fes.globalorder)
+    if mesh.dim != 3 or _volume_vertex_counts(mesh) != {4}:
+        raise NotImplementedError("Curved device charge input requires pure 3D TET geometry")
+    if p not in (1, 2) or mesh.GetCurveOrder() != 2:
+        raise NotImplementedError("Curved device charge input requires a Curve(2) TET mesh and HDiv order 1 or 2")
+    if mesh.deformation is not None:
+        raise NotImplementedError("Device charge input does not support live mesh deformation")
+    int32_max = 2**31 - 1
+    if not 0 < fes.ndof <= int32_max or not 0 < mesh.GetNE(ng.VOL) <= int32_max:
+        raise ValueError("Device charge DOF or element budget exceeded")
+    validate_hdiv_configuration(mesh.dim, {4}, p, mesh.GetCurveOrder())
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = _exterior_bnd_elements(mesh)
+    if not bels:
+        raise ValueError("Device charge input requires exterior boundary surface elements")
+    mons_v, mons_s = _monos_vol(max(p - 1, 0)), _monos_surf(p)
+    host = [c for c in range(len(vels)) for _ in mons_v] + [f for f in range(len(bels)) for _ in mons_s]
+    kind = [0]*(len(vels)*len(mons_v)) + [1]*(len(bels)*len(mons_s))
+    expo = [i for _ in vels for m in mons_v for i in m] + [i for _ in bels for (a, b) in mons_s for i in (a, b, 0)]
+    rules = _curved_gram_rules(p)
+    return dict(
+        family="curved-tet", n_el=len(vels),
+        cell_nodes=np.concatenate([_trafo_lattice_nodes(mesh, e, _IR_TET_NODES).ravel() for e in vels]),
+        face_nodes=np.concatenate([_trafo_lattice_nodes(mesh, e, _IR_TRI_NODES).ravel() for e in bels]),
+        cell_vertices=np.array([v.nr for e in vels for v in mesh[e].vertices], dtype=np.int32),
+        face_vertices=np.array([v.nr for e in bels for v in mesh[e].vertices], dtype=np.int32),
+        charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
+        charge_expo=np.array(expo, dtype=np.int32), rules=rules, ho_far_factor=_CURVED_FAR_FACTOR)
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, image_rot_angle=None,
@@ -2577,28 +2667,11 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
         if int(curve_order) != 2:
             raise NotImplementedError("vim.ChargeGram: only curve_order=2 (isoparametric P2) is wired "
                                       "(the C++ CurvedTet/TriPotential are P2); got %r." % (curve_order,))
-        cbk = _charge_basis_curved(fes, quad, materialize_mass=_materialize_mass)
-        (rtp, rtw), (rsp, rsw) = _curved_outer_rules(p)
-        gx, gw = _g01(int(curve_gauss))
-        kw = dict(
-            cell_nodes=cbk["cell_nodes"], face_nodes=cbk["face_nodes"],
-            cell_vertices=cbk["cell_vertices"], face_vertices=cbk["face_vertices"],
-            n_el=cbk["n_el"], curve_order=2,
-            charge_host=_i32_buffer(cbk["host"]), charge_kind=_i32_buffer(cbk["kind"]),
-            charge_expo=_i32_buffer(cbk["expo"]),
-            ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
-            ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
-            curve_gl=_f64_buffer(gx), curve_gw=_f64_buffer(gw),
-            image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs),
-            eps=eps, leaf=leafsize, eta=eta,
-            build=bool(_build_hmatrix) and not image_rot_angle)
-        # Keep a permutation-invariant low rule for smooth, well-separated Gram blocks.  The persistent
-        # field evaluator retains curved P2 elements directly and does not reuse this approximation.
-        rtp_lo, rtw_lo = _outer_tet(far_quad)
-        rsp_lo, rsw_lo = _outer_tri(far_quad)
-        kw.update(ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
-                  ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
-                  ho_far_factor=ho_far_factor)
+        cbk, kw = _curved_tet_charge_inputs(
+            fes, quad, eps=eps, leafsize=leafsize, eta=eta, far_quad=far_quad, ho_far_factor=ho_far_factor,
+            curve_gauss=curve_gauss, image_masks=image_masks, image_signs=image_signs,
+            materialize_mass=_materialize_mass)
+        kw["build"] = bool(_build_hmatrix) and not image_rot_angle
         G = _rp._ChargeGramHMatrix(**kw)
         _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                                 build_hmatrix=bool(_build_hmatrix))
