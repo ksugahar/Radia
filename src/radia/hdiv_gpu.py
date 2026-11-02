@@ -2,10 +2,16 @@
 
 NGSolve owns FE assembly; Radia owns charge-Gram preparation. The caller owns
 the TaskManager region. Construction prepares operators, never a CPU solution.
+The charge Gram is generated on the device from flat-TET geometry; the charge
+map, mass and evaluation matrices are still host-built and reported as such.
 """
 from __future__ import annotations
 
 __all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
+
+# Host-built sparse operators this route still uploads. Reported in stats until
+# their device construction lands; never presented as device-resident.
+PENDING_HOST_OPERATORS = ("charge_map", "mass", "evaluation")
 
 import base64
 from importlib import metadata
@@ -76,14 +82,15 @@ class PreparedHDivNonlinear:
         self._closed = False
         self.order = order
         try:
-            setup = _prepare_host_components(path, order)
+            setup = _prepare_device_components(path, order)
             self.dofs = setup["dofs"]
-            B, snapshot, E = setup["charge_map"], setup["snapshot"], setup["evaluation"]
+            B, E = setup["charge_map"], setup["evaluation"]
             self._mass, self._rhs = setup["mass"], setup["rhs_operator"]
-            self._operator = _hdiv_cuda._ResidentHDiv(snapshot["leaves"],
-                snapshot["permutation"], snapshot["scale"], self.dofs,
-                B.indptr.astype(np.uint64), B.indices.astype(np.uint64),
-                np.ascontiguousarray(B.data), backend="gpu")
+            self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
+                **setup["charge_gram"], dofs=self.dofs,
+                offsets=B.indptr.astype(np.uint64), indices=B.indices.astype(np.uint64),
+                values=np.ascontiguousarray(B.data), backend="gpu")
+            self.assembly = _checked_device_assembly(self._operator.assembly(), B.shape[0])
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
                 native_law[name] = np.ascontiguousarray(native_law[name], dtype=np.float64).ravel()
@@ -134,6 +141,8 @@ class PreparedHDivNonlinear:
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
+                gram_route="device-flat-tet", pending_host_operators=PENDING_HOST_OPERATORS,
+                assembly=getattr(self, "assembly", None),
                 operator=self._operator.stats() if self._operator is not None else None,
                 material=self._material.stats() if self._material is not None else None)
 
@@ -262,27 +271,106 @@ def _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
         yield snapshot, hashlib.sha256(mesh_bytes).hexdigest(), hashlib.sha256(contract_bytes).hexdigest()
 
 
+# Device-generated Gram ledger: primitives in, two validity flags out.
+_DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "charge_kind",
+                        "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule",
+                        "tri_low_rule", "invalid_flag")
+
+
+def _checked_device_assembly(assembly, charges):
+    """Reject any assembly ledger that is not the primitive-only device route."""
+    if assembly.get("route") != "device-flat-tet" or assembly.get("charges") != charges:
+        raise RuntimeError("Unexpected HDiv Gram assembly route: %r" % (assembly.get("route"),))
+    rows = [(row["payload"], row["direction"]) for row in assembly["transfer_ledger"]]
+    allowed = {("resident_plan", "H2D"), ("charge_map_csr_host_built", "H2D"),
+               ("prepare_flag", "D2H"), ("energy_flag", "D2H")}
+    allowed |= {(name, "H2D") for name in _DEVICE_GRAM_UPLOADS}
+    if any(row not in allowed for row in rows) or not {("prepare_flag", "D2H"), ("energy_flag", "D2H")} <= set(rows):
+        raise RuntimeError("HDiv device Gram transfer ledger mismatch: %r" % (rows,))
+    return assembly
+
+
+def _device_gram_arguments(B, inputs):
+    """Map the staged flat-TET charge inputs to the device Gram binding.
+
+    H-matrix parameters (eps, leaf, eta) do not apply to the dense device
+    block. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
+    potentials, as on the CPU; higher degrees fail loudly on the device.
+    """
+    import numpy as np
+    if len(inputs.get("image_masks", ())):
+        raise NotImplementedError("Device charge Gram has no image route")
+    cells = np.ascontiguousarray(inputs["cell_verts"], dtype=np.float64).reshape(-1)
+    faces = np.ascontiguousarray(inputs["face_verts"], dtype=np.float64).reshape(-1)
+    if cells.size != 12*int(inputs["n_el"]):
+        raise ValueError("Charge cell geometry does not match n_el")
+
+    def rule(kind, suffix, width):
+        points = np.asarray(inputs["ref_%s_pts%s" % (kind, suffix)], dtype=np.float64).reshape(-1, width)
+        weights = np.asarray(inputs["ref_%s_w%s" % (kind, suffix)], dtype=np.float64).reshape(-1)
+        if len(points) != len(weights):
+            raise ValueError("Reference rule points and weights disagree")
+        rows = np.zeros((len(points), 4))
+        rows[:, :width], rows[:, 3] = points, weights
+        return rows
+
+    far = "ho_far_factor" in inputs and bool(np.isfinite(inputs["ho_far_factor"]))
+    arguments = dict(
+        cell_vertices=cells, face_vertices=faces,
+        charge_host=np.ascontiguousarray(inputs["charge_host"], dtype=np.int32),
+        charge_kind=np.ascontiguousarray(inputs["charge_kind"], dtype=np.int32),
+        charge_exponents=np.ascontiguousarray(inputs["charge_expo"], dtype=np.int32),
+        tet_rule=rule("tet", "", 3), tri_rule=rule("tri", "", 2),
+        tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
+        tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
+        far_factor=float(inputs["ho_far_factor"]) if far else 1e30)
+    if arguments["charge_host"].size != B.shape[0]:
+        raise ValueError("Charge map rows do not match the staged charges")
+    return arguments
+
+
+def _prepare_device_components(path, order, *, maximum_dofs=16384):
+    """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix."""
+    import ngsolve as ng
+    from radia.vim._vim import _prepare_gpu_charge_inputs
+    mesh = ng.Mesh(str(path))
+    fes = ng.HDiv(mesh, order=order)
+    if not 0 < fes.ndof <= maximum_dofs:
+        raise ValueError("HDiv workflow dimension exceeds bounded scope")
+    B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
+    return dict(_fe_components(path, mesh, fes), charge_map=B,
+                charge_gram=_device_gram_arguments(B, inputs))
+
+
 def _prepare_host_components(path, order, *, maximum_dofs=16384):
-    """One NG-owned FE/charge preparation shared by Python and MATLAB publishers.
+    """NG-owned FE/charge preparation for the MATLAB publisher.
 
     No resident GPU operator and no CPU solution is created here. The caller
     owns TaskManager; the private native material staging shares the same FE.
+    The publisher still ships host H-matrix leaves; its device route is pending.
     """
-    import numpy as np
     import ngsolve as ng
-    from scipy.sparse import coo_matrix, csc_matrix
     from radia.vim._vim import build_charge_gram
-    from .gpu import _native
-    _hdiv_cuda = _native("_hdiv_cuda")
     mesh = ng.Mesh(str(path))
     fes = ng.HDiv(mesh, order=order)
-    nd = fes.ndof
-    if not 0 < nd <= maximum_dofs:
+    if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
     B, gram, _ = build_charge_gram(fes, eps=1e-10, leafsize=64, eta=2.)
     snapshot = gram._resident_leaf_snapshot(16)
     if snapshot["dimension"] != B.shape[0]:
         raise ValueError("Charge snapshot numbering mismatch")
+    return dict(_fe_components(path, mesh, fes), charge_map=B, snapshot=snapshot)
+
+
+def _fe_components(path, mesh, fes):
+    """NG-owned mass, source and material-evaluation operators shared by both routes."""
+    import numpy as np
+    import ngsolve as ng
+    from scipy.sparse import coo_matrix, csc_matrix
+    from .gpu import _native
+    _hdiv_cuda = _native("_hdiv_cuda")
+    nd = fes.ndof
+    order = fes.globalorder
     u, v = fes.TnT()
     mass = ng.BilinearForm(fes, symmetric=True)
     mass += ng.InnerProduct(u, v)*ng.dx
@@ -311,8 +399,7 @@ def _prepare_host_components(path, order, *, maximum_dofs=16384):
     volume = float(ng.Integrate(1, mesh))
     if not math.isfinite(volume) or volume <= 0:
         raise ValueError("Invalid mesh volume")
-    return dict(dofs=nd, mass=M, rhs_operator=rhs, mean_operator=rhs.T/volume,
-                charge_map=B, snapshot=snapshot, evaluation=E,
+    return dict(dofs=nd, mass=M, rhs_operator=rhs, mean_operator=rhs.T/volume, evaluation=E,
                 weights=np.asarray(payload["weights"]), quadrature_order=payload["integration_order"])
 
 

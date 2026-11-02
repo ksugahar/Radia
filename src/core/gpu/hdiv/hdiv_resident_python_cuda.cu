@@ -2,6 +2,7 @@
 #include "hdiv_resident_python_api.hpp"
 #include "hmatrix_material_solver.cuh"
 #include "hmatrix_nonlinear_material.cuh"
+#include "hdiv_flat_gram.cuh"
 #include <mutex>
 #include <atomic>
 namespace radia_hdiv_python {
@@ -13,10 +14,32 @@ class Operator final:public DeviceOperator {
     radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::Resident> resident;
     const std::size_t dimension;
 public:
+    Assembly record;
     Operator(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::SparseMap& map)
       :dimension(map.columns) {
         // Keep the existing 2 GiB combined native setup bound, not a new cap.
         resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,&map,1);
+        record={"host-leaves",plan.n,resident->ownedBytes,0,{}};
+        record.transfers.push_back({"host_hmatrix_coefficients","H2D",plan.coefficients.size()*sizeof(double)});
+        residentTransfers(plan,map);
+    }
+    Operator(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::SparseMap& map,const radia_hmatrix_cuda::FlatBlock& block)
+      :dimension(map.columns) {
+        radia_hmatrix_cuda::FlatGramOracle oracle(block);
+        resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,&map,1);
+        resident->materializeDeferred(plan,oracle);
+        resident->setupPeakOwnedBytes=resident->ownedBytes+oracle.ownedBytes;
+        record={"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches,{}};
+        residentTransfers(plan,map);
+        for(const auto& t:oracle.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
+    }
+    // Resident construction uploads: O(n) plan indices and the host-built charge map
+    // (the remaining sparse-matrix upload of this slice, reported, not hidden).
+    void residentTransfers(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::SparseMap& map){
+        const auto index=sizeof(std::size_t);
+        record.transfers.push_back({"resident_plan","H2D",plan.directions.size()*sizeof(radia_hmatrix_cuda::Direction)+
+            (plan.permutation.size()+plan.rowOffsets.size()+plan.partialIndices.size())*index+plan.scale.size()*sizeof(double)});
+        record.transfers.push_back({"charge_map_csr_host_built","H2D",(map.offsets.size()+map.columns+1+2*map.indices.size())*index+2*map.values.size()*sizeof(double)});
     }
     radia_hmatrix_cuda::HostVector<double> apply(const radia_hmatrix_cuda::HostVector<double>& x)override {
         std::lock_guard<std::mutex> lock(mutex);
@@ -41,6 +64,7 @@ public:
     NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator& material,const MapInput& reference,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options)override{
         std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return nonlinearBridge(*resident,material,reference,rhs,initial,options);
     }
+    Assembly assembly()override {std::lock_guard<std::mutex> lock(mutex);return record;}
     Stats stats()override {
         std::lock_guard<std::mutex> lock(mutex);
         return {dimension,resident?resident->ownedBytes:0,resident?resident->applications:0,!resident};
@@ -66,6 +90,28 @@ std::shared_ptr<DeviceOperator> create(std::size_t n,const radia_hmatrix_cuda::H
     map.offsets.assign(input.offsets.begin(),input.offsets.end());
     map.indices.assign(input.indices.begin(),input.indices.end());map.values.assign(input.values.begin(),input.values.end());
     map.validate();return std::allocate_shared<Operator>(radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner"),plan,map);
+}
+std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const MapInput& charges) {
+    const auto n=input.host.size();
+    if(!n||n>4608||charges.rows!=n||!charges.columns||charges.columns>16384)
+        throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
+    radia_hmatrix_cuda::FlatBlock block;
+    block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
+    block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
+    block.expo.assign(input.expo.begin(),input.expo.end());block.farFactor=input.farFactor;
+    auto rule=[](const radia_hmatrix_cuda::HostVector<double>& rows,auto& out){
+        if(rows.size()%4)throw std::invalid_argument("Reference rule rows require (xi0,xi1,xi2,weight)");
+        for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
+    rule(input.tet,block.tet);rule(input.tri,block.tri);rule(input.tetLow,block.tetLow);rule(input.triLow,block.triLow);
+    block.validate();
+    // One deferred dense leaf: device storage is allocated, never uploaded.
+    radia_hmatrix_cuda::HostVector<LeafInput> leaves;leaves.push_back(LeafInput{0,0,n,n,0,{},{},true});
+    radia_hmatrix_cuda::HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
+    auto plan=radia_hmatrix_cuda::packLeaves(n,leaves,permutation,radia_hmatrix_cuda::HostVector<double>(n,1.));
+    radia_hmatrix_cuda::SparseMap map;map.rows=charges.rows;map.columns=charges.columns;
+    map.offsets.assign(charges.offsets.begin(),charges.offsets.end());
+    map.indices.assign(charges.indices.begin(),charges.indices.end());map.values.assign(charges.values.begin(),charges.values.end());
+    map.validate();return std::allocate_shared<Operator>(radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner"),plan,map,block);
 }
 } // namespace radia_hdiv_python
 

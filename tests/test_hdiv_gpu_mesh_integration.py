@@ -84,6 +84,7 @@ def test_bad_receipt_cannot_reach_workflow_native_or_fe(tmp_path,monkeypatch,mut
     monkeypatch.setattr(module.metadata,'version',lambda name:'6.2.2608')
     touched=[]
     monkeypatch.setattr(module,'_prepare_host_components',lambda *a,**kw:touched.append('FE-staging'))
+    monkeypatch.setattr(module,'_prepare_device_components',lambda *a,**kw:touched.append('device-staging'))
     def native_constructor(*args, **kwargs):
         touched.append('native-constructor')
         raise AssertionError('Native constructor before receipt')
