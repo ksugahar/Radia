@@ -74,7 +74,7 @@ def test_device_inputs_keep_production_near_inner_far_rules_without_gram(order, 
 @pytest.mark.parametrize("options,error", [
     ({"types": {8}}, NotImplementedError), ({"types": {6}}, NotImplementedError),
     ({"types": {4, 8}}, NotImplementedError), ({"curve": 2}, NotImplementedError),
-    ({"order": 0}, NotImplementedError), ({"order": 3}, NotImplementedError),
+    ({"order": -1}, NotImplementedError), ({"order": 3}, NotImplementedError),
     ({"dim": 2}, NotImplementedError),
     ({"deformation": object()}, NotImplementedError), ({"boundary": 0}, ValueError),
     ({"elements": 0}, ValueError), ({"elements": 2**31}, ValueError),
