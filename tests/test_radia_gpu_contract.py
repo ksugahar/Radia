@@ -1,6 +1,7 @@
 """GPU adapter and runtime source contracts.
 
-Guards: Explicit backend selection, exact pip versions/RECORD bytes, conflicting
+Guards: Explicit backend selection, exact pip versions/RECORD bytes (re-hashed on any
+stat-identity change), conflicting
 ELF providers, and resident-handle close/reject behavior without GPU fallback.
 Assumes: CUDA loading and installed metadata are mocked. Temporary files are
 fixtures, not native libraries. No compilation, CUDA context or solve executes.
@@ -163,6 +164,33 @@ def test_windows_rechecks_record_bytes_on_warm_calls(tmp_path, monkeypatch):
     path.write_bytes(b"tampered after the first load")
     with pytest.raises(ImportError, match="RECORD mismatch"):
         windows.prepare_cuda_runtime()
+
+
+def test_record_digest_is_rehashed_whenever_stat_identity_changes(tmp_path, monkeypatch):
+    import os
+    runtime = load("_cuda_runtime")
+    path = tmp_path / "libtest.so.12"
+    path.write_bytes(b"fixture library bytes")
+    expected = base64.urlsafe_b64encode(hashlib.sha256(path.read_bytes()).digest()).decode().rstrip("=")
+    class File:
+        hash = SimpleNamespace(mode="sha256", value=expected)
+        def __str__(self):
+            return path.name
+    dist = SimpleNamespace(version="12.8.1", files=[File()], locate_file=lambda _: path)
+    monkeypatch.setattr(runtime, "_LIBRARIES", (("cuda-fixture", (path.name,)),))
+    monkeypatch.setattr(runtime.metadata, "distribution", lambda _: dist)
+    reads = []
+    digest = runtime.hashlib.file_digest
+    monkeypatch.setattr(runtime.hashlib, "file_digest", lambda *a: reads.append(1) or digest(*a))
+    for _ in range(3):
+        runtime._library_paths({"cuda-fixture": "12.8.1"})
+    assert len(reads) == 1, reads
+    stamp = path.stat().st_mtime_ns
+    path.write_bytes(b"fixture library BYTES")  # same size, different bytes
+    os.utime(path, ns=(stamp + 10**9, stamp + 10**9))
+    with pytest.raises(ImportError, match="RECORD mismatch"):
+        runtime._library_paths({"cuda-fixture": "12.8.1"})
+    assert len(reads) == 2, reads
 
 
 def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, monkeypatch):

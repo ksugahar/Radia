@@ -19,6 +19,9 @@ _LIBRARIES = (
 _lock = threading.Lock()
 _handles = []
 _identity = None
+# RECORD digests verified in this process, keyed by the file's full stat
+# identity. Any rewrite, replacement or move changes the key and is re-hashed.
+_digests = {}
 
 
 def _pins():
@@ -43,6 +46,21 @@ def _maps():
     return paths
 
 
+def _digest(path):
+    """SHA256 of the file bytes, re-read whenever its stat identity changes."""
+    def key():
+        s = path.stat()
+        return (str(path), s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+    before = key()
+    if before not in _digests:
+        with path.open("rb") as stream:
+            actual = hashlib.file_digest(stream, "sha256").digest()
+        if key() != before:
+            raise ImportError(f"CUDA library changed while hashing: {path.name}")
+        _digests[before] = actual
+    return _digests[before]
+
+
 def _library_paths(pins, library_specs=None):
     found = {}
     for package, libraries in (_LIBRARIES if library_specs is None else library_specs):
@@ -58,8 +76,7 @@ def _library_paths(pins, library_specs=None):
             expected = entry.hash
             if not path.is_file() or expected is None or expected.mode != "sha256":
                 raise ImportError(f"CUDA library has no SHA256 RECORD: {name}")
-            with path.open("rb") as stream:
-                actual = hashlib.file_digest(stream, "sha256").digest()
+            actual = _digest(path)
             encoded = base64.urlsafe_b64encode(actual).decode().rstrip("=")
             if encoded != expected.value:
                 raise ImportError(f"CUDA library RECORD mismatch: {name}")
