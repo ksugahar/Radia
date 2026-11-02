@@ -201,7 +201,7 @@ __global__ void acaDenseFill(FlatDevice d,const std::size_t* perm,const double* 
     coefficients[s.offset+i*s.columns+j]=value;
 }
 struct FlatAcaStats {
-    std::size_t elements=0,clusters=0,denseLeaves=0,lowrankLeaves=0,admissibleBlocks=0,rankCapPromotions=0,storagePromotions=0,
+    std::size_t elements=0,clusters=0,denseLeaves=0,lowrankLeaves=0,admissibleBlocks=0,rankCapPromotions=0,storagePromotions=0,zeroRankLeaves=0,
         rankSum=0,maxRank=0,steps=0,factorCoefficients=0,denseCoefficients=0,batches=0;
 };
 // Compress before the resident plan exists (ranks size the plan), then
@@ -279,7 +279,8 @@ public:
                 if(status==acaRankCap){if(!options.rankCapDense)throw std::runtime_error("ACA leaf reached max_rank without converging");++stats.rankCapPromotions;continue;}
                 if(status!=acaConverged||rank>std::min(b.rows,b.columns))throw std::runtime_error("ACA leaf status or rank invalid");
                 // Rank 0 means every row was negligible: the leaf is stored dense, never dropped.
-                if(!rank||checkedProduct(rank,b.rows+b.columns)>=checkedProduct(b.rows,b.columns)){++stats.storagePromotions;continue;}
+                if(!rank){++stats.zeroRankLeaves;continue;}
+                if(checkedProduct(rank,b.rows+b.columns)>=checkedProduct(b.rows,b.columns)){++stats.storagePromotions;continue;}
                 batchKept.push_back({admissible[firstLeaf+s],rank,chunks.size(),chunkCount,chunkCount+b.rows*rank,s});
                 chunkCount+=rank*(b.rows+b.columns);rankOf[admissible[firstLeaf+s]]=rank;
             }

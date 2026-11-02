@@ -104,10 +104,14 @@ def test_newton_reuses_one_prepared_mass_operand():
 
 def test_flat_material_binding_takes_tables_not_evaluation_values():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
-    block = source[source.index('def_static("from_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
+    block = source[source.index('def_static("from_flat_tables"'):source.index('.def_static("validate_flat_tables"')]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', block)
     assert names == ["rule", "reference_shapes", "vertices", "element_class", "element_dofs",
                      "element_points", "dofs", "law", "backend"], names
+    scope = source[source.index('.def_static("validate_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
+    assert re.findall(r'py::arg\("([a-z_]+)"\)', scope) == names[:-2], "scope check takes the same tables, no law"
+    helper = source[source.index("void validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructFlat(")]
+    assert "validateFlatEvaluationScope(flatEvaluationInput(" in helper and "create" not in helper, helper
 
 
 def test_newton_binding_takes_no_mass_and_host_reference_is_separate():

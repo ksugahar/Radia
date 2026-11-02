@@ -140,7 +140,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         const auto& s=oracle.stats;
         result->record.counters={{"elements",s.elements},{"clusters",s.clusters},{"dense_leaves",s.denseLeaves},
             {"lowrank_leaves",s.lowrankLeaves},{"admissible_blocks",s.admissibleBlocks},{"rank_cap_promotions",s.rankCapPromotions},
-            {"storage_promotions",s.storagePromotions},{"rank_sum",s.rankSum},{"max_rank",s.maxRank},{"aca_steps",s.steps},
+            {"storage_promotions",s.storagePromotions},{"zero_rank_leaves",s.zeroRankLeaves},{"rank_sum",s.rankSum},{"max_rank",s.maxRank},{"aca_steps",s.steps},
             {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients}};
         return result;
     }
@@ -191,6 +191,7 @@ public:
 }
 std::shared_ptr<MaterialOperator> createMaterial(const MaterialInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
 std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
+void validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);}
 }
 
 radia_hdiv_python::NewtonResult radia_hdiv_python::nonlinearBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options){

@@ -30,11 +30,17 @@ class PreparedHDivNonlinear:
     ``law`` is the shared inverse-BH polynomial payload, not a new table fit.
     Only the explicit GPU route is implemented here. CPU workflows remain in
     radia.vim; unsupported geometry or a missing native binding raises.
+
+    ``gram_aca`` holds the device ACA parameters of the charge Gram
+    (eps, eta, leaf_size, max_rank, rank_cap). Leaf size and admissibility
+    are problem dependent and are never chosen automatically; ``None``
+    selects the documented CPU charge-Gram preset ``GRAM_ACA_PRESET``.
+    ``stats()`` reports the parameters actually used.
     """
 
     @classmethod
     def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, mesh_check_receipt,
-                      mesh_check_receipt_sha256, mesh_check_provenance, order=1):
+                      mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
         """Use the existing Radia CPU polynomial construction, without a CPU solve.
 
         Rows are [H in A/m, B in tesla]; one uniform soft-iron law is supported.
@@ -43,6 +49,7 @@ class PreparedHDivNonlinear:
             raise ValueError("This workflow requires explicit backend='gpu'")
         if isinstance(order, bool) or order not in (1, 2):
             raise ValueError("HDiv order must be 1 or 2")
+        aca = _checked_gram_aca(gram_aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
             import numpy as np
@@ -55,22 +62,23 @@ class PreparedHDivNonlinear:
             prepared = cls.__new__(cls)
             prepared.mesh_sha256 = mesh_hash
             prepared.label_contract_sha256 = contract_hash
-            prepared._initialize(snapshot, law, order)
+            prepared._initialize(snapshot, law, order, aca)
             return prepared
 
     def __init__(self, mesh_path, law, *, backend, label_contract, mesh_check_receipt,
-                 mesh_check_receipt_sha256, mesh_check_provenance, order=1):
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (1, 2):
             raise ValueError("HDiv order must be 1 or 2")
+        aca = _checked_gram_aca(gram_aca)
         with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
-            self._initialize(snapshot, law, order)
+            self._initialize(snapshot, law, order, aca)
 
-    def _initialize(self, path, law, order):
+    def _initialize(self, path, law, order, aca):
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
@@ -78,8 +86,9 @@ class PreparedHDivNonlinear:
         self._operator = self._material = None
         self._closed = False
         self.order = order
+        self.gram_aca = dict(aca)
         try:
-            setup = _prepare_device_components(path, order, _hdiv_cuda)
+            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca)
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
             self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
@@ -136,6 +145,7 @@ class PreparedHDivNonlinear:
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
                 gram_route="device-flat-tet", gram_compression=_GRAM_COMPRESSION,
+                gram_aca=dict(self.gram_aca) if hasattr(self, "gram_aca") else None,
                 assembly=getattr(self, "assembly", None),
                 material_assembly=getattr(self, "material_assembly", None),
                 operator=self._operator.stats() if self._operator is not None else None,
@@ -277,17 +287,47 @@ _DEVICE_GRAM_UPLOADS = ("cell_vertices_m", "face_vertices_m", "charge_host", "ch
 _CHARGE_TABLE_KEYS = ("cell_class", "cell_dofs", "cell_tables", "cell_exponents",
                       "face_class", "face_dofs", "face_tables", "face_exponents")
 _RULE_ROW_BYTES = 32  # FlatRulePoint: xi[3], weight as float64.
-# Device ACA of the charge Gram with the CPU charge-Gram H-matrix parameters
-# (radia.vim build_charge_gram eps, leaf size, eta). eps is the ACA stopping
-# parameter, not an operator error bound. A leaf reaching max_rank unconverged
-# is stored as an exact dense leaf of the same operator and counted.
+# Device ACA of the charge Gram. The preset carries the CPU charge-Gram H-matrix
+# parameters (radia.vim build_charge_gram eps, leaf size, eta); it is a starting
+# point, not a tuned choice. eps is the ACA stopping parameter, not an operator
+# error bound. A leaf reaching max_rank unconverged is stored as an exact dense
+# leaf of the same operator and counted (rank_cap="dense") or raises ("fail").
 _GRAM_COMPRESSION = "aca"
-_GRAM_ACA = dict(eps=1e-10, eta=2.0, leaf_size=64, max_rank=200, rank_cap="dense")
+GRAM_ACA_PRESET = dict(eps=1e-10, eta=2.0, leaf_size=64, max_rank=200, rank_cap="dense")
 # Metadata rows that exist only when the partition has admissible blocks.
 _ACA_OPTIONAL_ROWS = (("aca_leaf_spans", "H2D"), ("aca_leaf_status", "D2H"), ("aca_active_count", "D2H"))
 _ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admissible_blocks",
-                 "rank_cap_promotions", "storage_promotions", "rank_sum", "max_rank", "aca_steps",
+                 "rank_cap_promotions", "storage_promotions", "zero_rank_leaves", "rank_sum", "max_rank", "aca_steps",
                  "aca_batches", "factor_coefficients", "dense_coefficients")
+
+
+def _checked_gram_aca(aca):
+    """Return an owned copy of explicit device ACA parameters; ``None`` is the preset.
+
+    Ranges match the native partition and compression checks, so a bad value
+    fails before any mesh staging or device work.
+    """
+    if aca is None:
+        return dict(GRAM_ACA_PRESET)
+    if not isinstance(aca, dict) or set(aca) != set(GRAM_ACA_PRESET):
+        raise ValueError("gram_aca requires exactly eps, eta, leaf_size, max_rank, rank_cap: %r" % (aca,))
+
+    def real(name, valid):
+        value = aca[name]
+        if isinstance(value, bool) or not isinstance(value, numbers.Real) or not math.isfinite(value) or not valid(value):
+            raise ValueError("gram_aca %s out of range: %r" % (name, value))
+        return float(value)
+
+    def integer(name, upper):
+        value = aca[name]
+        if isinstance(value, bool) or not isinstance(value, numbers.Integral) or not 1 <= value <= upper:
+            raise ValueError("gram_aca %s must be an integer in [1,%d]: %r" % (name, upper, value))
+        return int(value)
+    if aca["rank_cap"] not in ("dense", "fail"):
+        raise ValueError("gram_aca rank_cap must be 'dense' or 'fail': %r" % (aca["rank_cap"],))
+    return dict(eps=real("eps", lambda v: 0 < v < 1), eta=real("eta", lambda v: v > 0),
+                leaf_size=integer("leaf_size", 4096), max_rank=integer("max_rank", 1024),
+                rank_cap=str(aca["rank_cap"]))
 
 
 def _expected_device_ledger(arguments):
@@ -379,11 +419,11 @@ def _checked_charge_exponents(kind, exponents):
                          "charge %d kind %d exponents %r" % (first, int(kind[first]), expo[first].tolist()))
 
 
-def _device_gram_arguments(tables, inputs, geometry):
+def _device_gram_arguments(tables, inputs, geometry, aca):
     """Map the staged flat-TET charge inputs and NGSolve tables to the device binding.
 
-    The Gram is compressed by device ACA with the CPU charge-Gram H-matrix
-    parameters (``_GRAM_ACA``); only the geometric partition is built on the
+    The Gram is compressed by device ACA with the caller's checked parameters
+    (``_checked_gram_aca``); only the geometric partition is built on the
     host. The inner subtraction rule is unused by the exact analytic BDM1/BDM2
     potentials, as on the CPU; higher degrees fail loudly on the device.
     The table staging must reproduce the Gram geometry and charge order
@@ -416,7 +456,7 @@ def _device_gram_arguments(tables, inputs, geometry):
         tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
         tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
         far_factor=float(inputs["ho_far_factor"]) if far else 1e30,
-        compression=_GRAM_COMPRESSION, aca=dict(_GRAM_ACA))
+        compression=_GRAM_COMPRESSION, aca=_checked_gram_aca(aca))
     _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"])
     cells_m, faces_m = geometry
     if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
@@ -434,22 +474,28 @@ def _device_gram_arguments(tables, inputs, geometry):
     return arguments
 
 
-def _prepare_device_components(path, order, native, *, maximum_dofs=16384):
+def _prepare_device_components(path, order, native, *, aca, maximum_dofs=16384):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
     ``native`` is the caller's verified ``_hdiv_cuda`` module: one preparation
     verifies the native and CUDA library closure once, not per staging helper.
+    The material tables pass the native host-only scope check before any
+    charge staging or Gram construction, so an unsupported material rule
+    fails before the costly device work.
     """
     import ngsolve as ng
     from radia.vim._vim import _prepare_gpu_charge_inputs
+    aca = _checked_gram_aca(aca)
     mesh = ng.Mesh(str(path))
     fes = ng.HDiv(mesh, order=order)
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
+    evaluation = _device_evaluation_tables(path, fes, native)
+    native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof)
     _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
     tables, geometry = _device_charge_tables(path, fes, native)
-    return dict(_fe_sources(mesh, fes), evaluation_tables=_device_evaluation_tables(path, fes, native),
-                charge_gram=_device_gram_arguments(tables, inputs, geometry))
+    return dict(_fe_sources(mesh, fes), evaluation_tables=evaluation,
+                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca))
 
 
 def _prepare_host_components(path, order, *, maximum_dofs=16384):

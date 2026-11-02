@@ -6,6 +6,8 @@ host-side mapping checks; CPU/GPU Gram agreement is a separate validation run.
 import importlib.util
 from pathlib import Path
 import re
+import sys
+import types
 
 import numpy as np
 import pytest
@@ -39,15 +41,18 @@ def tables(inputs):
             (np.asarray(inputs["cell_verts"], dtype=np.float64), np.asarray(inputs["face_verts"], dtype=np.float64)))
 
 
-def gram(inputs):
+def gram(inputs, aca=None):
     charge, geometry = tables(inputs)
-    return hdiv_gpu._device_gram_arguments(charge, inputs, geometry)
+    return hdiv_gpu._device_gram_arguments(charge, inputs, geometry, aca)
 
 
 def test_staged_inputs_map_to_primitive_rows_with_explicit_aca_parameters():
     arguments = gram(staged())
-    assert arguments["compression"] == "aca" and arguments["aca"] == hdiv_gpu._GRAM_ACA, arguments["aca"]
-    assert arguments["aca"] is not hdiv_gpu._GRAM_ACA, "callers must not share the module constant"
+    preset = hdiv_gpu.GRAM_ACA_PRESET
+    assert arguments["compression"] == "aca" and arguments["aca"] == preset, arguments["aca"]
+    assert arguments["aca"] is not preset, "callers must not share the module constant"
+    tuned = dict(preset, leaf_size=8, eta=1.5)
+    assert gram(staged(), tuned)["aca"] == tuned, "caller parameters must reach the binding unchanged"
     assert arguments["tet_rule"].shape == (2, 4) and arguments["tri_rule"].shape == (1, 4)
     assert arguments["tri_rule"][0, 2] == 0 and arguments["tet_low_rule"][0, 3] == pytest.approx(1/6)
     assert arguments["far_factor"] == 2.
@@ -104,6 +109,66 @@ def test_assembly_ledger_requires_the_exact_primitive_rows():
     for case in forged:
         with pytest.raises(RuntimeError):
             hdiv_gpu._checked_device_assembly(case, arguments)
+
+
+@pytest.mark.parametrize("change", [
+    dict(eps=0.), dict(eps=1.), dict(eps=float("nan")), dict(eta=0.), dict(eta=float("inf")),
+    dict(leaf_size=0), dict(leaf_size=4097), dict(leaf_size=8.), dict(leaf_size=True),
+    dict(max_rank=0), dict(max_rank=1025), dict(rank_cap="drop"), dict(eps="1e-10"), dict(extra=1)])
+def test_gram_aca_parameters_are_explicit_and_range_checked(change):
+    with pytest.raises(ValueError, match="gram_aca"):
+        hdiv_gpu._checked_gram_aca(dict(hdiv_gpu.GRAM_ACA_PRESET, **change))
+    missing = dict(hdiv_gpu.GRAM_ACA_PRESET)
+    del missing["leaf_size"]
+    with pytest.raises(ValueError, match="gram_aca"):
+        hdiv_gpu._checked_gram_aca(missing)
+
+
+def test_preset_is_copied_and_explicit_values_are_owned():
+    first, second = hdiv_gpu._checked_gram_aca(None), hdiv_gpu._checked_gram_aca(None)
+    assert first == hdiv_gpu.GRAM_ACA_PRESET and first is not second is not hdiv_gpu.GRAM_ACA_PRESET
+    caller = dict(hdiv_gpu.GRAM_ACA_PRESET, leaf_size=np.int64(32))
+    checked = hdiv_gpu._checked_gram_aca(caller)
+    caller["leaf_size"] = 1
+    assert checked["leaf_size"] == 32 and type(checked["leaf_size"]) is int, checked
+
+
+def _fake_device_staging(monkeypatch, calls, validate):
+    """Stand-ins for NGSolve, CPU charge staging and the native module (no FE work)."""
+    fes = types.SimpleNamespace(ndof=10)
+    ng = types.ModuleType("ngsolve")
+    ng.Mesh = lambda path: calls.append("mesh") or "mesh"
+    ng.HDiv = lambda mesh, order: fes
+    vim = types.ModuleType("radia.vim._vim")
+    vim._prepare_gpu_charge_inputs = lambda *a, **k: calls.append("charge-staging")
+    for name, module in (("ngsolve", ng), ("radia", types.ModuleType("radia")),
+                         ("radia.vim", types.ModuleType("radia.vim")), ("radia.vim._vim", vim)):
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(hdiv_gpu, "_device_evaluation_tables",
+                        lambda *a: calls.append("evaluation-staging") or dict(rule="tables"))
+    monkeypatch.setattr(hdiv_gpu, "_device_charge_tables", lambda *a: calls.append("charge-tables"))
+    return types.SimpleNamespace(_ResidentBHMaterial=types.SimpleNamespace(validate_flat_tables=validate))
+
+
+def test_material_scope_check_precedes_charge_staging_and_gram(monkeypatch):
+    calls = []
+
+    def validate(**arguments):
+        calls.append(("material-scope", arguments))
+        raise ValueError("Flat evaluation entry budget exceeded")
+    native = _fake_device_staging(monkeypatch, calls, validate)
+    with pytest.raises(ValueError, match="entry budget"):
+        hdiv_gpu._prepare_device_components("mesh.vol", 2, native, aca=None)
+    assert calls == ["mesh", "evaluation-staging", ("material-scope", dict(rule="tables", dofs=10))], calls
+
+
+def test_invalid_aca_parameters_fail_before_any_mesh_work(monkeypatch):
+    calls = []
+    native = _fake_device_staging(monkeypatch, calls, lambda **a: calls.append("material-scope"))
+    with pytest.raises(ValueError, match="gram_aca leaf_size"):
+        hdiv_gpu._prepare_device_components("mesh.vol", 2, native,
+                                            aca=dict(hdiv_gpu.GRAM_ACA_PRESET, leaf_size=0))
+    assert calls == [], calls
 
 
 def test_aca_metadata_rows_are_optional_but_positive():
@@ -179,3 +244,11 @@ def test_flat_binding_accepts_no_matrix_payload():
                           "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule",
                           "tri_low_rule", "far_factor"], names
     assert not {"leaves", "permutation", "scale", "a1", "a2"} & set(names), names
+
+
+def test_python_counter_schema_matches_the_native_publication():
+    source = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
+    block = source[source.index("result->record.counters={"):]
+    block = block[:block.index("};")]
+    native = re.findall(r'\{"([a-z_]+)",s\.', block)
+    assert native == list(hdiv_gpu._ACA_COUNTERS), (native, hdiv_gpu._ACA_COUNTERS)
