@@ -79,7 +79,7 @@ class PreparedHDivNonlinear:
         self._closed = False
         self.order = order
         try:
-            setup = _prepare_device_components(path, order)
+            setup = _prepare_device_components(path, order, _hdiv_cuda)
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
             self._operator = _hdiv_cuda._ResidentHDiv.from_flat_charges(
@@ -405,8 +405,12 @@ def _device_gram_arguments(tables, inputs, geometry):
     return arguments
 
 
-def _prepare_device_components(path, order, *, maximum_dofs=16384):
-    """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix."""
+def _prepare_device_components(path, order, native, *, maximum_dofs=16384):
+    """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
+
+    ``native`` is the caller's verified ``_hdiv_cuda`` module: one preparation
+    verifies the native and CUDA library closure once, not per staging helper.
+    """
     import ngsolve as ng
     from radia.vim._vim import _prepare_gpu_charge_inputs
     mesh = ng.Mesh(str(path))
@@ -414,8 +418,8 @@ def _prepare_device_components(path, order, *, maximum_dofs=16384):
     if not 0 < fes.ndof <= maximum_dofs:
         raise ValueError("HDiv workflow dimension exceeds bounded scope")
     _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    tables, geometry = _device_charge_tables(path, fes)
-    return dict(_fe_sources(mesh, fes), evaluation_tables=_device_evaluation_tables(path, fes),
+    tables, geometry = _device_charge_tables(path, fes, native)
+    return dict(_fe_sources(mesh, fes), evaluation_tables=_device_evaluation_tables(path, fes, native),
                 charge_gram=_device_gram_arguments(tables, inputs, geometry))
 
 
@@ -496,12 +500,10 @@ def _fe_components(path, mesh, fes):
                 quadrature_order=payload["integration_order"])
 
 
-def _device_evaluation_tables(path, fes):
+def _device_evaluation_tables(path, fes, native):
     """NGSolve reference-shape tables for device E construction; no evaluation matrix."""
     import numpy as np
-    from .gpu import _native
-    _hdiv_cuda = _native("_hdiv_cuda")
-    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder)
     try:
         tables = staging.flat_tables()
     finally:
@@ -519,16 +521,14 @@ def _device_evaluation_tables(path, fes):
     return arguments
 
 
-def _device_charge_tables(path, fes):
+def _device_charge_tables(path, fes, native):
     """NGSolve charge-projection tables for device B construction; no charge map.
 
     Returns the binding tables and, for the host-side consistency check only,
     the staged cell and exterior-face vertex coordinates.
     """
     import numpy as np
-    from .gpu import _native
-    _hdiv_cuda = _native("_hdiv_cuda")
-    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder)
     try:
         staged = staging.charge_tables()
     finally:
