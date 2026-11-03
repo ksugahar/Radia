@@ -251,7 +251,8 @@
         "tools/python_gpu_payload.py",
         "tools/prepare_hdiv_mesh_receipt.py",
         "tools/check_python_gpu_coexistence.py",
-        "validation_test/induction_heating/fin_return_principle.py"
+        "validation_test/induction_heating/fin_return_principle.py",
+        "tools/check_ninja_msvc_deps.py"
       ],
       "audit_sha256": "53cf934dbd4e799658b0f6d73d587292acab7c28d6e033f6b152d445910d78bb",
       "deferred_or_mocked_imports": {
