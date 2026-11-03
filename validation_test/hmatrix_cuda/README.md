@@ -61,8 +61,8 @@ the last 25 runs they are 1 MiB and 64 KiB per run.
 
 | Device | 100 runs | Per run | Last 25 runs | Per run |
 |---|---|---|---|---|
-| RTX 5000 | 1.20, 1.26 MB | 6.1, 5.0 kB | 0.00, 0.14 MB | -0.3, 7.9 kB |
-| A100 | 2.58, 2.35 MB | 32.0, 32.0 kB | 0.00, 0.00 MB | 0.0, 0.0 kB |
+| RTX 5000 | 1.09, 6.93 MB | 4.7, 55.3 kB | 0.00, 0.00 MB | 0.0, -0.2 kB |
+| A100 | 2.39, 2.43 MB | 32.0, 32.0 kB | 0.00, 0.00 MB | 0.0, 0.0 kB |
 
 Device memory returns to its baseline and no handle stays live on both. Passing the limits is not
 proof of zero leaks.
@@ -71,7 +71,12 @@ The workload failed the last-25-run limits before `readHDivDeviceSetup` stopped 
 payload again (RTX 5000 2.70 MB, A100 2.06 MB). On the A100, runs of one layer at a time showed late
 one-off steps when the checks ran on every solve and none when the same solves skipped them, so a
 changed payload is now the only one checked again. What inside MATLAB makes those steps is not
-identified. Reading the process counter also adds 64 KiB per read for about the first 66 reads, which
-ends before the last 25 runs. On the RTX 5000, private memory still alternates by about 0.52 MB per
-run, cause not identified. An idle control on that shared desktop host moved by up to 5.77 MB in one
-step, so a later result there can be disturbed by the host.
+identified. The comparison uses builtins only: an earlier version written as a recursive MATLAB
+function failed one of two RTX 5000 runs (16.78 MB, last 25 runs 5.70 MB) and added a one-off step of
+6 to 9 MB on both hosts.
+
+Reading the process counter also adds 64 KiB per read for about the first 66 reads, which ends before
+the last 25 runs. On the RTX 5000, private memory can alternate by up to 1.57 MB per run, cause not
+identified; it returns to the same value every other run, so the last-25-run difference does not see
+it. An idle control on that shared desktop host moved by up to 5.77 MB in one step, so a later result
+there can be disturbed by the host.
