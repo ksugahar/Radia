@@ -9,14 +9,6 @@ namespace py=pybind11;
 using namespace radia_hdiv_python;
 template<class T>using Array=py::array_t<T,py::array::c_style>;
 namespace {
-#ifdef RADIA_HDIV_PYTHON_FAULT_INJECTION
-thread_local std::size_t publicationFailAt=0,publicationAttempts=0;
-#endif
-void pythonPublicationProbe(){
-#ifdef RADIA_HDIV_PYTHON_FAULT_INJECTION
-    ++publicationAttempts;if(publicationFailAt && publicationAttempts==publicationFailAt)throw std::bad_alloc();
-#endif
-}
 constexpr std::size_t hostSnapshotBudget=std::size_t(512)<<20;
 template<class T,class Allocator=radia_hmatrix_cuda::HostFaultAllocator<T>>std::vector<T,Allocator> snapshot(Array<T> a,std::size_t& bytes) {
     if(a.ndim()!=1)throw py::value_error("Resident buffers must be one-dimensional and contiguous");
@@ -67,14 +59,14 @@ std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<dou
     std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);
     auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
     py::gil_scoped_release release;
-    auto owner=radia_hdiv_bh::createFlatMaterial(input,law);pythonPublicationProbe();return owner;
+    auto owner=radia_hdiv_bh::createFlatMaterial(input,law);return owner;
 }
 std::shared_ptr<radia_hdiv_bh::MassOperator> constructFlatMass(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,const std::string& backend){
     if(backend!="gpu")throw py::value_error("Mass context requires explicit backend='gpu'");
     std::size_t bytes=0;auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
     py::gil_scoped_release release;
-    auto owner=radia_hdiv_bh::createFlatMass(input);pythonPublicationProbe();return owner;
+    auto owner=radia_hdiv_bh::createFlatMass(input);return owner;
 }
 py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
     Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
@@ -154,7 +146,7 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
         auto rule=[&](const py::object& value,const char* what){auto a=typed(value,what,double{});
             if(a.ndim()!=2||a.shape(1)!=4)throw py::value_error(std::string(what)+" requires (points,4) float64 rows");return flat(a);};
         charges.cellRule=rule(cellMassRule,"cell_mass_rule");charges.faceRule=rule(faceMassRule,"face_mass_rule");}
-    py::gil_scoped_release release;auto owner=createFlat(input,charges);pythonPublicationProbe();return owner;
+    py::gil_scoped_release release;auto owner=createFlat(input,charges);return owner;
 }
 }
 void registerMaterialStaging(py::module_&);
@@ -168,29 +160,11 @@ static int massMode(const std::string& preconditioner){
     throw py::value_error("Unsupported material preconditioner");
 }
 static py::dict publishNewton(const NewtonResult& result){
-    pythonPublicationProbe();py::array_t<double> solution(result.x.size());std::copy(result.x.begin(),result.x.end(),solution.mutable_data());pythonPublicationProbe();py::dict out;out["x"]=solution;out["relative_residual"]=result.residual;out["energy"]=result.energy;out["newton_iterations"]=result.history.size();out["preconditioner_graph_launches"]=result.graphLaunches;
-    pythonPublicationProbe();py::list history;for(const auto& s:result.history){pythonPublicationProbe();py::dict row;row["relative_residual"]=s.residual;row["energy"]=s.energy;row["alpha"]=s.alpha;row["linear_relative_residual"]=s.linearResidual;row["linear_iterations"]=s.linearIterations;row["backtracks"]=s.backtracks;row["original_residual_certified"]=s.residualCertified;history.append(row);}out["history"]=history;return out;
+    py::array_t<double> solution(result.x.size());std::copy(result.x.begin(),result.x.end(),solution.mutable_data());py::dict out;out["x"]=solution;out["relative_residual"]=result.residual;out["energy"]=result.energy;out["newton_iterations"]=result.history.size();out["preconditioner_graph_launches"]=result.graphLaunches;
+    py::list history;for(const auto& s:result.history){py::dict row;row["relative_residual"]=s.residual;row["energy"]=s.energy;row["alpha"]=s.alpha;row["linear_relative_residual"]=s.linearResidual;row["linear_iterations"]=s.linearIterations;row["backtracks"]=s.backtracks;row["original_residual_certified"]=s.residualCertified;history.append(row);}out["history"]=history;return out;
 }
 PYBIND11_MODULE(_hdiv_cuda,m) {
     registerMaterialStaging(m);
-#ifdef RADIA_HDIV_PYTHON_FAULT_INJECTION
-    m.def("_diagnostic_failure",[](const std::string& kind,std::size_t at){
-        using namespace radia_hmatrix_cuda;
-        if(kind=="host")configureHostFault(at);
-        else if(kind=="device")configureDeviceFault(at);
-        else if(kind=="resource")configureResourceFault(at);
-        else if(kind=="publication"){publicationFailAt=at;publicationAttempts=0;}
-        else throw py::value_error("Unknown diagnostic class");
-    });
-    m.def("_diagnostic_report",[](){
-        using namespace radia_hmatrix_cuda;py::dict out;
-        out["host_attempts"]=hostFaultState.attempts;out["host_live_bytes"]=hostFaultState.liveBytes;
-        out["device_attempts"]=deviceFaultState.attempts;out["device_live_bytes"]=deviceFaultState.liveBytes;
-        out["device_free_errors"]=deviceFaultState.freeErrors;out["resource_attempts"]=resourceFaultState.attempts;
-        out["live_resources"]=resourceFaultState.live;out["resource_free_errors"]=resourceFaultState.freeErrors;
-        out["publication_attempts"]=publicationAttempts;return out;
-    });
-#endif
     py::class_<radia_hdiv_bh::MaterialOperator,std::shared_ptr<radia_hdiv_bh::MaterialOperator>>(m,"_ResidentBHMaterial")
       .def_static("from_flat_tables",&constructFlatMaterial,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
            py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
@@ -202,42 +176,42 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            "Host-only scope check of the flat evaluation tables (same checks as from_flat_tables) and their device byte budget; no device context.")
       .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
           {py::gil_scoped_release release;route=self.route();rows=self.transfers();bytes=self.footprint();}
-          pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
+          py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
           for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("reference_mass_apply",[](radia_hdiv_bh::MaterialOperator& self,Array<double> x){
           if(x.ndim()!=1)throw py::value_error("Reference mass input must be one-dimensional");
           std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hdiv_bh::MassAction result;
           {py::gil_scoped_release release;result=self.massAction(input);}
-          pythonPublicationProbe();py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
+          py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
           py::dict out;out["y"]=y;out["nonzeros"]=result.nonzeros;out["spectral_bound"]=result.bound;return out;
       },py::arg("x").noconvert(),"Diagnostic y=Mx of the device-built reference mass; vectors cross, the matrix never does.")
       .def("evaluation_apply",[](radia_hdiv_bh::MaterialOperator& self,Array<double> x,bool transpose){
           if(x.ndim()!=1)throw py::value_error("Evaluation action input must be one-dimensional");
           std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hmatrix_cuda::HostVector<double> y;
           {py::gil_scoped_release release;y=self.evaluationAction(input,transpose);}
-          pythonPublicationProbe();py::array_t<double> out(y.size());std::copy(y.begin(),y.end(),out.mutable_data());return out;
+          py::array_t<double> out(y.size());std::copy(y.begin(),y.end(),out.mutable_data());return out;
       },py::arg("x").noconvert(),py::arg("transpose"),"Diagnostic E x (transpose=False) or E^T y (transpose=True); vectors cross, no evaluation matrix does.")
       .def("evaluate",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state,Array<double> direction){
           const auto stats=self.stats();if(stats.closed)throw py::value_error("Material context is closed");
           if(state.ndim()!=1||std::size_t(state.size())!=stats.dofs||direction.ndim()!=1||(direction.size()!=0&&std::size_t(direction.size())!=stats.dofs))throw py::value_error("Material state or direction mismatch");
           std::size_t bytes=0;const auto x=snapshot(state,bytes),d=snapshot(direction,bytes);radia_hdiv_bh::MaterialEvaluation result;
           {py::gil_scoped_release release;result=self.evaluate(x,d);}
-          auto array=[](const auto& v){pythonPublicationProbe();py::array_t<double> a(v.size());std::copy(v.begin(),v.end(),a.mutable_data());return a;};
-          pythonPublicationProbe();py::dict out;out["gradient"]=array(result.gradient);out["tangent_action"]=array(result.tangentAction);out["energy"]=result.energy;out["maximum_magnetization"]=result.maximumMagnetization;out["device_payload_bound_bytes"]=result.ownedDeviceBytes;out["linearization_epoch"]=result.linearizationEpoch;return out;
+          auto array=[](const auto& v){py::array_t<double> a(v.size());std::copy(v.begin(),v.end(),a.mutable_data());return a;};
+          py::dict out;out["gradient"]=array(result.gradient);out["tangent_action"]=array(result.tangentAction);out["energy"]=result.energy;out["maximum_magnetization"]=result.maximumMagnetization;out["device_payload_bound_bytes"]=result.ownedDeviceBytes;out["linearization_epoch"]=result.linearizationEpoch;return out;
       },py::arg("state").noconvert(),py::arg("direction").noconvert())
       .def("linearize",[](radia_hdiv_bh::MaterialOperator& self,Array<double> state){
           const auto stats=self.stats();if(stats.closed||state.ndim()!=1||std::size_t(state.size())!=stats.dofs)throw py::value_error("Material state dimension or liveness mismatch");
           std::size_t bytes=0;const auto x=snapshot(state,bytes);radia_hdiv_bh::MaterialEvaluation result;
           {py::gil_scoped_release release;result=self.linearize(x);}
-          pythonPublicationProbe();py::array_t<double> gradient(result.gradient.size());std::copy(result.gradient.begin(),result.gradient.end(),gradient.mutable_data());pythonPublicationProbe();py::dict out;out["gradient"]=gradient;out["energy"]=result.energy;out["linearization_epoch"]=result.linearizationEpoch;return out;
+          py::array_t<double> gradient(result.gradient.size());std::copy(result.gradient.begin(),result.gradient.end(),gradient.mutable_data());py::dict out;out["gradient"]=gradient;out["energy"]=result.energy;out["linearization_epoch"]=result.linearizationEpoch;return out;
       },py::arg("state").noconvert())
       .def("apply_tangent",[](radia_hdiv_bh::MaterialOperator& self,Array<double> direction,std::size_t epoch){
           const auto stats=self.stats();if(stats.closed||direction.ndim()!=1||std::size_t(direction.size())!=stats.dofs)throw py::value_error("Material direction dimension or liveness mismatch");
           std::size_t bytes=0;const auto d=snapshot(direction,bytes);radia_hmatrix_cuda::HostVector<double> result;{py::gil_scoped_release release;result=self.tangent(d,epoch);}
-          pythonPublicationProbe();py::array_t<double> out(result.size());std::copy(result.begin(),result.end(),out.mutable_data());return out;
+          py::array_t<double> out(result.size());std::copy(result.begin(),result.end(),out.mutable_data());return out;
       },py::arg("direction").noconvert(),py::arg("linearization_epoch"))
-      .def("stats",[](radia_hdiv_bh::MaterialOperator& self){const auto s=self.stats();pythonPublicationProbe();py::dict out;out["dofs"]=s.dofs;out["points"]=s.points;out["device_payload_bound_bytes"]=s.devicePayloadBound;out["setup_upload_bytes"]=s.setupUploadBytes;out["state_upload_bytes"]=s.stateUploadBytes;out["evaluations"]=s.evaluations;out["epoch"]=s.epoch;out["closed"]=s.closed;out["linearization_epoch"]=s.linearizationEpoch;out["linearization_valid"]=s.linearizationValid;out["tangent_applications"]=s.tangentApplications;return out;})
+      .def("stats",[](radia_hdiv_bh::MaterialOperator& self){const auto s=self.stats();py::dict out;out["dofs"]=s.dofs;out["points"]=s.points;out["device_payload_bound_bytes"]=s.devicePayloadBound;out["setup_upload_bytes"]=s.setupUploadBytes;out["state_upload_bytes"]=s.stateUploadBytes;out["evaluations"]=s.evaluations;out["epoch"]=s.epoch;out["closed"]=s.closed;out["linearization_epoch"]=s.linearizationEpoch;out["linearization_valid"]=s.linearizationValid;out["tangent_applications"]=s.tangentApplications;return out;})
       .def("close",&radia_hdiv_bh::MaterialOperator::close,py::call_guard<py::gil_scoped_release>());
 
     py::class_<radia_hdiv_bh::MassOperator,std::shared_ptr<radia_hdiv_bh::MassOperator>>(m,"_ResidentMass")
@@ -247,18 +221,18 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            "Device-built reference mass M from resident NGSolve reference tables for the linear material solve; no mass entry crosses.")
       .def("assembly",[](radia_hdiv_bh::MassOperator& self){radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;std::string route;
           {py::gil_scoped_release release;rows=self.transfers();bytes=self.footprint();route=self.route();}
-          pythonPublicationProbe();py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
+          py::dict d;d["route"]=route;d["persistent_device_bytes"]=bytes.persistent;d["setup_transient_device_bytes"]=bytes.transient;py::list ledger;
           for(const auto& t:rows){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           d["transfer_ledger"]=ledger;return d;})
       .def("reference_mass_apply",[](radia_hdiv_bh::MassOperator& self,Array<double> x){
           if(x.ndim()!=1)throw py::value_error("Reference mass input must be one-dimensional");
           std::size_t bytes=0;const auto input=snapshot(x,bytes);radia_hdiv_bh::MassAction result;
           {py::gil_scoped_release release;result=self.massAction(input);}
-          pythonPublicationProbe();py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
+          py::array_t<double> y(result.y.size());std::copy(result.y.begin(),result.y.end(),y.mutable_data());
           py::dict out;out["y"]=y;out["nonzeros"]=result.nonzeros;out["spectral_bound"]=result.bound;return out;
       },py::arg("x").noconvert(),"Diagnostic y=Mx of the device-built reference mass; vectors cross, the matrix never does.")
       .def("stats",[](radia_hdiv_bh::MassOperator& self){std::size_t dofs;bool closed;{py::gil_scoped_release release;dofs=self.dofs();closed=self.closed();}
-          pythonPublicationProbe();py::dict d;d["dofs"]=dofs;d["closed"]=closed;d["backend"]="gpu";return d;})
+          py::dict d;d["dofs"]=dofs;d["closed"]=closed;d["backend"]="gpu";return d;})
       .def("close",&radia_hdiv_bh::MassOperator::close,py::call_guard<py::gil_scoped_release>());
 
     m.def("_inverse_bh_samples",[](Array<double> knots,Array<double> coefficients,Array<double> base,
@@ -270,8 +244,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         std::size_t bytes=0;radia_hdiv_bh::Law law{snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(knots,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(coefficients,bytes),snapshot<double,radia_hmatrix_cuda::HostFaultAllocator<double>>(base,bytes),cap,barrier,last,initial};
         const auto a=snapshot(amplitudes,bytes);radia_hdiv_bh::Samples result;
         {py::gil_scoped_release release;result=radia_hdiv_bh::evaluate(law,a);}
-        auto array=[](const auto& v){pythonPublicationProbe();py::array_t<double> a(v.size());std::copy(v.begin(),v.end(),a.mutable_data());return a;};
-        pythonPublicationProbe();py::dict d;d["secant"]=array(result.secant);d["tangent"]=array(result.tangent);d["energy"]=array(result.energy);
+        auto array=[](const auto& v){py::array_t<double> a(v.size());std::copy(v.begin(),v.end(),a.mutable_data());return a;};
+        py::dict d;d["secant"]=array(result.secant);d["tangent"]=array(result.tangent);d["energy"]=array(result.energy);
         d["owned_device_payload_bytes"]=result.ownedDeviceBytes;d["backend"]="gpu";return d;
     },py::arg("knots").noconvert(),py::arg("coefficients").noconvert(),py::arg("integral_base").noconvert(),
       py::arg("amplitudes").noconvert(),py::arg("cap"),py::arg("barrier_slope"),py::arg("last_field"),py::arg("initial_reluctivity"),py::arg("backend"));
@@ -308,7 +282,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         const auto r=snapshot(rows,bytes),c=snapshot(cols,bytes);
         radia_hmatrix_cuda::HostVector<std::size_t> rr(r.begin(),r.end()),cc(c.begin(),c.end());radia_hmatrix_cuda::HostVector<double> values;
         {py::gil_scoped_release release;values=flatDiagnosticEntries(input,rr,cc);}
-        pythonPublicationProbe();py::array_t<double> out(values.size());std::copy(values.begin(),values.end(),out.mutable_data());return out;
+        py::array_t<double> out(values.size());std::copy(values.begin(),values.end(),out.mutable_data());return out;
     },py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),py::arg("charge_host").noconvert(),
       py::arg("charge_kind").noconvert(),py::arg("charge_exponents").noconvert(),py::arg("tet_rule").noconvert(),
       py::arg("tri_rule").noconvert(),py::arg("tet_low_rule").noconvert(),py::arg("tri_low_rule").noconvert(),
@@ -329,7 +303,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("face_mass_rule")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
-          pythonPublicationProbe();py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;
+          py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;
           d["kernel_launches"]=a.launches;d["compression"]=a.compression;py::dict counters;
           for(const auto& c:a.counters)counters[py::str(c.first)]=c.second;d["hmatrix"]=counters;py::list ledger;
           if(a.budget.empty())d["charge_budget"]=py::none();
@@ -342,7 +316,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       .def("apply",[](DeviceOperator& self,Array<double> x){
           std::size_t bytes=0;auto input=snapshot(x,bytes);radia_hmatrix_cuda::HostVector<double> output;
           {py::gil_scoped_release release;output=self.apply(input);}
-          pythonPublicationProbe();py::array_t<double> result(output.size());std::copy(output.begin(),output.end(),result.mutable_data());return result;
+          py::array_t<double> result(output.size());std::copy(output.begin(),output.end(),result.mutable_data());return result;
       },py::arg("x").noconvert())
       .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
           const auto n=self.stats().dimension;
@@ -362,7 +336,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
               if(!degree.is_none())options.degree=py::cast<int>(degree);if(!lower.is_none())options.lowerFraction=py::cast<double>(lower);}
           std::size_t bytes=0;const auto b=snapshot(rhs,bytes);LinearResult result;
           {py::gil_scoped_release release;result=self.solve_linear(mass,b,options);}
-          pythonPublicationProbe();py::array_t<double> x(result.x.size());std::copy(result.x.begin(),result.x.end(),x.mutable_data());
+          py::array_t<double> x(result.x.size());std::copy(result.x.begin(),result.x.end(),x.mutable_data());
           py::dict out;out["x"]=x;out["iterations"]=result.iterations;out["relative_residual"]=result.relativeResidual;
           out["solver_owned_device_bytes"]=result.ownedBytes;out["preconditioner"]=preconditioner;out["preconditioner_graph_launches"]=result.graphLaunches;
           out["chebyshev_degree"]=mode>=4?options.degree:0;out["chebyshev_lower_fraction"]=mode>=4?options.lowerFraction:0.;return out;
@@ -370,6 +344,6 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         py::arg("degree")=py::none(),py::arg("lower_fraction")=py::none(),
         "Linear material PCG on (B^T G B + inv_chi M) x = rhs with the device-built mass context; only vectors cross.")
       .def("stats",[](DeviceOperator& self){Stats s;{py::gil_scoped_release release;s=self.stats();}
-          pythonPublicationProbe();py::dict d;d["dimension"]=s.dimension;d["owned_device_bytes"]=s.owned_bytes;d["applications"]=s.applications;d["closed"]=s.closed;d["backend"]="gpu";return d;})
+          py::dict d;d["dimension"]=s.dimension;d["owned_device_bytes"]=s.owned_bytes;d["applications"]=s.applications;d["closed"]=s.closed;d["backend"]="gpu";return d;})
       .def("close",&DeviceOperator::close,py::call_guard<py::gil_scoped_release>());
 }

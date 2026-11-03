@@ -1,4 +1,4 @@
-"""Public tetrahedral HDiv device whole-solve parity against independent CPU pybind11."""
+"""Public HDiv device whole-solve parity (RT0, BDM1, BDM2; tet, curved tet, hex) against independent CPU pybind11."""
 from pathlib import Path
 import argparse,ctypes,hashlib,json,os,sys,shutil
 from hdiv_validation_inputs import checked_mesh, dependency_directories, thread_record, cpu_receipt, single_thread_blas, observed_blas, sorted_oracle_csr
@@ -8,8 +8,8 @@ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def main():
     p=argparse.ArgumentParser()
     for name in ('device','out'):p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--order',type=int,choices=[1,2],default=1)
-    p.add_argument('--geometry',choices=['affine','curved'],default='curved')
+    p.add_argument('--order',type=int,choices=[0,1,2],default=1)
+    p.add_argument('--geometry',choices=['affine','curved','hex'],default='curved')
     for name in ('mesh','contract'):
         p.add_argument('--'+name,type=Path,required=True)
         p.add_argument('--'+name+'-sha256',required=True)
@@ -22,7 +22,7 @@ def main():
     p.add_argument('--cpu-build-receipt',type=Path,required=True)
     a=p.parse_args()
     a.device=a.device.resolve();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=False)
-    result=dict(accepted=False,scope='Bounded public tetrahedral HDiv, device-built operators with the exact dense Gram of the CPU reference, linear isotropic material',geometry=a.geometry,order=a.order,comparison_kind='operator and implementation parity on a matched near/far profile; not independent physical accuracy',adoption='proposed; see CURVED_GATE_RECORD.md',a100_used=None,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
+    result=dict(accepted=False,scope='Bounded public HDiv, device-built operators with the exact dense Gram of the CPU reference, linear isotropic material',geometry=a.geometry,order=a.order,comparison_kind='operator and implementation parity on a matched near/far profile; not independent physical accuracy',adoption='proposed; see CURVED_GATE_RECORD.md',a100_used=None,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
     eng=None
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
@@ -30,7 +30,7 @@ def main():
         directories,dll_handles=dependency_directories(a.dependency_dir)
         result['dependency_directories']=list(map(str,directories))
         result['threads']=thread_record(a.cpu_threads)
-        result['mesh_check']=checked_mesh(a.mesh,a.contract,a.mesh_sha256,a.contract_sha256,a.out/'vol_check.json')
+        result['mesh_check']=checked_mesh(a.mesh,a.contract,a.mesh_sha256,a.contract_sha256,a.out/'vol_check.json',tet_only=a.geometry!='hex')
         import numpy as np
         import ngsolve as ng
         from hdiv_hdf5 import write_hdiv_h5, read_hdiv_h5

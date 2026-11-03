@@ -11,7 +11,6 @@
 #include <memory>
 #include "hmatrix_host_fault.hpp"
 #include "hdiv_device_reserve.hpp"
-#include "hmatrix_leaf_coverage.hpp"
 
 namespace radia_hmatrix_cuda {
 inline void check(cudaError_t status) {

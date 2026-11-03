@@ -189,7 +189,7 @@ class build_py(_build_py):
             bool(python_binding or resident))
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Resident GPU AMG Python adapter"] if resident else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["HDiv device route: RT0, BDM1, BDM2 on affine and P2 tetrahedra and hexahedra"] if device else []) + (["Resident GPU AMG Python adapter"] if resident else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=runtime_common,
                         runtime_requirements_by_interface=runtime_interfaces)
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")

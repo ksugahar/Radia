@@ -4,7 +4,8 @@
   "cpu_owner": "Python/pybind11 with caller-owned NGSolve TaskManager",
   "gpu_owner": "MATLAB plain MEX over one nvcc kernel object, no TaskManager activation",
   "cpu_mex_supported": false,
-  "python_gpu_runtime_required": false,
+  "python_gpu_runtime_required_for_solve": false,
+  "python_gpu_runtime_required_for_staging": true,
   "capabilities": [
     {
       "CPU": "radia.vim charge Gram, charge map and mass over the same checked mesh",

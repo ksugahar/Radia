@@ -95,6 +95,25 @@ def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, c
         operator.close()
 
 
+def test_device_solve_reuses_its_operator_across_rhs_scalings(tmp_path, request, cuda):
+    """Guards: one prepared operator stays linear in the right-hand side, including its sign and zero."""
+    setup, expected, rhs = _case(tmp_path, 1, cuda)
+    nd = setup["dofs"]
+    mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
+    operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
+    try:
+        worst = 0.
+        for scale in (1., .5, -1., 0.):
+            result = operator.solve_linear(mass, np.ascontiguousarray(scale*rhs), INV_CHI, 1e-11, 2000, "mass-polynomial")
+            relative = np.linalg.norm(result["x"] - scale*expected)/np.linalg.norm(expected)
+            worst = max(worst, float(relative))
+            assert relative <= LINEAR_REL, f"scale={scale} relative={relative:.3e} limit={LINEAR_REL:.0e}"
+        request.node.user_properties += [("max_relative", worst)]
+    finally:
+        mass.close()
+        operator.close()
+
+
 def test_device_entries_refuse_a_missing_or_unknown_family(tmp_path, cuda):
     """Guards: the geometry family is never defaulted by the native entries.
 

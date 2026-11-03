@@ -38,15 +38,15 @@ took caller-built matrices or host-assembled mass and charge maps, which the
 matrix residency policy forbids. They are removed. Their recorded JSON stays
 under `results/` as provenance for that route only and certifies nothing about
 the device route. The dated narrative of those campaigns is in git history at
-`93efc9a60`. [RETIRED_ROUTE_INVENTORY.md](RETIRED_ROUTE_INVENTORY.md) lists every
-removed entry, its consumers, its coverage and what replaces it.
+`93efc9a60`. [RETIRED_ROUTE_INVENTORY.md](RETIRED_ROUTE_INVENTORY.md) lists the
+removed entries, their consumers, their coverage and what replaces it or what was lost.
 
 ## Device-route entries
 
 | Entry | Scope | Output |
 |---|---|---|
-| `validate_curved_hdiv.py` | Whole linear solve against the CPU route on a checked mesh | JSON with the matched-profile label |
-| `validate_device_nonlinear.py` | Nonlinear solve and material energy, gradient and tangent against the CPU route, with finite differences | JSON |
-| `device_scale.py` | Compressed device H-matrix setup and solve at one or more meshes; no threshold | JSON |
+| `validate_curved_hdiv.py` | Whole linear solve through MATLAB against the CPU route on a checked mesh: orders 0, 1, 2; affine, curved or HEX | JSON with the matched-profile label |
+| `validate_device_nonlinear.py` | Nonlinear solve and material energy, gradient and tangent on pybind11 against the CPU route, with finite differences | JSON |
+| `device_scale.py` | Compressed device H-matrix setup and linear solve, with `--nonlinear` also the BH solve, at one or more meshes; no threshold | JSON |
 | `check_pybind_mex_bitwise.py`, `hdiv_device_parity.py`, `produceHDivDeviceMexRecord.m` | Same-kernel frontend parity, see [PYBIND_MEX_BITWISE.md](PYBIND_MEX_BITWISE.md) | JSON |
 | `checkHDivDeviceMemory.m`, `makeGatewayMemoryWorkload.m`, `sampleGatewayMemory.m` | 100-run memory slope under `gateway_memory_protocol.json` (`hdiv-device` workload) | JSON |
