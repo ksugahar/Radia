@@ -34,6 +34,35 @@ bad=c;bad.Setup.charges.cell_dofs=[0.5;1];
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(bad),'radia:gpu:DeviceSetup');
 out=radia.simulink.validateHDivGPUWorkflowConfig(c);verifyEqual(t,out.Setup.dofs,4);
 end
+function testWarmAndColdReadsAgree(t)
+good=fixture().Setup;negativeZero=-0;verifyEqual(t,1/negativeZero,-Inf);
+other=good;other.order=2; % a different valid payload: the next read cannot match it
+cases={@(s)setfield(s,'rhs_operator',complex(s.rhs_operator,zeros(4,3))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_vertices',complex(s.charges.cell_vertices,zeros(12,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_dofs',complex(s.charges.cell_dofs,zeros(4,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'evaluation','rule',complex(s.evaluation.rule,zeros(12,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_vertices',[negativeZero;s.charges.cell_vertices(2:end)]),''; ...
+    @(s)setfield(s,'rhs_operator',sparse(s.rhs_operator)),''; ...
+    @(s)setfield(s,'rhs_operator',single(s.rhs_operator)),''; ...
+    @(s)setfield(s,'charges','cell_dofs',int32(s.charges.cell_dofs)),''; ...
+    @(s)setfield(s,'schema',char(s.schema)),''};
+for k=1:size(cases,1)
+    variant=cases{k,1}(good);
+    radia.gpu.readHDivDeviceSetup(other);cold=outcome(variant);
+    radia.gpu.readHDivDeviceSetup(other);radia.gpu.readHDivDeviceSetup(good);warm=outcome(variant);
+    verifyEqual(t,warm,cold,sprintf('Warm and cold reads differ, case %d',k));
+    if ~isempty(cases{k,2})
+        verifyEqual(t,cold,uint8(cases{k,2}),sprintf('Not refused, case %d',k));
+    end
+end
+end
+function bytes=outcome(setup)
+try
+    bytes=getByteStreamFromArray(radia.gpu.readHDivDeviceSetup(setup));
+catch e
+    bytes=uint8(e.identifier);
+end
+end
 function testIntegerTablesRestoredToInt32(t)
 out=radia.simulink.validateHDivGPUWorkflowConfig(fixture());
 verifyClass(t,out.Setup.charges.cell_dofs,'int32');verifyClass(t,out.Setup.evaluation.element_points,'int32');
