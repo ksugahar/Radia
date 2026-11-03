@@ -8,7 +8,8 @@ mass and the linear material solve agree with the CPU curved route:
 curved ChargeGram) and the NGSolve mass on the material rule. Dropping the
 curved Jacobian (affine map on P2 nodes), the |det J| weight of the curved
 Gram mass, or the curved touching/Duffy branch moves these far beyond the
-detectors.
+detectors. A P2 ``.vol`` stored on disk is solved as stored, and declaring it
+linear is refused.
 Assumes: the CPU curved route is the reference on identical NGSolve inputs;
 this is parity of one discretization, not independent accuracy. The REL
 values are PROPOSED detectors, not adopted criteria. Optional GPU lane: skips
@@ -45,6 +46,19 @@ def ball(tmp_path_factory):
     from netgen.occ import OCCGeometry, Pnt, Sphere
     path = tmp_path_factory.mktemp("curved") / "ball.vol"
     OCCGeometry(Sphere(Pnt(0, 0, 0), 0.05)).GenerateMesh(maxh=0.04).Save(str(path))
+    return path
+
+
+@pytest.fixture(scope="module")
+def saved_ball(ball, tmp_path_factory):
+    import ngsolve as ng
+    from radia.vim._vim import _curve_mesh
+    path = tmp_path_factory.mktemp("curved-saved") / "ball-p2.vol"
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(ball))
+        _curve_mesh(mesh, 2)
+        mesh.ngmesh.Save(str(path))
+        assert ng.Mesh(str(path)).GetCurveOrder() == 2
     return path
 
 
@@ -108,9 +122,10 @@ def test_curved_device_entries_match_cpu_charge_gram(ball, request, cuda, order)
         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
 
 
+@pytest.mark.parametrize("source", ["ball", "saved_ball"])
 @pytest.mark.parametrize("order", [1, 2])
-def test_curved_device_operator_and_mass_match_cpu(ball, request, cuda, order):
-    setup, B, kw, M = _case(ball, order, cuda)
+def test_curved_device_operator_and_mass_match_cpu(source, request, cuda, order):
+    setup, B, kw, M = _case(request.getfixturevalue(source), order, cuda)
     gram = _cpu_gram(kw)
     nd = setup["dofs"]
     assert setup["charge_gram"]["family"] == "curved-tet" and setup["evaluation_tables"]["vertices"].shape[1] == 30
@@ -136,6 +151,13 @@ def test_curved_device_operator_and_mass_match_cpu(ball, request, cuda, order):
     finally:
         mass.close()
         operator.close()
+
+
+def test_saved_curved_mesh_declared_linear_is_refused(saved_ball, cuda):
+    import ngsolve as ng
+    from radia import hdiv_gpu
+    with ng.TaskManager(), pytest.raises(ValueError, match="affine or P2-curved"):
+        hdiv_gpu._prepare_device_components(saved_ball, 1, cuda, aca=None, compression="dense", curve_order=1)
 
 
 @pytest.mark.parametrize("order,compression", [(1, "aca"), (2, "dense"), (2, "aca")])
