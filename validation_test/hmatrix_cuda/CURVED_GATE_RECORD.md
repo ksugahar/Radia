@@ -31,8 +31,21 @@ approval and a pinned input.
 
 Affine geometry, order 1, checked linear coarse sphere, 102 tetrahedra, 774 DoF:
 rhs error 1.3e-16, coefficient error 5.5e-11, physical error 1.6e-13, independent
-residual 9.0e-12, CPU residual 6.0e-12. Curved geometry and order 2 have not run
-through this entry.
+residual 9.0e-12, CPU residual 6.0e-12.
+
+## Curved mass rule
+
+On curved tetrahedra the matched reference also takes the device material mass
+rule, `IntegrationRule(TET, 2*max(6, 2p+2))`. The CPU default mass of the curved
+charge basis uses NGSolve's default rule, which under-integrates the rational
+Piola mass there. Measured on a 102-tetrahedron P2 unit sphere at order 1, against
+rule degree 30: 6.8e-2 for the default rule and 1.3e-3 for the device rule. With
+the default mass in the reference, the device differs by 1.5e-3 at order 1 and
+6.6e-3 at order 2 in coefficients, and 7.9e-6 and 2.3e-6 in the mean field. With
+the device rule in the reference, it differs by 5.7e-11 and 4.7e-10.
+
+This is a finding about the CPU linear route, which is unchanged here. It is
+not evidence that either mass is accurate enough for an adopted curved gate.
 
 ## Correction to the record of `810256e5b`
 
