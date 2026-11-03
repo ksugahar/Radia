@@ -501,14 +501,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Ninja header dependency tracking:
-REM MSVC /showIncludes outputs in Japanese (cp932) on Japanese Windows.
-REM If rules.ninja gets a garbled msvc_deps_prefix (encoding mismatch),
-REM Ninja records #deps 0 for all .obj files and misses header changes.
-REM Fix: delete build-*/CMakeFiles/rules.ninja and reconfigure (Build.ps1 -Rebuild).
-REM VSLANG=1033 does NOT change cl.exe language, but ensures consistent env.
-set VSLANG=1033
-
 $MklBatchEnvironment
 set RADIA_ONLY=$RadiaOnly
 set RUN_CPP_TESTS=$Test
@@ -530,6 +522,11 @@ if errorlevel 1 (
     echo ERROR: CMake configuration failed
     exit /b 1
 )
+"$PythonExecutable" "$PROJECT_DIR\tools\check_ninja_msvc_deps.py" prefix --build-dir "$BUILD_DIR" --compiler "$CompilerPath"
+if errorlevel 1 (
+    echo ERROR: Ninja header dependency configuration failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
@@ -538,6 +535,11 @@ echo ========================================
 "$CMAKE_EXE" --build . --config Release --target _radia_pybind -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: _radia_pybind build failed
+    exit /b 1
+)
+"$PythonExecutable" "$PROJECT_DIR\tools\check_ninja_msvc_deps.py" deps --build-dir "$BUILD_DIR" --ninja "$NINJA_EXE" --target _radia_pybind
+if errorlevel 1 (
+    echo ERROR: _radia_pybind header dependency build failed
     exit /b 1
 )
 
@@ -693,6 +695,15 @@ exit /b 0
 $BatchFile = "$BUILD_DIR\build_temp_msvc.bat"
 $BuildLog = "$BUILD_DIR\build.log"
 $BatchContent | Out-File -FilePath $BatchFile -Encoding ascii
+
+# cl.exe writes its localized /showIncludes notes in the console output code
+# page; CMake decodes its msvc_deps_prefix probe with the input code page.
+# Align them for the build, then restore the caller's console.
+$CallerConsoleInputEncoding = $null
+if ([Console]::InputEncoding.CodePage -ne [Console]::OutputEncoding.CodePage) {
+    $CallerConsoleInputEncoding = [Console]::InputEncoding
+    [Console]::InputEncoding = [Console]::OutputEncoding
+}
 
 try {
     Write-Host "Building..." -ForegroundColor Cyan
@@ -850,6 +861,7 @@ catch {
     exit 1
 }
 finally {
+    if ($CallerConsoleInputEncoding) { [Console]::InputEncoding = $CallerConsoleInputEncoding }
     if (Test-Path $BatchFile) { Remove-Item $BatchFile -Force }
 }
 
