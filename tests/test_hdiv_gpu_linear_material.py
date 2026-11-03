@@ -36,6 +36,7 @@ def cuda():
 
 def _case(tmp_path, order, cuda, compression="aca"):
     import ngsolve as ng
+    from scipy.sparse import coo_matrix
     from netgen.csg import unit_cube
     import radia._radia_pybind as rp
     from radia import hdiv_gpu
@@ -49,7 +50,12 @@ def _case(tmp_path, order, cuda, compression="aca"):
         B, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
         gram = rp._ChargeGramHMatrix(**inputs, build=False)
         gram.build_exact_dense_normalized_gram(maximum_memory_mb=256)
-        mass = hdiv_gpu._fe_forms(mesh, fes)["mass"]
+        u, v = fes.TnT()
+        form = ng.BilinearForm(fes, symmetric=True)
+        form += ng.InnerProduct(u, v)*ng.dx
+        form.Assemble()
+        rows, columns, values = form.mat.COO()
+        mass = coo_matrix((values, (rows, columns)), shape=(fes.ndof, fes.ndof)).tocsr()
     nd = fes.ndof
     columns = [B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(B[:, k].toarray().ravel())))
                for k in range(nd)]

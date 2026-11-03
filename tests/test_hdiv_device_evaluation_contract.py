@@ -58,10 +58,10 @@ def test_material_ledger_accepts_only_the_exact_table_rows():
 def test_device_route_reports_evaluation_and_mass_as_device_built():
     assert not hasattr(hdiv_gpu, "PENDING_HOST_OPERATORS"), "no host-built operator remains on this route"
     source = (ROOT / "src/radia/hdiv_gpu.py").read_text(encoding="utf-8")
-    prepare = source[source.index("def _prepare_device_components"):source.index("def _prepare_host_components")]
+    prepare = source[source.index("def _prepare_device_components"):source.index("def _fe_sources")]
     assert "_device_evaluation_tables" in prepare and "_fe_components" not in prepare, prepare
     assert "_fe_sources(" in prepare and "_fe_forms(" not in prepare, prepare
-    sources = source[source.index("def _fe_sources"):source.index("def _fe_forms")]
+    sources = source[source.index("def _fe_sources"):source.index("def _device_evaluation_tables")]
     assert "BilinearForm" not in sources, sources
     nonlinear = source[source.index("class PreparedHDivNonlinear"):source.index("class PreparedHDivLinear")]
     initialize = nonlinear[nonlinear.index("    def _initialize"):nonlinear.index("    def solve")]

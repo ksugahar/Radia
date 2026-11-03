@@ -9,7 +9,7 @@ operator is uploaded.
 """
 from __future__ import annotations
 
-__all__ = ["PreparedHDivLinear", "PreparedHDivNonlinear", "prepare_hdiv_device_setup", "prepare_hdiv_host_setup"]
+__all__ = ["PreparedHDivLinear", "PreparedHDivNonlinear", "prepare_hdiv_device_setup"]
 
 import base64
 from importlib import metadata
@@ -864,26 +864,6 @@ def _checked_material_budget(budget):
                 excludes=budget.get("excludes"))
 
 
-def _prepare_host_components(path, order, *, maximum_dofs=16384):
-    """NG-owned FE/charge preparation for the MATLAB publisher.
-
-    No resident GPU operator and no CPU solution is created here. The caller
-    owns TaskManager; the private native material staging shares the same FE.
-    The publisher still ships host H-matrix leaves; its device route is pending.
-    """
-    import ngsolve as ng
-    from radia.vim._vim import build_charge_gram
-    mesh = ng.Mesh(str(path))
-    fes = ng.HDiv(mesh, order=order)
-    if not 0 < fes.ndof <= maximum_dofs:
-        raise ValueError("HDiv workflow dimension exceeds bounded scope")
-    B, gram, _ = build_charge_gram(fes, eps=1e-10, leafsize=64, eta=2.)
-    snapshot = gram._resident_leaf_snapshot(16)
-    if snapshot["dimension"] != B.shape[0]:
-        raise ValueError("Charge snapshot numbering mismatch")
-    return dict(_fe_components(path, mesh, fes), charge_map=B, snapshot=snapshot)
-
-
 def _fe_sources(mesh, fes):
     """NG-owned uniform-source and mean-field operators (vectors, not matrices)."""
     import numpy as np
@@ -902,43 +882,6 @@ def _fe_sources(mesh, fes):
     if not math.isfinite(volume) or volume <= 0:
         raise ValueError("Invalid mesh volume")
     return dict(dofs=nd, rhs_operator=rhs, mean_operator=rhs.T/volume)
-
-
-def _fe_forms(mesh, fes):
-    """Sources plus the NG-assembled host mass (MATLAB publisher route only)."""
-    import ngsolve as ng
-    from scipy.sparse import coo_matrix
-    nd = fes.ndof
-    u, v = fes.TnT()
-    mass = ng.BilinearForm(fes, symmetric=True)
-    mass += ng.InnerProduct(u, v)*ng.dx
-    mass.Assemble()
-    rows, columns, values = mass.mat.COO()
-    M = coo_matrix((values, (rows, columns)), shape=(nd, nd)).tocsr()
-    M.sort_indices()
-    return dict(_fe_sources(mesh, fes), mass=M)
-
-
-def _fe_components(path, mesh, fes):
-    """FE forms plus the NG-built evaluation CSR (MATLAB publisher route)."""
-    import numpy as np
-    from scipy.sparse import csc_matrix
-    from .gpu import _native
-    _hdiv_cuda = _native("_hdiv_cuda")
-    forms = _fe_forms(mesh, fes)
-    nd = forms["dofs"]
-    staging = _hdiv_cuda._MaterialStagingContext(str(path), fes.globalorder)
-    try:
-        payload = staging.quadrature()
-    finally:
-        staging.close()
-    if payload["dofs"] != nd:
-        raise ValueError("Material and charge FE numbering mismatch")
-    E = csc_matrix((payload["evaluation_values"], payload["evaluation_row_indices"],
-        payload["evaluation_column_offsets"]), shape=(payload["evaluation_rows"], nd)).tocsr()
-    E.sort_indices()
-    return dict(forms, evaluation=E, weights=np.asarray(payload["weights"]),
-                quadrature_order=payload["integration_order"])
 
 
 def _device_evaluation_tables(path, fes, native, curve_order, family):
@@ -1067,10 +1010,10 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
         raise ValueError("HDiv device setup order must be 0 (RT0), 1 or 2")
     curve_order = _checked_curve_order(curve_order, order)
     aca = _checked_gram_compression(gram_compression, gram_aca)
-    from .gpu import _native
-    native = _native("_hdiv_cuda")
     with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
                                 mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
+        from .gpu import _native
+        native = _native("_hdiv_cuda")
         setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression,
                                            curve_order=curve_order)
     return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family=setup["family"], order=order,
@@ -1078,22 +1021,3 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
                 evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],
                 material_budget=setup["material_budget"], rhs_operator=setup["rhs_operator"],
                 mean_operator=setup["mean_operator"])
-
-
-def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
-                            mesh_check_receipt_sha256, mesh_check_provenance, order=1, maximum_dofs=16384):
-    """Return owned zero-based FE/charge/material arrays; no resident GPU solve.
-
-    NGSolve assembly stays under the caller's TaskManager. Consumers publish
-    their own ABI layout without reimplementing FE preparation or domain math.
-    """
-    if backend != "gpu":
-        raise ValueError("Host setup requires explicit backend='gpu'")
-    if isinstance(order, bool) or order not in (1, 2):
-        raise ValueError("HDiv order must be 1 or 2")
-    if isinstance(maximum_dofs, bool) or not isinstance(maximum_dofs, int) or not 0 < maximum_dofs <= 16384:
-        raise ValueError("Unsupported bounded host setup dimension")
-    with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
-                                mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
-        data = _prepare_host_components(path, order, maximum_dofs=maximum_dofs)
-    return dict(data, mesh_sha256=mesh_hash, label_contract_sha256=contract_hash, order=order)
