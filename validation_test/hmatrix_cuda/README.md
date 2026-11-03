@@ -49,4 +49,4 @@ removed entry, its consumers, its coverage and what replaces it.
 | `validate_device_nonlinear.py` | Nonlinear solve and material energy, gradient and tangent against the CPU route, with finite differences | JSON |
 | `device_scale.py` | Compressed device H-matrix setup and solve at one or more meshes; no threshold | JSON |
 | `check_pybind_mex_bitwise.py`, `hdiv_device_parity.py`, `produceHDivDeviceMexRecord.m` | Same-kernel frontend parity, see [PYBIND_MEX_BITWISE.md](PYBIND_MEX_BITWISE.md) | JSON |
-| `makeGatewayMemoryWorkload.m`, `sampleGatewayMemory.m` | 100-run memory slope under `gateway_memory_protocol.json` (`hdiv-device` workload) | JSON |
+| `checkHDivDeviceMemory.m`, `makeGatewayMemoryWorkload.m`, `sampleGatewayMemory.m` | 100-run memory slope under `gateway_memory_protocol.json` (`hdiv-device` workload) | JSON |
