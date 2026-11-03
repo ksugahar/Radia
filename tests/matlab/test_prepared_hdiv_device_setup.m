@@ -2,7 +2,8 @@ function report=test_prepared_hdiv_device_setup(setup,bhTable,outPath)
 % Guards: the MATLAB device workflow (radia_hdiv_device) over a checked
 % radia.hdiv-device-setup.v1 solves, reuses prepared state, uploads the
 % setup once, rejects malformed setups before allocation and releases every
-% handle. Assumes: independent CPU certification is external (validation_test).
+% handle; the frozen tangent equals the evaluated tangent action and refuses a
+% stale epoch. Assumes: independent CPU certification is external (validation_test).
 modes={'reference-diagonal','reference-chebyshev-graph'};rows=cell(1,2);solutions=cell(1,2);
 for k=1:2
     obj=radia.gpu.PreparedHDivNonlinear(setup,[1000 -2000 5000],bhTable,Preconditioner=modes{k}, ...
@@ -23,6 +24,23 @@ for k=1:2
 end
 linear=radia.gpu.solveHDivElements(setup,[0 0 1e5],.1,Tolerance=1e-11,MaxIterations=2000,Preconditioner='mass-cholesky');
 assert(linear.true_relative_residual<=1e-11 && radia_hdiv_device('live_count')==0);
+law=radia.gpu.makeHDivBHMaterial(bhTable);material=radia.gpu.HDivBHMaterial(setup,law);
+state=1e3*sin((1:setup.dofs)');direction=cos((1:setup.dofs)');
+evaluated=material.evaluate(state,direction);frozen=material.linearize(state);
+action=material.applyTangent(direction,frozen.linearization_epoch);
+assert(norm(action-evaluated.tangent_action)<=1e-11*norm(evaluated.tangent_action), ...
+    'tangent %.3e',norm(action-evaluated.tangent_action)/norm(evaluated.tangent_action));
+material.evaluate(state+direction);failed=false;
+try
+    material.applyTangent(direction,frozen.linearization_epoch);
+catch
+    failed=true;
+end
+assert(failed,'A stale linearization epoch must be refused');
+samples=radia.gpu.HDivBHMaterial.inverseSamples(law,[1;1e3;1e5]);
+assert(numel(samples.secant)==3 && all(samples.secant>0) && all(samples.energy>=0));
+clear material
+assert(radia_hdiv_device('live_count')==0);
 bad=setup;bad.order=3;reject(bad,bhTable);
 bad=setup;bad.evaluation.element_dofs=bad.evaluation.element_dofs(1:end-1);reject(bad,bhTable);
 bad=setup;bad.charges.cell_dofs=double(bad.charges.cell_dofs)+.5;reject(bad,bhTable);

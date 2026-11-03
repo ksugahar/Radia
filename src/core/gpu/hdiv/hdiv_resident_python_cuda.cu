@@ -175,7 +175,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
 std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces){
     using namespace radia_hmatrix_cuda;
     const auto block=analyticSources(cells,faces);const auto n=block.sources.size();
-    Leaf leaf{0,0,n,n,0,HostVector<double>(checkedProduct(n,n),0.),{}};
+    Leaf leaf{0,0,n,n,0};leaf.deferred=true;
     HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
     const auto plan=pack(n,{leaf},permutation,HostVector<double>(n,1.));
     return std::allocate_shared<Operator>(HostFaultAllocator<Operator>("python.operator-owner"),plan,block);

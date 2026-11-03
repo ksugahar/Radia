@@ -165,6 +165,13 @@ int newtonMode(const std::string& p){
 }
 void arity(int nr,int expected,int nl,int outputs){if(nr!=expected||nl>outputs)throw std::invalid_argument("Invalid HDiv device command arity");}
 
+mxArray* materialResult(const radia_hdiv_bh::MaterialEvaluation& r){
+    Builder b;
+    b.set("gradient",column(r.gradient)).set("tangent_action",column(r.tangentAction)).set("energy",number(r.energy))
+     .set("maximum_magnetization",number(r.maximumMagnetization)).set("linearization_epoch",number(double(r.linearizationEpoch)));
+    return b.release();
+}
+
 void dispatch(int nl,mxArray* out[],int nr,const mxArray* in[]){
     if(nr<1)throw std::invalid_argument("Missing HDiv device command");
     const auto command=text(in[0],"command");
@@ -229,9 +236,15 @@ void dispatch(int nl,mxArray* out[],int nr,const mxArray* in[]){
         b.set("y",column(r.y)).set("nonzeros",number(double(r.nonzeros))).set("spectral_bound",number(r.bound));out[0]=b.release();return;
     }
     if(command=="material_evaluate"){
-        arity(nr,4,nl,1);const auto r=entry(in[1],materialTag,&Entry::material).evaluate(reals(in[2],"state"),reals(in[3],"direction"));Builder b;
-        b.set("gradient",column(r.gradient)).set("tangent_action",column(r.tangentAction)).set("energy",number(r.energy))
-         .set("maximum_magnetization",number(r.maximumMagnetization)).set("linearization_epoch",number(double(r.linearizationEpoch)));
+        arity(nr,4,nl,1);out[0]=materialResult(entry(in[1],materialTag,&Entry::material).evaluate(reals(in[2],"state"),reals(in[3],"direction")));return;
+    }
+    if(command=="material_linearize"){arity(nr,3,nl,1);out[0]=materialResult(entry(in[1],materialTag,&Entry::material).linearize(reals(in[2],"state")));return;}
+    if(command=="material_apply_tangent"){arity(nr,4,nl,1);out[0]=column(entry(in[1],materialTag,&Entry::material).tangent(reals(in[2],"direction"),count(in[3],"epoch")));return;}
+    if(command=="inverse_bh_samples"){
+        arity(nr,3,nl,1);const auto amplitudes=reals(in[2],"amplitudes");
+        if(amplitudes.empty()||amplitudes.size()>65536)throw std::invalid_argument("Inverse BH amplitude budget exceeded");
+        const auto r=radia_hdiv_bh::evaluate(law(in[1]),amplitudes);Builder b;
+        b.set("secant",column(r.secant)).set("tangent",column(r.tangent)).set("energy",column(r.energy)).set("owned_device_payload_bytes",number(double(r.ownedDeviceBytes)));
         out[0]=b.release();return;
     }
     if(command=="material_stats"){

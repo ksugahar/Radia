@@ -23,6 +23,23 @@ classdef HDivBHMaterial < handle
             end
             result=radia_hdiv_device('material_evaluate',obj.nativeToken(),state,direction);
         end
+        function result=linearize(obj,state)
+            % Freeze the tangent at state; result.linearization_epoch names it.
+            arguments
+                obj (1,1) radia.gpu.HDivBHMaterial
+                state (:,1) double {mustBeReal,mustBeFinite}
+            end
+            result=radia_hdiv_device('material_linearize',obj.nativeToken(),state);
+        end
+        function action=applyTangent(obj,direction,epoch)
+            % Tangent action of a current linearization; a stale epoch is refused.
+            arguments
+                obj (1,1) radia.gpu.HDivBHMaterial
+                direction (:,1) double {mustBeReal,mustBeFinite}
+                epoch (1,1) double {mustBeInteger,mustBePositive}
+            end
+            action=radia_hdiv_device('material_apply_tangent',obj.nativeToken(),direction,epoch);
+        end
         function info=stats(obj)
             info=radia_hdiv_device('material_stats',obj.nativeToken());
         end
@@ -31,6 +48,16 @@ classdef HDivBHMaterial < handle
                 radia_hdiv_device('destroy',obj.Token);
                 obj.Token=uint64(0);
             end
+        end
+    end
+    methods (Static)
+        function result=inverseSamples(law,amplitudes)
+            % Device inverse-BH secant, tangent and energy at the given amplitudes.
+            arguments
+                law (1,1) struct
+                amplitudes (:,1) double {mustBeReal,mustBeFinite}
+            end
+            result=radia_hdiv_device('inverse_bh_samples',law,amplitudes);
         end
     end
     methods (Access=?radia.gpu.HDivDeviceOperator)
