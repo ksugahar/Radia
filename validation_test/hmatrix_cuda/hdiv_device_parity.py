@@ -77,6 +77,7 @@ def make_input(out: Path, order: int) -> None:
         for name in CHARGE_FIELDS:
             charges[name] = np.ascontiguousarray(gram[name])
         charges.attrs["far_factor"], charges.attrs["compression"] = float(gram["far_factor"]), gram["compression"]
+        charges.attrs["family"] = setup["family"]
         for key, value in gram["aca"].items():
             charges.attrs["aca_" + key] = value
         evaluation = f.create_group("evaluation")
@@ -122,9 +123,9 @@ def run_pybind(input_path: Path, out: Path, receipt: dict) -> None:
                    integral_base=f["law/integral_base"][...], **{k: float(v) for k, v in f["law"].attrs.items()})
         vectors = {name: f["vectors"][name][...] for name in ("apply_input", "rhs", "initial")}
         linear, newton = dict(f["linear"].attrs), dict(f["newton"].attrs)
-        compression, far = text(c.attrs["compression"]), float(c.attrs["far_factor"])
+        compression, far, family = text(c.attrs["compression"]), float(c.attrs["far_factor"]), text(c.attrs["family"])
     operator = cuda._ResidentHDiv.from_flat_charges(**charges, far_factor=far, dofs=nd, compression=compression,
-                                                    aca=aca, backend="gpu")
+                                                    aca=aca, backend="gpu", family=family)
     mass = cuda._ResidentMass.from_flat_tables(**evaluation, dofs=nd, backend="gpu")
     material = cuda._ResidentBHMaterial.from_flat_tables(**evaluation, dofs=nd, law=law, backend="gpu")
     try:
