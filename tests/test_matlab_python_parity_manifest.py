@@ -22,7 +22,7 @@ def test_every_python_module_has_an_explicit_cpu_ownership_classification():
     assert [item["id"] for item in result["gpu_features"]] == [
         "csr-pcg", "ams-experimental", "native-hcurl-newton-ams", "reusable-linear-hcurl-ams",
         "reusable-gpu-ic0", "laplace-fmm-operators", "bounded-hdiv-mmm",
-        "normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh",
+        "normalized-leaf-resident-boundary", "device-hdiv-bh",
     ]
 
 
@@ -82,12 +82,13 @@ def test_hdiv_frontend_parity_is_pending_with_an_executable_comparator():
     """
     import json
     manifest = json.loads((ROOT / "packages/radia-simulink/matlab/python_api_parity_manifest.json").read_text())
+    cases = {"normalized-leaf-resident-boundary": "normalized-leaf-resident-boundary", "device-hdiv-bh": "device-flat-tet"}
     for feature in manifest["gpu_features"]:
-        if feature["id"] not in {"normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh"}:
+        if feature["id"] not in cases:
             continue
         contract = feature["same_kernel_bitwise_parity"]
         assert contract["status"] == "PENDING", contract
-        assert contract["case"] == feature["id"]
+        assert contract["case"] == cases[feature["id"]], contract
         assert (ROOT / contract["protocol"]).is_file()
         spec = importlib.util.spec_from_file_location("bitwise_parity", ROOT / contract["test_reference"])
         module = importlib.util.module_from_spec(spec)
