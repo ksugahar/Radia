@@ -79,3 +79,39 @@ def test_device_publisher_owns_flat_columns_and_numbering(tmp_path, monkeypatch,
         module.prepare_hdiv_device_setup(tmp_path/"mesh.vol", backend="cpu", label_contract="labels.json",
                                          mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64,
                                          mesh_check_provenance={})
+
+
+@pytest.mark.parametrize("compression", ["aca", "dense"])
+def test_setup_file_keeps_tables_and_rejects_unknown_requests(tmp_path, monkeypatch, compression):
+    """Guards: the process boundary keeps every table, dtype and scalar and rejects unknown fields."""
+    h5py = pytest.importorskip("h5py")
+    module = load("packages/radia-simulink/src/radia_simulink/hdiv.py")
+    data = _setup(compression)
+    aca = dict(eps=1e-8, eta=2, leaf_size=32, max_rank=64, rank_cap="fail") if compression == "aca" else None
+    seen = {}
+
+    def prepare(path, **checked):
+        seen.update(checked, path=path)
+        return data
+    monkeypatch.setitem(sys.modules, "radia.hdiv_gpu", types.SimpleNamespace(prepare_hdiv_device_setup=prepare))
+    request = dict(mesh_path="mesh.vol", backend="gpu", label_contract="labels.json", mesh_check_receipt="receipt.json",
+                   mesh_check_receipt_sha256="a"*64, mesh_check_provenance={}, order=2, curve_order=1,
+                   gram_compression=compression)
+    if aca:
+        request["gram_aca"] = aca
+    module.write_hdiv_device_setup(request, tmp_path/"setup.h5")
+    assert seen["path"] == "mesh.vol" and seen["order"] == 2
+    if aca:
+        assert isinstance(seen["gram_aca"]["eta"], float) and isinstance(seen["gram_aca"]["leaf_size"], int)
+    expected = module.prepare_hdiv_device_setup("mesh.vol", **{k: v for k, v in request.items() if k != "mesh_path"})
+    with h5py.File(tmp_path/"setup.h5", "r") as f:
+        assert f.attrs["schema"] == "radia.hdiv-device-setup.v1" and f.attrs["index_base"] == 0 and f.attrs["units"] == "SI"
+        np.testing.assert_array_equal(f["rhs_operator"], expected["rhs_operator"])
+        for name in ("charges", "evaluation"):
+            for key, value in expected[name].items():
+                if isinstance(value, np.ndarray) and key != "aca":
+                    assert f[name][key].dtype == value.dtype, key
+                    np.testing.assert_array_equal(f[name][key], value.ravel())
+        assert f["charges"].attrs["compression"] == compression and ("aca" in f["charges"]) == bool(aca)
+    with pytest.raises(ValueError, match="request fields"):
+        module.write_hdiv_device_setup(dict(request, stray=1), tmp_path/"other.h5")
