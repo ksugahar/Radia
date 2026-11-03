@@ -3,9 +3,10 @@
 Expected failures on pinned NGSolve 6.2.2608: connected tet-pyramid-hex orders
 1/2 fail the unchanged 1e-11 constant-projection criterion (1.59e-11/1.78e-11).
 They remain hard failures so earlier mass/checker defects cannot be hidden by
-an overly broad xfail. The device material route is affine-TET only, so no
-pyramid GPU action runs here. Rule-path parity is not geometric exactness; the
-NG pyramid rule loses ~1e-10 volume.
+an overly broad xfail. The device material route takes reference tables for
+tetrahedra and hexahedra and has no pyramid family, so no pyramid GPU action
+runs here. Rule-path parity is not geometric exactness; the NG pyramid rule
+loses ~1e-10 volume.
 """
 import json
 import subprocess

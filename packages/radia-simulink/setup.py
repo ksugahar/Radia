@@ -123,6 +123,9 @@ class build_py(_build_py):
         device = os.environ.get('RADIA_HDIV_DEVICE_BUILD')
         if device:
             expected.update(payload_module().stage_device(ROOT, package, commit, device))
+        projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
+        if projection:
+            expected.update(payload_module().stage_projection(ROOT, package, commit, projection))
         resident = os.environ.get('RADIA_RESIDENT_AMG_BUILD')
         if resident:
             expected.update(payload_module_resident().stage(ROOT, package, commit, resident))

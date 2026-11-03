@@ -1,7 +1,7 @@
 """NG-owned material staging and the shared inverse BH law on the native GPU binding.
 
 Not FE assembly, charge Gram or complete MMM acceptance; the device solve
-routes are covered by the flat-TET workflow tests.
+routes are covered by the device lanes, their limits by test_hdiv_gpu_device_guards.py.
 """
 import hashlib
 import importlib.util

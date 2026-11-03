@@ -6,8 +6,11 @@ import shutil
 
 DEVICE_WRAPPERS = ('solveHDivElements.m', 'solveNonlinearHDivElements.m', 'PreparedHDivNonlinear.m',
                    'HDivBHMaterial.m', 'makeHDivBHMaterial.m', 'HDivDeviceMass.m', 'HDivDeviceOperator.m',
-                   'prepareHDivDeviceSetup.m', 'loadHDivDeviceSetup.m', 'readHDivDeviceSetup.m')
+                   'prepareHDivDeviceSetup.m', 'loadHDivDeviceSetup.m', 'readHDivDeviceSetup.m',
+                   'AnalyticChargeGram.m')
+DEVICE_INTERNALS = ('runPythonProcess.m', 'pythonProcessPath.m')
 DEVICE_BINARY = 'radia_hdiv_device.mexw64'
+PROJECTION_BINARY = 'radia_cuda_projection.mexw64'
 
 
 SIMULINK_WRAPPERS = ('matlab/radia_hdiv_gpu_sfun.m',
@@ -103,6 +106,12 @@ def stage_device(root, package, commit, folder):
         wrapper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / 'packages/radia-simulink' / relative, wrapper)
         expected.add(relative.as_posix())
+    for name in DEVICE_INTERNALS:
+        relative = Path('matlab/+radia/+internal') / name
+        wrapper = package / relative
+        wrapper.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / 'packages/radia-simulink' / relative, wrapper)
+        expected.add(relative.as_posix())
     for relative in SIMULINK_WRAPPERS:
         wrapper = package / relative
         wrapper.parent.mkdir(parents=True, exist_ok=True)
@@ -112,3 +121,31 @@ def stage_device(root, package, commit, folder):
               'binary_sha256', 'cuda_object', 'mexcuda')}
     (package / 'hdiv-device-build.json').write_text(json.dumps(public, indent=2) + '\n')
     return expected
+
+
+def stage_projection(root, package, commit, folder):
+    """Stage the standalone field projection MEX; no shipped wrapper calls it."""
+    root, package, folder = Path(root), Path(package), Path(folder)
+    receipt = json.loads((folder / 'build.json').read_text(encoding='utf-8'))
+    if receipt.get('fault_injection') is not False or receipt.get('lifecycle_diagnostic') is not False:
+        raise RuntimeError('Diagnostic or unknown projection build cannot be staged for release')
+    if (not receipt.get('accepted') or receipt.get('source_dirty', True)
+            or receipt.get('source_commit') != commit or receipt.get('taskmanager_started', True)):
+        raise RuntimeError('Projection requires clean exact-commit native provenance')
+    for relative, digest in receipt['source_sha256'].items():
+        if Path(relative).is_absolute() or '..' in Path(relative).parts:
+            raise RuntimeError('Invalid projection source path')
+        source = root / relative
+        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            raise RuntimeError('Projection source mismatch: ' + relative)
+    binary = folder / PROJECTION_BINARY
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    if digest != receipt['binary_sha256']:
+        raise RuntimeError('Projection binary mismatch')
+    target = package / 'matlab' / PROJECTION_BINARY
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, target)
+    public = dict(source_commit=commit, source_dirty=False, binary_sha256=digest, source_sha256=receipt['source_sha256'],
+                  matlab=receipt['matlab'], taskmanager_started=False, fault_injection=False, lifecycle_diagnostic=False)
+    (package / 'projection-build.json').write_text(json.dumps(public, indent=2) + '\n')
+    return {'matlab/' + PROJECTION_BINARY, 'projection-build.json'}

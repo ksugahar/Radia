@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import importlib.util
 import json
+import re
 import pytest
 
 spec = importlib.util.spec_from_file_location('hdiv_payload', Path(__file__).parents[1] / 'hdiv_payload.py')
@@ -59,6 +60,10 @@ def test_exact_hdiv_device_mex_staging(tmp_path, fault):
     wrappers.mkdir(parents=True)
     for name in payload.DEVICE_WRAPPERS:
         (wrappers / name).write_text('% device wrapper')
+    internals = root / 'packages/radia-simulink/matlab/+radia/+internal'
+    internals.mkdir()
+    for name in payload.DEVICE_INTERNALS:
+        (internals / name).write_text('% device helper')
     for name in payload.SIMULINK_WRAPPERS:
         path = root / 'packages/radia-simulink' / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,10 +94,69 @@ def test_exact_hdiv_device_mex_staging(tmp_path, fault):
         return
     files = payload.stage_device(root, target, 'a'*40, folder)
     assert files == {'matlab/' + payload.DEVICE_BINARY, 'hdiv-device-build.json'} | {
-        'matlab/+radia/+gpu/' + name for name in payload.DEVICE_WRAPPERS} | set(payload.SIMULINK_WRAPPERS), files
+        'matlab/+radia/+gpu/' + name for name in payload.DEVICE_WRAPPERS} | {
+        'matlab/+radia/+internal/' + name for name in payload.DEVICE_INTERNALS} | set(payload.SIMULINK_WRAPPERS), files
     assert (target / 'matlab' / payload.DEVICE_BINARY).read_bytes() == binary.read_bytes()
     public = json.loads((target / 'hdiv-device-build.json').read_text())
     assert public['binary_sha256'] == receipt['binary_sha256'] and public['mexcuda'] is False, public
+
+
+def test_shipped_device_wrappers_reach_only_shipped_functions():
+    """Guards: every radia.* function a shipped HDiv wrapper calls is itself in the wheel.
+
+    Assumes: wrappers name package functions literally; the remaining +radia/+gpu files stage with the base wheel.
+    """
+    source = Path(__file__).parents[1]
+    matlab = source/'matlab'
+    shipped = {matlab/'+radia/+gpu'/name for name in payload.DEVICE_WRAPPERS}
+    shipped |= {matlab/'+radia/+internal'/name for name in payload.DEVICE_INTERNALS}
+    shipped |= {source/name for name in payload.SIMULINK_WRAPPERS if name.endswith('.m')}
+    pending, seen, missing = list(shipped), set(), []
+    while pending:
+        path = pending.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        for package, name in re.findall(r'radia\.(internal|simulink)\.(\w+)', path.read_text(encoding='utf-8')):
+            target = matlab/('+radia/+' + package)/(name + '.m')
+            if target not in shipped:
+                missing.append((path.name, target.name))
+            pending.append(target)
+    assert not missing, missing
+
+
+@pytest.mark.parametrize('fault', [None, 'commit', 'dirty', 'binary', 'source', 'fault-injection', 'lifecycle', 'taskmanager'])
+def test_exact_projection_staging(tmp_path, fault):
+    """Guards: only a clean exact-commit, non-diagnostic projection MEX enters the wheel.
+
+    Assumes: the receipt fields are those build_projection_cuda.py writes.
+    """
+    root = tmp_path/'source'
+    root.mkdir()
+    source = root/'native.cu'
+    source.write_bytes(b'public projection gateway')
+    folder = tmp_path/'build'
+    folder.mkdir()
+    binary = folder/payload.PROJECTION_BINARY
+    binary.write_bytes(b'fixture artifact')
+    receipt = dict(accepted=True, source_commit='a'*40, source_dirty=False, taskmanager_started=False, fault_injection=False,
+                   lifecycle_diagnostic=False, matlab='fixture', source_sha256={'native.cu': hashlib.sha256(source.read_bytes()).hexdigest()},
+                   binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest())
+    if fault == 'commit': receipt['source_commit'] = 'b'*40
+    if fault == 'dirty': receipt['source_dirty'] = True
+    if fault == 'binary': receipt['binary_sha256'] = '0'*64
+    if fault == 'source': source.write_bytes(b'changed')
+    if fault == 'fault-injection': receipt['fault_injection'] = True
+    if fault == 'lifecycle': receipt['lifecycle_diagnostic'] = True
+    if fault == 'taskmanager': receipt['taskmanager_started'] = True
+    (folder/'build.json').write_text(json.dumps(receipt))
+    target = tmp_path/'package'
+    if fault:
+        with pytest.raises(RuntimeError):
+            payload.stage_projection(root, target, 'a'*40, folder)
+        assert not (target/'projection-build.json').exists()
+    else:
+        assert payload.stage_projection(root, target, 'a'*40, folder) == {'matlab/' + payload.PROJECTION_BINARY, 'projection-build.json'}
 
 
 def test_hdiv_python_payload_is_owned_by_radia():

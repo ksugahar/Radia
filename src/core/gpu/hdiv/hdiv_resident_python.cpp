@@ -76,6 +76,11 @@ py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double
     out["limiting_term"]=radia_hdiv_bh::FlatEvaluationBudget::names[budget.limiting()];
     out["excludes"]="CUB scratch and the inverse-BH law; both are added at construction";return out;
 }
+std::shared_ptr<DeviceOperator> constructAnalyticGram(Array<double> cells,Array<double> faces,const std::string& backend) {
+    if(backend!="gpu")throw py::value_error("The device analytic Gram requires explicit backend='gpu'");
+    std::size_t bytes=0;const auto c=snapshot<double>(cells,bytes);const auto f=snapshot<double>(faces,bytes);
+    py::gil_scoped_release release;return createAnalyticGram(c,f);
+}
 std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> faces,Array<std::int32_t> host,
     Array<std::int32_t> kind,Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,
     Array<double> triLow,double farFactor,std::size_t dofs,Array<std::int32_t> cellClass,Array<std::int32_t> cellDofs,
@@ -291,6 +296,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
       "Diagnostic raw (unnormalized) device flat-Gram entries for explicit charge pairs; pairs and values cross, no matrix does.");
     py::class_<DeviceOperator,std::shared_ptr<DeviceOperator>>(m,"_ResidentHDiv")
+      .def_static("from_analytic_constant_block",&constructAnalyticGram,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),py::arg("backend"),
+           "Fill a Gram-only constant-density block on the device from flat row-major linear tetrahedra and triangles; at most 128 charges, no images, no charge map, no material solve.")
       .def_static("from_flat_charges",&constructFlat,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),
            py::arg("charge_host").noconvert(),py::arg("charge_kind").noconvert(),py::arg("charge_exponents").noconvert(),
            py::arg("tet_rule").noconvert(),py::arg("tri_rule").noconvert(),py::arg("tet_low_rule").noconvert(),

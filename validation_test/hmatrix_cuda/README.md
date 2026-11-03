@@ -23,12 +23,11 @@ solution = radia.gpu.solveHDivElements(setup, [1 .2 .1], 2.5, Tolerance=1e-11, .
 `validate_curved_hdiv.py` compares that whole solve with independent CPU pybind11;
 `PYBIND_MEX_BITWISE.md` describes the same-kernel frontend parity.
 
-The dated sections below are provenance for measurements made on the retired
-host-normalized MATLAB route. Their positional options and scripts such as
+Scripts of the retired host-normalized MATLAB route, such as
 `validate_scaled_hdiv.py`, `validate_hdiv_artifact.py`, `measure_hdiv_cpu_gpu.py`
-and the `check*`/`measure*` nonlinear scripts were removed with that route; the
-recorded JSON stays under `results/` and the sources stay in history. Those results
-do not certify the device route.
+and the `check*`/`measure*` nonlinear scripts, were removed with it. Their recorded
+JSON stays under `results/` and the sources stay in history. Those results do not
+certify the device route.
 
 ## Retired host-upload route
 

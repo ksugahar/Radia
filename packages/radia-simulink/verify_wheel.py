@@ -189,11 +189,23 @@ def verify(path: Path) -> dict:
                 'matlab/+radia/+gpu/' + name for name in
                 ('solveHDivElements.m', 'solveNonlinearHDivElements.m', 'PreparedHDivNonlinear.m',
                  'HDivBHMaterial.m', 'makeHDivBHMaterial.m', 'HDivDeviceMass.m', 'HDivDeviceOperator.m',
-                 'prepareHDivDeviceSetup.m', 'loadHDivDeviceSetup.m', 'readHDivDeviceSetup.m')}
+                 'prepareHDivDeviceSetup.m', 'loadHDivDeviceSetup.m', 'readHDivDeviceSetup.m',
+                 'AnalyticChargeGram.m')} | {
+                'matlab/+radia/+internal/' + name for name in ('runPythonProcess.m', 'pythonProcessPath.m')}
             if not required.issubset(manifest['files']):
                 raise ValueError('Incomplete HDiv device payload')
             device = json.loads(archive.read('radia_simulink/hdiv-device-build.json'))
             verify_hdiv_device_receipt(manifest, device)
+        projection_files = {'matlab/radia_cuda_projection.mexw64', 'projection-build.json'}
+        if projection_files & set(manifest['files']):
+            if not projection_files <= set(manifest['files']):
+                raise ValueError('Incomplete projection CUDA payload')
+            projection = json.loads(archive.read('radia_simulink/projection-build.json'))
+            if (projection.get('source_dirty') is not False or projection.get('source_commit') != manifest['source_commit']
+                    or projection.get('taskmanager_started') is not False or projection.get('fault_injection') is not False
+                    or projection.get('lifecycle_diagnostic') is not False
+                    or projection.get('binary_sha256') != manifest['files']['matlab/radia_cuda_projection.mexw64']):
+                raise ValueError('Projection CUDA binary receipt mismatch')
         fmm_files = {'fmm-build.json', 'matlab/radia_cuda_fmm.mexw64', 'matlab/+radia/+gpu/LaplaceFMM.m'}
         if fmm_files & set(manifest['files']):
             if not fmm_files <= set(manifest['files']):
