@@ -120,7 +120,7 @@
       "cpu_reference": "radia.vim.Solve and the CPU material on identical checked meshes; Gram, operator, mass and linear solve of the assembled CPU equation in the curved and hex device lanes",
       "cpu_fallback": false,
       "same_kernel_bitwise_parity": {
-        "status": "PENDING",
+        "status": "PASS",
         "python_entry": "radia.hdiv_gpu.PreparedHDivNonlinear",
         "mex_entry": "radia_hdiv_device",
         "test_reference": "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py",
@@ -129,7 +129,26 @@
         "input_contract": "One canonical HDF5 of NGSolve device-construction tables, inverse-BH payload, vectors and solver controls; same input SHA256.",
         "compiler_contract": "Same source SHA, CUDA compiler version, device architecture and device UUID; --fmad=false --ftz=false --prec-div=true --prec-sqrt=true; no fast math; record full compile commands.",
         "acceptance": "Exact dtype, shape and bytes for each declared output; no tolerance or CPU/GPU-oracle substitution.",
-        "execution": "Requires a separately admitted Windows GPU run of the pybind11 module and plain MEX linked from one nvcc object; not executed by source contracts or Flow2 Linux smoke."
+        "evidence": {
+          "case": "device-flat-tet",
+          "outputs": [
+            "apply",
+            "linear_solution",
+            "nonlinear_residual_history",
+            "nonlinear_solution"
+          ],
+          "source_sha": "daedfd8fc0add4399f6dcbc8414fc01416da8aca",
+          "kernel_object_sha256": "c973393065919c836557cd261eaab71589124db7dba794c6322fac2cf3563775",
+          "python_binary_sha256": "0818cc15bbe53a1b887ad9784540a87460d3d4186997b78b1667e241ce8e7d07",
+          "mex_binary_sha256": "8ba1d2373a068d738f0521ec788cc912d895627058ba719565e7d231ebdffa4b",
+          "input_sha256": "b76795cbfa768e09c188c64daa9f3c0ffe95bec8193ddd717c3ab45a455d9cca",
+          "cuda_compiler": "release 12.8, V12.8.61",
+          "architecture": "sm_75",
+          "scope": "This exact executed pair and its four outputs only; not CPU/GPU accuracy, performance or other device families",
+          "python_record_sha256": "90e196e33bbabd6d075b1223e4ffee8b93ee3f6ff80c3dcc978cc3035088533f",
+          "mex_record_sha256": "0f56a48d590a9563b8ef5368926a2dade3745ebdb29bb0b61b36f887a5707ec6",
+          "report_sha256": "4450ec57c7b30e78b44f8efb442f1312b12d16d74d1bad65ce60c97bbe66d150"
+        }
       }
     },
     {
