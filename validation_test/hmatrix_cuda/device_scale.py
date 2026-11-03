@@ -91,7 +91,7 @@ def main():
                   cases=[])
     try:
         for maxh in args.maxh:
-            path = args.out / f"sphere-{maxh:g}.vol".replace(".", "p", 1)
+            path = args.out / (f"sphere-{maxh:g}".replace(".", "p") + ".vol")
             with ng.TaskManager():
                 public_sphere(path, maxh, args.curve_order, args.contract)
             result["cases"].append(dict(run_case(path, args, checked_inputs(path, args.contract, args.receipt_python)),
