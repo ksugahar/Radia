@@ -129,7 +129,7 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
     std::map<std::array<int,4>,std::vector<std::pair<std::size_t,int>>> owners;
     for(std::size_t e=0;e<context.ne;++e)for(int f=0;f<6;++f){std::array<int,4> key;
         for(int v=0;v<4;++v)key[v]=cellVertexNumbers[8*e+hexFaces[f][v]];std::sort(key.begin(),key.end());owners[key].push_back({e,f});}
-    std::vector<int> faceKey;const std::size_t nse=std::size_t(mesh->GetNSE());
+    std::vector<int> faceKey;std::vector<double> faceMoments;const std::size_t nse=std::size_t(mesh->GetNSE());
     for(std::size_t s=0;s<nse;++s){ngstd::HeapReset reset(heap);ngfem::ElementId sid(ngfem::BND,int(s));
         if(mesh->GetElType(sid)!=ngfem::ET_QUAD)throw std::invalid_argument("Device HEX charge tables require quadrilateral boundary elements");
         const auto vertexNumbers=mesh->GetElement(sid).Vertices();int numbers[4];std::array<int,4> key;
@@ -159,6 +159,10 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
             for(std::size_t i=0;i<local;++i){const double flux=shape(i,0)*nu[0]+shape(i,1)*nu[1]+shape(i,2)*nu[2];
                 for(std::size_t r=0;r<fm;++r)R[r*local+i]+=ip.Weight()*m[r]*flux;}
             for(std::size_t r=0;r<fm;++r)for(std::size_t t=0;t<fm;++t)M[r*fm+t]+=ip.Weight()*m[r]*m[t];}
+        // Faces of one class may lie on different reference faces, and the monomial Gram amplifies their roundoff:
+        // the class check compares these moments, whose equality fixes the solved table of every face in the class.
+        std::vector<double> moments(fm*out.faceWidth);
+        for(std::size_t r=0;r<fm;++r)for(std::size_t k=0;k<out.faceWidth;++k)moments[r*out.faceWidth+k]=R[r*local+column[k]];
         solveSmall(M,R,fm,local);
         double scale=0;for(double v:R){if(!std::isfinite(v))throw std::runtime_error("Nonfinite HEX charge face table");scale=std::max(scale,std::abs(v));}
         std::vector<unsigned char> onFace(local,0);for(auto i:column)onFace[i]=1;
@@ -167,9 +171,9 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
         std::vector<double> table(fm*out.faceWidth);
         for(std::size_t r=0;r<fm;++r)for(std::size_t k=0;k<out.faceWidth;++k)table[r*out.faceWidth+k]=R[r*local+column[k]];
         const int fkey=rankKey(numbers,4);auto found=std::find(faceKey.begin(),faceKey.end(),fkey);const std::size_t cls=std::size_t(found-faceKey.begin());
-        if(found==faceKey.end()){faceKey.push_back(fkey);out.faceTables.insert(out.faceTables.end(),table.begin(),table.end());}
-        else{const double* reference=out.faceTables.data()+cls*table.size();
-            for(std::size_t i=0;i<table.size();++i)if(std::abs(table[i]-reference[i])>1e-12*(1+std::abs(reference[i])))
+        if(found==faceKey.end()){faceKey.push_back(fkey);out.faceTables.insert(out.faceTables.end(),table.begin(),table.end());faceMoments.insert(faceMoments.end(),moments.begin(),moments.end());}
+        else{const double* reference=faceMoments.data()+cls*moments.size();
+            for(std::size_t i=0;i<moments.size();++i)if(std::abs(moments[i]-reference[i])>1e-12*(1+std::abs(reference[i])))
                 throw std::runtime_error("NGSolve HDiv HEX face traces are not determined by the face vertex order");}
         out.faceClass.push_back(int(cls));out.faceDofs.insert(out.faceDofs.end(),faceDofs.begin(),faceDofs.end());
         latticeOf(mesh->GetTrafo(sid,heap),2,out.faceVertices);
