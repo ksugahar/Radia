@@ -13,6 +13,11 @@
       "scope": "Device-built Gram, B, B^T, material tables and mass; no matrix crosses"
     },
     {
+      "CPU": "_ChargeGramHMatrix constant tet/triangle analytic constructor and matvec_sym",
+      "MATLAB": "radia.gpu.AnalyticChargeGram",
+      "scope": "Bounded constant-density linear tet/triangle block; all-analytic strategy, no images"
+    },
+    {
       "CPU": "radia.hdiv_gpu.PreparedHDivLinear",
       "MATLAB": "radia.gpu.solveHDivElements",
       "scope": "Linear isotropic material; RT0, BDM1 and BDM2 on affine TET; P2 TET and HEX at orders 1/2"

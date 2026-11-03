@@ -74,6 +74,9 @@ public:
 };
 // The charge Gram, B and B^T are generated on the device; no Gram or B value crosses.
 std::shared_ptr<DeviceOperator> createFlat(const FlatInput&,const ChargeMapInput&);
+// Gram-only constant-density block filled on the device from flat row-major linear
+// tetrahedra (12 coordinates) and triangles (9); no charge map, no material solve.
+std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces);
 // Diagnostic: raw device flat-Gram entries for explicit charge pairs; no matrix crosses.
 radia_hmatrix_cuda::HostVector<double> flatDiagnosticEntries(const FlatInput&,const radia_hmatrix_cuda::HostVector<std::size_t>& rows,
     const radia_hmatrix_cuda::HostVector<std::size_t>& cols);

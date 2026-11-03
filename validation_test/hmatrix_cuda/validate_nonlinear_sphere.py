@@ -18,13 +18,14 @@ def main():
     ng.SetNumThreads(1)
     result=dict(accepted=False,scope='Ideal unit-sphere mean and declared core M stencil; no whole-field or operator-residual certification',units='M and H A/m')
     try:
-        # Independently authored public unit-sphere fixture; reject unrelated inputs.
+        # This physical gate is scoped to a P2 unit sphere at the origin; reject unrelated inputs.
         mesh_sha=hashlib.sha256(args.mesh.read_bytes()).hexdigest()
-        if mesh_sha not in {
-            '74da487538d92c370393f149cbff5fed0b3e89a28af8382e7fbb42e01cfacf77',
-            '681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb',
-        }:
-            raise ValueError('This physical gate is scoped to the declared public P2 unit sphere')
+        with ng.TaskManager():
+            scoped=ng.Mesh(str(args.mesh));volume=ng.Integrate(1,scoped,order=8);area=ng.Integrate(1,scoped,ng.BND,order=8)
+            center=[ng.Integrate(ng.CoefficientFunction(c),scoped,order=8) for c in (ng.x,ng.y,ng.z)]
+        if (scoped.GetCurveOrder()!=2 or abs(volume/(4*np.pi/3)-1)>1e-3 or abs(area/(4*np.pi)-1)>1e-3
+                or max(abs(c) for c in center)>1e-3):
+            raise ValueError(f'This physical gate is scoped to a P2 unit sphere; curve={scoped.GetCurveOrder()} volume={volume} area={area} center={center}')
         ref,_=read_hdiv_h5(args.cpu_h5);field=ref['applied_field'].ravel();strength=np.linalg.norm(field)
         if strength<=0:raise ValueError('Nonzero uniform applied field required')
         curves,_,_=_bh_inverse_funcs(ref['table'][:,0],ref['table'][:,1])

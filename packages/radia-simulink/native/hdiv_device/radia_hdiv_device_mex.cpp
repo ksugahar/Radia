@@ -169,6 +169,7 @@ void dispatch(int nl,mxArray* out[],int nr,const mxArray* in[]){
     if(nr<1)throw std::invalid_argument("Missing HDiv device command");
     const auto command=text(in[0],"command");
     if(command=="create_operator"){arity(nr,2,nl,1);out[0]=publish(Entry{createOperator(in[1]),{},{}},operatorTag);return;}
+    if(command=="create_analytic_gram"){arity(nr,3,nl,1);out[0]=publish(Entry{createAnalyticGram(reals(in[1],"cells"),reals(in[2],"faces")),{},{}},operatorTag);return;}
     if(command=="create_mass"){arity(nr,3,nl,1);out[0]=publish(Entry{{},radia_hdiv_bh::createFlatMass(evaluationInput(in[1],count(in[2],"dofs"))),{}},massTag);return;}
     if(command=="create_material"){arity(nr,4,nl,1);out[0]=publish(Entry{{},{},radia_hdiv_bh::createFlatMaterial(evaluationInput(in[1],count(in[2],"dofs")),law(in[3]))},materialTag);return;}
     if(command=="destroy"){

@@ -392,6 +392,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $projectionStart = [DateTime]::UtcNow
           & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
@@ -408,6 +409,7 @@ jobs:
             if ($accepted.Count -eq 0) { throw 'Missing accepted exact-commit CUDA build' }
             return $accepted[0].FullName
           }
+          $projection = Select-ExactBuild (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
           # The plain HDiv MEX links the nvcc kernel object of this exact checkout.
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -438,6 +440,7 @@ jobs:
           & cmd.exe /d /c "`"$bat`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_HDIV_DEVICE_BUILD=$hdivDevice" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh

@@ -16,6 +16,8 @@ import os
 import platform
 import numpy as np
 
+from hdiv_hdf5 import write_hdiv_h5
+
 LIMITS = dict(material=1e-8, finite_difference=1e-5, coefficients=1e-8, mean=1e-8, nonlinear_residual=1e-10)
 H_SAMPLES = np.array([0., 1., 10., 100., 1000., 1e4, 1e5])
 MS, CHI = 1e6, 1000.  # Synthetic monotone saturation law; not measured steel.
@@ -106,8 +108,8 @@ def main():
                        mesh_check_provenance=json.loads(args.mesh_check_provenance.read_text(encoding="utf-8")))
         with ng.TaskManager():
             mesh = ng.Mesh(str(args.mesh))
-            if args.curve_order == 2:
-                mesh.Curve(2)
+            if mesh.GetCurveOrder() != args.curve_order:
+                raise ValueError("Declared curve order differs from the checked mesh")
             fes = ng.HDiv(mesh, order=args.order)
             state, direction = saturating_state(fes, table)
             near_root = state*1e-6
@@ -137,6 +139,14 @@ def main():
             and result["solve"]["coefficients"] <= LIMITS["coefficients"]
             and result["solve"]["mean"] <= LIMITS["mean"]
             and result["solve"]["nonlinear_residual"] <= LIMITS["nonlinear_residual"])
+        # Inputs of the independent ideal-sphere check, validate_nonlinear_sphere.py.
+        write_hdiv_h5(args.out / "cpu.h5", dict(table=table, coefficients=coefficients, mean=np.asarray(answer["M_avg"]),
+                                                applied_field=np.array([0., 0., args.field])),
+                      dict(units="SI", labels=["cpu-reference"]))
+        (args.out / "device.json").write_text(json.dumps(dict(
+            accepted=result["accepted"], solution=dict(coefficients=np.asarray(solution["x"]).tolist(),
+                                                       mean_magnetization=np.asarray(solution["mean_magnetization"]).tolist()))),
+            encoding="utf-8")
     except BaseException as exc:
         result["error"] = repr(exc)
         raise

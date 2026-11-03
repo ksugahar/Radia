@@ -388,7 +388,7 @@ RT0 is `prepareHDivDeviceSetup(mesh, 0, ...)`; curved P2 tetrahedra pass `CurveO
 
 `radia.gpu.prepareHDivDeviceSetup(meshPath, order, LabelContract=..., MeshCheckReceipt=..., MeshCheckReceiptSha256=..., MeshCheckProvenance=...)` runs `radia_simulink.hdiv.prepare_hdiv_device_setup` once at the initialization boundary and returns a checked `radia.hdiv-device-setup.v1` struct of primitive NGSolve tables and vectors. No matrix is built on the host. `PreparedHDivNonlinear(setup, H, bhTable)` then builds the Gram, charge map, evaluation map and reference mass on the device through the plain `radia_hdiv_device` MEX, for the affine tet, curved P2 tet and hex families at orders 1 and 2; order 0 (RT0) is linear only.
 
-Schema-2 normalized leaves must partition the upper matrix exactly once. A bounded per-row bitmap rejects duplicate, overlapping or missing blocks before resident allocation. Diagonal squares cover their upper triangle; off-diagonal blocks are mirrored. Legacy schema-1 and internal additive operator packing retain their existing contracts. Prefer the checked NGSolve/Radia snapshot publisher for HDiv workflows. Matrix symmetry/physical validity also remains a caller contract. `HostSetup` FE dimensions/types are checked before GPU initialization; native leaf/key/charge-map validation runs after GPU selection, before resident allocation.
+`radia.gpu.AnalyticChargeGram(cells, faces)` applies the Gram of constant-density linear tetrahedra and triangles, filled on the device from flat row-major coordinates (at most 128 charges, no images, no charge map or material solve). `radia_cuda_projection` remains a standalone field-projection MEX.
 
 ## License
 

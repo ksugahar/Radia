@@ -131,6 +131,15 @@
         "acceptance": "Exact dtype, shape and bytes for each declared output; no tolerance or CPU/GPU-oracle substitution.",
         "execution": "Requires a separately admitted Windows GPU run of the pybind11 module and plain MEX linked from one nvcc object; not executed by source contracts or Flow2 Linux smoke."
       }
+    },
+    {
+      "id": "device-analytic-gram",
+      "scope": "Device-filled Gram of constant-density linear tetrahedra and triangles from flat coordinates; at most 128 charges, no images, no charge map or material solve.",
+      "source": "src/core/gpu/hdiv/analytic_matrix_build.cuh",
+      "matlab": "packages/radia-simulink/matlab/+radia/+gpu/AnalyticChargeGram.m",
+      "validation": "validation_test/hmatrix_cuda/check_analytic_gram_bitwise.py",
+      "cpu_reference": "_ChargeGramHMatrix analytic constructor and matvec_sym, in tests/test_hdiv_gpu_analytic_gram.py",
+      "cpu_fallback": false
     }
   ],
   "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."

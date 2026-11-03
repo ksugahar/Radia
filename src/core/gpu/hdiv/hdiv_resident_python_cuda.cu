@@ -45,8 +45,17 @@ class Operator final:public DeviceOperator {
     std::mutex mutex;
     radia_hmatrix_cuda::HostUnique<radia_hmatrix_cuda::Resident> resident;
     const std::size_t dimension;
+    const bool gramOnly=false;
 public:
     Assembly record;
+    Operator(const radia_hmatrix_cuda::Plan& plan,const radia_hmatrix_cuda::AnalyticBlock& block):dimension(plan.n),gramOnly(true) {
+        resident=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::Resident>("python.resident-object",plan,nullptr,0);
+        resident->assemble(block);
+        record={"device-analytic-constant-block",plan.n,std::max(resident->ownedBytes,resident->setupPeakOwnedBytes),3,{}};
+        record.compression="dense";
+        planTransfer(plan);
+        record.transfers.push_back({"analytic_geometry","H2D",block.sources.size()*sizeof(radia_hmatrix_cuda::AnalyticSource)+block.quadrature.size()*sizeof(radia_hmatrix_cuda::QuadraturePoint)});
+    }
     // B and B^T are generated on the device from NGSolve tables; no CSR crosses.
     // The dense oracle allocates its workspace after B is built; ACA factors
     // and prepared charges are already live while the resident and B exist.
@@ -81,10 +90,14 @@ public:
         return {y.begin(),y.end()};
     }
     NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options)override{
-        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return nonlinearBridge(*resident,material,rhs,initial,options);
+        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");
+        if(gramOnly)throw std::invalid_argument("The analytic Gram has no charge map or material solve");
+        return nonlinearBridge(*resident,material,rhs,initial,options);
     }
     LinearResult solve_linear(radia_hdiv_bh::MassOperator& mass,const radia_hmatrix_cuda::HostVector<double>& rhs,const LinearOptions& options)override{
-        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");return linearBridge(*resident,mass,rhs,options);
+        std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");
+        if(gramOnly)throw std::invalid_argument("The analytic Gram has no charge map or material solve");
+        return linearBridge(*resident,mass,rhs,options);
     }
     Assembly assembly()override {std::lock_guard<std::mutex> lock(mutex);return record;}
     Stats stats()override {
@@ -158,6 +171,14 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         return result;
     }
     throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense' or 'aca'");
+}
+std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces){
+    using namespace radia_hmatrix_cuda;
+    const auto block=analyticSources(cells,faces);const auto n=block.sources.size();
+    Leaf leaf{0,0,n,n,0,HostVector<double>(checkedProduct(n,n),0.),{}};
+    HostVector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
+    const auto plan=pack(n,{leaf},permutation,HostVector<double>(n,1.));
+    return std::allocate_shared<Operator>(HostFaultAllocator<Operator>("python.operator-owner"),plan,block);
 }
 } // namespace radia_hdiv_python
 
