@@ -21,6 +21,7 @@ binding through the provenance-checked loader and fails if it cannot.
 """
 
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -46,6 +47,28 @@ def _mirrored_shear(x, y, z):
 
 _MESHES = {"cube": dict(nx=2, ny=2, nz=2), "sheared": dict(nx=2, ny=2, nz=1, mapping=_shear),
            "mirrored": dict(nx=2, ny=2, nz=1, mapping=_mirrored_shear)}
+# Structured numbering keeps one vertex order per reference face; these share an order across reference faces.
+_NAMES = sorted(_MESHES) + ["pair", "renumbered"]
+
+
+def _renumbered_mesh(options):
+    """The structured mesh with a fixed random point numbering, as a general mesher would number it."""
+    import numpy as np
+    from netgen.meshing import Element2D, Element3D, FaceDescriptor, Mesh, MeshPoint, Pnt
+    from ngsolve.meshes import MakeStructured3DMesh
+    source = MakeStructured3DMesh(hexes=True, **options).ngmesh
+    points = [point.p for point in source.Points()]
+    target = Mesh(dim=3)
+    face = target.Add(FaceDescriptor(surfnr=1, domin=1, domout=0, bc=1))
+    new = np.random.default_rng(7).permutation(len(points))
+    handles = [None]*len(points)
+    for index in np.argsort(new):
+        handles[index] = target.Add(MeshPoint(Pnt(*points[index])))
+    for element in source.Elements3D():
+        target.Add(Element3D(1, [handles[vertex.nr - 1] for vertex in element.vertices]))
+    for element in source.Elements2D():
+        target.Add(Element2D(face, [handles[vertex.nr - 1] for vertex in element.vertices]))
+    return target
 
 
 @pytest.fixture(scope="module")
@@ -64,6 +87,9 @@ def meshes(tmp_path_factory):
     for name, options in _MESHES.items():
         paths[name] = root / (name + ".vol")
         MakeStructured3DMesh(hexes=True, **options).ngmesh.Save(str(paths[name]))
+    paths["pair"] = Path(__file__).resolve().parent / "fixtures" / "hdiv" / "hex_pair.vol"
+    paths["renumbered"] = root / "renumbered.vol"
+    _renumbered_mesh(_MESHES["sheared"]).Save(str(paths["renumbered"]))
     return paths
 
 
@@ -96,7 +122,7 @@ def _case(path, order, cuda, compression="dense"):
     return setup, B, gram, M
 
 
-@pytest.mark.parametrize("name", sorted(_MESHES))
+@pytest.mark.parametrize("name", _NAMES)
 @pytest.mark.parametrize("order", [1, 2])
 def test_hex_device_input_reproduces_cpu_charges_and_lattices(meshes, name, order):
     import ngsolve as ng
@@ -110,7 +136,7 @@ def test_hex_device_input_reproduces_cpu_charges_and_lattices(meshes, name, orde
         assert np.array_equal(np.asarray(staged[key]).ravel(), np.asarray(cpu[cpu_key]).ravel()), key
 
 
-@pytest.mark.parametrize("name", sorted(_MESHES))
+@pytest.mark.parametrize("name", _NAMES)
 @pytest.mark.parametrize("order", [1, 2])
 def test_hex_device_entries_match_cpu_charge_gram(meshes, request, cuda, name, order):
     setup, _, gram, _ = _case(meshes[name], order, cuda)
@@ -132,7 +158,7 @@ def test_hex_device_entries_match_cpu_charge_gram(meshes, request, cuda, name, o
         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
 
 
-@pytest.mark.parametrize("name", sorted(_MESHES))
+@pytest.mark.parametrize("name", _NAMES)
 @pytest.mark.parametrize("order", [1, 2])
 def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, order):
     setup, B, gram, M = _case(meshes[name], order, cuda)
