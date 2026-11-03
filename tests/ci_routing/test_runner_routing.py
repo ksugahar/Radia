@@ -173,6 +173,53 @@ def test_a100_is_compute_only_and_never_a_pr_gate():
     assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')
 
 
+def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
+    workflow = yaml.safe_load((ROOT / '.github/workflows/hdiv-a100-validation.yml').read_text(encoding='utf-8'))
+    assert set(workflow[True]) == {'workflow_dispatch'}
+    job = workflow['jobs']['validate']
+    assert job['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100']
+    commands = chr(10).join(step.get('run', '') for step in job['steps'])
+    assert 'ci_gpu_artifact.py fetch gpu-input --radia --sha ${{ github.sha }}' in commands
+    assert 'run_installed.py --source-commit ${{ github.sha }}' in commands
+    assert '--require-gpu A100' in commands
+    assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
+    native = yaml.safe_load((ROOT / '.github/workflows/build-test.yml').read_text(encoding='utf-8'))
+    steps = native['jobs']['build-test']['steps']
+    upload = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
+    assert 'ci_gpu_artifact.py seal' in steps[upload - 1]['run']
+
+
+def _hdiv_lane():
+    spec = importlib.util.spec_from_file_location('hdiv_lane', ROOT / 'validation_test/hdiv_cuda/run_installed.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_hdiv_a100_lane_discovers_every_gated_test():
+    tests = _hdiv_lane().lane_tests()
+    assert {'tests/test_hdiv_gpu_hex_device.py', 'tests/test_hdiv_gpu_curved_device.py',
+            'tests/test_hdiv_gpu_linear_material.py', 'tests/test_hdiv_gpu_p1_touching_parity.py',
+            'tests/test_native_hdiv_resident.py'} <= set(tests), tests
+
+
+@pytest.mark.parametrize('returncode, tag, expected', [
+    (0, None, []),
+    (0, 'skipped', ['skipped: tests.test_a::case']),
+    (1, 'failure', ['pytest returned 1', 'failure: tests.test_a::case']),
+    (1, 'error', ['pytest returned 1', 'error: tests.test_a::case']),
+])
+def test_hdiv_a100_lane_rejects_a_skipped_or_failed_case(returncode, tag, expected):
+    case = dict(module='tests.test_a', name='case')
+    if tag:
+        case[tag] = 'message'
+    assert _hdiv_lane().lane_failures(returncode, ['tests/test_a.py'], [case]) == expected
+
+
+def test_hdiv_a100_lane_rejects_a_module_that_ran_nothing():
+    assert _hdiv_lane().lane_failures(0, ['tests/test_a.py'], []) == ['no case ran from tests/test_a.py']
+
+
 @pytest.mark.parametrize("mutation", ["tier-format", "description", "non-light-budget", "ownership-rule", "existing-alternative"])
 def test_validated_data_only_changes_preserve_executable_seal(tree, mutation):
     root, manifest = tree

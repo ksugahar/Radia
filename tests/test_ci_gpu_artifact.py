@@ -34,6 +34,26 @@ def test_absent_artifact_fails(tmp_path, monkeypatch):
         gpu.fetch(tmp_path, 'a' * 40)
 
 
+def test_radia_wheel_comes_from_native_release_at_the_exact_sha(monkeypatch):
+    import json
+    sha = 'a' * 40
+    routes = []
+    def request(route):
+        routes.append(route)
+        if route.startswith('actions/workflows/'):
+            return json.dumps({'workflow_runs': [dict(id=8, head_sha='b' * 40), dict(id=7, head_sha=sha)]}).encode()
+        return json.dumps({'artifacts': [dict(id=9, name='gpu-radia-wheel', expired=False)]}).encode()
+    monkeypatch.setattr(gpu, 'request', request)
+    [(run, found, artifact)] = gpu.resolve(sha, gpu.RADIA_WHEELS)
+    assert (run['id'], found['id'], artifact) == (7, 9, 'gpu-radia-wheel')
+    assert routes[0] == f'actions/workflows/build-test.yml/runs?head_sha={sha}&status=success&per_page=100'
+    routes.clear()
+    monkeypatch.setattr(gpu, 'request', lambda route: routes.append(route) or json.dumps({'workflow_runs': []}).encode())
+    with pytest.raises(ValueError, match='Missing successful exact-SHA artifact: gpu-simulink-wheel'):
+        gpu.resolve(sha)
+    assert routes[0] == f'actions/workflows/radia-simulink.yml/runs?head_sha={sha}&event=push&status=success&per_page=100'
+
+
 def test_redirect_strips_credential_without_network():
     req = gpu.urllib.request.Request('https://api.github.com/repos/test/repo/actions/artifacts/1/zip',
         headers={'Authorization': 'Bearer secret', 'Accept': 'application/zip'})

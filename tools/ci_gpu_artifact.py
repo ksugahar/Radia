@@ -9,6 +9,13 @@ import urllib.request
 import zipfile
 
 
+# Compute validation of the MATLAB payloads consumes wheels built on main pushes.
+COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push'),
+                  ('radia-optuna.yml', 'gpu-optuna-wheel', '&event=push')]
+# Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
+RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', '')]
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -84,11 +91,10 @@ def newest_main_sha():
     raise ValueError('No main SHA has both successful sealed GPU artifacts')
 
 
-def resolve(sha):
+def resolve(sha, wheels=COMPUTE_WHEELS):
     selected = []
-    for workflow, artifact in [('radia-simulink.yml', 'gpu-simulink-wheel'),
-                               ('radia-optuna.yml', 'gpu-optuna-wheel')]:
-        runs = json.loads(request(f'actions/workflows/{workflow}/runs?head_sha={sha}&event=push&status=success&per_page=100'))['workflow_runs']
+    for workflow, artifact, event in wheels:
+        runs = json.loads(request(f'actions/workflows/{workflow}/runs?head_sha={sha}{event}&status=success&per_page=100'))['workflow_runs']
         found = None
         for run in runs:
             if run['head_sha'] != sha:
@@ -103,8 +109,8 @@ def resolve(sha):
     return selected
 
 
-def fetch(output, sha):
-    for run, found, artifact in resolve(sha):
+def fetch(output, sha, wheels=COMPUTE_WHEELS):
+    for run, found, artifact in resolve(sha, wheels):
         archive = request(f"actions/artifacts/{found['id']}/zip")
         target = output / artifact
         target.mkdir(parents=True, exist_ok=False)
@@ -123,6 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('mode', choices=['seal', 'fetch', 'select'])
     parser.add_argument('directory', type=Path)
     parser.add_argument('--sha')
+    parser.add_argument('--radia', action='store_true', help='Fetch the radia wheel instead of the MATLAB payloads')
     args = parser.parse_args()
     if args.mode == 'select':
         sha = newest_main_sha()
@@ -130,4 +137,7 @@ if __name__ == '__main__':
         raise SystemExit(0)
     if not args.sha or len(args.sha) != 40 or any(c not in '0123456789abcdef' for c in args.sha):
         parser.error('Expected a full commit SHA')
-    (seal if args.mode == 'seal' else fetch)(args.directory, args.sha)
+    if args.mode == 'seal':
+        seal(args.directory, args.sha)
+    else:
+        fetch(args.directory, args.sha, RADIA_WHEELS if args.radia else COMPUTE_WHEELS)

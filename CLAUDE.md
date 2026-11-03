@@ -73,7 +73,7 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification.
+**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification. The validation host's `gpu-a100` runner is compute-only: it runs nightly or dispatched validation (`GPU compute validation`, `HDiv A100 validation`) on hash-verified exact-SHA wheels built on the build host, never compiles and is never a PR gate.
 Deployment: radia uses bound editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve uses metadata pin (6.2.2608).
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.

@@ -2111,6 +2111,7 @@
     {
       "pattern": "tools/ci_gpu_artifact.py",
       "owners": [
+        "radia",
         "radia-simulink",
         "radia-optuna"
       ],
@@ -2123,6 +2124,7 @@
     {
       "pattern": "tests/test_ci_gpu_artifact.py",
       "owners": [
+        "radia",
         "radia-simulink",
         "radia-optuna"
       ],
@@ -2245,6 +2247,12 @@
         "detail": "solver-numerics surrogate tests import the regression-lock helper"
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": ".github/workflows/hdiv-a100-validation.yml",
+      "owners": [
+        "radia"
+      ]
     },
     {
       "pattern": ".github/workflows/gpu-runner-readiness.yml",
@@ -4617,6 +4625,21 @@
             "cron": "43 17 * * *"
           }
         ],
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "hdiv-a100-validation": {
+      "workflow": ".github/workflows/hdiv-a100-validation.yml",
+      "owners": [
+        "radia"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
         "workflow_dispatch": {}
       },
       "selector_refs": [],

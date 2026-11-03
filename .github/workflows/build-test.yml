@@ -645,3 +645,30 @@ jobs:
           name: radia-wheel
           path: dist/*.whl
           retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Seal the same wheel for exact-SHA compute validation
+      # ----------------------------------------------------------------
+      - name: Seal exact-SHA GPU wheel
+        if: success()
+        shell: pwsh
+        run: |
+          $sealed = Join-Path $env:RUNNER_TEMP "radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $sealed | Out-Null
+          $wheels = @(Get-ChildItem dist -Filter radia-*.whl)
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one radia wheel' }
+          Copy-Item -LiteralPath $wheels[0].FullName -Destination $sealed
+          python tools/ci_gpu_artifact.py seal $sealed --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_GPU_WHEEL_DIR=$sealed" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload sealed GPU wheel
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-radia-wheel
+          path: |
+            ${{ env.RADIA_GPU_WHEEL_DIR }}/*.whl
+            ${{ env.RADIA_GPU_WHEEL_DIR }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
