@@ -537,7 +537,9 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
             if(degree>64||lower.size()!=1||!std::isfinite(lower[0])||lower[0]<=0||lower[0]>=1)throw std::invalid_argument("Invalid fixed Chebyshev settings");
             chebyshevDegree=int(degree);chebyshevLowerFraction=lower[0];
         }
-        auto result=solveLinearMaterial(op,mass,rhs,invChi[0],tolerance[0],int(integer(in[6],true)),preconditioner=="mass-cholesky",preconditioner=="mass-polynomial"||preconditioner=="mass-polynomial-graph",preconditioner=="mass-polynomial-graph"||preconditioner=="mass-chebyshev-graph",preconditioner=="mass-chebyshev"||preconditioner=="mass-chebyshev-graph",chebyshevDegree,chebyshevLowerFraction);
+        const auto choice=preconditioner=="mass-cholesky"?MassPreconditioner::cholesky:preconditioner=="mass-polynomial"?MassPreconditioner::polynomial:preconditioner=="mass-polynomial-graph"?MassPreconditioner::polynomialGraph:preconditioner=="mass-chebyshev"?MassPreconditioner::chebyshev:preconditioner=="mass-chebyshev-graph"?MassPreconditioner::chebyshevGraph:MassPreconditioner::diagonal;
+        HostMass prepared(mass,choice==MassPreconditioner::polynomial||choice==MassPreconditioner::polynomialGraph||choice==MassPreconditioner::chebyshev||choice==MassPreconditioner::chebyshevGraph);
+        auto result=solveLinearMaterial(op,prepared.operand(),rhs,invChi[0],tolerance[0],int(integer(in[6],true)),choice,chebyshevDegree,chebyshevLowerFraction);
         const char* names[]={"x","iterations","true_relative_residual","solver_owned_device_bytes","preconditioner","preconditioner_graph_launches","chebyshev_degree","chebyshev_lower_fraction"};out[0]=checkedArray(&mxCreateStructMatrix,1,1,8,names);
         auto* x=checkedArray(&mxCreateDoubleMatrix,result.x.size(),1,mxREAL);std::copy(result.x.begin(),result.x.end(),mxGetDoubles(x));mxSetField(out[0],0,"x",x);
         mxSetField(out[0],0,"iterations",checkedArray(&mxCreateDoubleScalar,result.iterations));mxSetField(out[0],0,"true_relative_residual",checkedArray(&mxCreateDoubleScalar,result.relativeResidual));
