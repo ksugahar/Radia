@@ -40,6 +40,7 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     owner.order = 1
     owner.mesh_sha256 = "fixture"
     owner._rhs = np.eye(3)
+    owner._mean = 2*np.eye(3)
     calls = []
 
     class Native:
@@ -61,6 +62,7 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     for field in ([1., 2., 3.], [3., 2., 1.]):
         result = owner.solve(field)
         np.testing.assert_array_equal(result["x"], field)
+        np.testing.assert_array_equal(result["mean_magnetization"], 2*np.asarray(field))
         assert result["backend"] == "gpu"
     assert calls[0][0] is calls[1][0]
     with pytest.raises(ValueError, match="three finite"):

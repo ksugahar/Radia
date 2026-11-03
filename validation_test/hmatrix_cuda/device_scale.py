@@ -79,8 +79,8 @@ def run_nonlinear(path, args, checked):
         solution = prepared.solve((0., 0., args.field), tolerance=tolerance)
         solve_seconds = time.perf_counter() - start
         stats = prepared.stats()
-    residual = float(solution["nonlinear_relative_residual"])
-    return dict(passed=residual <= tolerance, nonlinear_relative_residual=residual, newton_iterations=int(solution["iterations"]),
+    residual = float(solution["relative_residual"])
+    return dict(passed=residual <= tolerance, nonlinear_relative_residual=residual, newton_iterations=int(solution["newton_iterations"]),
                 setup_peak_device_bytes=stats["assembly"]["setup_peak_device_bytes"],
                 operator_owned_device_bytes=stats["operator"]["owned_device_bytes"],
                 setup_seconds_diagnostic=setup_seconds, solve_seconds_diagnostic=solve_seconds)

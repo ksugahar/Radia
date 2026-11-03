@@ -124,6 +124,7 @@ class PreparedHDivNonlinear:
             self.family = setup["family"]
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
+            self._mean = setup["mean_operator"]
             self.material_budget = setup["material_budget"]
             native_law = dict(law)
             for name in ("knots", "coefficients", "integral_base"):
@@ -144,7 +145,7 @@ class PreparedHDivNonlinear:
     def solve(self, applied_field, *, initial=None, tolerance=1e-11,
               linear_tolerance=5e-14, max_iterations=40, max_linear_iterations=10000,
               preconditioner="reference-diagonal", degree=32, lower_fraction=.01):
-        """Solve a uniform applied H (A/m); return owned coefficients and history.
+        """Solve a uniform applied H (A/m); return owned coefficients, history and the mean magnetization.
 
         Native Newton recertifies the original nonlinear equation. This is not
         an independent CPU certificate or a performance claim.
@@ -174,8 +175,8 @@ class PreparedHDivNonlinear:
                 np.ascontiguousarray(self._rhs @ field),
                 np.ascontiguousarray(x), tolerance, linear_tolerance, max_iterations,
                 max_linear_iterations, preconditioner, degree, lower_fraction)
-            return dict(result, backend="gpu", mesh_sha256=self.mesh_sha256,
-                        order=self.order, dofs=self.dofs, field_units="A/m")
+            return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
+                        mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
 
     def stats(self):
         with self._lock:
