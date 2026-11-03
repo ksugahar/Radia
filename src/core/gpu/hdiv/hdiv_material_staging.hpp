@@ -29,16 +29,17 @@ struct MaterialStagingContext {
     std::shared_ptr<ngcomp::FESpace> materialSpace;
     std::size_t ne=0,nd=0,totalPoints=0;
     int degree=0;
-    // curveOrder 2 applies NGSolve's isoparametric P2 curving to the checked
-    // mesh, exactly as the Python FE side does with Mesh.Curve(2).
+    // curveOrder 2 applies NGSolve's isoparametric P2 curving to a linear checked
+    // mesh, exactly as the Python FE side does with Mesh.Curve(2). A loaded P2 .vol
+    // stays as stored: it has no CAD callback, so a second Curve would replace it.
     MaterialStagingContext(const std::string& path,int order,int curveOrder=1){
         mesh=std::make_shared<ngcomp::MeshAccess>(path);ne=std::size_t(mesh->GetNE(ngfem::VOL));
         // int32 element, DOF and point numbering is the structural bound; device
         // budgets are checked where the tables are consumed.
         constexpr std::size_t count=std::numeric_limits<int>::max();
-        if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>1||order<0||order>2||(curveOrder!=1&&curveOrder!=2))
+        if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>curveOrder||order<0||order>2||(curveOrder!=1&&curveOrder!=2))
             throw std::invalid_argument("Material quadrature requires bounded RT0/P1/P2 tetrahedral, hexahedral or pyramidal HDiv on an affine or P2-curved mesh");
-        if(curveOrder==2){mesh->Curve(2);if(mesh->GetCurveOrder()!=2)throw std::runtime_error("NGSolve did not curve the mesh to order 2");}
+        if(curveOrder==2&&mesh->GetCurveOrder()!=2){mesh->Curve(2);if(mesh->GetCurveOrder()!=2)throw std::runtime_error("NGSolve did not curve the mesh to order 2");}
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
         nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         degree=std::max(6,2*order+2);ngcore::Flags irFlags;irFlags.SetFlag("order",degree);
