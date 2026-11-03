@@ -49,6 +49,7 @@ removed entries, their consumers, their coverage and what replaces it or what wa
 | `device_scale.py` | Compressed device H-matrix setup and linear solve, with `--nonlinear` also the BH solve, at one or more meshes; no threshold | JSON |
 | `check_pybind_mex_bitwise.py`, `hdiv_device_parity.py`, `produceHDivDeviceMexRecord.m` | Same-kernel frontend parity, see [PYBIND_MEX_BITWISE.md](PYBIND_MEX_BITWISE.md) | JSON |
 | `check_analytic_gram_bitwise.py` | Analytic charge Gram action and inverse-BH samples, pybind11 against MEX, bitwise on one kernel object | JSON |
+| `run_device_boundary.py`, `runDeviceBoundary.m` | That frontend parity, the setup read controls and the MATLAB device workflow on one exact build; runs in the GPU lane of `radia-simulink.yml` | JSON |
 | `checkHDivDeviceMemory.m`, `makeGatewayMemoryWorkload.m`, `sampleGatewayMemory.m` | 100-run memory slope under `gateway_memory_protocol.json` (`hdiv-device` workload) | JSON |
 
 `tests/test_hdiv_gpu_analytic_gram.py` and `tests/test_hdiv_gpu_device_guards.py` are the

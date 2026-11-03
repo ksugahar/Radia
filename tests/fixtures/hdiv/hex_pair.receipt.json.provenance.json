@@ -1,0 +1,19 @@
+{
+  "checker": {
+    "distribution": "cubit-mesh-export",
+    "version": "2.2.8",
+    "record_sha256": "8e6000035905a7a94f922270b2bca58504ddc03937f10b9bd98cc336832d8fd8"
+  },
+  "argv": [
+    "C:\\temp\\checker\\venv\\Scripts\\python.exe",
+    "-m",
+    "cubit_mesh_export.check",
+    "C:\\temp\\checker\\tmp\\radia-check-vol-h0z0c6wo\\mesh.vol",
+    "--strict-labels",
+    "--contract",
+    "C:\\temp\\checker\\tmp\\radia-check-vol-h0z0c6wo\\labels.json",
+    "--format",
+    "json"
+  ],
+  "ngsolve_version": "6.2.2608"
+}

@@ -185,3 +185,13 @@ def test_bundled_sdk_root_is_not_a_standalone_toolkit(tmp_path):
     matlab, _, _ = sdk_fixture(tmp_path)
     with pytest.raises(RuntimeError, match="explicit MATLAB-bundled root"):
         b.windows_cuda_layout(tmp_path / "standalone CUDA", matlab, "release 12.8, V12.8.61")
+
+
+def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
+    # Guards: a kernel or adapter change still executes pybind11/MEX parity and the MATLAB device test on its own build.
+    workflow = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
+    job = workflow[workflow.index("\n  cuda-mex:"):]
+    step = job[job.index("- name: Verify HDiv device boundary and same-kernel parity"):]
+    step = step[:step.index("\n      - ")]
+    assert "validation_test/hmatrix_cuda/run_device_boundary.py" in step, step
+    assert "continue-on-error" not in step and "if:" not in step, step
