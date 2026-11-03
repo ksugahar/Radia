@@ -48,6 +48,14 @@ through this entry.
 
 ## Curved mass rule
 
+On curved geometry this gate is not a comparison with the CPU route as it stands. Its
+reference is a direct solve with the CPU Gram and charge map and the device mass rule. The Gram
+and charge map still come from the CPU code, and the rule is written out in the script, so a
+device operator error or a drift of the device rule still fails. The gate cannot see a
+regression in the CPU curved mass or a growth of the gap below. Each curved run reports that
+gap as `curved_cpu_route_difference`; nothing gates it. Before this entry the CPU route was the
+reference, so curved results are not comparable across that change.
+
 On curved tetrahedra the matched reference also takes the device material mass
 rule, `IntegrationRule(TET, 2*max(6, 2p+2))`. The CPU default mass of the curved
 charge basis uses NGSolve's default rule, which under-integrates the rational
