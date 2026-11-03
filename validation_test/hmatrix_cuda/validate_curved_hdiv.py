@@ -33,6 +33,7 @@ def main():
         result['mesh_check']=checked_mesh(a.mesh,a.contract,a.mesh_sha256,a.contract_sha256,a.out/'vol_check.json',tet_only=a.geometry!='hex')
         import numpy as np
         import ngsolve as ng
+        from scipy.sparse import coo_matrix
         from hdiv_hdf5 import write_hdiv_h5, read_hdiv_h5
         import radia.vim._vim as cpu
         import radia._radia_pybind as cpu_native
@@ -59,10 +60,14 @@ def main():
         with ng.TaskManager():
             fes=ng.HDiv(mesh,order=a.order)
             B,G,mass=cpu.build_charge_gram(fes,curve_order=2 if a.geometry=='curved' else 0,curve_gauss=8,gram_backend='exact-dense',exact_dense_memory_mb=64)
+            if a.geometry=='curved':
+                # The device material rule. The CPU default mass under-integrates the rational curved Piola mass.
+                u,v=fes.TnT();rule=ng.BilinearForm(fes);rule+=u*v*ng.dx(intrules={ng.TET:ng.IntegrationRule(ng.TET,2*max(6,2*a.order+2))});rule.Assemble()
+                rows,cols,values=rule.mat.COO();mass=coo_matrix((values,(rows,cols)),shape=(fes.ndof,fes.ndof)).tocsr()
             load=ng.LinearForm(fes);load+=ng.CoefficientFunction((1.,.2,.1))*fes.TestFunction()*ng.dx;load.Assemble();rhs=np.array(load.vec.FV().NumPy())
-            reference=G.solve_configured_linear_material_mass_riesz(2.5,rhs,1e-11,1000)
+            reference=None if a.geometry=='curved' else G.solve_configured_linear_material_mass_riesz(2.5,rhs,1e-11,1000)
             demag=np.column_stack([B.T@np.asarray(G.matvec_sym(B[:,k].toarray().ravel())) for k in range(fes.ndof)])
-            system=demag+2.5*mass.toarray();expected=np.asarray(reference['m'])
+            system=demag+2.5*mass.toarray();expected=np.linalg.solve(system,rhs) if reference is None else np.asarray(reference['m'])
             means=[]
             for c in range(3):
                 form=ng.LinearForm(fes);form+=fes.TestFunction()[c]*ng.dx;form.Assemble();means.append(np.array(form.vec.FV().NumPy())/ng.Integrate(1,mesh))
@@ -73,7 +78,7 @@ def main():
         result['oracle_sparse_storage']={name:dict(shape=list(value.shape),nnz=int(value.nnz),canonical=bool(value.has_canonical_format),sorted_indices=bool(value.has_sorted_indices)) for name,value in (('B',B),('mass',mass))}
         output_B,output_mass=sorted_oracle_csr(B),sorted_oracle_csr(mass)
         fixture=a.out/'cpu.h5';write_hdiv_h5(fixture,dict(B=output_B,mass=output_mass,rhs=rhs,system=system,expected=expected,mean_operator=means),dict(units='SI',labels=list(mesh.GetBoundaries())))
-        result.update(cells=mesh.ne,dofs=fes.ndof,charges=B.shape[0],cpu_true_residual=cpu_residual,cpu_iterations=int(reference['iters']),cpu_vim_sha256=sha(cpu.__file__),input_sha256=sha(fixture),mesh_sha256=sha(mesh_path),source_sha256=sha(__file__),device_sha256=sha(a.device/'radia_hdiv_device.mexw64'))
+        result.update(cells=mesh.ne,dofs=fes.ndof,charges=B.shape[0],cpu_true_residual=cpu_residual,cpu_iterations=0 if reference is None else int(reference['iters']),cpu_vim_sha256=sha(cpu.__file__),input_sha256=sha(fixture),mesh_sha256=sha(mesh_path),source_sha256=sha(__file__),device_sha256=sha(a.device/'radia_hdiv_device.mexw64'))
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');result['matlab']=eng.version();result['ngsolve']=ng.__version__
         result['owned_matlab_pid']=int(eng.feature('getpid'))
         eng.eval("observedDevice=gpuDevice;observedGpu=struct('name',observedDevice.Name,'compute_capability',observedDevice.ComputeCapability,'selected_device',observedDevice.Index,'backend','plain MEX on the nvcc device kernel');",nargout=0)
