@@ -15,6 +15,8 @@ import pytest
 
 ng = pytest.importorskip("ngsolve")
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 ROOT = Path(__file__).resolve().parents[1]
 STAGING = ROOT / "src/core/gpu/hdiv/hdiv_charge_staging.hpp"
 
