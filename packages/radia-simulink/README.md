@@ -301,10 +301,7 @@ Set `RADIA_HDIV_DEVICE_BUILD` and `RADIA_FMM_BUILD` to accepted clean builds of
 the wheel commit. Stale artifacts
 are rejected even when their earlier numerical evidence passed.
 
-HDiv supports tetrahedra with affine or P2 geometry, orders 1/2 and linear
-isotropic material. Host-cache is opt-in and consumes additional memory.
-General adaptive high-order HACApK, images, internal interfaces, constraints
-and nonlinear HDiv are not accepted. FMM boundary maps are flat P1; the
+FMM boundary maps are flat P1; the
 independently measured direct-sum speedup is not a comparison with CPU FMM.
 Small workloads can be slower on GPU. IH preview modules are not distributed.
 Compatible user-installed native dependencies remain required; no implicit
@@ -323,30 +320,23 @@ The build-machine check also passed LTspice and the official Toolkit model check
 
 Fresh idle same-machine measurements used two ABBA cycles. GPU whole time
 includes construction, all transfers, solve/application, result recovery and
-context destruction. HDiv includes mesh-file loading; reference-fixture reads
-and output serialization are excluded. FMM input-file reads and output
-serialization are excluded.
+context destruction. FMM input-file reads and output serialization are excluded.
+The HDiv measurements of 0.1.3 described a host-upload route that has been
+removed ([inventory](../../validation_test/hmatrix_cuda/RETIRED_ROUTE_INVENTORY.md))
+and stay only in the release JSON below.
 
 | Bounded public case | CPU median | GPU median | CPU/GPU |
 | --- | ---: | ---: | ---: |
-| P2 sphere, HDiv order 2, host-cache; CPU 1 thread | 5.1781 s | 0.26823 s | 19.30 |
-| Same HDiv case; CPU 16 threads, BLAS 1 thread | 0.43456 s | 0.25845 s | 1.68 |
 | FMM, 8192 sources, 2048 targets, 3 channels, order 8, separation 2 | 4.4744 s | 0.99416 s | 4.50 |
 
 The FMM CPU route is a single-threaded NumPy direct sum, not CPU FMM.
-HDiv direct/cache coefficients were identical; independent true relative
-residual was `7.96e-12` or lower. Its exact accounted owned GPU peak was
-2286980 bytes with cache, compared with 450288 bytes for direct assembly.
-Cache improves this workload's time while consuming more memory.
 The FMM measured relative difference from direct sum remained below `1e-8`.
 
 These cases do not establish large-model scaling or a universal GPU speedup.
 The first numerical payload and MATLAB/GPU initialization are recorded
-separately; complete process-cold solver time is not certified. HDiv host and
-global CUDA/runtime peaks remain unmeasured. FMM native buffer counters and
-50 ms process samples are distinct measures; samples include runtime/baseline
-memory and may miss short allocation spikes. The HDiv CPU native file hash is
-verified, but its original build-source receipt remains unverified.
+separately; complete process-cold solver time is not certified. FMM native buffer
+counters and 50 ms process samples are distinct measures; samples include
+runtime/baseline memory and may miss short allocation spikes.
 
 Machine-readable qualification is in
 `validation_test/radia_simulink/releases/0.1.3.json`; measured samples, input/source/
@@ -387,12 +377,12 @@ These CSR results do not establish HDiv, AMS, nonlinear or large-model parity.
 
 The Python HDiv GPU solver and pybind build belong to `radia.hdiv_gpu`; see the Radia [development build preparation](../../docs/compilation/python-hdiv-gpu.md). This distribution owns mexcuda and the thin MATLAB host publisher only. The Python workflow requires the optional pure-Python `cubit-mesh-export` checker for strict `check-vol` validation; Cubit itself is not required.
 
-Affine linear P2 GPU results obtained with the former degree-5 quadrature do not certify the degree-10 route. Independent CPU re-certification passed for one 30-DoF affine tet P2 linear isotropic case (inverse susceptibility 1, uniform applied H): coefficient error 4.11e-13 and original-equation residual 5.53e-15. The exact wrapper and native identities are in `validation_test/hmatrix_cuda/results/hdiv_linear_p2_degree10.json`. This bounded result does not certify other meshes or final release artifacts; nonlinear P2 evidence has its separately recorded scope.
-
 HDiv solves take a checked setup in one of two ways, and neither builds a matrix on the host:
 
-- In a MATLAB session with a Python that has `radia[gpu]` and `h5py` (from `PythonExecutable` or `pyenv`), `prepareHDivDeviceSetup` runs the staging process below and loads its result.
-- Without Python in MATLAB, run `python -m radia_simulink.hdiv request.json setup.h5` once beforehand, then `setup = radia.gpu.loadHDivDeviceSetup('setup.h5')`. Only that step needs Python.
+- In a MATLAB session with a Python that has `radia[gpu]`, `radia-simulink` and `h5py` (from `PythonExecutable` or `pyenv`), `prepareHDivDeviceSetup` runs the staging process below and loads its result.
+- Without Python in MATLAB, run `python -m radia_simulink.hdiv request.json setup.h5` once beforehand with those same packages, then `setup = radia.gpu.loadHDivDeviceSetup('setup.h5')`. Only that step needs Python. It loads the pip CUDA runtime; running it on a machine without a GPU has not been tested.
+
+Either way the request names a checked mesh: a versioned label contract, a `check-vol` receipt and its provenance.
 
 RT0 is `prepareHDivDeviceSetup(mesh, 0, ...)`; curved P2 tetrahedra pass `CurveOrder=2`. Pyramid and mixed meshes are refused, as the CPU charge Gram does not implement them. Caller-supplied leaves, mass or charge maps are no longer accepted: the former `HMatrixOperator`, `solveHDivRT0` and `solveCurvedHDiv` are removed.
 

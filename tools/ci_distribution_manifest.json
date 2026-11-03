@@ -2540,18 +2540,6 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
-      },
-      "selection": "all_owners"
-    },
-    {
       "pattern": "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
       "owners": [
         "radia",
@@ -3418,7 +3406,6 @@
             "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
             "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
             "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
-            "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
             "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
             "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
             "src/core/gpu/hdiv/hmatrix_resident.cuh",
@@ -3554,7 +3541,6 @@
             "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
             "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
             "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
-            "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
             "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
             "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
             "src/core/gpu/hdiv/hmatrix_resident.cuh",

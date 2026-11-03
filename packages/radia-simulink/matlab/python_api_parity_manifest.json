@@ -116,8 +116,8 @@
       "scope": "Experimental device-built Gram, charge map, evaluation map and reference mass with the shared GPU BH frozen-tangent Newton, for affine tet, curved P2 tet and hex HDiv orders 1/2 over a radia.hdiv-device-setup.v1. No matrix crosses from the host. No mixed/pyramid claim.",
       "source": "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/PreparedHDivNonlinear.m",
-      "validation": "tests/test_hdiv_gpu_hex_device.py",
-      "cpu_reference": "CPU curved and hex routes on identical NGSolve inputs (Gram, operator, mass and linear solve of the assembled CPU equation)",
+      "validation": "validation_test/hmatrix_cuda/validate_device_nonlinear.py",
+      "cpu_reference": "radia.vim.Solve and the CPU material on identical checked meshes; Gram, operator, mass and linear solve of the assembled CPU equation in the curved and hex device lanes",
       "cpu_fallback": false,
       "same_kernel_bitwise_parity": {
         "status": "PENDING",

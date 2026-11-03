@@ -1,8 +1,8 @@
-"""Device compressed H-matrix setup and solve at scale on public spheres; JSON record, no speed or scale threshold.
+"""Device compressed H-matrix setup and linear (optionally nonlinear) solve at scale on public spheres; JSON record, no speed or scale threshold.
 
 Each mesh is a public sphere, checked by the authoritative check-vol through
 ``tools/prepare_hdiv_mesh_receipt.py`` run in ``--receipt-python``. The only pass
-condition is the native true residual of the solve. Timings are diagnostic.
+condition is the native true residual of each solve. Timings are diagnostic.
 """
 from pathlib import Path
 import argparse
@@ -67,6 +67,25 @@ def run_case(path, args, checked):
                 mesh_sha256=sha256(path))
 
 
+def run_nonlinear(path, args, checked):
+    from radia.hdiv_gpu import PreparedHDivNonlinear
+    from validate_device_nonlinear import bh_table
+    tolerance = 1e-11
+    start = time.perf_counter()
+    with PreparedHDivNonlinear.from_bh_table(path, bh_table(), backend="gpu", order=args.order,
+                                             curve_order=args.curve_order, **checked) as prepared:
+        setup_seconds = time.perf_counter() - start
+        start = time.perf_counter()
+        solution = prepared.solve((0., 0., args.field), tolerance=tolerance)
+        solve_seconds = time.perf_counter() - start
+        stats = prepared.stats()
+    residual = float(solution["nonlinear_relative_residual"])
+    return dict(passed=residual <= tolerance, nonlinear_relative_residual=residual, newton_iterations=int(solution["iterations"]),
+                setup_peak_device_bytes=stats["assembly"]["setup_peak_device_bytes"],
+                operator_owned_device_bytes=stats["operator"]["owned_device_bytes"],
+                setup_seconds_diagnostic=setup_seconds, solve_seconds_diagnostic=solve_seconds)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -80,6 +99,7 @@ def main():
     parser.add_argument("--tolerance", type=float, default=1e-10)
     parser.add_argument("--max-iterations", type=int, default=2000)
     parser.add_argument("--preconditioner", default="mass-diagonal")
+    parser.add_argument("--nonlinear", action="store_true", help="Also solve the synthetic BH law of validate_device_nonlinear.py")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     import ngsolve as ng
@@ -94,9 +114,12 @@ def main():
             path = args.out / (f"sphere-{maxh:g}".replace(".", "p") + ".vol")
             with ng.TaskManager():
                 public_sphere(path, maxh, args.curve_order, args.contract)
-            result["cases"].append(dict(run_case(path, args, checked_inputs(path, args.contract, args.receipt_python)),
-                                        maxh=maxh))
-        result["accepted"] = all(case["passed"] for case in result["cases"])
+            checked = checked_inputs(path, args.contract, args.receipt_python)
+            case = dict(run_case(path, args, checked), maxh=maxh)
+            result["cases"].append(case)
+            if args.nonlinear:
+                case["nonlinear"] = run_nonlinear(path, args, checked)
+        result["accepted"] = all(case["passed"] and case.get("nonlinear", case)["passed"] for case in result["cases"])
     except BaseException as exc:
         result["error"] = repr(exc)
         raise
