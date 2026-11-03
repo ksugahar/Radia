@@ -20,7 +20,7 @@ solution = radia.gpu.solveHDivElements(setup, [1 .2 .1], 2.5, Tolerance=1e-11, .
     MaxIterations=1000, Preconditioner='mass-cholesky');
 ```
 
-`validate_curved_hdiv.py` compares that whole solve with independent CPU pybind11;
+`validate_curved_hdiv.py` compares that whole solve with CPU pybind11, on curved geometry with the device mass rule ([record](CURVED_GATE_RECORD.md));
 `PYBIND_MEX_BITWISE.md` describes the same-kernel frontend parity.
 
 Scripts of the retired host-normalized MATLAB route, such as
@@ -44,7 +44,7 @@ removed entries, their consumers, their coverage and what replaces it or what wa
 
 | Entry | Scope | Output |
 |---|---|---|
-| `validate_curved_hdiv.py` | Whole linear solve through MATLAB against the CPU route on a checked mesh: orders 0, 1, 2; affine, curved or HEX | JSON with the matched-profile label |
+| `validate_curved_hdiv.py` | Whole linear solve through MATLAB on a checked mesh against the CPU route, on curved geometry against the CPU Gram with the device mass rule: orders 0, 1, 2; affine, curved or HEX | JSON with the matched-profile label |
 | `validate_device_nonlinear.py` | Nonlinear solve and material energy, gradient and tangent on pybind11 against the CPU route, with finite differences | JSON |
 | `device_scale.py` | Compressed device H-matrix setup and linear solve, with `--nonlinear` also the BH solve, at one or more meshes; no threshold | JSON |
 | `check_pybind_mex_bitwise.py`, `hdiv_device_parity.py`, `produceHDivDeviceMexRecord.m` | Same-kernel frontend parity, see [PYBIND_MEX_BITWISE.md](PYBIND_MEX_BITWISE.md) | JSON |

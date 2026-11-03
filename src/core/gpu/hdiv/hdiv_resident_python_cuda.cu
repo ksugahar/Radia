@@ -77,11 +77,11 @@ public:
         for(const auto& t:builder.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
         for(const auto& t:oracle.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
     }
-    // Resident construction uploads O(n) plan indices.
+    // Resident construction uploads O(n) plan indices and any host-held coefficients; device-built plans hold none.
     void planTransfer(const radia_hmatrix_cuda::Plan& plan){
         const auto index=sizeof(std::size_t);
         record.transfers.push_back({"resident_plan","H2D",plan.directions.size()*sizeof(radia_hmatrix_cuda::Direction)+
-            (plan.permutation.size()+plan.rowOffsets.size()+plan.partialIndices.size())*index+plan.scale.size()*sizeof(double)});
+            (plan.permutation.size()+plan.rowOffsets.size()+plan.partialIndices.size())*index+(plan.scale.size()+plan.coefficients.size())*sizeof(double)});
     }
     radia_hmatrix_cuda::HostVector<double> apply(const radia_hmatrix_cuda::HostVector<double>& x)override {
         std::lock_guard<std::mutex> lock(mutex);

@@ -132,7 +132,7 @@ def test_flat_material_binding_takes_tables_not_evaluation_values():
     assert "_explicit_evaluation_oracle" not in source and "createFlatMaterialOracle" not in source
     scope = source[source.index('.def_static("validate_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
     assert re.findall(r'py::arg\("([a-z_]+)"\)', scope) == names[:-2], "scope check takes the same tables, no law"
-    helper = source[source.index("py::dict validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructFlat(")]
+    helper = source[source.index("py::dict validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructAnalyticGram(")]
     assert "validateFlatEvaluationScope(flatEvaluationInput(" in helper and "create" not in helper, helper
 
 
