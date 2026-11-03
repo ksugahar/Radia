@@ -1,8 +1,10 @@
 function setup=prepareHDivDeviceSetup(meshPath,order,options)
-% Initialization boundary: Radia Python stages the checked mesh's NGSolve
-% tables (radia_simulink.hdiv.prepare_hdiv_device_setup); no matrix is built
-% on the host and nothing runs per Simulink step. Returns the checked
-% radia.hdiv-device-setup.v1 struct consumed by radia_hdiv_device.
+% Initialization boundary: a separate Radia Python process stages the checked
+% mesh's NGSolve tables (python -m radia_simulink.hdiv) and returns them in HDF5.
+% Staging loads the pip CUDA runtime, which must not share a process with
+% MATLAB's own. No matrix is built on the host and nothing runs per Simulink
+% step. Returns the checked radia.hdiv-device-setup.v1 struct consumed by
+% radia_hdiv_device.
 arguments
     meshPath (1,:) char {mustBeNonempty}
     order (1,1) double {mustBeMember(order,[0 1 2])}
@@ -15,18 +17,59 @@ arguments
     % 1: linear geometry; 2: NGSolve Curve(2) (orders 1 and 2). A pure-TET mesh
     % is affine-tet or curved-tet by curve order; a pure-HEX mesh is hex at either.
     options.CurveOrder (1,1) double {mustBeMember(options.CurveOrder,[1 2])}=1
+    options.PythonExecutable (1,1) string=string(pyenv().Executable)
 end
-keywords=struct('backend','gpu','label_contract',options.LabelContract, ...
+assert(strlength(options.PythonExecutable)>0 && ~contains(options.PythonExecutable,'"'),'radia:gpu:DeviceSetup', ...
+    'Select the Python that has radia[gpu] through PythonExecutable or pyenv');
+request=struct('mesh_path',meshPath,'backend','gpu','label_contract',options.LabelContract, ...
     'mesh_check_receipt',options.MeshCheckReceipt,'mesh_check_receipt_sha256',options.MeshCheckReceiptSha256, ...
-    'mesh_check_provenance',options.MeshCheckProvenance,'order',int64(order), ...
-    'gram_compression',options.GramCompression,'curve_order',int64(options.CurveOrder));
+    'mesh_check_provenance',options.MeshCheckProvenance,'order',order, ...
+    'gram_compression',options.GramCompression,'curve_order',options.CurveOrder);
 if ~isempty(fieldnames(options.GramACA))
-    aca=options.GramACA;aca.leaf_size=int64(aca.leaf_size);aca.max_rank=int64(aca.max_rank);
-    keywords.gram_aca=aca;
+    request.gram_aca=options.GramACA;
 end
-result=radia.internal.callPython("radia_simulink.hdiv","prepare_hdiv_device_setup",{meshPath},Keywords=keywords);
-setup=radia.gpu.readHDivDeviceSetup(result.value);
+work=tempname;mkdir(work);workOwner=onCleanup(@()rmdir(work,'s'));
+requestPath=fullfile(work,'request.json');outputPath=fullfile(work,'setup.h5');
+stream=fopen(requestPath,'w','n','UTF-8');assert(stream>0,'radia:gpu:DeviceSetup','Cannot write %s',requestPath);
+fwrite(stream,unicode2native(jsonencode(request),'UTF-8'));fclose(stream);
+command=sprintf('"%s" -m radia_simulink.hdiv "%s" "%s"',options.PythonExecutable,requestPath,outputPath);
+[status,output]=radia.internal.runPythonProcess(string(command));
+if status~=0
+    error('radia:gpu:DeviceSetup','HDiv device setup process failed with status %d:\n%s',status,output);
+end
+setup=radia.gpu.readHDivDeviceSetup(readSetupFile(outputPath));
 families={'affine-tet','curved-tet'};
 assert(setup.order==order && any(strcmp(setup.family,{families{options.CurveOrder},'hex'})),'radia:gpu:DeviceSetup', ...
     'Device setup order or geometry family differs from the request');
+end
+
+function value=readSetupFile(path)
+% Row-major HDF5 tables read as reversed MATLAB arrays; the flat tables are vectors.
+attribute=@(location,name)h5readatt(path,location,name);
+text=@(location,name)char(string(attribute(location,name)));
+assert(strcmp(text('/','units'),'SI') && double(attribute('/','index_base'))==0,'radia:gpu:DeviceSetup', ...
+    'Device setup file requires SI units and 0-based indices');
+value=struct();
+for name={'schema','backend','family','mesh_sha256','label_contract_sha256'}
+    value.(name{1})=text('/',name{1});
+end
+value.order=double(attribute('/','order'));value.dofs=double(attribute('/','dofs'));
+value.rhs_operator=h5read(path,'/rhs_operator')';value.mean_operator=h5read(path,'/mean_operator')';
+value.charges=readTables(path,'/charges');value.evaluation=readTables(path,'/evaluation');
+value.charges.far_factor=double(attribute('/charges','far_factor'));
+value.charges.compression=text('/charges','compression');value.charges.dofs=double(attribute('/charges','dofs'));
+if strcmp(value.charges.compression,'dense')
+    value.charges.aca=zeros(0,0);
+else
+    value.charges.aca=struct('eps',double(attribute('/charges/aca','eps')),'eta',double(attribute('/charges/aca','eta')), ...
+        'leaf_size',double(attribute('/charges/aca','leaf_size')),'max_rank',double(attribute('/charges/aca','max_rank')), ...
+        'rank_cap',text('/charges/aca','rank_cap'));
+end
+end
+
+function tables=readTables(path,group)
+tables=struct();info=h5info(path,group);
+for k=1:numel(info.Datasets)
+    name=info.Datasets(k).Name;tables.(name)=h5read(path,[group '/' name]);
+end
 end
