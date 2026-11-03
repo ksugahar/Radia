@@ -1,6 +1,7 @@
 """Guards: a Ninja/MSVC build tree whose msvc_deps_prefix does not match the
 compiler's /showIncludes bytes, or whose _radia_pybind objects carry no
-recorded header dependencies, fails Build.ps1 before the provenance receipt.
+VALID recorded header dependencies, fails Build.ps1 before the provenance
+receipt.
 
 Assumes: the byte strings are the observed cl.exe 19.44 Japanese prefix in
 cp932 and UTF-8 and its UTF-8-read-as-cp932 mojibake; no compilation runs.
@@ -62,16 +63,25 @@ def _objects(tmp_path, names):
     return [f"CMakeFiles/_radia_pybind.dir/src/{name}" for name in names]
 
 
-def _deps_output(counts):
-    return "".join(f"{path}: #deps {count}, deps mtime 8153543202164041 (VALID)\n    src/h.h\n\n"
-                   for path, count in counts.items())
+def _deps_output(counts, states=None):
+    states = states or {}
+    return "".join(f"{path}: #deps {count}, deps mtime 8153543202164041 ({states.get(path, 'VALID')})\n"
+                   "    src/h.h\n\n" for path, count in counts.items())
 
 
 def test_target_with_recorded_deps_passes(tmp_path):
     objects = _objects(tmp_path, ["a.cpp.obj", "core/b.cpp.obj"])
     records = deps.recorded_deps(_deps_output(dict.fromkeys(objects, 3)))
-    assert records == dict.fromkeys(objects, 3)
+    assert records == dict.fromkeys(objects, (3, "VALID")), records
     assert deps.check_target_deps(tmp_path, "_radia_pybind", records) == 2
+
+
+@pytest.mark.parametrize("state", ["STALE", "UNKNOWN"])
+def test_target_object_with_non_valid_record_fails(tmp_path, state):
+    objects = _objects(tmp_path, ["a.cpp.obj", "core/b.cpp.obj"])
+    output = _deps_output(dict.fromkeys(objects, 3), {objects[1]: state})
+    with pytest.raises(deps.DepsError, match=rf"not VALID for 1/2 _radia_pybind objects.*'{state}'"):
+        deps.check_target_deps(tmp_path, "_radia_pybind", deps.recorded_deps(output))
 
 
 @pytest.mark.parametrize("record", ["zero", "missing"])
