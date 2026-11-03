@@ -412,6 +412,7 @@ jobs:
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           function Select-ExactBuild($candidates) {
             $accepted = @($candidates | Where-Object {
               $receipt = Join-Path $_.FullName 'build.json'
