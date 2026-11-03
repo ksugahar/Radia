@@ -23,6 +23,7 @@ charges=struct();
 for k=1:numel(chargeFields),charges.(chargeFields{k})=column(inputPath,['/charges/' chargeFields{k}]);end
 charges.far_factor=double(h5readatt(inputPath,'/charges','far_factor'));
 charges.compression=textAttribute(inputPath,'/charges','compression');
+charges.family=textAttribute(inputPath,'/charges','family');
 charges.dofs=nd;
 charges.aca=struct('eps',double(h5readatt(inputPath,'/charges','aca_eps')),'eta',double(h5readatt(inputPath,'/charges','aca_eta')), ...
     'leaf_size',double(h5readatt(inputPath,'/charges','aca_leaf_size')),'max_rank',double(h5readatt(inputPath,'/charges','aca_max_rank')), ...
