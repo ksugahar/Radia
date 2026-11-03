@@ -7,14 +7,33 @@ large physical, nonlinear, mixed-mesh and GPU performance studies belong here
 with JSON evidence. Existing tetrahedral results do not certify the other two
 families. Pyramid-specific upstream defects do not suspend the other GPU work.
 
-## 2026-10-18 bounded scale research candidate
+## Current device route
 
-The native MATLAB route has explicit experimental options:
+MATLAB HDiv solves take a checked `radia.hdiv-device-setup.v1`; every Gram, charge,
+evaluation and mass operator is built on the device:
 
 ```matlab
-solution = radia.gpu.solveHDivElements(checkedMeshPath, 2, [1 .2 .1], ...
-    2.5, 1e-11, 1000, 'host-cache', 'mass-cholesky', 'sparse');
+setup = radia.gpu.prepareHDivDeviceSetup(checkedMeshPath, 2, LabelContract=contractPath, ...
+    MeshCheckReceipt=receiptPath, MeshCheckReceiptSha256=receiptSha256, ...
+    MeshCheckProvenance=provenance);
+solution = radia.gpu.solveHDivElements(setup, [1 .2 .1], 2.5, Tolerance=1e-11, ...
+    MaxIterations=1000, Preconditioner='mass-cholesky');
 ```
+
+`validate_curved_hdiv.py` compares that whole solve with independent CPU pybind11;
+`PYBIND_MEX_BITWISE.md` describes the same-kernel frontend parity.
+
+The dated sections below are provenance for measurements made on the retired
+host-normalized MATLAB route. Their positional options and scripts such as
+`validate_scaled_hdiv.py`, `validate_hdiv_artifact.py`, `measure_hdiv_cpu_gpu.py`
+and the `check*`/`measure*` nonlinear scripts were removed with that route; the
+recorded JSON stays under `results/` and the sources stay in history. Those results
+do not certify the device route.
+
+## 2026-10-18 bounded scale research candidate
+
+The retired native MATLAB route had these explicit experimental options:
+`'host-cache'`, `'mass-cholesky'` and `'sparse'`.
 
 `mass-cholesky` builds a dense FP64 mass factor on the GPU with MATLAB-bundled
 cuSOLVER and applies its two triangular solves with cuBLAS. The original material
@@ -107,14 +126,9 @@ regression and leaf-size/performance sweeps remain required. Large leaves are a
 hypothesis to measure, not a universal MMM rule. See
 `results/curved-hacapk-research-20261018.json`; no release acceptance is claimed.
 
-The bounded wrapper/statistics research candidate accepts an
-explicit `hacapk` mode as follows; no HACApK parameters are silently defaulted:
-
-```matlab
-options=struct('epsilon',1e-10,'leaf_size',64,'eta',2,'max_rank',64);
-solution=radia.gpu.solveHDivElements(checkedMeshPath,2,[1 .2 .1], ...
-    2.5,1e-11,1000,'hacapk','mass-cholesky','sparse',false,options);
-```
+The bounded wrapper/statistics research candidate accepted an explicit `hacapk`
+mode with no silently defaulted parameters. The device route takes its ACA
+settings through `GramACA` on `prepareHDivDeviceSetup`.
 
 `validate_scaled_hdiv.py --assembly-mode hacapk` requires the corresponding
 four `--hacapk-*` options and still certifies the result with the independent

@@ -104,8 +104,8 @@
     },
     {
       "id": "bounded-hdiv-mmm",
-      "scope": "Bounded affine/P2 tetrahedral HDiv orders 1/2, linear isotropic material; native FE/charge setup and resident FP64 solve, optional host-vector cache. General adaptive geometry, interfaces, constraints and nonlinear materials remain unsupported.",
-      "source": "packages/radia-simulink/native/radia_cuda_hmatrix.cu",
+      "scope": "Bounded affine/P2 tetrahedral HDiv orders 1/2, linear isotropic material; device-built operators and resident FP64 solve over a checked device setup. General adaptive geometry, interfaces and constraints remain unsupported.",
+      "source": "packages/radia-simulink/native/hdiv_device/radia_hdiv_device_mex.cpp",
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/solveHDivElements.m",
       "validation": "validation_test/hmatrix_cuda/validate_curved_hdiv.py",
       "cpu_reference": "Independent Python/pybind11 NGSolve charge map, mass, sparsecholesky and original-equation true residual",
