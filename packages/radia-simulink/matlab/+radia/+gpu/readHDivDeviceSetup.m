@@ -5,7 +5,7 @@ function setup=readHDivDeviceSetup(value)
 % Repeated solves pass the same payload, so only a changed payload is checked
 % again; the last checked payload stays referenced until the next one replaces it.
 persistent checkedInput checkedSetup
-if ~isempty(checkedInput) && isequal(value,checkedInput)
+if ~isempty(checkedInput) && sameBits(value,checkedInput)
     setup=checkedSetup;return
 end
 assert(isstruct(value) && isscalar(value),'radia:gpu:DeviceSetup','Device setup must be a scalar struct');
@@ -66,6 +66,32 @@ end
 setup.evaluation=tables(value.evaluation,{'rule','reference_shapes','vertices'}, ...
     {'element_class','element_dofs','element_points'});
 checkedInput=value;checkedSetup=setup;
+end
+
+function same=sameBits(a,b)
+% Whether two payloads cannot differ under the checks here or in the MEX. isequal alone ignores
+% class, complexity, sparsity and the sign of zero. Anything not listed is simply checked again.
+same=strcmp(class(a),class(b)) && isequal(size(a),size(b)) && ~isobject(a);
+if ~same
+    return
+elseif isstruct(a)
+    names=fieldnames(a);
+    same=isscalar(a) && numel(names)==numel(fieldnames(b));
+    for k=1:numel(names)
+        same=same && isfield(b,names{k}) && sameBits(a.(names{k}),b.(names{k}));
+    end
+elseif ischar(a) || isstring(a)
+    same=isequal(a,b);
+elseif isnumeric(a) || islogical(a)
+    same=isreal(a) && isreal(b) && ~issparse(a) && ~issparse(b);
+    if same && isfloat(a) && ~isempty(a)
+        same=isequal(typecast(a(:),'uint8'),typecast(b(:),'uint8'));
+    elseif same
+        same=isequal(a,b);
+    end
+else
+    same=false;
+end
 end
 
 function out=tables(s,reals,integers)
