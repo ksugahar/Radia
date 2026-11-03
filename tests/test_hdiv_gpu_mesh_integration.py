@@ -21,6 +21,14 @@ def api():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
+def test_committed_hex_pair_receipt_still_binds_the_fixture():
+    # The GPU lane consumes this receipt; a changed mesh, contract or receipt must be regenerated.
+    base=ROOT/"tests/fixtures/hdiv";receipt=(base/"hex_pair.receipt.json").read_bytes()
+    provenance=json.loads((base/"hex_pair.receipt.json.provenance.json").read_bytes())
+    api()._verify_mesh_receipt((base/"hex_pair.vol").read_bytes(),(base/"hex_pair.labels.json").read_bytes(),receipt,
+                               hashlib.sha256(receipt).hexdigest(),provenance)
+
+
 def fixture(tmp_path,compressed=False):
     data=(ROOT/"tests/fixtures/hdiv/hex_pair.vol").read_bytes()
     if compressed:data=gzip.compress(data,mtime=0)

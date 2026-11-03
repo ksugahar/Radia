@@ -339,7 +339,7 @@ jobs:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.gpu_required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
-    timeout-minutes: 60
+    timeout-minutes: 100
     env:
       RADIA_GPU_CI_BUILD: "1"
     steps:
@@ -442,6 +442,15 @@ jobs:
           "RADIA_HDIV_DEVICE_BUILD=$hdivDevice" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify HDiv device boundary and same-kernel parity
+        shell: pwsh
+        run: |
+          # pybind11 and the plain MEX on one kernel object, bitwise, and the MATLAB device workflow. Small fixed cases, no skip path.
+          & ./Build.ps1 -RadiaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -Path (Join-Path (Split-Path -Parent $env:RADIA_HDIV_DEVICE_BUILD) 'gpu/_hdiv_cuda*') -Destination src/radia
+          python validation_test/hmatrix_cuda/run_device_boundary.py --mex-build $env:RADIA_HDIV_DEVICE_BUILD --out "$env:RUNNER_TEMP/radia-hdiv-boundary-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh
         run: |
@@ -501,6 +510,7 @@ jobs:
           path: |
             ${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
             ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-hdiv-boundary-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
           if-no-files-found: error
 
