@@ -120,15 +120,7 @@ class build_py(_build_py):
             public_python['loaded_runtime_sha256']=runtime['runtime_identity']['sha256']
             (package/'python-build.json').write_text(json.dumps(public_python,indent=2)+'\n')
             expected.update({name,'python-build.json'})
-        hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
-        projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
-        if bool(hmatrix) != bool(projection):
-            raise RuntimeError('Select both HDiv HMatrix and projection build directories')
-        if hmatrix:
-            expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
         device = os.environ.get('RADIA_HDIV_DEVICE_BUILD')
-        if bool(device) != bool(hmatrix):
-            raise RuntimeError('Select the HDiv device MEX build with the HDiv payload')
         if device:
             expected.update(payload_module().stage_device(ROOT, package, commit, device))
         resident = os.environ.get('RADIA_RESIDENT_AMG_BUILD')
@@ -137,12 +129,12 @@ class build_py(_build_py):
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
-        hdiv_wrappers = set(payload_module().WRAPPERS) | set(payload_module().DEVICE_WRAPPERS)
+        hdiv_wrappers = set(payload_module().DEVICE_WRAPPERS)
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:
                     continue
-                if path.name in hdiv_wrappers or path.name in {"FieldCloud.m", "FieldElements.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "evaluateHDivBHMaterial.m", "evaluateHDivBHChunks.m"}:
+                if path.name in hdiv_wrappers or path.name in {"FieldCloud.m", "FieldElements.m"}:
                     continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.

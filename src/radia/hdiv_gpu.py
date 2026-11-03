@@ -42,7 +42,8 @@ class PreparedHDivNonlinear:
 
     - affine tetrahedra (``curve_order=1``) or NGSolve ``Curve(2)``
       isoparametric P2 tetrahedra (``curve_order=2``), or pure hexahedra
-      (linear or ``Curve(2)``, family ``hex``, detected from the mesh), HDiv
+      (linear or ``Curve(2)``, family ``hex``, detected from the mesh, with the
+      CPU graded near family on thin and non-conforming BDM1 pairs), HDiv
       order 1 or 2, one soft-iron law with at most 4096 table rows;
     - material rule: NGSolve ``IntegrationRule(TET or HEX, 2*max(6, 2*order+2))``
       (343 points per TET element), shared with the CPU route and never reduced;
@@ -609,7 +610,7 @@ def _checked_device_assembly(assembly, arguments):
     A host-built charge-map row is rejected like any other unexpected payload.
     """
     charges = int(arguments["charge_host"].size)
-    if assembly.get("route") != _gram_route(arguments.get("family", "affine-tet")) \
+    if assembly.get("route") != _gram_route(arguments["family"]) \
             or assembly.get("charges") != charges:
         raise RuntimeError("Unexpected HDiv Gram assembly route: %r" % (assembly.get("route"),))
     if assembly.get("compression") != arguments["compression"]:
@@ -641,7 +642,7 @@ def _checked_device_assembly(assembly, arguments):
     return assembly
 
 
-def _checked_charge_exponents(kind, exponents, family="affine-tet"):
+def _checked_charge_exponents(kind, exponents, family):
     """Bound every exponent before any degree sum (face z = 0).
 
     TET: total degree, cell <= 1 and face <= 2. HEX: per-axis exponents <= 2.
@@ -754,7 +755,7 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
             return _rule_rows(inputs["ref_%s_pts%s" % (kind, suffix)], inputs["ref_%s_w%s" % (kind, suffix)], width)
 
         far = "ho_far_factor" in inputs and bool(np.isfinite(inputs["ho_far_factor"]))
-        arguments = dict(common, cell_vertices=cells, face_vertices=faces,
+        arguments = dict(common, cell_vertices=cells, face_vertices=faces, family=family,
                          tet_rule=rule("tet", "", 3), tri_rule=rule("tri", "", 2),
                          tet_low_rule=rule("tet", "_lo", 3) if far else np.zeros((0, 4)),
                          tri_low_rule=rule("tri", "_lo", 2) if far else np.zeros((0, 4)),
