@@ -2631,6 +2631,114 @@
       ]
     },
     {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_aca.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_charge_map.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_gram.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_hex_gram.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_p1_diagonal_input.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_p1_diagonal_math.inc",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_resident_python_cuda.cu",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/radia/hdiv_gpu.py",
       "owners": [
         "radia",
@@ -3311,6 +3419,15 @@
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
             "src/core/gpu/hdiv/hdiv_device_reserve.hpp",
+            "src/core/gpu/hdiv/hdiv_flat_aca.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_charge_map.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_hex_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_p1_diagonal_input.hpp",
+            "src/core/gpu/hdiv/hdiv_p1_diagonal_math.inc",
+            "src/core/gpu/hdiv/hdiv_resident_python_cuda.cu",
+            "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",
@@ -3442,6 +3559,15 @@
             "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
             "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
             "src/core/gpu/hdiv/hdiv_device_reserve.hpp",
+            "src/core/gpu/hdiv/hdiv_flat_aca.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_charge_map.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_hex_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_p1_diagonal_input.hpp",
+            "src/core/gpu/hdiv/hdiv_p1_diagonal_math.inc",
+            "src/core/gpu/hdiv/hdiv_resident_python_cuda.cu",
+            "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
             "src/core/gpu/hdiv/hdiv_material_staging.hpp",
