@@ -18,11 +18,13 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def public_sphere(path, maxh, curve_order):
+def public_sphere(path, maxh, curve_order, contract):
     import ngsolve as ng
     from netgen.csg import CSGeometry, Pnt, Sphere
+    labels = json.loads(Path(contract).read_text(encoding="utf-8"))["required"]
+    material, boundary = labels["materials"][0], labels["boundaries"][0]
     geometry = CSGeometry()
-    geometry.Add(Sphere(Pnt(0, 0, 0), 1).mat("magnetic_body").bc("exterior"))
+    geometry.Add(Sphere(Pnt(0, 0, 0), 1).mat(material).bc(boundary))
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=maxh))
     if curve_order == 2:
         mesh.Curve(2)
@@ -91,7 +93,7 @@ def main():
         for maxh in args.maxh:
             path = args.out / f"sphere-{maxh:g}.vol".replace(".", "p", 1)
             with ng.TaskManager():
-                public_sphere(path, maxh, args.curve_order)
+                public_sphere(path, maxh, args.curve_order, args.contract)
             result["cases"].append(dict(run_case(path, args, checked_inputs(path, args.contract, args.receipt_python)),
                                         maxh=maxh))
         result["accepted"] = all(case["passed"] for case in result["cases"])
