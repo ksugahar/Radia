@@ -4,8 +4,8 @@ function setup=readHDivDeviceSetup(value)
 % char; the MEX recomputes every dimension from the flat counts.
 % Repeated solves pass the same payload, so only a changed payload is checked
 % again; the last checked payload stays referenced until the next one replaces it.
-persistent checkedInput checkedSetup
-if ~isempty(checkedInput) && sameBits(value,checkedInput)
+persistent checkedInput checkedReal checkedSetup
+if isstruct(value) && ~isempty(checkedInput) && isequal(value,checkedInput) && isequal(realFlags(value),checkedReal)
     setup=checkedSetup;return
 end
 assert(isstruct(value) && isscalar(value),'radia:gpu:DeviceSetup','Device setup must be a scalar struct');
@@ -22,7 +22,7 @@ curved=strcmp(setup.family,'curved-tet');hex=strcmp(setup.family,'hex');
 assert(~isempty(regexp(setup.mesh_sha256,'^[0-9a-f]{64}$','once')) && ...
     ~isempty(regexp(setup.label_contract_sha256,'^[0-9a-f]{64}$','once')), ...
     'radia:gpu:DeviceSetup','Missing checked mesh/label identity');
-setup.order=double(value.order);setup.dofs=double(value.dofs);nd=setup.dofs;
+setup.order=plain(value.order);setup.dofs=plain(value.dofs);nd=setup.dofs;
 assert(isscalar(setup.order) && ismember(setup.order,[0 1 2]) && isscalar(nd) && nd>=1 && fix(nd)==nd, ...
     'radia:gpu:DeviceSetup','Invalid device setup order or dimension');
 % Curved P2 TET and HEX geometry carry orders 1 and 2 only, matching the CPU routes.
@@ -32,6 +32,7 @@ assert(isequal(size(setup.rhs_operator),[nd 3]) && isequal(size(setup.mean_opera
     isreal(setup.rhs_operator) && isreal(setup.mean_operator) && ...
     all(isfinite(setup.rhs_operator(:))) && all(isfinite(setup.mean_operator(:))), ...
     'radia:gpu:DeviceSetup','Invalid NGSolve excitation/mean numbering');
+setup.rhs_operator=setup.rhs_operator+0;setup.mean_operator=setup.mean_operator+0;
 c=value.charges;
 setup.charges=tables(c,{'cell_vertices','face_vertices','tet_rule','tri_rule','tet_low_rule','tri_low_rule', ...
     'cell_tables','face_tables'},{'charge_host','charge_kind','charge_exponents','cell_class','cell_dofs', ...
@@ -52,46 +53,35 @@ for name=fieldnames(extra)'
     setup.charges.(name{1})=extra.(name{1});
 end
 setup.charges.family=setup.family;
-setup.charges.far_factor=double(c.far_factor);setup.charges.compression=char(c.compression);
-setup.charges.dofs=double(c.dofs);
+setup.charges.far_factor=plain(c.far_factor);setup.charges.compression=char(c.compression);
+setup.charges.dofs=plain(c.dofs);
 assert(setup.charges.dofs==nd,'radia:gpu:DeviceSetup','Charge numbering differs from the FE dimension');
 if strcmp(setup.charges.compression,'dense')
     assert(isempty(c.aca),'radia:gpu:DeviceSetup','Dense compression carries no ACA parameters');
     setup.charges.aca=zeros(0,0);
 else
     a=c.aca;assert(isstruct(a) && isscalar(a),'radia:gpu:DeviceSetup','ACA compression requires its parameters');
-    setup.charges.aca=struct('eps',double(a.eps),'eta',double(a.eta),'leaf_size',double(a.leaf_size), ...
-        'max_rank',double(a.max_rank),'rank_cap',char(a.rank_cap));
+    setup.charges.aca=struct('eps',plain(a.eps),'eta',plain(a.eta),'leaf_size',plain(a.leaf_size), ...
+        'max_rank',plain(a.max_rank),'rank_cap',char(a.rank_cap));
 end
 setup.evaluation=tables(value.evaluation,{'rule','reference_shapes','vertices'}, ...
     {'element_class','element_dofs','element_points'});
-checkedInput=value;checkedSetup=setup;
+checkedInput=value;checkedReal=realFlags(value);checkedSetup=setup;
 end
 
-function same=sameBits(a,b)
-% Whether two payloads cannot differ under the checks here or in the MEX. isequal alone ignores
-% class, complexity, sparsity and the sign of zero. Anything not listed is simply checked again.
-same=strcmp(class(a),class(b)) && isequal(size(a),size(b)) && ~isobject(a);
-if ~same
-    return
-elseif isstruct(a)
-    names=fieldnames(a);
-    same=isscalar(a) && numel(names)==numel(fieldnames(b));
-    for k=1:numel(names)
-        same=same && isfield(b,names{k}) && sameBits(a.(names{k}),b.(names{k}));
-    end
-elseif ischar(a) || isstring(a)
-    same=isequal(a,b);
-elseif isnumeric(a) || islogical(a)
-    same=isreal(a) && isreal(b) && ~issparse(a) && ~issparse(b);
-    if same && isfloat(a) && ~isempty(a)
-        same=isequal(typecast(a(:),'uint8'),typecast(b(:),'uint8'));
-    elseif same
-        same=isequal(a,b);
-    end
-else
-    same=false;
+function flags=realFlags(value)
+% isequal ignores complexity. It also ignores class, sparsity and the sign of zero, which the read
+% below normalizes, so equal payloads with equal flags read identically. Builtins only: this runs
+% on every solve, and MATLAB code run this often shows up in the memory slope.
+flags=[cellfun('isreal',struct2cell(value));cellfun('isreal',struct2cell(value.charges)); ...
+    cellfun('isreal',struct2cell(value.evaluation))];
+if isstruct(value.charges.aca)
+    flags=[flags;cellfun('isreal',struct2cell(value.charges.aca))];
 end
+end
+
+function v=plain(v)
+v=double(v)+0;
 end
 
 function out=tables(s,reals,integers)
@@ -101,12 +91,12 @@ out=struct();
 for name=reals
     v=double(s.(name{1}));
     assert(isreal(v) && all(isfinite(v(:))),'radia:gpu:DeviceSetup','Non-finite device table: %s',name{1});
-    out.(name{1})=v(:);
+    out.(name{1})=v(:)+0;
 end
 for name=integers
     v=s.(name{1});
     if ~isa(v,'int32')
-        v=double(v);
+        v=full(double(v));
         assert(isreal(v) && all(v(:)==fix(v(:))) && all(abs(v(:))<=2^31-1), ...
             'radia:gpu:DeviceSetup','Integer device table is not exact int32: %s',name{1});
     end
