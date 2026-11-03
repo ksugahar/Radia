@@ -54,10 +54,23 @@ removed entries, their consumers, their coverage and what replaces it or what wa
 `tests/test_hdiv_gpu_analytic_gram.py` and `tests/test_hdiv_gpu_device_guards.py` are the
 surrogate tests of the analytic Gram and of the material and Newton guards on the device.
 
-The `hdiv-device` memory workload does not meet the plateau limit of the protocol. Over 100
-runs of the gateway, private bytes rise 4.26 MB, at 38.9 kB per run, against limits of 16 MiB
-and 1 MiB per run. The last 25 runs rise 2.49 MB at 49.1 kB per run, against limits of 1 MiB
-and 64 KiB per run. Device memory returns to its baseline and no handle stays live. A control
-of the same sampling loop without the gateway rises 5.72 MB over its last 25 runs, also above
-the limit, so this measurement does not separate the gateway from the sampling loop. The cause
-is not identified and the limits are unchanged.
+The `hdiv-device` memory workload meets the limits of the protocol on both device hosts, in two
+fresh MATLAB runs each. Over 100 runs of the gateway, the limits are 16 MiB and 1 MiB per run; over
+the last 25 runs they are 1 MiB and 64 KiB per run.
+
+| Device | 100 runs | Per run | Last 25 runs | Per run |
+|---|---|---|---|---|
+| RTX 5000 | 1.20, 1.26 MB | 6.1, 5.0 kB | 0.00, 0.14 MB | -0.3, 7.9 kB |
+| A100 | 2.58, 2.35 MB | 32.0, 32.0 kB | 0.00, 0.00 MB | 0.0, 0.0 kB |
+
+Device memory returns to its baseline and no handle stays live on both. Passing the limits is not
+proof of zero leaks.
+
+The workload failed the last-25-run limits before `readHDivDeviceSetup` stopped checking an unchanged
+payload again (RTX 5000 2.70 MB, A100 2.06 MB). On the A100, runs of one layer at a time showed late
+one-off steps when the checks ran on every solve and none when the same solves skipped them, so a
+changed payload is now the only one checked again. What inside MATLAB makes those steps is not
+identified. Reading the process counter also adds 64 KiB per read for about the first 66 reads, which
+ends before the last 25 runs. On the RTX 5000, private memory still alternates by about 0.52 MB per
+run, cause not identified. An idle control on that shared desktop host moved by up to 5.77 MB in one
+step, so a later result there can be disturbed by the host.
