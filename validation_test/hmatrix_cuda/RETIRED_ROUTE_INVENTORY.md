@@ -31,8 +31,9 @@ Removal steps:
 
 ### Effect on MATLAB users
 
-- **Physics.** RT0, BDM1 and BDM2 on affine and P2 tetrahedra and hexahedra, and
-  the BH law at orders 1 and 2, all have a device route.
+- **Physics.** RT0 on affine tetrahedra, BDM1 and BDM2 on affine and P2 tetrahedra
+  and on hexahedra, and the BH law at orders 1 and 2, all have a device route. RT0 on
+  hexahedra and on P2 tetrahedra is refused; the base had no such route either.
 - **MATLAB without Python.** The removed solves ran NGSolve in the MEX. Their
   replacement has one Python step at the initialization boundary, which may run
   beforehand: `python -m radia_simulink.hdiv request.json setup.h5`. That Python
@@ -47,6 +48,8 @@ Removal steps:
   forbid it. An earlier version of this file missed it. It stands as
   `radia.gpu.AnalyticChargeGram`, with the same geometry and the same 128-charge
   bound; the old upload, repeat and download calls are one `apply`.
+- **Material gateway commands.** `linearize_bh_material`, `apply_bh_tangent` and `inverse_bh_samples` stand as
+  `HDivBHMaterial.linearize`, `applyTangent` and `inverseSamples`.
 - **Standalone field projection.** `radia_cuda_projection` is shipped in the wheel
   again; an earlier change here had dropped it.
 
@@ -61,6 +64,10 @@ capability is lost, so none is settled here:
 | Caller `E` and weights (`HDivBHMaterial(E,weights,law)`), and with it GPU material evaluation on pyramids | Same policy. The device material takes reference tables for tetrahedra and hexahedra and has no pyramid family. Pure-pyramid evaluation reached this action at `93efc9a60`; the tet-pyramid-hex family failed before it |
 | Assembled sparse tangent from `evaluateHDivBHMaterial` | A matrix crossing. `HDivBHMaterial` returns the tangent action only |
 | MATLAB solve with no Python step | The removed solves ran NGSolve in the MEX; the device setup is staged by Python once |
+| Geometry-only compressed Gram: `create_analytic_hacapk` took constant-density cells and faces, up to 4096 charges, with an optional caller charge map | `AnalyticChargeGram` is dense and bounded at 128 charges. A compressed RT0 operator is reachable through `prepareHDivDeviceSetup(mesh, 0, ...)` from a mesh, not from bare geometry |
+| All-high-order Gram profile of the old `native-tet` and `direct` routes | The device route uses the near/far profile of `_prepare_gpu_charge_inputs` with far factor 2. This is a numerically different Gram; there is no option to select the old one |
+| `HMatrixOperator.apply(n)` repeating an action without a download | `HDivDeviceOperator.apply` returns every result. Repeated applies stay on the device only inside a solve |
+| Result fields of the removed solves: `setup_peak_owned_device_bytes`, `combined_peak_owned_device_bytes`, `quadrature_order`, `material_points`, `implementation`, `gram_integration_profile`, `fe_setup_seconds` and similar | Only the fields of the device result remain; `stats` and `assembly` carry the device ownership and the transfer ledger |
 | Raw gateway commands (`analytic_aca_*`, `analytic_entry_batch`, `curved_entry_batch`) and `affineHDivQuadrature`, `curvedHDivQuadrature` as query functions | They served the host normalization; their values had no other consumer |
 | `profileAssembly` option | A timer of the removed host stages |
 
@@ -70,8 +77,8 @@ capability is lost, so none is settled here:
 `live_count` and its lifecycle diagnostics. It maps a batched field onto NGSolve
 targets and owns no matrix. Consumers: `validation_test/radfld_cuda/`,
 `checkProjection*.m`, `makeGatewayMemoryWorkload.m`. It stays staged in the wheel
-as a standalone MEX; no shipped wrapper calls it now. Its last shipped caller was
-the mesh-path route of `solveHDivElements`.
+as a standalone MEX; no shipped wrapper calls it now. Its last shipped callers were
+`PreparedHDivNonlinear` and the mesh-path route of `solveHDivElements`.
 
 Pyramid and mixed meshes: the CPU charge Gram refuses them
 (`radia.vim` "Radia pyramid and MIXED-element charge-Gram are not implemented"),
@@ -135,8 +142,9 @@ Each belonged to the host route; none has a replacement unless stated.
 - Python: `radia.hdiv_gpu.prepare_hdiv_host_setup`,
   `radia_simulink.hdiv.prepare_hdiv_host_setup`, schema `radia.hdiv-host-setup.v1`,
   `validate_deterministic_flags` and its test.
-- MATLAB options: `Assembly`, `HostSetup`, `MaterialBudgetBytes` and `CacheBytes` of
-  `PreparedHDivNonlinear`; `assemblyMode`, `stagingMode`, `hacapkOptions` and
+- MATLAB options: `Assembly`, `HostSetup`, `MaterialBudgetBytes`, `CacheBytes`,
+  `MaterialChunkElements`, `InexactNewton` and `FinalResidualOnly` of
+  `PreparedHDivNonlinear`, the last three accepting their defaults only; `assemblyMode`, `stagingMode`, `hacapkOptions` and
   `profileAssembly` of `solveHDivElements`. Simulink configuration fields `MeshPath`,
   `Order`, `Assembly` and `HostSetup`: the block takes a device setup.
 - Build: `Build.ps1 -HMatrixMklRoot`, `-HMatrixFaultInjection`.

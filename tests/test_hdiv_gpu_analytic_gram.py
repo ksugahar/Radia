@@ -5,7 +5,8 @@ normalizes the block on the device from geometry alone: its action equals
 ``matvec_sym`` of the independent CPU ``_ChargeGramHMatrix`` built with the same
 all-analytic near route, on tetrahedra alone and on tetrahedra with triangles.
 Refuses a CPU backend, more than 128 charges, degenerate geometry, mismatched
-vectors and material solves. Records the geometry transfer and no matrix.
+vectors and material solves. Records the geometry transfer and uploads no matrix:
+the plan of a dense block stays below the bytes of that block.
 Assumes: the CPU Gram is the reference on identical geometry; RELATIVE is the
 limit of the retired resident apply check. Parity, not independent accuracy.
 Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a
@@ -60,6 +61,18 @@ def test_analytic_gram_action_matches_cpu_charge_gram(request, cuda, faces):
         gram.close()
     with pytest.raises(RuntimeError, match="closed"):
         gram.apply(np.ones(n))
+
+
+def test_analytic_gram_uploads_no_matrix(cuda):
+    offsets = np.array([[2.*i, 2.*j, 0.] for i in range(8) for j in range(8)])
+    cells = np.concatenate([(TETRA + offset).ravel() for offset in offsets])
+    n = cells.size//12
+    gram = cuda._ResidentHDiv.from_analytic_constant_block(cells, np.empty(0), backend="gpu")
+    try:
+        plan = [row for row in gram.assembly()["transfer_ledger"] if row["payload"] == "resident_plan"]
+        assert len(plan) == 1 and plan[0]["bytes"] < 8*n*n, (plan, 8*n*n)
+    finally:
+        gram.close()
 
 
 def test_analytic_gram_has_no_material_solve(tmp_path, cuda):

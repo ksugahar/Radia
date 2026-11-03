@@ -330,7 +330,7 @@ public:
         check(cudaStreamSynchronize(stream));materialized=true;
     }
     void assemble(const AnalyticBlock& block){
-        valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.sources.size()!=n)
+        valid(true);if(materialized||initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.sources.size()!=n)
             throw std::invalid_argument("Analytic assembly requires a fresh single dense block");
         std::size_t extra=checkedProduct(block.sources.size(),sizeof(AnalyticSource));
         const auto quadBytes=checkedProduct(block.quadrature.size(),sizeof(QuadraturePoint));
@@ -343,7 +343,7 @@ public:
         analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());
         int flag=0;check(cudaMemcpyAsync(&flag,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
         if(flag)throw std::runtime_error("Analytic assembly produced invalid energy");
-        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));materialized=true;
     }
     void assembleCurved(const CurvedBlock& block){
         valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.charges.size()!=n)throw std::invalid_argument("Curved assembly requires a fresh dense block");

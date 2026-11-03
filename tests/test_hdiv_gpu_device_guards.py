@@ -4,10 +4,10 @@ Guards: on device-built tables, ``_ResidentBHMaterial`` matches an analytic cubi
 law evaluated by NGSolve on the same rule (energy, gradient, tangent action, below
 and above the cap, and finite differences); refuses NaN and overflowing states and
 a tangent of a stale linearization; reuses its tables without another upload. The
-shared Newton solve recovers a manufactured root from a CPU right-hand side, and
-the iteration limits of the linear and Newton solves raise and leave the operator
-usable. The operator action matches the CPU equation and its device ownership
-does not change over 100 applications.
+shared Newton solve recovers a root manufactured from the analytic law and the
+device operator, and the iteration limits of the linear and Newton solves raise and
+leave the operator usable. The operator action of BDM1 and BDM2 matches the CPU
+equation and repeats bitwise, with the same device ownership, over 100 applications.
 Assumes: the CPU exact dense Gram, the charge map and NGSolve are the references
 on identical inputs. Limits are those of the retired resident checks
 (1e-11/1e-12 material, 1e-6 differences, 1e-10 root, 1e-11 residual). Optional GPU
@@ -151,22 +151,22 @@ def test_device_material_refuses_invalid_state_and_stale_tangent(tmp_path, cuda)
 @pytest.mark.parametrize("topology,order", CASES)
 def test_device_newton_recovers_a_manufactured_root(tmp_path, request, cuda, topology, order):
     import ngsolve as ng
-    fes, setup, demag = _case(tmp_path, topology, order, cuda)
+    fes, setup, _ = _case(tmp_path, topology, order, cuda)
     nd = setup["dofs"]
     root = .05*np.random.default_rng(order).standard_normal(nd)
     with ng.TaskManager():
         _, gradient, _ = _analytic(fes, root, np.zeros(nd))
-    rhs = demag @ root + gradient
     material = cuda._ResidentBHMaterial.from_flat_tables(**setup["evaluation_tables"], dofs=nd, law=LAW, backend="gpu")
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
     try:
+        rhs = operator.apply(root) + gradient
         solve = lambda iterations: operator.solve_nonlinear_material(
             material, rhs, np.zeros(nd), 1e-11, 5e-14, iterations, 10000, "reference-diagonal", 32, .01)
         result = solve(30)
         with ng.TaskManager():
             _, found, _ = _analytic(fes, result["x"], np.zeros(nd))
         error = np.linalg.norm(result["x"] - root)/np.linalg.norm(root)
-        residual = np.linalg.norm(demag @ result["x"] + found - rhs)/np.linalg.norm(rhs)
+        residual = np.linalg.norm(operator.apply(result["x"]) + found - rhs)/np.linalg.norm(rhs)
         request.node.user_properties += [("dofs", nd), ("root_error", float(error)), ("residual", float(residual))]
         assert error <= 1e-10 and residual <= 1e-11, f"root={error:.3e} residual={residual:.3e}"
         with pytest.raises(RuntimeError, match="Newton"):
@@ -177,8 +177,9 @@ def test_device_newton_recovers_a_manufactured_root(tmp_path, request, cuda, top
         material.close()
 
 
-def test_device_linear_solve_limits_and_operator_ownership(tmp_path, cuda):
-    _, setup, demag = _case(tmp_path, "tet", 1, cuda)
+@pytest.mark.parametrize("order", [1, 2])
+def test_device_linear_solve_limits_and_operator_ownership(tmp_path, request, cuda, order):
+    _, setup, demag = _case(tmp_path, "tet", order, cuda)
     nd = setup["dofs"]
     rng = np.random.default_rng(3)
     rhs = setup["rhs_operator"] @ np.array([0., 0., 1e5])
@@ -195,8 +196,12 @@ def test_device_linear_solve_limits_and_operator_ownership(tmp_path, cuda):
         owned = operator.stats()["owned_device_bytes"]
         x = rng.standard_normal(nd)
         expected = demag @ x
+        first = operator.apply(x)
+        relative = np.linalg.norm(first - expected)/np.linalg.norm(expected)
+        request.node.user_properties.append(("relative", float(relative)))
+        assert relative <= 1e-8, f"order={order} relative={relative:.3e} limit=1e-8"
         for _ in range(100):
-            np.testing.assert_allclose(operator.apply(x), expected, rtol=1e-8)
+            assert np.array_equal(operator.apply(x), first)
             assert operator.stats()["owned_device_bytes"] == owned
         with pytest.raises(ValueError, match="dimension"):
             operator.apply(np.ones(nd + 1))
