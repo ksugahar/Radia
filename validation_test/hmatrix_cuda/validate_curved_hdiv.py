@@ -58,7 +58,7 @@ def main():
         if bool(mesh.GetCurveOrder()>1)!=(a.geometry=='curved'):raise RuntimeError('Declared geometry/mesh curve order mismatch')
         with ng.TaskManager():
             fes=ng.HDiv(mesh,order=a.order)
-            B,G,mass=cpu.build_charge_gram(fes,intorder=4,curve_order=2 if a.geometry=='curved' else 0,curve_gauss=8,ho_far_factor=1e30,gram_backend='exact-dense',exact_dense_memory_mb=64)
+            B,G,mass=cpu.build_charge_gram(fes,curve_order=2 if a.geometry=='curved' else 0,curve_gauss=8,gram_backend='exact-dense',exact_dense_memory_mb=64)
             load=ng.LinearForm(fes);load+=ng.CoefficientFunction((1.,.2,.1))*fes.TestFunction()*ng.dx;load.Assemble();rhs=np.array(load.vec.FV().NumPy())
             reference=G.solve_configured_linear_material_mass_riesz(2.5,rhs,1e-11,1000)
             demag=np.column_stack([B.T@np.asarray(G.matvec_sym(B[:,k].toarray().ravel())) for k in range(fes.ndof)])
