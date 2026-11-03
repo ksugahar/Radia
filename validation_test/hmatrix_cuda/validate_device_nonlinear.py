@@ -129,8 +129,8 @@ def main():
         result["solve"] = dict(
             coefficients=relative(solution["x"], coefficients),
             mean=relative(solution["mean_magnetization"], np.asarray(answer["M_avg"])),
-            nonlinear_residual=float(solution["nonlinear_relative_residual"]),
-            newton_iterations=int(solution["iterations"]), dofs=fes.ndof)
+            nonlinear_residual=float(solution["relative_residual"]),
+            newton_iterations=int(solution["newton_iterations"]), dofs=fes.ndof)
         result["accepted"] = bool(
             max(result["material"].values()) <= LIMITS["material"]
             and max(result["finite_difference"].values()) <= LIMITS["finite_difference"]
