@@ -8,6 +8,10 @@ WRAPPERS = ('solveHDivElements.m', 'affineHDivQuadrature.m', 'curvedHDivQuadratu
             'HMatrixOperator.m', 'HDivBHMaterial.m', 'PreparedHDivNonlinear.m',
             'makeHDivBHMaterial.m', 'solveNonlinearHDivElements.m')
 
+DEVICE_WRAPPERS = ('HDivDeviceMass.m', 'HDivDeviceOperator.m', 'prepareHDivDeviceSetup.m',
+                   'readHDivDeviceSetup.m')
+DEVICE_BINARY = 'radia_hdiv_device.mexw64'
+
 
 SIMULINK_WRAPPERS = ('matlab/radia_hdiv_gpu_sfun.m',
     'matlab/+radia/+simulink/hdivGPUWorkflowSFunction.m',
@@ -73,6 +77,39 @@ def stage_fmm(root, package, commit, folder):
               'source_sha256', 'binary_sha256', 'matlab', 'taskmanager_used', 'python_adapter_required')}
     (package / 'fmm-build.json').write_text(json.dumps(public, indent=2) + '\n')
     return {'matlab/' + binary.name, 'fmm-build.json'}
+
+
+def stage_device(root, package, commit, folder):
+    """Stage the plain MEX linked from the exact-commit nvcc kernel object."""
+    root, package, folder = Path(root), Path(package), Path(folder)
+    binary = folder / DEVICE_BINARY
+    receipt = json.loads(Path(str(binary) + '.build.json').read_text(encoding='utf-8'))
+    if (receipt.get('schema') != 'radia.hdiv-mex-build.v1' or receipt.get('source_dirty') is not False
+            or receipt.get('source_commit') != commit or receipt.get('mexcuda') is not False):
+        raise RuntimeError('HDiv device MEX requires clean exact-commit plain-MEX provenance')
+    for relative, digest in receipt['source_sha256'].items():
+        if Path(relative).is_absolute() or '..' in Path(relative).parts:
+            raise RuntimeError('Invalid HDiv device source path')
+        source = root / relative
+        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            raise RuntimeError('HDiv device source mismatch: ' + relative)
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    if digest != receipt['binary_sha256']:
+        raise RuntimeError('HDiv device binary mismatch')
+    target = package / 'matlab' / DEVICE_BINARY
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, target)
+    expected = {'matlab/' + DEVICE_BINARY, 'hdiv-device-build.json'}
+    for name in DEVICE_WRAPPERS:
+        relative = Path('matlab/+radia/+gpu') / name
+        wrapper = package / relative
+        wrapper.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / 'packages/radia-simulink' / relative, wrapper)
+        expected.add(relative.as_posix())
+    public = {key: receipt[key] for key in ('schema', 'source_commit', 'source_dirty', 'source_sha256',
+              'binary_sha256', 'cuda_object', 'mexcuda')}
+    (package / 'hdiv-device-build.json').write_text(json.dumps(public, indent=2) + '\n')
+    return expected
 
 
 def stage(root, package, commit, hmatrix, projection):

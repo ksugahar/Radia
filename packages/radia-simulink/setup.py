@@ -126,13 +126,18 @@ class build_py(_build_py):
             raise RuntimeError('Select both HDiv HMatrix and projection build directories')
         if hmatrix:
             expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
+        device = os.environ.get('RADIA_HDIV_DEVICE_BUILD')
+        if bool(device) != bool(hmatrix):
+            raise RuntimeError('Select the HDiv device MEX build with the HDiv payload')
+        if device:
+            expected.update(payload_module().stage_device(ROOT, package, commit, device))
         resident = os.environ.get('RADIA_RESIDENT_AMG_BUILD')
         if resident:
             expected.update(payload_module_resident().stage(ROOT, package, commit, resident))
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
-        hdiv_wrappers = set(payload_module().WRAPPERS)
+        hdiv_wrappers = set(payload_module().WRAPPERS) | set(payload_module().DEVICE_WRAPPERS)
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:

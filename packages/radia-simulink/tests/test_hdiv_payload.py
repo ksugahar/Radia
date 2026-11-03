@@ -101,6 +101,49 @@ def test_exact_hdiv_artifact_staging(tmp_path, fault):
             assert (target / 'matlab' / binary).read_bytes() == (folder / binary).read_bytes()
 
 
+@pytest.mark.parametrize('fault', [None, 'commit', 'dirty', 'binary', 'source', 'mexcuda', 'schema', 'receipt-missing'])
+def test_exact_hdiv_device_mex_staging(tmp_path, fault):
+    """Guards: only a clean exact-commit plain MEX enters the wheel, with its MATLAB wrappers.
+
+    Assumes: the receipt fields are those build_hdiv_mex.py writes.
+    """
+    root = tmp_path / 'source'
+    wrappers = root / 'packages/radia-simulink/matlab/+radia/+gpu'
+    wrappers.mkdir(parents=True)
+    for name in payload.DEVICE_WRAPPERS:
+        (wrappers / name).write_text('% device wrapper')
+    source = root / 'packages/radia-simulink/native.cpp'
+    source.write_bytes(b'public plain MEX gateway')
+    folder = tmp_path / 'build'
+    folder.mkdir()
+    binary = folder / payload.DEVICE_BINARY
+    binary.write_bytes(b'fixture artifact')
+    receipt = dict(schema='radia.hdiv-mex-build.v1', source_commit='a'*40, source_dirty=False, mexcuda=False,
+                   source_sha256={'packages/radia-simulink/native.cpp': hashlib.sha256(source.read_bytes()).hexdigest()},
+                   binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                   cuda_object=dict(name='hdiv.obj', sha256='c'*64))
+    if fault == 'commit': receipt['source_commit'] = 'b'*40
+    if fault == 'dirty': receipt['source_dirty'] = True
+    if fault == 'binary': receipt['binary_sha256'] = '0'*64
+    if fault == 'source': source.write_bytes(b'changed')
+    if fault == 'mexcuda': receipt['mexcuda'] = True
+    if fault == 'schema': receipt['schema'] = 'unknown'
+    if fault != 'receipt-missing':
+        Path(str(binary) + '.build.json').write_text(json.dumps(receipt))
+    target = tmp_path / 'package'
+    if fault:
+        with pytest.raises((RuntimeError, FileNotFoundError)):
+            payload.stage_device(root, target, 'a'*40, folder)
+        assert not (target / 'hdiv-device-build.json').exists()
+        return
+    files = payload.stage_device(root, target, 'a'*40, folder)
+    assert files == {'matlab/' + payload.DEVICE_BINARY, 'hdiv-device-build.json'} | {
+        'matlab/+radia/+gpu/' + name for name in payload.DEVICE_WRAPPERS}, files
+    assert (target / 'matlab' / payload.DEVICE_BINARY).read_bytes() == binary.read_bytes()
+    public = json.loads((target / 'hdiv-device-build.json').read_text())
+    assert public['binary_sha256'] == receipt['binary_sha256'] and public['mexcuda'] is False, public
+
+
 def test_hdiv_python_payload_is_owned_by_radia():
     """Guards: MEX wheels cannot stage the moved Radia Python domain binding.
 
