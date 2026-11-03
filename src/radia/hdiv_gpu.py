@@ -43,9 +43,7 @@ class PreparedHDivNonlinear:
     - affine tetrahedra (``curve_order=1``) or NGSolve ``Curve(2)``
       isoparametric P2 tetrahedra (``curve_order=2``), or pure hexahedra
       (linear or ``Curve(2)``, family ``hex``, detected from the mesh), HDiv
-      order 1 or 2, one soft-iron law with at most 4096 table rows. HEX
-      pairs that need the CPU graded near family (anisotropic or
-      non-conforming BDM1 contact) fail loudly on the device;
+      order 1 or 2, one soft-iron law with at most 4096 table rows;
     - material rule: NGSolve ``IntegrationRule(TET or HEX, 2*max(6, 2*order+2))``
       (343 points per TET element), shared with the CPU route and never reduced;
     - material: no fixed element, DOF or point cap. Numbering is int32, and
@@ -725,7 +723,8 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
         rows = np.concatenate([np.c_[np.full(len(rules[name][0]), index, dtype=np.float64),
                                      np.asarray(rules[name][0], dtype=np.float64),
                                      np.asarray(rules[name][1], dtype=np.float64)]
-                               for index, name in enumerate(("out", "inner", "pair", "pair_affine"))])
+                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self"))
+                               if name in rules])
         empty = np.zeros((0, 4))
         arguments = dict(common, cell_vertices=cells_m, face_vertices=faces_m, tet_rule=empty, tri_rule=empty,
                          tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30, family=_HEX,

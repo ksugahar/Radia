@@ -105,12 +105,11 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.curved=input.family=="curved-tet";block.hex=input.family=="hex";
     if(block.hex){
         if(input.hexRules.size()%3||input.hexBands.size()!=2)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and two bands");
-        radia_hmatrix_cuda::HostVector<double>* points[4]={&block.ruleOut,&block.rulePair,&block.rulePair,&block.rulePair};
-        radia_hmatrix_cuda::HostVector<double>* weights[4]={&block.ruleOutW,&block.rulePairW,&block.rulePairW,&block.rulePairW};
-        points[1]=&block.ruleIn;weights[1]=&block.ruleInW;points[3]=&block.rulePairAffine;weights[3]=&block.rulePairAffineW;
+        radia_hmatrix_cuda::HostVector<double>* points[6]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf};
+        radia_hmatrix_cuda::HostVector<double>* weights[6]={&block.ruleOutW,&block.ruleInW,&block.rulePairW,&block.rulePairAffineW,&block.ruleNearW,&block.ruleInSelfW};
         int previous=0;
         for(std::size_t i=0;i<input.hexRules.size();i+=3){const double r=input.hexRules[i];
-            if(!(r==0||r==1||r==2||r==3)||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..3");
+            if(!(r==0||r==1||r==2||r==3||r==4||r==5)||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..5");
             previous=int(r);points[previous]->push_back(input.hexRules[i+1]);weights[previous]->push_back(input.hexRules[i+2]);}
         block.nearGrade=input.hexBands[0];block.farInner=input.hexBands[1];
     }else if(!input.hexRules.empty()||!input.hexBands.empty())throw std::invalid_argument("TET geometry takes no HEX rules");

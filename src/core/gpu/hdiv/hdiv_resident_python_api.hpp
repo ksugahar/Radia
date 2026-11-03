@@ -39,7 +39,7 @@ struct FlatInput {
     radia_hmatrix_cuda::HostVector<int> cellNumbers,faceNumbers;
     radia_hmatrix_cuda::HostVector<double> gl,gw;
     // HEX: rows (rule, point, weight) with rule 0 outer, 1 radial inner,
-    // 2 pair product, 3 affine pair product; bands = (near_grade, far_inner).
+    // 2 pair product, 3 affine pair product, 4 near outer and 5 fine inner (BDM1 only); bands = (near_grade, far_inner).
     radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated

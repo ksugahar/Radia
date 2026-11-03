@@ -12,7 +12,9 @@ agree with the CPU route ``_build_charge_gram_hex`` (its default rules) and
 the NGSolve mass on the material rule. Dropping the symmetrized pair block,
 the pair-domain Duffy rule, the distorted composite near rule or the face
 normal orientation, or the det J sign of the cell charge rows, moves these
-far beyond the detectors.
+far beyond the detectors. Thin (aspect above 12) affine and trilinear lattices
+and a non-conforming box contact take the CPU graded near family at BDM1, whose
+device rule is the graded tensor outer with the analytic or cone/fan inner.
 Assumes: the CPU hex route is the reference on identical NGSolve inputs;
 this is parity of one discretization, not independent accuracy. The REL
 values are PROPOSED detectors, not adopted criteria. Optional GPU lane: skips
@@ -49,6 +51,31 @@ _MESHES = {"cube": dict(nx=2, ny=2, nz=2), "sheared": dict(nx=2, ny=2, nz=1, map
            "mirrored": dict(nx=2, ny=2, nz=1, mapping=_mirrored_shear)}
 # Structured numbering keeps one vertex order per reference face; these share an order across reference faces.
 _NAMES = sorted(_MESHES) + ["pair", "renumbered"]
+# BDM1 pairs of these meshes take the graded near family (CPU stats counters below).
+_GRADED = ("contact", "thin", "thin-sheared")
+_CASES = [(name, order) for name in _NAMES for order in (1, 2)] + [(name, 1) for name in _GRADED]
+
+
+def _thin(x, y, z):
+    return (x, y, 0.02*z)
+
+
+def _thin_shear(x, y, z):
+    return _thin(*_shear(x, y, z))
+
+
+def _box_mesh(boxes):
+    """Boxes as separate HEX cells: a contact between them shares lattice nodes but no whole entity."""
+    from netgen.meshing import Element2D, Element3D, FaceDescriptor, Mesh, MeshPoint, Pnt
+    mesh = Mesh(dim=3)
+    face = mesh.Add(FaceDescriptor(surfnr=1, domin=1, domout=0, bc=1))
+    for lo, hi in boxes:
+        corners = [mesh.Add(MeshPoint(Pnt(*[(hi if bit else lo)[axis] for axis, bit in enumerate(bits)])))
+                   for bits in ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1))]
+        mesh.Add(Element3D(1, corners))
+        for quad in ((3, 2, 1, 0), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
+            mesh.Add(Element2D(face, [corners[k] for k in quad]))
+    return mesh
 
 
 def _renumbered_mesh(options):
@@ -90,6 +117,11 @@ def meshes(tmp_path_factory):
     paths["pair"] = Path(__file__).resolve().parent / "fixtures" / "hdiv" / "hex_pair.vol"
     paths["renumbered"] = root / "renumbered.vol"
     _renumbered_mesh(_MESHES["sheared"]).Save(str(paths["renumbered"]))
+    for name, mapping in (("thin", _thin), ("thin-sheared", _thin_shear)):
+        paths[name] = root / (name + ".vol")
+        MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=1, mapping=mapping).ngmesh.Save(str(paths[name]))
+    paths["contact"] = root / "contact.vol"
+    _box_mesh((((0., 0., 0.), (2., 2., 2.)), ((2., 0., 0.), (3., 1., 1.)))).Save(str(paths["contact"]))
     return paths
 
 
@@ -122,8 +154,7 @@ def _case(path, order, cuda, compression="dense"):
     return setup, B, gram, M
 
 
-@pytest.mark.parametrize("name", _NAMES)
-@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("name,order", _CASES)
 def test_hex_device_input_reproduces_cpu_charges_and_lattices(meshes, name, order):
     import ngsolve as ng
     from radia.vim._vim import _charge_basis_hex, _prepare_gpu_hex_charge_inputs
@@ -136,10 +167,13 @@ def test_hex_device_input_reproduces_cpu_charges_and_lattices(meshes, name, orde
         assert np.array_equal(np.asarray(staged[key]).ravel(), np.asarray(cpu[cpu_key]).ravel()), key
 
 
-@pytest.mark.parametrize("name", _NAMES)
-@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("name,order", _CASES)
 def test_hex_device_entries_match_cpu_charge_gram(meshes, request, cuda, name, order):
     setup, _, gram, _ = _case(meshes[name], order, cuda)
+    if name in _GRADED:
+        stats = gram.stats()
+        routed = stats["hex_pair_anisotropy_graded"] + stats["hex_pair_nonconforming"]
+        assert routed > 0, f"{name} took no graded near pair: {stats}"
     device = {key: setup["charge_gram"][key] for key in _GEOMETRY}
     n = len(device["charge_host"])
     rng = np.random.default_rng(20261103)
@@ -158,8 +192,7 @@ def test_hex_device_entries_match_cpu_charge_gram(meshes, request, cuda, name, o
         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
 
 
-@pytest.mark.parametrize("name", _NAMES)
-@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("name,order", _CASES)
 def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, order):
     setup, B, gram, M = _case(meshes[name], order, cuda)
     nd = setup["dofs"]
@@ -189,7 +222,8 @@ def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, ord
 
 
 @pytest.mark.parametrize("name,order,compression", [("cube", 1, "aca"), ("sheared", 1, "dense"),
-                                                    ("sheared", 2, "aca"), ("mirrored", 2, "dense")])
+                                                    ("sheared", 2, "aca"), ("mirrored", 2, "dense"),
+                                                    ("thin", 1, "aca"), ("thin-sheared", 1, "dense")])
 def test_hex_device_linear_solve_matches_cpu_equation(meshes, request, cuda, name, order, compression):
     setup, B, gram, M = _case(meshes[name], order, cuda, compression)
     nd = setup["dofs"]
