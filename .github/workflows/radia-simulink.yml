@@ -425,6 +425,35 @@ jobs:
           $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
           $projection = Select-ExactBuild (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
+          # The plain HDiv MEX links the nvcc kernel object of this exact checkout.
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $toolset = (Get-Content (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14[.]44[.]') { throw 'Default MSVC 14.44 is required' }
+          $cl = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $matlab = Join-Path $env:ProgramFiles 'MATLAB/R2026a'
+          $cuda = Join-Path $matlab 'sys/cuda/win64/cuda'
+          $hdivRoot = Join-Path $env:RUNNER_TEMP "radia-hdiv-device-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $hdivRoot | Out-Null
+          $approval = Join-Path $hdivRoot 'admission.private.json'
+          @{ source_sha=$commit; owner="radia-simulink-$env:GITHUB_RUN_ID"; gpu_build_approved=$true;
+             scope='compile-only sm75+sm80; no GPU execution'; started_utc=[DateTimeOffset]::UtcNow.ToString('o') } |
+            ConvertTo-Json | Set-Content -LiteralPath $approval -Encoding utf8
+          $approvalHash = (Get-FileHash -LiteralPath $approval -Algorithm SHA256).Hash.ToLowerInvariant()
+          $hdivGpu = Join-Path $hdivRoot 'gpu'
+          $hdivDevice = Join-Path $hdivRoot 'mex'
+          $bat = Join-Path $hdivRoot 'build.private.cmd'
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "python tools/build_python_gpu.py --cuda-root `"$cuda`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --architectures 75 80 --components _hdiv_cuda --output `"$hdivGpu`" --admission `"$approval`" --admission-sha256 $approvalHash",
+            'if errorlevel 1 exit /b %errorlevel%',
+            "python packages/radia-simulink/tools/build_hdiv_mex.py --gpu-build `"$hdivGpu`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --output `"$hdivDevice`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_HDIV_DEVICE_BUILD=$hdivDevice" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
