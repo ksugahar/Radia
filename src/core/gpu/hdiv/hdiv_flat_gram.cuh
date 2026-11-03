@@ -51,7 +51,9 @@ struct FlatBlock {
     HostVector<double> ruleOut{HostFaultAllocator<double>("hex.out")},ruleOutW{HostFaultAllocator<double>("hex.out-w")},
         ruleIn{HostFaultAllocator<double>("hex.in")},ruleInW{HostFaultAllocator<double>("hex.in-w")},
         rulePair{HostFaultAllocator<double>("hex.pair")},rulePairW{HostFaultAllocator<double>("hex.pair-w")},
-        rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")};
+        rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")},
+        ruleNear{HostFaultAllocator<double>("hex.near")},ruleNearW{HostFaultAllocator<double>("hex.near-w")},
+        ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")};
     std::size_t charges()const{return host.size();}
     std::size_t cellStride()const{return hex?81:curved?30:12;}
     std::size_t faceStride()const{return hex?27:curved?18:9;}
@@ -116,6 +118,12 @@ struct FlatBlock {
         // Per-host counts are bounded by the tensor monomials of the order: BDM1 Duffy blocks hold at most 8 x 8.
         HostVector<int> first{HostFaultAllocator<int>("hex.validate-first")},count{HostFaultAllocator<int>("hex.validate-count")},global{HostFaultAllocator<int>("hex.validate-global")};
         HexPrepared::layout(*this,first,count,global,order);
+        // Only BDM1 has the graded near family, whose outer and fine inner rules it requires.
+        for(const auto* rule:{&ruleNear,&ruleInSelf}){const auto& w=rule==&ruleNear?ruleNearW:ruleInSelfW;
+            if(order==2?(!rule->empty()||!w.empty()):(rule->empty()||rule->size()>std::size_t(hexRuleCap)||w.size()!=rule->size()))
+                throw std::invalid_argument("HEX near rules take 1..16 Gauss points for BDM1 and none for BDM2");
+            for(std::size_t k=0;k<rule->size();++k)if(!std::isfinite((*rule)[k])||!std::isfinite(w[k])||!((*rule)[k]>0)||!((*rule)[k]<1)||!(w[k]>0))
+                throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");}
         const int monomials=(order+1)*(order+1);
         for(std::size_t g=0;g<count.size();++g)if(count[g]>(g<cellTotal?monomials*(order+1):monomials))
             throw std::invalid_argument("HEX host carries more charges than its tensor monomials");

@@ -1629,6 +1629,11 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
 _HEX_GLPAIR_N = 6
 
 
+# BDM1 graded near family rules, shared by the CPU route and the device input.
+_HEX_GLNEAR_P1_N = 8
+_HEX_GLIN_SELF_P1_N = 8
+
+
 def _hex_gram_rule_counts(fes, glout_n=None, glin_n=None):
     """Default 1D outer and radial-inner point counts of the hex charge Gram (CPU and device share them)."""
     p = int(fes.globalorder)
@@ -1711,10 +1716,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # sub pairs is decoupled from glout_n (shared by the far tensor product, whose cost grows like n^6),
     # touching hosts are always graded (near_grade 1.0 + the C++ shared-node test), and touching pairs take
     # the exact-anchor radial inner.  ``near_inner="site"`` restores the static-site radial for A/B only.
-    glnear_n = (8 if p == 1 else glout_n) if glnear_n is None else int(glnear_n)
+    glnear_n = (_HEX_GLNEAR_P1_N if p == 1 else glout_n) if glnear_n is None else int(glnear_n)
     # glin_self_n rules the sinh-substituted (peaked) directions of the cone/fan inner -- ray, fan radius,
     # edge parameter -- and glin_n the smooth ones; 8 points integrate the substituted peaks to ~1e-6.
-    glin_self_n = (8 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
+    glin_self_n = (_HEX_GLIN_SELF_P1_N if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
     # glpair_n = the 1D Gauss rule per dimension of the pair-domain Duffy quadrature that integrates every
     # TOUCHING BDM1 host pair (self, shared face/edge/vertex) on its (dT + dS)-dimensional product domain
     # (2026-09-06): the near-zero modes of M^-1 N are 1e-3 cancellations of block energies, so the touching
@@ -2453,7 +2458,8 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
     (``_build_charge_gram_hex`` defaults): 27/9-node Q2 lattices from the
     same NGSolve-linear interpolation or GetTrafo, reference-measure
     monomials grouped by host (cells, then exterior quads), and the 1D outer,
-    radial-inner and pair-domain rules with near_grade = far_inner = 1. No
+    radial-inner and pair-domain rules, plus the BDM1 near outer and fine inner
+    of the graded near family, with near_grade = far_inner = 1. No
     charge map, Gram coefficient or CUDA allocation is produced. The caller
     curves the mesh and owns TaskManager.
     """
@@ -2483,6 +2489,8 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
     kind = [0]*(len(vels)*len(mons_v)) + [1]*(len(bels)*len(mons_s))
     expo = [i for _ in vels for m in mons_v for i in m] + [i for _ in bels for (a, b) in mons_s for i in (a, b, 0)]
     glout_n, glin_n = _hex_gram_rule_counts(fes)
+    # BDM2 has no graded near family: its near pairs take the affine or composite product.
+    graded = dict(near=_g01(_HEX_GLNEAR_P1_N), inner_self=_g01(_HEX_GLIN_SELF_P1_N)) if p == 1 else {}
     return dict(
         family="hex", n_el=len(vels),
         cell_nodes=np.concatenate([(_hex_q2_lattice_nodes_ngsolve_linear(mesh, e) if linear
@@ -2491,7 +2499,7 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
                                     else _trafo_lattice_nodes(mesh, e, ir_quad)).ravel() for e in bels]),
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32),
-        rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N)),
+        rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N), **graded),
         near_grade=1.0, far_inner=1.0)
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
