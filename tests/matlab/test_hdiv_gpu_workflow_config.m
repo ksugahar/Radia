@@ -26,6 +26,14 @@ verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:gpu:Devi
 c=fixture();c.Setup.charges.cell_dofs=[0.5;1];
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:gpu:DeviceSetup');
 end
+function testChangedPayloadIsCheckedAgain(t)
+c=fixture();radia.simulink.validateHDivGPUWorkflowConfig(c);radia.simulink.validateHDivGPUWorkflowConfig(c);
+bad=c;bad.Setup.evaluation.rule(1)=NaN;
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(bad),'radia:gpu:DeviceSetup');
+bad=c;bad.Setup.charges.cell_dofs=[0.5;1];
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(bad),'radia:gpu:DeviceSetup');
+out=radia.simulink.validateHDivGPUWorkflowConfig(c);verifyEqual(t,out.Setup.dofs,4);
+end
 function testIntegerTablesRestoredToInt32(t)
 out=radia.simulink.validateHDivGPUWorkflowConfig(fixture());
 verifyClass(t,out.Setup.charges.cell_dofs,'int32');verifyClass(t,out.Setup.evaluation.element_points,'int32');

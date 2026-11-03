@@ -2,6 +2,12 @@ function setup=readHDivDeviceSetup(value)
 % Checked radia.hdiv-device-setup.v1 payload for radia_hdiv_device.
 % Integer tables are restored to int32 (exact integers only) and text to
 % char; the MEX recomputes every dimension from the flat counts.
+% Repeated solves pass the same payload, so only a changed payload is checked
+% again; the last checked payload stays referenced until the next one replaces it.
+persistent checkedInput checkedSetup
+if ~isempty(checkedInput) && isequal(value,checkedInput)
+    setup=checkedSetup;return
+end
 assert(isstruct(value) && isscalar(value),'radia:gpu:DeviceSetup','Device setup must be a scalar struct');
 required={'schema';'backend';'family';'order';'dofs';'mesh_sha256';'label_contract_sha256'; ...
     'charges';'evaluation';'rhs_operator';'mean_operator'};
@@ -59,6 +65,7 @@ else
 end
 setup.evaluation=tables(value.evaluation,{'rule','reference_shapes','vertices'}, ...
     {'element_class','element_dofs','element_points'});
+checkedInput=value;checkedSetup=setup;
 end
 
 function out=tables(s,reals,integers)
