@@ -1,115 +1,27 @@
 {
-  "schema": "radia.experimental-hmatrix-parity.v1",
-  "status": "experimental-kernel-subgates-only",
+  "schema": "radia.hdiv-device-parity.v2",
+  "status": "device-route-subgates",
   "cpu_owner": "Python/pybind11 with caller-owned NGSolve TaskManager",
-  "gpu_owner": "MATLAB mexcuda, CUDA device execution, no TaskManager activation",
+  "gpu_owner": "MATLAB plain MEX over one nvcc kernel object, no TaskManager activation",
   "cpu_mex_supported": false,
   "python_gpu_runtime_required": false,
   "capabilities": [
     {
-      "CPU": "_ChargeGramHMatrix.matvec_sym",
-      "MATLAB": "radia.gpu.HMatrixOperator upload/apply/download (operator_kind=gram)",
-      "scope": "Symmetric dense/low-rank leaves, permutation and physical normalization; not complete class parity"
+      "CPU": "radia.vim charge Gram, charge map and mass over the same checked mesh",
+      "MATLAB": "radia.gpu.HDivDeviceOperator and HDivDeviceMass over radia.hdiv-device-setup.v1",
+      "scope": "Device-built Gram, B, B^T, material tables and mass; no matrix crosses"
     },
     {
-      "CPU": "B.T @ _ChargeGramHMatrix.matvec_sym(B @ x)",
-      "MATLAB": "radia.gpu.HMatrixOperator (operator_kind=demag, charge_map=B)",
-      "scope": "Resident real charge-map operator composition; FE geometry assembly and solve not certified"
+      "CPU": "radia.hdiv_gpu.PreparedHDivLinear",
+      "MATLAB": "radia.gpu.solveHDivElements",
+      "scope": "Linear isotropic material; RT0, BDM1 and BDM2 on affine TET; P2 TET and HEX at orders 1/2"
     },
     {
-      "CPU": "_ChargeGramHMatrix constant tet/triangle analytic constructor and matvec_sym",
-      "MATLAB": "radia.gpu.HMatrixOperator (assembly=analytic_constant_block)",
-      "scope": "Bounded constant-density linear tet/triangle block; all-analytic strategy, no images"
-    },
-    {
-      "CPU": "RT0 NGSolve charge map/mass/RHS + public ChargeGram linear material solve",
-      "MATLAB": "radia.gpu.solveHDivRT0; radia_cuda_projection assemble_hdiv_rt0 + radia_cuda_hmatrix solve_linear_material",
-      "scope": "1..16 affine tetra RT0, exact dense or complete constant-charge HACApK hierarchy, linear isotropic material; one/eight-tetra subgates, not general HDiv"
-    },
-    {
-      "CPU": "_EnergyMaterialQuadrature mapped HDiv evaluation and IntegrationRuleSpace order max(6,2p+2)",
-      "MATLAB": "radia_cuda_projection('hdiv_material_quadrature',meshPath,order)",
-      "scope": "Experimental component-major numeric mapped evaluation, weights and zero-based element IDs; unbuilt/unaccepted at implementation commit"
+      "CPU": "radia.hdiv_gpu.PreparedHDivNonlinear",
+      "MATLAB": "radia.gpu.PreparedHDivNonlinear and solveNonlinearHDivElements",
+      "scope": "Soft-iron inverse BH; orders 1/2; same-kernel bitwise evidence is case-bound"
     }
   ],
-  "native_commands": [
-    "create",
-    "create_analytic_constant_block",
-    "upload",
-    "apply",
-    "download",
-    "stats",
-    "destroy",
-    "live_count",
-    "analytic_entry_batch",
-    "analytic_aca_vector",
-    "analytic_aca_compress",
-    "analytic_aca_leaf",
-    "solve_linear_material",
-    "create_analytic_hacapk"
-  ],
-  "handle_contract": "Scalar uint64 type/generation/liveness checked; native GPU ownership and stream checked",
-  "numerical_relative_limit": 1e-12,
-  "material_preconditioners": [
-    "mass-diagonal",
-    "mass-cholesky",
-    "mass-polynomial",
-    "mass-polynomial-graph"
-  ],
-  "polynomial_graph": {
-    "accepted": false,
-    "status": "Repeated nonlinear measurement encountered unresolved energy line-search failure; successful linear and single nonlinear subgates do not certify reliability",
-    "default_enabled": false,
-    "scope": "One captured memset plus eight CSR/point-update pairs, identical fixed SPD inverse action; full PCG and true-residual checks remain outside graph",
-    "actual_execution_counter": "preconditioner_graph_launches",
-    "validated_examples": [288, 10344],
-    "memory_limitations": "Native buffer counters exclude graph driver allocation and global/library/host peaks",
-    "release_accepted": false
-  },
-  "pending": [
-    "General HACApK adaptive Matrix Build",
-    "General high-order/curved NGSolve charge-map assembly",
-    "Constitutive/preconditioner/solver integration",
-    "Full HDiv-MMM physics and true residual",
-    "Device reset lifecycle",
-    "HDF5 large interchange frontend",
-    "Release CI and distribution acceptance"
-  ],
-  "aca_compression_acceptance": "Cyclic-search defect fixed; tiny physical block passed; 66x66 cap exhausted so requested compression convergence and full assembly remain pending",
-  "aca_dense_promotion": "CPU rank-budget condition preserved; bounded direct CUDA batches; physical CPU 1e-8 and direct CUDA 1e-12 subgates, whole adaptive assembly pending",
-  "full_constant_charge_assembly": "Existing full BBOX support-aware hierarchy, normalized production ACA, CUDA entries and exact dense promotion, serial host; 132-tetra direct CPU parity. Strict cap promoted all low-rank leaves; no compression-success claim. General FE/high-order/curved/images remain pending.",
-  "full_assembly_physical_relative_limit": 1e-08,
-  "bounded_rt0_coefficient_relative_limit": 1e-10,
-  "bounded_rt0_true_residual_limit": 1e-11,
-  "nonlinear_commands": {
-    "hdiv_material_quadrature": {
-      "module": "projection",
-      "accepted": false
-    },
-    "radia.gpu.solveNonlinearHDivElements": {
-      "backend": "MATLAB gpuArray material evaluation plus mexcuda resident H-matrix/inner PCG",
-      "accepted": false,
-      "scope": "Experimental single-region monotone BH, orders1/2 implemented; validated order2 examples288/2412/6594/10344DoF with explicit integration profile; no arbitrary geometry/constraints/temperature/hysteresis claim",
-      "validated_examples": [
-        288,
-        2412,
-        6594,
-        10344
-      ],
-      "release_accepted": false
-    },
-    "hdiv_material_quadrature_chunk": {
-      "module": "projection",
-      "accepted": true,
-      "scope": "Bounded material-only element intervals, <=65536points/4million shape entries per chunk; CPU/GPU examples288/6594/10344DoF",
-      "release_accepted": false
-    },
-    "radia.gpu.PreparedHDivNonlinear": {
-      "backend": "MATLAB-owned immutable FE/material maps and mexcuda H-matrix; explicit context lifetime",
-      "accepted": false,
-      "validated_examples": [288, 10344],
-      "scope": "Bounded repeated zero-start and explicit-initial-state solves; same fixed mesh, BH law and field direction; optional inexact inner tolerance <=1e-6 with unchanged final nonlinear gate; not general nonlinear or release acceptance",
-      "release_accepted": false
-    }
-  }
+  "native_commands": "See the command list in packages/radia-simulink/native/hdiv_device/radia_hdiv_device_mex.cpp",
+  "numerical_relative_limit": 1e-12
 }

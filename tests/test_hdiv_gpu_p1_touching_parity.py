@@ -22,7 +22,7 @@ import pytest
 
 PARITY_REL = 1e-10
 _GEOMETRY = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents",
-             "tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule", "far_factor")
+             "tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule", "far_factor", "family")
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,6 @@
 {
   "schema": "radia.gateway-memory-protocol.v2",
-  "gateways": ["hmatrix", "projection", "csr-pcg", "ic", "fmm", "field", "ams", "ih"],
+  "gateways": ["hdiv-device", "projection", "csr-pcg", "ic", "fmm", "field", "ams", "ih"],
   "initialization": "Fresh owned MATLAB; select and retain gpuDevice once; wait before baseline; load exact modules and retain declared fixture inputs; no device reset or cache flushing",
   "warmup_iterations": 5,
   "measurement_iterations": 100,

@@ -190,31 +190,15 @@ __global__ void reduceOutput(std::size_t n,const std::size_t* offsets,const std:
 }
 template<class T> struct Buffer {
     T* data=nullptr;std::size_t size=0;int device=0;
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-    bool faultCounted=false;
-#endif
     Buffer()=default;Buffer(const Buffer&)=delete;Buffer& operator=(const Buffer&)=delete;
     ~Buffer(){if(data){int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
         const auto status=cudaFree(data);
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        if(faultCounted){if(status==cudaSuccess)deviceFaultState.liveBytes-=size*sizeof(T);else ++deviceFaultState.freeErrors;}
-#else
         (void)status;
-#endif
         if(previous!=device)cudaSetDevice(previous);}}
     void allocate(std::size_t n){
         if(data)throw std::runtime_error("Device buffer already allocated");
         const auto bytes=checkedProduct(n,sizeof(T));check(cudaGetDevice(&device));
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        faultCounted=deviceFaultState.enabled;
-        if(n && faultCounted){auto& s=deviceFaultState;++s.attempts;
-            if(s.failAt && s.attempts==s.failAt)check(cudaErrorMemoryAllocation);
-            if(bytes>std::numeric_limits<std::size_t>::max()-s.liveBytes)throw std::overflow_error("Device diagnostic byte overflow");}
-#endif
         if(n)check(cudaMalloc(reinterpret_cast<void**>(&data),bytes));size=n;
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        if(n && faultCounted){auto& s=deviceFaultState;s.liveBytes+=bytes;s.peakBytes=std::max(s.peakBytes,s.liveBytes);}
-#endif
     }
     template<class Allocator>void upload(const std::vector<T,Allocator>& v){allocate(v.size());if(size){
         check(cudaMemcpy(data,v.data(),size*sizeof(T),cudaMemcpyHostToDevice));

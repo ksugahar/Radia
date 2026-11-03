@@ -93,3 +93,25 @@ def test_device_linear_solve_matches_cpu_assembled_equation(tmp_path, request, c
     finally:
         mass.close()
         operator.close()
+
+
+def test_device_entries_refuse_a_missing_or_unknown_family(tmp_path, cuda):
+    """Guards: the geometry family is never defaulted by the native entries.
+
+    Assumes: the staged arguments of an affine mesh are otherwise valid.
+    """
+    setup, _, _ = _case(tmp_path, 1, cuda)
+    arguments = dict(setup["charge_gram"], dofs=setup["dofs"], backend="gpu")
+    assert arguments.pop("family") == "affine-tet"
+    with pytest.raises(TypeError):
+        cuda._ResidentHDiv.from_flat_charges(**arguments)
+    with pytest.raises(ValueError, match="family must be explicit"):
+        cuda._ResidentHDiv.from_flat_charges(**arguments, family="unknown")
+    entries = {key: arguments[key] for key in (
+        "cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents", "tet_rule",
+        "tri_rule", "tet_low_rule", "tri_low_rule", "far_factor")}
+    rows = np.zeros(1, dtype=np.uint64)
+    with pytest.raises(TypeError):
+        cuda._diagnostic_flat_charge_entries(**entries, rows=rows, cols=rows, backend="gpu")
+    with pytest.raises(ValueError, match="family must be explicit"):
+        cuda._diagnostic_flat_charge_entries(**entries, rows=rows, cols=rows, backend="gpu", family="unknown")

@@ -223,7 +223,7 @@ def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, ord
 
 @pytest.mark.parametrize("name,order,compression", [("cube", 1, "aca"), ("sheared", 1, "dense"),
                                                     ("sheared", 2, "aca"), ("mirrored", 2, "dense"),
-                                                    ("thin", 1, "aca"), ("thin-sheared", 1, "dense")])
+                                                    ("thin", 1, "aca"), ("contact", 1, "dense")])
 def test_hex_device_linear_solve_matches_cpu_equation(meshes, request, cuda, name, order, compression):
     setup, B, gram, M = _case(meshes[name], order, cuda, compression)
     nd = setup["dofs"]
@@ -239,6 +239,29 @@ def test_hex_device_linear_solve_matches_cpu_equation(meshes, request, cuda, nam
         assert result["relative_residual"] <= 1e-11 and operator.assembly()["compression"] == compression
         assert relative <= LINEAR_REL, (f"{name} order={order} {compression} relative={relative:.3e} "
                                         f"limit={LINEAR_REL:.0e} iterations={result['iterations']}")
+    finally:
+        mass.close()
+        operator.close()
+
+
+def test_hex_device_solve_refuses_the_indefinite_thin_sheared_equation(meshes, cuda):
+    """Guards: PCG raises on an equation that is indefinite on the CPU route as well.
+
+    Assumes: the device operator equals the CPU one on this mesh (the operator test above);
+    aspect 50 with trilinear shear leaves the CPU charge rule with negative demag eigenvalues.
+    """
+    setup, B, gram, M = _case(meshes["thin-sheared"], 1, cuda)
+    nd = setup["dofs"]
+    columns = [B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(B[:, k].toarray().ravel()))) for k in range(nd)]
+    system = np.column_stack(columns) + INV_CHI*M.toarray()
+    lowest = np.linalg.eigvalsh(.5*(system + system.T))[0]
+    assert lowest < 0, f"thin-sheared equation became definite, lowest eigenvalue {lowest:.3e}: move it to the solve test"
+    rhs = setup["rhs_operator"] @ np.array([0., 0., 1e5])
+    operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
+    mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
+    try:
+        with pytest.raises(RuntimeError, match="lost positive definiteness"):
+            operator.solve_linear(mass, np.ascontiguousarray(rhs), INV_CHI, 1e-11, 4000, "mass-diagonal")
     finally:
         mass.close()
         operator.close()

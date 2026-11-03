@@ -313,7 +313,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       py::arg("charge_kind").noconvert(),py::arg("charge_exponents").noconvert(),py::arg("tet_rule").noconvert(),
       py::arg("tri_rule").noconvert(),py::arg("tet_low_rule").noconvert(),py::arg("tri_low_rule").noconvert(),
       py::arg("far_factor"),py::arg("rows").noconvert(),py::arg("cols").noconvert(),py::arg("backend"),
-      py::arg("family")="affine-tet",py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
+      py::arg("family"),py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
       py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
       "Diagnostic raw (unnormalized) device flat-Gram entries for explicit charge pairs; pairs and values cross, no matrix does.");
     py::class_<DeviceOperator,std::shared_ptr<DeviceOperator>>(m,"_ResidentHDiv")
@@ -324,7 +324,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("cell_dofs").noconvert(),py::arg("cell_tables").noconvert(),py::arg("cell_exponents").noconvert(),
            py::arg("face_class").noconvert(),py::arg("face_dofs").noconvert(),py::arg("face_tables").noconvert(),
            py::arg("face_exponents").noconvert(),py::arg("compression"),py::arg("aca"),py::arg("backend"),
-           py::arg("family")="affine-tet",py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
+           py::arg("family"),py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
            py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("cell_mass_rule")=py::none(),
            py::arg("face_mass_rule")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")

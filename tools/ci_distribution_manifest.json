@@ -161,9 +161,6 @@
         "AmsCudaOnly": [
           "radia-simulink"
         ],
-        "HMatrixCudaOnly": [
-          "radia-simulink"
-        ],
         "ProjectionCudaOnly": [
           "radia-simulink"
         ],
@@ -1154,14 +1151,8 @@
     {
       "pattern": "src/ext/HACApK/**",
       "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "CPU HACApK and GPU build_hmatrix_cuda.py compile this implementation."
-      },
-      "selection": "all_owners"
+        "radia"
+      ]
     },
     {
       "pattern": "src/core/rad_bem_galerkin.h",
@@ -1171,7 +1162,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1183,7 +1174,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1195,7 +1186,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1207,7 +1198,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1219,7 +1210,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1231,7 +1222,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1243,7 +1234,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1255,7 +1246,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1267,21 +1258,15 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
     {
       "pattern": "src/core/rad_hacapk_parallel.h",
       "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
-      },
-      "selection": "all_owners"
+        "radia"
+      ]
     },
     {
       "pattern": "src/core/rad_hdiv_field_evaluator.h",
@@ -1291,7 +1276,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1303,7 +1288,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1315,7 +1300,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -1327,7 +1312,7 @@
       ],
       "reason": {
         "kind": "shared_abi",
-        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+        "detail": "CPU field/quadrature source included by GPU native kernels."
       },
       "selection": "all_owners"
     },
@@ -2269,14 +2254,8 @@
     {
       "pattern": "src/core/rad_blas.h",
       "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "LP64 provider boundary compiled by CPU Radia and the serial C HACApK closure of build_hmatrix_cuda.py."
-      },
-      "selection": "all_owners"
+        "radia"
+      ]
     },
     {
       "pattern": "tools/build_python_gpu.py",
@@ -2497,14 +2476,8 @@
     {
       "pattern": "src/core/gpu/hdiv/hdiv_material_staging.hpp",
       "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
-      },
-      "selection": "all_owners"
+        "radia"
+      ]
     },
     {
       "pattern": "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
@@ -3364,8 +3337,6 @@
             "validation_test/fmm_cuda/**/*.h5",
             "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
-            "src/ext/HACApK/**",
-            "src/core/rad_blas.h",
             "src/core/rad_bem_galerkin.h",
             "src/core/rad_bem_galerkin.cpp",
             "src/core/rad_biot_savart_filaments.cpp",
@@ -3375,7 +3346,6 @@
             "src/core/rad_field_cloud_kernel.h",
             "src/core/rad_field_source_kernel.inc",
             "src/core/rad_field_sources.h",
-            "src/core/rad_hacapk_parallel.h",
             "src/core/rad_hdiv_field_evaluator.h",
             "src/core/rad_hdiv_field_kernel_api.inc",
             "src/core/rad_hdiv_field_math.inc",
@@ -3444,7 +3414,6 @@
             "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
-            "src/core/gpu/hdiv/hdiv_material_staging.hpp",
             "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
             "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
             "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
@@ -3504,8 +3473,6 @@
             "validation_test/fmm_cuda/**/*.h5",
             "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
-            "src/ext/HACApK/**",
-            "src/core/rad_blas.h",
             "src/core/rad_bem_galerkin.h",
             "src/core/rad_bem_galerkin.cpp",
             "src/core/rad_biot_savart_filaments.cpp",
@@ -3515,7 +3482,6 @@
             "src/core/rad_field_cloud_kernel.h",
             "src/core/rad_field_source_kernel.inc",
             "src/core/rad_field_sources.h",
-            "src/core/rad_hacapk_parallel.h",
             "src/core/rad_hdiv_field_evaluator.h",
             "src/core/rad_hdiv_field_kernel_api.inc",
             "src/core/rad_hdiv_field_math.inc",
@@ -3584,7 +3550,6 @@
             "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
             "src/core/gpu/hdiv/hdiv_flat_evaluation.cuh",
             "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
-            "src/core/gpu/hdiv/hdiv_material_staging.hpp",
             "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
             "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
             "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
@@ -3621,7 +3586,6 @@
         "src/core/rad_field_cloud_kernel.h",
         "src/core/rad_field_source_kernel.inc",
         "src/core/rad_field_sources.h",
-        "src/core/rad_hacapk_parallel.h",
         "src/core/rad_hdiv_field_evaluator.h",
         "src/core/rad_hdiv_field_kernel_api.inc",
         "src/core/rad_hdiv_field_math.inc",
@@ -3630,23 +3594,6 @@
         "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
         "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
         "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
-        "src/ext/HACApK/cHACApK_aca.inc",
-        "src/ext/HACApK/cHACApK_base.c",
-        "src/ext/HACApK/cHACApK_base.h",
-        "src/ext/HACApK/cHACApK_block_tree.c",
-        "src/ext/HACApK/cHACApK_block_tree.h",
-        "src/ext/HACApK/cHACApK_calc_entry_ij.h",
-        "src/ext/HACApK/cHACApK_cpp.h",
-        "src/ext/HACApK/cHACApK_cpp_impl.c",
-        "src/ext/HACApK/cHACApK_harith.c",
-        "src/ext/HACApK/cHACApK_harith.h",
-        "src/ext/HACApK/cHACApK_harith_par.cpp",
-        "src/ext/HACApK/cHACApK_lib.c",
-        "src/ext/HACApK/cHACApK_lib.h",
-        "src/ext/HACApK/cHACApK_pca_cluster.c",
-        "src/ext/HACApK/cHACApK_pca_cluster.h",
-        "src/ext/HACApK/hacapk_log.h",
-        "src/ext/HACApK/mpi_stub.h",
         "CMakeLists.txt",
         "Build.ps1",
         "pyproject.toml",

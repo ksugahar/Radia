@@ -9,6 +9,9 @@ CASES = {"device-flat-tet": {"apply", "linear_solution", "nonlinear_solution", "
 # Build and run identity both records must share; the kernel object hash binds both binaries to one nvcc object.
 SHARED = ("source_sha", "kernel_object_sha256", "cuda_compiler", "python_binary_sha256", "mex_binary_sha256",
           "input_sha256", "device_uuid", "architecture", "case", "output_names")
+EVIDENCE_HASHES = ("source_sha", "kernel_object_sha256", "python_binary_sha256", "mex_binary_sha256", "input_sha256",
+                   "python_record_sha256", "mex_record_sha256", "report_sha256")
+HEX = set("0123456789abcdef")
 
 
 def check_receipts(a: dict, b: dict) -> set:
@@ -26,6 +29,28 @@ def check_receipts(a: dict, b: dict) -> set:
     if set(a["output_names"]) != expected or len(a["output_names"]) != len(expected):
         raise ValueError(f"Expected outputs {sorted(expected)}, got {a['output_names']}")
     return expected
+
+
+def check_contract(contract: dict) -> str:
+    """Return the manifest status after checking that a PASS is bound to one executed case and its hashes."""
+    status, evidence = contract.get("status"), contract.get("evidence")
+    if status == "PENDING":
+        if evidence is not None:
+            raise ValueError("A pending parity contract carries no evidence")
+        return status
+    if status != "PASS" or not isinstance(evidence, dict):
+        raise ValueError("Parity status must be PENDING, or PASS with evidence")
+    if evidence.get("case") != contract.get("case") or contract.get("case") not in CASES:
+        raise ValueError("Parity evidence names another case")
+    if sorted(evidence.get("outputs", ())) != sorted(CASES[contract["case"]]):
+        raise ValueError("Parity evidence does not cover exactly the outputs of its case")
+    for key in EVIDENCE_HASHES:
+        value = evidence.get(key)
+        if not isinstance(value, str) or len(value) != (40 if key == "source_sha" else 64) or set(value) - HEX:
+            raise ValueError(f"Parity evidence field is not a hash: {key}")
+    if not evidence.get("cuda_compiler") or not evidence.get("architecture"):
+        raise ValueError("Parity evidence names no compiler or architecture")
+    return status
 
 
 def compare(python_path: Path, mex_path: Path) -> dict:

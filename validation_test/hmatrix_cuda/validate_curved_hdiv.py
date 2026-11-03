@@ -22,7 +22,7 @@ def main():
     p.add_argument('--cpu-build-receipt',type=Path,required=True)
     a=p.parse_args()
     a.device=a.device.resolve();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=False)
-    result=dict(accepted=False,scope='Bounded public tetrahedral HDiv, device-built operators with the exact dense Gram of the CPU reference, linear isotropic material',geometry=a.geometry,order=a.order,a100_used=None,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
+    result=dict(accepted=False,scope='Bounded public tetrahedral HDiv, device-built operators with the exact dense Gram of the CPU reference, linear isotropic material',geometry=a.geometry,order=a.order,comparison_kind='operator and implementation parity on a matched near/far profile; not independent physical accuracy',adoption='proposed; see CURVED_GATE_RECORD.md',a100_used=None,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
     eng=None
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)

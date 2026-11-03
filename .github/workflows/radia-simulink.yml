@@ -46,8 +46,6 @@ on:
       - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
-      - 'src/ext/HACApK/**'
-      - 'src/core/rad_blas.h'
       - 'src/core/rad_bem_galerkin.h'
       - 'src/core/rad_bem_galerkin.cpp'
       - 'src/core/rad_biot_savart_filaments.cpp'
@@ -57,7 +55,6 @@ on:
       - 'src/core/rad_field_cloud_kernel.h'
       - 'src/core/rad_field_source_kernel.inc'
       - 'src/core/rad_field_sources.h'
-      - 'src/core/rad_hacapk_parallel.h'
       - 'src/core/rad_hdiv_field_evaluator.h'
       - 'src/core/rad_hdiv_field_kernel_api.inc'
       - 'src/core/rad_hdiv_field_math.inc'
@@ -126,7 +123,6 @@ on:
       - 'src/core/gpu/hdiv/cmake/HDivKernels.cmake'
       - 'src/core/gpu/hdiv/hdiv_flat_evaluation.cuh'
       - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
-      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
       - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
       - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
@@ -182,8 +178,6 @@ on:
       - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
-      - 'src/ext/HACApK/**'
-      - 'src/core/rad_blas.h'
       - 'src/core/rad_bem_galerkin.h'
       - 'src/core/rad_bem_galerkin.cpp'
       - 'src/core/rad_biot_savart_filaments.cpp'
@@ -193,7 +187,6 @@ on:
       - 'src/core/rad_field_cloud_kernel.h'
       - 'src/core/rad_field_source_kernel.inc'
       - 'src/core/rad_field_sources.h'
-      - 'src/core/rad_hacapk_parallel.h'
       - 'src/core/rad_hdiv_field_evaluator.h'
       - 'src/core/rad_hdiv_field_kernel_api.inc'
       - 'src/core/rad_hdiv_field_math.inc'
@@ -262,7 +255,6 @@ on:
       - 'src/core/gpu/hdiv/cmake/HDivKernels.cmake'
       - 'src/core/gpu/hdiv/hdiv_flat_evaluation.cuh'
       - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
-      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
       - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
       - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
@@ -402,11 +394,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $mklRoot = python -c "import sys; from pathlib import Path; print(Path(sys.prefix)/'Library')"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & ./Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot $mklRoot -RequireNativeProvenance
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $projectionStart = [DateTime]::UtcNow
           & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
@@ -423,8 +410,6 @@ jobs:
             if ($accepted.Count -eq 0) { throw 'Missing accepted exact-commit CUDA build' }
             return $accepted[0].FullName
           }
-          $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
-          $projection = Select-ExactBuild (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
           # The plain HDiv MEX links the nvcc kernel object of this exact checkout.
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -455,8 +440,6 @@ jobs:
           & cmd.exe /d /c "`"$bat`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_HDIV_DEVICE_BUILD=$hdivDevice" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh

@@ -41,9 +41,6 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
-    [switch]$HMatrixCudaOnly,    # isolated resident HACApK leaf application
-    [string]$HMatrixMklRoot,     # explicit isolated MKL for complete C HACApK assembly
-    [switch]$HMatrixFaultInjection, # isolated diagnostic hooks, never a release default
     [string]$GpuBuildAdmission,  # private reviewed HDiv GPU worker/task/source admission
     [string]$GpuBuildAdmissionSha256,
     [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
@@ -66,9 +63,9 @@ if ($CsrPythonBindings -and -not $CudaMexOnly) { throw '-CsrPythonBindings requi
 if ($ResidentAmgPython -and -not $CudaMexOnly) { throw "Resident AMG Python requires -CudaMexOnly" }
 if ($ProjectionLifecycleDiagnostic -and -not $ProjectionCudaOnly) { throw 'Projection lifecycle diagnostic requires the isolated Projection target' }
 if ([bool]$GpuBuildAdmission -ne [bool]$GpuBuildAdmissionSha256) { throw 'GPU build admission and hash must be supplied together' }
-if ($GpuBuildAdmission -and -not ($HMatrixCudaOnly -or $ProjectionCudaOnly -or $FmmCudaOnly -or $FieldCudaOnly -or $IhCudaOnly -or $AmsCudaOnly -or $CudaMexOnly)) { throw 'GPU build admission requires an isolated native CUDA target' }
+if ($GpuBuildAdmission -and -not ($ProjectionCudaOnly -or $FmmCudaOnly -or $FieldCudaOnly -or $IhCudaOnly -or $AmsCudaOnly -or $CudaMexOnly)) { throw 'GPU build admission requires an isolated native CUDA target' }
 if ($FmmCudaOnly) {
-    if ($RadiaOnly -or $HMatrixCudaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AmsCudaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test -or $HMatrixMklRoot -or $args.Count) {
+    if ($RadiaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AmsCudaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test -or $args.Count) {
         throw '-FmmCudaOnly is an isolated experimental build'
     }
     $fmmBuildArgs = @()
@@ -78,24 +75,8 @@ if ($FmmCudaOnly) {
     if ($LASTEXITCODE -ne 0) { throw 'FMM CUDA build failed' }
     return
 }
-if ($HMatrixMklRoot -and -not $HMatrixCudaOnly) { throw '-HMatrixMklRoot requires -HMatrixCudaOnly' }
-if ($HMatrixFaultInjection -and -not ($HMatrixCudaOnly -and $HMatrixMklRoot)) { throw '-HMatrixFaultInjection requires the full isolated HMatrix CUDA target' }
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
-}
-
-if ($HMatrixCudaOnly) {
-    if ($RadiaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
-        throw '-HMatrixCudaOnly is an isolated experimental build'
-    }
-    $hMatrixBuildArgs = @()
-    if ($HMatrixMklRoot) { $hMatrixBuildArgs += @('--mkl-root', $HMatrixMklRoot) }
-    if ($HMatrixFaultInjection) { $hMatrixBuildArgs += '--fault-injection' }
-    if ($RequireNativeProvenance) { $hMatrixBuildArgs += '--require-clean-source' }
-    if ($GpuBuildAdmission) { $hMatrixBuildArgs += @('--build-admission', $GpuBuildAdmission, '--build-admission-sha256', $GpuBuildAdmissionSha256) }
-    & python (Join-Path $PSScriptRoot 'packages/radia-simulink/tools/build_hmatrix_cuda.py') @hMatrixBuildArgs
-    if ($LASTEXITCODE -ne 0) { throw 'H-matrix CUDA experimental build failed' }
-    return
 }
 
 if ($ProjectionCudaOnly) {
