@@ -40,7 +40,7 @@ struct HexDevice {
     const double* cellCoeff;const double* faceCoeff;const double* affineCenter;
     const double* farX;const double* farW;int farStride;
     const unsigned long long* keys;const std::size_t* offsets;const double* values;std::size_t pairs;
-    HexRule out,in,pair,pairAffine,near,inSelf;double nearGrade,farInner,candidate;int order;
+    HexRule out,in,pair,pairAffine,nearOut,inSelf;double nearGrade,farInner,candidate;int order;
 };
 __device__ inline void hexLag3(double t,double v[3],double d[3]){
     v[0]=2.0*(t-0.5)*(t-1.0);v[1]=4.0*t*(1.0-t);v[2]=2.0*t*(t-0.5);
@@ -428,7 +428,7 @@ __device__ inline void hexCenterForms(const double* nd,bool cell,double lin[3][4
 // accumulation order (Neumaier for the pair product, as the CPU).
 __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int nT,int nS,double* scratch,double* out,int* invalid){
     const bool cellT=hexCell(d,t),cellS=hexCell(d,s),product=cls==hexProductClass,graded=cls==hexGradedClass;
-    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?d.near:d.out;
+    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?d.nearOut:d.out;
     const int N=R.n,nc=cellT?N:1,npT=N*N*nc;int npS=0;
     double* source=scratch;
     if(product){const int ncs=cellS?N:1;npS=N*N*ncs;
@@ -645,7 +645,7 @@ struct HexPrepared {
         d.cellNodes=cells.data;d.faceNodes=faces.data;d.cells=int(cellsN);d.hosts=int(hosts);d.first=first.data;d.count=count.data;
         d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
-        d.near=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);
+        d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
         cellCoeff.allocate(order==2?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
         faceCoeff.allocate(order==2?std::max<std::size_t>(1,checkedProduct(facesN,9*35)):1);
@@ -678,7 +678,7 @@ struct HexPrepared {
         // Phase-1 rows of the widest family: outer tensor (or pair product) points x (source + target) charges.
         const std::size_t maxCount=order==2?27:8,nOut=std::size_t(d.out.n)*d.out.n*d.out.n;
         const std::size_t nPair=std::size_t(std::max(d.pair.n,d.pairAffine.n)),nPair3=nPair*nPair*nPair;
-        const std::size_t nNear=std::size_t(d.near.n),nNear3=nNear*nNear*nNear;
+        const std::size_t nNear=std::size_t(d.nearOut.n),nNear3=nNear*nNear*nNear;
         const std::size_t stride=std::max({nOut*2*maxCount,order==1?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
                                            order==1?hexGradedCoeff+nNear3*2*maxCount:std::size_t(0)});
         constexpr std::size_t launchItems=64;
