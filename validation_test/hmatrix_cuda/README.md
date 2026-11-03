@@ -48,4 +48,16 @@ removed entries, their consumers, their coverage and what replaces it or what wa
 | `validate_device_nonlinear.py` | Nonlinear solve and material energy, gradient and tangent on pybind11 against the CPU route, with finite differences | JSON |
 | `device_scale.py` | Compressed device H-matrix setup and linear solve, with `--nonlinear` also the BH solve, at one or more meshes; no threshold | JSON |
 | `check_pybind_mex_bitwise.py`, `hdiv_device_parity.py`, `produceHDivDeviceMexRecord.m` | Same-kernel frontend parity, see [PYBIND_MEX_BITWISE.md](PYBIND_MEX_BITWISE.md) | JSON |
+| `check_analytic_gram_bitwise.py` | Analytic charge Gram action and inverse-BH samples, pybind11 against MEX, bitwise on one kernel object | JSON |
 | `checkHDivDeviceMemory.m`, `makeGatewayMemoryWorkload.m`, `sampleGatewayMemory.m` | 100-run memory slope under `gateway_memory_protocol.json` (`hdiv-device` workload) | JSON |
+
+`tests/test_hdiv_gpu_analytic_gram.py` and `tests/test_hdiv_gpu_device_guards.py` are the
+surrogate tests of the analytic Gram and of the material and Newton guards on the device.
+
+The `hdiv-device` memory workload does not meet the plateau limit of the protocol. Over 100
+runs of the gateway, private bytes rise 4.26 MB, at 38.9 kB per run, against limits of 16 MiB
+and 1 MiB per run. The last 25 runs rise 2.49 MB at 49.1 kB per run, against limits of 1 MiB
+and 64 KiB per run. Device memory returns to its baseline and no handle stays live. A control
+of the same sampling loop without the gateway rises 5.72 MB over its last 25 runs, also above
+the limit, so this measurement does not separate the gateway from the sampling loop. The cause
+is not identified and the limits are unchanged.

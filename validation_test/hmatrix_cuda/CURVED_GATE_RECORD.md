@@ -29,9 +29,22 @@ approval and a pinned input.
 
 ## Matched-profile run on record
 
-Affine geometry, order 1, checked linear coarse sphere, 102 tetrahedra, 774 DoF:
-rhs error 1.3e-16, coefficient error 5.5e-11, physical error 1.6e-13, independent
-residual 9.0e-12, CPU residual 6.0e-12.
+Every family and order on small generated public meshes: a 102-tetrahedron unit
+sphere, linear and P2, and the two-hexahedron fixture. These inputs are job-owned,
+not pinned, and the limits stay the ones in the script.
+
+| Family, order | DoF | rhs | Coefficients | Physical | Independent residual |
+|---|---|---|---|---|---|
+| Affine tet, 0 | 258 | 1.2e-16 | 1.0e-11 | 1.1e-12 | 9.6e-12 |
+| Affine tet, 1 | 774 | 1.3e-16 | 5.5e-11 | 1.6e-13 | 9.0e-12 |
+| Affine tet, 2 | 2160 | 1.5e-16 | 5.0e-10 | 1.3e-12 | 9.6e-12 |
+| Curved tet, 1 | 774 | 1.3e-16 | 5.7e-11 | 4.0e-13 | 9.5e-12 |
+| Curved tet, 2 | 2160 | 1.5e-16 | 4.7e-10 | 3.7e-13 | 9.9e-12 |
+| Hex, 1 | 68 | 1.7e-16 | 2.6e-11 | 5.2e-13 | 6.1e-12 |
+| Hex, 2 | 207 | 2.1e-16 | 1.9e-10 | 7.3e-13 | 5.9e-12 |
+
+RT0 on hexahedra is refused, as declared. Pyramid and mixed meshes do not run
+through this entry.
 
 ## Curved mass rule
 
