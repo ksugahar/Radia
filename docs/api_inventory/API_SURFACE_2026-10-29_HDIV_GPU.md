@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `PreparedHDivNonlinear` | user-intent | One explicit prepared material solve owner; no implicit fallback. |
 | Shared HDiv/HMatrix/BH/Newton implementation | method-keep | Radia-owned private native implementation, shared with MEX. |
-| `prepare_hdiv_host_setup` | method-keep | Radia charge/material preparation; NGSolve still owns FE/mesh operations. |
+| `prepare_hdiv_device_setup` | method-keep | Primitive device-construction payload of a checked mesh; NGSolve still owns FE/mesh operations and no matrix crosses. |
 | Former Simulink-owned Python solver/binary staging | deprecated-drop | Removed; callers use Radia directly, without a compatibility alias. |
 
 No new mesh, CAD or generic solver implementation is added. The MATLAB

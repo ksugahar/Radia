@@ -62,7 +62,7 @@ def test_staged_tables_must_reproduce_the_gram_geometry_and_order(damage, match)
 
 def test_device_route_reports_charge_map_as_device_built():
     source = (ROOT / "src/radia/hdiv_gpu.py").read_text(encoding="utf-8")
-    prepare = source[source.index("def _prepare_device_components"):source.index("def _prepare_host_components")]
+    prepare = source[source.index("def _prepare_device_components"):source.index("def _fe_sources")]
     assert "_device_charge_tables" in prepare and "charge_map=" not in prepare, prepare
     initialize = source[source.index("    def _initialize"):source.index("    def solve")]
     assert "indptr" not in initialize and "B.data" not in initialize, initialize
