@@ -187,6 +187,15 @@ def test_bundled_sdk_root_is_not_a_standalone_toolkit(tmp_path):
         b.windows_cuda_layout(tmp_path / "standalone CUDA", matlab, "release 12.8, V12.8.61")
 
 
+def test_fault_mex_stays_out_of_the_shipped_tree():
+    # Guards: the build that can fail allocations on demand is test-only; no shipped path names it.
+    # Assumes: wheels and MATLAB wrappers are built from packages/ and src/ only.
+    hits = [str(path) for root in ("packages/radia-simulink", "src/radia") for path in (ROOT / root).rglob("*")
+            if path.suffix in (".py", ".m", ".cpp", ".cu", ".txt", ".toml") and path.is_file()
+            and "radia_hdiv_device_fault" in path.read_text(encoding="utf-8", errors="replace")]
+    assert hits == [], hits
+
+
 def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
     # Guards: a kernel or adapter change still executes pybind11/MEX parity and the MATLAB device test on its own build.
     workflow = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
@@ -194,4 +203,5 @@ def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
     step = job[job.index("- name: Verify HDiv device boundary and same-kernel parity"):]
     step = step[:step.index("\n      - ")]
     assert "validation_test/hmatrix_cuda/run_device_boundary.py" in step, step
+    assert "--fault-mex-build" in step and "build_fault_mex.py" in job, step
     assert "continue-on-error" not in step and "if:" not in step, step

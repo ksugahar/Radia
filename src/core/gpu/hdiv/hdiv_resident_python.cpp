@@ -45,32 +45,40 @@ radia_hdiv_bh::FlatEvaluationInput flatEvaluationInput(Array<double> rule,Array<
     input.classes=std::size_t(shapes.shape(0));input.points=input.elements*input.rulePoints;input.dofs=dofs;
     if(std::size_t(shapes.shape(1))!=input.rulePoints||std::size_t(shapes.shape(2))!=input.local||std::size_t(elementDofs.shape(0))!=input.elements||std::size_t(elementPoints.shape(0))!=input.elements)
         throw py::value_error("Flat evaluation table dimensions disagree");
-    // Geometry rows: 12 (affine vertices), 30 (curved P2 TET nodes) or 81 (HEX Q2 lattice) coordinates per element.
-    if(vertices.ndim()!=2||(vertices.shape(1)!=12&&vertices.shape(1)!=30&&vertices.shape(1)!=81))
-        throw py::value_error("Evaluation geometry requires (elements,12) affine vertices, (elements,30) P2 nodes or (elements,81) HEX Q2 nodes");
+    // Geometry rows: 12 (affine vertices), 15 (pyramid vertices), 30 (curved P2 TET nodes) or 81 (HEX Q2 lattice) coordinates per element.
+    if(vertices.ndim()!=2||(vertices.shape(1)!=12&&vertices.shape(1)!=15&&vertices.shape(1)!=30&&vertices.shape(1)!=81))
+        throw py::value_error("Evaluation geometry requires (elements,12) affine vertices, (elements,15) pyramid vertices, (elements,30) P2 nodes or (elements,81) HEX Q2 nodes");
     input.nodes=std::size_t(vertices.shape(1))/3;
     input.rule=rows(rule,4,bytes,"rule");input.shapes=rows(shapes,0,bytes,"shapes");input.vertices=rows(vertices,0,bytes,"vertices");
     input.elementClass=rows(elementClass,0,bytes,"class");input.elementDofs=rows(elementDofs,0,bytes,"dofs");input.elementPoints=rows(elementPoints,0,bytes,"points");
     return input;
 }
-std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(Array<double> rule,Array<double> shapes,Array<double> vertices,
-    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,py::dict lawData,const std::string& backend){
+// Groups of one mesh: every entry takes the from_flat_tables arrays, and every group's points is the mesh total.
+radia_hdiv_bh::FlatEvaluationGroups flatEvaluationGroups(py::list tables,std::size_t dofs,std::size_t& bytes){
+    radia_hdiv_bh::FlatEvaluationGroups groups;std::size_t points=0;
+    for(py::handle item:tables){const auto d=py::reinterpret_borrow<py::dict>(item);
+        auto field=[&](const char* name,auto tag){using T=decltype(tag);if(!d.contains(name)||!py::isinstance<Array<T>>(d[name]))throw py::value_error(std::string("Evaluation group requires a contiguous array ")+name);return py::cast<Array<T>>(d[name]);};
+        groups.push_back(flatEvaluationInput(field("rule",double{}),field("reference_shapes",double{}),field("vertices",double{}),
+            field("element_class",std::int32_t{}),field("element_dofs",std::int32_t{}),field("element_points",std::int32_t{}),dofs,bytes));
+        points+=groups.back().points;}
+    for(auto& group:groups)group.points=points;
+    return groups;
+}
+std::shared_ptr<radia_hdiv_bh::MaterialOperator> constructFlatMaterial(py::list tables,std::size_t dofs,py::dict lawData,const std::string& backend){
     if(backend!="gpu")throw py::value_error("Material context requires explicit backend='gpu'");
     std::size_t bytes=0;auto law=lawFromDict(lawData,bytes);
-    auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
+    auto input=flatEvaluationGroups(tables,dofs,bytes);
     py::gil_scoped_release release;
     auto owner=radia_hdiv_bh::createFlatMaterial(input,law);return owner;
 }
-std::shared_ptr<radia_hdiv_bh::MassOperator> constructFlatMass(Array<double> rule,Array<double> shapes,Array<double> vertices,
-    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs,const std::string& backend){
+std::shared_ptr<radia_hdiv_bh::MassOperator> constructFlatMass(py::list tables,std::size_t dofs,const std::string& backend){
     if(backend!="gpu")throw py::value_error("Mass context requires explicit backend='gpu'");
-    std::size_t bytes=0;auto input=flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes);
+    std::size_t bytes=0;auto input=flatEvaluationGroups(tables,dofs,bytes);
     py::gil_scoped_release release;
     auto owner=radia_hdiv_bh::createFlatMass(input);return owner;
 }
-py::dict validateFlatTables(Array<double> rule,Array<double> shapes,Array<double> vertices,
-    Array<std::int32_t> elementClass,Array<std::int32_t> elementDofs,Array<std::int32_t> elementPoints,std::size_t dofs){
-    std::size_t bytes=0;const auto budget=radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationInput(rule,shapes,vertices,elementClass,elementDofs,elementPoints,dofs,bytes));
+py::dict validateFlatTables(py::list tables,std::size_t dofs){
+    std::size_t bytes=0;const auto budget=radia_hdiv_bh::validateFlatEvaluationScope(flatEvaluationGroups(tables,dofs,bytes));
     py::dict terms;for(std::size_t i=0;i<budget.count;++i)terms[radia_hdiv_bh::FlatEvaluationBudget::names[i]]=budget.bytes[i];
     py::dict out;out["schema"]="radia.hdiv-flat-material-budget.v1";out["terms"]=terms;out["total_bytes"]=budget.total();
     out["limiting_term"]=radia_hdiv_bh::FlatEvaluationBudget::names[budget.limiting()];
@@ -87,7 +95,7 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     Array<double> cellTables,Array<std::int32_t> cellExponents,Array<std::int32_t> faceClass,Array<std::int32_t> faceDofs,
     Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend,
     const std::string& family,py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,
-    py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands) {
+    py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands,py::object hostTypes,py::object mixedCharges) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
     if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
     if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
@@ -110,8 +118,8 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     auto integers=[&](Array<std::int32_t> a){const auto v=snapshot(a,bytes);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     auto table=[&](Array<std::int32_t> a,const char* what){const auto v=rows(a,0,bytes,what);return radia_hmatrix_cuda::HostVector<int>(v.begin(),v.end());};
     if(cells.ndim()!=1||faces.ndim()!=1)throw py::value_error("Geometry uses flat row-major coordinate vectors");
-    if(family!="affine-tet"&&family!="curved-tet"&&family!="hex")throw py::value_error("family must be explicit 'affine-tet', 'curved-tet' or 'hex'");
-    const bool curved=family=="curved-tet",hex=family=="hex";
+    if(family!="affine-tet"&&family!="curved-tet"&&family!="hex"&&family!="mixed")throw py::value_error("family must be explicit 'affine-tet', 'curved-tet', 'hex' or 'mixed'");
+    const bool curved=family=="curved-tet",mixed=family=="mixed",hex=family=="hex"||mixed;
     for(const auto* value:{&cellNumbers,&faceNumbers,&curveGl,&curveGw,&cellMassRule,&faceMassRule})
         if(value->is_none()==curved)throw py::value_error("Curved geometry arrays are required for family='curved-tet' and rejected otherwise");
     for(const auto* value:{&hexRules,&hexBands})
@@ -127,6 +135,8 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
         input.gl=flat(typed(curveGl,"curve_gl",double{}));input.gw=flat(typed(curveGw,"curve_gw",double{}));
     }
     if(hex){input.hexRules=flat(typed(hexRules,"hex_rules",double{}));input.hexBands=flat(typed(hexBands,"hex_bands",double{}));}
+    if(hostTypes.is_none()==mixed||mixedCharges.is_none()==mixed)throw py::value_error("host_types and mixed_charges are required for family='mixed' and rejected otherwise");
+    if(mixed)input.hostTypes=integers(typed(hostTypes,"host_types",std::int32_t{}));
     if(compression=="aca"){
         if(!py::isinstance<py::dict>(aca))throw py::value_error("aca must be a dictionary");
         auto d=py::reinterpret_borrow<py::dict>(aca);
@@ -146,7 +156,10 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     charges.cellClass=integers(cellClass);charges.faceClass=integers(faceClass);
     charges.cellDofs=table(cellDofs,"cell_dofs");charges.faceDofs=table(faceDofs,"face_dofs");
     charges.cellExponents=table(cellExponents,"cell_exponents");charges.faceExponents=table(faceExponents,"face_exponents");
-    charges.hex=hex;
+    charges.hex=hex&&!mixed;charges.mixed=mixed;
+    if(mixed){const auto d=py::cast<py::dict>(mixedCharges);
+        charges.hostClass=integers(typed(d["host_class"],"host_class",std::int32_t{}));charges.classInfo=table(typed(d["class_info"],"class_info",std::int32_t{}),"class_info");
+        charges.hostDofs=integers(typed(d["host_dofs"],"host_dofs",std::int32_t{}));charges.classTables=flat(typed(d["class_tables"],"class_tables",double{}));}
     if(curved){charges.curved=true;
         auto rule=[&](const py::object& value,const char* what){auto a=typed(value,what,double{});
             if(a.ndim()!=2||a.shape(1)!=4)throw py::value_error(std::string(what)+" requires (points,4) float64 rows");return flat(a);};
@@ -171,13 +184,9 @@ static py::dict publishNewton(const NewtonResult& result){
 PYBIND11_MODULE(_hdiv_cuda,m) {
     registerMaterialStaging(m);
     py::class_<radia_hdiv_bh::MaterialOperator,std::shared_ptr<radia_hdiv_bh::MaterialOperator>>(m,"_ResidentBHMaterial")
-      .def_static("from_flat_tables",&constructFlatMaterial,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
-           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
-           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("law"),py::arg("backend"),
+      .def_static("from_flat_tables",&constructFlatMaterial,py::arg("tables"),py::arg("dofs"),py::arg("law"),py::arg("backend"),
            "Matrix-free device E and E^T from resident NGSolve reference tables, with point measures and reference mass; no evaluation matrix exists or crosses.")
-      .def_static("validate_flat_tables",&validateFlatTables,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
-           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
-           py::arg("element_points").noconvert(),py::arg("dofs"),
+      .def_static("validate_flat_tables",&validateFlatTables,py::arg("tables"),py::arg("dofs"),
            "Host-only scope check of the flat evaluation tables (same checks as from_flat_tables) and their device byte budget; no device context.")
       .def("assembly",[](radia_hdiv_bh::MaterialOperator& self){std::string route;radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;
           {py::gil_scoped_release release;route=self.route();rows=self.transfers();bytes=self.footprint();}
@@ -220,9 +229,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       .def("close",&radia_hdiv_bh::MaterialOperator::close,py::call_guard<py::gil_scoped_release>());
 
     py::class_<radia_hdiv_bh::MassOperator,std::shared_ptr<radia_hdiv_bh::MassOperator>>(m,"_ResidentMass")
-      .def_static("from_flat_tables",&constructFlatMass,py::arg("rule").noconvert(),py::arg("reference_shapes").noconvert(),
-           py::arg("vertices").noconvert(),py::arg("element_class").noconvert(),py::arg("element_dofs").noconvert(),
-           py::arg("element_points").noconvert(),py::arg("dofs"),py::arg("backend"),
+      .def_static("from_flat_tables",&constructFlatMass,py::arg("tables"),py::arg("dofs"),py::arg("backend"),
            "Device-built reference mass M from resident NGSolve reference tables for the linear material solve; no mass entry crosses.")
       .def("assembly",[](radia_hdiv_bh::MassOperator& self){radia_hmatrix_cuda::HostVector<radia_hdiv_bh::LedgerRow> rows;radia_hdiv_bh::MaterialFootprint bytes;std::string route;
           {py::gil_scoped_release release;rows=self.transfers();bytes=self.footprint();route=self.route();}
@@ -258,10 +265,10 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
     m.def("_diagnostic_flat_charge_entries",[](Array<double> cells,Array<double> faces,Array<std::int32_t> host,Array<std::int32_t> kind,
         Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,Array<double> triLow,double farFactor,
         Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend,const std::string& family,
-        py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,py::object hexRules,py::object hexBands){
+        py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,py::object hexRules,py::object hexBands,py::object hostTypes){
         if(backend!="gpu")throw py::value_error("Flat diagnostic entries require explicit backend='gpu'");
-        if(family!="affine-tet"&&family!="curved-tet"&&family!="hex")throw py::value_error("family must be explicit 'affine-tet', 'curved-tet' or 'hex'");
-        const bool curved=family=="curved-tet",hex=family=="hex";
+        if(family!="affine-tet"&&family!="curved-tet"&&family!="hex"&&family!="mixed")throw py::value_error("family must be explicit 'affine-tet', 'curved-tet', 'hex' or 'mixed'");
+        const bool curved=family=="curved-tet",mixed=family=="mixed",hex=family=="hex"||mixed;
         for(const auto* value:{&cellNumbers,&faceNumbers,&curveGl,&curveGw})
             if(value->is_none()==curved)throw py::value_error("Curved geometry arrays are required for family='curved-tet' and rejected otherwise");
         for(const auto* value:{&hexRules,&hexBands})
@@ -284,6 +291,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         if(curved){input.cellNumbers=integers(py::cast<Array<std::int32_t>>(cellNumbers));input.faceNumbers=integers(py::cast<Array<std::int32_t>>(faceNumbers));
             input.gl=flat(py::cast<Array<double>>(curveGl));input.gw=flat(py::cast<Array<double>>(curveGw));}
         if(hex){input.hexRules=flat(py::cast<Array<double>>(hexRules));input.hexBands=flat(py::cast<Array<double>>(hexBands));}
+        if(hostTypes.is_none()==mixed)throw py::value_error("host_types is required for family='mixed' and rejected otherwise");
+        if(mixed)input.hostTypes=integers(py::cast<Array<std::int32_t>>(hostTypes));
         const auto r=snapshot(rows,bytes),c=snapshot(cols,bytes);
         radia_hmatrix_cuda::HostVector<std::size_t> rr(r.begin(),r.end()),cc(c.begin(),c.end());radia_hmatrix_cuda::HostVector<double> values;
         {py::gil_scoped_release release;values=flatDiagnosticEntries(input,rr,cc);}
@@ -294,6 +303,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       py::arg("far_factor"),py::arg("rows").noconvert(),py::arg("cols").noconvert(),py::arg("backend"),
       py::arg("family"),py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
       py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
+      py::arg("host_types")=py::none(),
       "Diagnostic raw (unnormalized) device flat-Gram entries for explicit charge pairs; pairs and values cross, no matrix does.");
     py::class_<DeviceOperator,std::shared_ptr<DeviceOperator>>(m,"_ResidentHDiv")
       .def_static("from_analytic_constant_block",&constructAnalyticGram,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),py::arg("backend"),
@@ -308,6 +318,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("family"),py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
            py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("cell_mass_rule")=py::none(),
            py::arg("face_mass_rule")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
+           py::arg("host_types")=py::none(),py::arg("mixed_charges")=py::none(),
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;

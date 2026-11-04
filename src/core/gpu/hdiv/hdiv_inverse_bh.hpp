@@ -27,12 +27,20 @@ struct MaterialInput {
 // geometry, DOF and material-point numbers. No E values. Geometry holds
 // `nodes` points per element: 4 affine vertices in NGSolve order, the 10
 // P2 nodes of a curved element (corners first, NGSolve reference frame), or
-// the 27-node Q2 lattice of a HEX (node ix + 3 iy + 9 iz at xi = (ix,iy,iz)/2).
+// the 27-node Q2 lattice of a HEX (node ix + 3 iy + 9 iz at xi = (ix,iy,iz)/2),
+// or the 5 vertices of a straight pyramid in NGSolve order.
 struct FlatEvaluationInput {
     std::size_t elements=0,local=0,rulePoints=0,classes=0,points=0,dofs=0,nodes=4;
     BoundaryVector<double> rule,shapes,vertices;
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
 };
+// One table set for a pure mesh, one per element type of a mixed mesh. DOF and
+// point numbers stay global: `points` of every group is the mesh total, and the
+// groups together cover it once.
+using FlatEvaluationGroups=BoundaryVector<FlatEvaluationInput>;
+inline std::string flatEvaluationFamily(const FlatEvaluationGroups& in){
+    return in.size()>1||in.at(0).nodes==5?"mixed":in[0].nodes==27?"hex":in[0].nodes==10?"curved-tet":"flat-tet";
+}
 // Device bytes of one matrix-free flat material build and its resident state,
 // from table dimensions alone: no global E is stored. Builder transients are
 // counted as live together, so the sum bounds the setup peak; CUB scratch is
@@ -55,19 +63,24 @@ inline std::size_t budgetProduct(std::size_t a,std::size_t b){
 inline std::size_t budgetSum(std::initializer_list<std::size_t> terms){
     std::size_t s=0;for(auto t:terms){if(t>std::numeric_limits<std::size_t>::max()-s)throw std::overflow_error("Flat material budget overflow");s+=t;}return s;
 }
-inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationInput& in,std::size_t lawDoubles){
+inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationGroups& groups,std::size_t lawDoubles){
     const auto mul=budgetProduct;const auto add=budgetSum;
-    const auto ne=in.elements,local=in.local,rule=in.rulePoints,nq=in.points,nd=in.dofs;
-    const auto slots=mul(ne,local),triples=mul(ne,mul(local,local));
+    const auto nq=groups.at(0).points,nd=groups[0].dofs;
     constexpr std::size_t index=sizeof(std::size_t),real=sizeof(double),small=sizeof(int),key=sizeof(unsigned long long);
-    FlatEvaluationBudget b;
-    // Resident element tables (geometry, shapes, rule, class, DOFs, points, slot order) plus the flag.
-    b.bytes[0]=add({mul(mul(3*in.nodes,ne),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
-                    mul(add({ne,slots,mul(ne,rule),1}),small),slots});
-    b.bytes[1]=add({mul(add({nd,1}),index),mul(slots,sizeof(unsigned))});
-    b.bytes[2]=mul(slots,3*sizeof(unsigned));
+    FlatEvaluationBudget b;std::size_t triples=0;
+    for(const auto& in:groups){const auto ne=in.elements,local=in.local,rule=in.rulePoints;
+        const auto slots=mul(ne,local);triples=add({triples,mul(ne,mul(local,local))});
+        // Resident element tables (geometry, shapes, rule, map table of a non-affine element, class, DOFs, points, slot order) plus the flag.
+        b.bytes[0]=add({b.bytes[0],mul(mul(3*in.nodes,ne),real),in.nodes==4?std::size_t(0):mul(mul(10,mul(ne,rule)),real),mul(mul(mul(in.classes,rule),mul(local,3)),real),mul(mul(4,rule),real),
+                        mul(add({ne,slots,mul(ne,rule),1}),small),slots});
+        b.bytes[1]=add({b.bytes[1],mul(add({nd,1}),index),mul(slots,sizeof(unsigned))});
+        b.bytes[2]=add({b.bytes[2],mul(slots,3*sizeof(unsigned))});
+    }
+    // The transpose of a mixed mesh sums one vector per group.
+    if(groups.size()>1)b.bytes[1]=add({b.bytes[1],mul(nd,real)});
     b.bytes[3]=add({mul(triples,3*key+2*real+2*small),mul(nd,real),real,2*small});
-    b.bytes[4]=add({mul(add({nd,1}),index),mul(triples,index+real),mul(nd,real)});
+    // The reference mass CSR and the frozen tangent values on its pattern.
+    b.bytes[4]=add({mul(add({nd,1}),index),mul(triples,index+2*real),mul(nd,real)});
     b.bytes[5]=add({mul(add({mul(18,nq),mul(4,nd),2,lawDoubles}),real),small});
     return b;
 }
@@ -98,7 +111,7 @@ public:
     virtual void close()=0;
 };
 // E and E^T act matrix-free on the device; no evaluation matrix crosses.
-std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput&,const Law&);
+std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationGroups&,const Law&);
 // Device-built reference mass alone, for the linear material solve: no law and
 // no material point state. Vectors cross for diagnostics; the mass never does.
 class MassOperator {
@@ -113,9 +126,9 @@ public:
     // Geometry family of the device build: device-flat-tet-mass, device-curved-tet-mass or device-hex-mass.
     virtual std::string route()=0;
 };
-std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput&);
+std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationGroups&);
 // Host-only scope check of the flat tables (the same checks the context runs) and
 // their device budget without CUB scratch or the law; no CUDA call.
-FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput&);
+FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationGroups&);
 Samples evaluate(const Law&,const radia_hmatrix_cuda::HostVector<double>& amplitudes);
 }

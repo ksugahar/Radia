@@ -1,5 +1,6 @@
 // Thin Python owner/publisher for the shared NGSolve material staging boundary.
 #include "hdiv_charge_staging.hpp"
+#include "hdiv_mixed_staging.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <mutex>
@@ -24,7 +25,13 @@ public:
     FlatChargeTables chargeTables(){
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
+        if(isMixedMesh(*context))return stageMixedChargeTables(*context);
         return isHexMesh(*context)?stageHexChargeTables(*context):stageFlatChargeTables(*context);
+    }
+    std::vector<FlatEvaluationTables> mixedTables(){
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!context)throw std::invalid_argument("Material context is closed");
+        return stageMixedEvaluationTables(*context);
     }
     void close(){std::lock_guard<std::mutex> lock(mutex);context.reset();}
 };
@@ -67,8 +74,15 @@ py::dict publishFlat(const FlatEvaluationTables& t){
 py::dict publishCharge(const FlatChargeTables& t){
     py::dict out;
     out["schema"]="radia.hdiv-flat-charge-tables.v1";
-    out["family"]=t.hex?"hex":t.curved?"curved-tet":"affine-tet";
+    out["family"]=t.mixed?"mixed":t.hex?"hex":t.curved?"curved-tet":"affine-tet";
     out["dofs"]=t.dofs;
+    if(t.mixed){
+        out["host_types"]=ownedArray(t.hostTypes);out["host_class"]=ownedArray(t.hostClass);out["class_info"]=ownedRows(t.classInfo,t.classInfo.size()/3);
+        out["host_dofs"]=ownedArray(t.hostDofs);out["class_tables"]=ownedArray(t.classTables);
+        out["charge_host"]=ownedArray(t.chargeHost);out["charge_kind"]=ownedArray(t.chargeKind);out["charge_exponents"]=ownedArray(t.chargeExponents);
+        out["cell_vertices"]=ownedRows(t.cellVertices,t.cells);out["face_vertices"]=ownedRows(t.faceVertices,t.faces);
+        return out;
+    }
     auto tables=[](const std::vector<double>& v,std::size_t monomials,std::size_t width){auto a=ownedArray(v);
         a.resize({py::ssize_t(monomials*width?v.size()/(monomials*width):0),py::ssize_t(monomials),py::ssize_t(width)});return a;};
     out["cell_tables"]=tables(t.cellTables,t.cellMonomials,t.cellWidth);out["face_tables"]=tables(t.faceTables,t.faceMonomials,t.faceWidth);
@@ -94,6 +108,12 @@ void registerMaterialStaging(py::module_& module){
             {py::gil_scoped_release release;tables=self.flatTables();}
             return publishFlat(tables);
         },"NGSolve reference HDiv shapes per vertex-rank class plus primitive geometry (affine TET vertices, curved P2 TET nodes or HEX Q2 lattices); no evaluation matrix.")
+        .def("mixed_tables",[](MaterialOwner& self){
+            std::vector<FlatEvaluationTables> groups;
+            {py::gil_scoped_release release;groups=self.mixedTables();}
+            py::list out;for(const auto& t:groups){auto d=publishFlat(t);d["family"]="mixed";out.append(d);}
+            return out;
+        },"One flat_tables payload per element type of a straight tet, pyramid and hex mesh, with global DOF and point numbers")
         .def("charge_tables",[](MaterialOwner& self){
             FlatChargeTables tables;
             {py::gil_scoped_release release;tables=self.chargeTables();}

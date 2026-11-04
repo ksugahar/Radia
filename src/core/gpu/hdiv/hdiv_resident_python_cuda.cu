@@ -70,7 +70,7 @@ public:
             [&](radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){builder.build(flat,charges,B,BT);});
         resident->materializeDeferred(plan,oracle);
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
-        record={flat.family=="hex"?"device-hex":flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
+        record={flat.family=="mixed"?"device-mixed":flat.family=="hex"?"device-hex":flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
         record.compression=flat.compression;
         for(std::size_t i=0;i<ChargeBudget::count;++i)record.budget.push_back({ChargeBudget::names[i],budget.bytes[i]});
         planTransfer(plan);
@@ -113,9 +113,11 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.cells.assign(input.cells.begin(),input.cells.end());block.faces.assign(input.faces.begin(),input.faces.end());
     block.host.assign(input.host.begin(),input.host.end());block.kind.assign(input.kind.begin(),input.kind.end());
     block.expo.assign(input.expo.begin(),input.expo.end());block.farFactor=input.farFactor;
-    if(input.family!="affine-tet"&&input.family!="curved-tet"&&input.family!="hex")
-        throw std::invalid_argument("Charge geometry family must be 'affine-tet', 'curved-tet' or 'hex'");
-    block.curved=input.family=="curved-tet";block.hex=input.family=="hex";
+    if(input.family!="affine-tet"&&input.family!="curved-tet"&&input.family!="hex"&&input.family!="mixed")
+        throw std::invalid_argument("Charge geometry family must be 'affine-tet', 'curved-tet', 'hex' or 'mixed'");
+    if(input.hostTypes.empty()==(input.family=="mixed"))throw std::invalid_argument("Host types are required for family 'mixed' and rejected otherwise");
+    block.curved=input.family=="curved-tet";block.hex=input.family=="hex"||input.family=="mixed";
+    block.hostTypes.assign(input.hostTypes.begin(),input.hostTypes.end());
     if(block.hex){
         if(input.hexRules.size()%3||input.hexBands.size()!=2)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and two bands");
         radia_hmatrix_cuda::HostVector<double>* points[6]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf};
@@ -224,13 +226,13 @@ class MassOwner final:public MassOperator {
     radia_hmatrix_cuda::HostVector<LedgerRow> ledger;MaterialFootprint bytes;int device=0;
     void live(){if(!M)throw std::invalid_argument("Mass context is closed");int current;radia_hmatrix_cuda::check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("Mass context belongs to another GPU");}
 public:
-    explicit MassOwner(const FlatEvaluationInput& input){
+    explicit MassOwner(const FlatEvaluationGroups& input){
         using namespace radia_hmatrix_cuda;
         if(liveMassOwners.fetch_add(1)>=2){--liveMassOwners;throw std::invalid_argument("Mass context count budget exceeded");}
         counted=true;
         try{
             validateFlatEvaluation(input);FlatEvaluationBudget budget;requireFlatEvaluationDevice(input,0,budget);
-            check(cudaGetDevice(&device));nd=input.dofs;routeName=input.nodes==27?"device-hex-mass":input.nodes==10?"device-curved-tet-mass":"device-flat-tet-mass";
+            check(cudaGetDevice(&device));nd=input[0].dofs;routeName="device-"+flatEvaluationFamily(input)+"-mass";
             auto map=makeHostUnique<DeviceMap>("python.mass-map");auto diag=makeHostUnique<Buffer<double>>("python.mass-diagonal");
             {FlatEvaluationOperator flat;Buffer<double> weights;FlatEvaluationBuilder builder;
                 builder.build(input,flat,weights,*map,*diag);
@@ -260,9 +262,9 @@ public:
     void close()override{std::lock_guard<std::mutex> lock(mutex);diagonal.reset();M.reset();if(counted){--liveMassOwners;counted=false;}}
 };
 }
-std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationInput& input){return std::allocate_shared<MassOwner>(radia_hmatrix_cuda::HostFaultAllocator<MassOwner>("python.mass-owner"),input);}
-std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationInput& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
-FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationInput& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
+std::shared_ptr<MassOperator> createFlatMass(const FlatEvaluationGroups& input){return std::allocate_shared<MassOwner>(radia_hmatrix_cuda::HostFaultAllocator<MassOwner>("python.mass-owner"),input);}
+std::shared_ptr<MaterialOperator> createFlatMaterial(const FlatEvaluationGroups& input,const Law& law){return std::allocate_shared<MaterialOwner>(radia_hmatrix_cuda::HostFaultAllocator<MaterialOwner>("python.material-owner"),input,law);}
+FlatEvaluationBudget validateFlatEvaluationScope(const FlatEvaluationGroups& input){validateFlatEvaluation(input);return flatEvaluationBudget(input,0);}
 }
 
 radia_hdiv_python::NewtonResult radia_hdiv_python::nonlinearBridge(radia_hmatrix_cuda::Resident& op,radia_hdiv_bh::MaterialOperator& material,const radia_hmatrix_cuda::HostVector<double>& rhs,const radia_hmatrix_cuda::HostVector<double>& initial,const NewtonOptions& options){
