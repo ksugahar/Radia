@@ -1,0 +1,245 @@
+"""Mirror and cyclic images on the connected tet, pyramid and hex device route.
+
+Guards: the CPU route refuses images on a mixed mesh, so the reference is the CPU typed route on the explicitly meshed
+copies. On a transition cube set off from its rotated copies and on a polar sector of hexes, pyramids and tets whose rotated
+copies touch it at the seam, BDM1 and BDM2, the device entries with images equal the sum of the CPU entries over the copies,
+alternating signs included. On those meshes and on a transition cube set off from or cut by its mirror, the dense and
+compressed linear solves and the nonlinear solve reproduce the element means of the CPU solve of the explicit mesh. A
+classification that ignores the image or a typed inner integral on the unmapped point moves them far beyond the detectors.
+A space with a compressed trace, a connected periodic sector and a field request refuse.
+Assumes: the CPU typed route on a mesh of explicit copies is the reference; a solve in the mirror-symmetric or cyclic
+subspace is the same discretization only when the copies carry the same elements, so the copies are built from one cell
+list. The REL values are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is
+bypassed for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane
+loads the binding through the provenance-checked loader.
+"""
+
+import contextlib
+import math
+import os
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ENTRY_REL = 1e-9
+SOLVE_REL = 1e-6
+ACA_SOLVE_REL = 1e-5
+INV_CHI = 1.0/499.0
+PAIR_SAMPLE = 1500
+_BH = [[0.0, 0.0], [200.0, 0.8], [1000.0, 1.4], [5000.0, 1.7], [50000.0, 1.95], [500000.0, 2.6]]
+_GEOMETRY = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents",
+             "tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule", "far_factor", "family",
+             "hex_rules", "hex_bands", "host_types")
+_FOLD = dict(disjoint=6, sector=8)
+
+
+@pytest.fixture(scope="module")
+def cuda():
+    if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
+        pytest.skip("Optional GPU lane requires RADIA_HDIV_NATIVE_TEST_DIR")
+    from radia.gpu import _native
+    return _native("_hdiv_cuda")
+
+
+def _parts(mesh):
+    ngmesh = mesh.ngmesh
+    points = [tuple(float(value) for value in point.p) for point in ngmesh.Points()]
+    return points, [[vertex.nr - 1 for vertex in element.vertices] for element in ngmesh.Elements3D()]
+
+
+def _rotated_copies(points, cells, fold):
+    """The copies of one cell list, disjoint in numbering: a rotated copy touches its neighbour without sharing a vertex."""
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh
+    all_points, all_cells = [], []
+    for k in range(fold):
+        c, s = math.cos(2.0*math.pi*k/fold), math.sin(2.0*math.pi*k/fold)
+        offset = len(all_points)
+        all_points += [(c*x - s*y, s*x + c*y, z) for x, y, z in points]
+        all_cells += [[vertex + offset for vertex in cell] for cell in cells]
+    return build_mesh(all_points, all_cells)
+
+
+def _mirrored(points, cells):
+    """The cell list and its x -> -x copy; vertices on the plane are shared, so the normal trace is continuous there."""
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, oriented
+    all_points, index = list(points), {}
+    for number, (x, y, z) in enumerate(points):
+        if abs(x) < 1e-12:
+            index[number] = number
+        else:
+            index[number] = len(all_points)
+            all_points.append((-x, y, z))
+    copies = []
+    for cell in cells:
+        image = [index[vertex] for vertex in cell]
+        copies.append([image[i] for i in (1, 0, 3, 2, 5, 4, 7, 6)] if len(image) == 8 else oriented(all_points, image))
+    return build_mesh(all_points, cells + copies)
+
+
+def _save(mesh, path):
+    mesh.ngmesh.Save(str(path))
+    return path
+
+
+@pytest.fixture(scope="module")
+def meshes(tmp_path_factory):
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, mixed_grid, transition_cube
+    root = tmp_path_factory.mktemp("mixed-images")
+    points, cells = _parts(transition_cube())
+    box = lambda x0: [(x0 + 0.02*x, 0.02*(y - 0.5), 0.02*(z - 0.5)) for x, y, z in points]
+    alpha = 2.0*math.pi/_FOLD["sector"]
+    polar = lambda radius, theta, z: (radius*math.cos(theta), radius*math.sin(theta), z)
+    sector = mixed_grid((2, 1, 1), lengths=(0.02, alpha, 0.008), origin=(0.03, -0.5*alpha, -0.004), mapping=polar)
+    target = dict(disjoint=_save(build_mesh(box(0.04), cells), root/"disjoint.vol"),
+                  disjoint_copies=_save(_rotated_copies(box(0.04), cells, _FOLD["disjoint"]), root/"disjoint_copies.vol"),
+                  sector=_save(sector, root/"sector.vol"),
+                  gap=_save(build_mesh(box(0.004), cells), root/"gap.vol"),
+                  gap_copies=_save(_mirrored(box(0.004), cells), root/"gap_copies.vol"),
+                  cut=_save(build_mesh(box(0.0), cells), root/"cut.vol"),
+                  cut_copies=_save(_mirrored(box(0.0), cells), root/"cut_copies.vol"))
+    target["sector_copies"] = _save(_rotated_copies(*_parts(sector), _FOLD["sector"]), root/"sector_copies.vol")
+    return target
+
+
+@contextlib.contextmanager
+def _unchecked_snapshot(path, *_):
+    yield Path(path), "0"*64, "0"*64
+
+
+_RECEIPT = dict(label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="0"*64,
+                mesh_check_provenance={})
+
+
+@pytest.fixture
+def prepared(monkeypatch):
+    from radia import hdiv_gpu
+    monkeypatch.setattr(hdiv_gpu, "_checked_mesh_snapshot", _unchecked_snapshot)
+    return hdiv_gpu
+
+
+def _hosts(setup):
+    table = setup["charge_gram"]
+    return (table["cell_vertices"].size//81, table["face_vertices"].size//27,
+            {(int(kind), int(host), tuple(int(e) for e in expo)): index for index, (kind, host, expo) in
+             enumerate(zip(table["charge_kind"], table["charge_host"], table["charge_exponents"].reshape(-1, 3)))})
+
+
+def _entries(cuda, arguments, rows, cols):
+    rows, cols = np.ascontiguousarray(rows, dtype=np.uint64), np.ascontiguousarray(cols, dtype=np.uint64)
+    return np.concatenate([cuda._diagnostic_flat_charge_entries(**arguments, rows=rows[s:s + 65536], cols=cols[s:s + 65536],
+                                                                backend="gpu") for s in range(0, len(rows), 65536)])
+
+
+@pytest.mark.parametrize("name,order,alternating", [("disjoint", 1, False), ("disjoint", 2, False), ("sector", 1, False),
+                                                    ("sector", 2, False), ("sector", 1, True), ("sector", 2, True)])
+def test_image_entries_equal_the_sum_over_the_explicit_copies(meshes, request, cuda, name, order, alternating):
+    import ngsolve as ng
+    from radia import hdiv_gpu
+    from radia.vim._vim import _build_charge_gram_mixed
+    fold = _FOLD[name]
+    with ng.TaskManager():
+        base = hdiv_gpu._prepare_device_components(meshes[name], order, cuda, aca=None, compression="dense")
+        copies = hdiv_gpu._prepare_device_components(meshes[name + "_copies"], order, cuda, aca=None, compression="dense")
+        _, gram, _, _ = _build_charge_gram_mixed(ng.HDiv(ng.Mesh(str(meshes[name + "_copies"])), order=order), build_hmatrix=False)
+    assert base["family"] == "mixed" and copies["family"] == "mixed"
+    table = base["charge_gram"]
+    cells, faces, _ = _hosts(base)
+    _, _, ring = _hosts(copies)
+    # Copy k of a host follows the cell list: its lattice is the rotated base lattice, which keeps the reference monomials.
+    for kind, count, key in ((0, cells, "cell_vertices"), (1, faces, "face_vertices")):
+        lattice = table[key].reshape(count, -1, 3)
+        for k in range(fold):
+            c, s = math.cos(2.0*math.pi*k/fold), math.sin(2.0*math.pi*k/fold)
+            moved = np.stack((c*lattice[..., 0] - s*lattice[..., 1], s*lattice[..., 0] + c*lattice[..., 1], lattice[..., 2]), axis=-1)
+            other = copies["charge_gram"][key].reshape(fold*count, -1, 3)[k*count:(k + 1)*count]
+            assert np.abs(moved - other).max() <= 1e-12, f"{name} copy {k} kind {kind}: {np.abs(moved - other).max():.3e}"
+    n = table["charge_host"].size
+    rng = np.random.default_rng(20261105)
+    upper = np.c_[np.triu_indices(n)]
+    pairs = upper if len(upper) <= PAIR_SAMPLE else np.unique(np.r_[np.c_[np.arange(n), np.arange(n)],
+                                                                    upper[rng.integers(0, len(upper), PAIR_SAMPLE)]], axis=0)
+    signs = [(-1.0)**k if alternating else 1.0 for k in range(fold)]
+    expected = np.zeros(len(pairs))
+    for index, (a, b) in enumerate(pairs):
+        kind, host, expo = int(table["charge_kind"][b]), int(table["charge_host"][b]), tuple(int(e) for e in table["charge_exponents"][3*b:3*b + 3])
+        for k in range(fold):
+            expected[index] += signs[k]*gram.entry(int(a), ring[kind, host + k*(faces if kind else cells), expo])
+    device = {key: table[key] for key in _GEOMETRY}
+    device.update(hdiv_gpu._device_image_terms(None, fold, alternating))
+    actual = _entries(cuda, device, pairs[:, 0], pairs[:, 1])
+    plain = _entries(cuda, {key: table[key] for key in _GEOMETRY}, pairs[:, 0], pairs[:, 1])
+    direct = np.abs(_entries(cuda, {key: table[key] for key in _GEOMETRY}, np.arange(n), np.arange(n)))
+    scale = np.sqrt(direct[pairs[:, 0]]*direct[pairs[:, 1]])
+    relative = np.abs(actual - expected)/scale
+    worst = int(np.argmax(relative))
+    moved = np.abs(plain - expected)/scale
+    request.node.user_properties += [("charges", int(n)), ("pairs", len(pairs)), ("max_relative", float(relative.max())), ("moved", float(moved.max()))]
+    assert relative.max() <= ENTRY_REL, (f"{name} order={order} alternating={alternating} pair={pairs[worst].tolist()} actual={actual[worst]!r} "
+                                         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
+    assert moved.max() > 1e3*max(ENTRY_REL, float(relative.max())), f"{name} images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}"
+
+
+def _element_means(field, mesh):
+    import ngsolve as ng
+    return np.column_stack([np.asarray(ng.Integrate(field[k], mesh, order=8, element_wise=True)) for k in range(3)])
+
+
+def _cpu_means(path, cells, order, applied, **kw):
+    import ngsolve as ng
+    import radia as rad
+    from radia.vim import _solve
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(path))
+        result = _solve.hdiv_demag_solve(mesh, H_ext=ng.CF(applied), order=order, tol=1e-11, **kw)
+        return _element_means(result["gfM"], mesh)[:cells]
+
+
+def _device_means(device, state):
+    import ngsolve as ng
+    field = ng.GridFunction(device.fespace)
+    field.vec.FV().NumPy()[:] = state
+    with ng.TaskManager():
+        return _element_means(field, device.fespace.mesh)
+
+
+_SOLVE_CASES = [("disjoint", 1, "dense", dict(image_cyclic=6), (0.0, 0.0, 1e5)), ("disjoint", 2, "aca", dict(image_cyclic=6), (0.0, 0.0, 1e5)),
+                ("sector", 1, "dense", dict(image_cyclic=8), (0.0, 0.0, 1e5)), ("sector", 2, "dense", dict(image_cyclic=8), (0.0, 0.0, 1e5)),
+                ("sector", 2, "aca", dict(image_cyclic=8), (0.0, 0.0, 1e5)), ("gap", 2, "dense", dict(image="-x"), (1e5, 0.0, 0.0)),
+                ("cut", 1, "dense", dict(image="-x"), (1e5, 0.0, 0.0)), ("cut", 2, "dense", dict(image="-x"), (1e5, 0.0, 0.0))]
+
+
+@pytest.mark.parametrize("name,order,compression,images,applied", _SOLVE_CASES)
+def test_linear_solve_matches_the_explicit_copies(meshes, request, prepared, cuda, name, order, compression, images, applied):
+    with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression=compression, **_RECEIPT, **images) as device:
+        solved = device.solve(applied, INV_CHI, tolerance=1e-10, max_iterations=4000)
+        means = _device_means(device, solved["x"])
+        rows = {(row["payload"], row["direction"]): row["bytes"] for row in device.stats()["assembly"]["transfer_ledger"]}
+    reference = _cpu_means(meshes[name + "_copies"], len(means), order, applied, mu_r=500.0)
+    relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
+    request.node.user_properties += [("solve_relative", float(relative)), ("iterations", int(solved["iterations"]))]
+    assert ("image_transforms", "H2D") in rows
+    limit = SOLVE_REL if compression == "dense" else ACA_SOLVE_REL
+    assert relative <= limit, f"{name} order={order} {compression} {images} relative={relative:.3e} limit={limit:.0e}"
+
+
+@pytest.mark.parametrize("name,order,images,applied", [("sector", 1, dict(image_cyclic=8), (0.0, 0.0, 1e5)), ("cut", 2, dict(image="-x"), (1e5, 0.0, 0.0))])
+def test_nonlinear_solve_matches_the_explicit_copies(meshes, request, prepared, cuda, name, order, images, applied):
+    with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
+        solved = device.solve(applied, tolerance=1e-9, linear_tolerance=1e-10)
+        means = _device_means(device, solved["x"])
+    reference = _cpu_means(meshes[name + "_copies"], len(means), order, applied, bh_table=_BH, nl_tol=1e-9)
+    relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
+    request.node.user_properties += [("solve_relative", float(relative)), ("newton", int(solved["newton_iterations"]))]
+    assert relative <= SOLVE_REL, f"{name} order={order} {images} relative={relative:.3e} limit={SOLVE_REL:.0e}"
+
+
+def test_a_compressed_trace_a_periodic_sector_and_a_field_request_refuse(meshes, prepared, cuda):
+    with pytest.raises(NotImplementedError, match="compressed normal trace"):
+        prepared.PreparedHDivLinear(meshes["cut"], backend="gpu", order=1, gram_compression="dense", **_RECEIPT, image="+x")
+    with pytest.raises(NotImplementedError, match="pure HEX"):
+        prepared._DeviceImages(None, 6, False, ("periodic_min", "periodic_max")).checked_terms(None, 1, prepared._MIXED)
+    with prepared.PreparedHDivLinear(meshes["gap"], backend="gpu", order=1, gram_compression="dense", **_RECEIPT, image="-x") as device:
+        with pytest.raises(ValueError, match="no route"):
+            device.field(np.zeros(device.dofs), np.array([[0.05, 0.0, 0.0]]))

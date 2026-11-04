@@ -207,7 +207,7 @@ __device__ inline bool hexExponential(const HexDevice& d,int t,int s,bool touchi
 // Directed (target t, source s, image img) block family of the CPU QuadBlockHex.
 __device__ inline int hexClassify(const HexDevice& d,int t,int s,HexAdjacency& adj,int img=0){
     adj.dim=-1;
-    if(d.type)return t==s||hexTouch(d,t,s)||hexSep(d,t,s)<=d.nearGrade*(d.size[t]+d.size[s])?hexGradedClass:hexFarClass;
+    if(d.type)return hexTouch(d,t,s,img)||hexSep(d,t,s,img)<=d.nearGrade*(d.size[t]+d.size[s])?hexGradedClass:hexFarClass;
     const bool touching=hexTouch(d,t,s,img);const double sep=hexSep(d,t,s,img),sz=d.size[t]+d.size[s];
     const bool exactNear=touching||sep<=hexAffineExactNear*sz;
     if(d.order==1){
@@ -421,15 +421,16 @@ __device__ inline bool hexGradedInner(const HexDevice& d,bool self,int s,const d
     if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),pm,ref):quadClosest(hexNodes(d,s),pm,ref)))return false;
     hexConeFanInner(d,s,pm,ref,nS,inner);return true;
 }
-// CPU QuadBlockTyped inner of a tet, triangle or pyramid source: exact on the polynomial charges of an
-// affine source, on levels on its rational charge, radial from the anchor on a non-parallelogram pyramid.
-__device__ inline void hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
+// CPU QuadBlockTyped inner of a tet, triangle or pyramid source at the target point p, mapped by T^-1 for an image: exact on
+// the polynomial charges of an affine source, on levels on its rational charge, radial from the anchor on a non-parallelogram
+// pyramid. The anchor is the target's own pre-image only when p is that point on the source itself.
+__device__ inline void hexTypedInner(const HexDevice& d,bool onSource,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
     using namespace radia_hdiv_typed;
     const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;
     if(analytic)affinePotentials(type,nd,center,p,nS,coeff,inner);
     if(type!=pyramidHost)return;
     if(analytic){for(int l=0;l<nS;++l)if(e[3*l+2]<0)inner[l]+=pyramidRationalPotential(nd,center,p,R.x,R.w,R.n);return;}
-    double anchor[3];if(t==s)collapse(type,xi,anchor);else pyramidAnchor(nd,p,anchor);
+    double anchor[3];if(onSource)collapse(type,xi,anchor);else pyramidAnchor(nd,p,anchor);
     pyramidRadial(nd,p,anchor,e,0,nS,R.x,R.w,R.n,inner);
 }
 // CPU QuadBlockHexCompositeProduct inner: the exact self radial, the radial
@@ -533,7 +534,8 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int img,int
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
         else if(cls==hexFarClass)hexFarInner(d,s,Xm,nS,row);
         else if(cls==hexAffineClass)hexAffineInner(d,s,Xm,nS,row);
-        else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
+        else if(typedSource){const bool onSource=self&&fabs(X[0]-Xm[0])+fabs(X[1]-Xm[1])+fabs(X[2]-Xm[2])<=1e-12*d.size[s];
+            hexTypedInner(d,onSource,s,Xm,xi,analytic,typedCenter,local,nS,row);}
         else if(graded){if(!hexGradedInner(d,self,s,X,Xm,xi,nS,row,local))atomicExch(invalid,5);}
         else if(!hexCompositeInner(d,self,s,X,Xm,xi,nS,row))atomicExch(invalid,4);
         for(int l=0;l<nT;++l)row[nS+l]=wq*hexDensity(d,t,hexExponent(d,t,l),xi);
@@ -667,6 +669,7 @@ __global__ void hexPairWork(HexDevice d,const unsigned long long* keys,const std
     work[2*p]={lowerSource?-1:lo,hi,img,2*offsets[p]};work[2*p+1]={lo==hi||(oneSided&&!lowerSource)?-1:hi,lo,img,2*offsets[p]+size};
 }
 // 0.5 (G_AB + G_BA^T) into the lo-host row orientation, or the one integrated direction of a mixed mesh pair (CPU GetHexSymBlock).
+// One direction of an image pair is G_T or G_T^-1 by the host types alone; the list closed under inversion with equal signs sums both.
 __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,const double* raw,double* values,int* invalid){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
     int img,lo,hi;hexKeyParts(d,keys[p],img,lo,hi);
