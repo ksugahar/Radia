@@ -271,7 +271,7 @@ def _fake_workflow(monkeypatch, calls, material_fail=None, used=900, bound=910):
     monkeypatch.setattr(hdiv_gpu, "__package__", "hdivfake")
     monkeypatch.setattr(hdiv_gpu, "_prepare_device_components", lambda *a, **k: dict(
         dofs=4, family="affine-tet", rhs_operator=None, mean_operator=None, material_budget=_budget(), charge_gram={},
-        evaluation_tables={}))
+        evaluation_tables={}, fespace=None, fe_owner=None))
     monkeypatch.setattr(hdiv_gpu, "_checked_material_assembly", lambda assembly, tables: dict(
         persistent_device_bytes=used - 100, setup_transient_device_bytes=100))
     monkeypatch.setattr(hdiv_gpu, "_checked_device_assembly", lambda assembly, gram: {})
