@@ -512,19 +512,15 @@ def _cpu_ams(fes, coefficients, bonus, ssn, ndof):
     import ngsolve as ng
 
     mesh = fes.mesh
-    real_space = ng.HCurl(mesh, order=1, nograds=True, complex=False, dirichlet=fes.GetDirichlet() if hasattr(fes, "GetDirichlet") else "")
-    real_space.FreeDofs().Clear()
-    for number, is_free in enumerate(fes.FreeDofs()):
-        if is_free:
-            real_space.FreeDofs().Set(number)
+    real_space = ng.HCurl(mesh, order=1, nograds=True, complex=False)
     aux = _aux_matrix(real_space, coefficients, bonus)
     gradient, _ = real_space.CreateGradient()
     coordinates = np.array([v.point for v in mesh.vertices], dtype=np.float64)
-    arguments = dict(a_real_mat=aux, grad_mat=gradient, freedofs=real_space.FreeDofs(), coord_x=list(coordinates[:, 0]),
-                     coord_y=list(coordinates[:, 1]), coord_z=list(coordinates[:, 2]), cycle_type=1, print_level=0)
+    arguments = dict(grad_mat=gradient, freedofs=fes.FreeDofs(), coord_x=coordinates[:, 0].tolist(), coord_y=coordinates[:, 1].tolist(),
+                     coord_z=coordinates[:, 2].tolist(), cycle_type=1, print_level=0)
     if fes.is_complex:
-        return ssn.ComplexCompactAMSPreconditioner(ndof_complex=ndof, **arguments)
-    return ssn.CompactAMSPreconditioner(**arguments)
+        return ssn.ComplexCompactAMSPreconditioner(a_real_mat=aux, ndof_complex=ndof, **arguments)
+    return ssn.CompactAMSPreconditioner(mat=aux, **arguments)
 
 
 def _solve(space, coefficients, rhs, *, Backend, lift, preconditioner, bonus, tolerance, max_iterations, cycles):
