@@ -101,7 +101,8 @@ findings remain:
    the acceptance gate; a single positive quadratic direction is not a global
    PSD certificate.
 Known, fail-loud limitations are not hidden failures: mapped HEX BDM2 shape
-derivatives, 3D pyramid/mixed meshes, and 2D history solves remain unsupported.
+derivatives, curved or image-using 3D pyramid/mixed meshes, and 2D history solves remain
+unsupported.
 Large IMA field maps remain direct because the tree route is
 disabled whenever images are present. MATLAB owns native field-evaluator and
 EnergyStop MEX surfaces, but the high-level `radia.vim` solve is still an
@@ -177,7 +178,7 @@ an agreement certificate, not analytic absolute truth.
 | 3D HEX | BDM2 | affine or mapped geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop; mapped shape derivative fails loudly | persistent native evaluator from configured source representation |
 | 3D WEDGE | BDM1, BDM2 | geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop | persistent mapped source representation; native repeated evaluation |
 | 2D TRI/QUAD/mixed | BDM1 with geometry 1/2; BDM2 with geometry 1/2/3 | Q2/Q3 production pairings are explicit | linear/nonlinear and IMA; no `SolveHysteresis` | persistent native planar field and `Az` evaluator |
-| 3D mixed/pyramid | none | none | fail loud pending NGSolve HDiv pyramid | fixed-magnetization Radia geometry is separate and is not a material solve |
+| 3D mixed/pyramid | BDM1, BDM2 | straight only | linear, nonlinear; no images or internal interfaces | typed charge Gram on CPU and device; fixed-magnetization Radia geometry is separate and is not a material solve |
 
 The four permanent-magnet levels are implemented on the same method surface:
 
@@ -809,7 +810,6 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
   the clean rebuild; the older access-violation report is not reproduced;
 - loop-free, symmetry-loop, PSD, high-order TET, linear recoil, and irreversible
   EnergyStop validation: PASS;
-- NGSolve HDiv pyramid tripwire: expected xfail;
 - 3 IMA field roundoff tests: FAIL, including isolated-process reruns, with the
   measurements recorded in section 4;
 - batched/block-PCG true-residual and constrained-H-matrix checks: 2 tests PASS.
@@ -871,7 +871,6 @@ python -m pytest -q `
   validation_test/feec/test_hdiv_vim_loop_free.py `
   validation_test/feec/test_hdiv_vim_symmetry_loops.py `
   validation_test/feec/test_hdiv_vim_psd.py `
-  validation_test/feec/test_hdiv_pyramid_gate.py `
   validation_test/hysteresis/test_linear_recoil_permanent_magnet.py `
   validation_test/hysteresis/test_energy_stop_irreversible_pm.py
 

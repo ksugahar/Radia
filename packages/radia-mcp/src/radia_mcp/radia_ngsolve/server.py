@@ -983,7 +983,7 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
                            backend: str, mesh_check_receipt: str, mesh_check_receipt_sha256: str,
                            mesh_check_provenance: dict, order: int = 1, curve_order: int = 1,
                            preconditioner: str = "reference-diagonal",
-                           tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> str:
+                           tolerance: float = 5e-14, linear_tolerance: float = 1e-6) -> str:
     """Run shared GPU HDiv-MMM Newton for uniform H cases, reusing one owner.
 
     Select backend='gpu' explicitly. Provide a checked body .vol label contract

@@ -53,6 +53,26 @@ Removal steps:
 - **Standalone field projection.** `radia_cuda_projection` is shipped in the wheel
   again; an earlier change here had dropped it.
 
+### Retired by user decision
+
+The user approved these retirements on 2026-11-04. They have no replacement:
+
+| Capability | Why it has no replacement |
+|---|---|
+| Geometry-only compressed Gram: `create_analytic_hacapk` took constant-density cells and faces, up to 4096 charges, with an optional caller charge map | `AnalyticChargeGram` is dense and bounded at 128 charges. A compressed RT0 operator is reachable through `prepareHDivDeviceSetup(mesh, 0, ...)` from a mesh, not from bare geometry |
+| All-high-order Gram profile of the old `native-tet` and `direct` routes | The device route uses the near/far profile of `_prepare_gpu_charge_inputs` with far factor 2. This is a numerically different Gram; there is no option to select the old one |
+| `HMatrixOperator.apply(n)` repeating an action without a download | `HDivDeviceOperator.apply` returns every result. Repeated applies stay on the device only inside a solve |
+| Test of compensated products on exact-arithmetic leaves | It needs caller-supplied leaves. The `fma` code stays live and is reached only by ordinary solves |
+
+### Replaced by a device route
+
+Pure-pyramid GPU material evaluation reached the removed action at `93efc9a60`; the
+tet-pyramid-hex family failed before it. The user asked on 2026-11-04 for tet-hex meshes
+joined through pyramids. They now take the device `mixed` family: typed charge Gram, per-class
+charge map, and up to three evaluation groups for the material and the reference mass
+(`tests/test_hdiv_gpu_mixed_device.py`, `validate_mixed_sphere.py`). The CPU typed route of
+`radia.vim` is its reference.
+
 ### Open user decisions
 
 These have no replacement. Each conflicts with the direction that no MATLAB
@@ -61,13 +81,10 @@ capability is lost, so none is settled here:
 | Capability | Why it has no replacement |
 |---|---|
 | Caller-supplied leaves, mass or charge map (`HMatrixOperator`, a released public class; `_ResidentHDiv` leaf constructor) | Uploading them is what the residency policy forbids |
-| Caller `E` and weights (`HDivBHMaterial(E,weights,law)`), and with it GPU material evaluation on pyramids | Same policy. The device material takes reference tables for tetrahedra and hexahedra and has no pyramid family. Pure-pyramid evaluation reached this action at `93efc9a60`; the tet-pyramid-hex family failed before it |
+| Caller `E` and weights (`HDivBHMaterial(E,weights,law)`) | Same policy |
 | Assembled sparse tangent from `evaluateHDivBHMaterial` | A matrix crossing. `HDivBHMaterial` returns the tangent action only |
 | MATLAB solve with no Python step | The removed solves ran NGSolve in the MEX; the device setup is staged by Python once |
-| Geometry-only compressed Gram: `create_analytic_hacapk` took constant-density cells and faces, up to 4096 charges, with an optional caller charge map | `AnalyticChargeGram` is dense and bounded at 128 charges. A compressed RT0 operator is reachable through `prepareHDivDeviceSetup(mesh, 0, ...)` from a mesh, not from bare geometry |
-| All-high-order Gram profile of the old `native-tet` and `direct` routes | The device route uses the near/far profile of `_prepare_gpu_charge_inputs` with far factor 2. This is a numerically different Gram; there is no option to select the old one |
 | The CPU route as the curved reference of `validate_curved_hdiv.py` | The device takes a higher mass rule than the CPU default; see [CURVED_GATE_RECORD.md](CURVED_GATE_RECORD.md). Choosing the rule of the two routes is a numerical decision |
-| `HMatrixOperator.apply(n)` repeating an action without a download | `HDivDeviceOperator.apply` returns every result. Repeated applies stay on the device only inside a solve |
 | Result fields of the removed solves: `setup_peak_owned_device_bytes`, `combined_peak_owned_device_bytes`, `quadrature_order`, `material_points`, `implementation`, `gram_integration_profile`, `fe_setup_seconds` and similar | Only the fields of the device result remain; `stats` and `assembly` carry the device ownership and the transfer ledger |
 | Raw gateway commands (`analytic_aca_*`, `analytic_entry_batch`, `curved_entry_batch`) and `affineHDivQuadrature`, `curvedHDivQuadrature` as query functions | They served the host normalization; their values had no other consumer |
 | `profileAssembly` option | A timer of the removed host stages |
@@ -81,12 +98,10 @@ targets and owns no matrix. Consumers: `validation_test/radfld_cuda/`,
 as a standalone MEX; no shipped wrapper calls it now. Its last shipped callers were
 `PreparedHDivNonlinear` and the mesh-path route of `solveHDivElements`.
 
-Pyramid and mixed meshes: the CPU charge Gram refuses them
-(`radia.vim` "Radia pyramid and MIXED-element charge-Gram are not implemented"),
-and the device route refuses them through `_mesh_family`. No solve consumer
-existed. `tests/test_hdiv_pyramid_material.py` changed: it lost its GPU energy,
-gradient and tangent check, so it now covers the NGSolve mapped mass and the
-standalone publisher exchange only. See the open decisions above.
+`tests/test_hdiv_pyramid_material.py` keeps the NGSolve mapped mass and the standalone
+publisher exchange. The GPU energy, gradient and tangent of a pyramid moved to the mixed
+device tests above. Straight geometry and orders 1 and 2 only; images and internal
+interfaces refuse loudly.
 
 ## Script consumers of `HMatrixOperator` at removal
 
@@ -107,7 +122,7 @@ and remains in git history.
 
 "Pybind11" below means the entry runs `_hdiv_cuda` through Python, not the MEX.
 The two frontends share one kernel object; their bitwise equality is recorded for
-`device-flat-tet` only (`PYBIND_MEX_BITWISE.md`).
+`device-flat-tet` and `device-mixed` only (`PYBIND_MEX_BITWISE.md`).
 
 | Coverage | Removed scripts | Standing on the device route |
 |---|---|---|
@@ -117,7 +132,7 @@ The two frontends share one kernel object; their bitwise equality is recorded fo
 | Gram, B and mass actions vs CPU | `checkHDivCPUActions.m`, `validate_python_hdiv_resident.py` | The composed `B^T G B` action in the curved and HEX lanes and in `test_hdiv_gpu_device_guards.py` for affine; G and B are not compared separately. Pybind11 |
 | Analytic constant-density Gram vs CPU | `validate_resident.py`, `checkResidentHMatrix.m` | `test_hdiv_gpu_analytic_gram.py`; pybind11 and MEX bitwise in `check_analytic_gram_bitwise.py` |
 | Fail-loud limits: linear and Newton iteration limits, stale linearization, NaN and overflowing states, device ownership over repeated applies | `tests/test_native_hdiv_resident.py` | `test_hdiv_gpu_device_guards.py` on device-built operators |
-| Compensated products on exact-arithmetic leaves | `tests/test_native_hdiv_resident.py` | **Lost.** It needs caller-supplied leaves. The `fma` code stays live and is reached only by ordinary solves |
+| Compensated products on exact-arithmetic leaves | `tests/test_native_hdiv_resident.py` | Retired by user decision, see above |
 | Chebyshev and polynomial settings | `checkChebyshev.m`, `checkChebyshevSettings.m`, `screenChebyshevSettings.m`, `checkPolynomialGraph.m` | Fixed settings in the linear lane. The settings screen was a one-off and has no replacement |
 | Nonlinear whole solve vs CPU coefficients | `checkNonlinearSolve.m`, `checkPreparedNonlinear.m`, `prepare_nonlinear_solve.py`, `checkFinalResidual.m`, `checkFrameAdmission.m` | `validate_device_nonlinear.py` against `radia.vim.Solve` on pybind11. It shares the near/far profile, so it is implementation parity, not independent accuracy. It also writes the inputs of `validate_nonlinear_sphere.py`, the ideal unit-sphere check; that script now tests the mesh geometry instead of pinning two mesh hashes, with its 1 % limit unchanged. Frame coefficient telemetry has no replacement |
 | Known-root nonlinear solve | `validate_hdiv_nonlinear_manufactured.py` | `test_device_newton_recovers_a_manufactured_root` in `test_hdiv_gpu_device_guards.py`: analytic cubic material through NGSolve with the root's right-hand side taken from the device operator, so it guards the Newton loop and not the operator, which the operator action cases guard; same 1e-10 and 1e-11 limits, tetrahedra and hexahedra. It replaces the independent CPU leaf factors with the CPU exact dense Gram |
@@ -127,7 +142,7 @@ The two frontends share one kernel object; their bitwise equality is recorded fo
 | 100-run process and device memory slope | `checkHostSetupMemory.m` | `checkHDivDeviceMemory.m` (`makeGatewayMemoryWorkload.m` case `hdiv-device`) under `gateway_memory_protocol.json`. Meets its limits on both device hosts: see [README.md](README.md) |
 | Linear and nonlinear device scale, GPU only | `measurePreparedNonlinear.m`, `measureStrongNonlinear.m`, `validate_scaled_hdiv.py`, `prepare_hdiv_scale.py`, `preflight_hdiv_scale.py` | `device_scale.py`, with `--nonlinear`. Records only; no speed or scale threshold |
 | CPU/GPU and ABBA timing | `measure_hdiv_cpu_gpu.py`, `measureChebyshev.m`, `measureChebyshevSettings.m`, `measureFinalResidual.m`, `measurePolynomialGraph.m`, `measureMaterialCSC.m` | None. One-off comparisons are not repeated |
-| Native allocation and MEX fault injection of the gateway | `checkAllocationFailure.m`, `checkCurvedAllocationFailure.m`, `checkMxCommandFailure.m`, `checkMxOutputFailure.m`, `checkResourceFailure.m`, `gates/p1-*.json`, `check_c_memory_transaction.c`, `check_host_fault_allocator.cpp`, `check_entry_batch.*`, `check_full_host.*`, `check_leaf_bounds.*`, `check_serial_host.c`, `check_aca_cpu.c`, `check_aca_regression.c` | Subject removed. No device-route counterpart was written: a 100-run memory slope covers retention, not allocation failure paths |
+| Native allocation and MEX fault injection of the gateway | `checkAllocationFailure.m`, `checkCurvedAllocationFailure.m`, `checkMxCommandFailure.m`, `checkMxOutputFailure.m`, `checkResourceFailure.m`, `gates/p1-*.json`, `check_c_memory_transaction.c`, `check_host_fault_allocator.cpp`, `check_entry_batch.*`, `check_full_host.*`, `check_leaf_bounds.*`, `check_serial_host.c`, `check_aca_cpu.c`, `check_aca_regression.c` | `device_fault/`, run by `run_device_boundary.py`; see [README.md](README.md). The removed C and host-leaf checks have no subject |
 | MATLAB output fixture | `prepareCurvedMxOutputFixture.m` | Subject removed |
 | Scale estimate formulas | `tests/test_hdiv_scale_estimates.py` | Subject removed |
 
