@@ -36,6 +36,12 @@ def checked_inputs(path, contract, receipt_python):
     receipt = Path(str(path) + ".receipt.json")
     subprocess.run([str(receipt_python), str(repo / "tools/prepare_hdiv_mesh_receipt.py"), "--mesh", str(path),
                     "--label-contract", str(contract), "--output", str(receipt)], check=True)
+    return carried_inputs(path, contract)
+
+
+def carried_inputs(path, contract):
+    """The receipt of a mesh checked earlier; hosts without the checker consume these."""
+    receipt = Path(str(path) + ".receipt.json")
     provenance = json.loads(Path(str(receipt) + ".provenance.json").read_text(encoding="utf-8"))
     return dict(label_contract=str(contract), mesh_check_receipt=str(receipt),
                 mesh_check_receipt_sha256=sha256(receipt), mesh_check_provenance=provenance)
