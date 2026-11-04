@@ -359,8 +359,9 @@ private:
         for (size_t g = 0; g < split.size(); ++g) {
             const GroupView& view = op.groups.g[g];
             const int ni = split[g].ni, nw = split[g].nw;
-            // Short launches keep every kernel well inside a device watchdog.
-            const int batch = std::min(view.ne, 4096);
+            // Short launches keep every kernel well inside a device watchdog. Elements of a group
+            // cost the same, so one block per processor leaves none idle for a launch.
+            const int batch = int(std::min<long long>(view.ne, 64LL * device_processors()));
             Dev<S> scratch(size_t(batch) * ni * nw, name);
             for (int first = 0; first < view.ne; first += batch) {
                 const int count = std::min(batch, view.ne - first);

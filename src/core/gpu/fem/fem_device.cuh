@@ -29,6 +29,13 @@ inline void ck(cudaError_t status, const char* where) {
         throw std::runtime_error(std::string(where) + ": " + cudaGetErrorString(status));
 }
 inline void ck_kernels(const char* where) { ck(cudaGetLastError(), where); }
+inline int device_processors() {
+    int gpu = 0;
+    ck(cudaGetDevice(&gpu), "device query");
+    cudaDeviceProp properties;
+    ck(cudaGetDeviceProperties(&properties, gpu), "device query");
+    return std::max(properties.multiProcessorCount, 1);
+}
 
 struct DeviceMemory {
     size_t live = 0, peak = 0;
