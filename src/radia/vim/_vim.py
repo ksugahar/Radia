@@ -37,6 +37,7 @@ import scipy.sparse as sp
 from netgen.meshing import EdgeDescriptor
 
 from ._capabilities import validate_hdiv_configuration
+from ._nonlinear import _material_rule_space, _rule_integrator
 import ngsolve as ng
 import time
 
@@ -801,6 +802,12 @@ def _shape_signature_ref(fe, pts, dim):
     return fe.ndof, np.round(vals, 14).tobytes()
 
 
+def _ref_monomial(pt, e):
+    """One reference monomial; a z exponent of -1 codes the rational pyramid charge x y / (1 - z)."""
+    value = pt[0] ** e[0] * pt[1] ** e[1]
+    return value / (1.0 - pt[2]) if e[2] < 0 else value * pt[2] ** e[2]
+
+
 def _ref_monomial_moment_transform(fe, mons, refP, refW, dim):
     """Direct map from ref-shape moments to ref monomial coefficients.
 
@@ -812,8 +819,7 @@ def _ref_monomial_moment_transform(fe, mons, refP, refW, dim):
     """
     if dim == 3:
         Phi = np.array([fe.CalcShape(float(pt[0]), float(pt[1]), float(pt[2])) for pt in refP], dtype=float)
-        Mono = np.array([[pt[0] ** i * pt[1] ** j * pt[2] ** k for (i, j, k) in mons]
-                         for pt in refP], dtype=float)
+        Mono = np.array([[_ref_monomial(pt, e) for e in mons] for pt in refP], dtype=float)
     else:
         Phi = np.array([fe.CalcShape(float(pt[0]), float(pt[1])) for pt in refP], dtype=float)
         Mono = np.array([[pt[0] ** i * pt[1] ** j for (i, j) in mons] for pt in refP], dtype=float)
@@ -2241,6 +2247,175 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
     return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
+# Host types of hdiv_typed_host_math.inc.
+_HOST_HEX, _HOST_QUAD, _HOST_TET, _HOST_TRI, _HOST_PYRAMID = 0, 1, 2, 3, 4
+_MIXED_CELL_TYPES = {8: _HOST_HEX, 4: _HOST_TET, 5: _HOST_PYRAMID}
+_MIXED_FACE_TYPES = {4: _HOST_QUAD, 3: _HOST_TRI}
+_MIXED_ET = {_HOST_HEX: ng.ET.HEX, _HOST_QUAD: ng.ET.QUAD, _HOST_TET: ng.ET.TET, _HOST_TRI: ng.ET.TRIG, _HOST_PYRAMID: ng.ET.PYRAMID}
+_MIXED_SIGNATURE_PTS = {_HOST_HEX: _HEX_SHAPE_SIG_PTS, _HOST_QUAD: _QUAD_SHAPE_SIG_PTS,
+                        _HOST_TET: np.array([(0.137, 0.239, 0.361), (0.211, 0.113, 0.557), (0.319, 0.173, 0.123)]),
+                        _HOST_TRI: _TRI_SHAPE_SIG_PTS,
+                        _HOST_PYRAMID: np.array([(0.137, 0.239, 0.361), (0.211, 0.113, 0.557), (0.319, 0.173, 0.123)])}
+
+
+def _mons_mixed_cell(host_type, order):
+    """Reference monomials spanning the divergence image of an HDiv cell of the given order."""
+    if host_type == _HOST_HEX:
+        return _mons_hex(order)
+    if host_type == _HOST_TET:
+        return [(total - k - j, j, k) for total in range(order) for k in range(total + 1)
+                for j in range(total - k + 1)]
+    return [(0, 0, 0)] if order == 1 else [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, -1)]
+
+
+def _mixed_lattice_nodes(mesh, e, host_type):
+    """Q2 lattice of the trilinear map from the unit cube, from the NGSolve element vertices."""
+    if host_type == _HOST_HEX:
+        return _hex_q2_lattice_nodes_ngsolve_linear(mesh, e)
+    if host_type == _HOST_QUAD:
+        return _quad_q2_lattice_nodes_ngsolve_linear(mesh, e)
+    v = np.array([mesh[w].point for w in mesh[e].vertices], dtype=float)
+    if host_type == _HOST_TRI:
+        return np.array([(iu/2*(1-iv/2))*v[0] + (iv/2)*v[1] + (1-iv/2)*(1-iu/2)*v[2]
+                         for iv in range(3) for iu in range(3)])
+    nodes = []
+    for iz in range(3):
+        for iy in range(3):
+            for ix in range(3):
+                c = (ix/2, iy/2, iz/2)
+                if host_type == _HOST_TET:
+                    x, y, z = c[0]*(1-c[1])*(1-c[2]), c[1]*(1-c[2]), c[2]
+                    nodes.append(x*v[0] + y*v[1] + z*v[2] + (1-x-y-z)*v[3])
+                else:
+                    bottom = (1-c[0])*(1-c[1])*v[0] + c[0]*(1-c[1])*v[1] + c[0]*c[1]*v[2] + (1-c[0])*c[1]*v[3]
+                    nodes.append((1-c[2])*bottom + c[2]*v[4])
+    return np.array(nodes)
+
+
+def _charge_basis_mixed(fes, *, materialize_mass=True):
+    """Charge map B and host lattices of a straight tet, pyramid and hex mesh; the caller wraps TaskManager.
+
+    Interior faces are conforming, so charges are the cell densities and the exterior face traces, each a
+    reference-frame monomial in the reference measure (the Piola Jacobian cancels, as on the hex route).
+    The mass takes the material rule, the one the device route uses: NGSolve's default order is short on a
+    non-parallelogram pyramid or hex, by 1.5e-3 of the mass on a coarse ball and 1.2e-5 of its mean."""
+    mesh = fes.mesh
+    p = int(fes.globalorder)
+    if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
+        raise NotImplementedError("Mixed HDiv-VIM requires HDiv order 1 or 2 on straight undeformed geometry")
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v = ng.L2(mesh, order=p)
+    L2b = ng.SurfaceL2(mesh, order=p)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
+    mh = ng.BilinearForm(fes); mh += _rule_integrator(u * fes.TestFunction(), _material_rule_space(fes)); mh.Assemble()
+    Bv, Bb = _csr(bv), _csr(bb)
+    M_mass = _csr(mh) if materialize_mass else None
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = _exterior_bnd_elements(mesh)
+    if not bels:
+        raise ValueError("Mixed HDiv-VIM requires exterior boundary surface elements")
+    host, kind, expo, cell_nodes, face_nodes, host_types = [], [], [], [], [], []
+    cache = {}
+
+    def rows(elements, space, types, nodes, kind_code, moments):
+        count = 0
+        data, row_index, col_index = [], [], []
+        for h, e in enumerate(elements):
+            host_type = types[len(mesh[e].vertices)]
+            host_types.append(host_type)
+            nodes.append(_mixed_lattice_nodes(mesh, e, host_type))
+            fe = space.GetFE(e)
+            dim = 3 if kind_code == 0 else 2
+            mons = _mons_mixed_cell(host_type, p) if kind_code == 0 else (
+                _mons_quad(p) if host_type == _HOST_QUAD else _mons_tri(p))
+            key = (host_type, _shape_signature_ref(fe, _MIXED_SIGNATURE_PTS[host_type], dim=dim))
+            T = cache.get(key)
+            if T is None:
+                rule = ng.IntegrationRule(_MIXED_ET[host_type], 2*p + 6)
+                refP = np.array([ip.point[:dim] for ip in rule], dtype=float)
+                refW = np.array([ip.weight for ip in rule], dtype=float)
+                T = _ref_monomial_moment_transform(fe, mons, refP, refW, dim=dim)
+                cache[key] = T
+            dofs = list(space.GetDofNrs(e))
+            for a, m in enumerate(mons):
+                host.append(h); kind.append(kind_code)
+                expo.extend(m if kind_code == 0 else (m[0], m[1], 0))
+                for b, col in enumerate(dofs):
+                    if T[a, b] != 0.0:
+                        row_index.append(count + a); col_index.append(int(col)); data.append(float(T[a, b]))
+            count += len(mons)
+        return sp.csr_matrix((data, (row_index, col_index)), shape=(count, moments.shape[0])) @ moments
+
+    Bvol = rows(vels, L2v, _MIXED_CELL_TYPES, cell_nodes, 0, Bv)
+    Bface = rows(bels, L2b, _MIXED_FACE_TYPES, face_nodes, 1, Bb)
+    return dict(B=sp.vstack([Bvol, Bface]).tocsr(), M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo, host_types=host_types, n_el=len(vels), n_bf=len(bels),
+                cell_nodes=_f64_buffer(np.concatenate([n.ravel() for n in cell_nodes])),
+                face_nodes=_f64_buffer(np.concatenate([n.ravel() for n in face_nodes])))
+
+
+_MIXED_GLNEAR_N = 10
+_MIXED_NEAR_BAND = 0.5
+
+
+def _mixed_gram_rules(p):
+    """1D outer, pyramid and graded near point counts of the mixed Gram, shared by the CPU and device routes.
+
+    The middle count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
+    charge of an affine one. These are proposed values, from convergence on small meshes. A fixed count
+    is a relative error per touching cell pair, so it stays a floor under mesh refinement.
+    """
+    return (5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N
+
+
+def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materialize_mass=True, build_hmatrix=True):
+    """Charge Gram of a straight tet, pyramid and hex mesh via the hex-mode C++ H-matrix.
+
+    Every pair takes QuadBlockTyped: each host is the trilinear image of a unit cube with its density in
+    the cube measure, so one far and one graded near rule serve all of them. A pair is near when it is
+    self, touching, or within _MIXED_NEAR_BAND of its summed sizes. The near inner is exact on an affine
+    tet, triangle or pyramid source, by levels on the rational charge of an affine pyramid, radial on a
+    non-parallelogram pyramid, and a hex or quad source keeps its own inner rules. A pair of two different hosts integrates one
+    direction, with the cheaper host as source."""
+    p = int(fes.globalorder)
+    t0 = time.perf_counter()
+    cb = _charge_basis_mixed(fes, materialize_mass=materialize_mass)
+    t1 = time.perf_counter()
+    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    glo, gwo = _g01(glout_n)
+    gli, gwi = _g01(glin_n)
+    gln, gwn = _g01(glnear_n)
+    glp, gwp = _g01(_HEX_GLPAIR_N)
+    ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
+    G = _rp._ChargeGramHMatrix(
+        hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
+        n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
+        charge_host=_i32_buffer(cb["host"]), charge_kind=_i32_buffer(cb["kind"]),
+        charge_expo=_i32_buffer(cb["expo"]),
+        sym_tet_pts=_f64_buffer(_SYM5_TET[0]), sym_tet_w=_f64_buffer(_SYM5_TET[1]),
+        sym_tri_pts=_f64_buffer(_SYM5_TRI[0]), sym_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        gl_out=_f64_buffer(glo), gw_out=_f64_buffer(gwo),
+        gl_in=_f64_buffer(gli), gw_in=_f64_buffer(gwi),
+        far_tet_pts=_f64_buffer(ftp), far_tet_w=_f64_buffer(ftw),
+        far_tri_pts=_f64_buffer(_SYM5_TRI[0]), far_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        near_grade=_MIXED_NEAR_BAND, far_inner_factor=1.0, image_masks=_EMPTY_I32, image_signs=_EMPTY_F64,
+        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix),
+        gl_near=_f64_buffer(gln), gw_near=_f64_buffer(gwn), near_inner_exact=True,
+        gl_in_self=_f64_buffer(gli), gw_in_self=_f64_buffer(gwi),
+        gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
+        gl_pair_affine=_f64_buffer(glp), gw_pair_affine=_f64_buffer(gwp),
+        host_types=_i32_buffer(cb["host_types"]))
+    build_charge_gram.last_timings = {"charge_basis_wall_s": t1 - t0, "charge_gram_cpp_wall_s": time.perf_counter() - t1}
+    chk = G.hex_state_check()
+    if chk["ctor"] != chk["now"]:
+        raise RuntimeError(
+            "mixed charge Gram instance state was corrupted between construction and use "
+            f"(canary ctor={chk['ctor']!r} != now={chk['now']!r})")
+    return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
+
+
 def _finish_image_rotations(
         G, image_rot_angle, *, eps, leafsize, eta, build_hmatrix,
         deferred_build=False, max_rank=200):
@@ -2449,6 +2624,47 @@ def _prepare_gpu_curved_charge_inputs(fes, *, backend):
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32), rules=rules, ho_far_factor=_CURVED_FAR_FACTOR)
 
+
+
+def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
+    """Stage the straight tet, pyramid and hex device-build input, not a GPU operator.
+
+    Host lattices, charge order and rules are those of ``_build_charge_gram_mixed``: no charge map, Gram
+    coefficient or CUDA allocation is produced. The caller owns TaskManager.
+    """
+    if backend != "gpu":
+        raise ValueError("Device charge preparation requires explicit backend='gpu'")
+    mesh = fes.mesh
+    p = int(fes.globalorder)
+    if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
+        raise NotImplementedError("Mixed device charge input requires HDiv order 1 or 2 on straight undeformed geometry")
+    if not 0 < fes.ndof <= 2**31 - 1:
+        raise ValueError("Device charge DOF or element budget exceeded")
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = _exterior_bnd_elements(mesh)
+    if not bels:
+        raise ValueError("Device charge input requires exterior boundary surface elements")
+    host, kind, expo, host_types, cell_nodes, face_nodes = [], [], [], [], [], []
+    for h, e in enumerate(vels):
+        host_type = _MIXED_CELL_TYPES[len(mesh[e].vertices)]
+        host_types.append(host_type)
+        cell_nodes.append(_mixed_lattice_nodes(mesh, e, host_type).ravel())
+        for m in _mons_mixed_cell(host_type, p):
+            host.append(h); kind.append(0); expo.extend(m)
+    for h, e in enumerate(bels):
+        host_type = _MIXED_FACE_TYPES[len(mesh[e].vertices)]
+        host_types.append(host_type)
+        face_nodes.append(_mixed_lattice_nodes(mesh, e, host_type).ravel())
+        for a, b in (_mons_quad(p) if host_type == _HOST_QUAD else _mons_tri(p)):
+            host.append(h); kind.append(1); expo.extend((a, b, 0))
+    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    return dict(
+        family="mixed", n_el=len(vels), cell_nodes=np.concatenate(cell_nodes), face_nodes=np.concatenate(face_nodes),
+        host_types=np.array(host_types, dtype=np.int32), charge_host=np.array(host, dtype=np.int32),
+        charge_kind=np.array(kind, dtype=np.int32), charge_expo=np.array(expo, dtype=np.int32),
+        rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N),
+                   near=_g01(glnear_n), inner_self=_g01(glin_n)),
+        near_grade=_MIXED_NEAR_BAND, far_inner=1.0)
 
 
 def _prepare_gpu_hex_charge_inputs(fes, *, backend):
@@ -2696,10 +2912,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix)),
             gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes != {4}:
-        raise ValueError(
-            "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
-            "(6-vertex). Radia pyramid and MIXED-element charge-Gram are not implemented; "
-            "NGSolve element support alone does not enable them. Got vertex counts %s." % sorted(_vtypes))
+        # Straight tet, pyramid and hex hosts of one mesh, validated above against its capability.
+        if image_masks or image_rot_angle or internal_interfaces:
+            raise NotImplementedError(
+                "vim.ChargeGram: images and internal interfaces are not wired for a mixed mesh")
+        return _finish_charge_gram_backend(_configure_cpp_operator(*_build_charge_gram_mixed(
+            fes, eps=eps, leafsize=leafsize, eta=eta,
+            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix)),
+            gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs

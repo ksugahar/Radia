@@ -42,6 +42,9 @@ _CAPABILITIES = (
     HDivCapability(3, "hex", 2, (1, 2), 2),
     HDivCapability(3, "wedge", 1, (1, 2), 2),
     HDivCapability(3, "wedge", 2, (1, 2), 2),
+    # Straight tet, pyramid and hex hosts of one mesh, or pure pyramids.
+    HDivCapability(3, "mixed", 1, (1,), 1),
+    HDivCapability(3, "mixed", 2, (1,), 1),
 )
 _BY_KEY = {(c.dimension, c.topology, c.hdiv_order): c for c in _CAPABILITIES}
 
@@ -63,9 +66,11 @@ def classify_hdiv_topology(dimension: int, vertex_counts) -> str:
             return "wedge"
         if counts == {8}:
             return "hex"
+        if counts <= {4, 5, 8}:
+            return "mixed"
     raise ValueError(
-        "HDiv-VIM supports 2D TRI/QUAD mixtures or one pure 3D topology "
-        "(TET, HEX, WEDGE); got dimension=%r, vertex_counts=%s."
+        "HDiv-VIM supports 2D TRI/QUAD mixtures, one pure 3D topology (TET, HEX, "
+        "WEDGE) or a TET, PYRAMID and HEX mixture; got dimension=%r, vertex_counts=%s."
         % (dimension, sorted(counts)))
 
 

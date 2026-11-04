@@ -309,7 +309,8 @@ public:
                         bool near_inner_exact = true,
                         std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
                         std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {},
-                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {});
+                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {},
+                        std::vector<int> host_types = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -1356,6 +1357,9 @@ private:
     void BuildHexInnerRules();
     std::vector<HexFarRule> m_hexInnerRules;  // cells, then boundary faces; immutable during fill
     void ResetHexCacheStats();
+    // Directed block of a pair with a tet, pyramid or triangle host; see hdiv_typed_host_math.inc.
+    std::vector<double> QuadBlockTyped(int kindT, int hT, int kindS, int hS) const;
+    int TypedHostOf(int kind, int host) const { return m_hostType[(kind == 0) ? (size_t)host : (size_t)m_n_el + host]; }
     // img (IMA): 0 = direct block; i>0 = image block i-1 (target host x the source host mapped by the image
     // transform T_{i-1}), for the reduced-symmetry image method -- mirrors (1/2,1/4,1/8 models) and cyclic
     // N-fold rotations.  Default 0 keeps the direct hex/wedge Gram byte-identical.
@@ -1398,6 +1402,8 @@ private:
     // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
     // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
     bool m_wedgemode = false;
+    // Hex mode on a mixed mesh: one host type per cell, then per face. Empty on a pure hex mesh.
+    std::vector<int> m_hostType;
     int  m_wedge_n_bf = 0;
     std::vector<double> m_wCellNodes;    // [n_el*54]  18-node tri-P2 (x) z-P2 prism lattice (n = t + 6*iz)
     std::vector<double> m_wFaceNodes;    // [n_bf*27]  9-node slots x 3D (a tri face fills the first 6 = 18)

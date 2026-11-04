@@ -288,9 +288,10 @@ def _resolve_highorder_preconditioner(preconditioner, *, nonlinear, nonlinear_so
     if vertex_counts in ({6}, {8}):
         return "jacobi", "auto:hex-wedge-energy-newton-jacobi"
     threshold = _auto_tet_jacobi_nface_threshold()
+    family = "tet" if vertex_counts == {4} else "mixed"
     if int(n_face) >= threshold:
-        return "jacobi", "auto:tet-energy-newton-jacobi-nface>=%d" % threshold
-    return "mass-riesz", "auto:tet-energy-newton-mass-riesz-nface<%d" % threshold
+        return "jacobi", "auto:%s-energy-newton-jacobi-nface>=%d" % (family, threshold)
+    return "mass-riesz", "auto:%s-energy-newton-mass-riesz-nface<%d" % (family, threshold)
 
 
 def _clear_cpp_solve_timings():
