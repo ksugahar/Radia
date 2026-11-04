@@ -3,10 +3,10 @@
 
 The contract of ``validation_ffag_cyclic_bdm2_ring.py`` on the device route. One two-pole HEX cell solved on the
 device with its rotated images must reproduce the ring of N exact rotations of that cell, in the mean magnetization and
-in gap-field samples. The ring is solved on the CPU route, the validated reference, and on the device route; the
-isolated cell shows that a no-op image route could not pass. Every operator of a device solve is built and kept on the
-device, and the transfer ledgers are recorded. The limits repeat the CPU route's numbers but are PROPOSED for the device
-route, not adopted.
+in gap-field samples, on a linear material and on a saturating BH table. The ring is solved on the CPU route, the
+validated reference, and on the device route; the isolated cell shows that a no-op image route could not pass. Every
+operator of a device solve is built and kept on the device, and the transfer ledgers are recorded. The linear limits
+repeat the CPU route's numbers; all limits are PROPOSED for the device route, not adopted.
 """
 from __future__ import annotations
 
@@ -27,6 +27,9 @@ sys.path.insert(0, str(ROOT.parents[0]/"hmatrix_cuda"))
 
 PROPOSED_MINIMUM_GAP_FRACTION_CLOSED = 0.999
 PROPOSED_MAXIMUM_FIELD_RELATIVE_ERROR = 2.0e-8
+PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR = 1.0e-6
+PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_ERROR = 1.0e-6
+BH_TABLE = ((0.0, 0.0), (200.0, 0.8), (1000.0, 1.4), (5000.0, 1.7), (50000.0, 1.95), (500000.0, 2.6))
 _CONTRACT = dict(schema="radia.vol-label-contract.v1", application="ffag_cyclic_pole_ring",
                  metadata=dict(length_unit="m", unit_source="Caller declaration; the VOL file has no unit tag"),
                  strict_labels=True, required=dict(materials=["pole"], boundaries=["pole_boundary"]),
@@ -53,6 +56,22 @@ def _device_solve(path, checked, probes, args, compression, **images):
     return dict(x=solved["x"], mean_mz=float(solved["mean_magnetization"][2]), field=np.asarray(field["field"]),
                 dofs=int(device.dofs), iterations=int(solved["iterations"]), relative_residual=float(solved["relative_residual"]),
                 gram_route=stats["gram_route"], field_route=field["route"], setup_s=setup_s, solve_s=solve_s,
+                transfer_ledger=stats["assembly"]["transfer_ledger"], field_ledger=field["transfer_ledger"])
+
+
+def _device_nonlinear(path, checked, probes, args, **images):
+    from radia.hdiv_gpu import PreparedHDivNonlinear
+    started = time.perf_counter()
+    with PreparedHDivNonlinear.from_bh_table(path, np.array(BH_TABLE), backend="gpu", order=args.hdiv_order, **checked, **images) as device:
+        setup_s = time.perf_counter() - started
+        started = time.perf_counter()
+        solved = device.solve((0.0, 0.0, args.applied_field_am), tolerance=args.nonlinear_tol, linear_tolerance=args.device_tol)
+        solve_s = time.perf_counter() - started
+        field = device.field(solved["x"], probes)
+        stats = device.stats()
+    return dict(mean_mz=float(solved["mean_magnetization"][2]), field=np.asarray(field["field"]), dofs=int(device.dofs),
+                newton_iterations=int(solved["newton_iterations"]), relative_residual=float(solved["relative_residual"]),
+                field_route=field["route"], setup_s=setup_s, solve_s=solve_s,
                 transfer_ledger=stats["assembly"]["transfer_ledger"], field_ledger=field["transfer_ledger"])
 
 
@@ -96,6 +115,11 @@ def run_validation(args):
                              gram_eps=args.gram_eps, tol=args.solve_tol)
         cpu_cell_mz = _mean_mz(cpu_cell, cell)
         cpu_cell_x = np.asarray(cpu_cell["_m_coefficients"], dtype=float)
+        rad.UtiDelAll()
+        cpu_saturating = vim.Solve(ring, bh_table=np.array(BH_TABLE), H_ext=external, order=args.hdiv_order, gram_eps=args.gram_eps,
+                                   tol=args.solve_tol, nl_tol=args.nonlinear_tol)
+        cpu_saturating_mz = _mean_mz(cpu_saturating, ring)
+        cpu_saturating_h = np.asarray(vim.FieldFromSolution(cpu_saturating, probes, algorithm="direct"), float)
     runs = {}
     for compression in args.compressions:
         runs[compression] = dict(
@@ -128,16 +152,36 @@ def run_validation(args):
                 next(row["bytes"] for row in run["cyclic"]["transfer_ledger"]
                      if row["payload"] == "image_transforms" and row["direction"] == "H2D") == 72*(args.fold - 1))})
     gates["bdm2_hex_is_used"] = bool(args.hdiv_order == 2 and {len(e.vertices) for e in cell.Elements(ng.VOL)} == {8})
+    saturating = dict(lone=_device_nonlinear(paths["cell"], checked["cell"], probes, args),
+                      cyclic=_device_nonlinear(paths["cell"], checked["cell"], probes, args, image_cyclic=args.fold),
+                      ring=_device_nonlinear(paths["ring"], checked["ring"], probes, args))
+    saturating_scale = max(float(np.max(np.linalg.norm(cpu_saturating_h, axis=1))), 1.0)
+    saturating_measured = dict(
+        cpu_ring_mean_mz=cpu_saturating_mz, cyclic_mean_mz=saturating["cyclic"]["mean_mz"], lone_mean_mz=saturating["lone"]["mean_mz"],
+        device_ring_mean_mz=saturating["ring"]["mean_mz"],
+        cyclic_vs_cpu_ring_mean=abs(saturating["cyclic"]["mean_mz"] - cpu_saturating_mz)/abs(cpu_saturating_mz),
+        lone_vs_cpu_ring_mean=abs(saturating["lone"]["mean_mz"] - cpu_saturating_mz)/abs(cpu_saturating_mz),
+        device_ring_vs_cpu_ring_mean=abs(saturating["ring"]["mean_mz"] - cpu_saturating_mz)/abs(cpu_saturating_mz),
+        cyclic_vs_cpu_ring_field=float(np.max(np.linalg.norm(saturating["cyclic"]["field"] - cpu_saturating_h, axis=1))/saturating_scale),
+        lone_vs_cpu_ring_field=float(np.max(np.linalg.norm(saturating["lone"]["field"] - cpu_saturating_h, axis=1))/saturating_scale),
+        cyclic_vs_device_ring_field=float(np.max(np.linalg.norm(saturating["cyclic"]["field"] - saturating["ring"]["field"], axis=1))/saturating_scale))
+    gates.update(
+        saturating_cyclic_mean_matches_cpu_ring=bool(saturating_measured["cyclic_vs_cpu_ring_mean"] <= PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR),
+        saturating_cyclic_field_matches_cpu_ring=bool(saturating_measured["cyclic_vs_cpu_ring_field"] <= PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_ERROR),
+        saturating_lone_cell_field_differs=bool(saturating_measured["lone_vs_cpu_ring_field"] > 1.0e3*PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_ERROR))
     return dict(
         schema="radia.ffag-device-cyclic-ring/v1", status="pass" if all(gates.values()) else "fail", adoption="proposed",
         accepted=False, scope="Disjoint two-pole FFAG cells on the device route; the CPU ring is the reference.",
         proposed_limits=dict(minimum_gap_fraction_closed=PROPOSED_MINIMUM_GAP_FRACTION_CLOSED,
-                             maximum_field_relative_error=PROPOSED_MAXIMUM_FIELD_RELATIVE_ERROR),
+                             maximum_field_relative_error=PROPOSED_MAXIMUM_FIELD_RELATIVE_ERROR,
+                             maximum_nonlinear_mean_relative_error=PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR,
+                             maximum_nonlinear_field_relative_error=PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_ERROR),
         settings={key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
         source_sha=os.environ.get("RADIA_SOURCE_SHA"), ngsolve_version=ng.__version__,
         cpu=dict(ring_mean_mz=cpu_ring_mz, cell_mean_mz=cpu_cell_mz, ring_dofs=int(cpu_ring["ndof"]), cell_dofs=int(cpu_cell["ndof"]),
                  ring_field_am=cpu_ring_h.tolist(), probe_points_m=probes.tolist()),
         measured=measured, gates=gates, runs={compression: {name: _public(run) for name, run in cases.items()} for compression, cases in runs.items()},
+        saturating=dict(measured=saturating_measured, runs={name: _public(run) for name, run in saturating.items()}),
         validation_wall_s=time.perf_counter() - started, runtime=dict(platform_class=platform.system(), python=platform.python_version()))
 
 
@@ -159,6 +203,7 @@ def parse_args(argv=None):
     parser.add_argument("--gram-eps", type=float, default=1.0e-10)
     parser.add_argument("--solve-tol", type=float, default=1.0e-10)
     parser.add_argument("--device-tol", type=float, default=1.0e-10)
+    parser.add_argument("--nonlinear-tol", type=float, default=1.0e-9)
     parser.add_argument("--max-iterations", type=int, default=4000)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=4)
@@ -172,7 +217,7 @@ def main(argv=None):
     report = run_validation(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    print(json.dumps(dict(status=report["status"], measured=report["measured"], gates=report["gates"]), indent=2))
+    print(json.dumps(dict(status=report["status"], measured=report["measured"], saturating=report["saturating"]["measured"], gates=report["gates"]), indent=2))
     return 0 if report["status"] == "pass" else 1
 
 
