@@ -18,7 +18,7 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 from radia.vim import _solve as solve
 from radia.vim import _vim as V
-from test_hdiv_connected_meshes import connected_mesh
+from tests.test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, mixed_grid, oriented, pyramid_cube, to_ball, transition_cube
 from validation_test.hmatrix_cuda.rational_pyramid_reference import energies
 

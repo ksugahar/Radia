@@ -17,7 +17,7 @@ from scipy.sparse.linalg import norm as sparse_norm
 
 
 ng = pytest.importorskip("ngsolve")
-from test_hdiv_connected_meshes import connected_mesh
+from tests.test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 
 
