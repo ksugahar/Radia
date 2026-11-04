@@ -1,6 +1,6 @@
 """Device-assembled H1 and HCurl operators against NGSolve assembly on identical inputs.
 
-Guards: on straight tets, trilinear hexes and curved tets, with volume and boundary terms at
+Guards: on straight tets, trilinear hexes, prisms, warped pyramids, a tet/hex/pyramid mesh and curved tets, with volume and boundary terms at
 p=1,2,3, the device sparsity pattern and values act on random vectors like the NGSolve matrix of
 the same form. A wrong metric, Piola map, orientation class, quadrature rule or reference tensor
 moves the action far beyond the detector. The ledger names only permitted payload families, so a
@@ -18,8 +18,8 @@ ng = pytest.importorskip("ngsolve")
 
 ACTION_REL = 1e-11
 BONUS = (2, 2, 2)
-COEFFICIENTS = dict(stiff=2.0, mass=3.0, mass_im=5.0, trace={"back": 7.0, "top": 2.0}, trace_im={"back": 1.5},
-                    stiff_aux=2.0, mass_aux=4.0, trace_aux={"back": 8.0})
+COEFFICIENTS = dict(stiff=2.0, mass=3.0, mass_im=5.0, trace={"back": 7.0, "top": 2.0, "exterior": 4.0},
+                    trace_im={"back": 1.5, "exterior": 0.5}, stiff_aux=2.0, mass_aux=4.0, trace_aux={"back": 8.0, "exterior": 3.0})
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +51,23 @@ def _curved():
     return mesh
 
 
-MESHES = {"tets": _tets, "hexes": _hexes, "curved": _curved}
+def _prisms():
+    from ngsolve.meshes import MakeStructured3DMesh
+    return MakeStructured3DMesh(hexes=False, prism=True, nx=2, ny=2, nz=2,
+                                mapping=lambda x, y, z: (x * (1 + 0.2 * y), y + 0.1 * x * z, z + 0.05 * x * y))
+
+
+def _pyramids():
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import pyramid_cube
+    return pyramid_cube(0.3)
+
+
+def _mixed():
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import mixed_grid
+    return mixed_grid((2, 2, 2))
+
+
+MESHES = {"tets": _tets, "hexes": _hexes, "curved": _curved, "prisms": _prisms, "pyramids": _pyramids, "mixed": _mixed}
 
 
 def _coefficients(route, mesh):

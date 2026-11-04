@@ -106,13 +106,12 @@ def _element_rows(fes, mesh, coefficients):
     return groups
 
 
-def _rule_orders(kind, order, et, bonus):
-    """Integration orders of the symbolic forms: simplices drop the derivative orders."""
+def _derivative_rule_order(fe_order, et, bonus):
+    """Rule order of a derivative form: 2 * element order, less two on simplices, plus the bonus."""
     import ngsolve as ng
 
     simplex = et in (ng.ET.TET, ng.ET.TRIG)
-    derivative = 2 * order - (2 if simplex else 0) + bonus[0]
-    return max(derivative, 0), 2 * order + bonus[1]
+    return max(2 * fe_order - (2 if simplex else 0) + bonus, 0)
 
 
 def _tabulate(fes, mesh, vb, representatives, points, nl, quantity):
@@ -155,9 +154,6 @@ def _geometry_derivatives(mesh, vb, representative, points):
     return np.array(tables, dtype=np.float64)
 
 
-_JACOBIAN_CACHE_KEY = "jacobians"
-
-
 def _curved_jacobians(mesh, vb, rule_by_type, numbers):
     """Element Jacobians of a curved mesh, taken from the NGSolve mapping."""
     import ngsolve as ng
@@ -174,7 +170,7 @@ def _curved_jacobians(mesh, vb, rule_by_type, numbers):
     return flat[picks].reshape(len(numbers) * nq * 3 * dim)
 
 
-def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity, law, curved, native_laws):
+def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity, law, curved):
     import ngsolve as ng
 
     points = [tuple(p) for p in rule.points]
@@ -190,7 +186,7 @@ def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity,
     return form
 
 
-def _group_inputs(fes, mesh, coefficients, kind, order, bonus, native):
+def _group_inputs(fes, mesh, coefficients, kind, bonus, native):
     import ngsolve as ng
 
     if mesh.dim != 3:
@@ -210,7 +206,8 @@ def _group_inputs(fes, mesh, coefficients, kind, order, bonus, native):
         representatives = numbers[first]
         nl = dofs.shape[1]
         dim = 3 if vb == ng.VOL else 2
-        stiff_order, mass_order = _rule_orders(kind, order, et, bonus)
+        # The rule follows the element's own order: HCurl on a hexahedron reports p + 1.
+        fe_order = fes.GetFE(ng.ElementId(vb, int(representatives[0]))).order
         group = {"dim": dim, "ne": len(numbers), "nl": nl, "ncls": len(unique), "ngeo": topology.shape[1],
                  "dofs": np.ascontiguousarray(dofs, dtype=np.int32),
                  "cls": np.ascontiguousarray(inverse.ravel(), dtype=np.int32),
@@ -218,12 +215,12 @@ def _group_inputs(fes, mesh, coefficients, kind, order, bonus, native):
                  "coef": np.ascontiguousarray(np.array(row["coef"], dtype=np.float64)), "stiff": None, "mass": None}
         if vb == ng.VOL:
             quantity, law = ("grad", native.LAW_GRAD) if kind == "H1" else ("curl", native.LAW_CURL)
-            group["stiff"] = _form_input(fes, mesh, vb, et, ng.IntegrationRule(et, stiff_order), representatives, numbers, nl,
-                                         quantity, law, curved, native)
+            group["stiff"] = _form_input(fes, mesh, vb, et, ng.IntegrationRule(et, _derivative_rule_order(fe_order, et, bonus[0])),
+                                         representatives, numbers, nl, quantity, law, curved)
         trace_bonus = bonus[2] if vb == ng.BND else bonus[1]
-        mass_rule = ng.IntegrationRule(et, 2 * order + trace_bonus)
+        mass_rule = ng.IntegrationRule(et, 2 * fe_order + trace_bonus)
         quantity, law = ("scalar", native.LAW_VALUE) if kind == "H1" else ("covariant", native.LAW_COVARIANT)
-        group["mass"] = _form_input(fes, mesh, vb, et, mass_rule, representatives, numbers, nl, quantity, law, curved, native)
+        group["mass"] = _form_input(fes, mesh, vb, et, mass_rule, representatives, numbers, nl, quantity, law, curved)
         inputs.append(group)
     return inputs, vertices
 
@@ -285,7 +282,7 @@ class DeviceSystem:
         self.complex_values = bool(fes.is_complex) if complex_values is None else bool(complex_values)
         self._times = {}
         start = time.perf_counter()
-        self.groups, self.vertices = _group_inputs(fes, self.mesh, coefficients, self.kind, self.order, bonus, native)
+        self.groups, self.vertices = _group_inputs(fes, self.mesh, coefficients, self.kind, bonus, native)
         self.free_dofs = np.array(list(fes.FreeDofs()), dtype=np.int32)
         self._times["host_setup_seconds"] = time.perf_counter() - start
         self.native = native.System(int(fes.ndof), self.complex_values, self.groups, self.free_dofs)
