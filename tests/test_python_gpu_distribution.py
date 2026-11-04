@@ -58,7 +58,7 @@ def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutati
         if mutation == "private": z.writestr("radia/commands.json", "private original")
     if mutation == "none":
         result = verifier.verify(wheel, require_python_gpu=True)
-        assert len(result["python_gpu_binaries"]) == 4, result
+        assert len(result["python_gpu_binaries"]) == len(payload.MODULES), result
         assert result["runtime_qualified"] is False, result
     else:
         with pytest.raises(ValueError): verifier.verify(wheel, require_python_gpu=True)
