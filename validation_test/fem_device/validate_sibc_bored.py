@@ -105,13 +105,14 @@ def cpu_reference(case, kelvin, vol, order):
     return result, captured, time.perf_counter() - started
 
 
-def surface_power(g, mesh, sibc, Z_s):
-    """P = Re(Z_s)/2 * int |n x H|^2 dS with H = curl A / mu_0, as the CPU route evaluates it."""
+def surface_power(g, mesh, sibc, omega, Z_s):
+    """P = Re(Z_s)/2 * (omega/|Z_s|)^2 * int |A_t|^2 dS, the expression the CPU route evaluates."""
     normal = ng.specialcf.normal(3)
-    H = NU_0 * ng.curl(g.Trace())
-    tangential = ng.Cross(normal, H)
-    value = ng.Integrate(ng.InnerProduct(tangential, tangential).real, mesh, ng.BND, definedon=mesh.Boundaries(sibc), order=2 * g.space.globalorder + 4)
-    return 0.5 * Z_s.real * float(value)
+    squared = sum(g[i].real * g[i].real + g[i].imag * g[i].imag for i in range(3))
+    normal_re = sum(g[i].real * normal[i] for i in range(3))
+    normal_im = sum(g[i].imag * normal[i] for i in range(3))
+    tangential = ng.Integrate(squared - normal_re * normal_re - normal_im * normal_im, mesh, ng.BND, definedon=mesh.Boundaries(sibc)).real
+    return 0.5 * Z_s.real * (omega / abs(Z_s)) ** 2 * tangential
 
 
 def run_case(case, kelvin, text, work, cycles, tolerance):
@@ -136,10 +137,10 @@ def run_case(case, kelvin, text, work, cycles, tolerance):
     difference = float(np.linalg.norm(device["solution"][free] - reference[free]) / np.linalg.norm(reference[free]))
     g = ng.GridFunction(fes)
     g.vec.FV().NumPy()[:] = device["solution"]
-    power = surface_power(g, mesh, sibc, Z_s)
+    power = surface_power(g, mesh, sibc, omega, Z_s)
     g_cpu = ng.GridFunction(fes)
     g_cpu.vec.FV().NumPy()[:] = reference
-    power_cpu_same_formula = surface_power(g_cpu, mesh, sibc, Z_s)
+    power_cpu_same_formula = surface_power(g_cpu, mesh, sibc, omega, Z_s)
     source_work = float(.5 * omega * np.vdot(device["solution"], data["rhs"]).imag)
     limits = case.LIMITS
     gates = {"true_residual": {"actual": device["true_residual"], "bound": limits["true_residual"], "pass": device["true_residual"] <= limits["true_residual"]},
