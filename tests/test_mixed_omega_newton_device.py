@@ -5,7 +5,8 @@ the host-evaluated point tensor and its update on every Newton step, for the pro
 ``solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(..., Backend="gpu")``.
 Assumes: the nonlinear residual stays the same host quadrature in both routes, so identical stopping
 tests hold on identical inputs. SOLUTION_REL is a PROPOSED detector; the CPU direct solve is the
-reference, not validation of the formulation.
+reference, not validation of the formulation. The linear matching-trace case keeps the tolerances of
+the CPU iterative solve in ``test_kelvin_mixed_omega.py``.
 """
 import importlib.util
 import os
@@ -55,6 +56,41 @@ def _run(case, order, **options):
     arguments.update(options)
     with ng.TaskManager():
         return solve(mesh, source, trace, 1.0, (3.0, 0.0, 0.0), **arguments)
+
+
+@pytest.mark.parametrize("order", [1, 2])
+def test_matching_trace_device_matches_the_direct_solve(order):
+    """The linear entry of ``test_matching_trace_condensation_matches_multiplier_and_cg``, device against direct."""
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
+    from radia.kelvin_solver import solve_magnetostatic_matching_trace_total_reduced_omega
+
+    reduced = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
+    reduced.mat("reduced")
+    reduced.faces.name = "natural"
+    reduced.faces.Min(X).name = "norm_boundary"
+    reduced.faces.Max(X).name = "source_total_interface"
+    total = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
+    total.mat("total")
+    total.faces.name = "natural"
+    total.faces.Max(X).name = "norm_boundary"
+    total.faces.Min(X).name = "source_total_interface"
+    mesh = ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=0.65))
+    source_h = ng.CoefficientFunction((ng.x * ng.x + 0.1 * ng.y, 0.2 * ng.y, -0.15 * ng.z))
+    trace_space = ng.H1(mesh, order=order, definedon=mesh.Boundaries("source_total_interface"))
+    trace = ng.GridFunction(trace_space)
+    trace.Set(-ng.z, definedon=mesh.Boundaries("source_total_interface"))
+    common = dict(mu_r_by_material={"reduced": 1.0, "total": 2.0}, reduced_materials=("reduced",), total_materials=("total",),
+                  interface_boundary="source_total_interface", order=order, dirichlet_boundary="norm_boundary")
+    with ng.TaskManager():
+        direct = solve_magnetostatic_matching_trace_total_reduced_omega(mesh, source_h, trace, solver="direct", **common)
+        device = solve_magnetostatic_matching_trace_total_reduced_omega(mesh, source_h, trace, solver="cg", cg_preconditioner="bddc_h1amg",
+                                                                        cg_tolerance=1.0e-12, Backend="gpu", **common)
+    assert device["backend"] == "gpu", f"backend {device['backend']}, expected gpu"
+    assert device["linear_residual_relative"] < 1.0e-9, f"true residual {device['linear_residual_relative']}"
+    for point in ((-0.65, 0.1, 0.15), (-0.2, -0.2, 0.25), (0.2, 0.15, -0.1), (0.65, -0.1, 0.2)):
+        actual = np.asarray(device["H_cf"](mesh(*point)), dtype=float)
+        expected = np.asarray(direct["H_cf"](mesh(*point)), dtype=float)
+        assert np.allclose(actual, expected, rtol=1.0e-9, atol=1.0e-10), f"H at {point}: device {actual}, direct {expected}"
 
 
 @pytest.mark.parametrize("order", [1, 2])
