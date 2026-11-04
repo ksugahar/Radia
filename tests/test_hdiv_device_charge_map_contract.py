@@ -75,7 +75,7 @@ def test_flat_binding_takes_tables_not_charge_map_values():
     assert names[10:] == ["dofs", "cell_class", "cell_dofs", "cell_tables", "cell_exponents", "face_class",
                           "face_dofs", "face_tables", "face_exponents", "compression", "aca", "backend",
                           "family", "cell_numbers", "face_numbers", "curve_gl", "curve_gw", "cell_mass_rule",
-                          "face_mass_rule", "hex_rules", "hex_bands"], names
+                          "face_mass_rule", "hex_rules", "hex_bands", "host_types", "mixed_charges"], names
     assert not {"offsets", "indices", "values"} & set(names), names
     flat = source[source.index("std::shared_ptr<DeviceOperator> constructFlat("):start]
     assert not re.search(r"\bMapInput\b", flat[:flat.index("PYBIND11_MODULE")]), "flat binding still builds a host CSR"
@@ -84,7 +84,8 @@ def test_flat_binding_takes_tables_not_charge_map_values():
 def test_device_charge_builder_downloads_only_its_validity_flag():
     source = (HDIV / "hdiv_flat_charge_map.cuh").read_text(encoding="utf-8")
     downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
-    assert len(downloads) == 1 and "sizeof(int)" in downloads[0], downloads
+    # One validity flag per builder: flat and mixed.
+    assert len(downloads) == 2 and all("sizeof(int)" in download for download in downloads), downloads
     assert "cudaMemcpyHostToDevice" not in source and "SortPairs" in source
     operator = (HDIV / "hdiv_resident_python_cuda.cu").read_text(encoding="utf-8")
     flat = operator[operator.index("const FlatInput& flat,const ChargeMapInput& charges"):operator.index("void planTransfer")]

@@ -83,7 +83,7 @@ __global__ void flatChargeOffsets(std::size_t rows,std::size_t cellRows,std::siz
 }
 // Mixed mesh: every host has its own monomial and DOF counts, from its class. Rows are the charges in
 // host order; the entries of a row start at the host span plus (row within host) x width.
-__global__ void mixedChargeEntries(std::size_t rows,const int* rowHost,const int* hostFirst,const int* hostClass,const int* classInfo,const int* hostDofStart,
+__global__ void mixedChargeEntries(std::size_t rows,std::size_t nnz,const int* rowHost,const int* hostFirst,const int* hostClass,const int* classInfo,const int* hostDofStart,
     const std::size_t* hostEntry,const int* dofs,const double* tables,std::size_t* indices,double* values,unsigned* entryRow,std::size_t* offsets,int* invalid){
     const auto r=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(r>=rows)return;
     const int g=rowHost[r],a=int(r)-hostFirst[g],cls=hostClass[g],start=classInfo[3*cls],width=classInfo[3*cls+2];
@@ -93,6 +93,7 @@ __global__ void mixedChargeEntries(std::size_t rows,const int* rowHost,const int
     for(int i=0;i<width;++i){int j=i;while(j>0&&d[order[j-1]]>d[i]){order[j]=order[j-1];--j;}order[j]=i;}
     for(int k=0;k<width;++k){const int i=order[k];if(!isfinite(T[i]))atomicExch(invalid,1);indices[base+k]=std::size_t(d[i]);values[base+k]=T[i];entryRow[base+k]=unsigned(r);}
     offsets[r]=base;
+    if(r+1==rows)offsets[rows]=nnz;
 }
 __global__ void mixedChargeTransposeEntries(std::size_t nnz,const unsigned* entries,const unsigned* entryRow,const double* values,std::size_t* indices,double* transposed){
     const auto j=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(j>=nnz)return;
@@ -197,9 +198,8 @@ private:
         upload(hostDofStartD,hostDofStart,"charge_host_dof_start");upload(hostEntryD,hostEntry,"charge_host_entry");upload(invalid,HostVector<int>{0},"charge_map_invalid_flag");
         Buffer<unsigned> entryRow;entryRow.allocate(nnz);
         B.rows=rows;B.offsets.allocate(rows+1);B.indices.allocate(nnz);B.values.allocate(nnz);
-        mixedChargeEntries<<<unsigned((rows+127)/128),128>>>(rows,rowHostD.data,hostFirstD.data,hostClassD.data,classInfoD.data,hostDofStartD.data,hostEntryD.data,dofs.data,tables.data,
+        mixedChargeEntries<<<unsigned((rows+127)/128),128>>>(rows,nnz,rowHostD.data,hostFirstD.data,hostClassD.data,classInfoD.data,hostDofStartD.data,hostEntryD.data,dofs.data,tables.data,
             B.indices.data,B.values.data,entryRow.data,B.offsets.data,invalid.data);check(cudaGetLastError());++launches;
-        check(cudaMemcpy(B.offsets.data+rows,&nnz,sizeof(std::size_t),cudaMemcpyHostToDevice));
         int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));
         transfers.push_back({"charge_map_flag","D2H",sizeof(int)});
         if(failed)throw std::runtime_error("Device HDiv mixed charge map has an invalid row or nonfinite value");
