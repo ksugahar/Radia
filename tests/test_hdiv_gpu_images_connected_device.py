@@ -1,11 +1,12 @@
 """A connected HEX sector on the device: periodic trace, paired seam faces out of the skin, cyclic images.
 
-Guards: on a one-cell polar sector, straight and with a Q2 deformation, BDM1 and BDM2, the device energy operator on the
-dense and the compressed routes, the mass and the linear solve on ``Compress(Periodic(HDiv))`` agree with the CPU operators
-of that space on identical inputs. A two-cell sector reproduces the explicit ring, where the CPU image dispatch selects a far
-rule for touching seam pairs. Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped
-DOF move these far beyond the detectors. A labeled seam without the pair, a sector without identifications and an
-antiperiodic pair refuse.
+Guards: on a one-cell polar sector, which holds both vertices of each identified pair, straight and with a Q2 deformation,
+BDM1 and BDM2, the device energy operator on the dense and the compressed routes, the mass and the linear solve on
+``Compress(Periodic(HDiv))`` agree with the CPU operators of that space on identical inputs, also when a master carries the
+larger number of its pair. A two-cell sector reproduces the explicit ring, where the CPU image dispatch selects a far rule
+for touching seam pairs. Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped DOF
+move these far beyond the detectors. A labeled seam without the pair, a sector without identifications and an antiperiodic
+pair refuse.
 Assumes: the CPU operators of the same reduced space are the reference, with the mass taken on the device's material rule,
 and the ring on its rotated copies; this is parity of one discretization, not independent accuracy. The REL values are
 PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is bypassed for scratch
@@ -31,8 +32,11 @@ SEAM = ("periodic_min", "periodic_max")
 _QUADS = ((0, 3, 2, 1), (4, 5, 6, 7), (1, 2, 6, 5), (3, 0, 4, 7))
 
 
-def _yoke(path, cells, fold, *, ring=False, identified=True, inner=0.03, outer=0.05, half=0.004):
-    """Annular HEX yoke: `cells` per sector, either the closed ring or one sector with labeled cut faces."""
+def _yoke(path, cells, fold, *, ring=False, identified=True, numbering=None, inner=0.03, outer=0.05, half=0.004):
+    """Annular HEX yoke: `cells` per sector, either the closed ring or one sector with labeled cut faces.
+
+    `numbering` holds the vertex number of each (station, radius, height) in index order.
+    """
     from netgen.meshing import Element2D, Element3D, FaceDescriptor, IdentificationType, Mesh, MeshPoint, Pnt
     mesh = Mesh(dim=3)
     mesh.SetMaterial(1, "yoke")
@@ -46,7 +50,8 @@ def _yoke(path, cells, fold, *, ring=False, identified=True, inner=0.03, outer=0
     stations = total if ring else total + 1
     step = 2.0*math.pi/(cells*fold)
     point = {}
-    for it, ir, iz in np.ndindex(stations, 2, 2):
+    keys = list(np.ndindex(stations, 2, 2))
+    for it, ir, iz in (keys if numbering is None else [keys[index] for index in np.argsort(numbering)]):
         radius = (inner, outer)[ir]
         point[it, ir, iz] = mesh.Add(MeshPoint(Pnt(radius*math.cos(it*step), radius*math.sin(it*step), (-half, half)[iz])))
     for it in range(total):
@@ -91,7 +96,8 @@ def cuda():
 def meshes(tmp_path_factory):
     root = tmp_path_factory.mktemp("connected")
     return dict(sector=_yoke(root/"sector.vol", 1, 12), sector2=_yoke(root/"sector2.vol", 2, 8), ring2=_yoke(root/"ring2.vol", 2, 8, ring=True),
-                unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False))
+                unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False),
+                shuffled=_yoke(root/"shuffled.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
 
 
 def _applied():
@@ -135,18 +141,19 @@ def _setup(path, order, cuda, compression, fold, deform):
                                                    q2_deformation=deform, images=hdiv_gpu._DeviceImages(None, fold, False, SEAM))
 
 
-_CASES = [(1, None, "dense"), (2, None, "dense"), (2, None, "aca"), (1, _radial_q2, "dense"), (2, _radial_q2, "dense"), (2, _radial_q2, "aca")]
+_CASES = [("sector", 1, None, "dense"), ("sector", 2, None, "dense"), ("sector", 2, None, "aca"), ("sector", 1, _radial_q2, "dense"),
+          ("sector", 2, _radial_q2, "dense"), ("sector", 2, _radial_q2, "aca"), ("shuffled", 1, None, "dense"), ("shuffled", 2, None, "dense")]
 
 
-@pytest.mark.parametrize("order,deform,compression", _CASES)
-def test_operator_mass_and_solve_match_the_cpu_reduced_space(meshes, request, cuda, order, deform, compression):
+@pytest.mark.parametrize("name,order,deform,compression", _CASES)
+def test_operator_mass_and_solve_match_the_cpu_reduced_space(meshes, request, cuda, name, order, deform, compression):
     from radia import hdiv_gpu
     fold = 12
-    setup = _setup(meshes["sector"], order, cuda, compression, fold, deform)
-    B, gram, M, rhs, _keep = _cpu_operators(meshes["sector"], order, fold, deform)
+    setup = _setup(meshes[name], order, cuda, compression, fold, deform)
+    B, gram, M, rhs, _keep = _cpu_operators(meshes[name], order, fold, deform)
     nd = setup["dofs"]
     assert nd == B.shape[1] == M.shape[0] and len(setup["charge_gram"]["charge_host"]) == B.shape[0], (nd, B.shape, M.shape)
-    assert nd == ng_plain_dofs(meshes["sector"], order) - ng_slaves(order)
+    assert nd == ng_plain_dofs(meshes[name], order) - ng_slaves(order)
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
     mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
     try:
@@ -168,8 +175,8 @@ def test_operator_mass_and_solve_match_the_cpu_reduced_space(meshes, request, cu
         operator.close()
     limit = OPERATOR_REL if compression == "dense" else ACA_OPERATOR_REL
     request.node.user_properties += [("dofs", nd), ("solve_relative", float(relative))] + [("max_relative_" + k, float(v)) for k, v in worst.items()]
-    assert worst["operator"] <= limit and worst["mass"] <= MASS_REL, f"order={order} {compression} {worst} limits {limit:.0e} {MASS_REL:.0e}"
-    assert relative <= (LINEAR_REL if compression == "dense" else ACA_OPERATOR_REL), f"order={order} {compression} solve relative={relative:.3e}"
+    assert worst["operator"] <= limit and worst["mass"] <= MASS_REL, f"{name} order={order} {compression} {worst} limits {limit:.0e} {MASS_REL:.0e}"
+    assert relative <= (LINEAR_REL if compression == "dense" else ACA_OPERATOR_REL), f"{name} order={order} {compression} solve relative={relative:.3e}"
 
 
 def ng_plain_dofs(path, order):
