@@ -71,7 +71,8 @@ class PreparedHDivNonlinear:
 
     @classmethod
     def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, mesh_check_receipt,
-                      mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1):
+                      mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1,
+                      image=None, image_cyclic=None, image_cyclic_alternating=False):
         """Use the existing Radia CPU polynomial construction, without a CPU solve.
 
         Rows are [H in A/m, B in tesla]; one uniform soft-iron law is supported.
@@ -94,11 +95,13 @@ class PreparedHDivNonlinear:
             prepared = cls.__new__(cls)
             prepared.mesh_sha256 = mesh_hash
             prepared.label_contract_sha256 = contract_hash
-            prepared._initialize(snapshot, law, order, aca, curve_order)
+            prepared._initialize(snapshot, law, order, aca, curve_order,
+                                 _DeviceImages(image, image_cyclic, image_cyclic_alternating))
             return prepared
 
     def __init__(self, mesh_path, law, *, backend, label_contract, mesh_check_receipt,
-                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1):
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1,
+                 image=None, image_cyclic=None, image_cyclic_alternating=False):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (1, 2):
@@ -109,9 +112,10 @@ class PreparedHDivNonlinear:
                                     mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
-            self._initialize(snapshot, law, order, aca, curve_order)
+            self._initialize(snapshot, law, order, aca, curve_order,
+                             _DeviceImages(image, image_cyclic, image_cyclic_alternating))
 
-    def _initialize(self, path, law, order, aca, curve_order):
+    def _initialize(self, path, law, order, aca, curve_order, images):
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
@@ -122,7 +126,8 @@ class PreparedHDivNonlinear:
         self.family = None
         self.gram_aca = dict(aca)
         try:
-            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, curve_order=curve_order)
+            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, curve_order=curve_order, images=images)
+            self._gram_arguments = setup["charge_gram"]
             self.family = setup["family"]
             self.dofs = setup["dofs"]
             self._rhs = setup["rhs_operator"]
@@ -180,6 +185,23 @@ class PreparedHDivNonlinear:
             return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
                         mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
 
+    def field(self, x, points):
+        """H in A/m of a solved state at (points, 3) probes, images folded; pure HEX only.
+
+        The device route of ``vim.FieldFromSolution(..., algorithm="direct")``: the charges
+        are the resident charge map's product and only the state, geometry and probes cross.
+        """
+        import numpy as np
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Prepared HDiv workflow has been closed")
+            state = np.ascontiguousarray(x, dtype=np.float64)
+            probes = np.ascontiguousarray(points, dtype=np.float64)
+            if state.shape != (self.dofs,) or probes.ndim != 2 or probes.shape[1] != 3:
+                raise ValueError("field requires the prepared state and (points, 3) probes: %r, %r"
+                                 % (state.shape, probes.shape))
+            return _checked_device_field(self._operator.field(state, probes), self._gram_arguments, state, probes)
+
     def stats(self):
         with self._lock:
             return dict(closed=self._closed, backend="gpu", dofs=getattr(self, "dofs", None),
@@ -224,7 +246,8 @@ class PreparedHDivLinear:
 
     def __init__(self, mesh_path, *, backend, label_contract, mesh_check_receipt,
                  mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                 gram_compression="aca", curve_order=1):
+                 gram_compression="aca", curve_order=1, image=None, image_cyclic=None,
+                 image_cyclic_alternating=False):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (0, 1, 2):
@@ -247,7 +270,9 @@ class PreparedHDivLinear:
             self.label_contract_sha256 = contract_hash
             try:
                 setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, compression=gram_compression,
-                                                   curve_order=curve_order)
+                                                   curve_order=curve_order,
+                                                   images=_DeviceImages(image, image_cyclic, image_cyclic_alternating))
+                self._gram_arguments = setup["charge_gram"]
                 self.family = setup["family"]
                 self.dofs = setup["dofs"]
                 self._rhs = setup["rhs_operator"]
@@ -292,6 +317,23 @@ class PreparedHDivLinear:
                                                  degree, lower_fraction)
             return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
                         mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
+
+    def field(self, x, points):
+        """H in A/m of a solved state at (points, 3) probes, images folded; pure HEX only.
+
+        The device route of ``vim.FieldFromSolution(..., algorithm="direct")``: the charges
+        are the resident charge map's product and only the state, geometry and probes cross.
+        """
+        import numpy as np
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Prepared HDiv workflow has been closed")
+            state = np.ascontiguousarray(x, dtype=np.float64)
+            probes = np.ascontiguousarray(points, dtype=np.float64)
+            if state.shape != (self.dofs,) or probes.ndim != 2 or probes.shape[1] != 3:
+                raise ValueError("field requires the prepared state and (points, 3) probes: %r, %r"
+                                 % (state.shape, probes.shape))
+            return _checked_device_field(self._operator.field(state, probes), self._gram_arguments, state, probes)
 
     def stats(self):
         with self._lock:
@@ -683,6 +725,35 @@ def _checked_device_assembly(assembly, arguments):
     return assembly
 
 
+def _checked_device_field(result, arguments, state, probes):
+    """Reject a field evaluation whose ledger holds anything but geometry, the state, probes and values."""
+    hosts = arguments["cell_class"].size + arguments["face_class"].size
+    expected = {(name, "H2D"): size for name, size in (
+        ("cell_q2_nodes_m", arguments["cell_vertices"].nbytes), ("face_q2_nodes_m", arguments["face_vertices"].nbytes),
+        ("hex_host_first", 4*hosts), ("hex_host_count", 4*hosts), ("charge_host", arguments["charge_host"].nbytes),
+        ("charge_exponents", arguments["charge_exponents"].nbytes), ("hex_invalid_flag", 4),
+        ("field_far_gauss", None), ("field_state", state.nbytes), ("field_probes", probes.nbytes))}
+    if arguments.get("image_masks") is not None:
+        expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
+    expected.update({("prepare_flag", "D2H"): 4, ("field_host_affine", "D2H"): hosts, ("field_flag", "D2H"): 4,
+                     ("field_values", "D2H"): probes.nbytes})
+    if result["route"] == "device-hex-polynomial":
+        expected[("field_polynomial_flag", "D2H")] = 4
+    elif result["route"] != "device-hex-cloud":
+        raise RuntimeError("Unexpected device field route: %r" % (result["route"],))
+    seen = {}
+    for row in result["transfer_ledger"]:
+        key, size = (row["payload"], row["direction"]), row["bytes"]
+        want = expected.get(key, -1)
+        if key in seen or want == -1 or type(size) is not int or (want is None and size <= 0) \
+                or (want is not None and size != want):
+            raise RuntimeError("Device field ledger row rejected: %r" % (row,))
+        seen[key] = size
+    if set(expected) - set(seen):
+        raise RuntimeError("Device field ledger missing rows: %r" % (sorted(set(expected) - set(seen)),))
+    return result
+
+
 def _checked_charge_exponents(kind, exponents, family):
     """Bound every exponent before any degree sum (face z = 0).
 
@@ -724,6 +795,35 @@ def _rule_rows(points, weights, width):
 # Two evaluations of the same NGSolve P2 map (vectorized CPU-route trafo and the
 # native staging's mapped points) agree to roundoff, never to a modelling error.
 _P2_GEOMETRY_ROUNDOFF = 1e-12
+
+
+class _DeviceImages:
+    """The caller's image request, checked against the mesh with the CPU contract before any staging."""
+
+    def __init__(self, image=None, image_cyclic=None, image_cyclic_alternating=False):
+        self.image, self.cyclic = image, image_cyclic
+        self.terms = _device_image_terms(image, image_cyclic, image_cyclic_alternating)
+
+    def checked_terms(self, mesh, order, family):
+        """Native Gram terms, or ``None``, after the ``vim.Solve`` mesh checks of a space without a compressed trace."""
+        if self.terms is None:
+            return None
+        if family != _HEX:
+            raise NotImplementedError("Device charge Gram has no image route for family %r" % (family,))
+        from radia.vim import _image
+        from radia.vim._solve import _hdiv_space_with_image_constraints
+        if self.cyclic is not None:
+            labels = [name for name in mesh.GetBoundaries() if "periodic" in name.lower() or "cyclic" in name.lower()]
+            if labels:
+                raise NotImplementedError("Device cyclic route has no identified HDiv trace: the mesh has azimuthal "
+                                          "boundary labels %r" % (labels,))
+        planes = _image.parse_image_string(self.image) if self.image is not None else []
+        _, constrained, _ = _hdiv_space_with_image_constraints(mesh, order, list(planes))
+        if constrained:
+            raise NotImplementedError("Device solve with a '+' mirror plane needs the compressed normal trace of %d "
+                                      "DOFs, which the device tables do not carry; the '-' planes and rotations do not"
+                                      % (len(constrained),))
+        return self.terms
 
 
 def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=False):
@@ -904,6 +1004,7 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     curve_order = _checked_curve_order(curve_order, order)
     mesh = ng.Mesh(str(path))
     family = _mesh_family(mesh, curve_order, order)
+    image_terms = None if images is None else images.checked_terms(mesh, order, family)
     if curve_order == 2:
         _curve_mesh(mesh, 2)
     fes = ng.HDiv(mesh, order=order)
@@ -919,7 +1020,7 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
         _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
     tables, geometry = _device_charge_tables(path, fes, native, curve_order, family)
     return dict(_fe_sources(mesh, fes), family=family, evaluation_tables=evaluation, material_budget=budget,
-                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression, images))
+                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression, image_terms))
 
 
 def _require_budget_cover(assembly, stats):
@@ -1102,7 +1203,8 @@ def _checked_material_assembly(assembly, tables, *, mass=False):
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
                               mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                              gram_compression="aca", curve_order=1):
+                              gram_compression="aca", curve_order=1, image=None, image_cyclic=None,
+                              image_cyclic_alternating=False):
     """Return the owned primitive device-construction payload of a checked mesh.
 
     Schema ``radia.hdiv-device-setup.v1``: NGSolve reference tables and charge
@@ -1128,7 +1230,8 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
         from .gpu import _native
         native = _native("_hdiv_cuda")
         setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression,
-                                           curve_order=curve_order)
+                                           curve_order=curve_order,
+                                           images=_DeviceImages(image, image_cyclic, image_cyclic_alternating))
     return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family=setup["family"], order=order,
                 dofs=setup["dofs"], mesh_sha256=mesh_hash, label_contract_sha256=contract_hash,
                 evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],

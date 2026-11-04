@@ -728,6 +728,9 @@ struct HexPrepared {
             for(int c=0;c<3;++c)order=std::max(order,b.expo[3*a+c]);}
     }
     template<class Block,class Record>void prepare(const Block& b,bool dense,cudaStream_t stream,Record record,std::size_t& launches,int& invalidCode){
+        prepareHosts(b,stream,record,launches,invalidCode);prepareTable(b,dense,stream,record,launches,invalidCode);}
+    // Lattices, host data and far rules: everything a field evaluation reads, without the pair table.
+    template<class Block,class Record>void prepareHosts(const Block& b,cudaStream_t stream,Record record,std::size_t& launches,int& invalidCode){
         const std::size_t cellsN=b.cellCount(),facesN=b.faceCount(),hosts=cellsN+facesN;
         HostVector<int> firstH{HostFaultAllocator<int>("hex.first")},countH{HostFaultAllocator<int>("hex.count")},globalH{HostFaultAllocator<int>("hex.global")};
         layout(b,firstH,countH,globalH,order);
@@ -753,6 +756,9 @@ struct HexPrepared {
         farX.allocate(checkedProduct(hosts,3*std::size_t(d.farStride)));farW.allocate(checkedProduct(hosts,std::size_t(d.farStride)));
         d.farX=farX.data;d.farW=farW.data;
         hexFarRules<<<hostBlocks,128,0,stream>>>(d,farX.data,farW.data);check(cudaGetLastError());++launches;
+    }
+    template<class Block,class Record>void prepareTable(const Block& b,bool dense,cudaStream_t stream,Record record,std::size_t& launches,int& invalidCode){
+        const std::size_t hosts=b.cellCount()+b.faceCount();const bool typed=!b.hostTypes.empty();
         // Dense keeps every host pair; ACA every pair inside the HexHostsTouch radius, which holds every non-far family.
         d.candidate=dense?1e300:1.05;
         // One table section per term: the direct pairs, then those of each image.

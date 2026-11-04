@@ -435,6 +435,8 @@ public:
     std::size_t dimension()const{return dofs?dofs:n;}
     bool isDemag()const{return dofs!=0;}
     cudaStream_t executionStream(){valid();return stream;}
+    // Device charges q = B x for a field evaluation; only the resident charge map acts.
+    void chargeProducts(const double* x,double* q){valid();if(!dofs)throw std::invalid_argument("This resident has no charge map");chargeMap.apply(x,q,stream);check(cudaGetLastError());check(cudaStreamSynchronize(stream));}
     // Internal device-to-device application for Krylov vectors. No host
     // vector transfer or synchronization; accepted uploaded state is untouched.
     void applyDevice(const double* x,double* y){
