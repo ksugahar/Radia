@@ -92,6 +92,61 @@ __global__ void k_metric(int ne, int points, int ngeo, int dim, int law, const d
     }
 }
 
+// With a point tensor the metric is J^-1 T J^-T times the measure and the weight;
+// the Jacobian inverse stays on the device so that a new tensor needs no new geometry.
+constexpr int GEOMETRY_VALUES = 10;
+
+__global__ void k_tensor_geometry(int ne, int points, int ngeo, const double* nodes, const double* dgeo, const double* jacobian,
+                                  const double* weights, double* geometry, int* bad) {
+    const int e = blockIdx.x * blockDim.x + threadIdx.x;
+    if (e >= ne) return;
+    for (int q = 0; q < points; ++q) {
+        double J[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+        if (jacobian) {
+            const double* row = jacobian + (size_t(e) * points + q) * 9;
+            for (int i = 0; i < 9; ++i) J[i] = row[i];
+        } else {
+            for (int n = 0; n < ngeo; ++n) {
+                const double* X = nodes + (size_t(e) * ngeo + n) * 3;
+                const double* d = dgeo + (size_t(q) * ngeo + n) * 3;
+                for (int i = 0; i < 3; ++i)
+                    for (int j = 0; j < 3; ++j) J[i * 3 + j] += X[i] * d[j];
+            }
+        }
+        const double c00 = J[4] * J[8] - J[5] * J[7], c01 = J[5] * J[6] - J[3] * J[8], c02 = J[3] * J[7] - J[4] * J[6];
+        const double det = J[0] * c00 + J[1] * c01 + J[2] * c02;
+        if (det == 0. || !isfinite(det)) atomicExch(bad, 1);
+        const double scale = 1. / det;
+        double* out = geometry + (size_t(e) * points + q) * GEOMETRY_VALUES;
+        out[0] = c00 * scale; out[1] = (J[2] * J[7] - J[1] * J[8]) * scale; out[2] = (J[1] * J[5] - J[2] * J[4]) * scale;
+        out[3] = c01 * scale; out[4] = (J[0] * J[8] - J[2] * J[6]) * scale; out[5] = (J[2] * J[3] - J[0] * J[5]) * scale;
+        out[6] = c02 * scale; out[7] = (J[1] * J[6] - J[0] * J[7]) * scale; out[8] = (J[0] * J[4] - J[1] * J[3]) * scale;
+        out[9] = fabs(det) * weights[q];
+    }
+}
+
+__global__ void k_tensor_metric(int ne, int points, const double* geometry, const double* tensor, double* metric) {
+    const int e = blockIdx.x * blockDim.x + threadIdx.x;
+    if (e >= ne) return;
+    for (int q = 0; q < points; ++q) {
+        const size_t at = size_t(e) * points + q;
+        const double* I = geometry + at * GEOMETRY_VALUES;
+        const double* T = tensor + at * 6;
+        const double full[9] = {T[0], T[1], T[2], T[1], T[3], T[4], T[2], T[4], T[5]};
+        double product[9];  // J^-1 T
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j) product[i * 3 + j] = I[i * 3] * full[j] + I[i * 3 + 1] * full[3 + j] + I[i * 3 + 2] * full[6 + j];
+        double* g = metric + at * 6;
+        const double m = I[9];
+        g[0] = m * (product[0] * I[0] + product[1] * I[1] + product[2] * I[2]);
+        g[1] = m * (product[0] * I[3] + product[1] * I[4] + product[2] * I[5]);
+        g[2] = m * (product[0] * I[6] + product[1] * I[7] + product[2] * I[8]);
+        g[3] = m * (product[3] * I[3] + product[4] * I[4] + product[5] * I[5]);
+        g[4] = m * (product[3] * I[6] + product[4] * I[7] + product[5] * I[8]);
+        g[5] = m * (product[6] * I[6] + product[7] * I[7] + product[8] * I[8]);
+    }
+}
+
 __global__ void k_reference_tensor(int ncls, int nl, int nq, const double* table, const double* weights, double* tensor) {
     const long long index = (long long)(blockIdx.x) * blockDim.x + threadIdx.x;
     const long long total = (long long)(ncls) * nl * nl;
@@ -161,7 +216,7 @@ __global__ void k_assemble_form(Groups groups, int nnz, const int* starts, const
 }
 
 struct FormStorage {
-    Dev<double> metric, table;
+    Dev<double> metric, table, geometry;
     FormView view() const {
         FormView v;
         v.metric = metric.p;
@@ -203,8 +258,17 @@ inline void build_form(Ledger& ledger, const GroupInput& input, const Dev<double
     out.metric.allocate(size_t(input.ne) * points * 6, "metric");
     Dev<int> bad(1, "metric flag");
     bad.zero();
-    k_metric<<<blocks_of(input.ne), TH>>>(input.ne, points, input.ngeo, input.dim, form.law, nodes.p, dgeo.p,
-                                          jacobian.p, form.affine ? nullptr : weights.p, out.metric.p, bad.p);
+    if (form.tensor) {
+        if (input.dim != 3 || form.law != LAW_GRAD || form.affine)
+            throw std::runtime_error("FEM device form: a point tensor needs a volume gradient form on the point rule");
+        Dev<double> tensor = upload(ledger, ("coef.tensor." + tag).c_str(), form.tensor, size_t(input.ne) * points * 6);
+        out.geometry.allocate(size_t(input.ne) * points * GEOMETRY_VALUES, "tensor geometry");
+        k_tensor_geometry<<<blocks_of(input.ne), TH>>>(input.ne, points, input.ngeo, nodes.p, dgeo.p, jacobian.p, weights.p, out.geometry.p, bad.p);
+        k_tensor_metric<<<blocks_of(input.ne), TH>>>(input.ne, points, out.geometry.p, tensor.p, out.metric.p);
+    } else {
+        k_metric<<<blocks_of(input.ne), TH>>>(input.ne, points, input.ngeo, input.dim, form.law, nodes.p, dgeo.p,
+                                              jacobian.p, form.affine ? nullptr : weights.p, out.metric.p, bad.p);
+    }
     ck_kernels("metric");
     check_flag(ledger, bad, "FEM device form: an element has a non-positive or nonfinite measure");
     view.nq = points;
@@ -230,6 +294,15 @@ struct Assembled {
     Dev<double> re, im, aux;
     CsrView view(const double* values) const { return CsrView{n, n, plan.rowptr.p, plan.columns.p, values}; }
 };
+
+inline void assemble_values(Assembled& out, bool complex_values) {
+    const int nnz = out.plan.nnz;
+    k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_RE, MASS_RE, out.re.p);
+    if (complex_values)
+        k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_IM, MASS_IM, out.im.p);
+    k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_AUX, MASS_AUX, out.aux.p);
+    ck_kernels("assembly");
+}
 
 inline void assemble(Ledger& ledger, Assembled& out, int ndof, bool complex_values,
                      const std::vector<GroupInput>& inputs, const int* free_dofs) {
@@ -289,14 +362,9 @@ inline void assemble(Ledger& ledger, Assembled& out, int ndof, bool complex_valu
     out.plan = make_plan(ledger, keys, triples, ndof, ndof, "assembly plan");
     const int nnz = out.plan.nnz;
     out.re.allocate(size_t(nnz), "operator re");
-    k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_RE, MASS_RE, out.re.p);
-    if (complex_values) {
-        out.im.allocate(size_t(nnz), "operator im");
-        k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_IM, MASS_IM, out.im.p);
-    }
+    if (complex_values) out.im.allocate(size_t(nnz), "operator im");
     out.aux.allocate(size_t(nnz), "operator aux");
-    k_assemble_form<<<blocks_of(nnz), TH>>>(out.groups, nnz, out.plan.starts.p, out.plan.order.p, STIFF_AUX, MASS_AUX, out.aux.p);
-    ck_kernels("assembly");
+    assemble_values(out, complex_values);
 }
 
 }  // namespace radia_fem

@@ -166,6 +166,26 @@ std::vector<AmgReport> System::setup_bddc(const std::vector<BddcGroupInput>& spl
     return reports;
 }
 
+void System::update_tensors(const std::vector<const double*>& tensors) {
+    Impl& m = *impl_;
+    if (tensors.size() != m.op.storage.size())
+        throw std::runtime_error("FEM device route: one tensor entry per element group is required");
+    m.amg.reset();
+    m.ams.reset();
+    m.bddc.reset();
+    Stage stage(m.timing, "tensor_update_seconds");
+    for (size_t g = 0; g < tensors.size(); ++g) {
+        if (!tensors[g]) continue;
+        FormStorage& form = m.op.storage[g].stiff;
+        if (!form.geometry.p) throw std::runtime_error("FEM device route: this group was not built with a point tensor");
+        const int ne = m.op.storage[g].ne, points = m.op.groups.g[g].stiff.nq;
+        Dev<double> tensor = upload(m.ledger, "coef.tensor.stiff", tensors[g], size_t(ne) * points * 6);
+        k_tensor_metric<<<blocks_of(ne), TH>>>(ne, points, form.geometry.p, tensor.p, form.metric.p);
+        ck_kernels("tensor metric");
+    }
+    assemble_values(m.op, m.complex_values);
+}
+
 int System::nonzeros() const { return impl_->op.plan.nnz; }
 
 void System::probe_action(int which, const double* x, double* y) {

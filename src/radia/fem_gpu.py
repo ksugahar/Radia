@@ -170,15 +170,15 @@ def _curved_jacobians(mesh, vb, rule_by_type, numbers):
     return flat[picks].reshape(len(numbers) * nq * 3 * dim)
 
 
-def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity, law, curved):
+def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity, law, curved, tensor=False):
     import ngsolve as ng
 
     points = [tuple(p) for p in rule.points]
     weights = np.array(list(rule.weights), dtype=np.float64)
-    affine = not curved and et in (ng.ET.TET, ng.ET.TRIG)
+    affine = not curved and et in (ng.ET.TET, ng.ET.TRIG) and not tensor
     table = _tabulate(fes, mesh, vb, representatives, points, nl, quantity)
     form = {"law": law, "nq": len(points), "affine": affine, "weights": weights,
-            "table": np.ascontiguousarray(table, dtype=np.float64), "dgeo": None, "jacobian": None}
+            "table": np.ascontiguousarray(table, dtype=np.float64), "dgeo": None, "jacobian": None, "tensor": None}
     if curved:
         form["jacobian"] = _curved_jacobians(mesh, vb, {et: rule}, numbers)
     else:
@@ -186,7 +186,25 @@ def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity,
     return form
 
 
-def _group_inputs(fes, mesh, coefficients, kind, bonus, native):
+def _point_tensor(tangent, mesh, rule_by_type, et, numbers):
+    """The caller's symmetric tensor at the rule points of one element group: ne * nq * 6."""
+    import ngsolve as ng
+
+    all_types = [el.type for el in mesh.Elements(ng.VOL)]
+    rules = {kind: rule_by_type.get(kind) or ng.IntegrationRule(kind, 0) for kind in set(all_types)}
+    points = mesh.MapToAllElements(rules, ng.VOL)
+    counts = np.array([len(rules[kind].points) for kind in all_types], dtype=np.int64)
+    starts = np.concatenate(([0], np.cumsum(counts)))
+    nq = len(rule_by_type[et].points)
+    picks = np.concatenate([np.arange(starts[n], starts[n] + nq) for n in numbers])
+    values = np.asarray(tangent(points[picks]), dtype=np.float64)
+    expected = (len(numbers) * nq, 6)
+    if values.shape != expected or not np.isfinite(values).all():
+        raise ValueError(f"the point tensor must be finite with shape {expected}, got {values.shape}")
+    return np.ascontiguousarray(values.reshape(-1))
+
+
+def _group_inputs(fes, mesh, coefficients, kind, bonus, native, tangent=None):
     import ngsolve as ng
 
     if mesh.dim != 3:
@@ -215,8 +233,13 @@ def _group_inputs(fes, mesh, coefficients, kind, bonus, native):
                  "coef": np.ascontiguousarray(np.array(row["coef"], dtype=np.float64)), "stiff": None, "mass": None}
         if vb == ng.VOL:
             quantity, law = ("grad", native.LAW_GRAD) if kind == "H1" else ("curl", native.LAW_CURL)
-            group["stiff"] = _form_input(fes, mesh, vb, et, ng.IntegrationRule(et, _derivative_rule_order(fe_order, et, bonus[0])),
-                                         representatives, numbers, nl, quantity, law, curved)
+            rule = ng.IntegrationRule(et, _derivative_rule_order(fe_order, et, bonus[0]))
+            group["stiff"] = _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity, law, curved, tensor=tangent is not None)
+            if tangent is not None:
+                if kind != "H1":
+                    raise ValueError("a point tensor applies to a gradient form on H1")
+                group["stiff"]["tensor"] = _point_tensor(tangent, mesh, {et: rule}, et, numbers)
+                group["_rule"], group["_numbers"], group["_et"] = rule, numbers, et
         trace_bonus = bonus[2] if vb == ng.BND else bonus[1]
         mass_rule = ng.IntegrationRule(et, 2 * fe_order + trace_bonus)
         quantity, law = ("scalar", native.LAW_VALUE) if kind == "H1" else ("covariant", native.LAW_COVARIANT)
@@ -274,20 +297,36 @@ def _complex_parts(value, ndof, name, complex_values):
 class DeviceSystem:
     """Operators of one space on the device. Mesh arrays cross; matrices never do."""
 
-    def __init__(self, fes, coefficients, *, bonus=(0, 0, 0), complex_values=None):
+    def __init__(self, fes, coefficients, *, bonus=(0, 0, 0), complex_values=None, tangent=None):
+        """``tangent(points)`` returns the symmetric tensor xx xy xz yy yz zz at mapped integration
+        points, evaluated on the host; the stiffness column then scales that tensor."""
         native = _native()
+        self.tangent = tangent
         self.fes, self.mesh = fes, fes.mesh
         self.kind = _space_kind(fes)
         self.order = int(fes.globalorder)
         self.complex_values = bool(fes.is_complex) if complex_values is None else bool(complex_values)
         self._times = {}
         start = time.perf_counter()
-        self.groups, self.vertices = _group_inputs(fes, self.mesh, coefficients, self.kind, bonus, native)
+        self.groups, self.vertices = _group_inputs(fes, self.mesh, coefficients, self.kind, bonus, native, tangent)
         self.free_dofs = np.array(list(fes.FreeDofs()), dtype=np.int32)
         self._times["host_setup_seconds"] = time.perf_counter() - start
         self.native = native.System(int(fes.ndof), self.complex_values, self.groups, self.free_dofs)
         self.hierarchy = None
         self.preconditioner = None
+
+    def update_tangent(self):
+        """Evaluate the point tensors again and rebuild the operators on the device.
+
+        The preconditioner is dropped; call ``setup`` before the next solve.
+        """
+        if self.tangent is None:
+            raise ValueError("this system was built without a point tensor")
+        tensors = [(_point_tensor(self.tangent, self.mesh, {group["_et"]: group["_rule"]}, group["_et"], group["_numbers"])
+                    if group["stiff"] is not None else None) for group in self.groups]
+        self.native.update_tensors(tensors)
+        self.preconditioner = None
+        self.hierarchy = None
 
     def setup(self, preconditioner, *, cycles=None, min_coarse=None, theta=AMG_THETA):
         if preconditioner == "amg":

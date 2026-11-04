@@ -133,6 +133,40 @@ def test_hcurl_action_matches_ngsolve(route, mesh_name, order):
                  _coefficients(route, mesh))
 
 
+@pytest.mark.parametrize("mesh_name", ["tets", "hexes", "mixed"])
+@pytest.mark.parametrize("order", [1, 2])
+def test_point_tensor_matches_ngsolve_and_updates(route, mesh_name, order):
+    """A symmetric tensor at the quadrature points: the device form and its update against NGSolve."""
+    mesh = MESHES[mesh_name]()
+    fes = ng.H1(mesh, order=order)
+    u, v = fes.TnT()
+    scale = ng.Parameter(1.0)
+    entries = (2 + ng.x * ng.y, 0.3 * ng.z, 0.1 * ng.x, 3 + ng.z * ng.z, 0.2 * ng.y, 1 + ng.x * ng.x)
+    entries = tuple(scale * entry for entry in entries)
+    tensor_cf = ng.CF(tuple(entries))
+    full = ng.CF((entries[0], entries[1], entries[2], entries[1], entries[3], entries[4], entries[2], entries[4], entries[5]), dims=(3, 3))
+
+    def tangent(points):
+        return np.asarray(tensor_cf(points)).reshape(-1, 6)
+
+    system = route.DeviceSystem(fes, route.Coefficients(stiff=1.0, stiff_aux=1.0), bonus=BONUS, tangent=tangent)
+    generator = np.random.default_rng(11)
+    for value in (1.0, 2.5):
+        scale.Set(value)
+        if value != 1.0:
+            system.update_tangent()
+        form = ng.BilinearForm(fes)
+        form += ng.InnerProduct(full * ng.grad(u), ng.grad(v)) * ng.dx(bonus_intorder=BONUS[0])
+        form.Assemble()
+        x = generator.standard_normal(fes.ndof)
+        vector = form.mat.CreateRowVector()
+        vector.FV().NumPy()[:] = x
+        out = vector.CreateVector()
+        out.data = form.mat * vector
+        error = _relative(system.action("re", x), out.FV().NumPy())
+        assert error <= ACTION_REL, f"tensor action off by {error} at scale {value}, limit {ACTION_REL}"
+
+
 def test_unknown_region_and_backend_raise(route):
     mesh = _tets()
     with pytest.raises(ValueError, match="regions the mesh does not have"):

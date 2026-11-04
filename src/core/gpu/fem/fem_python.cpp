@@ -47,6 +47,7 @@ FormInput form_input(Arrays& arrays, py::handle value, const GroupInput& group, 
     form.table = arrays.get<double>(d["table"], (long long)(group.ncls) * form.nq * group.nl * 3, name);
     form.dgeo = arrays.get<double>(d["dgeo"], points * group.ngeo * group.dim, name);
     form.jacobian = arrays.get<double>(d["jacobian"], group.ne * points * 3 * group.dim, name);
+    form.tensor = arrays.get<double>(d["tensor"], group.ne * points * 6, name);
     return form;
 }
 
@@ -87,6 +88,7 @@ public:
     PySystem(int ndof, bool complex_values, const py::list& groups, const py::array& free_dofs) : n_(ndof), complex_(complex_values) {
         Arrays arrays;
         std::vector<GroupInput> inputs = group_inputs(arrays, groups);
+        for (const GroupInput& input : inputs) tensor_values_.push_back(input.stiff.tensor ? (long long)(input.ne) * input.stiff.nq * 6 : 0);
         const int* mask = arrays.get<int>(free_dofs, ndof, "free_dofs");
         py::gil_scoped_release release;
         system_ = std::make_unique<System>(ndof, complex_values, inputs, mask);
@@ -137,6 +139,17 @@ public:
         py::list out;
         for (const AmgReport& report : reports) out.append(amg_dict(report));
         return out;
+    }
+    void update_tensors(const py::list& tensors) {
+        if (py::len(tensors) != tensor_values_.size()) throw py::value_error("one tensor entry per element group is required");
+        Arrays arrays;
+        std::vector<const double*> pointers;
+        for (size_t g = 0; g < tensor_values_.size(); ++g) {
+            if (!tensor_values_[g] && !tensors[g].is_none()) throw py::value_error("this group was not built with a point tensor");
+            pointers.push_back(arrays.get<double>(tensors[g], tensor_values_[g], "tensor"));
+        }
+        py::gil_scoped_release release;
+        system_->update_tensors(pointers);
     }
     py::array_t<double> probe_action(int which, const py::array& x) {
         Arrays arrays;
@@ -211,6 +224,7 @@ public:
 private:
     int n_ = 0;
     bool complex_ = false;
+    std::vector<long long> tensor_values_;
     std::unique_ptr<System> system_;
 };
 
@@ -229,6 +243,7 @@ PYBIND11_MODULE(_fem_cuda, m) {
         .def("setup_amg", &PySystem::setup_amg)
         .def("setup_ams", &PySystem::setup_ams)
         .def("setup_bddc", &PySystem::setup_bddc)
+        .def("update_tensors", &PySystem::update_tensors)
         .def("probe_action", &PySystem::probe_action)
         .def("probe_preconditioner", &PySystem::probe_preconditioner)
         .def("solve", &PySystem::solve)

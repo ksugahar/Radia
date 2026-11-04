@@ -24,6 +24,7 @@ struct FormInput {
     const double* table = nullptr;     // ncls * nq * nl * 3
     const double* dgeo = nullptr;      // nq * ngeo * dim, with nodes
     const double* jacobian = nullptr;  // ne * nq * 3 * dim, on curved elements
+    const double* tensor = nullptr;    // ne * nq * 6: symmetric xx xy xz yy yz zz, LAW_GRAD in a volume only
 };
 
 struct GroupInput {
@@ -80,6 +81,11 @@ public:
     std::vector<AmgReport> setup_bddc(const std::vector<BddcGroupInput>& split, const int* wb_of_dof, int nw,
                                       int nedge, int nv, const int* edge_vertices, const double* coordinates,
                                       int cycles, int min_coarse, double theta);
+
+    // New point tensors of the stiffness forms, one array per group or null. The
+    // operator values are rebuilt on the device on the same pattern, and any
+    // preconditioner is dropped: build it again before the next solve.
+    void update_tensors(const std::vector<const double*>& tensors);
 
     // Action of an assembled operator on a host probe vector. Which is 0 for the
     // real part, 1 for the imaginary part and 2 for the auxiliary real operator.
