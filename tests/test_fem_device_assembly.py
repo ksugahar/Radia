@@ -113,20 +113,18 @@ def _check_space(route, fes, real_fes, coefficients):
     assert not any(row["direction"] == "D2H" and row["payload"].startswith(("mesh.", "table.", "coef.")) for row in system.ledger())
 
 
-@pytest.mark.parametrize("mesh_name", sorted(MESHES))
-@pytest.mark.parametrize("order", [1, 2, 3])
+# The curved case stops at p=2 to stay within the runtime target.
+ACTION_CASES = [(name, order) for name in sorted(MESHES) for order in (1, 2, 3) if not (name == "curved" and order == 3)]
+
+
+@pytest.mark.parametrize("mesh_name,order", ACTION_CASES)
 def test_h1_action_matches_ngsolve(route, mesh_name, order):
-    if mesh_name == "curved" and order == 3:
-        pytest.skip("the curved case is covered at p=1 and p=2 to stay within the runtime target")
     mesh = MESHES[mesh_name]()
     _check_space(route, ng.H1(mesh, order=order, complex=True), ng.H1(mesh, order=order), _coefficients(route, mesh))
 
 
-@pytest.mark.parametrize("mesh_name", sorted(MESHES))
-@pytest.mark.parametrize("order", [1, 2, 3])
+@pytest.mark.parametrize("mesh_name,order", ACTION_CASES)
 def test_hcurl_action_matches_ngsolve(route, mesh_name, order):
-    if mesh_name == "curved" and order == 3:
-        pytest.skip("the curved case is covered at p=1 and p=2 to stay within the runtime target")
     mesh = MESHES[mesh_name]()
     nograds = order == 1
     _check_space(route, ng.HCurl(mesh, order=order, complex=True, nograds=nograds), ng.HCurl(mesh, order=order, nograds=nograds),
