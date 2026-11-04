@@ -178,7 +178,7 @@ an agreement certificate, not analytic absolute truth.
 | 3D HEX | BDM2 | affine or mapped geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop; mapped shape derivative fails loudly | persistent native evaluator from configured source representation |
 | 3D WEDGE | BDM1, BDM2 | geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop | persistent mapped source representation; native repeated evaluation |
 | 2D TRI/QUAD/mixed | BDM1 with geometry 1/2; BDM2 with geometry 1/2/3 | Q2/Q3 production pairings are explicit | linear/nonlinear and IMA; no `SolveHysteresis` | persistent native planar field and `Az` evaluator |
-| 3D mixed/pyramid | BDM1, BDM2 | straight only | linear, nonlinear; no images or internal interfaces | typed charge Gram on CPU and device; fixed-magnetization Radia geometry is separate and is not a material solve |
+| 3D mixed/pyramid | BDM1, BDM2 | straight only | linear, nonlinear; no internal interfaces; images on the device route only (limits PROPOSED), the CPU route refuses them | typed charge Gram on CPU and device; fixed-magnetization Radia geometry is separate and is not a material solve |
 
 The four permanent-magnet levels are implemented on the same method surface:
 
