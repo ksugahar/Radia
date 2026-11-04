@@ -5,12 +5,14 @@ The contract of ``validation_ffag_connected_cyclic_yoke.py`` on the device route
 with nonzero normal magnetization, so the sector needs the identified trace, the paired faces out of the charge skin and
 the rotated images. NGSolve supplies only non-matrix inputs here: the ``Compress(Periodic(HDiv))`` numbering, the periodic
 wrapper's orientation and the deformed Q2 lattices. Every operator of a device solve is built and kept on the device, and
-the transfer ledgers are recorded. The reference is the CPU equation of the explicit ring: the CPU charge map and Gram with
-the mass on the device's material rule, which differs from the rule of the CPU solve on non-affine hosts. The gates chain
-sector to device ring to that equation, and the rows against the CPU solve stay recorded beside the size of the rule
-difference, ungated. On several cells the CPU sector is recorded only, since the CPU image dispatch selects a far rule for
-touching seam pairs of a multi-cell sector. A device sector without images shows that a no-op image route could not pass.
-The limits repeat the CPU route's numbers but are PROPOSED for the device route, not adopted.
+the transfer ledgers are recorded. The linear reference is the CPU equation of the explicit ring: the CPU charge map and
+Gram with the mass on the device's material rule, which differs from the rule of the CPU linear solve on non-affine hosts.
+The gates chain sector to device ring to that equation, the device field on the CPU ring's own state closes the chain to the
+CPU field, and the rows against the CPU linear solve stay recorded beside the size of the rule difference, ungated. The CPU
+nonlinear solve takes the device's rule, so the nonlinear sector is held to the CPU ring directly. On several cells the CPU
+sector is recorded only, since the CPU image dispatch selects a far rule for touching seam pairs of a multi-cell sector. A
+device sector without images shows that a no-op image route could not pass. The limits repeat the CPU route's numbers but
+are PROPOSED for the device route, not adopted.
 """
 from __future__ import annotations
 
@@ -32,11 +34,6 @@ sys.path.insert(0, str(ROOT.parents[0]/"hmatrix_cuda"))
 PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR = 1.0e-8
 PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE = 2.0e-7
 PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR = 1.0e-8
-# Nonlinear: the sector against the device's own explicit ring on one mass rule, and against the CPU ring across the two
-# material rules, which the linear equation row measures.
-PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR = 1.0e-6
-PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_TO_DRIVE = 1.0e-5
-PROPOSED_MAXIMUM_NONLINEAR_CPU_RING_MEAN_RELATIVE_ERROR = 1.0e-3
 SEAM = ("periodic_min", "periodic_max")
 BH_TABLE = ((0.0, 0.0), (200.0, 0.8), (1000.0, 1.4), (5000.0, 1.7), (50000.0, 1.95), (500000.0, 2.6))
 _PHYSICAL_FACES = ((0, 3, 2, 1), (4, 5, 6, 7), (1, 2, 6, 5), (3, 0, 4, 7))
@@ -96,7 +93,7 @@ def _applied(args):
     return ng.CF((-args.applied_field_am*ng.y/radius, args.applied_field_am*ng.x/radius, 0.0))
 
 
-def _device_solve(path, checked, probes, args, compression, **images):
+def _device_solve(path, checked, probes, args, compression, reference_state=None, **images):
     import ngsolve as ng
     from radia.hdiv_gpu import PreparedHDivLinear
     from validation_ffag_connected_cyclic_yoke import _mean_tangential_magnetization, apply_cyclic_q2_geometry
@@ -109,11 +106,13 @@ def _device_solve(path, checked, probes, args, compression, **images):
         solved = device.solve(_applied(args), 1.0/(args.mu_r - 1.0), tolerance=args.device_tol, max_iterations=args.max_iterations)
         solve_s = time.perf_counter() - started
         field = device.field(solved["x"], probes)
+        reference_field = None if reference_state is None else np.asarray(device.field(reference_state, probes)["field"])
         stats = device.stats()
         magnetization = ng.GridFunction(device.fespace)
         magnetization.vec.FV().NumPy()[:] = solved["x"]
         mean = _mean_tangential_magnetization(dict(gfM=magnetization), device.fespace.mesh)
     return dict(x=np.array(solved["x"]), mean_tangential=mean, field=np.asarray(field["field"]), dofs=int(device.dofs),
+                field_of_reference_state=reference_field,
                 iterations=int(solved["iterations"]), relative_residual=float(solved["relative_residual"]),
                 gram_route=stats["gram_route"], field_route=field["route"], setup_s=setup_s, solve_s=solve_s,
                 transfer_ledger=stats["assembly"]["transfer_ledger"], field_ledger=field["transfer_ledger"])
@@ -205,9 +204,10 @@ def _nonlinear_case(paths, checked, probes, args):
         device_ring_vs_cpu_ring_mean=abs(device_ring["mean_tangential"] - cpu_mean)/abs(cpu_mean),
         sector_vs_cpu_ring_field_relative_to_drive=float(np.max(np.linalg.norm(sector["field"] - cpu_h, axis=1))/drive))
     gates = dict(
-        nonlinear_sector_mean_matches_device_ring=bool(measured["sector_vs_device_ring_mean"] <= PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR),
-        nonlinear_sector_field_matches_device_ring=bool(measured["sector_vs_device_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_TO_DRIVE),
-        nonlinear_sector_mean_matches_cpu_ring=bool(measured["sector_vs_cpu_ring_mean"] <= PROPOSED_MAXIMUM_NONLINEAR_CPU_RING_MEAN_RELATIVE_ERROR))
+        nonlinear_sector_mean_matches_device_ring=bool(measured["sector_vs_device_ring_mean"] <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
+        nonlinear_sector_field_matches_device_ring=bool(measured["sector_vs_device_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
+        nonlinear_sector_mean_matches_cpu_ring=bool(measured["sector_vs_cpu_ring_mean"] <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
+        nonlinear_sector_field_matches_cpu_ring=bool(measured["sector_vs_cpu_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE))
     return dict(measured=measured, gates=gates, sector=_public(sector), device_ring=_public(device_ring))
 
 
@@ -238,6 +238,7 @@ def _case(cells, args, contracts):
         cpu_sector = vim.Solve(sector, mu_r=args.mu_r, H_ext=_applied(args), order=args.hdiv_order, image_cyclic=args.fold,
                                cyclic_periodic_boundaries=SEAM, curve_order=2, gram_eps=args.gram_eps, leaf=args.leaf,
                                tol=args.solve_tol)
+        cpu_ring_x = np.array(cpu_ring["_m_coefficients"], dtype=float)
         cpu_ring_mean = _mean_tangential_magnetization(cpu_ring, ring)
         cpu_sector_mean = _mean_tangential_magnetization(cpu_sector, sector)
         cpu_ring_h = np.asarray(vim.FieldFromSolution(cpu_ring, probes, algorithm="direct"), float)
@@ -252,7 +253,7 @@ def _case(cells, args, contracts):
             lone=_device_solve(paths["sector"], checked["sector"], probes, args, compression),
             sector=_device_solve(paths["sector"], checked["sector"], probes, args, compression, image_cyclic=args.fold,
                                  cyclic_periodic_boundaries=SEAM),
-            ring=_device_solve(paths["ring"], checked["ring"], probes, args, compression))
+            ring=_device_solve(paths["ring"], checked["ring"], probes, args, compression, reference_state=cpu_ring_x))
         run = runs[compression]
         mean_error = abs(run["sector"]["mean_tangential"] - cpu_ring_mean)/abs(cpu_ring_mean)
         lone_error = abs(run["lone"]["mean_tangential"] - cpu_ring_mean)/abs(cpu_ring_mean)
@@ -268,7 +269,9 @@ def _case(cells, args, contracts):
             sector_vs_device_ring_field_relative_to_drive=float(np.max(np.linalg.norm(run["sector"]["field"] - run["ring"]["field"], axis=1))/drive),
             device_ring_x_vs_cpu_equation=float(np.linalg.norm(run["ring"]["x"] - equation_x)/np.linalg.norm(equation_x)),
             device_ring_vs_cpu_equation_mean=abs(run["ring"]["mean_tangential"] - equation_mean)/abs(equation_mean),
-            cpu_equation_vs_cpu_ring_mean=abs(equation_mean - cpu_ring_mean)/abs(cpu_ring_mean))
+            cpu_equation_vs_cpu_ring_mean=abs(equation_mean - cpu_ring_mean)/abs(cpu_ring_mean),
+            device_field_of_cpu_ring_state_vs_cpu_ring_field_relative_to_drive=float(
+                np.max(np.linalg.norm(run["ring"]["field_of_reference_state"] - cpu_ring_h, axis=1))/drive))
         gates.update({
             f"{compression}_sector_dofs_scale_as_one_fold": bool(run["sector"]["dofs"]*args.fold == run["ring"]["dofs"]),
             f"{compression}_periodic_trace_is_compressed": bool(run["sector"]["dofs"] < run["lone"]["dofs"]),
@@ -278,6 +281,8 @@ def _case(cells, args, contracts):
                 measured[compression]["sector_vs_device_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
             f"{compression}_device_ring_state_matches_cpu_equation": bool(measured[compression]["device_ring_x_vs_cpu_equation"] <= PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR),
             f"{compression}_device_ring_mean_matches_cpu_equation": bool(measured[compression]["device_ring_vs_cpu_equation_mean"] <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
+            f"{compression}_device_field_of_cpu_ring_state_matches_cpu_field": bool(
+                measured[compression]["device_field_of_cpu_ring_state_vs_cpu_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
             f"{compression}_images_crossed_only_as_rows": bool(
                 next(row["bytes"] for row in run["sector"]["transfer_ledger"]
                      if row["payload"] == "image_transforms" and row["direction"] == "H2D") == 72*(args.fold - 1))})
@@ -314,10 +319,7 @@ def run_validation(args):
         accepted=False, scope="Connected curved-Q2 annular HEX yoke on the device route; the CPU equation of the explicit ring is the reference.",
         proposed_limits=dict(maximum_mean_relative_error=PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR,
                              maximum_state_relative_error=PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR,
-                             maximum_field_relative_to_drive=PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE,
-                             maximum_nonlinear_mean_relative_error=PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR,
-                             maximum_nonlinear_field_relative_to_drive=PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_TO_DRIVE,
-                             maximum_nonlinear_cpu_ring_mean_relative_error=PROPOSED_MAXIMUM_NONLINEAR_CPU_RING_MEAN_RELATIVE_ERROR),
+                             maximum_field_relative_to_drive=PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
         settings={key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
         source_sha=os.environ.get("RADIA_SOURCE_SHA"), ngsolve_version=ng.__version__, gates=gates, cases=cases,
         validation_wall_s=time.perf_counter() - started, runtime=dict(platform_class=platform.system(), python=platform.python_version()))
