@@ -5,8 +5,8 @@ curved P2, the device entries, the energy operator on the dense and the compress
 solves with images agree with the CPU route on identical inputs. On a sector whose rotated copies touch it at the seam they
 agree with the sum over the explicitly meshed ring. The direct field of one state, with and without images, at probes off,
 near and inside the sources, agrees with the CPU field. Dropping the image sum, a sign, the graded rule of a touching P1
-image, the Duffy rule of a touching curved image, the inverse point map or the far test of one direction moves them far
-beyond the detectors.
+image, the Duffy rule of a touching curved image, the inverse point map or a far test shared by the two directions of a
+pair moves them far beyond the detectors.
 Assumes: the CPU TET route is the reference on identical NGSolve inputs and, on a rotated image, on the explicit ring: its
 image route takes the low far rule from the far test of one direction, also when the other direction is coincident at the
 seam. This is parity of one discretization, not independent accuracy. The REL values are PROPOSED detectors, not adopted
@@ -254,7 +254,7 @@ def test_sector_entries_equal_the_sum_over_the_explicit_ring(meshes, request, cu
     pairs = upper if len(upper) <= RING_PAIR_SAMPLE else np.unique(np.r_[np.c_[np.arange(n), np.arange(n)],
                                                                          upper[rng.integers(0, len(upper), RING_PAIR_SAMPLE)]], axis=0)
     rows, cols = pairs[:, 0], pairs[:, 1]
-    # The ring integrates a near pair from its lower-numbered side; the two sums of one pair fold into what a sector can hold.
+    # The ring integrates a curved near pair from one side; the two sums of one pair fold into what a sector can hold.
     expected = np.array([0.5*sum(gram.entry(int(index[0, a]), int(index[k, b])) + gram.entry(int(index[0, b]), int(index[k, a])) for k in range(FOLD))
                          for a, b in pairs])
     actual = _entries(cuda, {**bare, **_terms(None, FOLD)}, rows, cols)
