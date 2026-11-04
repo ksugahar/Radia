@@ -5,11 +5,12 @@ The contract of ``validation_ffag_connected_cyclic_yoke.py`` on the device route
 with nonzero normal magnetization, so the sector needs the identified trace, the paired faces out of the charge skin and
 the rotated images. NGSolve supplies only non-matrix inputs here: the ``Compress(Periodic(HDiv))`` numbering, the periodic
 wrapper's orientation and the deformed Q2 lattices. Every operator of a device solve is built and kept on the device, and
-the transfer ledgers are recorded. The CPU ring is the reference. On one cell per sector the CPU sector is a second
-reference; on several cells it is recorded only, since the CPU image dispatch selects a far rule for touching seam pairs
-of a multi-cell sector. A device sector without images shows that a no-op image route could not pass. The device mass takes
-its material rule, which differs from the CPU rule on non-affine hosts: the CPU equation with that rule separates this
-difference from the operators. The limits repeat the CPU route's numbers but are PROPOSED for the device route, not adopted.
+the transfer ledgers are recorded. The reference is the CPU equation of the explicit ring: the CPU charge map and Gram with
+the mass on the device's material rule, which differs from the rule of the CPU solve on non-affine hosts. The gates chain
+sector to device ring to that equation, and the rows against the CPU solve stay recorded beside the size of the rule
+difference, ungated. On several cells the CPU sector is recorded only, since the CPU image dispatch selects a far rule for
+touching seam pairs of a multi-cell sector. A device sector without images shows that a no-op image route could not pass.
+The limits repeat the CPU route's numbers but are PROPOSED for the device route, not adopted.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ sys.path.insert(0, str(ROOT.parents[0]/"hmatrix_cuda"))
 
 PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR = 1.0e-8
 PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE = 2.0e-7
+PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR = 1.0e-8
 # Nonlinear: the sector against the device's own explicit ring on one mass rule, and against the CPU ring across the two
 # material rules, which the linear equation row measures.
 PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR = 1.0e-6
@@ -271,8 +273,11 @@ def _case(cells, args, contracts):
             f"{compression}_sector_dofs_scale_as_one_fold": bool(run["sector"]["dofs"]*args.fold == run["ring"]["dofs"]),
             f"{compression}_periodic_trace_is_compressed": bool(run["sector"]["dofs"] < run["lone"]["dofs"]),
             f"{compression}_sector_without_images_is_discriminating": bool(lone_error > 1.0e3*PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
-            f"{compression}_mean_matches_cpu_ring": bool(mean_error <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
-            f"{compression}_field_matches_cpu_ring": bool(field_error <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
+            f"{compression}_sector_mean_matches_device_ring": bool(measured[compression]["sector_vs_device_ring_mean"] <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
+            f"{compression}_sector_field_matches_device_ring": bool(
+                measured[compression]["sector_vs_device_ring_field_relative_to_drive"] <= PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE),
+            f"{compression}_device_ring_state_matches_cpu_equation": bool(measured[compression]["device_ring_x_vs_cpu_equation"] <= PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR),
+            f"{compression}_device_ring_mean_matches_cpu_equation": bool(measured[compression]["device_ring_vs_cpu_equation_mean"] <= PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR),
             f"{compression}_images_crossed_only_as_rows": bool(
                 next(row["bytes"] for row in run["sector"]["transfer_ledger"]
                      if row["payload"] == "image_transforms" and row["direction"] == "H2D") == 72*(args.fold - 1))})
@@ -306,8 +311,9 @@ def run_validation(args):
     gates["connected_periodic_contract"] = bool(contract.reduction_mode == "connected-periodic-fem-sector")
     return dict(
         schema="radia.ffag-device-connected-yoke/v1", status="pass" if all(gates.values()) else "fail", adoption="proposed",
-        accepted=False, scope="Connected curved-Q2 annular HEX yoke on the device route; the CPU ring is the reference.",
+        accepted=False, scope="Connected curved-Q2 annular HEX yoke on the device route; the CPU equation of the explicit ring is the reference.",
         proposed_limits=dict(maximum_mean_relative_error=PROPOSED_MAXIMUM_MEAN_RELATIVE_ERROR,
+                             maximum_state_relative_error=PROPOSED_MAXIMUM_STATE_RELATIVE_ERROR,
                              maximum_field_relative_to_drive=PROPOSED_MAXIMUM_FIELD_RELATIVE_TO_DRIVE,
                              maximum_nonlinear_mean_relative_error=PROPOSED_MAXIMUM_NONLINEAR_MEAN_RELATIVE_ERROR,
                              maximum_nonlinear_field_relative_to_drive=PROPOSED_MAXIMUM_NONLINEAR_FIELD_RELATIVE_TO_DRIVE,
