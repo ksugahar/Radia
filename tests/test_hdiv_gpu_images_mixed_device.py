@@ -4,12 +4,14 @@ Guards: the CPU route refuses images on a mixed mesh, so the reference is the CP
 copies. On a transition cube set off from its rotated copies and on a polar sector of hexes, pyramids and tets whose rotated
 copies touch it at the seam, BDM1 and BDM2, the device entries with images equal the sum of the CPU entries over the copies,
 alternating signs included. On those meshes and on a transition cube set off from or cut by its mirror, the dense and
-compressed linear solves and the nonlinear solve reproduce the element means of the CPU solve of the explicit mesh. A
-classification that ignores the image or a typed inner integral on the unmapped point moves them far beyond the detectors.
-A space with a compressed trace, a connected periodic sector and a field request refuse.
+compressed linear solves and the nonlinear solve reproduce the element means of the CPU solve of the explicit mesh,
+averaged over its copies. A classification that ignores the image or a typed inner integral on the unmapped point moves
+them far beyond the detectors. A space with a compressed trace, a connected periodic sector and a field request refuse.
 Assumes: the CPU typed route on a mesh of explicit copies is the reference; a solve in the mirror-symmetric or cyclic
 subspace is the same discretization only when the copies carry the same elements, so the copies are built from one cell
-list. The REL values are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is
+list. That route integrates a touching pair from its lower-numbered side only, so the copies of one explicit solve differ
+from each other (recorded as reference_spread); their mean is what a solve in the subspace can match. The REL values are
+PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is
 bypassed for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane
 loads the binding through the provenance-checked loader.
 """
@@ -187,7 +189,21 @@ def _element_means(field, mesh):
     return np.column_stack([np.asarray(ng.Integrate(field[k], mesh, order=8, element_wise=True)) for k in range(3)])
 
 
-def _cpu_means(path, cells, order, applied, **kw):
+def _copy_frames(means, cells, images):
+    """The element means of each copy, mapped back onto the cells of copy 0."""
+    if "image_cyclic" in images:
+        frames = []
+        for k in range(images["image_cyclic"]):
+            c, s = math.cos(2.0*math.pi*k/images["image_cyclic"]), math.sin(2.0*math.pi*k/images["image_cyclic"])
+            block = means[k*cells:(k + 1)*cells]
+            frames.append(np.column_stack((c*block[:, 0] + s*block[:, 1], -s*block[:, 0] + c*block[:, 1], block[:, 2])))
+        return np.array(frames)
+    assert images == dict(image="-x"), images
+    return np.array([means[:cells], means[cells:2*cells]*np.array([1.0, -1.0, -1.0])])
+
+
+def _cpu_means(path, cells, order, applied, images, **kw):
+    """The mean over the copies of one CPU solve of the explicit mesh, and the largest distance of a copy from that mean."""
     import ngsolve as ng
     import radia as rad
     from radia.vim import _solve
@@ -195,7 +211,9 @@ def _cpu_means(path, cells, order, applied, **kw):
     with ng.TaskManager():
         mesh = ng.Mesh(str(path))
         result = _solve.hdiv_demag_solve(mesh, H_ext=ng.CF(applied), order=order, gram_eps=1e-10, tol=1e-11, **kw)
-        return _element_means(result["gfM"], mesh)[:cells]
+        frames = _copy_frames(_element_means(result["gfM"], mesh), cells, images)
+    mean = frames.mean(axis=0)
+    return mean, max(float(np.linalg.norm(frame - mean)/np.linalg.norm(mean)) for frame in frames)
 
 
 def _device_means(device, state):
@@ -218,9 +236,9 @@ def test_linear_solve_matches_the_explicit_copies(meshes, request, prepared, cud
         solved = device.solve(applied, INV_CHI, tolerance=1e-10, max_iterations=4000)
         means = _device_means(device, solved["x"])
         rows = {(row["payload"], row["direction"]): row["bytes"] for row in device.stats()["assembly"]["transfer_ledger"]}
-    reference = _cpu_means(meshes[name + "_copies"], len(means), order, applied, mu_r=500.0)
+    reference, spread = _cpu_means(meshes[name + "_copies"], len(means), order, applied, images, mu_r=500.0)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
-    request.node.user_properties += [("solve_relative", float(relative)), ("iterations", int(solved["iterations"]))]
+    request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("iterations", int(solved["iterations"]))]
     assert ("image_transforms", "H2D") in rows
     limit = SOLVE_REL if compression == "dense" else ACA_SOLVE_REL
     assert relative <= limit, f"{name} order={order} {compression} {images} relative={relative:.3e} limit={limit:.0e}"
@@ -231,9 +249,9 @@ def test_nonlinear_solve_matches_the_explicit_copies(meshes, request, prepared, 
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve(applied, tolerance=1e-9, linear_tolerance=1e-10)
         means = _device_means(device, solved["x"])
-    reference = _cpu_means(meshes[name + "_copies"], len(means), order, applied, bh_table=_BH, nl_tol=1e-9)
+    reference, spread = _cpu_means(meshes[name + "_copies"], len(means), order, applied, images, bh_table=_BH, nl_tol=1e-9)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
-    request.node.user_properties += [("solve_relative", float(relative)), ("newton", int(solved["newton_iterations"]))]
+    request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("newton", int(solved["newton_iterations"]))]
     assert relative <= SOLVE_REL, f"{name} order={order} {images} relative={relative:.3e} limit={SOLVE_REL:.0e}"
 
 
