@@ -8,7 +8,9 @@ reaches the dense equation of the same operators. Loud refusals of order 3, curv
 geometry and images. Dropping the typed near rule, the rational pyramid charge or the face
 orientation moves the factors far beyond DEMAG_REL. The energies of the rational charge on one
 pyramid match a reduction that shares no rule with the Gram. The mass matches a long rule on a mesh
-mapped onto a ball, whose cells the default rule of u*v*dx underintegrates.
+mapped onto a ball, whose cells the default rule of u*v*dx underintegrates. Both routes refuse a cell
+whose map changes sign, the bound behind that refusal holds against the element map, and every mesh
+family of the record stays one-signed.
 Assumes: NGSolve owns the HDiv basis, orientation and Piola maps; the values guard code,
 not the accuracy of a physical model, and DEMAG_REL, RATIONAL_REL and SOLVE_REL are PROPOSED detectors.
 """
@@ -102,6 +104,49 @@ def test_mixed_mass_rule_is_long_enough_on_warped_cells(order):
     expected[np.asarray(rows), np.asarray(cols)] = np.asarray(values)
     relative = float(np.linalg.norm(M - expected)/np.linalg.norm(expected))
     assert relative <= MASS_REL, f"order={order} relative={relative:.3e} limit={MASS_REL:.0e}"
+
+
+_TWISTED_PYRAMID = [(0, 0, 0), (1, 0, 0), (1, 1, 2.2), (0, 1, 0), (.5, .5, .5)]
+_TWISTED_HEX = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (.2, .2, .2), (0, 1, 1)]
+
+
+def _one_cell(points):
+    return build_mesh(points, [list(range(len(points)))])
+
+
+@pytest.mark.parametrize("points", [_TWISTED_PYRAMID, _TWISTED_HEX], ids=["pyramid", "hex"])
+@pytest.mark.parametrize("route", ["cpu", "device"])
+def test_mixed_route_refuses_a_cell_whose_map_changes_sign(points, route):
+    with ng.TaskManager():
+        fes = ng.HDiv(_one_cell(points), order=1)
+        with pytest.raises(ValueError, match="changes sign"):
+            if route == "cpu":
+                V._build_charge_gram_mixed(fes, build_hmatrix=False)
+            else:
+                V._prepare_gpu_mixed_charge_inputs(fes, backend="gpu")
+
+
+@pytest.mark.parametrize("name", ["warped", "twisted", "hex"])
+def test_mixed_jacobian_extremes_bound_the_element_map(name):
+    points = dict(warped=[(0, 0, 0), (1, 0, 0), (1.2, 1, .3), (0, 1, 0), (.5, .5, .8)], twisted=_TWISTED_PYRAMID, hex=_TWISTED_HEX)[name]
+    mesh = _one_cell(points)
+    element = next(iter(mesh.Elements(ng.VOL)))
+    jacobian = ng.specialcf.JacobianMatrix(3)
+    values = np.asarray(jacobian(mesh.GetTrafo(element)(ng.IntegrationRule(element.type, 14)))).reshape(-1, 3, 3)
+    sampled = np.linalg.det(values)
+    low, high = V._mixed_jacobian_extremes(np.array([v.point for v in mesh.vertices], dtype=float), np.array([[v.nr for v in element.vertices]]))
+    # The element's own orientation sets one overall sign; the bounds must then hold with the same sign.
+    sign = np.sign(sampled[np.argmax(np.abs(sampled))])*np.sign(low[0] if abs(low[0]) > abs(high[0]) else high[0])
+    bound_low, bound_high = sorted((sign*low[0], sign*high[0]))
+    assert bound_low <= sampled.min() + 1e-12 and sampled.max() <= bound_high + 1e-12, (
+        f"{name}: sampled [{sampled.min()}, {sampled.max()}] outside bound [{bound_low}, {bound_high}]")
+
+
+@pytest.mark.parametrize("name,mesh", [("cube", pyramid_cube), ("warped", lambda: pyramid_cube(.3)), ("transition", transition_cube),
+                                       ("grid", lambda: mixed_grid((3, 3, 3))), ("connected", lambda: connected_mesh("tet-pyramid-hex")),
+                                       ("ball", lambda: mixed_grid((6, 6, 6), lengths=(2., 2., 2.), origin=(-1., -1., -1.), mapping=to_ball(1.)))])
+def test_mixed_meshes_of_the_record_are_one_signed(name, mesh):
+    V._require_one_signed_mixed_jacobians(mesh())
 
 
 @pytest.mark.parametrize("order", [1, 2])
