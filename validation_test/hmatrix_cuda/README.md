@@ -101,8 +101,13 @@ there can be disturbed by the host.
   and near counts rise together; at the proposed (outer 6, pyramid 14, near 10) the field difference is about `5e-5`.
   Order 2 on non-parallelogram pyramids is slower and not monotone: the field difference stays near `3e-5` to `4e-5` from
   (6, 14, 16) to (6, 20, 16). Order 1 on the same mesh reaches about `2e-6` at (5, 14, 16), and its proposed (5, 6, 10)
-  gives about `2e-4`. The flat tet route at its default is about `1e-3` in the field at order 2 on the cube of the record,
+  gives about `2e-4`. Those warped cells keep a one-signed map, so their slower rate is not an inversion. The flat tet route at its default is about `1e-3` in the field at order 2 on the cube of the record,
   and it needs intorder 60 and far quadrature 14 for about `3e-6`; the typed route is not its default.
+- Both mixed routes refuse a cell whose map changes sign. No rule converges on such a cell, and the receipts of `check-vol`
+  do not look at it. The determinant of a straight pyramid is bilinear in its base coordinates, so its four base corners
+  decide exactly; a hex is sampled on five points per axis, which can miss a small inversion between the samples. The ball
+  meshes of the sphere validation use a smooth cube map, on which the checkerboard grid stays one-signed up to `n = 6`;
+  it inverts corner pyramids at `n = 7` and `n = 8`, and the radial max-norm map used before inverts pyramids from `n = 3`.
 - Reference: a polynomial magnetization has no jump across interior faces, so its charge on any mesh of a cube is that
   of the cube, whose box integrals have closed forms after a Duffy map at the corner (Duffy, SIAM J. Numer. Anal. 19, 1982;
   Bailey, Borwein and Crandall, J. Comput. Appl. Math. 206, 2007, for the cube and square values it reproduces). It covers

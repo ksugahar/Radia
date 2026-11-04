@@ -2292,17 +2292,61 @@ def _mixed_lattice_nodes(mesh, e, host_type):
     return np.array(nodes)
 
 
+_HEX_CORNERS = np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)], dtype=float)
+
+
+def _mixed_jacobian_extremes(xyz, cells):
+    """Smallest and largest map determinant of each straight cell of one vertex count, shape (cells, count, 3).
+
+    A tet determinant is constant. A pyramid determinant is bilinear in the base coordinates x/(1-z), y/(1-z), so
+    its four base corners bound it exactly. A hex determinant is triquadratic and is sampled on five points per axis.
+    """
+    v = xyz[cells]
+    if cells.shape[1] == 4:
+        dets = np.linalg.det(v[:, :3] - v[:, 3:])[:, None]
+    elif cells.shape[1] == 5:
+        apex = v[:, 4]
+        dets = np.stack([np.linalg.det(np.stack((v[:, b] - v[:, a], v[:, c] - v[:, d], apex - v[:, corner]), axis=1))
+                         for corner, a, b, d, c in ((0, 0, 1, 0, 3), (1, 0, 1, 1, 2), (2, 3, 2, 1, 2), (3, 3, 2, 0, 3))], axis=1)
+    else:
+        t = np.linspace(0., 1., 5)
+        ref = np.stack(np.meshgrid(t, t, t, indexing="ij"), axis=-1).reshape(-1, 3)
+        factor = _HEX_CORNERS[None]*ref[:, None] + (1 - _HEX_CORNERS[None])*(1 - ref[:, None])
+        slope = 2*_HEX_CORNERS[None] - 1
+        gradient = np.stack((slope[..., 0]*factor[..., 1]*factor[..., 2], factor[..., 0]*slope[..., 1]*factor[..., 2],
+                             factor[..., 0]*factor[..., 1]*slope[..., 2]), axis=-1)
+        dets = np.linalg.det(np.einsum("qia,cib->cqab", gradient, v))
+    return dets.min(axis=1), dets.max(axis=1)
+
+
+def _require_one_signed_mixed_jacobians(mesh):
+    """Refuse a straight cell whose map changes sign: no rule converges on it, so no integral on it means anything."""
+    xyz = np.array([v.point for v in mesh.vertices], dtype=float)
+    numbers = {}
+    for element in mesh.Elements(ng.VOL):
+        numbers.setdefault(len(element.vertices), []).append((element.nr, [v.nr for v in element.vertices]))
+    refused = []
+    for count, rows in numbers.items():
+        low, high = _mixed_jacobian_extremes(xyz, np.array([row[1] for row in rows], dtype=np.int64))
+        refused += [(rows[i][0], count, float(low[i]), float(high[i])) for i in np.flatnonzero(low*high <= 0)]
+    if refused:
+        cell, count, low, high = refused[0]
+        raise ValueError(f"Mixed HDiv-VIM refuses {len(refused)} cells whose map changes sign or vanishes: cell {cell} "
+                         f"with {count} vertices has a determinant from {low:.6e} to {high:.6e}. Mesh the body without inverted cells.")
+
+
 def _charge_basis_mixed(fes, *, materialize_mass=True):
     """Charge map B and host lattices of a straight tet, pyramid and hex mesh; the caller wraps TaskManager.
 
     Interior faces are conforming, so charges are the cell densities and the exterior face traces, each a
     reference-frame monomial in the reference measure (the Piola Jacobian cancels, as on the hex route).
     The mass takes the material rule, the one the device route uses: NGSolve's default order is short on a
-    non-parallelogram pyramid or hex, by 1.5e-3 of the mass on a coarse ball and 1.2e-5 of its mean."""
+    non-parallelogram pyramid or hex, by about 1e-3 of the mass on a coarse ball."""
     mesh = fes.mesh
     p = int(fes.globalorder)
     if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
         raise NotImplementedError("Mixed HDiv-VIM requires HDiv order 1 or 2 on straight undeformed geometry")
+    _require_one_signed_mixed_jacobians(mesh)
     nn = ng.specialcf.normal(mesh.dim)
     L2v = ng.L2(mesh, order=p)
     L2b = ng.SurfaceL2(mesh, order=p)
@@ -2638,6 +2682,7 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
     p = int(fes.globalorder)
     if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
         raise NotImplementedError("Mixed device charge input requires HDiv order 1 or 2 on straight undeformed geometry")
+    _require_one_signed_mixed_jacobians(mesh)
     if not 0 < fes.ndof <= 2**31 - 1:
         raise ValueError("Device charge DOF or element budget exceeded")
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
