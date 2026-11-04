@@ -54,8 +54,8 @@ def _occ(path, shape, maxh):
     return path
 
 
-def _tet_sector(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
-    """Kuhn tets of a polar sector over [-alpha/2, alpha/2]; rotated copies touch at the seam vertices. Every face is skin."""
+def _tet_sector(path, cells, fold, inner=0.03, outer=0.05, half=0.004, span=1.0):
+    """Kuhn tets of a polar sector over span*[-alpha/2, alpha/2]; at span 1 rotated copies touch at the seam vertices. Every face is skin."""
     from netgen.meshing import Element2D, Element3D, FaceDescriptor, Mesh, MeshPoint, Pnt
     alpha = 2.0*math.pi/fold
     mesh = Mesh(dim=3)
@@ -64,7 +64,7 @@ def _tet_sector(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
     mesh.SetBCName(0, "skin")
     point = {}
     for it, ir, iz in np.ndindex(cells + 1, 2, 2):
-        theta, radius = -0.5*alpha + it*alpha/cells, (inner, outer)[ir]
+        theta, radius = span*(-0.5*alpha + it*alpha/cells), (inner, outer)[ir]
         point[ir, it, iz] = mesh.Add(MeshPoint(Pnt(radius*math.cos(theta), radius*math.sin(theta), (-half, half)[iz])))
     for it in range(cells):
         corners = [point[0, it, 0], point[1, it, 0], point[1, it + 1, 0], point[0, it + 1, 0],
@@ -128,6 +128,7 @@ def meshes(tmp_path_factory):
                 half_ball=_occ(root/"half_ball.vol", half_ball, 0.016),
                 sector=_tet_sector(root/"sector.vol", 1, FOLD),
                 sector2=_tet_sector(root/"sector2.vol", 2, FOLD),
+                apart=_tet_sector(root/"apart.vol", 2, FOLD, span=0.8),
                 ring=_tet_ring(root/"ring.vol", 1, FOLD),
                 ring2=_tet_ring(root/"ring2.vol", 2, FOLD))
 
@@ -479,7 +480,7 @@ def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, orde
 
 @pytest.mark.parametrize("name,order,curve_order,images", [
     ("gap", 1, 1, dict(image="-x")), ("gap", 2, 1, {}), ("cut", 2, 1, dict(image="-x")), ("corner", 1, 1, dict(image="-x-y")),
-    ("sector2", 1, 1, dict(image_cyclic=8)), ("sector2", 2, 1, dict(image_cyclic=8)), ("half_ball", 1, 2, dict(image="-x")),
+    ("apart", 1, 1, dict(image_cyclic=8)), ("apart", 2, 1, dict(image_cyclic=8)), ("half_ball", 1, 2, dict(image="-x")),
     ("half_ball", 2, 2, dict(image="-x")), ("half_ball", 2, 2, {})])
 def test_field_of_the_cpu_state_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, images):
     from radia import vim
