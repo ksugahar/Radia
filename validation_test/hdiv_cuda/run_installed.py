@@ -75,6 +75,19 @@ def check_installed(source_commit):
     return package, binaries
 
 
+def check_netgen(overlay):
+    """The netgen of this venv must hold the patched library; test_hdiv_pyramid_material assumes it."""
+    from importlib.util import find_spec
+    receipt = json.loads((overlay / 'netgen-overlay.json').read_text(encoding='utf-8'))
+    package = Path(find_spec('netgen').submodule_search_locations[0]).resolve()
+    if not package.is_relative_to(Path(sys.prefix).resolve()):
+        raise RuntimeError(f'netgen imported outside the run venv: {package} not under {sys.prefix}')
+    actual = digest(package / receipt['library'])
+    if actual != receipt['library_sha256']:
+        raise RuntimeError(f"{receipt['library']} is {actual}, overlay {receipt['library_sha256']}")
+    return {key: receipt[key] for key in ('upstream_sha', 'patch_sha256', 'library_sha256')}
+
+
 def query_gpu(required):
     names = subprocess.check_output(['nvidia-smi', '--query-gpu=name,driver_version,memory.total',
                                      '--format=csv,noheader'], text=True).strip().splitlines()
@@ -88,6 +101,7 @@ def main():
     parser.add_argument('--source-commit', required=True)
     parser.add_argument('--wheel', required=True, type=Path)
     parser.add_argument('--require-gpu', required=True)
+    parser.add_argument('--netgen-overlay', required=True, type=Path)
     parser.add_argument('--out', required=True, type=Path)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
@@ -99,6 +113,7 @@ def main():
     try:
         result['gpu'] = query_gpu(args.require_gpu)
         package, result['binaries'] = check_installed(args.source_commit)
+        result['netgen'] = check_netgen(args.netgen_overlay)
         import ngsolve
         import pytest
         result['versions'] = dict(python=sys.version.split()[0], ngsolve=ngsolve.__version__, pytest=pytest.__version__)

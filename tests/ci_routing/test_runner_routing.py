@@ -182,11 +182,15 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     assert 'ci_gpu_artifact.py fetch gpu-input --radia --sha ${{ github.sha }}' in commands
     assert 'run_installed.py --source-commit ${{ github.sha }}' in commands
     assert '--require-gpu A100' in commands
+    assert 'netgen_overlay.py install --overlay gpu-input/gpu-netgen-overlay' in commands
+    assert '--netgen-overlay gpu-input/gpu-netgen-overlay' in commands
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     native = yaml.safe_load((ROOT / '.github/workflows/build-test.yml').read_text(encoding='utf-8'))
     steps = native['jobs']['build-test']['steps']
     upload = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
     assert 'ci_gpu_artifact.py seal' in steps[upload - 1]['run']
+    overlay = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-netgen-overlay')
+    assert 'netgen_overlay.py build' in steps[overlay - 1]['run'] and 'ci_gpu_artifact.py seal' in steps[overlay - 1]['run']
 
 
 def _hdiv_lane():

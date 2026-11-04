@@ -966,6 +966,18 @@
       ]
     },
     {
+      "pattern": "tools/netgen_overlay.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/patches/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "tools/probe_hdiv_pyramid.py",
       "owners": [
         "radia"

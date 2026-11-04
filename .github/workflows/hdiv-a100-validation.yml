@@ -21,7 +21,7 @@ jobs:
       OPENBLAS_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch the hash-verified exact-SHA radia wheel from Radia Native Release
+      - name: Fetch the hash-verified exact-SHA radia wheel and Netgen library from Radia Native Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -36,11 +36,13 @@ jobs:
           if ($wheels.Count -ne 1) { throw 'Expected one verified radia wheel' }
           & "$venv/Scripts/python.exe" -I -m pip install --only-binary=:all: "$($wheels[0].FullName)[gpu]" pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/netgen_overlay.py install --overlay gpu-input/gpu-netgen-overlay --python "$venv/Scripts/python.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "HDIV_LANE_PYTHON=$venv/Scripts/python.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "HDIV_LANE_WHEEL=$($wheels[0].FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Execute the HDiv device tests on the installed wheel without compilation
         run: |
-          & $env:HDIV_LANE_PYTHON -I validation_test/hdiv_cuda/run_installed.py --source-commit ${{ github.sha }} --wheel $env:HDIV_LANE_WHEEL --require-gpu A100 --out gpu-results
+          & $env:HDIV_LANE_PYTHON -I validation_test/hdiv_cuda/run_installed.py --source-commit ${{ github.sha }} --wheel $env:HDIV_LANE_WHEEL --require-gpu A100 --netgen-overlay gpu-input/gpu-netgen-overlay --out gpu-results
           exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
