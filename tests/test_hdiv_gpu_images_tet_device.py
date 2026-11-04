@@ -351,6 +351,29 @@ def test_image_operator_matches_cpu(meshes, request, cuda, name, order, curve_or
     assert worst <= limit, f"{name} order={order} {compression} {images} relative={worst:.3e} limit={limit:.0e}"
 
 
+def _cpu_equation(path, order, curve_order, terms, rhs):
+    """The dense CPU equation of one image list on the device's mass rule E^T W E, IntegrationRule(TET, 2*max(6, 2p+2))."""
+    import ngsolve as ng
+    from scipy.sparse import coo_matrix, csr_matrix
+    from radia.vim._vim import _curve_mesh
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(path))
+        if curve_order == 2:
+            _curve_mesh(mesh, 2)
+        fes = ng.HDiv(mesh, order=order)
+        B, gram, _ = _cpu_gram(fes, terms, 2 if curve_order == 2 else None)
+        u, v = fes.TnT()
+        mass = ng.BilinearForm(fes)
+        mass += u*v*ng.dx(intrules={ng.TET: ng.IntegrationRule(ng.TET, 2*max(6, 2*order + 2))})
+        mass.Assemble()
+    gram.build_exact_dense_normalized_gram(maximum_memory_mb=2048)
+    B = csr_matrix(B)
+    columns = [B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(B[:, k].toarray().ravel()))) for k in range(fes.ndof)]
+    rows, cols, values = mass.mat.COO()
+    M = coo_matrix((values, (rows, cols)), shape=(fes.ndof, fes.ndof)).toarray()
+    return np.linalg.solve(np.column_stack(columns) + INV_CHI*M, rhs)
+
+
 def _cpu_solve(path, order, curve_order, **kw):
     import ngsolve as ng
     import radia as rad
@@ -370,10 +393,19 @@ def _cpu_solve(path, order, curve_order, **kw):
     ("gap", 1, 1, "dense", dict(image="-x")), ("cut", 2, 1, "dense", dict(image="-x")), ("cut", 2, 1, "aca", dict(image="-x")),
     ("half_ball", 2, 2, "dense", dict(image="-x"))])
 def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, compression, images):
-    x_cpu, _ = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
+    import ngsolve as ng
     with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression=compression, curve_order=curve_order,
                                      **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), INV_CHI, tolerance=1e-10, max_iterations=4000)
+    if curve_order == 2:
+        # On a curved host the two routes integrate the mass on different rules: the CPU equation of the device's.
+        with ng.TaskManager():
+            setup = prepared._prepare_device_components(meshes[name], order, cuda, aca=None, compression=compression, curve_order=curve_order,
+                                                        images=prepared._DeviceImages(images.get("image"), images.get("image_cyclic")))
+        x_cpu = _cpu_equation(meshes[name], order, curve_order, _terms(images.get("image"), images.get("image_cyclic")),
+                              setup["rhs_operator"] @ np.array([0.0, 0.0, 1e5]))
+    else:
+        x_cpu, _ = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
     relative = np.linalg.norm(solved["x"] - x_cpu)/np.linalg.norm(x_cpu)
     request.node.user_properties += [("solve_relative", float(relative)), ("iterations", int(solved["iterations"]))]
     limit = SOLVE_REL if compression == "dense" else ACA_SOLVE_REL
@@ -394,7 +426,7 @@ def _device_means(device, state):
 
 
 def _ring_means(path, count, order, **kw):
-    """Element means of the first sector of the CPU solve of the explicit ring; the drive is invariant, so every copy holds the same."""
+    """The mean over the rotated copies of one CPU solve of the explicit ring, and the largest distance of a copy from that mean."""
     import ngsolve as ng
     import radia as rad
     from radia.vim import _solve
@@ -402,7 +434,14 @@ def _ring_means(path, count, order, **kw):
     with ng.TaskManager():
         mesh = ng.Mesh(str(path))
         result = _solve.hdiv_demag_solve(mesh, H_ext=ng.CF((0.0, 0.0, 1e5)), order=order, gram_eps=1e-10, tol=1e-11, **kw)
-        return _element_means(result["gfM"], mesh)[:count]
+        means = _element_means(result["gfM"], mesh)
+    frames = []
+    for k in range(FOLD):
+        c, s = math.cos(2.0*math.pi*k/FOLD), math.sin(2.0*math.pi*k/FOLD)
+        block = means[k*count:(k + 1)*count]
+        frames.append(np.column_stack((c*block[:, 0] + s*block[:, 1], -s*block[:, 0] + c*block[:, 1], block[:, 2])))
+    mean = np.mean(frames, axis=0)
+    return mean, max(float(np.linalg.norm(frame - mean)/np.linalg.norm(mean)) for frame in frames)
 
 
 @pytest.mark.parametrize("cells,order,compression", [(1, 2, "dense"), (2, 2, "dense"), (2, 1, "aca")])
@@ -411,9 +450,9 @@ def test_sector_linear_solve_matches_the_explicit_ring(meshes, request, prepared
     with prepared.PreparedHDivLinear(sector, backend="gpu", order=order, gram_compression=compression, **_RECEIPT, image_cyclic=FOLD) as device:
         solved = device.solve((0.0, 0.0, 1e5), INV_CHI, tolerance=1e-10, max_iterations=4000)
         means = _device_means(device, solved["x"])
-    reference = _ring_means(ring, len(means), order, mu_r=500.0)
+    reference, spread = _ring_means(ring, len(means), order, mu_r=500.0)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
-    request.node.user_properties += [("solve_relative", float(relative)), ("iterations", int(solved["iterations"]))]
+    request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("iterations", int(solved["iterations"]))]
     limit = SECTOR_SOLVE_REL if compression == "dense" else ACA_SOLVE_REL
     assert relative <= limit, f"cells={cells} order={order} {compression} relative={relative:.3e} limit={limit:.0e}"
 
@@ -422,9 +461,9 @@ def test_sector_nonlinear_solve_matches_the_explicit_ring(meshes, request, prepa
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes["sector2"], _BH, backend="gpu", order=1, **_RECEIPT, image_cyclic=FOLD) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
         means = _device_means(device, solved["x"])
-    reference = _ring_means(meshes["ring2"], len(means), 1, bh_table=_BH, nl_tol=1e-9)
+    reference, spread = _ring_means(meshes["ring2"], len(means), 1, bh_table=_BH, nl_tol=1e-9)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
-    request.node.user_properties += [("solve_relative", float(relative)), ("newton", int(solved["newton_iterations"]))]
+    request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("newton", int(solved["newton_iterations"]))]
     assert relative <= SECTOR_SOLVE_REL, f"relative={relative:.3e} limit={SECTOR_SOLVE_REL:.0e}"
 
 
