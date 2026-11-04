@@ -31,8 +31,11 @@ _BH = [[0.0, 0.0], [200.0, 0.8], [1000.0, 1.4], [5000.0, 1.7], [50000.0, 1.95], 
 _KEYS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents", "tet_rule", "tri_rule",
          "tet_low_rule", "tri_low_rule", "far_factor", "family")
 _CURVED_KEYS = ("cell_numbers", "face_numbers", "curve_gl", "curve_gw")
-_KUHN = ((0, 1, 2, 6), (0, 2, 3, 6), (0, 3, 7, 6), (0, 7, 4, 6), (0, 4, 5, 6), (0, 5, 1, 6))
-_QUADS = ((3, 2, 1, 0), (4, 5, 6, 7), (1, 2, 6, 5), (3, 0, 4, 7), (0, 1, 5, 4), (2, 3, 7, 6))
+# Kuhn tets of a hex around its diagonal 0-6, in the order of a generated mesh, and the triangles of its faces on the same
+# diagonals: bottom, top, outer, inner, then the two azimuthal faces.
+_KUHN = ((0, 2, 1, 6), (0, 3, 2, 6), (0, 7, 3, 6), (0, 4, 7, 6), (0, 5, 4, 6), (0, 1, 5, 6))
+_FACES = (((0, 3, 2), (0, 2, 1)), ((4, 5, 6), (4, 6, 7)), ((1, 2, 6), (1, 6, 5)), ((0, 4, 7), (0, 7, 3)),
+          ((0, 1, 5), (0, 5, 4)), ((3, 7, 6), (3, 6, 2)))
 
 
 def _occ(path, shape, maxh):
@@ -58,14 +61,10 @@ def _tet_sector(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
                    point[0, it, 1], point[1, it, 1], point[1, it + 1, 1], point[0, it + 1, 1]]
         for tet in _KUHN:
             mesh.Add(Element3D(1, [corners[k] for k in tet]))
-        for index, quad in enumerate(_QUADS):
-            if index >= 4 and not ((index == 4 and it == 0) or (index == 5 and it == cells - 1)):
-                continue
-            # Both triangles of a quad hold the Kuhn diagonal through its corner of smallest hex index.
-            first = min(range(4), key=lambda k: quad[k])
-            a, b, c, d = (quad[(first + k) % 4] for k in range(4))
-            mesh.Add(Element2D(skin, [corners[a], corners[b], corners[c]]))
-            mesh.Add(Element2D(skin, [corners[a], corners[c], corners[d]]))
+        for index, triangles in enumerate(_FACES):
+            if index < 4 or (index == 4 and it == 0) or (index == 5 and it == cells - 1):
+                for triangle in triangles:
+                    mesh.Add(Element2D(skin, [corners[k] for k in triangle]))
     mesh.Save(str(path))
     return path
 
