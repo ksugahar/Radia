@@ -148,8 +148,15 @@ RADIA_TYPED_KERNEL inline void pyramidAnchor(const double* nd,const double* p,do
         clampPyramid(y);
     }
 }
-// Radial cones from the anchor over the two reference sub-tets of a pyramid, for charges first..nS-1.
+// Radial cones from the anchor over the two reference sub-tets of a pyramid, for charges first..nS-1. The source, the
+// exponents and the sums stay in locals, so that nothing is reloaded past a store at each of the many points of the rule.
 RADIA_TYPED_KERNEL inline void pyramidRadial(const double* nd,const double* p,const double* anchor,const int* exponents,int first,int nS,const double* gx,const double* gw,int nq,double* inner){
+    constexpr int pyramidCharges=5;
+    if(nS>pyramidCharges){for(int l=first;l<nS;++l)inner[l]=NAN;return;}
+    double v0[3],e1[3],e3[3],ez[3],bilinear[3],sum[pyramidCharges];int powers[pyramidCharges][3];
+    for(int k=0;k<3;++k){v0[k]=nd[k];e1[k]=nd[6+k]-nd[k];e3[k]=nd[18+k]-nd[k];bilinear[k]=nd[24+k]-nd[6+k]-nd[18+k]+nd[k];ez[k]=nd[54+k]-nd[k];}
+    for(int l=first;l<nS;++l){sum[l]=inner[l];for(int k=0;k<3;++k)powers[l][k]=exponents[3*l+k];}
+    const double px=p[0],py=p[1],pz=p[2];
     const double corners[5][3]={{0,0,0},{1,0,0},{1,1,0},{0,1,0},{0,0,1}};
     const int subs[2][4]={{0,1,2,4},{0,2,3,4}},faces[4][3]={{1,2,3},{0,3,2},{0,1,3},{0,2,1}};
     for(int sub=0;sub<2;++sub){
@@ -161,16 +168,21 @@ RADIA_TYPED_KERNEL inline void pyramidRadial(const double* nd,const double* p,co
             for(int k=0;k<3;++k){d1[k]=b1[k]-x0[k];d2[k]=b2[k]-x0[k];d3[k]=b3[k]-x0[k];e21[k]=b2[k]-b1[k];e32[k]=b3[k]-b2[k];}
             const double D=fabs(d1[0]*(d2[1]*d3[2]-d2[2]*d3[1])-d1[1]*(d2[0]*d3[2]-d2[2]*d3[0])+d1[2]*(d2[0]*d3[1]-d2[1]*d3[0]));
             if(D<1e-300)continue;
-            for(int a=0;a<nq;++a)for(int b=0;b<nq;++b)for(int c=0;c<nq;++c){
-                const double u=gx[a],v=gx[b],w=gx[c];double y[3],X[3],J[3][3];
-                for(int k=0;k<3;++k)y[k]=x0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
-                pyramidMap(nd,y,X,J);
-                const double dr[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]};const double r=norm3(dr);if(r<1e-300)continue;
-                const double weight=gw[a]*gw[b]*gw[c]*u*u*v*D/r;
-                for(int l=first;l<nS;++l)inner[l]+=weight*monomial(exponents+3*l,y);
+            for(int a=0;a<nq;++a){const double u=gx[a],wa=gw[a];
+                for(int b=0;b<nq;++b){const double v=gx[b],wab=wa*gw[b];
+                    for(int c=0;c<nq;++c){const double w=gx[c];double y[3],X[3];
+                        for(int k=0;k<3;++k)y[k]=x0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
+                        const double top=fmax(1.0-y[2],1e-300),share=y[1]/top;
+                        for(int k=0;k<3;++k)X[k]=v0[k]+y[0]*e1[k]+y[1]*e3[k]+y[2]*ez[k]+y[0]*share*bilinear[k];
+                        const double dr[3]={px-X[0],py-X[1],pz-X[2]};const double r=norm3(dr);if(r<1e-300)continue;
+                        const double weight=wab*gw[c]*u*u*v*D/r;
+                        for(int l=first;l<nS;++l)sum[l]+=weight*monomial(powers[l],y);
+                    }
+                }
             }
         }
     }
+    for(int l=first;l<nS;++l)inner[l]=sum[l];
 }
 // Potential of the rational charge x y/(1-z) of an affine pyramid. Each level z is a parallelogram carrying the
 // polynomial x y, whose potential is exact; the rule in z is split at the level of p, where the kernel peaks, and graded.

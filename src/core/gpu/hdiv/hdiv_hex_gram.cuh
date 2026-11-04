@@ -731,7 +731,9 @@ struct HexPrepared {
         const std::size_t nNear=std::size_t(d.nearOut.n),nNear3=nNear*nNear*nNear;
         const std::size_t stride=std::max({nOut*2*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
                                            order==1||typed?std::size_t(hexGradedCoeff(order))+nNear3*2*maxCount:std::size_t(0)});
-        constexpr std::size_t launchItems=64;
+        // One block per processor: more would only share processors and lengthen each kernel.
+        int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
+        const std::size_t launchItems=std::size_t(std::max(properties.multiProcessorCount,1));
         const std::size_t items=checkedProduct(2,pairs);
         if(items>std::size_t(INT_MAX))throw std::runtime_error("HEX pair table exceeds the work sort");
         const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(items,2*sizeof(HexWork)+2)+checkedProduct(launchItems*stride,sizeof(double));
