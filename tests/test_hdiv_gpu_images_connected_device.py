@@ -97,7 +97,9 @@ def meshes(tmp_path_factory):
     root = tmp_path_factory.mktemp("connected")
     return dict(sector=_yoke(root/"sector.vol", 1, 12), sector2=_yoke(root/"sector2.vol", 2, 8), ring2=_yoke(root/"ring2.vol", 2, 8, ring=True),
                 unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False),
-                shuffled=_yoke(root/"shuffled.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
+                shuffled=_yoke(root/"shuffled.vol", 1, 12, numbering=[5, 0, 1, 7, 2, 6, 4, 3]),
+                swapped=_yoke(root/"swapped.vol", 1, 12, numbering=[2, 6, 7, 5, 1, 3, 0, 4]),
+                untied=_yoke(root/"untied.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
 
 
 def _applied():
@@ -142,7 +144,8 @@ def _setup(path, order, cuda, compression, fold, deform):
 
 
 _CASES = [("sector", 1, None, "dense"), ("sector", 2, None, "dense"), ("sector", 2, None, "aca"), ("sector", 1, _radial_q2, "dense"),
-          ("sector", 2, _radial_q2, "dense"), ("sector", 2, _radial_q2, "aca"), ("shuffled", 1, None, "dense"), ("shuffled", 2, None, "dense")]
+          ("sector", 2, _radial_q2, "dense"), ("sector", 2, _radial_q2, "aca"), ("shuffled", 1, None, "dense"), ("shuffled", 2, None, "dense"),
+          ("swapped", 2, None, "dense")]
 
 
 @pytest.mark.parametrize("name,order,deform,compression", _CASES)
@@ -249,6 +252,9 @@ def test_a_seam_without_a_pair_or_identification_refuses(meshes, prepared, cuda)
         prepared.PreparedHDivLinear(meshes["sector"], cyclic_periodic_boundaries=SEAM, **kw)
     with pytest.raises(ValueError, match="pair of labels"):
         prepared.PreparedHDivLinear(meshes["sector"], image_cyclic=12, cyclic_periodic_boundaries="periodic_min", **kw)
+    # This numbering pairs every vertex, yet the wrapper ties no DOF: the reduction would be a silent no-op.
+    with pytest.raises(ValueError, match="did not identify"):
+        prepared.PreparedHDivLinear(meshes["untied"], image_cyclic=12, cyclic_periodic_boundaries=SEAM, **kw)
 
 
 def test_a_deformation_requires_the_hex_family_and_q2(meshes, prepared, cuda):
