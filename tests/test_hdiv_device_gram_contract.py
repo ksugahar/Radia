@@ -174,6 +174,7 @@ def _fake_device_staging(monkeypatch, calls, validate):
     vim._curve_mesh = lambda mesh, order: calls.append(("curve", order))
     vim._volume_vertex_counts = lambda mesh: frozenset({4})
     vim._prepare_gpu_hex_charge_inputs = lambda *a, **k: calls.append("hex-charge-staging")
+    vim._prepare_gpu_mixed_charge_inputs = lambda *a, **k: calls.append("mixed-charge-staging")
     for name, module in (("ngsolve", ng), ("radia", types.ModuleType("radia")),
                          ("radia.vim", types.ModuleType("radia.vim")), ("radia.vim._vim", vim)):
         monkeypatch.setitem(sys.modules, name, module)
@@ -475,16 +476,28 @@ def test_hex_lattice_disagreement_fails_before_the_device():
         hdiv_gpu._device_gram_arguments(charge, inputs, (cells + 1e-6, faces), None)
 
 
-@pytest.mark.parametrize("counts,order,error", [
-    ({4, 8}, 1, "pure TET or pure HEX"), ({6}, 1, "pure TET or pure HEX"), ({8}, 0, "RT0 is affine TET only")])
-def test_mixed_meshes_and_hex_rt0_fail_loudly(monkeypatch, counts, order, error):
+def _family_counts(monkeypatch, counts):
     vim = types.ModuleType("radia.vim._vim")
     vim._volume_vertex_counts = lambda mesh: frozenset(counts)
     for name, module in (("radia", types.ModuleType("radia")), ("radia.vim", types.ModuleType("radia.vim")),
                          ("radia.vim._vim", vim)):
         monkeypatch.setitem(sys.modules, name, module)
+
+
+@pytest.mark.parametrize("counts,curve,order,error", [
+    ({6}, 1, 1, "TET, pyramid and HEX"), ({4, 6}, 1, 1, "TET, pyramid and HEX"), ({8}, 1, 0, "RT0 is affine TET only"),
+    ({4, 8}, 1, 0, "order 1 or 2 on straight geometry"), ({5}, 1, 3, "order 1 or 2 on straight geometry"),
+    ({4, 5, 8}, 2, 1, "order 1 or 2 on straight geometry")])
+def test_unsupported_meshes_and_rules_fail_loudly(monkeypatch, counts, curve, order, error):
+    _family_counts(monkeypatch, counts)
     with pytest.raises(NotImplementedError, match=error):
-        hdiv_gpu._mesh_family(None, 1, order)
+        hdiv_gpu._mesh_family(None, curve, order)
+
+
+@pytest.mark.parametrize("counts", [{5}, {4, 5}, {5, 8}, {4, 8}, {4, 5, 8}])
+def test_every_connected_element_mix_is_the_mixed_family(monkeypatch, counts):
+    _family_counts(monkeypatch, counts)
+    assert hdiv_gpu._mesh_family(None, 1, 2) == "mixed"
 
 
 def test_hex_gram_downloads_only_flags_and_table_sizes():

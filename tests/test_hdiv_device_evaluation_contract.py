@@ -18,13 +18,14 @@ _spec.loader.exec_module(hdiv_gpu)
 
 
 def tables(elements=3, rule=4, local=6, classes=2):
-    return dict(rule=np.zeros((rule, 4)), reference_shapes=np.zeros((classes, rule, local, 3)),
-                vertices=np.zeros((elements, 12)), element_class=np.zeros(elements, np.int32),
-                element_dofs=np.zeros((elements, local), np.int32),
-                element_points=np.zeros((elements, rule), np.int32))
+    return dict(tables=[dict(rule=np.zeros((rule, 4)), reference_shapes=np.zeros((classes, rule, local, 3)),
+                             vertices=np.zeros((elements, 12)), element_class=np.zeros(elements, np.int32),
+                             element_dofs=np.zeros((elements, local), np.int32),
+                             element_points=np.zeros((elements, rule), np.int32))])
 
 
 def ledger(t, *extra, drop=(), law=24, persistent=4096, transient=2048):
+    t = t["tables"][0]
     sizes = {"element_vertices_m": t["vertices"].nbytes, "reference_shapes": t["reference_shapes"].nbytes,
              "material_rule": t["rule"].nbytes, "element_class": t["element_class"].nbytes,
              "element_dofs": t["element_dofs"].nbytes, "element_points": t["element_points"].nbytes,
@@ -125,15 +126,14 @@ def test_flat_material_binding_takes_tables_not_evaluation_values():
     source = (HDIV / "hdiv_resident_python.cpp").read_text(encoding="utf-8")
     block = source[source.index('def_static("from_flat_tables"'):source.index('.def_static("validate_flat_tables"')]
     names = re.findall(r'py::arg\("([a-z_]+)"\)', block)
-    assert names == ["rule", "reference_shapes", "vertices", "element_class", "element_dofs",
-                     "element_points", "dofs", "law", "backend"], names
+    assert names == ["tables", "dofs", "law", "backend"], names
     assert "&constructFlatMaterial," in block, "production binding must build the matrix-free context"
     # The explicit-E diagnostic oracle is retired; coverage moved to independent NGSolve references.
     assert "_explicit_evaluation_oracle" not in source and "createFlatMaterialOracle" not in source
     scope = source[source.index('.def_static("validate_flat_tables"'):source.index('.def("assembly",[](radia_hdiv_bh::MaterialOperator')]
     assert re.findall(r'py::arg\("([a-z_]+)"\)', scope) == names[:-2], "scope check takes the same tables, no law"
     helper = source[source.index("py::dict validateFlatTables("):source.index("std::shared_ptr<DeviceOperator> constructAnalyticGram(")]
-    assert "validateFlatEvaluationScope(flatEvaluationInput(" in helper and "create" not in helper, helper
+    assert "validateFlatEvaluationScope(flatEvaluationGroups(" in helper and "create" not in helper, helper
 
 
 def test_device_binding_takes_no_host_matrix():
@@ -184,7 +184,7 @@ def test_flat_material_scope_has_structural_bounds_not_fixed_size_caps():
     material = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
     staging = (HDIV / "hdiv_material_staging.hpp").read_text(encoding="utf-8")
     blocks = dict(scope=_block(evaluation, "inline void validateFlatEvaluation(", "// CUB scratch of FlatEvaluationBuilder"),
-                  flat_context=_block(material, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()"),
+                  flat_context=_block(material, "MappedMaterial(const FlatEvaluationGroups& in", "radia_hmatrix_cuda::MassOperand massOperand()"),
                   staging_context=_block(staging, "MaterialStagingContext(const std::string& path", "inline MaterialQuadraturePayload stageMaterialQuadrature"))
     for name, block in blocks.items():
         for cap in ("16384", "65536", "4000000", "2000000", "512)<<20", "ne>4096"):
@@ -230,17 +230,19 @@ def test_matrix_free_evaluation_has_one_piola_formula_and_no_float_atomics():
     for kernel, nxt in (("flatEvaluationEntries", "flatEvaluationApply"), ("flatEvaluationApply", "flatEvaluationTransposeApply"),
                         ("flatEvaluationTransposeApply", "slotKeys"), ("flatMassEntries", "flatMassReduce")):
         body = _block(source, "__global__ void " + kernel + "(", "__global__ void " + nxt + "(")
-        # One geometry entry for affine vertices and curved P2 nodes.
-        assert "piolaValue(J,det," in body and "elementJacobian(vertices,nodes,e,ruleRows+4*k,J)" in body, kernel
+        # One geometry entry for affine vertices and curved P2 nodes; the repeated actions read its table.
+        assert "piolaValue(J,det," in body, kernel
+        geometry = "elementJacobian(vertices,nodes,e,ruleRows+4*k,J)" if kernel == "flatEvaluationEntries" else "tabulatedJacobian(row)"
+        assert geometry in body, kernel
     transpose = _block(source, "__global__ void flatEvaluationTransposeApply(", "__global__ void slotKeys(")
     assert "atomic" not in transpose and "incidence[at]" in transpose, "E^T must be a deterministic gather"
 
 
 def test_production_material_stores_no_global_evaluation_matrix():
     source = (HDIV / "hmatrix_bh_material.cuh").read_text(encoding="utf-8")
-    flat = _block(source, "MappedMaterial(const FlatEvaluationInput& in", "radia_hmatrix_cuda::MassOperand massOperand()")
+    flat = _block(source, "MappedMaterial(const FlatEvaluationGroups& in", "radia_hmatrix_cuda::MassOperand massOperand()")
     assert "builder.build(in,flat,weights,M,massDiagonal);" in flat and "&E" not in flat and "&ET" not in flat
-    assert 'matrixFree=true;routeName=in.nodes==27?"device-hex-matrix-free":in.nodes==10?"device-curved-tet-matrix-free":"device-flat-tet-matrix-free";' in flat
+    assert 'matrixFree=true;routeName="device-"+flatEvaluationFamily(in)+"-matrix-free";' in flat
     for method in ("MaterialEvaluation evaluate(", "void applyFrozenDevice("):
         body = source[source.index(method):]
         body = body[:body.index("\n    }\n")]

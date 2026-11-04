@@ -13,15 +13,23 @@
 // 0.5 (G_AB + G_BA^T), the CPU GetHexSymBlock; ACA entries beyond the table
 // are far products evaluated per entry. Only geometry and charges cross H2D,
 // the 1D rules as kernel arguments; no Gram value leaves the device.
+// A mixed tet, pyramid and hex mesh adds the host types and takes one family for
+// every pair, as the CPU QuadBlockTyped: the graded near rule on self, touching and
+// near pairs, the outer tensor rule beyond them, densities in the unit-cube measure.
+// A pair of two different hosts integrates one direction, with the cheaper host as
+// source, and the block is not symmetrized.
 #pragma once
 #include <climits>
 #include <cmath>
 #include <cub/device/device_scan.cuh>
 #include "hmatrix_resident.cuh"
+#define RADIA_TYPED_KERNEL __device__
+#define RADIA_TYPED_FIELD rad_hdiv_cuda
+#include "hdiv_typed_host_math.inc"
 namespace radia_hmatrix_cuda {
 constexpr int hexRuleCap=16,hexThreads=128;
-// Scratch of a BDM1 graded block: 8 source monomials x 84 polynomial coefficients.
-constexpr int hexGradedCoeff=8*84;
+// Scratch of a graded block: source charges x 84 polynomial coefficients. Only a mixed mesh grades at order 2.
+__device__ __host__ inline int hexGradedCoeff(int order){return (order==2?27:8)*84;}
 constexpr double hexInvFourPi=0.07957747154594766788;
 // CPU HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY_DEFAULT, HEX_AFFINE_EXACT_NEAR_FACTOR and HexDistortedFarFactor().
 constexpr double hexMaxAnisotropy=12.0,hexAffineExactNear=1.0,hexDistortedFar=1.0;
@@ -41,6 +49,8 @@ struct HexDevice {
     const double* farX;const double* farW;int farStride;
     const unsigned long long* keys;const std::size_t* offsets;const double* values;std::size_t pairs;
     HexRule out,in,pair,pairAffine,nearOut,inSelf;double nearGrade,farInner,candidate;int order;
+    // Host types of a mixed mesh (radia_hdiv_typed::HostType); null on a pure hex mesh.
+    const int* type;
 };
 __device__ inline void hexLag3(double t,double v[3],double d[3]){
     v[0]=2.0*(t-0.5)*(t-1.0);v[1]=4.0*t*(1.0-t);v[2]=2.0*t*(t-0.5);
@@ -77,6 +87,9 @@ __device__ inline void hexPoint(const HexDevice& d,int g,const double* xi,double
 __device__ inline double hexMono(const int* e,const double* xi){
     double v=1.0;for(int k=0;k<3;++k)for(int i=0;i<e[k];++i)v*=xi[k];return v;}
 __device__ inline const int* hexExponent(const HexDevice& d,int g,int local){return d.exponents+3*std::size_t(d.first[g]+local);}
+// Charge density per unit-cube measure of host g.
+__device__ inline double hexDensity(const HexDevice& d,int g,const int* e,const double* xi){
+    return d.type?radia_hdiv_typed::density(d.type[g],e,xi):hexMono(e,xi);}
 __device__ inline void hexNeumaier(double& sum,double& comp,double x){
     const double t=sum+x;if(fabs(sum)>=fabs(x))comp+=(sum-t)+x;else comp+=(x-t)+sum;sum=t;}
 __device__ inline double hexSep(const HexDevice& d,int t,int s){
@@ -147,6 +160,7 @@ __device__ inline bool hexExponential(const HexDevice& d,int t,int s,bool touchi
 // Directed (target t, source s) block family of the CPU QuadBlockHex.
 __device__ inline int hexClassify(const HexDevice& d,int t,int s,HexAdjacency& adj){
     adj.dim=-1;
+    if(d.type)return t==s||hexTouch(d,t,s)||hexSep(d,t,s)<=d.nearGrade*(d.size[t]+d.size[s])?hexGradedClass:hexFarClass;
     const bool touching=hexTouch(d,t,s);const double sep=hexSep(d,t,s),sz=d.size[t]+d.size[s];
     const bool exactNear=touching||sep<=hexAffineExactNear*sz;
     if(d.order==1){
@@ -166,7 +180,7 @@ __device__ inline void hexFarInner(const HexDevice& d,int s,const double* p,int 
     for(int q=0;q<np;++q){const double dx=p[0]-X[3*q],dy=p[1]-X[3*q+1],dz=p[2]-X[3*q+2];const double r=sqrt(dx*dx+dy*dy+dz*dz);
         if(r<1e-300)continue;const double w=W[q]/r;
         const double xi[3]={d.out.x[q%n1],d.out.x[(q/n1)%n1],hexCell(d,s)?d.out.x[q/(n1*n1)]:0.0};
-        for(int l=0;l<nS;++l)inner[l]+=w*hexMono(hexExponent(d,s,l),xi);}
+        for(int l=0;l<nS;++l)inner[l]+=w*hexDensity(d,s,hexExponent(d,s,l),xi);}
 }
 // Exact sub-simplex potentials of an affine source (CPU PhiInnerHexAffine{Cell,Face}Vec). BDM2 reads the
 // host coefficient tables; a BDM1 graded pair passes the coefficients of its nS monomials in local.
@@ -359,6 +373,17 @@ __device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const doubl
     if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),p,ref):quadClosest(hexNodes(d,s),p,ref)))return false;
     hexConeFanInner(d,s,p,ref,nS,inner);return true;
 }
+// CPU QuadBlockTyped inner of a tet, triangle or pyramid source: exact on the polynomial charges of an
+// affine source, on levels on its rational charge, radial from the anchor on a non-parallelogram pyramid.
+__device__ inline void hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
+    using namespace radia_hdiv_typed;
+    const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;
+    if(analytic)affinePotentials(type,nd,center,p,nS,coeff,inner);
+    if(type!=pyramidHost)return;
+    if(analytic){for(int l=0;l<nS;++l)if(e[3*l+2]<0)inner[l]+=pyramidRationalPotential(nd,center,p,R.x,R.w,R.n);return;}
+    double anchor[3];if(t==s)collapse(type,xi,anchor);else pyramidAnchor(nd,p,anchor);
+    pyramidRadial(nd,p,anchor,e,0,nS,R.x,R.w,R.n,inner);
+}
 // CPU QuadBlockHexCompositeProduct inner: the exact self radial, the radial
 // rule anchored at the (clamped) source pre-image near the source, the outer
 // tensor rule beyond 1.5 far_inner host radii.
@@ -439,11 +464,18 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         __syncthreads();}
     // A BDM1 graded pair on an affine source keeps its monomial coefficients for this block only.
     const double* local=nullptr;
-    if(graded&&d.affine[s]){double lin[3][4],scaleInv=0.0,ac[3];hexAffineForms(hexNodes(d,s),cellS,lin,scaleInv);hexCenterForms(hexNodes(d,s),cellS,lin,ac);
+    const bool typedSource=graded&&d.type&&d.type[s]>=radia_hdiv_typed::tetHost;bool analytic=false;double typedCenter[3]={0.0,0.0,0.0};
+    if(typedSource){using namespace radia_hdiv_typed;double lin[3][4],scaleInv=0.0;const double mid[3]={0.5,0.5,0.5};
+        analytic=affineForms(d.type[s],hexNodes(d,s),lin,scaleInv);hexPoint(d,s,mid,typedCenter);
+        if(!analytic&&d.type[s]!=pyramidHost)atomicExch(invalid,6);
+        const int ncoeff=cellS?cellPolynomials:facePolynomials;
+        if(analytic)for(int l=threadIdx.x;l<nS;l+=blockDim.x)if(!chargePolynomials(lin,scaleInv,typedCenter,cellS,hexExponent(d,s,l),1,scratch+std::size_t(l)*ncoeff))atomicExch(invalid,1);
+        local=scratch;__syncthreads();}
+    else if(graded&&d.affine[s]){double lin[3][4],scaleInv=0.0,ac[3];hexAffineForms(hexNodes(d,s),cellS,lin,scaleInv);hexCenterForms(hexNodes(d,s),cellS,lin,ac);
         const int ncoeff=cellS?84:35;
         for(int l=threadIdx.x;l<nS;l+=blockDim.x)if(!hexMonomialCoeff(lin,scaleInv,cellS,hexExponent(d,s,l),scratch+std::size_t(l)*ncoeff))atomicExch(invalid,1);
         local=scratch;__syncthreads();}
-    double* rows=scratch+std::size_t(npS)*(4+nS)+(graded?std::size_t(hexGradedCoeff):std::size_t(0));const int width=nS+nT;
+    double* rows=scratch+std::size_t(npS)*(4+nS)+(graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0));const int width=nS+nT;
     for(int q=threadIdx.x;q<npT;q+=blockDim.x){double xi[3],wq;
         if(product){const int a=q/(N*nc),b=(q/nc)%N,c=q%nc;xi[0]=R.x[a];xi[1]=R.x[b];xi[2]=cellT?R.x[c]:0.0;wq=R.w[a]*R.w[b]*(cellT?R.w[c]:1.0);}
         else{const int ix=q%N,iy=(q/N)%N,iz=q/(N*N);xi[0]=R.x[ix];xi[1]=R.x[iy];xi[2]=cellT?R.x[iz]:0.0;wq=R.w[ix]*R.w[iy]*(cellT?R.w[iz]:1.0);}
@@ -453,9 +485,10 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
         else if(cls==hexFarClass)hexFarInner(d,s,X,nS,row);
         else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
+        else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
         else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
         else if(!hexCompositeInner(d,t,s,X,xi,nS,row))atomicExch(invalid,4);
-        for(int l=0;l<nT;++l)row[nS+l]=wq*hexMono(hexExponent(d,t,l),xi);
+        for(int l=0;l<nT;++l)row[nS+l]=wq*hexDensity(d,t,hexExponent(d,t,l),xi);
     }
     __syncthreads();
     for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x){const int lt=e/nS,ls=e%nS;double sum=0.0,comp=0.0;
@@ -543,7 +576,7 @@ __global__ void hexPrepareHosts(HexDevice d,double* center,double* size,unsigned
     if(!ok)return;
     double ac[3];hexCenterForms(nd,cell,lin,ac);
     for(int k=0;k<3;++k)affineCenter[3*g+k]=ac[k];
-    if(d.order!=2)return;
+    if(d.order!=2||d.type)return;
     for(int mono=0;mono<(cell?27:9);++mono){const int e[3]={mono%3,(mono/3)%3,cell?mono/9:0};
         double* dst=cell?cellCoeff+(std::size_t(g)*27+mono)*84:faceCoeff+(std::size_t(g-d.cells)*9+mono)*35;
         if(!hexMonomialCoeff(lin,scaleInv,cell,e,dst))atomicExch(invalid,1);}
@@ -571,14 +604,16 @@ __global__ void hexPairWork(HexDevice d,const unsigned long long* keys,const std
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
     const int lo=int(keys[p]/(unsigned long long)d.hosts),hi=int(keys[p]%(unsigned long long)d.hosts);
     const std::size_t size=std::size_t(d.count[lo])*std::size_t(d.count[hi]);
-    work[2*p]={lo,hi,2*offsets[p]};work[2*p+1]={lo==hi?-1:hi,lo,2*offsets[p]+size};
+    const bool oneSided=d.type&&lo!=hi;const bool lowerSource=oneSided&&radia_hdiv_typed::lowerHostIsSource(d.type[lo],d.type[hi]);
+    work[2*p]={lowerSource?-1:lo,hi,2*offsets[p]};work[2*p+1]={lo==hi||(oneSided&&!lowerSource)?-1:hi,lo,2*offsets[p]+size};
 }
-// 0.5 (G_AB + G_BA^T) into the lo-host row orientation (CPU GetHexSymBlock).
+// 0.5 (G_AB + G_BA^T) into the lo-host row orientation, or the one integrated direction of a mixed mesh pair (CPU GetHexSymBlock).
 __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,const double* raw,double* values,int* invalid){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
     const int lo=int(keys[p]/(unsigned long long)d.hosts),hi=int(keys[p]%(unsigned long long)d.hosts);
     const int nA=d.count[lo],nB=d.count[hi];const double* ab=raw+2*offsets[p];const double* ba=lo==hi?ab:ab+std::size_t(nA)*nB;
-    for(int a=0;a<nA;++a)for(int b=0;b<nB;++b){const double v=0.5*(ab[a*nB+b]+ba[b*nA+a]);if(!isfinite(v))atomicExch(invalid,1);values[offsets[p]+std::size_t(a)*nB+b]=v;}
+    const bool oneSided=d.type&&lo!=hi;const bool lowerSource=oneSided&&radia_hdiv_typed::lowerHostIsSource(d.type[lo],d.type[hi]);
+    for(int a=0;a<nA;++a)for(int b=0;b<nB;++b){const double v=lowerSource?ba[b*nA+a]:oneSided?ab[a*nB+b]:0.5*(ab[a*nB+b]+ba[b*nA+a]);if(!isfinite(v))atomicExch(invalid,1);values[offsets[p]+std::size_t(a)*nB+b]=v;}
 }
 // Far tensor product of one charge pair beyond the pair table.
 __device__ inline double hexFarEntry(const HexDevice& d,std::size_t a,std::size_t b){
@@ -590,8 +625,8 @@ __device__ inline double hexFarEntry(const HexDevice& d,std::size_t a,std::size_
     for(int qt=0;qt<npT;++qt){const double xt[3]={d.out.x[qt%n1],d.out.x[(qt/n1)%n1],hexCell(d,t)?d.out.x[qt/(n1*n1)]:0.0};double inner=0.0;
         for(int qs=0;qs<npS;++qs){const double dx=XT[3*qt]-XS[3*qs],dy=XT[3*qt+1]-XS[3*qs+1],dz=XT[3*qt+2]-XS[3*qs+2];
             const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
-            const double xs[3]={d.out.x[qs%n1],d.out.x[(qs/n1)%n1],hexCell(d,s)?d.out.x[qs/(n1*n1)]:0.0};inner+=(WS[qs]/r)*hexMono(eb,xs);}
-        sum+=(WT[qt]*hexMono(ea,xt))*inner;}
+            const double xs[3]={d.out.x[qs%n1],d.out.x[(qs/n1)%n1],hexCell(d,s)?d.out.x[qs/(n1*n1)]:0.0};inner+=(WS[qs]/r)*hexDensity(d,s,eb,xs);}
+        sum+=(WT[qt]*hexDensity(d,t,ea,xt))*inner;}
     return sum*hexInvFourPi;
 }
 __device__ inline double hexEntry(const HexDevice& d,std::size_t a,std::size_t b){
@@ -609,7 +644,7 @@ __device__ inline double hexEntry(const HexDevice& d,std::size_t a,std::size_t b
 // inside prepare(); the counts that size the table are the only D2H values.
 struct HexPrepared {
     Buffer<double> cells,faces,center,size,affineCenter,cellCoeff,faceCoeff,farX,farW,values;
-    Buffer<int> first,count,chargeHost,exponents,invalid;Buffer<unsigned char> affine;
+    Buffer<int> first,count,chargeHost,exponents,invalid,types;Buffer<unsigned char> affine;
     Buffer<unsigned long long> keys;Buffer<std::size_t> offsets;
     HexDevice d{};int order=1;
     static HexRule rule(const HostVector<double>& x,const HostVector<double>& w){
@@ -646,9 +681,10 @@ struct HexPrepared {
         d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
         d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);
+        const bool typed=!b.hostTypes.empty();if(typed){upload(types,b.hostTypes,"host_types");d.type=types.data;}
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
-        cellCoeff.allocate(order==2?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
-        faceCoeff.allocate(order==2?std::max<std::size_t>(1,checkedProduct(facesN,9*35)):1);
+        cellCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
+        faceCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(facesN,9*35)):1);
         d.center=center.data;d.size=size.data;d.affine=affine.data;d.affineCenter=affineCenter.data;d.cellCoeff=cellCoeff.data;d.faceCoeff=faceCoeff.data;
         const unsigned hostBlocks=unsigned((hosts+127)/128);
         hexPrepareHosts<<<hostBlocks,128,0,stream>>>(d,center.data,size.data,affine.data,affineCenter.data,cellCoeff.data,faceCoeff.data,invalid.data);
@@ -679,8 +715,8 @@ struct HexPrepared {
         const std::size_t maxCount=order==2?27:8,nOut=std::size_t(d.out.n)*d.out.n*d.out.n;
         const std::size_t nPair=std::size_t(std::max(d.pair.n,d.pairAffine.n)),nPair3=nPair*nPair*nPair;
         const std::size_t nNear=std::size_t(d.nearOut.n),nNear3=nNear*nNear*nNear;
-        const std::size_t stride=std::max({nOut*2*maxCount,order==1?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
-                                           order==1?hexGradedCoeff+nNear3*2*maxCount:std::size_t(0)});
+        const std::size_t stride=std::max({nOut*2*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
+                                           order==1||typed?std::size_t(hexGradedCoeff(order))+nNear3*2*maxCount:std::size_t(0)});
         constexpr std::size_t launchItems=64;
         const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(2*pairs,sizeof(HexWork))+checkedProduct(launchItems*stride,sizeof(double));
         {std::size_t free,totalMemory;check(cudaMemGetInfo(&free,&totalMemory));
@@ -697,6 +733,7 @@ struct HexPrepared {
                                     :invalidCode==1?"HEX graded near rule produced a nonfinite source polynomial"
                                     :invalidCode==4?"HEX composite near rule could not invert the source host map"
                                     :invalidCode==5?"HEX graded near rule could not find the closest source point"
+                                    :invalidCode==6?"Mixed charge Gram has a degenerate tet or triangle source"
                                     :"HEX pair-domain Duffy block exceeds 8 x 8 charges");
         hexSymmetrize<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,raw.data,values.data,invalid.data);check(cudaGetLastError());++launches;
         if((invalidCode=flag(stream,record,"hex_symmetrize_flag"))!=0)throw std::runtime_error("HEX device Gram produced a nonfinite block entry");

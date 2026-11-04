@@ -18,7 +18,9 @@ namespace radia::hdiv_cuda {
 // The geometry is the 10/6 P2 nodes and the mesh vertex numbers.
 struct FlatChargeTables {
     std::size_t dofs=0,cells=0,faces=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0,cellClasses=0,faceClasses=0;
-    bool curved=false,hex=false;
+    bool curved=false,hex=false,mixed=false;
+    // Mixed mesh: tables per class and hosts in order, cells then exterior faces; cellVertices and faceVertices hold the unit-cube lattices.
+    std::vector<int> hostTypes,hostClass,classInfo,hostDofs,chargeHost,chargeKind,chargeExponents;std::vector<double> classTables;
     std::vector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents,cellNumbers,faceNumbers;
     std::vector<double> cellTables,faceTables,cellVertices,faceVertices,cellRule,faceRule;
 };

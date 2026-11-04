@@ -26,7 +26,8 @@ struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // first), the mesh vertex numbers decide touching hosts and (gl,gw) is the
 // [0,1] Gauss rule of the touching Duffy potentials. "hex": cells/faces hold
 // the 27/9-node Q2 lattices, charges are reference monomials and hexRules /
-// hexBands carry the CPU hex Gram rules; TET rules stay empty.
+// hexBands carry the CPU hex Gram rules; TET rules stay empty. "mixed": as
+// "hex" with the unit-cube lattices of tet, pyramid and hex hosts and hostTypes.
 // compression is "dense" (one deferred dense block) or "aca" (device ACA
 // leaves on a geometric partition); the ACA parameters apply to "aca" only.
 struct FlatInput {
@@ -41,6 +42,7 @@ struct FlatInput {
     // HEX: rows (rule, point, weight) with rule 0 outer, 1 radial inner,
     // 2 pair product, 3 affine pair product, 4 near outer and 5 fine inner (BDM1 only); bands = (near_grade, far_inner).
     radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
+    radia_hmatrix_cuda::HostVector<int> hostTypes;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated
 // on the device from these and the FlatInput geometry; no B value crosses.
@@ -51,11 +53,16 @@ struct FlatInput {
 // (cellRule/faceRule rows), so B = G_e^{-1} R carries the curved measure.
 // HEX: tables are the reference-measure projections and B rows are the class
 // tables unscaled (the Piola Jacobians cancel in the reference-frame charges).
+// Mixed: as HEX with one table per class in classTables; classInfo holds
+// (table start, monomials, width) per class, hostClass the class per host and
+// hostDofs the DOFs of all hosts in host order. Other table fields stay empty.
 struct ChargeMapInput {
     std::size_t dofs=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0;
     radia_hmatrix_cuda::HostVector<double> cellTables,faceTables,cellRule,faceRule;
     radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
-    bool curved=false,hex=false;
+    bool curved=false,hex=false,mixed=false;
+    radia_hmatrix_cuda::HostVector<double> classTables;
+    radia_hmatrix_cuda::HostVector<int> hostClass,classInfo,hostDofs;
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;

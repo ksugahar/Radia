@@ -128,7 +128,7 @@ def test_curved_device_operator_and_mass_match_cpu(source, request, cuda, order)
     setup, B, kw, M = _case(request.getfixturevalue(source), order, cuda)
     gram = _cpu_gram(kw)
     nd = setup["dofs"]
-    assert setup["charge_gram"]["family"] == "curved-tet" and setup["evaluation_tables"]["vertices"].shape[1] == 30
+    assert setup["charge_gram"]["family"] == "curved-tet" and setup["evaluation_tables"]["tables"][0]["vertices"].shape[1] == 30
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
     mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
     try:

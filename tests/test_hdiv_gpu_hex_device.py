@@ -196,7 +196,7 @@ def test_hex_device_entries_match_cpu_charge_gram(meshes, request, cuda, name, o
 def test_hex_device_operator_and_mass_match_cpu(meshes, request, cuda, name, order):
     setup, B, gram, M = _case(meshes[name], order, cuda)
     nd = setup["dofs"]
-    assert setup["evaluation_tables"]["vertices"].shape[1] == 81
+    assert setup["evaluation_tables"]["tables"][0]["vertices"].shape[1] == 81
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
     mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
     try:

@@ -81,6 +81,23 @@ __global__ void flatChargeEntries(std::size_t cells,std::size_t faces,std::size_
 __global__ void flatChargeOffsets(std::size_t rows,std::size_t cellRows,std::size_t cw,std::size_t fw,std::size_t* offsets){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<=rows)offsets[i]=i<=cellRows?i*cw:cellRows*cw+(i-cellRows)*fw;
 }
+// Mixed mesh: every host has its own monomial and DOF counts, from its class. Rows are the charges in
+// host order; the entries of a row start at the host span plus (row within host) x width.
+__global__ void mixedChargeEntries(std::size_t rows,const int* rowHost,const int* hostFirst,const int* hostClass,const int* classInfo,const int* hostDofStart,
+    const std::size_t* hostEntry,const int* dofs,const double* tables,std::size_t* indices,double* values,unsigned* entryRow,std::size_t* offsets,int* invalid){
+    const auto r=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(r>=rows)return;
+    const int g=rowHost[r],a=int(r)-hostFirst[g],cls=hostClass[g],start=classInfo[3*cls],width=classInfo[3*cls+2];
+    if(a<0||a>=classInfo[3*cls+1]||width>128){atomicExch(invalid,1);return;}
+    const auto base=hostEntry[g]+std::size_t(a)*width;const int* d=dofs+hostDofStart[g];const double* T=tables+start+a*width;
+    int order[128];
+    for(int i=0;i<width;++i){int j=i;while(j>0&&d[order[j-1]]>d[i]){order[j]=order[j-1];--j;}order[j]=i;}
+    for(int k=0;k<width;++k){const int i=order[k];if(!isfinite(T[i]))atomicExch(invalid,1);indices[base+k]=std::size_t(d[i]);values[base+k]=T[i];entryRow[base+k]=unsigned(r);}
+    offsets[r]=base;
+}
+__global__ void mixedChargeTransposeEntries(std::size_t nnz,const unsigned* entries,const unsigned* entryRow,const double* values,std::size_t* indices,double* transposed){
+    const auto j=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(j>=nnz)return;
+    const std::size_t e=entries[j];indices[j]=entryRow[e];transposed[j]=values[e];
+}
 // Stable radix order keeps rows ascending within each column (deterministic B^T).
 __global__ void flatChargeTransposeEntries(std::size_t nnz,std::size_t cellEntries,std::size_t cellRows,std::size_t cw,std::size_t fw,
     const unsigned* entries,const double* values,std::size_t* indices,double* transposed){
@@ -92,6 +109,7 @@ struct FlatChargeMapBuilder {
     radia_hmatrix_cuda::HostVector<FlatEvaluationTransfer> transfers;std::size_t launches=0,scratchBytes=0;
     static std::size_t nonzeros(const radia_hdiv_python::ChargeMapInput& in){
         using radia_hmatrix_cuda::checkedProduct;
+        if(in.mixed){std::size_t sum=0;for(int c:in.hostClass)sum+=checkedProduct(std::size_t(in.classInfo[3*c+1]),std::size_t(in.classInfo[3*c+2]));return sum;}
         return checkedProduct(checkedProduct(in.cellClass.size(),in.cellMonomials),in.cellWidth)+
                checkedProduct(checkedProduct(in.faceClass.size(),in.faceMonomials),in.faceWidth);
     }
@@ -103,11 +121,13 @@ struct FlatChargeMapBuilder {
             static_cast<const unsigned*>(nullptr),static_cast<unsigned*>(nullptr),int(nnz),0,bits));
         // Curved: rules, exponents and the per-host tables (cells x cm x cw plus faces x fm x fw).
         const auto hostTables=in.curved?nonzeros(in):std::size_t(0);
-        const auto doubles=checkedProduct((in.hex?0:flat.cells.size()+flat.faces.size())+in.cellTables.size()+in.faceTables.size()+
-                                          in.cellRule.size()+in.faceRule.size()+hostTables,sizeof(double));
+        const auto doubles=checkedProduct((in.hex||in.mixed?0:flat.cells.size()+flat.faces.size())+in.cellTables.size()+in.faceTables.size()+
+                                          in.cellRule.size()+in.faceRule.size()+hostTables+in.classTables.size(),sizeof(double));
         const auto ints=checkedProduct(in.cellClass.size()+in.cellDofs.size()+in.faceClass.size()+in.faceDofs.size()+1+
-                                       (in.curved?in.cellExponents.size()+in.faceExponents.size():0),sizeof(int));
-        const auto keys=checkedProduct(4*nnz,sizeof(unsigned));
+                                       (in.curved?in.cellExponents.size()+in.faceExponents.size():0)+
+                                       in.classInfo.size()+in.hostDofs.size()+2*in.hostClass.size()+flat.host.size()+(in.mixed?in.hostClass.size():0),sizeof(int))+
+                         checkedProduct(in.hostClass.size(),sizeof(std::size_t));
+        const auto keys=checkedProduct((in.mixed?5:4)*nnz,sizeof(unsigned));
         if(doubles>SIZE_MAX-ints||doubles+ints>SIZE_MAX-keys||doubles+ints+keys>SIZE_MAX-scratch)throw std::overflow_error("Charge-map scratch overflow");
         return doubles+ints+keys+scratch;
     }
@@ -115,6 +135,7 @@ struct FlatChargeMapBuilder {
     void build(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in,
         radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){
         using namespace radia_hmatrix_cuda;
+        if(in.mixed){buildMixed(flat,in,B,BT);return;}
         const auto cells=in.cellClass.size(),faces=in.faceClass.size(),cm=in.cellMonomials,fm=in.faceMonomials,cw=in.cellWidth,fw=in.faceWidth;
         const auto cellRows=cells*cm,rows=cellRows+faces*fm,cellEntries=cellRows*cw,nnz=nonzeros(in);
         scratchBytes=scratchBound(flat,in);
@@ -158,11 +179,70 @@ struct FlatChargeMapBuilder {
         columnOffsets<<<unsigned((in.dofs+256)/256),256>>>(in.dofs,nnz,sortedKeys.data,BT.offsets.data);check(cudaGetLastError());++launches;
         check(cudaDeviceSynchronize());
     }
+private:
+    void buildMixed(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in,radia_hmatrix_cuda::DeviceMap& B,radia_hmatrix_cuda::DeviceMap& BT){
+        using namespace radia_hmatrix_cuda;
+        const auto hosts=in.hostClass.size(),cells=flat.cells.size()/81,rows=flat.host.size(),nnz=nonzeros(in);
+        scratchBytes=scratchBound(flat,in);
+        // Spans of the checked host layout: structure only, no map value.
+        HostVector<int> rowHost(rows),hostFirst(hosts),hostDofStart(hosts);HostVector<std::size_t> hostEntry(hosts);
+        for(std::size_t r=0;r<rows;++r)rowHost[r]=flat.kind[r]==0?flat.host[r]:int(cells)+flat.host[r];
+        {int row=0,dof=0;std::size_t entry=0;for(std::size_t g=0;g<hosts;++g){const int* info=&in.classInfo[3*std::size_t(in.hostClass[g])];
+            hostFirst[g]=row;hostDofStart[g]=dof;hostEntry[g]=entry;row+=info[1];dof+=info[2];entry+=std::size_t(info[1])*info[2];}}
+        Buffer<double> tables;Buffer<int> rowHostD,hostFirstD,hostClassD,classInfoD,hostDofStartD,dofs,invalid;Buffer<std::size_t> hostEntryD;
+        auto upload=[&](auto& buffer,const auto& values,const char* payload){buffer.upload(values);
+            transfers.push_back({payload,"H2D",checkedProduct(values.size(),sizeof(values[0]))});};
+        upload(tables,in.classTables,"charge_class_tables");upload(classInfoD,in.classInfo,"charge_class_info");upload(hostClassD,in.hostClass,"charge_host_class");
+        upload(dofs,in.hostDofs,"charge_host_dofs");upload(rowHostD,rowHost,"charge_row_host");upload(hostFirstD,hostFirst,"charge_host_first");
+        upload(hostDofStartD,hostDofStart,"charge_host_dof_start");upload(hostEntryD,hostEntry,"charge_host_entry");upload(invalid,HostVector<int>{0},"charge_map_invalid_flag");
+        Buffer<unsigned> entryRow;entryRow.allocate(nnz);
+        B.rows=rows;B.offsets.allocate(rows+1);B.indices.allocate(nnz);B.values.allocate(nnz);
+        mixedChargeEntries<<<unsigned((rows+127)/128),128>>>(rows,rowHostD.data,hostFirstD.data,hostClassD.data,classInfoD.data,hostDofStartD.data,hostEntryD.data,dofs.data,tables.data,
+            B.indices.data,B.values.data,entryRow.data,B.offsets.data,invalid.data);check(cudaGetLastError());++launches;
+        check(cudaMemcpy(B.offsets.data+rows,&nnz,sizeof(std::size_t),cudaMemcpyHostToDevice));
+        int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));
+        transfers.push_back({"charge_map_flag","D2H",sizeof(int)});
+        if(failed)throw std::runtime_error("Device HDiv mixed charge map has an invalid row or nonfinite value");
+        Buffer<unsigned> keys,sortedKeys,entries,sortedEntries;keys.allocate(nnz);sortedKeys.allocate(nnz);entries.allocate(nnz);sortedEntries.allocate(nnz);
+        columnKeys<<<unsigned((nnz+255)/256),256>>>(nnz,B.indices.data,keys.data,entries.data);check(cudaGetLastError());++launches;
+        int bits=1;while((std::size_t(1)<<bits)<in.dofs)++bits;std::size_t scratch=0;
+        check(cub::DeviceRadixSort::SortPairs(nullptr,scratch,keys.data,sortedKeys.data,entries.data,sortedEntries.data,int(nnz),0,bits));
+        Buffer<unsigned char> temporary;temporary.allocate(scratch);
+        check(cub::DeviceRadixSort::SortPairs(temporary.data,scratch,keys.data,sortedKeys.data,entries.data,sortedEntries.data,int(nnz),0,bits));++launches;
+        BT.rows=in.dofs;BT.offsets.allocate(in.dofs+1);BT.indices.allocate(nnz);BT.values.allocate(nnz);
+        mixedChargeTransposeEntries<<<unsigned((nnz+255)/256),256>>>(nnz,sortedEntries.data,entryRow.data,B.values.data,BT.indices.data,BT.values.data);check(cudaGetLastError());++launches;
+        columnOffsets<<<unsigned((in.dofs+256)/256),256>>>(in.dofs,nnz,sortedKeys.data,BT.offsets.data);check(cudaGetLastError());++launches;
+        check(cudaDeviceSynchronize());
+    }
 };
+// Mixed map bounds: classes, spans and rows agree with the Gram charge order.
+inline void validateMixedChargeMap(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in){
+    constexpr std::size_t top=INT_MAX;const auto hosts=in.hostClass.size();
+    if(flat.family!="mixed"||flat.cells.size()%81||flat.faces.size()%27||hosts!=flat.hostTypes.size()||hosts!=flat.cells.size()/81+flat.faces.size()/27||!in.dofs||in.dofs>top||
+       in.classInfo.empty()||in.classInfo.size()%3||in.classInfo.size()/3>4096||!in.cellTables.empty()||!in.faceTables.empty()||!in.cellDofs.empty()||!in.faceDofs.empty())
+        throw std::invalid_argument("Mixed charge map tables outside the bounded scope");
+    const auto classes=in.classInfo.size()/3;std::size_t tableAt=0;
+    for(std::size_t c=0;c<classes;++c){const int start=in.classInfo[3*c],m=in.classInfo[3*c+1],w=in.classInfo[3*c+2];
+        if(m<1||m>27||w<1||w>128||std::size_t(start)!=tableAt)throw std::invalid_argument("Mixed charge class table layout");
+        tableAt+=std::size_t(m)*w;}
+    if(tableAt!=in.classTables.size())throw std::invalid_argument("Mixed charge class tables disagree with their layout");
+    for(double v:in.classTables)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite mixed charge table");
+    const auto cells=flat.cells.size()/81;std::size_t row=0,dof=0;
+    for(std::size_t g=0;g<hosts;++g){const int c=in.hostClass[g];if(c<0||std::size_t(c)>=classes)throw std::invalid_argument("Mixed charge class out of range");
+        const int m=in.classInfo[3*std::size_t(c)+1],w=in.classInfo[3*std::size_t(c)+2];
+        for(int a=0;a<m;++a,++row)if(row>=flat.host.size()||flat.kind[row]!=(g<cells?0:1)||std::size_t(flat.host[row])!=(g<cells?g:g-cells))
+            throw std::invalid_argument("Mixed charge map rows disagree with the Gram charge order");
+        if(dof+w>in.hostDofs.size())throw std::invalid_argument("Mixed charge DOF table too short");
+        for(int i=0;i<w;++i){const int d=in.hostDofs[dof+i];if(d<0||std::size_t(d)>=in.dofs)throw std::invalid_argument("Charge DOF index out of range");
+            for(int j=0;j<i;++j)if(in.hostDofs[dof+j]==d)throw std::invalid_argument("Duplicate charge local DOF");}
+        dof+=std::size_t(w);}
+    if(row!=flat.host.size()||dof!=in.hostDofs.size()||row>top||FlatChargeMapBuilder::nonzeros(in)>top)throw std::invalid_argument("Mixed charge rows or DOFs exceed the checked scope");
+}
 // Host bounds before any upload: the B rows must be the FlatInput charges in
 // order, every index is range-checked and every table value is finite. The
 // curved map requires the curved Gram geometry (10/6 P2 nodes per host).
 inline void validateFlatChargeMap(const radia_hdiv_python::FlatInput& flat,const radia_hdiv_python::ChargeMapInput& in){
+    if(in.mixed||flat.family=="mixed"){if(!in.mixed)throw std::invalid_argument("Charge map and Gram geometry families disagree");validateMixedChargeMap(flat,in);return;}
     const auto cells=in.cellClass.size(),faces=in.faceClass.size(),cm=in.cellMonomials,fm=in.faceMonomials,cw=in.cellWidth,fw=in.faceWidth;
     // Structural limits only: int32 cells, faces, DOFs and charge rows; the CUB sort counts nonzeros as int.
     constexpr std::size_t top=INT_MAX;

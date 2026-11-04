@@ -21,11 +21,12 @@ def api():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
-def test_committed_hex_pair_receipt_still_binds_the_fixture():
-    # The GPU lane consumes this receipt; a changed mesh, contract or receipt must be regenerated.
-    base=ROOT/"tests/fixtures/hdiv";receipt=(base/"hex_pair.receipt.json").read_bytes()
-    provenance=json.loads((base/"hex_pair.receipt.json.provenance.json").read_bytes())
-    api()._verify_mesh_receipt((base/"hex_pair.vol").read_bytes(),(base/"hex_pair.labels.json").read_bytes(),receipt,
+@pytest.mark.parametrize("name",["hex_pair","tet_pyramid_hex"])
+def test_committed_receipt_still_binds_the_fixture(name):
+    # The GPU lane consumes these receipts; a changed mesh, contract or receipt must be regenerated.
+    base=ROOT/"tests/fixtures/hdiv";receipt=(base/(name+".receipt.json")).read_bytes()
+    provenance=json.loads((base/(name+".receipt.json.provenance.json")).read_bytes())
+    api()._verify_mesh_receipt((base/(name+".vol")).read_bytes(),(base/(name+".labels.json")).read_bytes(),receipt,
                                hashlib.sha256(receipt).hexdigest(),provenance)
 
 

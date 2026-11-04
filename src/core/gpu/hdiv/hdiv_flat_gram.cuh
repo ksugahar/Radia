@@ -48,6 +48,8 @@ struct FlatBlock {
     // (outer tensor, radial inner, pair product, affine pair product) with the
     // near band and the radial reach of the CPU hex Gram.
     bool hex=false;double nearGrade=1.0,farInner=1.0;
+    // Mixed mesh: one radia_hdiv_typed::HostType per host, cells then faces; hex is also set and the lattices are the host maps.
+    HostVector<int> hostTypes{HostFaultAllocator<int>("hex.host-types")};
     HostVector<double> ruleOut{HostFaultAllocator<double>("hex.out")},ruleOutW{HostFaultAllocator<double>("hex.out-w")},
         ruleIn{HostFaultAllocator<double>("hex.in")},ruleInW{HostFaultAllocator<double>("hex.in-w")},
         rulePair{HostFaultAllocator<double>("hex.pair")},rulePairW{HostFaultAllocator<double>("hex.pair-w")},
@@ -110,18 +112,23 @@ struct FlatBlock {
         if(rulePair.size()<2||rulePairAffine.size()<2)throw std::invalid_argument("HEX pair rules require at least 2 points");
         if(!std::isfinite(nearGrade)||!(nearGrade>0)||!std::isfinite(farInner)||!(farInner>0))throw std::invalid_argument("HEX near band and radial reach must be positive");
         for(const auto* coordinates:{&cells,&faces})for(double v:*coordinates)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite HEX host lattice");
-        const std::size_t cellTotal=cellCount(),faceTotal=faceCount();int order=1;
+        const std::size_t cellTotal=cellCount(),faceTotal=faceCount();int order=1;const bool typed=!hostTypes.empty();
+        if(typed){if(hostTypes.size()!=cellTotal+faceTotal)throw std::invalid_argument("Mixed charge Gram takes one host type per host");
+            for(std::size_t g=0;g<hostTypes.size();++g){const int t=hostTypes[g];using namespace radia_hdiv_typed;
+                if(g<cellTotal?(t!=hexHost&&t!=tetHost&&t!=pyramidHost):(t!=quadHost&&t!=triHost))throw std::invalid_argument("Mixed host type out of range for its host kind");}}
         for(std::size_t a=0;a<charges();++a){const int k=kind[a],h=host[a];
             if((k!=0&&k!=1)||h<0||std::size_t(h)>=(k==0?cellTotal:faceTotal))throw std::invalid_argument("HEX charge kind or host index out of range");
-            for(int c=0;c<3;++c){if(expo[3*a+c]<0||expo[3*a+c]>2)throw std::invalid_argument("HEX charge exponent outside BDM1/BDM2 support");order=std::max(order,expo[3*a+c]);}
+            const std::size_t g=k==0?std::size_t(h):cellTotal+std::size_t(h);
+            const bool rational=typed&&hostTypes[g]==radia_hdiv_typed::pyramidHost&&expo[3*a]==1&&expo[3*a+1]==1&&expo[3*a+2]==-1;
+            for(int c=0;c<3;++c){if((expo[3*a+c]<0&&!rational)||expo[3*a+c]>2)throw std::invalid_argument("HEX charge exponent outside BDM1/BDM2 support");order=std::max(order,expo[3*a+c]);}
             if(k==1&&expo[3*a+2]!=0)throw std::invalid_argument("HEX face charges carry two reference exponents");}
         // Per-host counts are bounded by the tensor monomials of the order: BDM1 Duffy blocks hold at most 8 x 8.
         HostVector<int> first{HostFaultAllocator<int>("hex.validate-first")},count{HostFaultAllocator<int>("hex.validate-count")},global{HostFaultAllocator<int>("hex.validate-global")};
         HexPrepared::layout(*this,first,count,global,order);
-        // Only BDM1 has the graded near family, whose outer and fine inner rules it requires.
+        // BDM1 and every mixed mesh have the graded near family, whose outer and fine inner rules it requires.
         for(const auto* rule:{&ruleNear,&ruleInSelf}){const auto& w=rule==&ruleNear?ruleNearW:ruleInSelfW;
-            if(order==2?(!rule->empty()||!w.empty()):(rule->empty()||rule->size()>std::size_t(hexRuleCap)||w.size()!=rule->size()))
-                throw std::invalid_argument("HEX near rules take 1..16 Gauss points for BDM1 and none for BDM2");
+            if(order==2&&!typed?(!rule->empty()||!w.empty()):(rule->empty()||rule->size()>std::size_t(hexRuleCap)||w.size()!=rule->size()))
+                throw std::invalid_argument("HEX near rules take 1..16 Gauss points for BDM1 and mixed meshes, none for pure BDM2");
             for(std::size_t k=0;k<rule->size();++k)if(!std::isfinite((*rule)[k])||!std::isfinite(w[k])||!((*rule)[k]>0)||!((*rule)[k]<1)||!(w[k]>0))
                 throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");}
         const int monomials=(order+1)*(order+1);
@@ -396,7 +403,7 @@ struct FlatPrepared {
             const auto lattices=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double));
             const auto perHost=checkedProduct(hosts,checkedProduct(4*nOut*nOut*nOut+8,sizeof(double))+2*sizeof(int)+1+2*sizeof(std::size_t));
             const auto coefficients=checkedProduct(checkedProduct(block.cellCount(),27*84)+checkedProduct(block.faceCount(),9*35),sizeof(double));
-            return flatSum(flatSum(lattices,perHost),flatSum(coefficients,checkedProduct(n,4*sizeof(int))+sizeof(int)));}
+            return flatSum(flatSum(lattices,perHost),flatSum(coefficients,checkedProduct(n,4*sizeof(int))+checkedProduct(block.hostTypes.size(),sizeof(int))+sizeof(int)));}
         const std::size_t stride=std::max(block.tet.size(),block.tri.size()),lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
         const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
