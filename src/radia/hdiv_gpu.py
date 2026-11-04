@@ -1148,8 +1148,8 @@ def _applied_source(fespace, uniform, applied_field):
         vector = np.array(source.vec.FV().NumPy(), dtype=np.float64)
     else:
         field = np.asarray(applied_field, dtype=np.float64)
-        if field.shape != (3,):
-            raise ValueError("applied_field must contain three H components in A/m or be a CoefficientFunction")
+        if field.shape != (3,) or not np.isfinite(field).all():
+            raise ValueError("applied_field must contain three finite H components in A/m or be a CoefficientFunction")
         vector = uniform @ field
     if not np.isfinite(vector).all():
         raise ValueError("applied_field must be finite")
