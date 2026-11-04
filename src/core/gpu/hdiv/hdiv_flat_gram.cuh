@@ -1,7 +1,8 @@
 // TET BDM1/BDM2 charge Gram generated on the device from host geometry,
 // charge monomials and reference rules. The entry dispatch mirrors the CPU
-// HighOrderTetEntryStrategy without images: well-separated pairs take the low
-// double rule. Affine: self and touching pairs of affine P1 hosts the shared
+// HighOrderTetEntryStrategy: well-separated pairs take the low double rule, and
+// each mirror or cyclic image folds its own term after the direct one (see
+// flatImageTerm). Affine: self and touching pairs of affine P1 hosts the shared
 // graded outer rule (CPU P1TouchHosts/P1TouchEntryValue); other pairs the
 // exact analytic moment potentials on the outer rule. Curved P2: touching
 // hosts (shared edge, or a shared vertex with a face) the symmetrized curved
@@ -92,7 +93,10 @@ struct FlatBlock {
     std::size_t faceCount()const{return faces.size()/faceStride();}
     void validate()const{
         const auto n=host.size();
-        if(!images.empty()&&(!hex||!hostTypes.empty()))throw std::invalid_argument("Device charge Gram has no image route for this geometry family");
+        if(!images.empty()&&!hostTypes.empty())throw std::invalid_argument("Device charge Gram has no image route for this geometry family");
+        // CPU diagnostic knobs that change the TET image dispatch have no device route.
+        if(!images.empty()&&!hex)for(const char* knob:{"RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK","RADIA_HDIV_DISABLE_HO_IMAGE_FAR"}){const char* value=std::getenv(knob);
+            if(value&&value[0]!='\0'&&value[0]!='0')throw std::invalid_argument(std::string(knob)+" has no device TET Gram route");}
         // Charge, cell and face indices are int32 on both sides of the binding.
         if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%cellStride()||faces.size()%faceStride()||
            cellCount()>std::size_t(INT_MAX)||faceCount()>std::size_t(INT_MAX))
@@ -215,6 +219,8 @@ struct FlatDevice {
     // Curved P2 hosts: node tables and the touching Duffy rule.
     bool curved;const double* cellNodes;const double* faceNodes;const double* gl;const double* gw;int nq;
     bool hex;HexDevice hexd;
+    // Mirror and cyclic images of the TET families; the HEX family holds its own in hexd.
+    const HexImage* images;int imageCount;
 };
 __device__ inline double flatQuadDot(const FlatDevice& d,std::size_t target,std::size_t source){
     const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
@@ -271,8 +277,7 @@ __device__ inline double curvedDirectDot(const FlatDevice& d,std::size_t target,
     }
     return sum*0.07957747154594766788;
 }
-__device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
-    if(d.hex)return hexEntry(d.hexd,a,b);
+__device__ inline double flatDirectEntry(const FlatDevice& d,std::size_t a,std::size_t b){
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
     if(a!=b&&d.farFactor<1e29){
         const double dx=qa.center[0]-qb.center[0],dy=qa.center[1]-qb.center[1],dz=qa.center[2]-qb.center[2];
@@ -288,6 +293,99 @@ __device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t
                    :0.5*(radia_hdiv_p1_diagonal::pairEntry(d.p1[a],d.p1[b])+radia_hdiv_p1_diagonal::pairEntry(d.p1[b],d.p1[a]));
     if(a==b)return flatQuadDot(d,a,a);
     return 0.5*(flatQuadDot(d,a,b)+flatQuadDot(d,b,a));
+}
+// The image of a pair: by the isometry only the target's points move by T^-1 and the source keeps its monomial-folded
+// rule. CPU QuadDotFarImage.
+__device__ inline double flatQuadDotFarImage(const FlatDevice& d,std::size_t target,std::size_t source,const HexImage& m){
+    const auto* Px=d.lowPoints+3*d.lowStride*target;const auto* Wx=d.lowWeights+d.lowStride*target;
+    const auto* Py=d.lowPoints+3*d.lowStride*source;const auto* Wy=d.lowWeights+d.lowStride*source;double sum=0.0;
+    for(int i=0;i<d.lowCount[target];++i){double p[3];hexImagePoint(m,Px+3*i,p);double inner=0.0;
+        for(int j=0;j<d.lowCount[source];++j){
+            const double dx=p[0]-Py[3*j],dy=p[1]-Py[3*j+1],dz=p[2]-Py[3*j+2];
+            const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
+            inner+=Wy[j]/r;
+        }
+        sum+=Wx[i]*inner;
+    }
+    return sum*0.07957747154594766788;
+}
+// CPU ImageFarPair: the direct far rule on the image geometry, self pairs included.
+__device__ inline bool flatImageFar(const FlatDevice& d,const FlatCharge& a,const FlatCharge& b,const HexImage& m){
+    if(d.farFactor>=1e29)return false;
+    double c[3];hexImagePoint(m,a.center,c);
+    const double dx=c[0]-b.center[0],dy=c[1]-b.center[1],dz=c[2]-b.center[2];
+    return sqrt(dx*dx+dy*dy+dz*dz)>d.farFactor*(a.size+b.size);
+}
+// CPU P1TouchHosts with an image: graded when a mapped source vertex coincides with a target vertex. -1 marks a vertex
+// inside the gap band without coinciding, which the CPU route refuses and which fails here as a nonfinite entry.
+__device__ inline int flatP1TouchImage(const FlatDevice& d,const FlatCharge& t,const FlatCharge& s,const HexImage& m){
+    if((t.kind==0?d.cellNonP1:d.faceNonP1)[t.host]||(s.kind==0?d.cellNonP1:d.faceNonP1)[s.host])return 0;
+    const double scale=t.size+s.size,tol=1e-9*scale,gap=1e-4*scale;int touch=0;
+    for(int j=0;j<(s.kind?3:4);++j){double q[3];hexImageVector(m,s.vertices+3*j,q);
+        for(int i=0;i<(t.kind?3:4);++i){const double dx=q[0]-t.vertices[3*i],dy=q[1]-t.vertices[3*i+1],dz=q[2]-t.vertices[3*i+2];
+            const double r2=dx*dx+dy*dy+dz*dz;
+            if(r2<=tol*tol)touch=1;else if(r2<gap*gap)return -1;}}
+    return touch;
+}
+// CPU QuadDotRefl: the graded entry of the target vertices mapped by T^-1, else the analytic potential at its mapped rule.
+__device__ inline double flatDirectedImage(const FlatDevice& d,std::size_t target,std::size_t source,const HexImage& m){
+    const auto& t=d.charges[target];
+    const int touch=flatP1TouchImage(d,t,d.charges[source],m);
+    if(touch<0)return NAN;
+    if(touch){double mapped[12];for(int i=0;i<(t.kind?3:4);++i)hexImagePoint(m,t.vertices+3*i,mapped+3*i);
+        radia_hdiv_python::P1ChargeSource moved;
+        if(!radia_hdiv_python::p1ChargeSourceInto(t.kind,mapped,t.expo,moved))return NAN;
+        return radia_hdiv_p1_diagonal::pairEntry(moved,d.p1[source]);}
+    const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
+    for(int k=0;k<d.outerCount[target];++k){double p[3];hexImagePoint(m,P+3*k,p);sum+=W[k]*flatInnerPotential(d.charges[source],p);}
+    return sum*0.07957747154594766788;
+}
+// CPU ImageHostsTouch: two mapped corners coincide, or one when a face is involved.
+__device__ inline bool curvedImageTouch(const FlatCharge& t,const FlatCharge& s,const HexImage& m){
+    const double tol=1e-9*(t.size+s.size);int shared=0;
+    for(int j=0;j<(s.kind?3:4);++j){double q[3];hexImageVector(m,s.vertices+3*j,q);
+        for(int i=0;i<(t.kind?3:4);++i){const double dx=q[0]-t.vertices[3*i],dy=q[1]-t.vertices[3*i+1],dz=q[2]-t.vertices[3*i+2];
+            if(dx*dx+dy*dy+dz*dz<=tol*tol){++shared;break;}}}
+    return shared>=2||(shared==1&&(t.kind||s.kind));
+}
+// CPU QuadBlockHOTetImage on curved hosts: the Duffy potential of the source at the target's mapped points when the
+// image touches, else the high tensor product.
+__device__ inline double curvedDirectedImage(const FlatDevice& d,std::size_t target,std::size_t source,const HexImage& m,bool touch){
+    const auto& s=d.charges[source];const auto* P=d.points+3*d.stride*target;const auto* W=d.weights+d.stride*target;double sum=0.0;
+    if(touch){const double* nodes=s.kind?d.faceNodes+18*std::size_t(s.host):d.cellNodes+30*std::size_t(s.host);
+        for(int k=0;k<d.outerCount[target];++k){double p[3];hexImagePoint(m,P+3*k,p);
+            const double inner=s.kind?rad_hdiv_cuda::CurvedTriPotential(reinterpret_cast<const double(*)[3]>(nodes),s.expo[0],s.expo[1],p,d.gl,d.gw,d.nq,true)
+                :rad_hdiv_cuda::CurvedTetPotential(reinterpret_cast<const double(*)[3]>(nodes),s.expo[0],s.expo[1],s.expo[2],p,d.gl,d.gw,d.nq,true);
+            sum+=W[k]*inner;}
+        return sum*0.07957747154594766788;}
+    const auto* Py=d.points+3*d.stride*source;const auto* Wy=d.weights+d.stride*source;
+    for(int i=0;i<d.outerCount[target];++i){double p[3];hexImagePoint(m,P+3*i,p);double inner=0.0;
+        for(int j=0;j<d.outerCount[source];++j){
+            const double dx=p[0]-Py[3*j],dy=p[1]-Py[3*j+1],dz=p[2]-Py[3*j+2];
+            const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
+            inner+=Wy[j]/r;
+        }
+        sum+=W[i]*inner;
+    }
+    return sum*0.07957747154594766788;
+}
+// One image term of a TET pair, CPU GetInteractionMatrixElementRaw: far on the image geometry takes the low rule; a
+// curved mirror pair that does not touch is an exact transpose and needs one direction, every other pair folds both.
+__device__ inline double flatImageTerm(const FlatDevice& d,std::size_t a,std::size_t b,const HexImage& m){
+    const auto& qa=d.charges[a];const auto& qb=d.charges[b];
+    if(flatImageFar(d,qa,qb,m))return 0.5*(flatQuadDotFarImage(d,a,b,m)+flatQuadDotFarImage(d,b,a,m));
+    if(d.curved){const bool touch=curvedImageTouch(qa,qb,m);
+        const double ab=curvedDirectedImage(d,a,b,m,touch);
+        if(a==b||(m.rotated==0.0&&!touch))return ab;
+        return 0.5*(ab+curvedDirectedImage(d,b,a,m,curvedImageTouch(qb,qa,m)));}
+    if(a==b)return flatDirectedImage(d,a,a,m);
+    return 0.5*(flatDirectedImage(d,a,b,m)+flatDirectedImage(d,b,a,m));
+}
+__device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
+    if(d.hex)return hexEntry(d.hexd,a,b);
+    double value=flatDirectEntry(d,a,b);
+    for(int i=0;i<d.imageCount;++i)value+=d.images[i].sign*flatImageTerm(d,a,b,d.images[i]);
+    return value;
 }
 // One thread per charge: host maps, monomial-folded outer/low rules and the
 // A + B.y + y^T C y physical expansion (CPU constructor + InitHOPolynomialCoefficients).
@@ -414,8 +512,9 @@ __global__ void prepareCurvedCharges(std::size_t n,const double* cellNodes,std::
 // keeps scale 1 (the similarity leaves its zero row at roundoff); every other diagonal must be positive.
 __device__ inline bool flatChargeScale(const FlatDevice& d,std::size_t a,double diagonal,double& scale){
     if(!isfinite(diagonal))return false;
-    if(d.hex&&d.hexd.imageCount>0){const double direct=hexTermEntry(d.hexd,a,a,0);
-        if(isfinite(direct)&&direct>0.0&&fabs(diagonal)<=64.0*2.220446049250313e-16*(1.0+d.hexd.imageCount)*fabs(direct)){scale=1.0;return true;}}
+    const int images=d.hex?d.hexd.imageCount:d.imageCount;
+    if(images>0){const double direct=d.hex?hexTermEntry(d.hexd,a,a,0):flatDirectEntry(d,a,a);
+        if(isfinite(direct)&&direct>0.0&&fabs(diagonal)<=64.0*2.220446049250313e-16*(1.0+images)*fabs(direct)){scale=1.0;return true;}}
     if(!(diagonal>0.0))return false;
     scale=sqrt(diagonal);return true;
 }
@@ -436,7 +535,7 @@ struct FlatPrepared {
     Buffer<double> cells,faces;Buffer<int> hosts,kinds,exponents,invalid,outerCount,lowCount;
     Buffer<FlatRulePoint> tet,tri,tetLow,triLow;Buffer<FlatCharge> charges;Buffer<double> qp,qw,lp,lw;
     Buffer<radia_hdiv_python::P1ChargeSource> p1;Buffer<int> cellNonP1,faceNonP1;
-    Buffer<double> gl,gw;Buffer<int> cellNumbers,faceNumbers;
+    Buffer<double> gl,gw;Buffer<int> cellNumbers,faceNumbers;Buffer<HexImage> images;
     std::size_t n=0,stride=0,lowStride=0;double farFactor=1e30;bool curved=false,hex=false;HexPrepared hexPrepared;
     // Every buffer prepare() allocates, uploads included, so one reserve check
     // covers them; the HEX pair table is sized and checked inside prepare().
@@ -456,7 +555,8 @@ struct FlatPrepared {
             checkedProduct(block.cellCount()+block.faceCount(),sizeof(int)));
         const auto curved=flatSum(checkedProduct(block.gl.size()+block.gw.size(),sizeof(double)),
             checkedProduct(block.cellNumbers.size()+block.faceNumbers.size(),sizeof(int)));
-        return flatSum(flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads),flatSum(p1,curved));
+        return flatSum(flatSum(flatSum(checkedProduct(n,sizeof(FlatCharge)+2*sizeof(int))+sizeof(int),flatSum(points,low)),uploads),
+                       flatSum(flatSum(p1,curved),checkedProduct(block.images.size(),sizeof(HexImage))));
     }
     int flag(cudaStream_t stream,HostVector<FlatTransfer>& transfers,const char* payload){int value=0;
         check(cudaMemcpyAsync(&value,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));
@@ -475,7 +575,7 @@ struct FlatPrepared {
         upload(cells,block.cells,curved?"cell_p2_nodes_m":"cell_vertices_m");upload(faces,block.faces,curved?"face_p2_nodes_m":"face_vertices_m");
         upload(hosts,block.host,"charge_host");upload(kinds,block.kind,"charge_kind");upload(exponents,block.expo,"charge_exponents");
         upload(tet,block.tet,"tet_rule");upload(tri,block.tri,"tri_rule");upload(tetLow,block.tetLow,"tet_low_rule");upload(triLow,block.triLow,"tri_low_rule");
-        upload(invalid,HostVector<int>{0},"invalid_flag");
+        upload(invalid,HostVector<int>{0},"invalid_flag");upload(images,block.images,"image_transforms");
         if(curved){upload(gl,block.gl,"curve_gauss_points");upload(gw,block.gw,"curve_gauss_weights");
             upload(cellNumbers,block.cellNumbers,"cell_vertex_numbers");upload(faceNumbers,block.faceNumbers,"face_vertex_numbers");}
         charges.allocate(n);outerCount.allocate(n);lowCount.allocate(n);
@@ -500,7 +600,7 @@ struct FlatPrepared {
                                                        :"Invalid flat charge host, kind, exponent or degenerate geometry");
     }
     FlatDevice device()const{return {charges.data,qp.data,qw.data,lp.data,lw.data,n,stride,lowStride,outerCount.data,lowCount.data,farFactor,
-        p1.data,cellNonP1.data,faceNonP1.data,curved,cells.data,faces.data,gl.data,gw.data,int(gl.size),hex,hexPrepared.d};}
+        p1.data,cellNonP1.data,faceNonP1.data,curved,cells.data,faces.data,gl.data,gw.data,int(gl.size),hex,hexPrepared.d,images.data,int(images.size)};}
 };
 inline void flatReserve(std::size_t bytes,const char* what){
     std::size_t free,total;check(cudaMemGetInfo(&free,&total));
