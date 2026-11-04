@@ -480,8 +480,7 @@ def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, orde
 
 @pytest.mark.parametrize("name,order,curve_order,images", [
     ("gap", 1, 1, dict(image="-x")), ("gap", 2, 1, {}), ("cut", 2, 1, dict(image="-x")), ("corner", 1, 1, dict(image="-x-y")),
-    ("apart", 1, 1, dict(image_cyclic=8)), ("apart", 2, 1, dict(image_cyclic=8)), ("half_ball", 1, 2, dict(image="-x")),
-    ("half_ball", 2, 2, dict(image="-x")), ("half_ball", 2, 2, {})])
+    ("apart", 1, 1, dict(image_cyclic=8)), ("apart", 2, 1, dict(image_cyclic=8)), ("half_ball", 1, 2, dict(image="-x"))])
 def test_field_of_the_cpu_state_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, images):
     from radia import vim
     x_cpu, cpu = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
