@@ -33,7 +33,9 @@ struct MaterialStagingContext {
     // identified pair alike, and the labels of those traces, which carry no charge. Empty: the plain space.
     std::vector<int> vertexMap;
     std::vector<std::string> excludedBoundaries;
-    int mappedVertex(int vertex)const{return vertexMap.empty()?vertex:vertexMap.at(std::size_t(vertex));}
+    // The vertex order of the wrapper's element: the identified number, and within a pair the master first, which
+    // decides the orientation of a cell that holds both vertices of a pair.
+    int orientedVertex(int vertex)const{if(vertexMap.empty())return vertex;const int mapped=vertexMap.at(std::size_t(vertex));return 2*mapped+int(mapped!=vertex);}
     bool excludedBoundary(ngfem::ElementId element)const{
         const auto name=mesh->GetMaterial(element);
         return std::find(excludedBoundaries.begin(),excludedBoundaries.end(),std::string(name))!=excludedBoundaries.end();}
@@ -51,6 +53,7 @@ struct MaterialStagingContext {
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
         nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         if(!periodicBoundaries.empty()){
+            if(std::size_t(mesh->GetNP())>count/2)throw std::invalid_argument("Periodic material staging vertex numbering exceeds int32");
             vertexMap.resize(std::size_t(mesh->GetNP()));for(std::size_t v=0;v<vertexMap.size();++v)vertexMap[v]=int(v);
             for(int id=0;id<mesh->GetNPeriodicIdentifications();++id)for(const auto& pair:mesh->GetPeriodicNodes(ngfem::NT_VERTEX,id))vertexMap.at(std::size_t(pair[1]))=vertexMap.at(std::size_t(pair[0]));
             bool mapped=false;for(std::size_t v=0;v<vertexMap.size();++v)mapped=mapped||vertexMap[v]!=int(v);

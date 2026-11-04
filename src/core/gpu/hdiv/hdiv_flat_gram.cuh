@@ -370,9 +370,11 @@ __device__ inline double curvedDirectedImage(const FlatDevice& d,std::size_t tar
 }
 // One image term of a TET pair, CPU GetInteractionMatrixElementRaw: far on the image geometry takes the low rule; a
 // curved mirror pair that does not touch is an exact transpose and needs one direction, every other pair folds both.
+// A rotation moves the target of each direction differently, so far holds only in both: one direction far says nothing of
+// the other, which may be coincident at the seam. A mirror is its own inverse and the two tests agree.
 __device__ inline double flatImageTerm(const FlatDevice& d,std::size_t a,std::size_t b,const HexImage& m){
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
-    if(flatImageFar(d,qa,qb,m))return 0.5*(flatQuadDotFarImage(d,a,b,m)+flatQuadDotFarImage(d,b,a,m));
+    if(flatImageFar(d,qa,qb,m)&&flatImageFar(d,qb,qa,m))return 0.5*(flatQuadDotFarImage(d,a,b,m)+flatQuadDotFarImage(d,b,a,m));
     if(d.curved){const bool touch=curvedImageTouch(qa,qb,m);
         const double ab=curvedDirectedImage(d,a,b,m,touch);
         if(a==b||(m.rotated==0.0&&!touch))return ab;
