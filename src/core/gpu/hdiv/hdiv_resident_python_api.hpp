@@ -68,6 +68,8 @@ struct ChargeMapInput {
     radia_hmatrix_cuda::HostVector<int> hostClass,classInfo,hostDofs;
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
+// Device field of a resident HEX solution, H in A/m per the CPU field_from_solution; probes and values cross.
+struct FieldResult {radia_hmatrix_cuda::HostVector<double> field;radia_hmatrix_cuda::HostVector<Transfer> transfers;std::size_t launches=0,ownedBytes=0;bool affine=false;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;
     std::string compression;radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> counters;
     // Device-flat route only: the checked pre-allocation charge budget, in publication order.
@@ -78,6 +80,7 @@ public:
     virtual radia_hmatrix_cuda::HostVector<double> apply(const radia_hmatrix_cuda::HostVector<double>&)=0;
     virtual NewtonResult solve_nonlinear(radia_hdiv_bh::MaterialOperator&,const radia_hmatrix_cuda::HostVector<double>&,const radia_hmatrix_cuda::HostVector<double>&,const NewtonOptions&)=0;
     virtual LinearResult solve_linear(radia_hdiv_bh::MassOperator&,const radia_hmatrix_cuda::HostVector<double>&,const LinearOptions&)=0;
+    virtual FieldResult field(const radia_hmatrix_cuda::HostVector<double>& x,const radia_hmatrix_cuda::HostVector<double>& points)=0;
     virtual Stats stats()=0;
     virtual Assembly assembly()=0;
     virtual void close()=0;
