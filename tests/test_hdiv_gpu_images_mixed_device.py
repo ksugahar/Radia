@@ -164,11 +164,12 @@ def test_image_entries_equal_the_sum_over_the_explicit_copies(meshes, request, c
     signs = [(-1.0)**k if alternating else 1.0 for k in range(fold)]
     expected = np.zeros(len(pairs))
     charge = lambda index: (int(table["charge_kind"][index]), int(table["charge_host"][index]), tuple(int(e) for e in table["charge_exponents"][3*index:3*index + 3]))
+    copies_sum = lambda target, source: sum(signs[k]*gram.entry(ring[target], ring[source[0], source[1] + k*(faces if source[0] else cells), source[2]]) for k in range(fold))
     for index, (a, b) in enumerate(pairs):
-        kind, host, expo = charge(b)
-        target = ring[charge(a)]
-        for k in range(fold):
-            expected[index] += signs[k]*gram.entry(target, ring[kind, host + k*(faces if kind else cells), expo])
+        expected[index] = copies_sum(charge(a), charge(b))
+        # A host against its own images has no lower host to integrate from: the device folds both directed blocks.
+        if charge(a)[:2] == charge(b)[:2]:
+            expected[index] = 0.5*(expected[index] + copies_sum(charge(b), charge(a)))
     device = {key: table[key] for key in _GEOMETRY}
     device.update(hdiv_gpu._device_image_terms(None, fold, alternating))
     actual = _entries(cuda, device, pairs[:, 0], pairs[:, 1])
