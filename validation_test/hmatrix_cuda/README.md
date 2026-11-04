@@ -96,6 +96,13 @@ there can be disturbed by the host.
 - Rational pyramid charge: on an affine pyramid each level `z` of `xy/(1-z)` is a parallelogram carrying a polynomial,
   whose potential is exact, and the rule in `z` is split at the level of the point. The radial rule it replaced did not
   converge at order 2 on the small meshes of the record. A non-parallelogram pyramid keeps a radial rule on all charges.
+- Measured limits of the counts, on small meshes against the finest profile of the same route, so they say how far the
+  rule converged and nothing about the formulation. Order 2 on affine pyramids converges geometrically when the pyramid
+  and near counts rise together; at the proposed (outer 6, pyramid 14, near 10) the field difference is about `5e-5`.
+  Order 2 on non-parallelogram pyramids is slower and not monotone: the field difference stays near `3e-5` to `4e-5` from
+  (6, 14, 16) to (6, 20, 16). Order 1 on the same mesh reaches about `2e-6` at (5, 14, 16), and its proposed (5, 6, 10)
+  gives about `2e-4`. The flat tet route at its default is about `1e-3` in the field at order 2 on the cube of the record,
+  and it needs intorder 60 and far quadrature 14 for about `3e-6`; the typed route is not its default.
 - Reference: a polynomial magnetization has no jump across interior faces, so its charge on any mesh of a cube is that
   of the cube, whose box integrals have closed forms after a Duffy map at the corner (Duffy, SIAM J. Numer. Anal. 19, 1982;
   Bailey, Borwein and Crandall, J. Comput. Appl. Math. 206, 2007, for the cube and square values it reproduces). It covers
