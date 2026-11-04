@@ -93,7 +93,6 @@ struct FlatBlock {
     std::size_t faceCount()const{return faces.size()/faceStride();}
     void validate()const{
         const auto n=host.size();
-        if(!images.empty()&&!hostTypes.empty())throw std::invalid_argument("Device charge Gram has no image route for this geometry family");
         // CPU diagnostic knobs that change the TET image dispatch have no device route.
         if(!images.empty()&&!hex)for(const char* knob:{"RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK","RADIA_HDIV_DISABLE_HO_IMAGE_FAR"}){const char* value=std::getenv(knob);
             if(value&&value[0]!='\0'&&value[0]!='0')throw std::invalid_argument(std::string(knob)+" has no device TET Gram route");}

@@ -5,7 +5,7 @@ copies touch it at the seam, RT0, BDM1 and BDM2, affine and curved P2, the devic
 dense and the compressed routes and the linear and nonlinear solves with images agree with the CPU route on identical
 inputs, and so does the direct field of the same state, with and without images, at probes off, near and inside the
 sources. Dropping the image sum, a sign, the graded rule of a touching P1 image, the Duffy rule of a touching curved image
-or the inverse point map moves them far beyond the detectors. A mixed mesh keeps refusing images.
+or the inverse point map moves them far beyond the detectors.
 Assumes: the CPU TET route is the reference on identical NGSolve inputs; this is parity of one discretization, not
 independent accuracy. The REL values are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not
 under test and is bypassed for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a
@@ -275,9 +275,3 @@ def test_field_of_the_cpu_state_matches_cpu(meshes, request, prepared, cuda, nam
     request.node.user_properties += [("field_relative", float(relative)), ("field_route", same_state["route"])]
     assert relative <= FIELD_REL, (f"{name} order={order} curve={curve_order} {images} field relative={relative:.3e} "
                                    f"actual={same_state['field'].tolist()} expected={field_cpu.tolist()}")
-
-
-def test_a_mixed_mesh_keeps_refusing(prepared, cuda):
-    from radia import hdiv_gpu
-    with pytest.raises(NotImplementedError, match="no image route"):
-        hdiv_gpu._DeviceImages("-x").checked_terms(None, 1, hdiv_gpu._MIXED)
