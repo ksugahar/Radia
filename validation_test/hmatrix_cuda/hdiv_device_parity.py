@@ -1,9 +1,9 @@
 """Same-kernel pybind11 producer for the device HDiv frontend parity (PYBIND_MEX_BITWISE.md).
 
-``make-input`` writes the canonical input HDF5 of case ``device-flat-tet``: the
-NGSolve device-construction tables of a Netgen 6:1:1 bar (BDM2), the production
-inverse-BH payload of a fixed soft-iron table, every input vector and every
-solver control. ``pybind`` reads only that file, runs ``_hdiv_cuda`` and writes
+``make-input`` writes the canonical input HDF5 of one case: the NGSolve
+device-construction tables of a 6:1:1 bar (``device-flat-tet`` a Netgen mesh, BDM2;
+``device-mixed`` a connected tet, pyramid and hex grid), the production inverse-BH
+payload of a fixed soft-iron table, every input vector and every solver control. ``pybind`` reads only that file, runs ``_hdiv_cuda`` and writes
 the pybind11 record. ``produceHDivDeviceMexRecord.m`` runs the plain MEX on the
 same file. Both frontends link one nvcc kernel object; the comparator checks it.
 This is frontend parity, not CPU/GPU accuracy or performance.
@@ -16,11 +16,14 @@ import json
 import subprocess
 from pathlib import Path
 
-CASE = "device-flat-tet"
+CASES = ("device-flat-tet", "device-mixed")
+MIXED_SHAPE = (8, 2, 2)
 OUTPUTS = ("apply", "linear_solution", "nonlinear_solution", "nonlinear_residual_history")
 CHARGE_FIELDS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents", "tet_rule",
                  "tri_rule", "tet_low_rule", "tri_low_rule", "cell_class", "cell_dofs", "cell_tables",
                  "cell_exponents", "face_class", "face_dofs", "face_tables", "face_exponents")
+MIXED_GRAM_FIELDS = ("hex_rules", "hex_bands", "host_types")
+MIXED_CHARGE_FIELDS = ("host_class", "class_info", "host_dofs", "class_tables")
 EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "element_dofs", "element_points")
 # A 6:1:1 bar gives well-separated clusters, so device ACA builds low-rank leaves (the unit cube did not).
 ACA = dict(eps=1e-10, eta=2.0, leaf_size=32, max_rank=200, rank_cap="dense")
@@ -48,7 +51,8 @@ def device_identity() -> dict:
     return dict(device_uuid=uuid, architecture="sm_" + cap.replace(".", ""), device_name=name)
 
 
-def make_input(out: Path, order: int) -> None:
+def make_input(out: Path, order: int, maxh: float = MAXH, leaf_size: int = ACA["leaf_size"], length: float = BAR[0],
+               case: str = CASES[0], shape: tuple = MIXED_SHAPE) -> None:
     import h5py
     import ngsolve as ng
     import numpy as np
@@ -57,11 +61,15 @@ def make_input(out: Path, order: int) -> None:
     from radia.gpu import _native
     from radia.vim._nonlinear import _bh_inverse_payload, _validate_bh_table
     mesh_path = out.with_suffix(".vol")
-    geometry = CSGeometry()
-    geometry.Add(OrthoBrick(Pnt(0, 0, 0), Pnt(*BAR)))
-    geometry.GenerateMesh(maxh=MAXH).Save(str(mesh_path))
+    if case == "device-mixed":
+        from hdiv_mixed_meshes import mixed_grid
+        mixed_grid(shape, lengths=(length, BAR[1], BAR[2])).ngmesh.Save(str(mesh_path))
+    else:
+        geometry = CSGeometry()
+        geometry.Add(OrthoBrick(Pnt(0, 0, 0), Pnt(length, BAR[1], BAR[2])))
+        geometry.GenerateMesh(maxh=maxh).Save(str(mesh_path))
     with ng.TaskManager():
-        setup = hdiv_gpu._prepare_device_components(mesh_path, order, _native("_hdiv_cuda"), aca=dict(ACA),
+        setup = hdiv_gpu._prepare_device_components(mesh_path, order, _native("_hdiv_cuda"), aca=dict(ACA, leaf_size=leaf_size),
                                                     compression="aca")
     table = np.asarray(BH_TABLE)
     _validate_bh_table(table, context="device parity")
@@ -70,19 +78,25 @@ def make_input(out: Path, order: int) -> None:
     rhs = setup["rhs_operator"] @ np.asarray(APPLIED_FIELD)
     with h5py.File(out, "x") as f:
         f.attrs["schema"] = "radia.hdiv-device-parity-input.v1"
-        f.attrs["case"], f.attrs["order"], f.attrs["dofs"] = CASE, order, nd
+        f.attrs["case"], f.attrs["order"], f.attrs["dofs"] = case, order, nd
         f.attrs["mesh_sha256"] = sha256(mesh_path)
         gram = setup["charge_gram"]
         charges = f.create_group("charges")
         for name in CHARGE_FIELDS:
             charges[name] = np.ascontiguousarray(gram[name])
+        if case == "device-mixed":
+            for name in MIXED_GRAM_FIELDS:
+                charges[name] = np.ascontiguousarray(gram[name])
+            for name in MIXED_CHARGE_FIELDS:
+                charges[name] = np.ascontiguousarray(gram["mixed_charges"][name])
         charges.attrs["far_factor"], charges.attrs["compression"] = float(gram["far_factor"]), gram["compression"]
         charges.attrs["family"] = setup["family"]
         for key, value in gram["aca"].items():
             charges.attrs["aca_" + key] = value
-        evaluation = f.create_group("evaluation")
-        for name in EVALUATION_FIELDS:
-            evaluation[name] = np.ascontiguousarray(setup["evaluation_tables"][name])
+        for index, tables in enumerate(setup["evaluation_tables"]["tables"], 1):
+            evaluation = f.create_group("evaluation/group%d" % index)
+            for name in EVALUATION_FIELDS:
+                evaluation[name] = np.ascontiguousarray(tables[name])
         group = f.create_group("law")
         group["knots"] = law["knots"]
         group["coefficients"] = np.asarray(law["coefficients"]).reshape(-1, 4)
@@ -111,14 +125,19 @@ def run_pybind(input_path: Path, out: Path, receipt: dict) -> None:
     cuda = _native("_hdiv_cuda")
     digest = sha256(input_path)
     with h5py.File(input_path, "r") as f:
-        if text(f.attrs["schema"]) != "radia.hdiv-device-parity-input.v1" or text(f.attrs["case"]) != CASE:
+        case = text(f.attrs["case"])
+        if text(f.attrs["schema"]) != "radia.hdiv-device-parity-input.v1" or case not in CASES:
             raise ValueError("Not a device parity input")
         nd = int(f.attrs["dofs"])
         c = f["charges"]
         charges = {name: c[name][...] for name in CHARGE_FIELDS}
+        if case == "device-mixed":
+            charges.update({name: c[name][...] for name in MIXED_GRAM_FIELDS},
+                           mixed_charges={name: c[name][...] for name in MIXED_CHARGE_FIELDS})
         aca = dict(eps=float(c.attrs["aca_eps"]), eta=float(c.attrs["aca_eta"]), leaf_size=int(c.attrs["aca_leaf_size"]),
                    max_rank=int(c.attrs["aca_max_rank"]), rank_cap=text(c.attrs["aca_rank_cap"]))
-        evaluation = {name: f["evaluation"][name][...] for name in EVALUATION_FIELDS}
+        evaluation = dict(tables=[{name: f["evaluation"]["group%d" % k][name][...] for name in EVALUATION_FIELDS}
+                                  for k in range(1, len(f["evaluation"]) + 1)])
         law = dict(knots=f["law/knots"][...], coefficients=np.ascontiguousarray(f["law/coefficients"][...].ravel()),
                    integral_base=f["law/integral_base"][...], **{k: float(v) for k, v in f["law"].attrs.items()})
         vectors = {name: f["vectors"][name][...] for name in ("apply_input", "rhs", "initial")}
@@ -146,7 +165,7 @@ def run_pybind(input_path: Path, out: Path, receipt: dict) -> None:
         raise RuntimeError("Parity input did not exercise device ACA low-rank leaves: %r" % (counters,))
     outputs = dict(apply=applied, linear_solution=lin["x"], nonlinear_solution=new["x"],
                    nonlinear_residual_history=np.array([row["relative_residual"] for row in new["history"]]))
-    write_record(out, dict(receipt, frontend="pybind11", case=CASE, input_sha256=digest, output_names=list(OUTPUTS),
+    write_record(out, dict(receipt, frontend="pybind11", case=case, input_sha256=digest, output_names=list(OUTPUTS),
                            artifact_sha256=sha256(Path(cuda.__file__)), hmatrix=dict(counters),
                            linear_relative_residual=lin["relative_residual"],
                            nonlinear_relative_residual=new["relative_residual"], **device_identity()), outputs)
@@ -168,6 +187,11 @@ def main() -> None:
     make = sub.add_parser("make-input")
     make.add_argument("--out", type=Path, required=True)
     make.add_argument("--order", type=int, choices=(1, 2), default=2)
+    make.add_argument("--maxh", type=float, default=MAXH)
+    make.add_argument("--leaf-size", type=int, default=ACA["leaf_size"])
+    make.add_argument("--length", type=float, default=BAR[0])
+    make.add_argument("--case", choices=CASES, default=CASES[0])
+    make.add_argument("--shape", type=int, nargs=3, default=MIXED_SHAPE)
     run = sub.add_parser("pybind")
     run.add_argument("--input", type=Path, required=True)
     run.add_argument("--out", type=Path, required=True)
@@ -175,7 +199,7 @@ def main() -> None:
                      help="JSON shared by both producers: " + ", ".join(COMMON_RECEIPT))
     args = parser.parse_args()
     if args.command == "make-input":
-        make_input(args.out, args.order)
+        make_input(args.out, args.order, args.maxh, args.leaf_size, args.length, args.case, tuple(args.shape))
     else:
         run_pybind(args.input, args.out, common_receipt(args.common_receipt))
 

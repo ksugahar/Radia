@@ -13,51 +13,24 @@ common=jsondecode(fileread(commonReceiptPath));
 assert(isequal(sort(fieldnames(common)),sort({'source_sha';'kernel_object_sha256';'cuda_compiler'; ...
     'python_binary_sha256';'mex_binary_sha256'})),'radia:parity:Receipt','Unexpected common receipt fields');
 assert(strcmp(textAttribute(inputPath,'/','schema'),'radia.hdiv-device-parity-input.v1') && ...
-    strcmp(textAttribute(inputPath,'/','case'),'device-flat-tet'),'radia:parity:Input','Not a device parity input');
-nd=double(h5readatt(inputPath,'/','dofs'));
-chargeFields={'cell_vertices','face_vertices','charge_host','charge_kind','charge_exponents','tet_rule', ...
-    'tri_rule','tet_low_rule','tri_low_rule','cell_class','cell_dofs','cell_tables','cell_exponents', ...
-    'face_class','face_dofs','face_tables','face_exponents'};
-charges=struct();
-% HDF5 row-major tables read as reversed MATLAB arrays: (:) is the native flat order.
-for k=1:numel(chargeFields),charges.(chargeFields{k})=column(inputPath,['/charges/' chargeFields{k}]);end
-charges.far_factor=double(h5readatt(inputPath,'/charges','far_factor'));
-charges.compression=textAttribute(inputPath,'/charges','compression');
-charges.family=textAttribute(inputPath,'/charges','family');
-charges.dofs=nd;
-charges.aca=struct('eps',double(h5readatt(inputPath,'/charges','aca_eps')),'eta',double(h5readatt(inputPath,'/charges','aca_eta')), ...
-    'leaf_size',double(h5readatt(inputPath,'/charges','aca_leaf_size')),'max_rank',double(h5readatt(inputPath,'/charges','aca_max_rank')), ...
-    'rank_cap',textAttribute(inputPath,'/charges','aca_rank_cap'));
-evaluationFields={'rule','reference_shapes','vertices','element_class','element_dofs','element_points'};
-evaluation=struct();
-for k=1:numel(evaluationFields),evaluation.(evaluationFields{k})=column(inputPath,['/evaluation/' evaluationFields{k}]);end
-law=struct('knots',column(inputPath,'/law/knots'),'coefficients',h5read(inputPath,'/law/coefficients')', ...
-    'integral_base',column(inputPath,'/law/integral_base'));
-for name={'cap','barrier_slope','last_field','initial_reluctivity'}
-    law.(name{1})=double(h5readatt(inputPath,'/law',name{1}));
-end
-applyInput=column(inputPath,'/vectors/apply_input');rhs=column(inputPath,'/vectors/rhs');initial=column(inputPath,'/vectors/initial');
-linear=@(name)h5readatt(inputPath,'/linear',name);
-newton=struct();
-for name={'nonlinear_tolerance','linear_tolerance','maximum_iterations','maximum_linear_iterations','degree','lower_fraction'}
-    newton.(name{1})=double(h5readatt(inputPath,'/newton',name{1}));
-end
-newton.preconditioner=textAttribute(inputPath,'/newton','preconditioner');
+    any(strcmp(textAttribute(inputPath,'/','case'),{'device-flat-tet','device-mixed'})),'radia:parity:Input','Not a device parity input');
+input=readHDivParityInput(inputPath);
+nd=input.dofs;charges=input.charges;evaluation=input.evaluation;law=input.law;applyInput=input.apply;
+rhs=input.rhs;initial=input.initial;newton=input.newton;
 op=radia_hdiv_device('create_operator',charges);opOwner=onCleanup(@()radia_hdiv_device('destroy',op));
 mass=radia_hdiv_device('create_mass',evaluation,nd);massOwner=onCleanup(@()radia_hdiv_device('destroy',mass));
 material=radia_hdiv_device('create_material',evaluation,nd,law);materialOwner=onCleanup(@()radia_hdiv_device('destroy',material));
 counters=radia_hdiv_device('assembly',op).hmatrix;
 assert(counters.lowrank_leaves>=1,'radia:parity:ACA','Parity input did not exercise device ACA low-rank leaves');
 applied=radia_hdiv_device('apply',op,applyInput);
-lin=radia_hdiv_device('solve_linear',op,mass,rhs,double(linear('inv_chi')),double(linear('tolerance')), ...
-    double(linear('maximum_iterations')),textAttribute(inputPath,'/linear','preconditioner'));
+lin=radia_hdiv_device('solve_linear',op,mass,rhs,input.inv_chi,input.tolerance,input.maximum_iterations,input.preconditioner);
 new=radia_hdiv_device('solve_nonlinear',op,material,rhs,initial,newton);
 clear materialOwner massOwner opOwner
 assert(radia_hdiv_device('live_count')==0,'radia:parity:Leak','Device handles remain after the parity run');
 [~,gpu]=system('nvidia-smi --query-gpu=uuid,compute_cap,name --format=csv,noheader');
 rows=strtrim(splitlines(strtrim(gpu)));assert(isscalar(rows),'radia:parity:Device','Parity requires exactly one visible GPU');
 parts=strtrim(split(rows{1},','));
-receipt=common;receipt.frontend='mex';receipt.case='device-flat-tet';receipt.input_sha256=sha256(inputPath);
+receipt=common;receipt.frontend='mex';receipt.case=input.name;receipt.input_sha256=sha256(inputPath);
 receipt.output_names={'apply';'linear_solution';'nonlinear_solution';'nonlinear_residual_history'};
 receipt.artifact_sha256=sha256(which('radia_hdiv_device'));receipt.hmatrix=counters;
 receipt.linear_relative_residual=lin.relative_residual;receipt.nonlinear_relative_residual=new.relative_residual;
@@ -69,10 +42,6 @@ for k=1:numel(outputs)
     h5create(outPath,name,numel(value),'Datatype','double');h5write(outPath,name,value);
 end
 h5writeatt(outPath,'/','receipt_json',jsonencode(receipt));
-end
-
-function value=column(path,name)
-value=h5read(path,name);value=value(:);
 end
 
 function value=textAttribute(path,location,name)

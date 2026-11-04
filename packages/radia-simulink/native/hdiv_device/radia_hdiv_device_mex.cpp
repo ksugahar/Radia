@@ -91,18 +91,27 @@ mxArray* ledger(const HostVector<Transfer>& rows){
     return a;
 }
 
-radia_hdiv_bh::FlatEvaluationInput evaluationInput(const mxArray* s,std::size_t dofs){
+radia_hdiv_bh::FlatEvaluationInput evaluationGroup(const mxArray* s,std::size_t index,std::size_t dofs){
+    auto member=[&](const char* name){const mxArray* f=mxGetField(s,index,name);if(!f)throw std::invalid_argument(std::string("Missing device setup field: ")+name);return f;};
     radia_hdiv_bh::FlatEvaluationInput in;
-    const auto rule=reals(field(s,"rule"),"rule"),shapes=reals(field(s,"reference_shapes"),"reference_shapes"),vertices=reals(field(s,"vertices"),"vertices");
-    const auto cls=integers(field(s,"element_class"),"element_class"),dofTable=integers(field(s,"element_dofs"),"element_dofs"),points=integers(field(s,"element_points"),"element_points");
+    const auto rule=reals(member("rule"),"rule"),shapes=reals(member("reference_shapes"),"reference_shapes"),vertices=reals(member("vertices"),"vertices");
+    const auto cls=integers(member("element_class"),"element_class"),dofTable=integers(member("element_dofs"),"element_dofs"),points=integers(member("element_points"),"element_points");
     in.elements=cls.size();in.rulePoints=quotient(rule.size(),4,"rule");in.local=quotient(dofTable.size(),in.elements,"element_dofs");
     in.classes=quotient(shapes.size(),in.rulePoints*in.local*3,"reference_shapes");in.points=in.elements*in.rulePoints;in.dofs=dofs;
-    // Geometry: 4 affine vertices, 10 curved P2 nodes or a 27-node HEX Q2 lattice per element.
+    // Geometry: 4 affine vertices, 5 pyramid vertices, 10 curved P2 nodes or a 27-node HEX Q2 lattice per element.
     in.nodes=quotient(vertices.size(),3*in.elements,"vertices");
-    if(in.nodes!=4&&in.nodes!=10&&in.nodes!=27)throw std::invalid_argument("Evaluation geometry requires 4 affine vertices, 10 P2 nodes or 27 HEX lattice nodes per element");
+    if(in.nodes!=4&&in.nodes!=5&&in.nodes!=10&&in.nodes!=27)throw std::invalid_argument("Evaluation geometry requires 4 affine vertices, 5 pyramid vertices, 10 P2 nodes or 27 HEX lattice nodes per element");
     in.rule.assign(rule.begin(),rule.end());in.shapes.assign(shapes.begin(),shapes.end());in.vertices.assign(vertices.begin(),vertices.end());
     in.elementClass.assign(cls.begin(),cls.end());in.elementDofs.assign(dofTable.begin(),dofTable.end());in.elementPoints.assign(points.begin(),points.end());
     return in;
+}
+// One struct element per element type; every group's points is the mesh total.
+radia_hdiv_bh::FlatEvaluationGroups evaluationInput(const mxArray* s,std::size_t dofs){
+    if(!mxIsStruct(s)||mxIsEmpty(s))throw std::invalid_argument("Device setup evaluation must be a nonempty struct array");
+    radia_hdiv_bh::FlatEvaluationGroups groups;std::size_t points=0;
+    for(std::size_t i=0;i<mxGetNumberOfElements(s);++i){groups.push_back(evaluationGroup(s,i,dofs));points+=groups.back().points;}
+    for(auto& group:groups)group.points=points;
+    return groups;
 }
 radia_hdiv_bh::Law law(const mxArray* s){
     auto vector=[&](const char* name){const auto v=reals(field(s,name),name);return radia_hdiv_bh::BoundaryVector<double>(v.begin(),v.end());};
@@ -122,13 +131,16 @@ std::shared_ptr<DeviceOperator> createOperator(const mxArray* s){
         integers(field(s,"charge_kind"),"charge_kind"),integers(field(s,"charge_exponents"),"charge_exponents"),
         scalar(field(s,"far_factor"),"far_factor"),text(field(s,"compression"),"compression")};
     input.family=text(field(s,"family"),"family");
-    if(input.family!="affine-tet"&&input.family!="curved-tet"&&input.family!="hex")
-        throw std::invalid_argument("family must be explicit 'affine-tet', 'curved-tet' or 'hex'");
-    const bool curved=input.family=="curved-tet",hex=input.family=="hex";
+    if(input.family!="affine-tet"&&input.family!="curved-tet"&&input.family!="hex"&&input.family!="mixed")
+        throw std::invalid_argument("family must be explicit 'affine-tet', 'curved-tet', 'hex' or 'mixed'");
+    const bool curved=input.family=="curved-tet",mixed=input.family=="mixed",hex=input.family=="hex"||mixed;
     for(const char* name:{"cell_numbers","face_numbers","curve_gl","curve_gw","cell_mass_rule","face_mass_rule"})
         if((mxGetField(s,0,name)!=nullptr)!=curved)throw std::invalid_argument(std::string(name)+" is required for family='curved-tet' and rejected otherwise");
     for(const char* name:{"hex_rules","hex_bands"})
         if((mxGetField(s,0,name)!=nullptr)!=hex)throw std::invalid_argument(std::string(name)+" is required for family='hex' and rejected otherwise");
+    for(const char* name:{"host_types","host_class","class_info","host_dofs","class_tables"})
+        if((mxGetField(s,0,name)!=nullptr)!=mixed)throw std::invalid_argument(std::string(name)+" is required for family='mixed' and rejected otherwise");
+    if(mixed)input.hostTypes=integers(field(s,"host_types"),"host_types");
     if(curved){
         input.cellNumbers=integers(field(s,"cell_numbers"),"cell_numbers");input.faceNumbers=integers(field(s,"face_numbers"),"face_numbers");
         input.gl=reals(field(s,"curve_gl"),"curve_gl");input.gw=reals(field(s,"curve_gw"),"curve_gw");
@@ -143,6 +155,10 @@ std::shared_ptr<DeviceOperator> createOperator(const mxArray* s){
     }else if(input.compression!="dense")throw std::invalid_argument("compression must be explicit 'dense' or 'aca'");
     else if(!mxIsEmpty(field(s,"aca")))throw std::invalid_argument("ACA parameters are rejected for compression='dense'");
     ChargeMapInput charges;charges.dofs=count(field(s,"dofs"),"dofs");
+    if(mixed){charges.mixed=true;
+        charges.hostClass=integers(field(s,"host_class"),"host_class");charges.classInfo=integers(field(s,"class_info"),"class_info");
+        charges.hostDofs=integers(field(s,"host_dofs"),"host_dofs");charges.classTables=reals(field(s,"class_tables"),"class_tables");
+        return createFlat(input,charges);}
     charges.cellClass=integers(field(s,"cell_class"),"cell_class");charges.faceClass=integers(field(s,"face_class"),"face_class");
     charges.cellDofs=integers(field(s,"cell_dofs"),"cell_dofs");charges.faceDofs=integers(field(s,"face_dofs"),"face_dofs");
     charges.cellExponents=integers(field(s,"cell_exponents"),"cell_exponents");charges.faceExponents=integers(field(s,"face_exponents"),"face_exponents");

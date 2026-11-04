@@ -21,7 +21,7 @@ for name={'schema','backend','family','mesh_sha256','label_contract_sha256'}
 end
 value.order=double(attribute('/','order'));value.dofs=double(attribute('/','dofs'));
 value.rhs_operator=h5read(path,'/rhs_operator')';value.mean_operator=h5read(path,'/mean_operator')';
-value.charges=readTables(path,'/charges');value.evaluation=readTables(path,'/evaluation');
+value.charges=readTables(path,'/charges');value.evaluation=readGroups(path,'/evaluation');
 value.charges.far_factor=double(attribute('/charges','far_factor'));
 value.charges.compression=text('/charges','compression');value.charges.dofs=double(attribute('/charges','dofs'));
 if strcmp(value.charges.compression,'dense')
@@ -30,6 +30,14 @@ else
     value.charges.aca=struct('eps',double(attribute('/charges/aca','eps')),'eta',double(attribute('/charges/aca','eta')), ...
         'leaf_size',double(attribute('/charges/aca','leaf_size')),'max_rank',double(attribute('/charges/aca','max_rank')), ...
         'rank_cap',text('/charges/aca','rank_cap'));
+end
+end
+
+function groups=readGroups(path,root)
+% One table group per element type.
+info=h5info(path,root);
+for k=numel(info.Groups):-1:1
+    groups(k,1)=readTables(path,info.Groups(k).Name);
 end
 end
 
