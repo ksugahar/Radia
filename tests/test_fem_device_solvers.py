@@ -50,6 +50,7 @@ def _check(route, solve, fes, coefficients, rhs, *, lift=None, bonus=(0, 0, 0), 
     expected = route.cpu_solve(fes, coefficients, rhs, lift=lift, preconditioner="direct", bonus=bonus)
     actual = solve(fes, coefficients, rhs, Backend="gpu", lift=lift, bonus=bonus, tolerance=TOLERANCE, cycles=cycles)
     assert actual["backend"] == "gpu"
+    print("device iterations", actual["iterations"], "hierarchy", actual["hierarchy"])
     difference = float(np.linalg.norm(actual["solution"] - expected["solution"]) / np.linalg.norm(expected["solution"]))
     assert difference <= SOLUTION_REL, f"solution differs by {difference}, limit {SOLUTION_REL}; iterations {actual['iterations']}"
     assert 0 < actual["iterations"] <= ITERATION_LIMIT, f"iterations {actual['iterations']}, limit {ITERATION_LIMIT}"
@@ -91,7 +92,7 @@ def test_complex_curl_curl_with_sibc_term(route):
     mesh = _cube(8)
     fes = ng.HCurl(mesh, order=1, nograds=True, complex=True, dirichlet="left|right")
     robin = 40.0
-    coefficients = route.Coefficients(stiff=1.0, mass=1e-3, stiff_aux=1.0, mass_aux=1e-3 + 20.0, trace_im={"back": robin},
+    coefficients = route.Coefficients(stiff=1.0, mass=1e-3, stiff_aux=1.0, mass_aux=1e-3, trace_im={"back": robin},
                                       trace_aux={"back": robin})
     _check(route, route.solve_hcurl, fes, coefficients, _rhs(fes, "HCurl") + 0j, bonus=(4, 0, 0))
 
