@@ -329,7 +329,7 @@ inline void validateFlatEvaluation(const FlatEvaluationGroups& groups){
             throw std::invalid_argument("Invalid material reference rule");
         for(int c:in.elementClass)if(c<0||std::size_t(c)>=in.classes)throw std::invalid_argument("Evaluation class index out of range");
         for(int d:in.elementDofs)if(d<0||std::size_t(d)>=in.dofs)throw std::invalid_argument("Evaluation DOF index out of range");
-        for(std::size_t e=0;e<ne;++e)for(std::size_t i=0;i<local;++i)for(std::size_t j=0;j<i;++j)
+        if(!in.periodicTrace)for(std::size_t e=0;e<ne;++e)for(std::size_t i=0;i<local;++i)for(std::size_t j=0;j<i;++j)
             if(in.elementDofs[e*local+i]==in.elementDofs[e*local+j])throw std::invalid_argument("Duplicate evaluation local DOF");
     }
     if(covered!=points)throw std::invalid_argument("Evaluation points must cover each material point once");

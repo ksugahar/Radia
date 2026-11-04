@@ -60,6 +60,7 @@ radia_hdiv_bh::FlatEvaluationGroups flatEvaluationGroups(py::list tables,std::si
         auto field=[&](const char* name,auto tag){using T=decltype(tag);if(!d.contains(name)||!py::isinstance<Array<T>>(d[name]))throw py::value_error(std::string("Evaluation group requires a contiguous array ")+name);return py::cast<Array<T>>(d[name]);};
         groups.push_back(flatEvaluationInput(field("rule",double{}),field("reference_shapes",double{}),field("vertices",double{}),
             field("element_class",std::int32_t{}),field("element_dofs",std::int32_t{}),field("element_points",std::int32_t{}),dofs,bytes));
+        groups.back().periodicTrace=d.contains("periodic_trace")&&py::cast<bool>(d["periodic_trace"]);
         points+=groups.back().points;}
     for(auto& group:groups)group.points=points;
     return groups;
@@ -96,7 +97,7 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend,
     const std::string& family,py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,
     py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands,py::object hostTypes,py::object mixedCharges,
-    py::object imageMasks,py::object imageSigns,py::object imageRotations) {
+    py::object imageMasks,py::object imageSigns,py::object imageRotations,bool periodicTrace) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
     if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
     if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
@@ -154,7 +155,7 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
         input.acaEps=py::cast<double>(d["eps"]);input.acaEta=py::cast<double>(d["eta"]);
         input.acaLeafSize=integer(d,"leaf_size");input.acaMaxRank=integer(d,"max_rank");input.acaRankCapDense=cap=="dense";
     }
-    ChargeMapInput charges;charges.dofs=dofs;
+    ChargeMapInput charges;charges.dofs=dofs;charges.periodicTrace=periodicTrace;
     charges.cellMonomials=std::size_t(cellExponents.shape(0));charges.faceMonomials=std::size_t(faceExponents.shape(0));
     charges.cellWidth=std::size_t(cellDofs.shape(1));charges.faceWidth=std::size_t(faceDofs.shape(1));
     charges.cellTables=rows(cellTables,0,bytes,"cell_tables");charges.faceTables=rows(faceTables,0,bytes,"face_tables");
@@ -329,7 +330,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("cell_mass_rule")=py::none(),
            py::arg("face_mass_rule")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
            py::arg("host_types")=py::none(),py::arg("mixed_charges")=py::none(),
-           py::arg("image_masks")=py::none(),py::arg("image_signs")=py::none(),py::arg("image_rotations")=py::none(),
+           py::arg("image_masks")=py::none(),py::arg("image_signs")=py::none(),py::arg("image_rotations")=py::none(),py::arg("periodic_trace")=false,
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;

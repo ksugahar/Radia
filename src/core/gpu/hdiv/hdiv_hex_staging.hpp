@@ -62,6 +62,14 @@ inline void solveSmall(std::vector<double> M,std::vector<double>& R,std::size_t 
             for(std::size_t j=c;j<n;++j)M[r*n+j]-=f*M[c*n+j];for(std::size_t j=0;j<k;++j)R[r*k+j]-=f*R[c*k+j];}}
     for(std::size_t c=0;c<n;++c)for(std::size_t j=0;j<k;++j)R[c*k+j]/=M[c*n+c];
 }
+// The element of NGSolve's periodic wrapper: the plain element with the identified vertex numbers.
+inline ngfem::FiniteElement& hexElement(MaterialStagingContext& context,ngfem::ElementId element,ngstd::LocalHeap& heap){
+    auto& fe=context.space->GetFE(element,heap);
+    if(!context.vertexMap.empty()){int numbers[8];const auto vertices=context.mesh->GetElement(element).Vertices();
+        for(int v=0;v<8;++v)numbers[v]=context.mappedVertex(vertices[v]);
+        fe.SetVertexNumbers(ngcore::FlatArray<int>(8,numbers));}
+    return fe;
+}
 inline void requireHexMesh(const ngcomp::MeshAccess& mesh,std::size_t ne){
     for(std::size_t e=0;e<ne;++e)if(mesh.GetElType(ngfem::ElementId(ngfem::VOL,int(e)))!=ngfem::ET_HEX)
         throw std::invalid_argument("Device HEX tables require a pure hexahedral mesh");
@@ -91,7 +99,7 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
     ngstd::LocalHeap heap(1<<24,"radia_hdiv_hex_charge");
     std::vector<int> classKey;std::vector<double> classProbe;std::vector<int> cellVertexNumbers(8*context.ne);std::size_t local=0;
     for(std::size_t e=0;e<context.ne;++e){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,int(e));
-        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));
+        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(hexElement(context,eid,heap));
         ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);
         if(!local)local=std::size_t(fe.GetNDof());
         if(std::size_t(fe.GetNDof())!=local||std::size_t(dofs.Size())!=local||local>128)
@@ -101,7 +109,7 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
         if(std::adjacent_find(sorted.begin(),sorted.end())!=sorted.end())throw std::runtime_error("Duplicate charge local DOF unsupported");
         out.cellDofs.insert(out.cellDofs.end(),dofs.begin(),dofs.end());
         const auto vertexNumbers=mesh->GetElement(eid).Vertices();int numbers[8];
-        for(int v=0;v<8;++v){numbers[v]=vertexNumbers[v];cellVertexNumbers[8*e+v]=numbers[v];}
+        for(int v=0;v<8;++v){numbers[v]=context.mappedVertex(vertexNumbers[v]);cellVertexNumbers[8*e+v]=vertexNumbers[v];}
         auto& trafo=mesh->GetTrafo(eid,heap);
         const auto at=out.cellVertices.size();latticeOf(trafo,3,out.cellVertices);const int orientation=checkHexMap(trafo,out.cellVertices.data()+at);
         ngbla::Vector<> div(local);ngbla::Matrix<> shape(local,3);std::vector<double> probe;
@@ -132,13 +140,14 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
     std::vector<int> faceKey;std::vector<double> faceMoments;const std::size_t nse=std::size_t(mesh->GetNSE());
     for(std::size_t s=0;s<nse;++s){ngstd::HeapReset reset(heap);ngfem::ElementId sid(ngfem::BND,int(s));
         if(mesh->GetElType(sid)!=ngfem::ET_QUAD)throw std::invalid_argument("Device HEX charge tables require quadrilateral boundary elements");
+        if(context.excludedBoundary(sid))continue;
         const auto vertexNumbers=mesh->GetElement(sid).Vertices();int numbers[4];std::array<int,4> key;
         for(int v=0;v<4;++v)key[v]=numbers[v]=vertexNumbers[v];std::sort(key.begin(),key.end());
         const auto owner=owners.find(key);const std::size_t count=owner==owners.end()?0:owner->second.size();
         if(count==2)continue;
         if(count!=1)throw std::runtime_error("HEX boundary element matches "+std::to_string(count)+" volume facets; the mesh is non-conforming or corrupt");
         const std::size_t cell=owner->second[0].first;ngfem::ElementId eid(ngfem::VOL,int(cell));
-        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));
+        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(hexElement(context,eid,heap));
         const double* P[4];
         for(int v=0;v<4;++v){int w=0;while(w<8&&cellVertexNumbers[8*cell+w]!=numbers[v])++w;
             if(w==8)throw std::runtime_error("HEX face vertex is not a vertex of its cell");P[v]=hexVertexXi[w];}
@@ -170,7 +179,8 @@ inline FlatChargeTables stageHexChargeTables(MaterialStagingContext& context){
             throw std::runtime_error("HDiv HEX normal trace is not carried by the boundary-element DOFs");
         std::vector<double> table(fm*out.faceWidth);
         for(std::size_t r=0;r<fm;++r)for(std::size_t k=0;k<out.faceWidth;++k)table[r*out.faceWidth+k]=R[r*local+column[k]];
-        const int fkey=rankKey(numbers,4);auto found=std::find(faceKey.begin(),faceKey.end(),fkey);const std::size_t cls=std::size_t(found-faceKey.begin());
+        int faceRanks[4];for(int v=0;v<4;++v)faceRanks[v]=context.mappedVertex(numbers[v]);
+        const int fkey=rankKey(faceRanks,4);auto found=std::find(faceKey.begin(),faceKey.end(),fkey);const std::size_t cls=std::size_t(found-faceKey.begin());
         if(found==faceKey.end()){faceKey.push_back(fkey);out.faceTables.insert(out.faceTables.end(),table.begin(),table.end());faceMoments.insert(faceMoments.end(),moments.begin(),moments.end());}
         else{const double* reference=faceMoments.data()+cls*moments.size();
             for(std::size_t i=0;i<moments.size();++i)if(std::abs(moments[i]-reference[i])>1e-12*(1+std::abs(reference[i])))
@@ -198,7 +208,7 @@ inline FlatEvaluationTables stageHexEvaluationTables(MaterialStagingContext& con
     std::vector<int> classKey;std::vector<double> classProbe;std::vector<int> covered(context.totalPoints,0);
     ngstd::LocalHeap heap(1<<24,"radia_hdiv_hex_evaluation");
     for(std::size_t e=0;e<context.ne;++e){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,int(e));
-        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));
+        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(hexElement(context,eid,heap));
         ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);
         if(!out.local)out.local=std::size_t(fe.GetNDof());
         if(std::size_t(fe.GetNDof())!=out.local||std::size_t(dofs.Size())!=out.local||out.local>128)
@@ -211,7 +221,7 @@ inline FlatEvaluationTables stageHexEvaluationTables(MaterialStagingContext& con
         if(std::size_t(samples.Size())!=out.rulePoints)throw std::runtime_error("Material rule point count mismatch");
         for(auto q:samples){if(q<0||std::size_t(q)>=context.totalPoints||covered[q]++)throw std::runtime_error("Material samples are not element-disjoint");
             out.elementPoints.push_back(q);}
-        const auto vertexNumbers=mesh->GetElement(eid).Vertices();int numbers[8];for(int v=0;v<8;++v)numbers[v]=vertexNumbers[v];
+        const auto vertexNumbers=mesh->GetElement(eid).Vertices();int numbers[8];for(int v=0;v<8;++v)numbers[v]=context.mappedVertex(vertexNumbers[v]);
         auto& trafo=mesh->GetTrafo(eid,heap);
         const auto at=out.vertices.size();latticeOf(trafo,3,out.vertices);checkHexMap(trafo,out.vertices.data()+at);
         ngbla::Matrix<> shape(out.local,3);std::vector<double> probe;
