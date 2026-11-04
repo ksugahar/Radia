@@ -42,8 +42,8 @@ assert(numel(samples.secant)==3 && all(samples.secant>0) && all(samples.energy>=
 clear material
 assert(radia_hdiv_device('live_count')==0);
 bad=setup;bad.order=3;reject(bad,bhTable);
-bad=setup;bad.evaluation.element_dofs=bad.evaluation.element_dofs(1:end-1);reject(bad,bhTable);
-bad=setup;bad.charges.cell_dofs=double(bad.charges.cell_dofs)+.5;reject(bad,bhTable);
+bad=setup;bad.evaluation(1).element_dofs=bad.evaluation(1).element_dofs(1:end-1);reject(bad,bhTable);
+bad=setup;bad.charges.charge_host=double(bad.charges.charge_host)+.5;reject(bad,bhTable);
 report=struct('accepted',true,'scope','MATLAB device prepared HDiv workflow; independent certification external', ...
     'cases',[rows{:}],'linear_relative_residual',linear.true_relative_residual, ...
     'final_live_count',radia_hdiv_device('live_count'));

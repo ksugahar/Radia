@@ -33,6 +33,13 @@ Outputs, FP64 in `/outputs`: `apply` (B^T G B on a fixed vector),
 Both producers fail if ACA built no low-rank leaf; the MEX producer also fails
 if a device handle remains live.
 
+## Case `device-mixed`
+
+The same producers and outputs on a connected tet, pyramid and hex grid of the same
+bar (`hdiv_mixed_meshes.mixed_grid`, BDM1, leaf size 8), so the host-type tables, the
+per-class charge map and the three evaluation groups cross both frontends.
+`run_device_boundary.py` runs and compares both cases.
+
 ## Receipts and comparison
 
 Each record carries a UTF-8 `receipt_json` attribute: `frontend` (`pybind11` or

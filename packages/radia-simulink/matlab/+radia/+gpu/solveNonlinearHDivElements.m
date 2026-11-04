@@ -6,8 +6,8 @@ arguments
     bhTable (:,2) double {mustBeReal,mustBeFinite}
     options.NonlinearTolerance (1,1) double {mustBePositive}=5e-14
     options.MaxIterations (1,1) double {mustBeInteger,mustBePositive}=50
-    options.LinearTolerance (1,1) double {mustBePositive}=5e-14
-    options.LinearMaxIterations (1,1) double {mustBeInteger,mustBePositive}=10000
+    options.LinearTolerance (1,1) double {mustBePositive}=1e-6
+    options.LinearMaxIterations (1,1) double {mustBeInteger,mustBePositive}=30000
     options.Preconditioner (1,:) char {mustBeMember(options.Preconditioner,{'reference-diagonal','reference-chebyshev','reference-chebyshev-graph'})}='reference-diagonal'
     options.ChebyshevDegree (1,1) double {mustBeInteger,mustBePositive}=32
     options.ChebyshevLowerFraction (1,1) double {mustBePositive,mustBeFinite}= .01

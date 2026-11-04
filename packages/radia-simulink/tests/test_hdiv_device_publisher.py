@@ -34,7 +34,7 @@ def _setup(compression):
     tables = dict(rule=np.ones((3, 4)), reference_shapes=np.arange(8.).reshape(2, 4), vertices=np.zeros((4, 3)),
                   element_class=i32(0), element_dofs=i32(3, 1, 0, 2), element_points=i32(0))
     return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family="affine-tet", order=2, dofs=4,
-                mesh_sha256="mesh-hash", label_contract_sha256="contract-hash", evaluation_tables=tables,
+                mesh_sha256="mesh-hash", label_contract_sha256="contract-hash", evaluation_tables=dict(tables=[tables]),
                 charge_gram=gram, material_budget={}, rhs_operator=np.arange(12.).reshape(4, 3),
                 mean_operator=np.arange(12.).reshape(3, 4))
 
@@ -55,7 +55,7 @@ def test_device_publisher_owns_flat_columns_and_numbering(tmp_path, monkeypatch,
                                               mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64,
                                               mesh_check_provenance={}, order=2)
     assert calls == [2] and result["schema"] == "radia.hdiv-device-setup.v1" and result["dofs"] == 4.
-    charges, evaluation = result["charges"], result["evaluation"]
+    charges, evaluation = result["charges"], result["evaluation"][0]
     for name, value in list(charges.items()) + list(evaluation.items()):
         if isinstance(value, np.ndarray) and name != "aca":
             assert value.ndim == 2 and value.shape[1] == 1 and value.dtype in (np.float64, np.int32), name
@@ -107,11 +107,11 @@ def test_setup_file_keeps_tables_and_rejects_unknown_requests(tmp_path, monkeypa
     with h5py.File(tmp_path/"setup.h5", "r") as f:
         assert f.attrs["schema"] == "radia.hdiv-device-setup.v1" and f.attrs["index_base"] == 0 and f.attrs["units"] == "SI"
         np.testing.assert_array_equal(f["rhs_operator"], expected["rhs_operator"])
-        for name in ("charges", "evaluation"):
-            for key, value in expected[name].items():
+        for group, tables in ((f["charges"], expected["charges"]), (f["evaluation/group1"], expected["evaluation"][0])):
+            for key, value in tables.items():
                 if isinstance(value, np.ndarray) and key != "aca":
-                    assert f[name][key].dtype == value.dtype, key
-                    np.testing.assert_array_equal(f[name][key], value.ravel())
+                    assert group[key].dtype == value.dtype, key
+                    np.testing.assert_array_equal(group[key], value.ravel())
         assert f["charges"].attrs["compression"] == compression and ("aca" in f["charges"]) == bool(aca)
     with pytest.raises(ValueError, match="request fields"):
         module.write_hdiv_device_setup(dict(request, stray=1), tmp_path/"other.h5")

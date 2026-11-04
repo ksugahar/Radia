@@ -15,7 +15,7 @@ arguments
     options.GramACA (1,1) struct=struct()
     options.GramCompression (1,:) char {mustBeMember(options.GramCompression,{'aca','dense'})}='aca'
     % 1: linear geometry; 2: NGSolve Curve(2) (orders 1 and 2). A pure-TET mesh
-    % is affine-tet or curved-tet by curve order; a pure-HEX mesh is hex at either.
+    % is affine-tet or curved-tet by curve order; a pure-HEX mesh is hex at either; tet, pyramid and hex together are mixed, straight only.
     options.CurveOrder (1,1) double {mustBeMember(options.CurveOrder,[1 2])}=1
     options.PythonExecutable (1,1) string=string(pyenv().Executable)
 end
@@ -39,6 +39,6 @@ if status~=0
 end
 setup=radia.gpu.loadHDivDeviceSetup(outputPath);
 families={'affine-tet','curved-tet'};
-assert(setup.order==order && any(strcmp(setup.family,{families{options.CurveOrder},'hex'})),'radia:gpu:DeviceSetup', ...
+assert(setup.order==order && any(strcmp(setup.family,[families(options.CurveOrder) {'hex','mixed'}])),'radia:gpu:DeviceSetup', ...
     'Device setup order or geometry family differs from the request');
 end

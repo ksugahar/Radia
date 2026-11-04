@@ -5,7 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
-CASES = {"device-flat-tet": {"apply", "linear_solution", "nonlinear_solution", "nonlinear_residual_history"}}
+_OUTPUTS = {"apply", "linear_solution", "nonlinear_solution", "nonlinear_residual_history"}
+CASES = {"device-flat-tet": _OUTPUTS, "device-mixed": _OUTPUTS}
 # Build and run identity both records must share; the kernel object hash binds both binaries to one nvcc object.
 SHARED = ("source_sha", "kernel_object_sha256", "cuda_compiler", "python_binary_sha256", "mex_binary_sha256",
           "input_sha256", "device_uuid", "architecture", "case", "output_names")

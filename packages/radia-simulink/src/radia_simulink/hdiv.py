@@ -11,7 +11,9 @@ _EVALUATION_FIELDS = ("rule", "reference_shapes", "vertices", "element_class", "
 # Present only for the curved P2 family (``curve_order=2``) or the HEX family; the MEX rejects them otherwise.
 _CURVED_CHARGE_FIELDS = ("cell_numbers", "face_numbers", "curve_gl", "curve_gw", "cell_mass_rule", "face_mass_rule")
 _HEX_CHARGE_FIELDS = ("hex_rules", "hex_bands")
-_FAMILY_FIELDS = {"affine-tet": (), "curved-tet": _CURVED_CHARGE_FIELDS, "hex": _HEX_CHARGE_FIELDS}
+_MIXED_CHARGE_FIELDS = _HEX_CHARGE_FIELDS + ("host_types", "host_class", "class_info", "host_dofs", "class_tables")
+_FAMILY_FIELDS = {"affine-tet": (), "curved-tet": _CURVED_CHARGE_FIELDS, "hex": _HEX_CHARGE_FIELDS,
+                  "mixed": _MIXED_CHARGE_FIELDS}
 
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
@@ -39,7 +41,7 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
             raise ValueError("Device setup integer table %s must be int32" % name)
         return flat(value, np.int32)
 
-    gram = data["charge_gram"]
+    gram = dict(data["charge_gram"], **data["charge_gram"].get("mixed_charges", {}))
     fields = _CHARGE_FIELDS + _FAMILY_FIELDS[data["family"]]
     charges = {name: ints(name, gram) if np.asarray(gram[name]).dtype.kind in "iu" else flat(gram[name], np.float64)
                for name in fields}
@@ -47,9 +49,8 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
     charges.update(far_factor=float(gram["far_factor"]), compression=compression, dofs=float(data["dofs"]),
                    aca=np.zeros((0, 0)) if compression == "dense" else dict(eps=float(aca["eps"]), eta=float(aca["eta"]),
                        leaf_size=float(aca["leaf_size"]), max_rank=float(aca["max_rank"]), rank_cap=str(aca["rank_cap"])))
-    tables = data["evaluation_tables"]
-    evaluation = {name: ints(name, tables) if np.asarray(tables[name]).dtype.kind in "iu" else flat(tables[name], np.float64)
-                  for name in _EVALUATION_FIELDS}
+    evaluation = [{name: ints(name, tables) if np.asarray(tables[name]).dtype.kind in "iu" else flat(tables[name], np.float64)
+                   for name in _EVALUATION_FIELDS} for tables in data["evaluation_tables"]["tables"]]
     return dict(schema=data["schema"], backend="gpu", family=data["family"], order=float(data["order"]),
                 dofs=float(data["dofs"]), mesh_sha256=data["mesh_sha256"],
                 label_contract_sha256=data["label_contract_sha256"], charges=charges, evaluation=evaluation,
@@ -75,17 +76,20 @@ def write_hdiv_device_setup(request, output):
                        order=setup["order"], dofs=setup["dofs"], mesh_sha256=setup["mesh_sha256"],
                        label_contract_sha256=setup["label_contract_sha256"])
         f["rhs_operator"], f["mean_operator"] = setup["rhs_operator"], setup["mean_operator"]
-        for name in ("charges", "evaluation"):
-            group = f.create_group(name)
-            for key, value in setup[name].items():
-                if isinstance(value, dict):
-                    group.create_group(key).attrs.update(value)
-                elif key == "aca":
-                    continue  # the dense Gram carries no ACA parameters
-                elif hasattr(value, "ndim"):
-                    group[key] = value.ravel()
-                else:
-                    group.attrs[key] = value
+        group = f.create_group("charges")
+        for key, value in setup["charges"].items():
+            if isinstance(value, dict):
+                group.create_group(key).attrs.update(value)
+            elif key == "aca":
+                continue  # the dense Gram carries no ACA parameters
+            elif hasattr(value, "ndim"):
+                group[key] = value.ravel()
+            else:
+                group.attrs[key] = value
+        for index, tables in enumerate(setup["evaluation"], 1):
+            group = f.create_group("evaluation/group%d" % index)
+            for key, value in tables.items():
+                group[key] = value.ravel()
 
 
 def main(argv=None):

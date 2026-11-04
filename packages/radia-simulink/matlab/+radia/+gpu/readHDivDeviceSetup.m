@@ -17,16 +17,16 @@ for name={'schema','backend','family','mesh_sha256','label_contract_sha256'}
     setup.(name{1})=char(value.(name{1}));
 end
 assert(strcmp(setup.schema,'radia.hdiv-device-setup.v1') && strcmp(setup.backend,'gpu') && ...
-    any(strcmp(setup.family,{'affine-tet','curved-tet','hex'})),'radia:gpu:DeviceSetup','Unsupported device setup schema, backend or family');
-curved=strcmp(setup.family,'curved-tet');hex=strcmp(setup.family,'hex');
+    any(strcmp(setup.family,{'affine-tet','curved-tet','hex','mixed'})),'radia:gpu:DeviceSetup','Unsupported device setup schema, backend or family');
+curved=strcmp(setup.family,'curved-tet');mixed=strcmp(setup.family,'mixed');hex=strcmp(setup.family,'hex') || mixed;
 assert(~isempty(regexp(setup.mesh_sha256,'^[0-9a-f]{64}$','once')) && ...
     ~isempty(regexp(setup.label_contract_sha256,'^[0-9a-f]{64}$','once')), ...
     'radia:gpu:DeviceSetup','Missing checked mesh/label identity');
 setup.order=plain(value.order);setup.dofs=plain(value.dofs);nd=setup.dofs;
 assert(isscalar(setup.order) && ismember(setup.order,[0 1 2]) && isscalar(nd) && nd>=1 && fix(nd)==nd, ...
     'radia:gpu:DeviceSetup','Invalid device setup order or dimension');
-% Curved P2 TET and HEX geometry carry orders 1 and 2 only, matching the CPU routes.
-assert(~(curved || hex) || ismember(setup.order,[1 2]),'radia:gpu:DeviceSetup','Curved or HEX device setup requires order 1 or 2');
+% Curved P2 TET, HEX and mixed geometry carry orders 1 and 2 only, matching the CPU routes.
+assert(~(curved || hex) || ismember(setup.order,[1 2]),'radia:gpu:DeviceSetup','Curved, HEX or mixed device setup requires order 1 or 2');
 setup.rhs_operator=double(value.rhs_operator);setup.mean_operator=double(value.mean_operator);
 assert(isequal(size(setup.rhs_operator),[nd 3]) && isequal(size(setup.mean_operator),[3 nd]) && ...
     isreal(setup.rhs_operator) && isreal(setup.mean_operator) && ...
@@ -43,9 +43,14 @@ assert(all(isfield(c,curvedFields)==curved),'radia:gpu:DeviceSetup', ...
 hexFields={'hex_rules','hex_bands'};
 assert(all(isfield(c,hexFields)==hex),'radia:gpu:DeviceSetup', ...
     'HEX Gram rules and bands are required for hex and rejected otherwise');
+mixedFields={'host_types','host_class','class_info','host_dofs','class_tables'};
+assert(all(isfield(c,mixedFields)==mixed),'radia:gpu:DeviceSetup', ...
+    'Mixed host tables are required for mixed and rejected otherwise');
 extra=struct();
 if curved
     extra=tables(c,{'curve_gl','curve_gw','cell_mass_rule','face_mass_rule'},{'cell_numbers','face_numbers'});
+elseif mixed
+    extra=tables(c,[hexFields {'class_tables'}],{'host_types','host_class','class_info','host_dofs'});
 elseif hex
     extra=tables(c,hexFields,{});
 end
@@ -64,8 +69,12 @@ else
     setup.charges.aca=struct('eps',plain(a.eps),'eta',plain(a.eta),'leaf_size',plain(a.leaf_size), ...
         'max_rank',plain(a.max_rank),'rank_cap',char(a.rank_cap));
 end
-setup.evaluation=tables(value.evaluation,{'rule','reference_shapes','vertices'}, ...
-    {'element_class','element_dofs','element_points'});
+assert(isstruct(value.evaluation) && isvector(value.evaluation) && numel(value.evaluation)<=3 && ...
+    (mixed || isscalar(value.evaluation)),'radia:gpu:DeviceSetup','Invalid evaluation table groups');
+for k=numel(value.evaluation):-1:1
+    setup.evaluation(k,1)=tables(value.evaluation(k),{'rule','reference_shapes','vertices'}, ...
+        {'element_class','element_dofs','element_points'});
+end
 checkedInput=value;checkedReal=realFlags(value);checkedSetup=setup;
 end
 
@@ -73,8 +82,8 @@ function flags=realFlags(value)
 % isequal ignores complexity. It also ignores class, sparsity and the sign of zero, which the read
 % below normalizes, so equal payloads with equal flags read identically. Builtins only: this runs
 % on every solve, and MATLAB code run this often shows up in the memory slope.
-flags=[cellfun('isreal',struct2cell(value));cellfun('isreal',struct2cell(value.charges)); ...
-    cellfun('isreal',struct2cell(value.evaluation))];
+evaluation=cellfun('isreal',struct2cell(value.evaluation));
+flags=[cellfun('isreal',struct2cell(value));cellfun('isreal',struct2cell(value.charges));evaluation(:)];
 if isstruct(value.charges.aca)
     flags=[flags;cellfun('isreal',struct2cell(value.charges.aca))];
 end
