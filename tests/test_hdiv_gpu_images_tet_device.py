@@ -9,7 +9,10 @@ image, the Duffy rule of a touching curved image, the inverse point map or a far
 pair moves them far beyond the detectors.
 Assumes: the CPU TET route is the reference on identical NGSolve inputs and, on a rotated image, on the explicit ring: its
 image route takes the low far rule from the far test of one direction, also when the other direction is coincident at the
-seam. This is parity of one discretization, not independent accuracy. The REL values are PROPOSED detectors, not adopted
+seam. A curved pair touches by vertex number on the CPU route, so the curved reference at the seam is the connected ring, whose
+copies share their seam vertices and hold no seam face; the seam faces themselves have no CPU reference and are held to the
+direct device route on the ring with its coincident vertices numbered alike. This is parity of one discretization, not
+independent accuracy. The REL values are PROPOSED detectors, not adopted
 criteria. The checked-mesh receipt gate is not under test and is bypassed for scratch meshes. Optional GPU lane: skips
 visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane loads the binding through the provenance-checked loader.
 """
@@ -108,6 +111,36 @@ def _tet_ring(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
     return path
 
 
+def _tet_connected_ring(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
+    """The same ring with one number per seam vertex: the seam faces are interior and carry no charge."""
+    from netgen.meshing import Element2D, Element3D, FaceDescriptor, Mesh, MeshPoint, Pnt
+    alpha = 2.0*math.pi/fold
+    mesh = Mesh(dim=3)
+    mesh.SetMaterial(1, "yoke")
+    skin = mesh.Add(FaceDescriptor(surfnr=1, domin=1, domout=0, bc=1))
+    mesh.SetBCName(0, "skin")
+    point, elements, boundary = {}, [], []
+    for copy in range(fold):
+        for it, ir, iz in np.ndindex(cells + 1, 2, 2):
+            station = (copy*cells + it) % (fold*cells)
+            if (ir, station, iz) not in point:
+                theta, radius = -0.5*alpha + station*alpha/cells, (inner, outer)[ir]
+                point[ir, station, iz] = mesh.Add(MeshPoint(Pnt(radius*math.cos(theta), radius*math.sin(theta), (-half, half)[iz])))
+        for it in range(cells):
+            low, high = (copy*cells + it) % (fold*cells), (copy*cells + it + 1) % (fold*cells)
+            corners = [point[0, low, 0], point[1, low, 0], point[1, high, 0], point[0, high, 0],
+                       point[0, low, 1], point[1, low, 1], point[1, high, 1], point[0, high, 1]]
+            elements += [[corners[k] for k in tet] for tet in _KUHN]
+            for triangles in _FACES[:4]:
+                boundary += [[corners[k] for k in triangle] for triangle in triangles]
+    for element in elements:
+        mesh.Add(Element3D(1, element))
+    for element in boundary:
+        mesh.Add(Element2D(skin, element))
+    mesh.Save(str(path))
+    return path
+
+
 @pytest.fixture(scope="module")
 def cuda():
     if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
@@ -130,7 +163,8 @@ def meshes(tmp_path_factory):
                 sector2=_tet_sector(root/"sector2.vol", 2, FOLD),
                 apart=_tet_sector(root/"apart.vol", 2, FOLD, span=0.8),
                 ring=_tet_ring(root/"ring.vol", 1, FOLD),
-                ring2=_tet_ring(root/"ring2.vol", 2, FOLD))
+                ring2=_tet_ring(root/"ring2.vol", 2, FOLD),
+                connected2=_tet_connected_ring(root/"connected2.vol", 2, FOLD))
 
 
 def _terms(image=None, cyclic=None):
@@ -238,7 +272,31 @@ def _ring_index(table, ring, fold):
     return np.array([[lookup[kind, host + k*counts[kind], tuple(exponents)] for kind, host, exponents in rows(table)] for k in range(fold)])
 
 
-_SECTOR_ENTRY_CASES = [(1, 0, 1), (1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1), (2, 1, 2), (2, 2, 2)]
+def _rotated(lattice, k, fold):
+    c, s = math.cos(2.0*math.pi*k/fold), math.sin(2.0*math.pi*k/fold)
+    return np.stack((c*lattice[..., 0] - s*lattice[..., 1], s*lattice[..., 0] + c*lattice[..., 1], lattice[..., 2]), axis=-1)
+
+
+def _connected_ring_index(table, ring, fold):
+    """Sector charges with a host in every copy of the connected ring, and their ring charges; only seam faces have none."""
+    rows = lambda t: list(zip(t["charge_kind"].tolist(), t["charge_host"].tolist(), t["charge_exponents"].reshape(t["charge_host"].size, -1).tolist()))
+    lookup = {(kind, host, tuple(exponents)): index for index, (kind, host, exponents) in enumerate(rows(ring))}
+    hosts = {}
+    for kind, name in ((0, "cell_vertices"), (1, "face_vertices")):
+        lattice = table[name].reshape(int(table["charge_host"][table["charge_kind"] == kind].max()) + 1, -1, 3)
+        copies = ring[name].reshape(-1, lattice.shape[1], 3)
+        for k in range(fold):
+            gap = np.abs(_rotated(lattice, k, fold)[:, None] - copies[None]).max(axis=(2, 3))
+            found = gap.argmin(axis=1)
+            hosts[kind, k] = np.where(gap[np.arange(found.size), found] <= 1e-10, found, -1)
+        assert kind == 1 or min(hosts[kind, k].min() for k in range(fold)) >= 0, "a cell of the sector has no copy in the connected ring"
+    sector = rows(table)
+    kept = [a for a, (kind, host, _) in enumerate(sector) if all(hosts[kind, k][host] >= 0 for k in range(fold))]
+    index = np.array([[lookup[sector[a][0], int(hosts[sector[a][0], k][sector[a][1]]), tuple(sector[a][2])] for a in kept] for k in range(fold)])
+    return np.array(kept), index
+
+
+_SECTOR_ENTRY_CASES = [(1, 0, 1), (1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1)]
 
 
 @pytest.mark.parametrize("cells,order,curve_order", _SECTOR_ENTRY_CASES)
@@ -272,6 +330,71 @@ def test_sector_entries_equal_the_sum_over_the_explicit_ring(meshes, request, cu
     assert relative.max() <= SECTOR_ENTRY_REL, (f"cells={cells} order={order} curve={curve_order} pair=({rows[worst]},{cols[worst]}) "
                                                 f"actual={actual[worst]!r} expected={expected[worst]!r} relative={relative[worst]:.3e} limit={SECTOR_ENTRY_REL:.0e}")
     assert moved.max() > 1e3*max(SECTOR_ENTRY_REL, float(relative.max())), f"images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}"
+
+
+def _sampled_pairs(n, count=RING_PAIR_SAMPLE):
+    rng = np.random.default_rng(20261105)
+    upper = np.c_[np.triu_indices(n)]
+    return upper if len(upper) <= count else np.unique(np.r_[np.c_[np.arange(n), np.arange(n)], upper[rng.integers(0, len(upper), count)]], axis=0)
+
+
+@pytest.mark.parametrize("order", [1, 2])
+def test_curved_sector_entries_equal_the_connected_ring_at_the_seam(meshes, request, cuda, order):
+    table, _, _ = _plain(meshes["sector2"], order, 2, cuda)
+    ring_table, _, gram = _plain(meshes["connected2"], order, 2, cuda)
+    kept, index = _connected_ring_index(table, ring_table, FOLD)
+    n = table["charge_host"].size
+    assert 0 < kept.size < n, f"expected seam faces to drop out of the connected ring: kept={kept.size} charges={n}"
+    bare = {key: table[key] for key in _KEYS + _CURVED_KEYS}
+    pairs = _sampled_pairs(kept.size)
+    rows, cols = kept[pairs[:, 0]], kept[pairs[:, 1]]
+    expected = np.array([0.5*sum(gram.entry(int(index[0, a]), int(index[k, b])) + gram.entry(int(index[0, b]), int(index[k, a])) for k in range(FOLD))
+                         for a, b in pairs])
+    actual = _entries(cuda, {**bare, **_terms(None, FOLD)}, rows, cols)
+    plain = _entries(cuda, bare, rows, cols)
+    direct = np.abs(_entries(cuda, bare, np.arange(n), np.arange(n)))
+    scale = np.sqrt(direct[rows]*direct[cols])
+    relative = np.abs(actual - expected)/scale
+    moved = np.abs(plain - expected)/scale
+    worst = int(np.argmax(relative))
+    request.node.user_properties += [("charges", int(kept.size)), ("pairs", len(pairs)), ("max_relative", float(relative.max())), ("moved", float(moved.max()))]
+    assert relative.max() <= SECTOR_ENTRY_REL, (f"order={order} pair=({rows[worst]},{cols[worst]}) actual={actual[worst]!r} "
+                                                f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={SECTOR_ENTRY_REL:.0e}")
+    assert moved.max() > 1e3*max(SECTOR_ENTRY_REL, float(relative.max())), f"images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}"
+
+
+def _one_number_per_vertex(ring):
+    """Host numbers of a ring with every coincident vertex numbered alike, as a connected mesh numbers them."""
+    cells, faces = ring["cell_vertices"].reshape(-1, 3), ring["face_vertices"].reshape(-1, 3)
+    _, numbers = np.unique(np.r_[cells, faces], axis=0, return_inverse=True)
+    numbers = numbers.ravel()
+    return dict(cell_numbers=numbers[:cells.shape[0]].astype(ring["cell_numbers"].dtype).reshape(ring["cell_numbers"].shape),
+                face_numbers=numbers[cells.shape[0]:].astype(ring["face_numbers"].dtype).reshape(ring["face_numbers"].shape))
+
+
+def test_curved_seam_faces_equal_the_direct_device_ring(meshes, request, cuda):
+    order = 1
+    table, _, _ = _plain(meshes["sector2"], order, 2, cuda)
+    ring_table, _, _ = _plain(meshes["ring2"], order, 2, cuda)
+    kept, _ = _connected_ring_index(table, _plain(meshes["connected2"], order, 2, cuda)[0], FOLD)
+    index = _ring_index(table, ring_table, FOLD)
+    seam = np.setdiff1d(np.arange(table["charge_host"].size), kept)
+    assert seam.size, "the sector has no seam-face charge"
+    bare = {key: table[key] for key in _KEYS + _CURVED_KEYS}
+    ring = {**{key: ring_table[key] for key in _KEYS + _CURVED_KEYS}, **_one_number_per_vertex(ring_table)}
+    n = table["charge_host"].size
+    pairs = np.array([(a, b) for a in seam for b in range(n)])
+    pairs = pairs[_sampled_pairs(len(pairs), 600)[:, 0]]
+    rows, cols = pairs[:, 0], pairs[:, 1]
+    expected = 0.5*sum(_entries(cuda, ring, index[0, rows], index[k, cols]) + _entries(cuda, ring, index[0, cols], index[k, rows]) for k in range(FOLD))
+    actual = _entries(cuda, {**bare, **_terms(None, FOLD)}, rows, cols)
+    direct = np.abs(_entries(cuda, bare, np.arange(n), np.arange(n)))
+    scale = np.sqrt(direct[rows]*direct[cols])
+    relative = np.abs(actual - expected)/scale
+    worst = int(np.argmax(relative))
+    request.node.user_properties += [("seam_charges", int(seam.size)), ("pairs", len(pairs)), ("max_relative", float(relative.max()))]
+    assert relative.max() <= SECTOR_ENTRY_REL, (f"pair=({rows[worst]},{cols[worst]}) actual={actual[worst]!r} expected={expected[worst]!r} "
+                                                f"relative={relative[worst]:.3e} limit={SECTOR_ENTRY_REL:.0e}")
 
 
 @pytest.mark.parametrize("cells,order,compression", [(1, 2, "dense"), (2, 2, "dense"), (2, 1, "aca")])
