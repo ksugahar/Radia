@@ -95,7 +95,7 @@ RADIA_TYPED_KERNEL inline bool chargePolynomials(const double lin[3][4],double s
         double poly[polynomialSlots];for(int i=0;i<polynomialSlots;++i)poly[i]=0.0;
         poly[0]=1.0;int deg=0;
         for(int a=0;a<axes;++a)for(int r=0;r<e[a];++r)polyTimesLinear(poly,deg,shifted[a],ncoeff);
-        for(int i=0;i<ncoeff;++i){dst[i]=scaleInv*poly[i];finite=finite&&isfinite(dst[i]);}
+        for(int i=0;i<ncoeff;++i){dst[i]=scaleInv*poly[i];finite=finite&&std::isfinite(dst[i]);}
     }
     return finite;
 }
@@ -138,7 +138,7 @@ RADIA_TYPED_KERNEL inline void pyramidAnchor(const double* nd,const double* p,do
         double X[3],J[3][3];pyramidMap(nd,y,X,J);
         const double r[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]};
         const double det=J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
-        if(!isfinite(det)||fabs(det)<1e-300)return;
+        if(!std::isfinite(det)||std::fabs(det)<1e-300)return;
         const double id=1.0/det;
         y[0]+=id*(r[0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(r[1]*J[2][2]-J[1][2]*r[2])+J[0][2]*(r[1]*J[2][1]-J[1][1]*r[2]));
         y[1]+=id*(J[0][0]*(r[1]*J[2][2]-J[1][2]*r[2])-r[0]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*r[2]-r[1]*J[2][0]));
