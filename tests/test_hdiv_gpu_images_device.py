@@ -125,9 +125,9 @@ def meshes(tmp_path_factory):
         poles=_box(root/"poles.vol", (0.032, -0.006, 0.004), (0.048, 0.006, 0.010), (2, 1, 1)))
 
 
-def _terms(image=None, cyclic=None):
+def _terms(image=None, cyclic=None, alternating=False):
     from radia import hdiv_gpu
-    return hdiv_gpu._device_image_terms(image, cyclic)
+    return hdiv_gpu._device_image_terms(image, cyclic, alternating)
 
 
 def _cpu_kw(terms):
@@ -187,15 +187,16 @@ def _radial_q2(mesh):
     return deformation
 
 
-_ENTRY_CASES = [("cut", "-x", None, (), None), ("cut", "+x", None, (), None), ("corner", "-x-y", None, (), None),
-                ("corner", "+x-y", None, (), None), ("gap", "-x", None, (), None), ("distorted", "-x", None, (), None),
-                ("sector", None, 8, SEAM, None), ("sector", None, 8, SEAM, _radial_q2)]
+_ENTRY_CASES = [("cut", "-x", None, False, (), None), ("cut", "+x", None, False, (), None), ("corner", "-x-y", None, False, (), None),
+                ("corner", "+x-y", None, False, (), None), ("gap", "-x", None, False, (), None),
+                ("distorted", "-x", None, False, (), None), ("poles", None, 6, True, (), None),
+                ("sector", None, 8, False, SEAM, None), ("sector", None, 8, False, SEAM, _radial_q2)]
 
 
 @pytest.mark.parametrize("order", (1, 2))
-@pytest.mark.parametrize("name,image,cyclic,seam,deform", _ENTRY_CASES)
-def test_image_entries_match_cpu_charge_gram(meshes, request, cuda, name, image, cyclic, seam, deform, order):
-    arguments, gram, _deformation = _gram_case(meshes[name], order, _terms(image, cyclic), seam=seam, deform=deform)
+@pytest.mark.parametrize("name,image,cyclic,alternating,seam,deform", _ENTRY_CASES)
+def test_image_entries_match_cpu_charge_gram(meshes, request, cuda, name, image, cyclic, alternating, seam, deform, order):
+    arguments, gram, _deformation = _gram_case(meshes[name], order, _terms(image, cyclic, alternating), seam=seam, deform=deform)
     n = arguments["charge_host"].size
     rows, cols = np.triu_indices(n)
     actual = _entries(cuda, arguments, rows, cols)
@@ -329,7 +330,8 @@ def test_image_operator_matches_cpu(meshes, request, cuda, name, order, compress
 _SOLVE_CASES = [("gap", 1, "dense", dict(image="-x")), ("cut", 2, "dense", dict(image="-x")),
                 ("poles", 1, "dense", dict(image_cyclic=6)), ("poles", 2, "dense", dict(image_cyclic=6)),
                 ("poles", 2, "aca", dict(image_cyclic=6)), ("cut", 2, "aca", dict(image="-x")),
-                ("distorted", 1, "dense", dict(image="-x"))]
+                ("distorted", 1, "dense", dict(image="-x")),
+                ("poles", 2, "dense", dict(image_cyclic=6, image_cyclic_alternating=True))]
 
 
 def _cpu_equation(path, order, terms, rhs):
