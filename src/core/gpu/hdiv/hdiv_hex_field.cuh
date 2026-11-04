@@ -84,7 +84,7 @@ struct HexFieldResult {HostVector<double> field;HostVector<FlatTransfer> transfe
 // x is the prepared FE state; the Resident supplies q = B x on its own stream and device.
 inline HexFieldResult hexDeviceField(const FlatBlock& block,Resident& resident,const HostVector<double>& x,const HostVector<double>& points){
     if(!block.hex||!block.hostTypes.empty())throw std::invalid_argument("Device field evaluation has no route for this geometry family");
-    if(points.empty()||points.size()%3||x.size()!=resident.dofs)throw std::invalid_argument("Device field evaluation requires (points,3) probes and the prepared state");
+    if(points.empty()||points.size()%3||x.size()!=resident.fieldStateSize())throw std::invalid_argument("Device field evaluation requires (points,3) probes and the prepared state");
     for(double v:points)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite field probe");
     for(double v:x)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite field state");
     const std::size_t probes=points.size()/3,terms=1+block.images.size(),rowCount=checkedProduct(probes,terms),n=block.charges();
