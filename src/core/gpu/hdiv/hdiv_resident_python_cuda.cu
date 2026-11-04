@@ -6,7 +6,7 @@
 #include "hdiv_flat_diagnostic.cuh"
 #include "hdiv_flat_aca.cuh"
 #include "hdiv_flat_charge_map.cuh"
-#include "hdiv_hex_field.cuh"
+#include "hdiv_flat_field.cuh"
 #include <mutex>
 #include <sstream>
 #include <atomic>
@@ -75,7 +75,7 @@ public:
         resident->setupPeakOwnedBytes=resident->ownedBytes+(oracleLive?oracle.ownedBytes+builder.scratchBytes:std::max(oracle.ownedBytes,builder.scratchBytes));
         record={flat.family=="mixed"?"device-mixed":flat.family=="hex"?"device-hex":flat.family=="curved-tet"?"device-curved-tet":"device-flat-tet",plan.n,resident->setupPeakOwnedBytes,oracle.launches+builder.launches,{}};
         record.compression=flat.compression;
-        if(flat.family=="hex")fieldBlock=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::FlatBlock>("python.field-block",flatBlock(flat));
+        if(flat.family!="mixed")fieldBlock=radia_hmatrix_cuda::makeHostUnique<radia_hmatrix_cuda::FlatBlock>("python.field-block",flatBlock(flat));
         for(std::size_t i=0;i<ChargeBudget::count;++i)record.budget.push_back({ChargeBudget::names[i],budget.bytes[i]});
         planTransfer(plan);
         for(const auto& t:builder.transfers)record.transfers.push_back({t.payload,t.direction,t.bytes});
@@ -106,8 +106,8 @@ public:
     FieldResult field(const radia_hmatrix_cuda::HostVector<double>& x,const radia_hmatrix_cuda::HostVector<double>& points)override{
         std::lock_guard<std::mutex> lock(mutex);if(!resident)throw std::invalid_argument("HDiv resident has been closed");
         if(!fieldBlock)throw std::invalid_argument("Device field evaluation has no route for this geometry family");
-        auto computed=radia_hmatrix_cuda::hexDeviceField(*fieldBlock,*resident,x,points);
-        FieldResult out;out.field.assign(computed.field.begin(),computed.field.end());out.launches=computed.launches;out.ownedBytes=computed.ownedBytes;out.affine=computed.affine;
+        auto computed=fieldBlock->hex?radia_hmatrix_cuda::hexDeviceField(*fieldBlock,*resident,x,points):radia_hmatrix_cuda::flatDeviceField(*fieldBlock,*resident,x,points);
+        FieldResult out;out.field.assign(computed.field.begin(),computed.field.end());out.launches=computed.launches;out.ownedBytes=computed.ownedBytes;out.route=computed.route;
         for(const auto& t:computed.transfers)out.transfers.push_back({t.payload,t.direction,t.bytes});
         return out;
     }

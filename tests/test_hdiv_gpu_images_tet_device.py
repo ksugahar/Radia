@@ -3,9 +3,9 @@
 Guards: on tets touching a mirror plane or set off from it, in the corner of two planes, and on a sector whose rotated
 copies touch it at the seam, RT0, BDM1 and BDM2, affine and curved P2, the device entries, the energy operator on the
 dense and the compressed routes and the linear and nonlinear solves with images agree with the CPU route on identical
-inputs. Dropping the image sum, a sign, the graded rule of a touching P1 image, the Duffy rule of a touching curved image
-or the inverse point map moves them far beyond the detectors. A mixed mesh keeps refusing, and a TET field request
-refuses until the route has one.
+inputs, and so does the direct field of the same state, with and without images, at probes off, near and inside the
+sources. Dropping the image sum, a sign, the graded rule of a touching P1 image, the Duffy rule of a touching curved image
+or the inverse point map moves them far beyond the detectors. A mixed mesh keeps refusing images.
 Assumes: the CPU TET route is the reference on identical NGSolve inputs; this is parity of one discretization, not
 independent accuracy. The REL values are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not
 under test and is bypassed for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a
@@ -25,7 +25,10 @@ OPERATOR_REL = 1e-9
 ACA_OPERATOR_REL = 1e-5
 SOLVE_REL = 1e-7
 ACA_SOLVE_REL = 1e-5
+FIELD_REL = 1e-9
 INV_CHI = 1.0/499.0
+# Off, near (0.5 mm above a top face of the boxes, 0.6 mm above the sector) and inside the sources; no image lands on a face.
+_PROBES = np.array([[0.03, 0.015, 0.012], [0.02, 0.031, 0.0173], [0.0137, 0.0031, 0.0105], [-0.04, 0.01, 0.02], [0.0404, 0.0011, 0.0046]])
 PAIR_SAMPLE = 20000
 _BH = [[0.0, 0.0], [200.0, 0.8], [1000.0, 1.4], [5000.0, 1.7], [50000.0, 1.95], [500000.0, 2.6]]
 _KEYS = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents", "tet_rule", "tri_rule",
@@ -229,7 +232,7 @@ def _cpu_solve(path, order, curve_order, **kw):
             from radia.vim._vim import _curve_mesh
             _curve_mesh(mesh, 2)
         result = vim.Solve(mesh, H_ext=ng.CF((0.0, 0.0, 1e5)), order=order, gram_eps=1e-10, tol=1e-11, **extra, **kw)
-    return np.asarray(result["_m_coefficients"], dtype=np.float64)
+    return np.asarray(result["_m_coefficients"], dtype=np.float64), result
 
 
 @pytest.mark.parametrize("name,order,curve_order,compression,images", [
@@ -237,7 +240,7 @@ def _cpu_solve(path, order, curve_order, **kw):
     ("sector2", 2, 1, "dense", dict(image_cyclic=8)), ("sector2", 1, 1, "aca", dict(image_cyclic=8)),
     ("half_ball", 2, 2, "dense", dict(image="-x"))])
 def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, compression, images):
-    x_cpu = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
+    x_cpu, _ = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
     with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression=compression, curve_order=curve_order,
                                      **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), INV_CHI, tolerance=1e-10, max_iterations=4000)
@@ -249,7 +252,7 @@ def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, 
 
 @pytest.mark.parametrize("name,order,images", [("cut", 2, dict(image="-x")), ("sector2", 1, dict(image_cyclic=8))])
 def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, images):
-    x_cpu = _cpu_solve(meshes[name], order, 1, bh_table=_BH, nl_tol=1e-9, **images)
+    x_cpu, _ = _cpu_solve(meshes[name], order, 1, bh_table=_BH, nl_tol=1e-9, **images)
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
     relative = np.linalg.norm(solved["x"] - x_cpu)/np.linalg.norm(x_cpu)
@@ -257,10 +260,21 @@ def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, orde
     assert relative <= SOLVE_REL, f"{name} order={order} {images} relative={relative:.3e} limit={SOLVE_REL:.0e}"
 
 
-def test_a_tet_field_request_refuses(meshes, prepared, cuda):
-    with prepared.PreparedHDivLinear(meshes["gap"], backend="gpu", order=1, gram_compression="dense", **_RECEIPT, image="-x") as device:
-        with pytest.raises(ValueError, match="no route"):
-            device.field(np.zeros(device.dofs), np.array([[0.05, 0.0, 0.0]]))
+@pytest.mark.parametrize("name,order,curve_order,images", [
+    ("gap", 1, 1, dict(image="-x")), ("gap", 2, 1, {}), ("cut", 2, 1, dict(image="-x")), ("corner", 1, 1, dict(image="-x-y")),
+    ("sector2", 1, 1, dict(image_cyclic=8)), ("sector2", 2, 1, dict(image_cyclic=8)), ("half_ball", 1, 2, dict(image="-x")),
+    ("half_ball", 2, 2, dict(image="-x")), ("half_ball", 2, 2, {})])
+def test_field_of_the_cpu_state_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, images):
+    from radia import vim
+    x_cpu, cpu = _cpu_solve(meshes[name], order, curve_order, mu_r=500.0, **images)
+    field_cpu = np.asarray(vim.FieldFromSolution(cpu, _PROBES, algorithm="direct"), float)
+    with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression="dense", curve_order=curve_order,
+                                     **_RECEIPT, **images) as device:
+        same_state = device.field(x_cpu, _PROBES)
+    relative = np.linalg.norm(same_state["field"] - field_cpu)/np.linalg.norm(field_cpu)
+    request.node.user_properties += [("field_relative", float(relative)), ("field_route", same_state["route"])]
+    assert relative <= FIELD_REL, (f"{name} order={order} curve={curve_order} {images} field relative={relative:.3e} "
+                                   f"actual={same_state['field'].tolist()} expected={field_cpu.tolist()}")
 
 
 def test_a_mixed_mesh_keeps_refusing(prepared, cuda):

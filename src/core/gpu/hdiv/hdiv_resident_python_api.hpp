@@ -69,7 +69,7 @@ struct ChargeMapInput {
 };
 struct Transfer {std::string payload,direction;std::size_t bytes;};
 // Device field of a resident HEX solution, H in A/m per the CPU field_from_solution; probes and values cross.
-struct FieldResult {radia_hmatrix_cuda::HostVector<double> field;radia_hmatrix_cuda::HostVector<Transfer> transfers;std::size_t launches=0,ownedBytes=0;bool affine=false;};
+struct FieldResult {radia_hmatrix_cuda::HostVector<double> field;radia_hmatrix_cuda::HostVector<Transfer> transfers;std::size_t launches=0,ownedBytes=0;std::string route;};
 struct Assembly {std::string route;std::size_t charges,setupBytes,launches;radia_hmatrix_cuda::HostVector<Transfer> transfers;
     std::string compression;radia_hmatrix_cuda::HostVector<std::pair<std::string,std::size_t>> counters;
     // Device-flat route only: the checked pre-allocation charge budget, in publication order.

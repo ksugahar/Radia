@@ -357,8 +357,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           py::array_t<double> values({py::ssize_t(result.field.size()/3),py::ssize_t(3)});std::copy(result.field.begin(),result.field.end(),values.mutable_data());
           py::list ledger;for(const auto& t:result.transfers){py::dict row;row["payload"]=t.payload;row["direction"]=t.direction;row["bytes"]=t.bytes;ledger.append(row);}
           py::dict out;out["field"]=values;out["transfer_ledger"]=ledger;out["kernel_launches"]=result.launches;out["transient_device_bytes"]=result.ownedBytes;
-          out["route"]=result.affine?"device-hex-polynomial":"device-hex-cloud";return out;
-      },py::arg("x").noconvert(),py::arg("points").noconvert(),"H in A/m of the resident HEX solution at the probes, images folded; only the state, geometry and probes cross H2D and the values D2H.")
+          out["route"]=result.route;return out;
+      },py::arg("x").noconvert(),py::arg("points").noconvert(),"H in A/m of the resident solution at the probes, images folded; only the state, geometry and probes cross H2D and the values D2H.")
       .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
           const auto n=self.stats().dimension;
           if(rhs.ndim()!=1||std::size_t(rhs.size())!=n||initial.ndim()!=1||std::size_t(initial.size())!=n)throw py::value_error("Newton payload dimensions exceeded");

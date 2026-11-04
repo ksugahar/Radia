@@ -189,7 +189,7 @@ class PreparedHDivNonlinear:
                         mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
 
     def field(self, x, points):
-        """H in A/m of a solved state at (points, 3) probes, images folded; pure HEX only.
+        """H in A/m of a solved state at (points, 3) probes, images folded; a mixed mesh refuses.
 
         The device route of ``vim.FieldFromSolution(..., algorithm="direct")``: the charges
         are the resident charge map's product and only the state, geometry and probes cross.
@@ -321,7 +321,7 @@ class PreparedHDivLinear:
                         mesh_sha256=self.mesh_sha256, order=self.order, dofs=self.dofs, field_units="A/m")
 
     def field(self, x, points):
-        """H in A/m of a solved state at (points, 3) probes, images folded; pure HEX only.
+        """H in A/m of a solved state at (points, 3) probes, images folded; a mixed mesh refuses.
 
         The device route of ``vim.FieldFromSolution(..., algorithm="direct")``: the charges
         are the resident charge map's product and only the state, geometry and probes cross.
@@ -729,22 +729,45 @@ def _checked_device_assembly(assembly, arguments):
     return assembly
 
 
-def _checked_device_field(result, arguments, state, probes):
-    """Reject a field evaluation whose ledger holds anything but geometry, the state, probes and values."""
+# The Gram-construction rows a TET field evaluation repeats: geometry, charge layout and rules, never a matrix.
+_FIELD_GRAM_ROWS = ("cell_vertices_m", "face_vertices_m", "cell_p2_nodes_m", "face_p2_nodes_m", "charge_host", "charge_kind",
+                    "charge_exponents", "tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule", "invalid_flag",
+                    "curve_gauss_points", "curve_gauss_weights", "cell_vertex_numbers", "face_vertex_numbers", "image_transforms")
+
+
+def _expected_tet_field_ledger(result, arguments):
+    curved = arguments["family"] == "curved-tet"
+    if result["route"] != ("device-curved-tet-direct" if curved else "device-flat-tet-polynomial"):
+        raise RuntimeError("Unexpected device field route: %r" % (result["route"],))
+    expected = {key: size for key, size in _expected_device_ledger(arguments).items() if key[1] == "H2D" and key[0] in _FIELD_GRAM_ROWS}
+    hosts = (arguments["cell_vertices"].size//(30 if curved else 12)) + (arguments["face_vertices"].size//(18 if curved else 9))
+    expected.update({("field_host_first", "H2D"): 8*(hosts + 1), ("field_host_order", "H2D"): 4*arguments["charge_host"].size,
+                     ("field_polynomial_flag", "D2H"): 4})
+    return expected
+
+
+def _expected_hex_field_ledger(result, arguments):
     hosts = arguments["cell_class"].size + arguments["face_class"].size
     expected = {(name, "H2D"): size for name, size in (
         ("cell_q2_nodes_m", arguments["cell_vertices"].nbytes), ("face_q2_nodes_m", arguments["face_vertices"].nbytes),
         ("hex_host_first", 4*hosts), ("hex_host_count", 4*hosts), ("charge_host", arguments["charge_host"].nbytes),
-        ("charge_exponents", arguments["charge_exponents"].nbytes), ("hex_invalid_flag", 4),
-        ("field_far_gauss", None), ("field_state", state.nbytes), ("field_probes", probes.nbytes))}
+        ("charge_exponents", arguments["charge_exponents"].nbytes), ("hex_invalid_flag", 4))}
     if arguments.get("image_masks") is not None:
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
-    expected.update({("prepare_flag", "D2H"): 4, ("field_host_affine", "D2H"): hosts, ("field_flag", "D2H"): 4,
-                     ("field_values", "D2H"): probes.nbytes})
+    expected[("field_host_affine", "D2H")] = hosts
     if result["route"] == "device-hex-polynomial":
         expected[("field_polynomial_flag", "D2H")] = 4
     elif result["route"] != "device-hex-cloud":
         raise RuntimeError("Unexpected device field route: %r" % (result["route"],))
+    return expected
+
+
+def _checked_device_field(result, arguments, state, probes):
+    """Reject a field evaluation whose ledger holds anything but geometry, the state, probes and values."""
+    expected = (_expected_hex_field_ledger if arguments["family"] == _HEX else _expected_tet_field_ledger)(result, arguments)
+    expected.update({("field_far_gauss", "H2D"): None, ("field_state", "H2D"): state.nbytes, ("field_probes", "H2D"): probes.nbytes,
+                     ("prepare_flag", "D2H"): 4, ("field_flag", "D2H"): 4,
+                     ("field_values", "D2H"): probes.nbytes})
     seen = {}
     for row in result["transfer_ledger"]:
         key, size = (row["payload"], row["direction"]), row["bytes"]
