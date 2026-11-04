@@ -41,6 +41,7 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     owner.mesh_sha256 = "fixture"
     owner._rhs = np.eye(3)
     owner._mean = 2*np.eye(3)
+    owner.fespace = None
     calls = []
 
     class Native:
