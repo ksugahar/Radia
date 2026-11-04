@@ -372,15 +372,19 @@ __device__ inline double curvedDirectedImage(const FlatDevice& d,std::size_t tar
 // curved mirror pair that does not touch is an exact transpose and needs one direction, every other pair folds both.
 // A rotation moves the target of each direction differently, so far holds only in both: one direction far says nothing of
 // the other, which may be coincident at the seam. A mirror is its own inverse and the two tests agree.
+// One direction under one image is one pair of the explicit copies and takes the rule of that pair's own distance: under
+// a rotation the two directions of (a,b) lie at different distances, and one of them may coincide at the seam.
+__device__ inline double flatDirectedTerm(const FlatDevice& d,std::size_t target,std::size_t source,const HexImage& m){
+    const auto& t=d.charges[target];const auto& s=d.charges[source];
+    if(flatImageFar(d,t,s,m))return flatQuadDotFarImage(d,target,source,m);
+    return d.curved?curvedDirectedImage(d,target,source,m,curvedImageTouch(t,s,m)):flatDirectedImage(d,target,source,m);
+}
 __device__ inline double flatImageTerm(const FlatDevice& d,std::size_t a,std::size_t b,const HexImage& m){
     const auto& qa=d.charges[a];const auto& qb=d.charges[b];
-    if(flatImageFar(d,qa,qb,m)&&flatImageFar(d,qb,qa,m))return 0.5*(flatQuadDotFarImage(d,a,b,m)+flatQuadDotFarImage(d,b,a,m));
-    if(d.curved){const bool touch=curvedImageTouch(qa,qb,m);
-        const double ab=curvedDirectedImage(d,a,b,m,touch);
-        if(a==b||(m.rotated==0.0&&!touch))return ab;
-        return 0.5*(ab+curvedDirectedImage(d,b,a,m,curvedImageTouch(qb,qa,m)));}
-    if(a==b)return flatDirectedImage(d,a,a,m);
-    return 0.5*(flatDirectedImage(d,a,b,m)+flatDirectedImage(d,b,a,m));
+    const double ab=flatDirectedTerm(d,a,b,m);
+    // As on the CPU route, a curved mirror pair apart from its image is integrated from one side.
+    if(a==b||(d.curved&&m.rotated==0.0&&!flatImageFar(d,qa,qb,m)&&!curvedImageTouch(qa,qb,m)))return ab;
+    return 0.5*(ab+flatDirectedTerm(d,b,a,m));
 }
 __device__ inline double flatEntry(const FlatDevice& d,std::size_t a,std::size_t b){
     if(d.hex)return hexEntry(d.hexd,a,b);
