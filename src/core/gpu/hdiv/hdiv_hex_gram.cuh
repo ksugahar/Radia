@@ -103,6 +103,16 @@ __device__ inline double hexDensity(const HexDevice& d,int g,const int* e,const 
 __device__ inline void hexNeumaier(double& sum,double& comp,double x){
     const double t=sum+x;if(fabs(sum)>=fabs(x))comp+=(sum-t)+x;else comp+=(x-t)+sum;sum=t;}
 // CPU ImageEvalPoint: T^-1 v, the mirror flips first, then the inverse rotation; img 0 is the identity.
+__device__ inline void hexImagePoint(const HexImage& m,const double* v,double* o){
+    double x=v[0]*m.flip[0],y=v[1]*m.flip[1];const double z=v[2]*m.flip[2];
+    if(m.rotated!=0.0){const double a=x,b=y;x=m.ci*a-m.si*b;y=m.si*a+m.ci*b;}
+    o[0]=x;o[1]=y;o[2]=z;
+}
+__device__ inline void hexImageVector(const HexImage& m,const double* v,double* o){
+    double x=v[0],y=v[1];const double z=v[2]*m.flip[2];
+    if(m.rotated!=0.0){const double a=x,b=y;x=m.c*a-m.s*b;y=m.s*a+m.c*b;}
+    o[0]=x*m.flip[0];o[1]=y*m.flip[1];o[2]=z;
+}
 __device__ inline void hexImagePoint(const HexDevice& d,int img,const double* v,double* o){
     double x=v[0],y=v[1],z=v[2];
     if(img>0){const HexImage& m=d.images[img-1];x*=m.flip[0];y*=m.flip[1];z*=m.flip[2];

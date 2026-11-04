@@ -637,6 +637,8 @@ def _expected_device_ledger(arguments):
     expected = {(name, "H2D"): sizes[name] for name in uploads if sizes[name]}
     expected.update({("prepare_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
                      ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+    if arguments.get("image_masks") is not None:
+        expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
                          ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
@@ -825,7 +827,7 @@ class _DeviceImages:
         """Native Gram terms, or ``None``, after the ``vim.Solve`` mesh checks of a space without a compressed trace."""
         if self.terms is None:
             return None
-        if family != _HEX:
+        if family == _MIXED:
             raise NotImplementedError("Device charge Gram has no image route for family %r" % (family,))
         from radia.vim import _image
         from radia.vim._solve import _hdiv_space_with_image_constraints
@@ -897,12 +899,12 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
     lattices, which must equal the CPU lattices to roundoff. The mixed
     family (``_prepare_gpu_mixed_charge_inputs``) consumes the staged host
     lattices the same way, with their host types and per-class charge tables.
-    ``images`` (``_device_image_terms``) folds mirror and cyclic terms on pure HEX
-    only; every other family refuses them.
+    ``images`` (``_device_image_terms``) folds mirror and cyclic terms on the pure
+    HEX and TET families; the mixed family has no CPU image route and refuses them.
     """
     import numpy as np
     family = inputs.get("family", "affine-tet")
-    if len(inputs.get("image_masks", ())) or (images is not None and family != _HEX):
+    if len(inputs.get("image_masks", ())) or (images is not None and family == _MIXED):
         raise NotImplementedError("Device charge Gram has no image route for family %r" % (family,))
     curved = family == "curved-tet"
     common = dict(charge_host=np.ascontiguousarray(inputs["charge_host"], dtype=np.int32),
@@ -933,8 +935,6 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
                          tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30, family=family,
                          hex_rules=np.ascontiguousarray(rows),
                          hex_bands=np.array([inputs["near_grade"], inputs["far_inner"]], dtype=np.float64))
-        if images is not None:
-            arguments.update(images)
     elif curved:
         numbers = (np.ravel(tables["cell_numbers"]), np.ravel(tables["face_numbers"]))
         if not (np.array_equal(numbers[0], inputs["cell_vertices"]) and np.array_equal(numbers[1], inputs["face_vertices"])):
@@ -967,6 +967,8 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
         if not (np.array_equal(cells_m, cells) and np.array_equal(faces_m, faces)):
             raise ValueError("Charge tables and Gram geometry disagree")
     _checked_charge_exponents(arguments["charge_kind"], arguments["charge_exponents"], family)
+    if images is not None:
+        arguments.update(images)
     if family == _MIXED:
         staged = (tables["charge_host"], tables["charge_kind"], tables["charge_exponents"], tables["host_types"])
         cpu = (arguments["charge_host"], arguments["charge_kind"], arguments["charge_exponents"], inputs["host_types"])
