@@ -77,6 +77,8 @@ def run_case(text, tolerance):
     started = time.perf_counter()
     device = route.solve_h1(fes, coefficients, rhs, Backend="gpu", lift=boundary, bonus=(BONUS, 0, 0), tolerance=tolerance, max_iterations=2000)
     device_seconds = time.perf_counter() - started
+    entry = solve_cpu(mesh, source_h, trace, solver="cg", cg_preconditioner="bddc_h1amg", cg_tolerance=tolerance, Backend="gpu", **common)
+    entry_difference = float(np.linalg.norm(entry["solution"].vec.FV().NumPy() - reference) / np.linalg.norm(reference))
     difference = float(np.linalg.norm(device["solution"] - reference) / np.linalg.norm(reference))
     g = ng.GridFunction(fes)
     g.vec.FV().NumPy()[:] = device["solution"] - reference
@@ -85,10 +87,11 @@ def run_case(text, tolerance):
     field = float(np.sqrt(ng.Integrate(ng.InnerProduct(ng.grad(g), ng.grad(g)), mesh, order=2 * order + 2) / ng.Integrate(ng.InnerProduct(ng.grad(h), ng.grad(h)), mesh, order=2 * order + 2)))
     return {"case": text, "order": order, "maxh": maxh, "ndof": int(fes.ndof), "elements": int(mesh.ne), "preconditioner": device["preconditioner"], "device_iterations": device["iterations"],
             "cpu_bddc_h1amg_iterations": iterative["iterations"], "device_true_residual": device["true_residual"], "direct_relative_residual": direct["linear_residual_relative"],
+            "production_entry_difference_vs_sparsecholesky": entry_difference, "production_entry_iterations": entry["iterations"],
             "solution_difference_vs_sparsecholesky": difference, "grad_phi_difference_vs_sparsecholesky": field, "hierarchy": device["hierarchy"], "nonzeros": device["nonzeros"],
             "device": device["device"], "device_peak_bytes": device["device_peak_bytes"], "ledger": device["ledger"],
             "timing_diagnostic": {**device["timing_diagnostic"], "route_total_seconds": device_seconds, "cpu_cg_route_seconds": cpu_seconds},
-            "detector_status": "PASS" if difference <= SOLUTION_REL and field <= FIELD_REL else "FAIL"}
+            "detector_status": "PASS" if max(difference, entry_difference) <= SOLUTION_REL and field <= FIELD_REL else "FAIL"}
 
 
 def main():
