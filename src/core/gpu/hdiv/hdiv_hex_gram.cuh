@@ -21,6 +21,7 @@
 #pragma once
 #include <climits>
 #include <cmath>
+#include <cub/device/device_radix_sort.cuh>
 #include <cub/device/device_scan.cuh>
 #include "hmatrix_resident.cuh"
 #define RADIA_TYPED_KERNEL __device__
@@ -607,6 +608,19 @@ __global__ void hexPairWork(HexDevice d,const unsigned long long* keys,const std
     const bool oneSided=d.type&&lo!=hi;const bool lowerSource=oneSided&&radia_hdiv_typed::lowerHostIsSource(d.type[lo],d.type[hi]);
     work[2*p]={lowerSource?-1:lo,hi,2*offsets[p]};work[2*p+1]={lo==hi||(oneSided&&!lowerSource)?-1:hi,lo,2*offsets[p]+size};
 }
+// Cost class of one work item, cheapest first. The order only groups items: each block writes its own values.
+__global__ void hexWorkCost(HexDevice d,const HexWork* work,std::size_t items,unsigned char* cost){
+    const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=items)return;
+    const HexWork w=work[i];if(w.t<0){cost[i]=0;return;}
+    HexAdjacency a;const int cls=hexClassify(d,w.t,w.s,a);
+    if(cls==hexFarClass){cost[i]=1;return;}
+    if(cls!=hexGradedClass){cost[i]=cls==hexAffineClass?2:3;return;}
+    if(!d.type){cost[i]=4;return;}
+    using namespace radia_hdiv_typed;
+    if(d.type[w.s]==triHost||d.type[w.s]==tetHost){cost[i]=2;return;}
+    double lin[3][4],scaleInv=0.0;
+    cost[i]=d.type[w.s]==pyramidHost&&!affineForms(d.type[w.s],hexNodes(d,w.s),lin,scaleInv)?5:4;
+}
 // 0.5 (G_AB + G_BA^T) into the lo-host row orientation, or the one integrated direction of a mixed mesh pair (CPU GetHexSymBlock).
 __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,const double* raw,double* values,int* invalid){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
@@ -718,14 +732,23 @@ struct HexPrepared {
         const std::size_t stride=std::max({nOut*2*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
                                            order==1||typed?std::size_t(hexGradedCoeff(order))+nNear3*2*maxCount:std::size_t(0)});
         constexpr std::size_t launchItems=64;
-        const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(2*pairs,sizeof(HexWork))+checkedProduct(launchItems*stride,sizeof(double));
+        const std::size_t items=checkedProduct(2,pairs);
+        if(items>std::size_t(INT_MAX))throw std::runtime_error("HEX pair table exceeds the work sort");
+        const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(items,2*sizeof(HexWork)+2)+checkedProduct(launchItems*stride,sizeof(double));
         {std::size_t free,totalMemory;check(cudaMemGetInfo(&free,&totalMemory));
             if(!fitsAboveReserve(free,totalMemory,bytes))throw std::runtime_error("HEX Gram pair table would exceed the GPU reserve");}
-        values.allocate(total);Buffer<double> raw,scratch;Buffer<HexWork> work;raw.allocate(2*total);work.allocate(2*pairs);scratch.allocate(launchItems*stride);
+        values.allocate(total);Buffer<double> raw,scratch;Buffer<HexWork> unordered,work;raw.allocate(2*total);unordered.allocate(items);work.allocate(items);scratch.allocate(launchItems*stride);
         const unsigned pairBlocks=unsigned((pairs+127)/128);
-        hexPairWork<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,work.data);check(cudaGetLastError());++launches;
+        hexPairWork<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,unordered.data);check(cudaGetLastError());++launches;
+        // A launch waits for its slowest item, so costly near pairs run together, not one per launch among cheap ones.
+        {Buffer<unsigned char> cost,sorted,temporary;cost.allocate(items);sorted.allocate(items);
+            hexWorkCost<<<unsigned((items+127)/128),128,0,stream>>>(d,unordered.data,items,cost.data);check(cudaGetLastError());++launches;
+            std::size_t sortBytes=0;check(cub::DeviceRadixSort::SortPairs(nullptr,sortBytes,cost.data,sorted.data,unordered.data,work.data,int(items),0,8,stream));
+            temporary.allocate(std::max<std::size_t>(1,sortBytes));
+            check(cub::DeviceRadixSort::SortPairs(temporary.data,sortBytes,cost.data,sorted.data,unordered.data,work.data,int(items),0,8,stream));++launches;
+            check(cudaStreamSynchronize(stream));}
         // Bounded launches keep every kernel short on display-attached GPUs.
-        for(std::size_t item=0;item<2*pairs;item+=launchItems){const auto here=std::min(launchItems,2*pairs-item);
+        for(std::size_t item=0;item<items;item+=launchItems){const auto here=std::min(launchItems,items-item);
             hexBlocks<<<unsigned(here),hexThreads,0,stream>>>(d,work.data,item,here,scratch.data,stride,raw.data,invalid.data);
             check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;}
         if((invalidCode=flag(stream,record,"hex_block_flag"))!=0)
