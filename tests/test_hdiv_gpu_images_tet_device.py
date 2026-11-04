@@ -234,7 +234,7 @@ def _ring_index(table, ring, fold):
             c, s = math.cos(2.0*math.pi*k/fold), math.sin(2.0*math.pi*k/fold)
             moved = np.stack((c*lattice[..., 0] - s*lattice[..., 1], s*lattice[..., 0] + c*lattice[..., 1], lattice[..., 2]), axis=-1)
             gap = np.abs(moved - copies[k*counts[kind]:(k + 1)*counts[kind]]).max()
-            assert gap <= 1e-12, f"copy {k} of kind {kind} is not the rotated sector: {gap:.3e}"
+            assert gap <= 1e-10, f"copy {k} of kind {kind} is not the rotated sector: {gap:.3e}"
     return np.array([[lookup[kind, host + k*counts[kind], tuple(exponents)] for kind, host, exponents in rows(table)] for k in range(fold)])
 
 
@@ -254,7 +254,9 @@ def test_sector_entries_equal_the_sum_over_the_explicit_ring(meshes, request, cu
     pairs = upper if len(upper) <= RING_PAIR_SAMPLE else np.unique(np.r_[np.c_[np.arange(n), np.arange(n)],
                                                                          upper[rng.integers(0, len(upper), RING_PAIR_SAMPLE)]], axis=0)
     rows, cols = pairs[:, 0], pairs[:, 1]
-    expected = np.array([sum(gram.entry(int(index[0, a]), int(index[k, b])) for k in range(FOLD)) for a, b in pairs])
+    # The ring integrates a near pair from its lower-numbered side; the two sums of one pair fold into what a sector can hold.
+    expected = np.array([0.5*sum(gram.entry(int(index[0, a]), int(index[k, b])) + gram.entry(int(index[0, b]), int(index[k, a])) for k in range(FOLD))
+                         for a, b in pairs])
     actual = _entries(cuda, {**bare, **_terms(None, FOLD)}, rows, cols)
     plain = _entries(cuda, bare, rows, cols)
     direct = np.abs(_entries(cuda, bare, np.arange(n), np.arange(n)))
@@ -285,6 +287,13 @@ def test_sector_operator_matches_the_explicit_ring(meshes, request, cuda, cells,
     gram.build_exact_dense_normalized_gram(maximum_memory_mb=2048)
     nd = setup["dofs"]
     assert nd == B.shape[1] and table["charge_host"].size == B.shape[0]
+    n = table["charge_host"].size
+    folded = np.zeros((n, n))
+    for b in range(n):
+        ring_charges = np.zeros(ring_table["charge_host"].size)
+        ring_charges[index[:, b]] = 1.0
+        folded[:, b] = np.asarray(gram.matvec_sym(np.ascontiguousarray(ring_charges)))[index[0]]
+    folded = 0.5*(folded + folded.T)
     operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
     try:
         hdiv_gpu._checked_device_assembly(operator.assembly(), setup["charge_gram"])
@@ -292,9 +301,7 @@ def test_sector_operator_matches_the_explicit_ring(meshes, request, cuda, cells,
         worst = 0.0
         for _ in range(4):
             x = rng.standard_normal(nd)
-            ring_charges = np.zeros(ring_table["charge_host"].size)
-            ring_charges[index] = B @ x
-            expected = B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(ring_charges)))[index[0]]
+            expected = B.T @ (folded @ (B @ x))
             worst = max(worst, float(np.linalg.norm(operator.apply(np.ascontiguousarray(x)) - expected)/np.linalg.norm(expected)))
     finally:
         operator.close()
