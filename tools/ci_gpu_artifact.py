@@ -13,27 +13,32 @@ import zipfile
 COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push'),
                   ('radia-optuna.yml', 'gpu-optuna-wheel', '&event=push')]
 # Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
-RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', '')]
+RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', ''), ('build-test.yml', 'gpu-netgen-overlay', '')]
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def payload(directory):
+    """One wheel, or the patched Netgen library of tools/netgen_overlay.py."""
+    return list(directory.glob('*.whl')) + list(directory.glob('nglib.dll'))
+
+
 def seal(directory, sha):
-    wheels = list(directory.glob('*.whl'))
-    if len(wheels) != 1:
+    files = payload(directory)
+    if len(files) != 1:
         raise ValueError('Expected exactly one wheel')
     (directory / 'gpu-artifact.json').write_text(json.dumps({
         'schema': 1, 'source_commit': sha,
-        'files': {p.name: digest(p) for p in wheels}}, indent=2) + '\n')
+        'files': {p.name: digest(p) for p in files}}, indent=2) + '\n')
 
 
 def verify(directory, sha):
     receipt = json.loads((directory / 'gpu-artifact.json').read_text())
     if receipt['schema'] != 1 or receipt['source_commit'] != sha:
         raise ValueError('GPU artifact source mismatch')
-    if set(receipt['files']) != {p.name for p in directory.glob('*.whl')} or len(receipt['files']) != 1:
+    if set(receipt['files']) != {p.name for p in payload(directory)} or len(receipt['files']) != 1:
         raise ValueError('GPU wheel inventory mismatch')
     for name, expected in receipt['files'].items():
         path = directory / name
