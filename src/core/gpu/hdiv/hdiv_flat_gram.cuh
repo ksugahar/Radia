@@ -25,6 +25,33 @@
 namespace radia_hmatrix_cuda {
 inline std::size_t flatSum(std::size_t a,std::size_t b){
     if(a>std::numeric_limits<std::size_t>::max()-b)throw std::overflow_error("Flat device byte count overflow");return a+b;}
+// Checked image rows of the Gram, the CPU constructor and SetImageRotations contract: an empty angle list is a
+// mirror-only list; every other list has one finite angle per mask and is closed under inversion with equal signs,
+// because each image is symmetrized with its transpose. The identity would double the direct term. Host-side only.
+inline HostVector<HexImage> flatImageRows(const HostVector<int>& masks,const HostVector<double>& signs,const HostVector<double>& angles){
+    const auto n=masks.size();
+    HostVector<HexImage> rows{HostFaultAllocator<HexImage>("hex.images")};
+    if(signs.size()!=n)throw std::invalid_argument("image_masks and image_signs size mismatch");
+    if(n>std::size_t(hexMaxImages))throw std::invalid_argument("Device charge Gram supports at most 63 images, as the CPU route");
+    if(!angles.empty()&&angles.size()!=n)throw std::invalid_argument("Image rotation angles must have the same length as image_masks");
+    for(std::size_t i=0;i<n;++i){const double angle=angles.empty()?0.0:angles[i];
+        if(masks[i]<0||masks[i]>7)throw std::invalid_argument("Image mask must be in 0..7");
+        if(!std::isfinite(signs[i])||signs[i]==0.0)throw std::invalid_argument("Image signs must be finite and nonzero");
+        if(!std::isfinite(angle))throw std::invalid_argument("Image rotation angles must be finite");
+        if(masks[i]==0&&angle==0.0)throw std::invalid_argument("An image with mask 0 and rotation angle 0 is the identity: it would double the direct term");
+        HexImage row{};for(int k=0;k<3;++k)row.flip[k]=(masks[i]>>k)&1?-1.0:1.0;
+        row.c=std::cos(angle);row.s=std::sin(angle);row.ci=std::cos(-angle);row.si=std::sin(-angle);row.sign=signs[i];row.rotated=angle!=0.0?1.0:0.0;
+        rows.push_back(row);}
+    if(!angles.empty()){
+        auto matrix=[&](std::size_t i,double m[9]){const auto& r=rows[i];
+            m[0]=r.flip[0]*r.c;m[1]=-r.flip[0]*r.s;m[2]=0.0;m[3]=r.flip[1]*r.s;m[4]=r.flip[1]*r.c;m[5]=0.0;m[6]=0.0;m[7]=0.0;m[8]=r.flip[2];};
+        for(std::size_t i=0;i<n;++i){double a[9];matrix(i,a);bool found=false;
+            for(std::size_t j=0;j<n&&!found;++j){if(rows[j].sign!=rows[i].sign)continue;double b[9];matrix(j,b);double error=0.0;
+                for(int r=0;r<3;++r)for(int c=0;c<3;++c)error=std::max(error,std::fabs(b[3*c+r]-a[3*r+c]));
+                found=error<1e-12;}
+            if(!found)throw std::invalid_argument("Image rotations must be closed under inversion with matching signs (image "+std::to_string(i)+" has no inverse partner in the list); pass the complete cyclic group");}}
+    return rows;
+}
 struct FlatRulePoint {double xi[3],weight;};
 static_assert(sizeof(FlatRulePoint)==32,"hdiv_gpu._RULE_ROW_BYTES ledger contract");
 struct FlatCharge {
@@ -48,6 +75,8 @@ struct FlatBlock {
     // (outer tensor, radial inner, pair product, affine pair product) with the
     // near band and the radial reach of the CPU hex Gram.
     bool hex=false;double nearGrade=1.0,farInner=1.0;
+    // Mirror and cyclic images of the HEX Gram, in the CPU order (flatImageRows checks them).
+    HostVector<HexImage> images{HostFaultAllocator<HexImage>("hex.images")};
     // Mixed mesh: one radia_hdiv_typed::HostType per host, cells then faces; hex is also set and the lattices are the host maps.
     HostVector<int> hostTypes{HostFaultAllocator<int>("hex.host-types")};
     HostVector<double> ruleOut{HostFaultAllocator<double>("hex.out")},ruleOutW{HostFaultAllocator<double>("hex.out-w")},
@@ -63,6 +92,7 @@ struct FlatBlock {
     std::size_t faceCount()const{return faces.size()/faceStride();}
     void validate()const{
         const auto n=host.size();
+        if(!images.empty()&&(!hex||!hostTypes.empty()))throw std::invalid_argument("Device charge Gram has no image route for this geometry family");
         // Charge, cell and face indices are int32 on both sides of the binding.
         if(!n||n>std::size_t(INT_MAX)||kind.size()!=n||expo.size()!=3*n||cells.size()%cellStride()||faces.size()%faceStride()||
            cellCount()>std::size_t(INT_MAX)||faceCount()>std::size_t(INT_MAX))
@@ -380,6 +410,19 @@ __global__ void prepareCurvedCharges(std::size_t n,const double* cellNodes,std::
     lowCount[a]=nl;
     charges[a]=q;
 }
+// CPU ComputeChargeSigma: an image of opposite sign cancels the self term of a charge on its plane. That charge
+// keeps scale 1 (the similarity leaves its zero row at roundoff); every other diagonal must be positive.
+__device__ inline bool flatChargeScale(const FlatDevice& d,std::size_t a,double diagonal,double& scale){
+    if(!isfinite(diagonal))return false;
+    if(d.hex&&d.hexd.imageCount>0){const double direct=hexTermEntry(d.hexd,a,a,0);
+        if(isfinite(direct)&&direct>0.0&&fabs(diagonal)<=64.0*2.220446049250313e-16*(1.0+d.hexd.imageCount)*fabs(direct)){scale=1.0;return true;}}
+    if(!(diagonal>0.0))return false;
+    scale=sqrt(diagonal);return true;
+}
+__global__ void flatPhysicalScale(FlatDevice d,const double* matrix,double* scale,int* invalid){
+    const auto a=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(a>=d.n)return;
+    double value=0.0;if(!flatChargeScale(d,a,matrix[a*d.n+a],value)){atomicExch(invalid,1);return;}scale[a]=value;
+}
 __global__ void assembleFlatGram(FlatDevice d,std::size_t first,std::size_t count,double* matrix,int* invalid){
     const auto i=first+std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=first+count)return;
     const auto row=i/d.n,col=i%d.n;if(row>col)return;
@@ -403,7 +446,8 @@ struct FlatPrepared {
             const auto lattices=checkedProduct(block.cells.size()+block.faces.size(),sizeof(double));
             const auto perHost=checkedProduct(hosts,checkedProduct(4*nOut*nOut*nOut+8,sizeof(double))+2*sizeof(int)+1+2*sizeof(std::size_t));
             const auto coefficients=checkedProduct(checkedProduct(block.cellCount(),27*84)+checkedProduct(block.faceCount(),9*35),sizeof(double));
-            return flatSum(flatSum(lattices,perHost),flatSum(coefficients,checkedProduct(n,4*sizeof(int))+checkedProduct(block.hostTypes.size(),sizeof(int))+sizeof(int)));}
+            const auto images=flatSum(checkedProduct(block.images.size(),sizeof(HexImage)),checkedProduct(checkedProduct(hosts,block.images.size()),2*sizeof(std::size_t)));
+            return flatSum(flatSum(flatSum(lattices,perHost),images),flatSum(coefficients,checkedProduct(n,4*sizeof(int))+checkedProduct(block.hostTypes.size(),sizeof(int))+sizeof(int)));}
         const std::size_t stride=std::max(block.tet.size(),block.tri.size()),lowStride=std::max<std::size_t>(1,std::max(block.tetLow.size(),block.triLow.size()));
         const auto points=checkedProduct(checkedProduct(n,stride),4*sizeof(double)),low=checkedProduct(checkedProduct(n,lowStride),4*sizeof(double));
         const auto rules=checkedProduct(block.tet.size()+block.tri.size()+block.tetLow.size()+block.triLow.size(),sizeof(FlatRulePoint));
@@ -488,7 +532,7 @@ public:
         for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);
             assembleFlatGram<<<unsigned((here+127)/128),128,0,stream>>>(device,first,here,coefficients,prepared.invalid.data);
             check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;}
-        analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients,scale,prepared.invalid.data);check(cudaGetLastError());++launches;
+        flatPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(device,coefficients,scale,prepared.invalid.data);check(cudaGetLastError());++launches;
         if((invalidCode=prepared.flag(stream,transfers,"energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite entry or nonpositive self-energy");
         normalizeAnalytic<<<unsigned((entries+255)/256),256,0,stream>>>(n,coefficients,scale);check(cudaGetLastError());++launches;
         check(cudaStreamSynchronize(stream));

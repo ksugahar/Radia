@@ -95,7 +95,8 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     Array<double> cellTables,Array<std::int32_t> cellExponents,Array<std::int32_t> faceClass,Array<std::int32_t> faceDofs,
     Array<double> faceTables,Array<std::int32_t> faceExponents,const std::string& compression,py::object aca,const std::string& backend,
     const std::string& family,py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,
-    py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands,py::object hostTypes,py::object mixedCharges) {
+    py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands,py::object hostTypes,py::object mixedCharges,
+    py::object imageMasks,py::object imageSigns,py::object imageRotations) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
     if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
     if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
@@ -137,6 +138,10 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     if(hex){input.hexRules=flat(typed(hexRules,"hex_rules",double{}));input.hexBands=flat(typed(hexBands,"hex_bands",double{}));}
     if(hostTypes.is_none()==mixed||mixedCharges.is_none()==mixed)throw py::value_error("host_types and mixed_charges are required for family='mixed' and rejected otherwise");
     if(mixed)input.hostTypes=integers(typed(hostTypes,"host_types",std::int32_t{}));
+    if(imageMasks.is_none()!=imageSigns.is_none())throw py::value_error("image_masks and image_signs go together");
+    if(!imageMasks.is_none()){input.imageMasks=integers(typed(imageMasks,"image_masks",std::int32_t{}));input.imageSigns=flat(typed(imageSigns,"image_signs",double{}));
+        if(!imageRotations.is_none())input.imageAngles=flat(typed(imageRotations,"image_rotations",double{}));}
+    else if(!imageRotations.is_none())throw py::value_error("image_rotations requires image_masks");
     if(compression=="aca"){
         if(!py::isinstance<py::dict>(aca))throw py::value_error("aca must be a dictionary");
         auto d=py::reinterpret_borrow<py::dict>(aca);
@@ -265,7 +270,8 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
     m.def("_diagnostic_flat_charge_entries",[](Array<double> cells,Array<double> faces,Array<std::int32_t> host,Array<std::int32_t> kind,
         Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,Array<double> triLow,double farFactor,
         Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend,const std::string& family,
-        py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,py::object hexRules,py::object hexBands,py::object hostTypes){
+        py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,py::object hexRules,py::object hexBands,py::object hostTypes,
+        py::object imageMasks,py::object imageSigns,py::object imageRotations){
         if(backend!="gpu")throw py::value_error("Flat diagnostic entries require explicit backend='gpu'");
         if(family!="affine-tet"&&family!="curved-tet"&&family!="hex"&&family!="mixed")throw py::value_error("family must be explicit 'affine-tet', 'curved-tet', 'hex' or 'mixed'");
         const bool curved=family=="curved-tet",mixed=family=="mixed",hex=family=="hex"||mixed;
@@ -293,6 +299,10 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         if(hex){input.hexRules=flat(py::cast<Array<double>>(hexRules));input.hexBands=flat(py::cast<Array<double>>(hexBands));}
         if(hostTypes.is_none()==mixed)throw py::value_error("host_types is required for family='mixed' and rejected otherwise");
         if(mixed)input.hostTypes=integers(py::cast<Array<std::int32_t>>(hostTypes));
+        if(imageMasks.is_none()!=imageSigns.is_none())throw py::value_error("image_masks and image_signs go together");
+        if(!imageMasks.is_none()){input.imageMasks=integers(py::cast<Array<std::int32_t>>(imageMasks));input.imageSigns=flat(py::cast<Array<double>>(imageSigns));
+            if(!imageRotations.is_none())input.imageAngles=flat(py::cast<Array<double>>(imageRotations));}
+        else if(!imageRotations.is_none())throw py::value_error("image_rotations requires image_masks");
         const auto r=snapshot(rows,bytes),c=snapshot(cols,bytes);
         radia_hmatrix_cuda::HostVector<std::size_t> rr(r.begin(),r.end()),cc(c.begin(),c.end());radia_hmatrix_cuda::HostVector<double> values;
         {py::gil_scoped_release release;values=flatDiagnosticEntries(input,rr,cc);}
@@ -303,7 +313,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
       py::arg("far_factor"),py::arg("rows").noconvert(),py::arg("cols").noconvert(),py::arg("backend"),
       py::arg("family"),py::arg("cell_numbers")=py::none(),py::arg("face_numbers")=py::none(),
       py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
-      py::arg("host_types")=py::none(),
+      py::arg("host_types")=py::none(),py::arg("image_masks")=py::none(),py::arg("image_signs")=py::none(),py::arg("image_rotations")=py::none(),
       "Diagnostic raw (unnormalized) device flat-Gram entries for explicit charge pairs; pairs and values cross, no matrix does.");
     py::class_<DeviceOperator,std::shared_ptr<DeviceOperator>>(m,"_ResidentHDiv")
       .def_static("from_analytic_constant_block",&constructAnalyticGram,py::arg("cell_vertices").noconvert(),py::arg("face_vertices").noconvert(),py::arg("backend"),
@@ -319,6 +329,7 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
            py::arg("curve_gl")=py::none(),py::arg("curve_gw")=py::none(),py::arg("cell_mass_rule")=py::none(),
            py::arg("face_mass_rule")=py::none(),py::arg("hex_rules")=py::none(),py::arg("hex_bands")=py::none(),
            py::arg("host_types")=py::none(),py::arg("mixed_charges")=py::none(),
+           py::arg("image_masks")=py::none(),py::arg("image_signs")=py::none(),py::arg("image_rotations")=py::none(),
            "Generate the flat-TET BDM1/BDM2 charge Gram (explicit 'dense' block or device 'aca' leaves), B and B^T on the device; only geometry, monomials, rules, NGSolve tables and the geometric partition cross.")
       .def("assembly",[](DeviceOperator& self){Assembly a;{py::gil_scoped_release release;a=self.assembly();}
           py::dict d;d["route"]=a.route;d["charges"]=a.charges;d["setup_peak_device_bytes"]=a.setupBytes;

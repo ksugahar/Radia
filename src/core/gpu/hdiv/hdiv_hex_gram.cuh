@@ -18,6 +18,9 @@
 // near pairs, the outer tensor rule beyond them, densities in the unit-cube measure.
 // A pair of two different hosts integrates one direction, with the cheaper host as
 // source, and the block is not symmetrized.
+// Mirror and cyclic images (pure hex only) follow the CPU QuadBlockHex image dispatch: a directed
+// image block moves its target points by T^-1, each image keeps its own pair table section and
+// symmetrized blocks, and an entry folds the direct term with sign * 0.5 (G_T(a,b) + G_T(b,a)).
 #pragma once
 #include <climits>
 #include <cmath>
@@ -36,6 +39,11 @@ constexpr double hexMaxAnisotropy=12.0,hexAffineExactNear=1.0,hexDistortedFar=1.
 // CPU HOST_CONE_SINH_MIN_WIDTH and HOST_CONE_SINH_MAX_WIDTH.
 constexpr double hexSinhMinWidth=1e-3,hexSinhMaxWidth=1.0;
 struct HexRule {double x[hexRuleCap],w[hexRuleCap];int n;};
+// One image T = M R(angle): mirror flips, cos/sin of the forward and of the inverse rotation, the
+// folded sign and a nonzero flag when the image rotates. All float64: it crosses H2D as one ledger row.
+struct HexImage {double flip[3],c,s,ci,si,sign,rotated;};
+static_assert(sizeof(HexImage)==72,"hdiv_gpu._IMAGE_ROW_BYTES ledger contract");
+constexpr int hexMaxImages=63;  // CPU GetHexBlock refuses a larger image index.
 enum HexClass:int {hexFarClass=0,hexDuffyClass=1,hexProductClass=2,hexAffineClass=3,hexCompositeClass=4,hexGradedClass=5,hexSubPairClass=6};
 // Global host g: cells 0..cells-1, then boundary quads. Charges of one host
 // are contiguous (first[g], count[g]); exponents are reference xi powers.
@@ -51,6 +59,8 @@ struct HexDevice {
     HexRule out,in,pair,pairAffine,nearOut,inSelf;double nearGrade,farInner,candidate;int order;
     // Host types of a mixed mesh (radia_hdiv_typed::HostType); null on a pure hex mesh.
     const int* type;
+    // Images of a pure hex mesh; image index img = 1..imageCount, 0 is the direct term.
+    const HexImage* images;int imageCount;
 };
 __device__ inline void hexLag3(double t,double v[3],double d[3]){
     v[0]=2.0*(t-0.5)*(t-1.0);v[1]=4.0*t*(1.0-t);v[2]=2.0*t*(t-0.5);
@@ -92,18 +102,43 @@ __device__ inline double hexDensity(const HexDevice& d,int g,const int* e,const 
     return d.type?radia_hdiv_typed::density(d.type[g],e,xi):hexMono(e,xi);}
 __device__ inline void hexNeumaier(double& sum,double& comp,double x){
     const double t=sum+x;if(fabs(sum)>=fabs(x))comp+=(sum-t)+x;else comp+=(x-t)+sum;sum=t;}
-__device__ inline double hexSep(const HexDevice& d,int t,int s){
-    const double* a=d.center+3*std::size_t(t);const double* b=d.center+3*std::size_t(s);
+// CPU ImageEvalPoint: T^-1 v, the mirror flips first, then the inverse rotation; img 0 is the identity.
+__device__ inline void hexImagePoint(const HexDevice& d,int img,const double* v,double* o){
+    double x=v[0],y=v[1],z=v[2];
+    if(img>0){const HexImage& m=d.images[img-1];x*=m.flip[0];y*=m.flip[1];z*=m.flip[2];
+        if(m.rotated!=0.0){const double a=x,b=y;x=m.ci*a-m.si*b;y=m.si*a+m.ci*b;}}
+    o[0]=x;o[1]=y;o[2]=z;
+}
+// CPU ImageApplyVector: T v, the forward rotation, then the mirror flips.
+__device__ inline void hexImageVector(const HexDevice& d,int img,const double* v,double* o){
+    double x=v[0],y=v[1],z=v[2];
+    if(img>0){const HexImage& m=d.images[img-1];
+        if(m.rotated!=0.0){const double a=x,b=y;x=m.c*a-m.s*b;y=m.s*a+m.c*b;}
+        x*=m.flip[0];y*=m.flip[1];z*=m.flip[2];}
+    o[0]=x;o[1]=y;o[2]=z;
+}
+// True separation of the target from the image of the source, |c_t - T c_s|: the integrand of a directed
+// block is 1/|T^-1 x - y| = 1/|x - T y|. For a rotation this differs from |c_t - T^-1 c_s| whenever the centres
+// are not symmetric about the sector mid-plane, and a touching pair would be classified far by that reading.
+__device__ inline double hexSep(const HexDevice& d,int t,int s,int img=0){
+    const double* a=d.center+3*std::size_t(t);double b[3];hexImageVector(d,img,d.center+3*std::size_t(s),b);
     const double dx=a[0]-b[0],dy=a[1]-b[1],dz=a[2]-b[2];return sqrt(dx*dx+dy*dy+dz*dz);}
-// CPU HexHostsTouch: a shared Q2 lattice node within 1e-9 of the radius sum.
-__device__ inline bool hexTouch(const HexDevice& d,int t,int s){
-    if(t==s)return true;
-    const double rs=d.size[t]+d.size[s];if(hexSep(d,t,s)>1.05*rs+1e-12)return false;
+// CPU HexHostsTouch: a shared Q2 lattice node, the source nodes mapped by T, within 1e-9 of the radius sum.
+__device__ inline bool hexTouch(const HexDevice& d,int t,int s,int img=0){
+    if(img==0&&t==s)return true;
+    const double rs=d.size[t]+d.size[s];if(hexSep(d,t,s,img)>1.05*rs+1e-12)return false;
     const double* a=hexNodes(d,t);const double* b=hexNodes(d,s);const int na=hexCell(d,t)?27:9,nb=hexCell(d,s)?27:9;
     const double tol=1e-9*rs+1e-14;
-    for(int j=0;j<nb;++j)for(int i=0;i<na;++i){const double ex=b[3*j]-a[3*i],ey=b[3*j+1]-a[3*i+1],ez=b[3*j+2]-a[3*i+2];
-        if(ex*ex+ey*ey+ez*ez<=tol*tol)return true;}
+    for(int j=0;j<nb;++j){double q[3];hexImageVector(d,img,b+3*j,q);
+        for(int i=0;i<na;++i){const double ex=q[0]-a[3*i],ey=q[1]-a[3*i+1],ez=q[2]-a[3*i+2];
+            if(ex*ex+ey*ey+ez*ez<=tol*tol)return true;}}
     return false;
+}
+// CPU self_pair: the same host, invariant under the image (it lies on the mirror plane or the rotation axis).
+__device__ inline bool hexSelfPair(const HexDevice& d,int t,int s,int img){
+    if(t!=s)return false;if(img==0)return true;
+    const double* c=d.center+3*std::size_t(t);double r[3];hexImagePoint(d,img,c,r);
+    return fabs(r[0]-c[0])+fabs(r[1]-c[1])+fabs(r[2]-c[2])<1e-6*d.size[t]+1e-12;
 }
 struct HexAdjacency {int dim,permT[3],flipT[3],permS[3],flipS[3];};
 __device__ inline void hexRefNode(int dim,int node,double* z){
@@ -111,14 +146,15 @@ __device__ inline void hexRefNode(int dim,int node,double* z){
 // CPU HexPairAdjacencyOf: the shared entity (vertex 0, edge 1, face 2, cell 3)
 // and reference frames that put it at zeta_k = 1 (target) / 0 (source) for
 // k >= e with equal leading coordinates; -2 marks a non-conforming contact.
-__device__ inline HexAdjacency hexAdjacency(const HexDevice& d,int t,int s){
+__device__ inline HexAdjacency hexAdjacency(const HexDevice& d,int t,int s,int img=0){
     HexAdjacency adj{-1,{0,1,2},{0,0,0},{0,1,2},{0,0,0}};
     const int dT=hexCell(d,t)?3:2,dS=hexCell(d,s)?3:2,na=dT==3?27:9,nb=dS==3?27:9;
     const double* a=hexNodes(d,t);const double* b=hexNodes(d,s);
     const double tol=1e-9*(d.size[t]+d.size[s])+1e-14;
     unsigned char pi[27],pj[27];int count=0;
-    for(int j=0;j<nb;++j)for(int i=0;i<na;++i){const double ex=b[3*j]-a[3*i],ey=b[3*j+1]-a[3*i+1],ez=b[3*j+2]-a[3*i+2];
-        if(ex*ex+ey*ey+ez*ez<=tol*tol){if(count<27){pi[count]=(unsigned char)i;pj[count]=(unsigned char)j;}++count;}}
+    for(int j=0;j<nb;++j){double q[3];hexImageVector(d,img,b+3*j,q);
+        for(int i=0;i<na;++i){const double ex=q[0]-a[3*i],ey=q[1]-a[3*i+1],ez=q[2]-a[3*i+2];
+            if(ex*ex+ey*ey+ez*ez<=tol*tol){if(count<27){pi[count]=(unsigned char)i;pj[count]=(unsigned char)j;}++count;}}}
     if(!count)return adj;
     int e;
     if(count==1)e=0;else if(count==3)e=1;else if(count==9)e=2;else if(count==27&&dT==3&&dS==3)e=3;else{adj.dim=-2;return adj;}
@@ -149,30 +185,31 @@ __device__ inline void hexAxes(const HexDevice& d,int g,double& lo,double& hi){
 }
 // CPU HexPairExponentialRulesResolve: axis aspect ratios and, off contact,
 // the longest extent over the closest lattice gap stay within the bound.
-__device__ inline bool hexExponential(const HexDevice& d,int t,int s,bool touching){
+__device__ inline bool hexExponential(const HexDevice& d,int t,int s,bool touching,int img=0){
     double loT,hiT,loS,hiS;hexAxes(d,t,loT,hiT);hexAxes(d,s,loS,hiS);
     double ratio=(loT>0.0&&loS>0.0)?fmax(hiT/loT,hiS/loS):1e300;
     if(!touching){const double* a=hexNodes(d,t);const double* b=hexNodes(d,s);const int na=hexCell(d,t)?27:9,nb=hexCell(d,s)?27:9;double gap2=1e300;
-        for(int j=0;j<nb;++j)for(int i=0;i<na;++i){const double dx=a[3*i]-b[3*j],dy=a[3*i+1]-b[3*j+1],dz=a[3*i+2]-b[3*j+2];gap2=fmin(gap2,dx*dx+dy*dy+dz*dz);}
+        for(int j=0;j<nb;++j){double q[3];hexImageVector(d,img,b+3*j,q);
+            for(int i=0;i<na;++i){const double dx=a[3*i]-q[0],dy=a[3*i+1]-q[1],dz=a[3*i+2]-q[2];gap2=fmin(gap2,dx*dx+dy*dy+dz*dz);}}
         const double gap=sqrt(gap2),extent=fmax(hiT,hiS);ratio=fmax(ratio,gap>0.0?extent/gap:1e300);}
     return ratio<=hexMaxAnisotropy;
 }
-// Directed (target t, source s) block family of the CPU QuadBlockHex.
-__device__ inline int hexClassify(const HexDevice& d,int t,int s,HexAdjacency& adj){
+// Directed (target t, source s, image img) block family of the CPU QuadBlockHex.
+__device__ inline int hexClassify(const HexDevice& d,int t,int s,HexAdjacency& adj,int img=0){
     adj.dim=-1;
     if(d.type)return t==s||hexTouch(d,t,s)||hexSep(d,t,s)<=d.nearGrade*(d.size[t]+d.size[s])?hexGradedClass:hexFarClass;
-    const bool touching=hexTouch(d,t,s);const double sep=hexSep(d,t,s),sz=d.size[t]+d.size[s];
+    const bool touching=hexTouch(d,t,s,img);const double sep=hexSep(d,t,s,img),sz=d.size[t]+d.size[s];
     const bool exactNear=touching||sep<=hexAffineExactNear*sz;
     if(d.order==1){
-        bool ok=true;if(touching||sep<=d.nearGrade*sz)ok=hexExponential(d,t,s,touching);
-        if(touching&&ok){adj=hexAdjacency(d,t,s);if(adj.dim>=0)return hexDuffyClass;}
+        bool ok=true;if(touching||sep<=d.nearGrade*sz)ok=hexExponential(d,t,s,touching,img);
+        if(touching&&ok){adj=hexAdjacency(d,t,s,img);if(adj.dim>=0)return hexDuffyClass;}
         if(ok&&!touching&&sep<=d.nearGrade*sz)return hexProductClass;
     }
     if(d.affine[t]&&d.affine[s]&&(d.order==2||!exactNear))return exactNear?hexAffineClass:hexFarClass;
     if(!touching&&sep>hexDistortedFar*sz)return hexFarClass;
     if(d.order==2)return hexCompositeClass;
     // The CPU sub-simplex pair rule lies between the near band and the distorted far switch; the staged bands leave it empty.
-    return t==s||touching||sep<=d.nearGrade*sz?hexGradedClass:hexSubPairClass;
+    return (img==0&&t==s)||touching||sep<=d.nearGrade*sz?hexGradedClass:hexSubPairClass;
 }
 // Far tensor rule of source host s (CPU GetHexFarRule / PhiInnerHexTensorVec).
 __device__ inline void hexFarInner(const HexDevice& d,int s,const double* p,int nS,double* inner){
@@ -364,14 +401,15 @@ __device__ inline void hexConeFanInner(const HexDevice& d,int s,const double* p,
                     const double weight=tw[it]*sw[is]*rho*s2/pr,y3[3]={uv[0],uv[1],0.0};
                     for(int l=0;l<nS;++l)inner[l]+=weight*hexMono(hexExponent(d,s,l),y3);}}}}
 }
-// CPU QuadBlockHexNearTensor inner, without images: the exact analytic potential on an affine source, the
-// cone/fan rule on a distorted one, its apex the outer point itself (self) or the source's closest point.
-__device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,int nS,double* inner,const double* local){
-    if(d.affine[s]){hexAffineInner(d,s,p,nS,inner,local);return true;}
-    if(t==s){hexConeFanInner(d,s,p,xi,nS,inner);return true;}
+// CPU QuadBlockHexNearTensor inner: the exact analytic potential on an affine source, the cone/fan rule on a
+// distorted one, its apex the outer point itself (self) or the source's closest point. A self pair stays on
+// the unmapped outer point p; every other pair evaluates at the image-mapped point pm.
+__device__ inline bool hexGradedInner(const HexDevice& d,bool self,int s,const double* p,const double* pm,const double* xi,int nS,double* inner,const double* local){
+    if(d.affine[s]){hexAffineInner(d,s,self?p:pm,nS,inner,local);return true;}
+    if(self){hexConeFanInner(d,s,p,xi,nS,inner);return true;}
     double ref[3]={0.5,0.5,0.0};
-    if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),p,ref):quadClosest(hexNodes(d,s),p,ref)))return false;
-    hexConeFanInner(d,s,p,ref,nS,inner);return true;
+    if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),pm,ref):quadClosest(hexNodes(d,s),pm,ref)))return false;
+    hexConeFanInner(d,s,pm,ref,nS,inner);return true;
 }
 // CPU QuadBlockTyped inner of a tet, triangle or pyramid source: exact on the polynomial charges of an
 // affine source, on levels on its rational charge, radial from the anchor on a non-parallelogram pyramid.
@@ -386,15 +424,15 @@ __device__ inline void hexTypedInner(const HexDevice& d,int t,int s,const double
 }
 // CPU QuadBlockHexCompositeProduct inner: the exact self radial, the radial
 // rule anchored at the (clamped) source pre-image near the source, the outer
-// tensor rule beyond 1.5 far_inner host radii.
-__device__ inline bool hexCompositeInner(const HexDevice& d,int t,int s,const double* p,const double* xi,int nS,double* inner){
-    if(t==s){hexRadialInner(d,s,p,xi,nS,inner);return true;}
+// tensor rule beyond 1.5 far_inner host radii. A self pair stays on the unmapped point p, the others take pm.
+__device__ inline bool hexCompositeInner(const HexDevice& d,bool self,int s,const double* p,const double* pm,const double* xi,int nS,double* inner){
+    if(self){hexRadialInner(d,s,p,xi,nS,inner);return true;}
     const double* c=d.center+3*std::size_t(s);
-    const double dx=p[0]-c[0],dy=p[1]-c[1],dz=p[2]-c[2];
-    if(sqrt(dx*dx+dy*dy+dz*dz)>1.5*d.farInner*d.size[s]){hexFarInner(d,s,p,nS,inner);return true;}
+    const double dx=pm[0]-c[0],dy=pm[1]-c[1],dz=pm[2]-c[2];
+    if(sqrt(dx*dx+dy*dy+dz*dz)>1.5*d.farInner*d.size[s]){hexFarInner(d,s,pm,nS,inner);return true;}
     double ref[3]={0.5,0.5,0.5};
-    if(!(hexCell(d,s)?hexQ2Inverse(hexNodes(d,s),p,ref):quadClosest(hexNodes(d,s),p,ref)))return false;
-    hexRadialInner(d,s,p,ref,nS,inner);return true;
+    if(!(hexCell(d,s)?hexQ2Inverse(hexNodes(d,s),pm,ref):quadClosest(hexNodes(d,s),pm,ref)))return false;
+    hexRadialInner(d,s,pm,ref,nS,inner);return true;
 }
 // Host-level geometry (CPU constructor): corner mean and corner radius, the
 // affine test of HexAffineInverseForms / QuadAffineInverseForms and, for
@@ -451,8 +489,8 @@ __device__ inline void hexCenterForms(const double* nd,bool cell,double lin[3][4
 // Phase 1 tabulates, per target point, the inner source vector and the
 // target weights; phase 2 sums every block entry over the points in the CPU
 // accumulation order (Neumaier for the pair product, as the CPU).
-__device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int nT,int nS,double* scratch,double* out,int* invalid){
-    const bool cellT=hexCell(d,t),cellS=hexCell(d,s),product=cls==hexProductClass,graded=cls==hexGradedClass;
+__device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int img,int cls,int nT,int nS,double* scratch,double* out,int* invalid){
+    const bool cellT=hexCell(d,t),cellS=hexCell(d,s),product=cls==hexProductClass,graded=cls==hexGradedClass,self=hexSelfPair(d,t,s,img);
     const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?d.nearOut:d.out;
     const int N=R.n,nc=cellT?N:1,npT=N*N*nc;int npS=0;
     double* source=scratch;
@@ -479,15 +517,15 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
     for(int q=threadIdx.x;q<npT;q+=blockDim.x){double xi[3],wq;
         if(product){const int a=q/(N*nc),b=(q/nc)%N,c=q%nc;xi[0]=R.x[a];xi[1]=R.x[b];xi[2]=cellT?R.x[c]:0.0;wq=R.w[a]*R.w[b]*(cellT?R.w[c]:1.0);}
         else{const int ix=q%N,iy=(q/N)%N,iz=q/(N*N);xi[0]=R.x[ix];xi[1]=R.x[iy];xi[2]=cellT?R.x[iz]:0.0;wq=R.w[ix]*R.w[iy]*(cellT?R.w[iz]:1.0);}
-        double X[3];hexPoint(d,t,xi,X);double* row=rows+std::size_t(q)*width;for(int l=0;l<nS;++l)row[l]=0.0;
+        double X[3],Xm[3];hexPoint(d,t,xi,X);hexImagePoint(d,img,X,Xm);double* row=rows+std::size_t(q)*width;for(int l=0;l<nS;++l)row[l]=0.0;
         if(product){for(int p=0;p<npS;++p){const double* sp=source+std::size_t(p)*(4+nS);
-                const double dx=X[0]-sp[0],dy=X[1]-sp[1],dz=X[2]-sp[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
+                const double dx=Xm[0]-sp[0],dy=Xm[1]-sp[1],dz=Xm[2]-sp[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
-        else if(cls==hexFarClass)hexFarInner(d,s,X,nS,row);
-        else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
+        else if(cls==hexFarClass)hexFarInner(d,s,Xm,nS,row);
+        else if(cls==hexAffineClass)hexAffineInner(d,s,Xm,nS,row);
         else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
-        else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
-        else if(!hexCompositeInner(d,t,s,X,xi,nS,row))atomicExch(invalid,4);
+        else if(graded){if(!hexGradedInner(d,self,s,X,Xm,xi,nS,row,local))atomicExch(invalid,5);}
+        else if(!hexCompositeInner(d,self,s,X,Xm,xi,nS,row))atomicExch(invalid,4);
         for(int l=0;l<nT;++l)row[nS+l]=wq*hexDensity(d,t,hexExponent(d,t,l),xi);
     }
     __syncthreads();
@@ -499,7 +537,7 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
 // CPU QuadBlockHexPairDuffy for one BDM1 touching pair (at most 8 x 8
 // charges): per-thread partial sums of each subdomain, a fixed-order block
 // tree reduction, Neumaier over the subdomains.
-__device__ inline void hexDuffyBlock(const HexDevice& d,int t,int s,const HexAdjacency& adj,int nT,int nS,double* red,double* acc,double* cmp,double* out){
+__device__ inline void hexDuffyBlock(const HexDevice& d,int t,int s,int img,const HexAdjacency& adj,int nT,int nS,double* red,double* acc,double* cmp,double* out){
     for(int e=threadIdx.x;e<64;e+=blockDim.x){acc[e]=0.0;cmp[e]=0.0;}
     const int dT=hexCell(d,t)?3:2,dS=hexCell(d,s)?3:2,e=adj.dim,ntrT=dT-e,ntrS=dS-e,nrel=e,kcone=nrel+ntrT+ntrS,ndim=dT+dS;
     const HexRule& R=d.affine[t]&&d.affine[s]?d.pairAffine:d.pair;const int N=R.n;
@@ -530,10 +568,11 @@ __device__ inline void hexDuffyBlock(const HexDevice& d,int t,int s,const HexAdj
                 double xi[3]={0.0,0.0,0.0},eta[3]={0.0,0.0,0.0};
                 for(int k=0;k<dT;++k)xi[adj.permT[k]]=adj.flipT[k]?1.0-zT[k]:zT[k];
                 for(int k=0;k<dS;++k)eta[adj.permS[k]]=adj.flipS[k]?1.0-zS[k]:zS[k];
-                double XT[3],XS[3];
+                double XT[3],XTm[3],XS[3];
                 if(dT==3)hexMapX(ndT,xi,XT);else quadMapX(ndT,xi,XT);
+                hexImagePoint(d,img,XT,XTm);
                 if(dS==3)hexMapX(ndS,eta,XS);else quadMapX(ndS,eta,XS);
-                const double dx=XT[0]-XS[0],dy=XT[1]-XS[1],dz=XT[2]-XS[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);
+                const double dx=XTm[0]-XS[0],dy=XTm[1]-XS[1],dz=XTm[2]-XS[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);
                 if(r>1e-300){weight/=r;double qS[8];for(int l=0;l<nS;++l)qS[l]=hexMono(hexExponent(d,s,l),eta);
                     for(int lt=0;lt<nT;++lt){const double wl=weight*hexMono(hexExponent(d,t,lt),xi);for(int ls=0;ls<nS;++ls)part[lt*nS+ls]+=wl*qS[ls];}}
             }
@@ -546,19 +585,19 @@ __device__ inline void hexDuffyBlock(const HexDevice& d,int t,int s,const HexAdj
 }
 // One directed host-pair block per work item; t < 0 marks the absent second
 // direction of a self pair. Codes: 3 sub-simplex pair rule, 4 failed composite anchor, 5 failed closest point.
-struct HexWork {int t,s;std::size_t raw;};
+struct HexWork {int t,s,img;std::size_t raw;};
 __global__ void __launch_bounds__(hexThreads) hexBlocks(HexDevice d,const HexWork* work,std::size_t first,std::size_t count,
         double* scratch,std::size_t stride,double* raw,int* invalid){
     __shared__ double red[hexThreads],acc[64],cmp[64];__shared__ int cls;__shared__ HexAdjacency adj;
     for(std::size_t item=first+blockIdx.x;item<first+count;item+=gridDim.x){
         const HexWork w=work[item];if(w.t<0)continue;
-        if(threadIdx.x==0){HexAdjacency a;cls=hexClassify(d,w.t,w.s,a);adj=a;}
+        if(threadIdx.x==0){HexAdjacency a;cls=hexClassify(d,w.t,w.s,a,w.img);adj=a;}
         __syncthreads();
         const int nT=d.count[w.t],nS=d.count[w.s];
         if(cls==hexSubPairClass){if(threadIdx.x==0)atomicExch(invalid,3);}
         else if(cls==hexDuffyClass){if(nT>8||nS>8){if(threadIdx.x==0)atomicExch(invalid,2);}
-            else hexDuffyBlock(d,w.t,w.s,adj,nT,nS,red,acc,cmp,raw+w.raw);}
-        else hexTensorBlock(d,w.t,w.s,cls,nT,nS,scratch+std::size_t(blockIdx.x)*stride,raw+w.raw,invalid);
+            else hexDuffyBlock(d,w.t,w.s,w.img,adj,nT,nS,red,acc,cmp,raw+w.raw);}
+        else hexTensorBlock(d,w.t,w.s,w.img,cls,nT,nS,scratch+std::size_t(blockIdx.x)*stride,raw+w.raw,invalid);
         __syncthreads();
     }
 }
@@ -588,63 +627,81 @@ __global__ void hexFarRules(HexDevice d,double* X,double* W){
     for(int q=0;q<np;++q){const int ix=q%n1,iy=(q/n1)%n1,iz=q/(n1*n1);const double xi[3]={d.out.x[ix],d.out.x[iy],hexCell(d,g)?d.out.x[iz]:0.0};
         hexPoint(d,g,xi,X+3*(std::size_t(g)*d.farStride+q));W[std::size_t(g)*d.farStride+q]=d.out.w[ix]*d.out.w[iy]*(hexCell(d,g)?d.out.w[iz]:1.0);}
 }
-__device__ inline bool hexCandidate(const HexDevice& d,int i,int j){return !(hexSep(d,i,j)>d.candidate*(d.size[i]+d.size[j])+1e-12);}
+// A host pair enters the table of an image when either directed block can be non-far: both directions test their own separation.
+__device__ inline bool hexCandidate(const HexDevice& d,int i,int j,int img=0){
+    const double bound=d.candidate*(d.size[i]+d.size[j])+1e-12;
+    return !(hexSep(d,i,j,img)>bound)||(img!=0&&!(hexSep(d,j,i,img)>bound));}
+// Table rows: hosts per section, section 0 the direct term and section img each image.
+__device__ inline unsigned long long hexKey(const HexDevice& d,int img,int lo,int hi){
+    const auto hosts=(unsigned long long)d.hosts;return ((unsigned long long)img*hosts+(unsigned long long)lo)*hosts+(unsigned long long)hi;}
+__device__ inline void hexKeyParts(const HexDevice& d,unsigned long long key,int& img,int& lo,int& hi){
+    const auto hosts=(unsigned long long)d.hosts;img=int(key/(hosts*hosts));key%=hosts*hosts;lo=int(key/hosts);hi=int(key%hosts);}
 __global__ void hexCountPairs(HexDevice d,std::size_t* counts){
-    const int i=int(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=d.hosts)return;
-    std::size_t c=0;for(int j=i;j<d.hosts;++j)if(hexCandidate(d,i,j))++c;counts[i]=c;
+    const auto row=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(row>=std::size_t(d.hosts)*(1+d.imageCount))return;
+    const int img=int(row/d.hosts),i=int(row%d.hosts);
+    std::size_t c=0;for(int j=i;j<d.hosts;++j)if(hexCandidate(d,i,j,img))++c;counts[row]=c;
 }
-// Keys lo * hosts + hi ascend because hosts and their partners are visited in order.
+// Keys (img, lo, hi) ascend because sections, hosts and their partners are visited in order.
 __global__ void hexFillPairs(HexDevice d,const std::size_t* starts,unsigned long long* keys,std::size_t* sizes){
-    const int i=int(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=d.hosts)return;
-    std::size_t k=starts[i];
-    for(int j=i;j<d.hosts;++j)if(hexCandidate(d,i,j)){keys[k]=(unsigned long long)i*(unsigned long long)d.hosts+(unsigned long long)j;
+    const auto row=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(row>=std::size_t(d.hosts)*(1+d.imageCount))return;
+    const int img=int(row/d.hosts),i=int(row%d.hosts);
+    std::size_t k=starts[row];
+    for(int j=i;j<d.hosts;++j)if(hexCandidate(d,i,j,img)){keys[k]=hexKey(d,img,i,j);
         sizes[k]=std::size_t(d.count[i])*std::size_t(d.count[j]);++k;}
 }
 __global__ void hexPairWork(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,HexWork* work){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
-    const int lo=int(keys[p]/(unsigned long long)d.hosts),hi=int(keys[p]%(unsigned long long)d.hosts);
+    int img,lo,hi;hexKeyParts(d,keys[p],img,lo,hi);
     const std::size_t size=std::size_t(d.count[lo])*std::size_t(d.count[hi]);
     const bool oneSided=d.type&&lo!=hi;const bool lowerSource=oneSided&&radia_hdiv_typed::lowerHostIsSource(d.type[lo],d.type[hi]);
-    work[2*p]={lowerSource?-1:lo,hi,2*offsets[p]};work[2*p+1]={lo==hi||(oneSided&&!lowerSource)?-1:hi,lo,2*offsets[p]+size};
+    work[2*p]={lowerSource?-1:lo,hi,img,2*offsets[p]};work[2*p+1]={lo==hi||(oneSided&&!lowerSource)?-1:hi,lo,img,2*offsets[p]+size};
 }
 // 0.5 (G_AB + G_BA^T) into the lo-host row orientation, or the one integrated direction of a mixed mesh pair (CPU GetHexSymBlock).
 __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,const double* raw,double* values,int* invalid){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
-    const int lo=int(keys[p]/(unsigned long long)d.hosts),hi=int(keys[p]%(unsigned long long)d.hosts);
+    int img,lo,hi;hexKeyParts(d,keys[p],img,lo,hi);
     const int nA=d.count[lo],nB=d.count[hi];const double* ab=raw+2*offsets[p];const double* ba=lo==hi?ab:ab+std::size_t(nA)*nB;
     const bool oneSided=d.type&&lo!=hi;const bool lowerSource=oneSided&&radia_hdiv_typed::lowerHostIsSource(d.type[lo],d.type[hi]);
     for(int a=0;a<nA;++a)for(int b=0;b<nB;++b){const double v=lowerSource?ba[b*nA+a]:oneSided?ab[a*nB+b]:0.5*(ab[a*nB+b]+ba[b*nA+a]);if(!isfinite(v))atomicExch(invalid,1);values[offsets[p]+std::size_t(a)*nB+b]=v;}
 }
-// Far tensor product of one charge pair beyond the pair table.
-__device__ inline double hexFarEntry(const HexDevice& d,std::size_t a,std::size_t b){
+// Far tensor product of one charge pair beyond the pair table, target points mapped by T^-1.
+__device__ inline double hexFarEntry(const HexDevice& d,std::size_t a,std::size_t b,int img=0){
     const int t=d.chargeHost[a],s=d.chargeHost[b];const int* ea=d.exponents+3*a;const int* eb=d.exponents+3*b;
     const int n1=d.out.n,npT=hexCell(d,t)?n1*n1*n1:n1*n1,npS=hexCell(d,s)?n1*n1*n1:n1*n1;
     const double* XT=d.farX+3*std::size_t(t)*d.farStride;const double* WT=d.farW+std::size_t(t)*d.farStride;
     const double* XS=d.farX+3*std::size_t(s)*d.farStride;const double* WS=d.farW+std::size_t(s)*d.farStride;
     double sum=0.0;
     for(int qt=0;qt<npT;++qt){const double xt[3]={d.out.x[qt%n1],d.out.x[(qt/n1)%n1],hexCell(d,t)?d.out.x[qt/(n1*n1)]:0.0};double inner=0.0;
-        for(int qs=0;qs<npS;++qs){const double dx=XT[3*qt]-XS[3*qs],dy=XT[3*qt+1]-XS[3*qs+1],dz=XT[3*qt+2]-XS[3*qs+2];
+        double xm[3];hexImagePoint(d,img,XT+3*qt,xm);
+        for(int qs=0;qs<npS;++qs){const double dx=xm[0]-XS[3*qs],dy=xm[1]-XS[3*qs+1],dz=xm[2]-XS[3*qs+2];
             const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
             const double xs[3]={d.out.x[qs%n1],d.out.x[(qs/n1)%n1],hexCell(d,s)?d.out.x[qs/(n1*n1)]:0.0};inner+=(WS[qs]/r)*hexDensity(d,s,eb,xs);}
         sum+=(WT[qt]*hexDensity(d,t,ea,xt))*inner;}
     return sum*hexInvFourPi;
 }
-__device__ inline double hexEntry(const HexDevice& d,std::size_t a,std::size_t b){
+// The symmetrized entry of one term: 0 direct, img an image.
+__device__ inline double hexTermEntry(const HexDevice& d,std::size_t a,std::size_t b,int img){
     const int ga=d.chargeHost[a],gb=d.chargeHost[b],lo=ga<gb?ga:gb,hi=ga<gb?gb:ga;
-    const unsigned long long key=(unsigned long long)lo*(unsigned long long)d.hosts+(unsigned long long)hi;
+    const unsigned long long key=hexKey(d,img,lo,hi);
     std::size_t L=0,H=d.pairs;while(L<H){const std::size_t m=(L+H)/2;if(d.keys[m]<key)L=m+1;else H=m;}
     if(L<d.pairs&&d.keys[L]==key){const double* v=d.values+d.offsets[L];const int la=int(a)-d.first[ga],lb=int(b)-d.first[gb];
         return ga<=gb?v[la*d.count[gb]+lb]:v[lb*d.count[ga]+la];}
     // A pair missing from the table must be a far pair by the same test.
-    if(!(hexSep(d,ga,gb)>d.candidate*(d.size[ga]+d.size[gb])+1e-12))return NAN;
-    return hexFarEntry(d,a,b);
+    if(hexCandidate(d,ga,gb,img))return NAN;
+    // The direct far product is symmetric; an image pair folds both directed blocks like the CPU GetHexSymBlock.
+    return img==0?hexFarEntry(d,a,b):0.5*(hexFarEntry(d,a,b,img)+hexFarEntry(d,b,a,img));
+}
+__device__ inline double hexEntry(const HexDevice& d,std::size_t a,std::size_t b){
+    double value=hexTermEntry(d,a,b,0);
+    for(int img=1;img<=d.imageCount;++img)value+=d.images[img-1].sign*hexTermEntry(d,a,b,img);
+    return value;
 }
 // Device state of one HEX Gram: host lattices, charges, the pair table and its
 // symmetrized blocks. Raw directed blocks, work items and scratch live only
 // inside prepare(); the counts that size the table are the only D2H values.
 struct HexPrepared {
     Buffer<double> cells,faces,center,size,affineCenter,cellCoeff,faceCoeff,farX,farW,values;
-    Buffer<int> first,count,chargeHost,exponents,invalid,types;Buffer<unsigned char> affine;
+    Buffer<int> first,count,chargeHost,exponents,invalid,types;Buffer<unsigned char> affine;Buffer<HexImage> images;
     Buffer<unsigned long long> keys;Buffer<std::size_t> offsets;
     HexDevice d{};int order=1;
     static HexRule rule(const HostVector<double>& x,const HostVector<double>& w){
@@ -682,6 +739,8 @@ struct HexPrepared {
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
         d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);
         const bool typed=!b.hostTypes.empty();if(typed){upload(types,b.hostTypes,"host_types");d.type=types.data;}
+        d.images=nullptr;d.imageCount=0;
+        if(!b.images.empty()){upload(images,b.images,"image_transforms");d.images=images.data;d.imageCount=int(b.images.size());}
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
         cellCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
         faceCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(facesN,9*35)):1);
@@ -696,16 +755,19 @@ struct HexPrepared {
         hexFarRules<<<hostBlocks,128,0,stream>>>(d,farX.data,farW.data);check(cudaGetLastError());++launches;
         // Dense keeps every host pair; ACA every pair inside the HexHostsTouch radius, which holds every non-far family.
         d.candidate=dense?1e300:1.05;
-        Buffer<std::size_t> hostPairs,hostStarts;hostPairs.allocate(hosts);hostStarts.allocate(hosts);
-        hexCountPairs<<<hostBlocks,128,0,stream>>>(d,hostPairs.data);check(cudaGetLastError());++launches;
-        {std::size_t bytes=0;check(cub::DeviceScan::ExclusiveSum(nullptr,bytes,hostPairs.data,hostStarts.data,int(hosts),stream));
+        // One table section per term: the direct pairs, then those of each image.
+        const std::size_t tableRows=checkedProduct(hosts,1+b.images.size());const unsigned rowBlocks=unsigned((tableRows+127)/128);
+        if(tableRows>std::size_t(INT_MAX))throw std::invalid_argument("HEX image pair table exceeds the scan range");
+        Buffer<std::size_t> hostPairs,hostStarts;hostPairs.allocate(tableRows);hostStarts.allocate(tableRows);
+        hexCountPairs<<<rowBlocks,128,0,stream>>>(d,hostPairs.data);check(cudaGetLastError());++launches;
+        {std::size_t bytes=0;check(cub::DeviceScan::ExclusiveSum(nullptr,bytes,hostPairs.data,hostStarts.data,int(tableRows),stream));
             Buffer<unsigned char> temporary;temporary.allocate(std::max<std::size_t>(1,bytes));
-            check(cub::DeviceScan::ExclusiveSum(temporary.data,bytes,hostPairs.data,hostStarts.data,int(hosts),stream));++launches;
+            check(cub::DeviceScan::ExclusiveSum(temporary.data,bytes,hostPairs.data,hostStarts.data,int(tableRows),stream));++launches;
             check(cudaStreamSynchronize(stream));}
-        const std::size_t pairs=last(hostStarts,hostPairs,hosts,stream,record,"hex_pair_count");
+        const std::size_t pairs=last(hostStarts,hostPairs,tableRows,stream,record,"hex_pair_count");
         if(!pairs)throw std::runtime_error("HEX pair table is empty");
         keys.allocate(pairs);Buffer<std::size_t> blockSizes;blockSizes.allocate(pairs);offsets.allocate(pairs);
-        hexFillPairs<<<hostBlocks,128,0,stream>>>(d,hostStarts.data,keys.data,blockSizes.data);check(cudaGetLastError());++launches;
+        hexFillPairs<<<rowBlocks,128,0,stream>>>(d,hostStarts.data,keys.data,blockSizes.data);check(cudaGetLastError());++launches;
         {std::size_t bytes=0;check(cub::DeviceScan::ExclusiveSum(nullptr,bytes,blockSizes.data,offsets.data,int(pairs),stream));
             Buffer<unsigned char> temporary;temporary.allocate(std::max<std::size_t>(1,bytes));
             check(cub::DeviceScan::ExclusiveSum(temporary.data,bytes,blockSizes.data,offsets.data,int(pairs),stream));++launches;

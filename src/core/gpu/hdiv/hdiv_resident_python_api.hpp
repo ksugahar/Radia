@@ -43,6 +43,9 @@ struct FlatInput {
     // 2 pair product, 3 affine pair product, 4 near outer and 5 fine inner (BDM1 only); bands = (near_grade, far_inner).
     radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
     radia_hmatrix_cuda::HostVector<int> hostTypes;
+    // Pure HEX images, the CPU lists: mirror mask bits 1 x, 2 y, 4 z; folded sign; z rotation angle (empty: mirror only).
+    radia_hmatrix_cuda::HostVector<int> imageMasks;
+    radia_hmatrix_cuda::HostVector<double> imageSigns,imageAngles;
 };
 // NGSolve charge-projection tables per vertex-rank class: B rows are generated
 // on the device from these and the FlatInput geometry; no B value crosses.
