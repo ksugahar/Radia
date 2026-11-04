@@ -7,8 +7,9 @@ the rotated images. NGSolve supplies only non-matrix inputs here: the ``Compress
 wrapper's orientation and the deformed Q2 lattices. Every operator of a device solve is built and kept on the device, and
 the transfer ledgers are recorded. The CPU ring is the reference. On one cell per sector the CPU sector is a second
 reference; on several cells it is recorded only, since the CPU image dispatch selects a far rule for touching seam pairs
-of a multi-cell sector. A device sector without images shows that a no-op image route could not pass. The limits repeat
-the CPU route's numbers but are PROPOSED for the device route, not adopted.
+of a multi-cell sector. A device sector without images shows that a no-op image route could not pass. The device mass takes
+its material rule, which differs from the CPU rule on non-affine hosts: the CPU equation with that rule separates this
+difference from the operators. The limits repeat the CPU route's numbers but are PROPOSED for the device route, not adopted.
 """
 from __future__ import annotations
 
@@ -110,6 +111,39 @@ def _device_solve(path, checked, probes, args, compression, **images):
                 transfer_ledger=stats["assembly"]["transfer_ledger"], field_ledger=field["transfer_ledger"])
 
 
+def _cpu_ring_equation(path, args):
+    """The ring's CPU charge map and Gram with the mass on the device's material rule: the equation the device solves."""
+    import ngsolve as ng
+    from scipy.sparse import coo_matrix, csr_matrix
+    from radia.vim._vim import _build_charge_gram_hex
+    from validation_ffag_connected_cyclic_yoke import _mean_tangential_magnetization, apply_cyclic_q2_geometry
+
+    mesh = ng.Mesh(str(path))
+    keep = apply_cyclic_q2_geometry(mesh, args)
+    space = ng.HDiv(mesh, order=args.hdiv_order)
+    with ng.TaskManager():
+        charge_map, gram, _, _ = _build_charge_gram_hex(space, eps=args.gram_eps, build_hmatrix=False, materialize_mass=False)
+        u, v = space.TnT()
+        mass = ng.BilinearForm(space)
+        mass += u*v*ng.dx(intrules={ng.HEX: ng.IntegrationRule(ng.HEX, 2*max(6, 2*args.hdiv_order + 2))})
+        mass.Assemble()
+        source = ng.LinearForm(space)
+        source += _applied(args)*v*ng.dx
+        source.Assemble()
+    gram.build_exact_dense_normalized_gram(maximum_memory_mb=8192)
+    rows, cols, values = mass.mat.COO()
+    mass_matrix = coo_matrix((values, (rows, cols)), shape=(space.ndof, space.ndof)).toarray()
+    charge_map = csr_matrix(charge_map)
+    energy = np.column_stack([charge_map.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(charge_map[:, k].toarray().ravel())))
+                              for k in range(space.ndof)])
+    x = np.linalg.solve(energy + mass_matrix/(args.mu_r - 1.0), np.array(source.vec.FV().NumPy()))
+    magnetization = ng.GridFunction(space)
+    magnetization.vec.FV().NumPy()[:] = x
+    mean = _mean_tangential_magnetization(dict(gfM=magnetization), mesh)
+    del keep
+    return x, mean
+
+
 def _public(run):
     return {key: value.tolist() if isinstance(value, np.ndarray) else value for key, value in run.items() if key != "x"}
 
@@ -147,6 +181,7 @@ def _case(cells, args, contracts):
         cpu_sector_h = np.asarray(vim.FieldFromSolution(cpu_sector, probes, algorithm="direct"), float)
         cpu_sector_x = np.asarray(cpu_sector["_m_coefficients"], dtype=float)
     del keep
+    equation_x, equation_mean = _cpu_ring_equation(paths["ring"], args)
     drive = args.applied_field_am
     runs, measured, gates = {}, {}, {}
     for compression in args.compressions:
@@ -165,7 +200,12 @@ def _case(cells, args, contracts):
             sector_vs_cpu_ring_field_relative_to_drive=field_error,
             device_ring_vs_cpu_ring_mean=abs(run["ring"]["mean_tangential"] - cpu_ring_mean)/abs(cpu_ring_mean),
             device_ring_vs_cpu_ring_field_relative_to_drive=float(np.max(np.linalg.norm(run["ring"]["field"] - cpu_ring_h, axis=1))/drive),
-            sector_x_vs_cpu_sector=float(np.linalg.norm(run["sector"]["x"] - cpu_sector_x)/np.linalg.norm(cpu_sector_x)))
+            sector_x_vs_cpu_sector=float(np.linalg.norm(run["sector"]["x"] - cpu_sector_x)/np.linalg.norm(cpu_sector_x)),
+            sector_vs_device_ring_mean=abs(run["sector"]["mean_tangential"] - run["ring"]["mean_tangential"])/abs(run["ring"]["mean_tangential"]),
+            sector_vs_device_ring_field_relative_to_drive=float(np.max(np.linalg.norm(run["sector"]["field"] - run["ring"]["field"], axis=1))/drive),
+            device_ring_x_vs_cpu_equation=float(np.linalg.norm(run["ring"]["x"] - equation_x)/np.linalg.norm(equation_x)),
+            device_ring_vs_cpu_equation_mean=abs(run["ring"]["mean_tangential"] - equation_mean)/abs(equation_mean),
+            cpu_equation_vs_cpu_ring_mean=abs(equation_mean - cpu_ring_mean)/abs(cpu_ring_mean))
         gates.update({
             f"{compression}_sector_dofs_scale_as_one_fold": bool(run["sector"]["dofs"]*args.fold == run["ring"]["dofs"]),
             f"{compression}_periodic_trace_is_compressed": bool(run["sector"]["dofs"] < run["lone"]["dofs"]),
