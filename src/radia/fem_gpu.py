@@ -186,19 +186,23 @@ def _form_input(fes, mesh, vb, et, rule, representatives, numbers, nl, quantity,
     return form
 
 
-def _point_tensor(tangent, mesh, rule_by_type, et, numbers):
-    """The caller's symmetric tensor at the rule points of one element group: ne * nq * 6."""
+def _group_points(mesh, rule, et, numbers):
+    """Mapped rule points of one element group, in element then rule order."""
     import ngsolve as ng
 
     all_types = [el.type for el in mesh.Elements(ng.VOL)]
-    rules = {kind: rule_by_type.get(kind) or ng.IntegrationRule(kind, 0) for kind in set(all_types)}
+    rules = {kind: rule if kind == et else ng.IntegrationRule(kind, 0) for kind in set(all_types)}
     points = mesh.MapToAllElements(rules, ng.VOL)
     counts = np.array([len(rules[kind].points) for kind in all_types], dtype=np.int64)
     starts = np.concatenate(([0], np.cumsum(counts)))
-    nq = len(rule_by_type[et].points)
-    picks = np.concatenate([np.arange(starts[n], starts[n] + nq) for n in numbers])
-    values = np.asarray(tangent(points[picks]), dtype=np.float64)
-    expected = (len(numbers) * nq, 6)
+    nq = len(rule.points)
+    return points[np.concatenate([np.arange(starts[n], starts[n] + nq) for n in numbers])]
+
+
+def _point_tensor(tangent, points):
+    """The caller's symmetric tensor at mapped points: six values per point."""
+    values = np.asarray(tangent(points), dtype=np.float64)
+    expected = (len(points), 6)
     if values.shape != expected or not np.isfinite(values).all():
         raise ValueError(f"the point tensor must be finite with shape {expected}, got {values.shape}")
     return np.ascontiguousarray(values.reshape(-1))
@@ -238,8 +242,8 @@ def _group_inputs(fes, mesh, coefficients, kind, bonus, native, tangent=None):
             if tangent is not None:
                 if kind != "H1":
                     raise ValueError("a point tensor applies to a gradient form on H1")
-                group["stiff"]["tensor"] = _point_tensor(tangent, mesh, {et: rule}, et, numbers)
-                group["_rule"], group["_numbers"], group["_et"] = rule, numbers, et
+                group["_points"] = _group_points(mesh, rule, et, numbers)
+                group["stiff"]["tensor"] = _point_tensor(tangent, group["_points"])
         trace_bonus = bonus[2] if vb == ng.BND else bonus[1]
         mass_rule = ng.IntegrationRule(et, 2 * fe_order + trace_bonus)
         quantity, law = ("scalar", native.LAW_VALUE) if kind == "H1" else ("covariant", native.LAW_COVARIANT)
@@ -322,8 +326,7 @@ class DeviceSystem:
         """
         if self.tangent is None:
             raise ValueError("this system was built without a point tensor")
-        tensors = [(_point_tensor(self.tangent, self.mesh, {group["_et"]: group["_rule"]}, group["_et"], group["_numbers"])
-                    if group["stiff"] is not None else None) for group in self.groups]
+        tensors = [_point_tensor(self.tangent, group["_points"]) if group["stiff"] is not None else None for group in self.groups]
         self.native.update_tensors(tensors)
         self.preconditioner = None
         self.hierarchy = None
