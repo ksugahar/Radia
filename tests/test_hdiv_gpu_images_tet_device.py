@@ -386,7 +386,6 @@ def test_curved_seam_faces_equal_the_direct_device_ring(meshes, request, cuda):
     ring = {**{key: ring_table[key] for key in _KEYS + _CURVED_KEYS}, **_one_number_per_vertex(ring_table)}
     n = table["charge_host"].size
     pairs = np.array([(a, b) for a in seam for b in range(n)])
-    pairs = pairs[_sampled_pairs(len(pairs), 600)[:, 0]]
     rows, cols = pairs[:, 0], pairs[:, 1]
     expected = 0.5*sum(_entries(cuda, ring, index[0, rows], index[k, cols]) + _entries(cuda, ring, index[0, cols], index[k, rows]) for k in range(FOLD))
     actual = _entries(cuda, {**bare, **_terms(None, FOLD)}, rows, cols)
