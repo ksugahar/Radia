@@ -2678,6 +2678,18 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "src/core/gpu/hdiv/hdiv_flat_field.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/core/gpu/hdiv/hdiv_hex_gram.cuh",
       "owners": [
         "radia",
@@ -3418,6 +3430,7 @@
             "src/core/gpu/hdiv/hdiv_flat_aca.cuh",
             "src/core/gpu/hdiv/hdiv_flat_charge_map.cuh",
             "src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_field.cuh",
             "src/core/gpu/hdiv/hdiv_flat_gram.cuh",
             "src/core/gpu/hdiv/hdiv_hex_field.cuh",
             "src/core/gpu/hdiv/hdiv_hex_gram.cuh",
@@ -3554,6 +3567,7 @@
             "src/core/gpu/hdiv/hdiv_flat_aca.cuh",
             "src/core/gpu/hdiv/hdiv_flat_charge_map.cuh",
             "src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh",
+            "src/core/gpu/hdiv/hdiv_flat_field.cuh",
             "src/core/gpu/hdiv/hdiv_flat_gram.cuh",
             "src/core/gpu/hdiv/hdiv_hex_field.cuh",
             "src/core/gpu/hdiv/hdiv_hex_gram.cuh",

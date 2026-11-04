@@ -80,7 +80,7 @@ __global__ void hexFieldReduce(std::size_t probes,std::size_t terms,const double
     for(int k=0;k<3;++k){double sum=0.0;for(std::size_t t=0;t<terms;++t)sum+=rows[3*(p*terms+t)+k];
         const double value=sum/(4.0*3.14159265358979323846);if(!isfinite(value))atomicExch(invalid,1);field[3*p+k]=value;}
 }
-struct HexFieldResult {HostVector<double> field;HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("hex.field-transfers")};std::size_t launches=0,ownedBytes=0;bool affine=false;};
+struct HexFieldResult {HostVector<double> field;HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("hex.field-transfers")};std::size_t launches=0,ownedBytes=0;bool affine=false;const char* route="";};
 // x is the prepared FE state; the Resident supplies q = B x on its own stream and device.
 inline HexFieldResult hexDeviceField(const FlatBlock& block,Resident& resident,const HostVector<double>& x,const HostVector<double>& points){
     if(!block.hex||!block.hostTypes.empty())throw std::invalid_argument("Device field evaluation has no route for this geometry family");
@@ -102,6 +102,7 @@ inline HexFieldResult hexDeviceField(const FlatBlock& block,Resident& resident,c
     {HostVector<unsigned char> flags(hosts,0,HostFaultAllocator<unsigned char>("hex.field-affine"));
         check(cudaMemcpyAsync(flags.data(),d.affine,hosts,cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));record("field_host_affine","D2H",hosts);
         result.affine=true;for(auto flag:flags)result.affine=result.affine&&flag!=0;}
+    result.route=result.affine?"device-hex-polynomial":"device-hex-cloud";
     poly.allocate(result.affine?checkedProduct(hosts,84):1);
     if(result.affine){hexFieldPolynomials<<<unsigned((hosts+127)/128),128,0,stream>>>(d,charges.data,poly.data,prepared.invalid.data);check(cudaGetLastError());++result.launches;
         if(prepared.flag(stream,record,"field_polynomial_flag")!=0)throw std::runtime_error("Device field polynomial is nonfinite or its host stopped being affine");}
