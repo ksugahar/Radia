@@ -134,6 +134,7 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
         if(rows.size()%4)throw std::invalid_argument("Reference rule rows require (xi0,xi1,xi2,weight)");
         for(std::size_t i=0;i<rows.size();i+=4)out.push_back({{rows[i],rows[i+1],rows[i+2]},rows[i+3]});};
     rule(input.tet,block.tet);rule(input.tri,block.tri);rule(input.tetLow,block.tetLow);rule(input.triLow,block.triLow);
+    block.images=radia_hmatrix_cuda::flatImageRows(input.imageMasks,input.imageSigns,input.imageAngles);
     block.validate();return block;
 }
 }

@@ -599,6 +599,10 @@ def _expected_device_ledger(arguments):
     return expected
 
 
+# One native HexImage row: flips, forward and inverse rotation, sign and flag, all float64.
+_IMAGE_ROW_BYTES = 72
+
+
 def _expected_hex_ledger(arguments):
     hosts = arguments["cell_class"].size + arguments["face_class"].size
     expected = {(name, "H2D"): size for name, size in (
@@ -611,6 +615,8 @@ def _expected_hex_ledger(arguments):
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
                      ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
                      ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+    if arguments.get("image_masks") is not None:
+        expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
                          ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
@@ -720,7 +726,43 @@ def _rule_rows(points, weights, width):
 _P2_GEOMETRY_ROUNDOFF = 1e-12
 
 
-def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMPRESSION):
+def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=False):
+    """Mirror and cyclic terms of the device Gram, in the ``vim.Solve`` order and semantics.
+
+    Returns ``None`` without images, else the int32 masks (bits 1 x, 2 y, 4 z), float64 signs
+    and, for a cyclic list, the float64 rotation angles about +z. A mirror and a cyclic list
+    together are refused as on the CPU route; the native binding repeats the closure checks.
+    """
+    import numpy as np
+    from radia.vim import _image
+    masks, signs, angles = [], [], None
+    if image is not None:
+        for axes, sign in _image.image_group(_image.parse_image_string(image)):
+            masks.append(int(sum(1 << axis for axis in axes)))
+            signs.append(float(sign))
+    if image_cyclic is not None:
+        if isinstance(image_cyclic, bool) or not isinstance(image_cyclic, numbers.Integral) or image_cyclic < 2:
+            raise ValueError("image_cyclic must be an N-fold count >= 2: %r" % (image_cyclic,))
+        if image_cyclic_alternating and image_cyclic % 2:
+            raise ValueError("image_cyclic_alternating needs an even pole count: %r" % (image_cyclic,))
+        if masks:
+            raise NotImplementedError("Mirror image planes and image_cyclic cannot be combined, as on the CPU route")
+        fold = int(image_cyclic)
+        masks = [0]*(fold - 1)
+        signs = [-1.0 if image_cyclic_alternating and k % 2 else 1.0 for k in range(1, fold)]
+        angles = [2.0*math.pi*k/fold for k in range(1, fold)]
+    elif image_cyclic_alternating:
+        raise ValueError("image_cyclic_alternating requires image_cyclic")
+    if not masks:
+        return None
+    terms = dict(image_masks=np.ascontiguousarray(masks, dtype=np.int32),
+                 image_signs=np.ascontiguousarray(signs, dtype=np.float64))
+    if angles is not None:
+        terms["image_rotations"] = np.ascontiguousarray(angles, dtype=np.float64)
+    return terms
+
+
+def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMPRESSION, images=None):
     """Map the staged TET charge inputs and NGSolve tables to the device binding.
 
     The Gram is compressed by device ACA with the caller's checked parameters
@@ -738,11 +780,13 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
     lattices, which must equal the CPU lattices to roundoff. The mixed
     family (``_prepare_gpu_mixed_charge_inputs``) consumes the staged host
     lattices the same way, with their host types and per-class charge tables.
+    ``images`` (``_device_image_terms``) folds mirror and cyclic terms on pure HEX
+    only; every other family refuses them.
     """
     import numpy as np
-    if len(inputs.get("image_masks", ())):
-        raise NotImplementedError("Device charge Gram has no image route")
     family = inputs.get("family", "affine-tet")
+    if len(inputs.get("image_masks", ())) or (images is not None and family != _HEX):
+        raise NotImplementedError("Device charge Gram has no image route for family %r" % (family,))
     curved = family == "curved-tet"
     common = dict(charge_host=np.ascontiguousarray(inputs["charge_host"], dtype=np.int32),
                   charge_kind=np.ascontiguousarray(inputs["charge_kind"], dtype=np.int32),
@@ -772,6 +816,8 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
                          tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30, family=family,
                          hex_rules=np.ascontiguousarray(rows),
                          hex_bands=np.array([inputs["near_grade"], inputs["far_inner"]], dtype=np.float64))
+        if images is not None:
+            arguments.update(images)
     elif curved:
         numbers = (np.ravel(tables["cell_numbers"]), np.ravel(tables["face_numbers"]))
         if not (np.array_equal(numbers[0], inputs["cell_vertices"]) and np.array_equal(numbers[1], inputs["face_vertices"])):
@@ -834,7 +880,7 @@ def _EMPTY_CHARGE_TABLES():
                 face_tables=np.zeros((0, 0, 0)), face_exponents=np.zeros((0, 2), dtype=np.int32))
 
 
-def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION, curve_order=1):
+def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION, curve_order=1, images=None):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
     ``curve_order=2`` curves the FE mesh and the native staging mesh with
@@ -873,7 +919,7 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
         _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
     tables, geometry = _device_charge_tables(path, fes, native, curve_order, family)
     return dict(_fe_sources(mesh, fes), family=family, evaluation_tables=evaluation, material_budget=budget,
-                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression))
+                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression, images))
 
 
 def _require_budget_cover(assembly, stats):

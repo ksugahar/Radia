@@ -83,9 +83,22 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
         result.permutation.insert(result.permutation.end(),members.begin()+std::ptrdiff_t(offsets[e]),members.begin()+std::ptrdiff_t(offsets[e+1]));}
     if(result.permutation.size()!=n)throw std::runtime_error("ACA partition does not cover every charge exactly once");
     for(auto& node:nodes){node.charge=start[node.first];node.charges=start[node.first+node.count]-node.charge;}
+    auto separated=[&](const Node& s,const double* lo,const double* hi,double width){
+        double gap=0;for(int k=0;k<3;++k){const double d=std::max({0.0,lo[k]-s.hi[k],s.lo[k]-hi[k]});gap+=d*d;}
+        gap=std::sqrt(gap);return gap>0&&std::min(s.width,width)<=options.eta*gap;};
+    // Every term of a low-rank block must be smooth: the column cluster and the box hull of each of its images are
+    // admissible against the row cluster. The list is closed under inversion, so the image of the row cluster is covered.
     auto admissible=[&](const Node& s,const Node& t){
-        double gap=0;for(int k=0;k<3;++k){const double d=std::max({0.0,t.lo[k]-s.hi[k],s.lo[k]-t.hi[k]});gap+=d*d;}
-        gap=std::sqrt(gap);return gap>0&&std::min(s.width,t.width)<=options.eta*gap;};
+        if(!separated(s,t.lo,t.hi,t.width))return false;
+        for(const auto& image:block.images){double lo[3],hi[3];
+            for(int k=0;k<3;++k){lo[k]=std::numeric_limits<double>::infinity();hi[k]=-std::numeric_limits<double>::infinity();}
+            for(int corner=0;corner<8;++corner){
+                const double x=corner&1?t.hi[0]:t.lo[0],y=corner&2?t.hi[1]:t.lo[1],z=corner&4?t.hi[2]:t.lo[2];
+                const double p[3]={image.flip[0]*(image.c*x-image.s*y),image.flip[1]*(image.s*x+image.c*y),image.flip[2]*z};
+                for(int k=0;k<3;++k){lo[k]=std::min(lo[k],p[k]);hi[k]=std::max(hi[k],p[k]);}}
+            double width=0;for(int k=0;k<3;++k)width+=(hi[k]-lo[k])*(hi[k]-lo[k]);
+            if(!separated(s,lo,hi,std::sqrt(width)))return false;}
+        return true;};
     // Upper/diagonal blocks only: s precedes t in charge order whenever s != t.
     std::function<void(std::size_t,std::size_t)> split=[&](std::size_t si,std::size_t ti){
         const Node s=nodes[si],t=nodes[ti];
@@ -193,8 +206,8 @@ __global__ void acaStep(FlatDevice d,const std::size_t* perm,const double* sigma
 }
 __global__ void acaSigma(FlatDevice d,double* sigma,int* invalid){
     const auto a=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(a>=d.n)return;
-    const double diagonal=flatEntry(d,a,a);if(!isfinite(diagonal)||!(diagonal>0)){atomicExch(invalid,1);return;}
-    sigma[a]=sqrt(diagonal);
+    double value=0.0;if(!flatChargeScale(d,a,flatEntry(d,a,a),value)){atomicExch(invalid,1);return;}
+    sigma[a]=value;
 }
 __global__ void acaReport(const AcaLeafState* leaves,std::size_t count,int* report){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=count)return;
