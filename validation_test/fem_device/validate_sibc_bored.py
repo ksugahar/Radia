@@ -2,19 +2,21 @@
 
 The mesh, the coil and the CPU solve are those of validation_test/induction_heating/bored_workpiece.
 The production CPU route ``solve_fem`` with sparse Cholesky supplies the reference field and the
-line-integral right-hand side. The same right-hand side then crosses to the device, where the form
-and the preconditioner are built from mesh arrays: AMS at p=1 and BDDC over AMS at p=2.
+line-integral right-hand side. ``solve_fem(..., Backend="gpu")`` then builds the form and the
+preconditioner on the device from mesh arrays: AMS at p=1 and BDDC over AMS at p=2.
 
 The bored_workpiece README gates FEM against its BEM power at 2 %, and its FEM power balance at
 1e-5. Those values are read from validate.LIMITS, unchanged; no approval ID for them was found, so
 this script reports them as the case's gates, not as an adopted criterion. SOLUTION_REL is a
 PROPOSED detector. Writes one JSON. Timings are diagnostic. Usage:
-    python validate_sibc_bored.py --out result.json --work scratch_dir [--cases 0.006/1 0.006/2 ...]
+    python validate_sibc_bored.py --reference-only --out unused --work scratch_dir [--cases 0.012/1 0.012/2 ...]
+    python validate_sibc_bored.py --out result.json --work scratch_dir [--cases 0.012/1 0.012/2 ...]
+The first form is the CPU stage, with no device; the second runs the production entry on the device and
+compares it with the stored reference on the identical right-hand side.
 """
 import argparse
 import importlib.util
 import json
-import math
 from pathlib import Path
 import platform
 import subprocess
@@ -27,11 +29,10 @@ import ngsolve as ng
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/radia/panels"))
 sys.path.insert(0, str(ROOT / "src"))
-import radia.fem_gpu as route  # noqa: E402
 
 SOLUTION_REL = 1e-6
 BEM_FINEST_W = 73.634332  # bored_workpiece README, finest BEM surface
-NU_0 = 1 / (4e-7 * math.pi)
+AIR_RADIUS = .18
 
 
 def load_case_module():
@@ -41,7 +42,7 @@ def load_case_module():
     return module
 
 
-def build_mesh(case, h, work, air_radius=.18):
+def build_mesh(case, h, work, air_radius=AIR_RADIUS):
     from netgen.occ import Cylinder, Glue, OCCGeometry, Pnt, Sphere, Z
 
     with ng.TaskManager():
@@ -68,8 +69,8 @@ def build_mesh(case, h, work, air_radius=.18):
     return vol
 
 
-def cpu_reference(case, kelvin, vol, order):
-    """The production CPU solve with its assembled right-hand side and field captured at return."""
+def capture_solve(case, kelvin, vol, order, **options):
+    """The production ``solve_fem`` with its assembled right-hand side and field captured at return."""
     from radia.em_material import EMMaterial
 
     captured = {}
@@ -95,29 +96,33 @@ def cpu_reference(case, kelvin, vol, order):
     try:
         with ng.TaskManager():
             result = kelvin.solve_fem(vol_file=str(vol), fes_order=order, frequency=case.FREQ, mat=EMMaterial(name="linear alloy", sigma=case.SIGMA, mu_r=case.MUR),
-                                      half_thickness=.005, solver="sparsecholesky", nthreads=0, filaments=(paths, currents))
+                                      half_thickness=.005, nthreads=0, filaments=(paths, currents), **options)
     finally:
         sys.settrace(previous)
     if "error" in result:
         raise RuntimeError(result["error"])
     if not captured:
-        raise RuntimeError("the CPU route returned without its right-hand side being captured")
+        raise RuntimeError("the production route returned without its right-hand side being captured")
     return result, captured, time.perf_counter() - started
 
 
-def production_entry(case, kelvin, vol, order):
-    """The public ``solve_fem`` with ``Backend="gpu"``: the route as a user selects it."""
-    from radia.em_material import EMMaterial
+def parse_case(text):
+    return float(text.split("/")[0]), int(text.split("/")[1])
 
-    paths, currents = case.coils()
-    with ng.TaskManager():
-        result = kelvin.solve_fem(vol_file=str(vol), fes_order=order, frequency=case.FREQ, mat=EMMaterial(name="linear alloy", sigma=case.SIGMA, mu_r=case.MUR), half_thickness=.005,
-                                  solver="ams" if order == 1 else "bddc", nthreads=0, filaments=(paths, currents), Backend="gpu")
-    if "error" in result:
-        raise RuntimeError(result["error"])
-    if result["backend"] != "gpu" or not result["device_report"]:
-        raise RuntimeError(f"the production entry did not report the device route: {result['backend']}")
-    return result
+
+def reference_path(work, text):
+    h, order = parse_case(text)
+    return work / f"reference_{h:g}_{order}.npz"
+
+
+def run_reference(case, kelvin, text, work):
+    """The CPU stage: sparse Cholesky on the checked mesh. It holds no device and may run outside the device slot."""
+    h, order = parse_case(text)
+    vol = build_mesh(case, h, work)
+    result, data, seconds = capture_solve(case, kelvin, vol, order, solver="sparsecholesky")
+    np.savez(reference_path(work, text), rhs=data["rhs"], field=data["field"], P_total=float(result["P_total"]), seconds=seconds, ndof=int(data["fes"].ndof),
+             true_residual=float(result["linear_true_relative_residual"]))
+    print(f"reference {text}: ndof {data['fes'].ndof} power {result['P_total']:.6f} W, {seconds:.1f} s", flush=True)
 
 
 def surface_power(g, mesh, sibc, omega, Z_s):
@@ -130,62 +135,60 @@ def surface_power(g, mesh, sibc, omega, Z_s):
     return 0.5 * Z_s.real * (omega / abs(Z_s)) ** 2 * tangential
 
 
-def run_case(case, kelvin, text, work, cycles, tolerance):
-    h, order = float(text.split("/")[0]), int(text.split("/")[1])
-    vol = build_mesh(case, h, work)
-    cpu, data, cpu_seconds = cpu_reference(case, kelvin, vol, order)
+def run_case(case, kelvin, text, work):
+    h, order = parse_case(text)
+    reference_file = np.load(reference_path(work, text))
+    vol = work / f"air_{h:g}_{AIR_RADIUS:g}.vol"
+    solver = "ams" if order == 1 else "bddc"
+    entry, data, device_seconds = capture_solve(case, kelvin, vol, order, solver=solver, Backend="gpu")
+    if entry["backend"] != "gpu" or not entry["device_report"]:
+        raise RuntimeError(f"the production entry did not report the device route: {entry['backend']}")
+    device = entry["device_report"]
     fes, mesh = data["fes"], data["mesh"]
     omega, Z_s, sibc = data["omega"], data["Z_s"], data["sibc"]
-    robin = 1j * omega / Z_s
-    # The CPU route's system and auxiliary forms, as in solve_fem: curl-curl with bonus order 4, gauge
-    # mass, Robin trace; the auxiliary mass adds |omega| NU_0.
-    coefficients = route.Coefficients(stiff=NU_0, mass=data["reg"] * NU_0, trace={sibc: robin.real}, trace_im={sibc: robin.imag}, stiff_aux=NU_0,
-                                      mass_aux=(data["shift_eps"] + abs(omega)) * NU_0, trace_aux={sibc: abs(robin)})
-    bonus = (4, 0, 0)
-    started = time.perf_counter()
-    system = route.DeviceSystem(fes, coefficients, bonus=bonus)
-    system.setup("ams" if order == 1 else "bddc", cycles=cycles)
-    device = system.solve(data["rhs"], tolerance=tolerance, max_iterations=2000)
-    device_seconds = time.perf_counter() - started
+    rhs, reference = reference_file["rhs"], reference_file["field"]
+    if rhs.shape != data["rhs"].shape or np.linalg.norm(rhs - data["rhs"]) > 1e-12 * np.linalg.norm(rhs):
+        raise RuntimeError("the device and CPU right-hand sides differ, so the inputs are not identical")
     free = np.array(list(fes.FreeDofs()), dtype=bool)
-    reference = data["field"].copy()
-    difference = float(np.linalg.norm(device["solution"][free] - reference[free]) / np.linalg.norm(reference[free]))
+    difference = float(np.linalg.norm(data["field"][free] - reference[free]) / np.linalg.norm(reference[free]))
     g = ng.GridFunction(fes)
-    g.vec.FV().NumPy()[:] = device["solution"]
+    g.vec.FV().NumPy()[:] = data["field"]
     power = surface_power(g, mesh, sibc, omega, Z_s)
     g_cpu = ng.GridFunction(fes)
     g_cpu.vec.FV().NumPy()[:] = reference
     power_cpu_same_formula = surface_power(g_cpu, mesh, sibc, omega, Z_s)
-    source_work = float(.5 * omega * np.vdot(device["solution"], data["rhs"]).imag)
+    source_work = float(.5 * omega * np.vdot(data["field"], rhs).imag)
+    power_entry, power_cpu = float(entry["P_total"]), float(reference_file["P_total"])
     limits = case.LIMITS
     gates = {"true_residual": {"actual": device["true_residual"], "bound": limits["true_residual"], "pass": device["true_residual"] <= limits["true_residual"]},
              "fem_power_balance": {"actual": abs(source_work / power - 1), "bound": limits["fem_power_balance"], "pass": abs(source_work / power - 1) <= limits["fem_power_balance"]},
-             "bem_fem_power": {"actual": abs(power - BEM_FINEST_W) / BEM_FINEST_W, "bound": limits["bem_fem_power"], "pass": abs(power - BEM_FINEST_W) / BEM_FINEST_W <= limits["bem_fem_power"]},
-             "solution_vs_sparsecholesky_proposed": {"actual": difference, "bound": SOLUTION_REL, "pass": difference <= SOLUTION_REL}}
-    entry = production_entry(case, kelvin, vol, order)
-    entry_power = float(entry["P_total"])
-    gates["production_entry_power_vs_route_proposed"] = {"actual": abs(entry_power - power) / power, "bound": SOLUTION_REL, "pass": abs(entry_power - power) / power <= SOLUTION_REL}
-    return {"case": text, "production_entry_power_W": entry_power, "production_entry_iterations": entry["linear_krylov_iterations"], "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
-            "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": cycles if order > 1 else None, "solution_difference_vs_sparsecholesky": difference, "power_W": power,
-            "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": float(cpu["P_total"]), "source_work_W": source_work, "bem_finest_W": BEM_FINEST_W,
+             "bem_fem_power": {"actual": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W, "bound": limits["bem_fem_power"], "pass": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W <= limits["bem_fem_power"]},
+             "solution_vs_sparsecholesky_proposed": {"actual": difference, "bound": SOLUTION_REL, "pass": difference <= SOLUTION_REL},
+             "power_vs_cpu_route_proposed": {"actual": abs(power_entry - power_cpu) / power_cpu, "bound": SOLUTION_REL, "pass": abs(power_entry - power_cpu) / power_cpu <= SOLUTION_REL}}
+    return {"case": text, "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
+            "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": kelvin.BDDC_AMS_COARSE_CYCLES if order > 1 else None, "solution_difference_vs_sparsecholesky": difference,
+            "power_W": power_entry, "power_field_formula_W": power, "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": power_cpu, "source_work_W": source_work, "bem_finest_W": BEM_FINEST_W,
             "gates": gates, "hierarchy": device["hierarchy"], "nonzeros": device["nonzeros"], "device": device["device"], "device_peak_bytes": device["device_peak_bytes"], "ledger": device["ledger"],
-            "timing_diagnostic": {**device["timing_diagnostic"], "route_total_seconds": device_seconds, "cpu_route_seconds": cpu_seconds}}
+            "timing_diagnostic": {**device["timing_diagnostic"], "production_entry_seconds": device_seconds, "cpu_route_seconds": float(reference_file["seconds"])}}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
-    parser.add_argument("--cases", nargs="*", default=["0.006/1", "0.006/2"])
-    parser.add_argument("--cycles", type=int, default=4)
-    parser.add_argument("--tolerance", type=float, default=1e-8)
+    parser.add_argument("--cases", nargs="*", default=["0.012/1", "0.012/2"])
+    parser.add_argument("--reference-only", action="store_true", help="the CPU stage: write the sparse Cholesky reference into --work")
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=True)
     case = load_case_module()
     import calc_fem_kelvin as kelvin
+    if args.reference_only:
+        for text in args.cases:
+            run_reference(case, kelvin, text, args.work)
+        return
     cases = []
     for text in args.cases:
-        row = run_case(case, kelvin, text, args.work, args.cycles, args.tolerance)
+        row = run_case(case, kelvin, text, args.work)
         cases.append(row)
         print(f"{text}: ndof {row['ndof']} iterations {row['device_iterations']} true residual {row['true_residual']:.3e} difference {row['solution_difference_vs_sparsecholesky']:.3e} "
               f"power {row['power_W']:.6f} W (CPU {row['power_cpu_route_W']:.6f}, BEM {BEM_FINEST_W})", flush=True)
