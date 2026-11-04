@@ -261,7 +261,11 @@ def test_sector_entries_equal_the_sum_over_the_explicit_ring(meshes, request, cu
     relative = np.abs(actual - expected)/scale
     moved = np.abs(plain - expected)/scale
     worst = int(np.argmax(relative))
-    request.node.user_properties += [("charges", int(n)), ("pairs", len(pairs)), ("max_relative", float(relative.max())), ("moved", float(moved.max()))]
+    # The CPU image route on the same pairs is recorded, not asserted: its one-direction far test shows here.
+    _, _, cpu, _ = _case(meshes["sector2" if cells == 2 else "sector"], order, curve_order, _terms(None, FOLD), cuda)
+    cpu_values = np.array([cpu.entry(int(a), int(b)) for a, b in pairs])
+    request.node.user_properties += [("charges", int(n)), ("pairs", len(pairs)), ("max_relative", float(relative.max())), ("moved", float(moved.max())),
+                                     ("cpu_vs_ring", float((np.abs(cpu_values - expected)/scale).max()))]
     assert relative.max() <= SECTOR_ENTRY_REL, (f"cells={cells} order={order} curve={curve_order} pair=({rows[worst]},{cols[worst]}) "
                                                 f"actual={actual[worst]!r} expected={expected[worst]!r} relative={relative[worst]:.3e} limit={SECTOR_ENTRY_REL:.0e}")
     assert moved.max() > 1e3*max(SECTOR_ENTRY_REL, float(relative.max())), f"images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}"
