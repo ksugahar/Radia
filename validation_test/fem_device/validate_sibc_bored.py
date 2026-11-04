@@ -105,6 +105,21 @@ def cpu_reference(case, kelvin, vol, order):
     return result, captured, time.perf_counter() - started
 
 
+def production_entry(case, kelvin, vol, order):
+    """The public ``solve_fem`` with ``Backend="gpu"``: the route as a user selects it."""
+    from radia.em_material import EMMaterial
+
+    paths, currents = case.coils()
+    with ng.TaskManager():
+        result = kelvin.solve_fem(vol_file=str(vol), fes_order=order, frequency=case.FREQ, mat=EMMaterial(name="linear alloy", sigma=case.SIGMA, mu_r=case.MUR), half_thickness=.005,
+                                  solver="ams" if order == 1 else "bddc", nthreads=0, filaments=(paths, currents), Backend="gpu")
+    if "error" in result:
+        raise RuntimeError(result["error"])
+    if result["backend"] != "gpu" or not result["device_report"]:
+        raise RuntimeError(f"the production entry did not report the device route: {result['backend']}")
+    return result
+
+
 def surface_power(g, mesh, sibc, omega, Z_s):
     """P = Re(Z_s)/2 * (omega/|Z_s|)^2 * int |A_t|^2 dS, the expression the CPU route evaluates."""
     normal = ng.specialcf.normal(3)
@@ -147,7 +162,10 @@ def run_case(case, kelvin, text, work, cycles, tolerance):
              "fem_power_balance": {"actual": abs(source_work / power - 1), "bound": limits["fem_power_balance"], "pass": abs(source_work / power - 1) <= limits["fem_power_balance"]},
              "bem_fem_power": {"actual": abs(power - BEM_FINEST_W) / BEM_FINEST_W, "bound": limits["bem_fem_power"], "pass": abs(power - BEM_FINEST_W) / BEM_FINEST_W <= limits["bem_fem_power"]},
              "solution_vs_sparsecholesky_proposed": {"actual": difference, "bound": SOLUTION_REL, "pass": difference <= SOLUTION_REL}}
-    return {"case": text, "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
+    entry = production_entry(case, kelvin, vol, order)
+    entry_power = float(entry["P_total"])
+    gates["production_entry_power_vs_route_proposed"] = {"actual": abs(entry_power - power) / power, "bound": SOLUTION_REL, "pass": abs(entry_power - power) / power <= SOLUTION_REL}
+    return {"case": text, "production_entry_power_W": entry_power, "production_entry_iterations": entry["linear_krylov_iterations"], "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
             "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": cycles if order > 1 else None, "solution_difference_vs_sparsecholesky": difference, "power_W": power,
             "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": float(cpu["P_total"]), "source_work_W": source_work, "bem_finest_W": BEM_FINEST_W,
             "gates": gates, "hierarchy": device["hierarchy"], "nonzeros": device["nonzeros"], "device": device["device"], "device_peak_bytes": device["device_peak_bytes"], "ledger": device["ledger"],
