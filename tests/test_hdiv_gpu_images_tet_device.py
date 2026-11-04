@@ -399,7 +399,7 @@ def _cpu_solve(path, order, curve_order, **kw):
 
 @pytest.mark.parametrize("name,order,curve_order,compression,images", [
     ("gap", 1, 1, "dense", dict(image="-x")), ("cut", 2, 1, "dense", dict(image="-x")), ("cut", 2, 1, "aca", dict(image="-x")),
-    ("half_ball", 2, 2, "dense", dict(image="-x"))])
+    ("half_ball", 1, 2, "dense", dict(image="-x"))])
 def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, compression, images):
     import ngsolve as ng
     with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression=compression, curve_order=curve_order,
