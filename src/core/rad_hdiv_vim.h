@@ -64,6 +64,8 @@ void TetReferencePotentialMomentsDirectional(
     const double r[3], const double dr[3],
     const std::vector<std::array<int,3>>& exps,
     double* value, double* direction);
+void TetPotentialMomentsUpTo1(const double V[4][3], const double r[3],
+                              double out[4]);
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],

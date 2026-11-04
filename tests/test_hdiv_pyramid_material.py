@@ -1,14 +1,13 @@
 """NG-owned pyramid material evaluation; never a mixed charge-Gram certificate.
 
-Expected failures on pinned NGSolve 6.2.2608: connected tet-pyramid-hex orders
-1/2 fail the unchanged 1e-11 constant-projection criterion (1.59e-11/1.78e-11).
-They remain hard failures so earlier mass/checker defects cannot be hidden by
-an overly broad xfail. The device material route takes reference tables for
-tetrahedra and hexahedra and has no pyramid family, so no pyramid GPU action
-runs here. Rule-path parity is not geometric exactness; the NG pyramid rule
-loses ~1e-10 volume.
+Guards: staged material tables reproduce the NGSolve mass and a projected constant.
+Assumes: Netgen carries the apex-only pyramid map guard of tools/netgen_overlay.py,
+which the installed lane checks by hash. Pinned stock 6.2.2608 scales every pyramid
+z by 1 - 1e-10, which fails the unchanged 1e-11 projection on tet-pyramid-hex
+(order 1/2 about 1.6e-11/1.8e-11); that stays a hard failure.
 """
 import json
+import os
 import subprocess
 import sys
 import numpy as np
@@ -18,7 +17,6 @@ from scipy.sparse.linalg import norm as sparse_norm
 
 
 ng = pytest.importorskip("ngsolve")
-gpu = pytest.importorskip("radia._hdiv_cuda", reason="Optional isolated native GPU binding")
 from test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 
@@ -26,6 +24,10 @@ from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 @pytest.mark.parametrize("family", ["pyramid", "tet-pyramid-hex"])
 @pytest.mark.parametrize("order", [1, 2])
 def test_ng_pyramid_mapped_material_mass(tmp_path, record_property, family, order):
+    if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
+        pytest.skip("Optional GPU lane requires RADIA_HDIV_NATIVE_TEST_DIR")
+    from radia.gpu import _native
+    gpu = _native("_hdiv_cuda")
     mesh = connected_mesh(family)
     path = tmp_path / "material.vol"
     mesh.ngmesh.Save(str(path))

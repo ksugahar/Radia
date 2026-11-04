@@ -1344,6 +1344,11 @@ RAD_FIELD_KERNEL void TetReferencePotentialMoments(const double V[4][3], const d
 #endif
 
 
+RAD_FIELD_KERNEL void TetPotentialMomentsUpTo1(const double V[4][3], const double r[3], double out[4])
+{
+    TetPotentialMomentsUpTo(V, r, 1, out);
+}
+
 RAD_FIELD_KERNEL void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3], double out[20])
 {
     TetPotentialMomentsUpTo(V, r, 3, out);

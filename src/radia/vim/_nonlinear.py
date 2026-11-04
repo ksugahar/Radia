@@ -287,6 +287,21 @@ def _bh_inverse_payload(Harr, Barr):
                 initial_reluctivity=float(Hder(0.0)))
 
 
+def _material_rule_space(fes):
+    """IntegrationRuleSpace of the material quadrature rule of an HDiv space."""
+    from ngsolve.comp import IntegrationRuleSpace
+    return IntegrationRuleSpace(fes.mesh, order=max(6, 2 * int(fes.globalorder) + 2))
+
+
+def _rule_integrator(form, space):
+    # NGSolve 6.2.2606 tensor IntegrationRuleSpace evaluation needs the
+    # scalar evaluator; its SIMD path terminates the process on this form.
+    integrator = ng.SymbolicBFI(form, simd_evaluate=False)
+    for element_type, rule in space.GetIntegrationRules().items():
+        integrator.SetIntegrationRule(element_type, rule)
+    return integrator
+
+
 class _EnergyMaterialQuadrature:
     """One NGSolve quadrature rule for material energy, gradient and Hessian."""
 
@@ -295,12 +310,10 @@ class _EnergyMaterialQuadrature:
     _chunk_size = 65536
 
     def __init__(self, fes, bh_table):
-        from ngsolve.comp import IntegrationRuleSpace
-
         self.mesh = fes.mesh
         self.m_field = ng.GridFunction(fes)
-        self.order = max(6, 2 * int(fes.globalorder) + 2)
-        self.space = IntegrationRuleSpace(self.mesh, order=self.order)
+        self.space = _material_rule_space(fes)
+        self.order = self.space.globalorder
         self.measure = ng.dx(intrules=self.space.GetIntegrationRules())
         self.vector_space = ng.VectorValued(self.space, dim=3)
         self.samples = ng.GridFunction(self.vector_space)
@@ -338,12 +351,7 @@ class _EnergyMaterialQuadrature:
         self.tangent = self.tensor_samples.Reshape((3, 3))
 
     def bilinear_integrator(self, form):
-        # NGSolve 6.2.2606 tensor IntegrationRuleSpace evaluation needs the
-        # scalar evaluator; its SIMD path terminates the process on this form.
-        integrator = ng.SymbolicBFI(form, simd_evaluate=False)
-        for element_type, rule in self.space.GetIntegrationRules().items():
-            integrator.SetIntegrationRule(element_type, rule)
-        return integrator
+        return _rule_integrator(form, self.space)
 
     def update(self, coefficients):
         self.m_field.vec.FV().NumPy()[:] = coefficients

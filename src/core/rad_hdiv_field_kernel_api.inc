@@ -9,6 +9,8 @@ RAD_FIELD_KERNEL void TetMoment1(const double V[4][3], const double r[3], double
 RAD_FIELD_KERNEL void TetPotentialMomentsDirectionalUpTo1(
     const double V[4][3], const double dV[4][3], const double r[3], const double dr[3],
     double value[4], double direction[4]);
+RAD_FIELD_KERNEL void TetPotentialMomentsUpTo1(const double V[4][3], const double r[3],
+                              double out[4]);
 RAD_FIELD_KERNEL void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);
 RAD_FIELD_KERNEL void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],
