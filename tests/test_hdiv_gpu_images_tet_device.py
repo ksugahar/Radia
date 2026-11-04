@@ -148,17 +148,21 @@ def test_image_entries_match_cpu_charge_gram(meshes, request, cuda, name, order,
     actual = _entries(cuda, arguments, rows, cols)
     expected = np.array([gram.entry(int(i), int(j)) for i, j in pairs])
     diagonal = np.array([gram.entry(i, i) for i in range(n)])
-    # A charge an image of opposite sign cancels has a roundoff diagonal: it is measured at the largest scale.
+    bare = {key: value for key, value in arguments.items() if not key.startswith("image_")}
+    plain = _entries(cuda, bare, rows, cols)
+    # A charge an image of opposite sign cancels has a roundoff diagonal: it is measured at the largest scale, and a
+    # cancelled entry keeps the roundoff of its terms, the bound the CPU charge scale itself uses.
     scale = np.sqrt(np.maximum(np.abs(diagonal), 1e-6*np.abs(diagonal).max()))
-    relative = np.abs(actual - expected)/(scale[rows]*scale[cols])
+    direct = np.abs(_entries(cuda, bare, np.arange(n), np.arange(n)))
+    roundoff = 64*np.finfo(float).eps*(1 + arguments["image_masks"].size)*np.sqrt(direct[rows]*direct[cols])
+    relative = np.maximum(np.abs(actual - expected) - roundoff, 0.0)/(scale[rows]*scale[cols])
     worst = int(np.argmax(relative))
     request.node.user_properties += [("charges", int(n)), ("pairs", len(pairs)), ("max_relative", float(relative.max()))]
     assert relative.max() <= ENTRY_REL, (
         f"{name} {image or cyclic} order={order} curve={curve_order} pair=({rows[worst]},{cols[worst]}) actual={actual[worst]!r} "
         f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
     # Without the images the same pairs differ: a no-op image route cannot pass.
-    bare = {key: value for key, value in arguments.items() if not key.startswith("image_")}
-    moved = np.abs(_entries(cuda, bare, rows, cols) - expected)/(scale[rows]*scale[cols])
+    moved = np.abs(plain - expected)/(scale[rows]*scale[cols])
     assert moved.max() > 1e4*max(ENTRY_REL, float(relative.max())), (
         f"{name} images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}")
 
@@ -245,7 +249,7 @@ def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, 
 
 @pytest.mark.parametrize("name,order,images", [("cut", 2, dict(image="-x")), ("sector2", 1, dict(image_cyclic=8))])
 def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, images):
-    x_cpu = _cpu_solve(meshes[name], order, 1, bh_table=_BH, **images)
+    x_cpu = _cpu_solve(meshes[name], order, 1, bh_table=_BH, nl_tol=1e-9, **images)
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
     relative = np.linalg.norm(solved["x"] - x_cpu)/np.linalg.norm(x_cpu)
