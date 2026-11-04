@@ -161,10 +161,12 @@ def test_image_entries_equal_the_sum_over_the_explicit_copies(meshes, request, c
                                                                     upper[rng.integers(0, len(upper), PAIR_SAMPLE)]], axis=0)
     signs = [(-1.0)**k if alternating else 1.0 for k in range(fold)]
     expected = np.zeros(len(pairs))
+    charge = lambda index: (int(table["charge_kind"][index]), int(table["charge_host"][index]), tuple(int(e) for e in table["charge_exponents"][3*index:3*index + 3]))
     for index, (a, b) in enumerate(pairs):
-        kind, host, expo = int(table["charge_kind"][b]), int(table["charge_host"][b]), tuple(int(e) for e in table["charge_exponents"][3*b:3*b + 3])
+        kind, host, expo = charge(b)
+        target = ring[charge(a)]
         for k in range(fold):
-            expected[index] += signs[k]*gram.entry(int(a), ring[kind, host + k*(faces if kind else cells), expo])
+            expected[index] += signs[k]*gram.entry(target, ring[kind, host + k*(faces if kind else cells), expo])
     device = {key: table[key] for key in _GEOMETRY}
     device.update(hdiv_gpu._device_image_terms(None, fold, alternating))
     actual = _entries(cuda, device, pairs[:, 0], pairs[:, 1])
@@ -175,7 +177,7 @@ def test_image_entries_equal_the_sum_over_the_explicit_copies(meshes, request, c
     worst = int(np.argmax(relative))
     moved = np.abs(plain - expected)/scale
     request.node.user_properties += [("charges", int(n)), ("pairs", len(pairs)), ("max_relative", float(relative.max())), ("moved", float(moved.max()))]
-    assert relative.max() <= ENTRY_REL, (f"{name} order={order} alternating={alternating} pair={pairs[worst].tolist()} actual={actual[worst]!r} "
+    assert relative.max() <= ENTRY_REL, (f"{name} order={order} alternating={alternating} pair={pairs[worst].tolist()} {charge(pairs[worst, 0])} {charge(pairs[worst, 1])} actual={actual[worst]!r} "
                                          f"expected={expected[worst]!r} relative={relative[worst]:.3e} limit={ENTRY_REL:.0e}")
     assert moved.max() > 1e3*max(ENTRY_REL, float(relative.max())), f"{name} images are a no-op: moved={moved.max():.3e} relative={relative.max():.3e}"
 
