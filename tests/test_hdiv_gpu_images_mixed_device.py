@@ -192,7 +192,7 @@ def _cpu_means(path, cells, order, applied, **kw):
     rad.UtiDelAll()
     with ng.TaskManager():
         mesh = ng.Mesh(str(path))
-        result = _solve.hdiv_demag_solve(mesh, H_ext=ng.CF(applied), order=order, tol=1e-11, **kw)
+        result = _solve.hdiv_demag_solve(mesh, H_ext=ng.CF(applied), order=order, gram_eps=1e-10, tol=1e-11, **kw)
         return _element_means(result["gfM"], mesh)[:cells]
 
 
