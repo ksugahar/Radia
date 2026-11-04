@@ -113,6 +113,32 @@ def test_complex_hcurl_bddc(route, order):
     _check(route, route.solve_hcurl, fes, coefficients, _rhs(fes, "HCurl") + 0j, bonus=(2, 2, 2), cycles=3)
 
 
+def _other_mesh(name):
+    if name == "hexes":
+        return _cube(3, hexes=True)
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import mixed_grid, pyramid_cube
+    return {"pyramids": lambda: pyramid_cube(0.4), "mixed": lambda: mixed_grid((2, 2, 2))}[name]()
+
+
+@pytest.mark.parametrize("mesh_name", ["hexes", "pyramids", "mixed"])
+@pytest.mark.parametrize("order", [1, 2])
+def test_h1_on_other_elements(route, mesh_name, order):
+    mesh = _other_mesh(mesh_name)
+    fes = ng.H1(mesh, order=order, dirichlet=".*", wb_withedges=False)
+    actual = _check(route, route.solve_h1, fes, route.Coefficients(stiff=3.0, stiff_aux=3.0), _rhs(fes, "H1"))
+    assert actual["preconditioner"] == ("amg" if order == 1 else "bddc"), actual["preconditioner"]
+
+
+@pytest.mark.parametrize("mesh_name", ["hexes", "pyramids", "mixed"])
+@pytest.mark.parametrize("order", [1, 2])
+def test_complex_hcurl_on_other_elements(route, mesh_name, order):
+    mesh = _other_mesh(mesh_name)
+    fes = ng.HCurl(mesh, order=order, nograds=True, complex=True, dirichlet=".*")
+    coefficients = route.Coefficients(stiff=1.0, mass_im=30.0, stiff_aux=1.0, mass_aux=30.0)
+    actual = _check(route, route.solve_hcurl, fes, coefficients, _rhs(fes, "HCurl") + 0j, bonus=(2, 2, 2), cycles=3)
+    assert actual["preconditioner"] == "bddc", actual["preconditioner"]
+
+
 def test_real_right_hand_side_is_complex_checked(route):
     mesh = _cube(2)
     fes = ng.H1(mesh, order=1, dirichlet="left")

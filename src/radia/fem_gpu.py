@@ -339,9 +339,10 @@ class DeviceSystem:
             self.hierarchy = self.native.setup_ams(int(self.mesh.nedge), int(self.mesh.nv), edges,
                                                    np.ascontiguousarray(self.vertices), AMS_MIN_COARSE if min_coarse is None else min_coarse, theta)
         elif preconditioner == "bddc":
-            if self.order < 2:
-                raise ValueError("BDDC applies to p>1; use AMG or AMS at p=1")
             split, wb_of_dof, nw = _bddc_split(self.fes, self.mesh, self.kind, self.groups)
+            if nw >= self.fes.ndof:
+                raise ValueError("BDDC applies to p>1 or to a space with DOFs outside the wirebasket; use AMG or AMS on a pure "
+                                 f"lowest-order space, got {self.fes.ndof} DOFs and {nw} wirebasket DOFs")
             if self.kind == "HCurl":
                 edges = _edge_arrays(self.fes, self.mesh)
                 self.hierarchy = self.native.setup_bddc(split, wb_of_dof, nw, int(self.mesh.nedge), int(self.mesh.nv), edges,
@@ -576,19 +577,19 @@ def _solve(space, coefficients, rhs, *, Backend, lift, preconditioner, bonus, to
 
 def solve_h1(space, coefficients, rhs, *, Backend, lift=None, preconditioner=None, bonus=(0, 0, 0), tolerance=1e-10,
              max_iterations=500, cycles=None):
-    """Solve an H1 form: ``amg`` at p=1 and ``bddc`` at p>1; no implicit backend change."""
+    """Solve an H1 form: ``amg`` with one DOF per vertex, ``bddc`` otherwise; no implicit backend change."""
     if _space_kind(space) != "H1":
         raise ValueError("solve_h1 needs an H1 space")
-    selected = preconditioner or ("amg" if space.globalorder == 1 else "bddc")
+    selected = preconditioner or ("amg" if space.ndof == space.mesh.nv else "bddc")
     return _solve(space, coefficients, rhs, Backend=Backend, lift=lift, preconditioner=selected, bonus=bonus, tolerance=tolerance,
                   max_iterations=max_iterations, cycles=cycles)
 
 
 def solve_hcurl(space, coefficients, rhs, *, Backend, lift=None, preconditioner=None, bonus=(0, 0, 0), tolerance=1e-8,
                 max_iterations=500, cycles=None):
-    """Solve a curl-curl form: ``ams`` at p=1 and ``bddc`` over AMS at p>1."""
+    """Solve a curl-curl form: ``ams`` with one DOF per edge, ``bddc`` over AMS otherwise (p>1, or HCurl order 1 on hexes)."""
     if _space_kind(space) != "HCurl":
         raise ValueError("solve_hcurl needs an HCurl space")
-    selected = preconditioner or ("ams" if space.globalorder == 1 else "bddc")
+    selected = preconditioner or ("ams" if space.ndof == space.mesh.nedge else "bddc")
     return _solve(space, coefficients, rhs, Backend=Backend, lift=lift, preconditioner=selected, bonus=bonus, tolerance=tolerance,
                   max_iterations=max_iterations, cycles=cycles)
