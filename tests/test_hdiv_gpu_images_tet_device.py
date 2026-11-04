@@ -365,7 +365,9 @@ def test_curved_sector_entries_equal_the_connected_ring_at_the_seam(meshes, requ
 
 def _one_number_per_vertex(ring):
     """Host numbers of a ring with every coincident vertex numbered alike, as a connected mesh numbers them."""
-    cells, faces = ring["cell_vertices"].reshape(-1, 3), ring["face_vertices"].reshape(-1, 3)
+    # The curved lattices hold the corners of a host first, then its edge nodes.
+    cells = ring["cell_vertices"].reshape(ring["cell_numbers"].size//4, -1, 3)[:, :4].reshape(-1, 3)
+    faces = ring["face_vertices"].reshape(ring["face_numbers"].size//3, -1, 3)[:, :3].reshape(-1, 3)
     _, numbers = np.unique(np.r_[cells, faces], axis=0, return_inverse=True)
     numbers = numbers.ravel()
     return dict(cell_numbers=numbers[:cells.shape[0]].astype(ring["cell_numbers"].dtype).reshape(ring["cell_numbers"].shape),
