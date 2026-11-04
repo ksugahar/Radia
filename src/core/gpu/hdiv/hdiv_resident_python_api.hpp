@@ -63,7 +63,7 @@ struct ChargeMapInput {
     std::size_t dofs=0,cellMonomials=0,faceMonomials=0,cellWidth=0,faceWidth=0;
     radia_hmatrix_cuda::HostVector<double> cellTables,faceTables,cellRule,faceRule;
     radia_hmatrix_cuda::HostVector<int> cellClass,cellDofs,faceClass,faceDofs,cellExponents,faceExponents;
-    bool curved=false,hex=false,mixed=false;
+    bool curved=false,hex=false,mixed=false,periodicTrace=false;
     radia_hmatrix_cuda::HostVector<double> classTables;
     radia_hmatrix_cuda::HostVector<int> hostClass,classInfo,hostDofs;
 };

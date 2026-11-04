@@ -3,6 +3,7 @@
 #include "hdiv_mixed_staging.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
 #include <mutex>
 namespace py=pybind11;
 namespace {
@@ -11,7 +12,8 @@ class MaterialOwner {
     std::mutex mutex;
     std::unique_ptr<MaterialStagingContext> context;
 public:
-    MaterialOwner(const std::string& path,int order,int curveOrder):context(std::make_unique<MaterialStagingContext>(path,order,curveOrder)){}
+    MaterialOwner(const std::string& path,int order,int curveOrder,const std::vector<std::string>& periodicBoundaries):context(std::make_unique<MaterialStagingContext>(path,order,curveOrder,periodicBoundaries)){
+        if(!periodicBoundaries.empty()&&!isHexMesh(*context))throw std::invalid_argument("Periodic material staging requires a pure HEX mesh");}
     MaterialQuadraturePayload quadrature(std::size_t first,std::size_t count){
         std::lock_guard<std::mutex> lock(mutex);
         if(!context)throw std::invalid_argument("Material context is closed");
@@ -97,7 +99,8 @@ py::dict publishCharge(const FlatChargeTables& t){
 }
 void registerMaterialStaging(py::module_& module){
     py::class_<MaterialOwner>(module,"_MaterialStagingContext")
-        .def(py::init<const std::string&,int,int>(),py::arg("mesh_path"),py::arg("order"),py::arg("curve_order")=1,py::call_guard<py::gil_scoped_release>())
+        .def(py::init<const std::string&,int,int,const std::vector<std::string>&>(),py::arg("mesh_path"),py::arg("order"),py::arg("curve_order")=1,
+             py::arg("periodic_boundaries")=std::vector<std::string>{},py::call_guard<py::gil_scoped_release>())
         .def("quadrature",[](MaterialOwner& self,std::size_t first,std::size_t count){
             MaterialQuadraturePayload payload;
             {py::gil_scoped_release release;payload=self.quadrature(first,count);}

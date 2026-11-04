@@ -276,10 +276,12 @@ inline void validateFlatChargeMap(const radia_hdiv_python::FlatInput& flat,const
     for(double v:in.faceTables)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite charge face table");
     for(int c:in.cellClass)if(c<0||std::size_t(c)>=in.cellTables.size()/(cm*cw))throw std::invalid_argument("Charge cell class out of range");
     for(int c:in.faceClass)if(c<0||std::size_t(c)>=in.faceTables.size()/(fm*fw))throw std::invalid_argument("Charge face class out of range");
-    auto dofRows=[&](const auto& dofs,std::size_t count,std::size_t width){
+    auto dofRows=[&](const auto& dofs,std::size_t count,std::size_t width,bool repeat){
         for(int d:dofs)if(d<0||std::size_t(d)>=in.dofs)throw std::invalid_argument("Charge DOF index out of range");
-        for(std::size_t e=0;e<count;++e)for(std::size_t i=0;i<width;++i)for(std::size_t j=0;j<i;++j)
+        if(!repeat)for(std::size_t e=0;e<count;++e)for(std::size_t i=0;i<width;++i)for(std::size_t j=0;j<i;++j)
             if(dofs[e*width+i]==dofs[e*width+j])throw std::invalid_argument("Duplicate charge local DOF");};
-    dofRows(in.cellDofs,cells,cw);dofRows(in.faceDofs,faces,fw);
+    // A cell may hold both traces of an identified pair; a face's own DOFs never repeat.
+    if(in.periodicTrace&&!in.hex)throw std::invalid_argument("Periodic traces require the HEX charge map");
+    dofRows(in.cellDofs,cells,cw,in.periodicTrace);dofRows(in.faceDofs,faces,fw,false);
 }
 }

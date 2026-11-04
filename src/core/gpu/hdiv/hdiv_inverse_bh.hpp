@@ -33,6 +33,8 @@ struct FlatEvaluationInput {
     std::size_t elements=0,local=0,rulePoints=0,classes=0,points=0,dofs=0,nodes=4;
     BoundaryVector<double> rule,shapes,vertices;
     BoundaryVector<int> elementClass,elementDofs,elementPoints;
+    // Compressed periodic numbering: one element may hold both traces of an identified pair, so a DOF may repeat locally.
+    bool periodicTrace=false;
 };
 // One table set for a pure mesh, one per element type of a mixed mesh. DOF and
 // point numbers stay global: `points` of every group is the mesh total, and the

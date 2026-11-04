@@ -72,7 +72,8 @@ class PreparedHDivNonlinear:
     @classmethod
     def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, mesh_check_receipt,
                       mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1,
-                      image=None, image_cyclic=None, image_cyclic_alternating=False):
+                      image=None, image_cyclic=None, image_cyclic_alternating=False, cyclic_periodic_boundaries=(),
+                      q2_deformation=None):
         """Use the existing Radia CPU polynomial construction, without a CPU solve.
 
         Rows are [H in A/m, B in tesla]; one uniform soft-iron law is supported.
@@ -96,12 +97,14 @@ class PreparedHDivNonlinear:
             prepared.mesh_sha256 = mesh_hash
             prepared.label_contract_sha256 = contract_hash
             prepared._initialize(snapshot, law, order, aca, curve_order,
-                                 _DeviceImages(image, image_cyclic, image_cyclic_alternating))
+                                 _DeviceImages(image, image_cyclic, image_cyclic_alternating, cyclic_periodic_boundaries),
+                                 q2_deformation)
             return prepared
 
     def __init__(self, mesh_path, law, *, backend, label_contract, mesh_check_receipt,
                  mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None, curve_order=1,
-                 image=None, image_cyclic=None, image_cyclic_alternating=False):
+                 image=None, image_cyclic=None, image_cyclic_alternating=False, cyclic_periodic_boundaries=(),
+                 q2_deformation=None):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (1, 2):
@@ -113,9 +116,10 @@ class PreparedHDivNonlinear:
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
             self._initialize(snapshot, law, order, aca, curve_order,
-                             _DeviceImages(image, image_cyclic, image_cyclic_alternating))
+                             _DeviceImages(image, image_cyclic, image_cyclic_alternating, cyclic_periodic_boundaries),
+                             q2_deformation)
 
-    def _initialize(self, path, law, order, aca, curve_order, images):
+    def _initialize(self, path, law, order, aca, curve_order, images, q2_deformation):
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
@@ -126,10 +130,12 @@ class PreparedHDivNonlinear:
         self.family = None
         self.gram_aca = dict(aca)
         try:
-            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, curve_order=curve_order, images=images)
+            setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, curve_order=curve_order, images=images,
+                                               q2_deformation=q2_deformation)
             self._gram_arguments = setup["charge_gram"]
             self.family = setup["family"]
             self.dofs = setup["dofs"]
+            self.fespace, self._fe_owner = setup["fespace"], setup["fe_owner"]
             self._rhs = setup["rhs_operator"]
             self._mean = setup["mean_operator"]
             self.material_budget = setup["material_budget"]
@@ -152,7 +158,7 @@ class PreparedHDivNonlinear:
     def solve(self, applied_field, *, initial=None, tolerance=1e-11,
               linear_tolerance=1e-6, max_iterations=40, max_linear_iterations=30000,
               preconditioner="reference-diagonal", degree=32, lower_fraction=.01):
-        """Solve a uniform applied H (A/m); return owned coefficients, history and the mean magnetization.
+        """Solve an applied H (A/m), uniform or a CoefficientFunction; return coefficients, history and the mean magnetization.
 
         Native Newton recertifies the original nonlinear equation. This is not
         an independent CPU certificate or a performance claim.
@@ -171,15 +177,12 @@ class PreparedHDivNonlinear:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Prepared HDiv workflow has been closed")
-            field = np.asarray(applied_field, dtype=np.float64)
-            if field.shape != (3,) or not np.isfinite(field).all():
-                raise ValueError("applied_field must contain three finite H components in A/m")
+            source = _applied_source(self.fespace, self._rhs, applied_field)
             x = np.zeros(self.dofs) if initial is None else np.asarray(initial)
             if x.dtype != np.float64 or x.shape != (self.dofs,) or not np.isfinite(x).all():
                 raise ValueError("initial must be finite FP64 in the prepared FE numbering")
             # The reference mass is the material context's device-built E^T W E.
-            result = self._operator.solve_nonlinear_material(self._material,
-                np.ascontiguousarray(self._rhs @ field),
+            result = self._operator.solve_nonlinear_material(self._material, source,
                 np.ascontiguousarray(x), tolerance, linear_tolerance, max_iterations,
                 max_linear_iterations, preconditioner, degree, lower_fraction)
             return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
@@ -247,7 +250,7 @@ class PreparedHDivLinear:
     def __init__(self, mesh_path, *, backend, label_contract, mesh_check_receipt,
                  mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
                  gram_compression="aca", curve_order=1, image=None, image_cyclic=None,
-                 image_cyclic_alternating=False):
+                 image_cyclic_alternating=False, cyclic_periodic_boundaries=(), q2_deformation=None):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (0, 1, 2):
@@ -270,11 +273,13 @@ class PreparedHDivLinear:
             self.label_contract_sha256 = contract_hash
             try:
                 setup = _prepare_device_components(path, order, _hdiv_cuda, aca=aca, compression=gram_compression,
-                                                   curve_order=curve_order,
-                                                   images=_DeviceImages(image, image_cyclic, image_cyclic_alternating))
+                                                   curve_order=curve_order, q2_deformation=q2_deformation,
+                                                   images=_DeviceImages(image, image_cyclic, image_cyclic_alternating,
+                                                                        cyclic_periodic_boundaries))
                 self._gram_arguments = setup["charge_gram"]
                 self.family = setup["family"]
                 self.dofs = setup["dofs"]
+                self.fespace, self._fe_owner = setup["fespace"], setup["fe_owner"]
                 self._rhs = setup["rhs_operator"]
                 self._mean = setup["mean_operator"]
                 # The mass is built first: its live device budget check runs before the Gram.
@@ -291,7 +296,7 @@ class PreparedHDivLinear:
 
     def solve(self, applied_field, inv_chi, *, tolerance=1e-10, max_iterations=1000,
               preconditioner="mass-diagonal", degree=None, lower_fraction=None):
-        """Solve a uniform applied H (A/m); return owned coefficients and the mean magnetization.
+        """Solve an applied H (A/m), uniform or a CoefficientFunction; return owned coefficients and the mean magnetization.
 
         The native PCG recertifies the true residual of the original linear
         equation; Chebyshev settings are accepted only with a Chebyshev mode.
@@ -309,10 +314,7 @@ class PreparedHDivLinear:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Prepared HDiv workflow has been closed")
-            field = np.asarray(applied_field, dtype=np.float64)
-            if field.shape != (3,) or not np.isfinite(field).all():
-                raise ValueError("applied_field must contain three finite H components in A/m")
-            result = self._operator.solve_linear(self._mass, np.ascontiguousarray(self._rhs @ field), float(inv_chi),
+            result = self._operator.solve_linear(self._mass, _applied_source(self.fespace, self._rhs, applied_field), float(inv_chi),
                                                  float(tolerance), int(max_iterations), preconditioner,
                                                  degree, lower_fraction)
             return dict(result, mean_magnetization=self._mean @ result["x"], backend="gpu",
@@ -800,9 +802,24 @@ _P2_GEOMETRY_ROUNDOFF = 1e-12
 class _DeviceImages:
     """The caller's image request, checked against the mesh with the CPU contract before any staging."""
 
-    def __init__(self, image=None, image_cyclic=None, image_cyclic_alternating=False):
+    def __init__(self, image=None, image_cyclic=None, image_cyclic_alternating=False, cyclic_periodic_boundaries=()):
         self.image, self.cyclic = image, image_cyclic
         self.terms = _device_image_terms(image, image_cyclic, image_cyclic_alternating)
+        if isinstance(cyclic_periodic_boundaries, str):
+            raise ValueError("cyclic_periodic_boundaries must be a pair of labels: %r" % (cyclic_periodic_boundaries,))
+        self.periodic = tuple(str(name) for name in (cyclic_periodic_boundaries or ()))
+        if self.periodic:
+            if image_cyclic is None:
+                raise ValueError("cyclic_periodic_boundaries requires image_cyclic=N")
+            if len(self.periodic) != 2 or self.periodic[0] == self.periodic[1]:
+                raise ValueError("cyclic_periodic_boundaries must name two distinct rotation-related sector faces")
+            if image_cyclic_alternating:
+                raise NotImplementedError("Device connected antiperiodic HDiv sectors are not wired")
+
+    def reduced_space(self, mesh, order):
+        """The CPU route's ``Compress(Periodic(HDiv))`` of the identified sector faces, after its mesh checks."""
+        from radia.vim._solve import _hdiv_space_with_image_constraints
+        return _hdiv_space_with_image_constraints(mesh, order, [], self.periodic)[0]
 
     def checked_terms(self, mesh, order, family):
         """Native Gram terms, or ``None``, after the ``vim.Solve`` mesh checks of a space without a compressed trace."""
@@ -812,13 +829,13 @@ class _DeviceImages:
             raise NotImplementedError("Device charge Gram has no image route for family %r" % (family,))
         from radia.vim import _image
         from radia.vim._solve import _hdiv_space_with_image_constraints
-        if self.cyclic is not None:
+        if self.cyclic is not None and not self.periodic:
             labels = [name for name in mesh.GetBoundaries() if "periodic" in name.lower() or "cyclic" in name.lower()]
             if labels:
-                raise NotImplementedError("Device cyclic route has no identified HDiv trace: the mesh has azimuthal "
-                                          "boundary labels %r" % (labels,))
+                raise NotImplementedError("Device cyclic route has an unidentified azimuthal seam: the mesh has "
+                                          "boundary labels %r; pass cyclic_periodic_boundaries" % (labels,))
         planes = _image.parse_image_string(self.image) if self.image is not None else []
-        _, constrained, _ = _hdiv_space_with_image_constraints(mesh, order, list(planes))
+        _, constrained, _ = _hdiv_space_with_image_constraints(mesh, order, list(planes), self.periodic)
         if constrained:
             raise NotImplementedError("Device solve with a '+' mirror plane needs the compressed normal trace of %d "
                                       "DOFs, which the device tables do not carry; the '-' planes and rotations do not"
@@ -980,7 +997,8 @@ def _EMPTY_CHARGE_TABLES():
                 face_tables=np.zeros((0, 0, 0)), face_exponents=np.zeros((0, 2), dtype=np.int32))
 
 
-def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION, curve_order=1, images=None):
+def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_COMPRESSION, curve_order=1, images=None,
+                               q2_deformation=None):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
     ``curve_order=2`` curves the FE mesh and the native staging mesh with
@@ -996,6 +1014,13 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     fails before the costly device work. The check returns the material
     device byte budget (``material_budget``); the live free-memory check
     runs when the material context is constructed.
+
+    ``images`` carries the mirror and cyclic terms and, for a connected sector,
+    the labels of its identified faces: the tables then take the periodic
+    wrapper's element orientation and the ``Compress(Periodic(HDiv))`` numbering,
+    and those faces leave the charge skin. ``q2_deformation`` maps a HEX mesh
+    with the caller's Curve(2) + SetDeformation; its lattices replace the
+    staged ones and sources and mean field refer to the deformed mesh.
     """
     import ngsolve as ng
     from radia.vim._vim import (_curve_mesh, _prepare_gpu_charge_inputs, _prepare_gpu_curved_charge_inputs,
@@ -1005,22 +1030,38 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     mesh = ng.Mesh(str(path))
     family = _mesh_family(mesh, curve_order, order)
     image_terms = None if images is None else images.checked_terms(mesh, order, family)
-    if curve_order == 2:
+    periodic = () if images is None else images.periodic
+    if q2_deformation is not None and (family != _HEX or curve_order != 2):
+        raise NotImplementedError("A Q2 deformation requires the pure HEX family and curve_order=2")
+    # A deformed mesh stages on its straight lattices: only the geometry is replaced below.
+    staged_curve = 1 if q2_deformation is not None else curve_order
+    if staged_curve == 2:
         _curve_mesh(mesh, 2)
     fes = ng.HDiv(mesh, order=order)
-    evaluation = _device_evaluation_tables(path, fes, native, curve_order, family)
-    budget = _checked_material_budget(native._ResidentBHMaterial.validate_flat_tables(**evaluation, dofs=fes.ndof))
+    evaluation = _device_evaluation_tables(path, fes, native, staged_curve, family, periodic)
+    numbering = _reduced_numbering(fes, images.reduced_space(mesh, order), mesh) if periodic else None
+    if periodic:
+        for group in evaluation["tables"]:
+            group.update(element_dofs=numbering[group["element_dofs"]], periodic_trace=True)
+    budget = _checked_material_budget(native._ResidentBHMaterial.validate_flat_tables(
+        **evaluation, dofs=fes.ndof if numbering is None else int(numbering.max()) + 1))
     if family == _MIXED:
         inputs = _prepare_gpu_mixed_charge_inputs(fes, backend="gpu")
     elif family == _HEX:
-        inputs = _prepare_gpu_hex_charge_inputs(fes, backend="gpu")
+        inputs = _prepare_gpu_hex_charge_inputs(fes, backend="gpu", excluded_boundaries=periodic)
     elif curve_order == 2:
         inputs = _prepare_gpu_curved_charge_inputs(fes, backend="gpu")
     else:
         _, inputs = _prepare_gpu_charge_inputs(fes, backend="gpu")
-    tables, geometry = _device_charge_tables(path, fes, native, curve_order, family)
-    return dict(_fe_sources(mesh, fes), family=family, evaluation_tables=evaluation, material_budget=budget,
-                charge_gram=_device_gram_arguments(tables, inputs, geometry, aca, compression, image_terms))
+    tables, geometry = _device_charge_tables(path, fes, native, staged_curve, family, periodic)
+    arguments = _device_gram_arguments(tables, inputs, geometry, aca, compression, image_terms)
+    if periodic:
+        arguments.update(cell_dofs=numbering[arguments["cell_dofs"]], face_dofs=numbering[arguments["face_dofs"]],
+                         periodic_trace=True)
+    deformation = None if q2_deformation is None else _deformed_lattices(mesh, order, periodic, q2_deformation, arguments, evaluation)
+    space = images.reduced_space(mesh, order) if periodic else (fes if deformation is None else ng.HDiv(mesh, order=order))
+    return dict(_fe_sources(mesh, space), family=family, evaluation_tables=evaluation, material_budget=budget,
+                charge_gram=arguments, fespace=space, fe_owner=(mesh, deformation))
 
 
 def _require_budget_cover(assembly, stats):
@@ -1092,13 +1133,87 @@ def _fe_sources(mesh, fes):
     return dict(dofs=nd, rhs_operator=rhs, mean_operator=rhs.T/volume)
 
 
-def _device_evaluation_tables(path, fes, native, curve_order, family):
+def _applied_source(fespace, uniform, applied_field):
+    """The weak source: ``uniform @ H`` of a constant H in A/m, or the ``vim.Solve`` form of a CoefficientFunction."""
+    import numpy as np
+    import ngsolve as ng
+    if isinstance(applied_field, ng.CoefficientFunction):
+        if applied_field.dim != 3:
+            raise ValueError("applied_field must be a 3-component CoefficientFunction: dim %r" % (applied_field.dim,))
+        source = ng.LinearForm(fespace)
+        source += applied_field*fespace.TestFunction()*ng.dx
+        source.Assemble()
+        vector = np.array(source.vec.FV().NumPy(), dtype=np.float64)
+    else:
+        field = np.asarray(applied_field, dtype=np.float64)
+        if field.shape != (3,):
+            raise ValueError("applied_field must contain three H components in A/m or be a CoefficientFunction")
+        vector = uniform @ field
+    if not np.isfinite(vector).all():
+        raise ValueError("applied_field must be finite")
+    return np.ascontiguousarray(vector)
+
+
+def _reduced_numbering(plain, reduced, mesh):
+    """Plain HDiv DOF -> ``Compress(Periodic(HDiv))`` DOF, read element by element from NGSolve; fails on any conflict."""
+    import numpy as np
+    import ngsolve as ng
+    numbering = np.full(plain.ndof, -1, dtype=np.int32)
+    for region in (ng.VOL, ng.BND):
+        for element in mesh.Elements(region):
+            source, target = plain.GetDofNrs(element), reduced.GetDofNrs(element)
+            if len(source) != len(target) or min(target) < 0:
+                raise NotImplementedError("Device tables carry no removed DOF: element %r maps %r to %r" % (element, source, target))
+            for a, b in zip(source, target):
+                if numbering[a] not in (-1, b):
+                    raise RuntimeError("NGSolve reduced numbering is not a map: DOF %d to %d and %d" % (a, numbering[a], b))
+                numbering[a] = b
+    if numbering.min() < 0 or not np.array_equal(np.unique(numbering), np.arange(reduced.ndof)):
+        raise RuntimeError("Reduced numbering does not cover the %d reduced DOFs" % (reduced.ndof,))
+    return numbering
+
+
+def _hex_lattice_signs(nodes):
+    """Sign of det J at each Q2 cell centre (node ix + 3 iy + 9 iz)."""
+    import numpy as np
+    ex, ey, ez = nodes[:, 14] - nodes[:, 12], nodes[:, 16] - nodes[:, 10], nodes[:, 22] - nodes[:, 4]
+    return np.sign(np.einsum("ij,ij->i", ex, np.cross(ey, ez)))
+
+
+def _deformed_lattices(mesh, order, periodic, q2_deformation, arguments, evaluation):
+    """Replace the staged straight lattices by those of the caller's Curve(2) + SetDeformation map.
+
+    Geometry is a non-matrix input: B rows do not depend on it beyond the sign of det J, which must hold, and the
+    device builds E, the mass and the Gram from these nodes. Returns the deformation for its owner to keep alive.
+    """
+    import numpy as np
+    import ngsolve as ng
+    from radia.vim._vim import _prepare_gpu_hex_charge_inputs
+    if not callable(q2_deformation):
+        raise ValueError("q2_deformation must be a callable applied to the loaded NGSolve mesh")
+    deformation = q2_deformation(mesh)
+    if mesh.deformation is None or mesh.GetCurveOrder() != 2:
+        raise ValueError("q2_deformation must leave a Curve(2) mesh with a live deformation")
+    moved = _prepare_gpu_hex_charge_inputs(ng.HDiv(mesh, order=order), backend="gpu", excluded_boundaries=periodic,
+                                           live_deformation=True)
+    cells = np.ascontiguousarray(moved["cell_nodes"], dtype=np.float64).reshape(-1)
+    faces = np.ascontiguousarray(moved["face_nodes"], dtype=np.float64).reshape(-1)
+    if cells.shape != arguments["cell_vertices"].shape or faces.shape != arguments["face_vertices"].shape:
+        raise ValueError("Deformed and staged HEX lattices disagree in size")
+    if not np.array_equal(_hex_lattice_signs(cells.reshape(-1, 27, 3)), _hex_lattice_signs(arguments["cell_vertices"].reshape(-1, 27, 3))):
+        raise ValueError("q2_deformation changes the sign of a cell Jacobian")
+    arguments.update(cell_vertices=cells, face_vertices=faces)
+    evaluation["tables"][0]["vertices"] = cells.reshape(-1, 81)
+    return deformation
+
+
+def _device_evaluation_tables(path, fes, native, curve_order, family, periodic=()):
     """NGSolve reference-shape tables for device E construction; no evaluation matrix.
 
     ``tables`` holds one table set per element type, a single one on a pure mesh.
     """
     import numpy as np
-    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order, list(periodic))
     try:
         staged = list(staging.mixed_tables()) if family == _MIXED else [staging.flat_tables()]
     finally:
@@ -1120,7 +1235,7 @@ def _device_evaluation_tables(path, fes, native, curve_order, family):
     return dict(tables=groups)
 
 
-def _device_charge_tables(path, fes, native, curve_order, family):
+def _device_charge_tables(path, fes, native, curve_order, family, periodic=()):
     """NGSolve charge tables for device B construction; no charge map.
 
     Returns the binding tables and the staged cell and exterior-face
@@ -1129,7 +1244,7 @@ def _device_charge_tables(path, fes, native, curve_order, family):
     Curved tables add the corner numbers and the charge mass rules.
     """
     import numpy as np
-    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order)
+    staging = native._MaterialStagingContext(str(path), fes.globalorder, curve_order, list(periodic))
     try:
         staged = staging.charge_tables()
     finally:
@@ -1203,8 +1318,7 @@ def _checked_material_assembly(assembly, tables, *, mass=False):
 
 def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
                               mesh_check_receipt_sha256, mesh_check_provenance, order=1, gram_aca=None,
-                              gram_compression="aca", curve_order=1, image=None, image_cyclic=None,
-                              image_cyclic_alternating=False):
+                              gram_compression="aca", curve_order=1):
     """Return the owned primitive device-construction payload of a checked mesh.
 
     Schema ``radia.hdiv-device-setup.v1``: NGSolve reference tables and charge
@@ -1230,8 +1344,7 @@ def prepare_hdiv_device_setup(mesh_path, *, backend, label_contract, mesh_check_
         from .gpu import _native
         native = _native("_hdiv_cuda")
         setup = _prepare_device_components(path, order, native, aca=aca, compression=gram_compression,
-                                           curve_order=curve_order,
-                                           images=_DeviceImages(image, image_cyclic, image_cyclic_alternating))
+                                           curve_order=curve_order)
     return dict(schema="radia.hdiv-device-setup.v1", backend="gpu", family=setup["family"], order=order,
                 dofs=setup["dofs"], mesh_sha256=mesh_hash, label_contract_sha256=contract_hash,
                 evaluation_tables=setup["evaluation_tables"], charge_gram=setup["charge_gram"],

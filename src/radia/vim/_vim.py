@@ -2667,7 +2667,7 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
         near_grade=_MIXED_NEAR_BAND, far_inner=1.0)
 
 
-def _prepare_gpu_hex_charge_inputs(fes, *, backend):
+def _prepare_gpu_hex_charge_inputs(fes, *, backend, excluded_boundaries=(), live_deformation=False):
     """Stage the pure-HEX BDM1/BDM2 device-build input, not a GPU operator.
 
     Geometry, charge order and Gram rules are those of the CPU hex route
@@ -2677,7 +2677,9 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
     radial-inner and pair-domain rules, plus the BDM1 near outer and fine inner
     of the graded near family, with near_grade = far_inner = 1. No
     charge map, Gram coefficient or CUDA allocation is produced. The caller
-    curves the mesh and owns TaskManager.
+    curves the mesh and owns TaskManager. ``excluded_boundaries`` leave the
+    skin, as on the CPU route; ``live_deformation`` reads the lattices of a
+    deformed mesh for a caller that replaces the staged geometry with them.
     """
     if backend != "gpu":
         raise ValueError("Device charge preparation requires explicit backend='gpu'")
@@ -2687,17 +2689,17 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
         raise NotImplementedError("HEX device charge input requires pure 3D HEX geometry")
     if p not in (1, 2) or mesh.GetCurveOrder() > 2:
         raise NotImplementedError("HEX device charge input requires HDiv order 1 or 2 on a linear or Curve(2) mesh")
-    if mesh.deformation is not None:
+    if mesh.deformation is not None and not live_deformation:
         raise NotImplementedError("Device charge input does not support live mesh deformation")
     int32_max = 2**31 - 1
     if not 0 < fes.ndof <= int32_max or not 0 < mesh.GetNE(ng.VOL) <= int32_max:
         raise ValueError("Device charge DOF or element budget exceeded")
     validate_hdiv_configuration(mesh.dim, {8}, p, mesh.GetCurveOrder())
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = _exterior_bnd_elements(mesh)
+    bels = _exterior_bnd_elements(mesh, excluded_boundaries=excluded_boundaries)
     if not bels:
         raise ValueError("Device charge input requires exterior boundary surface elements")
-    linear = mesh.GetCurveOrder() < 2
+    linear = mesh.GetCurveOrder() < 2 and mesh.deformation is None
     ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
     ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
     mons_v, mons_s = _mons_hex(p), _mons_quad(p)
