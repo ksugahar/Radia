@@ -13,7 +13,7 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
                            backend: str, mesh_check_receipt: str, mesh_check_receipt_sha256: str,
                            mesh_check_provenance: dict, order: int = 1, curve_order: int = 1,
                            preconditioner: str = "reference-diagonal",
-                           tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> dict:
+                           tolerance: float = 5e-14, linear_tolerance: float = 1e-6) -> dict:
     """Reuse one prepared shared GPU owner for up to eight uniform H cases.
 
     Input is an inverse-BH polynomial payload, or a radia.bh-table.v1 object
