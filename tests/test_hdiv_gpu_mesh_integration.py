@@ -63,7 +63,7 @@ def test_valid_receipt_relocates_and_preserves_compressed_snapshot(tmp_path,monk
     module=api();mesh,contract,receipt,value,report=fixture(tmp_path,compressed);options=pins(receipt,value,report)
     monkeypatch.setattr(module.metadata,'version',lambda name:'6.2.2608')
     expected=mesh.read_bytes()
-    def initialize(self,snapshot,law,order,aca,curve_order):
+    def initialize(self,snapshot,law,order,aca,curve_order,images,q2_deformation):
         assert snapshot.name==('mesh.vol.gz' if compressed else 'mesh.vol')
         assert snapshot.read_bytes()==expected
     monkeypatch.setattr(module.PreparedHDivNonlinear,'_initialize',initialize)

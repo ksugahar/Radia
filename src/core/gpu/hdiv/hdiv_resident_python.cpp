@@ -348,15 +348,6 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           {py::gil_scoped_release release;output=self.apply(input);}
           py::array_t<double> result(output.size());std::copy(output.begin(),output.end(),result.mutable_data());return result;
       },py::arg("x").noconvert())
-      .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
-          const auto n=self.stats().dimension;
-          if(rhs.ndim()!=1||std::size_t(rhs.size())!=n||initial.ndim()!=1||std::size_t(initial.size())!=n)throw py::value_error("Newton payload dimensions exceeded");
-          const int mode=newtonMode(preconditioner);
-          std::size_t bytes=0;
-          const auto b=snapshot(rhs,bytes),x=snapshot(initial,bytes);NewtonOptions options{tolerance,linearTolerance,maximumIterations,maximumLinearIterations,mode,degree,lower};NewtonResult result;
-          {py::gil_scoped_release release;result=self.solve_nonlinear(material,b,x,options);}
-          return publishNewton(result);
-      },py::arg("material"),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01)
       .def("field",[](DeviceOperator& self,Array<double> x,Array<double> points){
           if(x.ndim()!=1||points.ndim()!=2||points.shape(1)!=3)throw py::value_error("Device field requires a state vector and (points,3) probes");
           std::size_t bytes=0;const auto state=snapshot(x,bytes);
@@ -368,6 +359,15 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
           py::dict out;out["field"]=values;out["transfer_ledger"]=ledger;out["kernel_launches"]=result.launches;out["transient_device_bytes"]=result.ownedBytes;
           out["route"]=result.affine?"device-hex-polynomial":"device-hex-cloud";return out;
       },py::arg("x").noconvert(),py::arg("points").noconvert(),"H in A/m of the resident HEX solution at the probes, images folded; only the state, geometry and probes cross H2D and the values D2H.")
+      .def("solve_nonlinear_material",[](DeviceOperator& self,radia_hdiv_bh::MaterialOperator& material,Array<double> rhs,Array<double> initial,double tolerance,double linearTolerance,int maximumIterations,int maximumLinearIterations,const std::string& preconditioner,int degree,double lower){
+          const auto n=self.stats().dimension;
+          if(rhs.ndim()!=1||std::size_t(rhs.size())!=n||initial.ndim()!=1||std::size_t(initial.size())!=n)throw py::value_error("Newton payload dimensions exceeded");
+          const int mode=newtonMode(preconditioner);
+          std::size_t bytes=0;
+          const auto b=snapshot(rhs,bytes),x=snapshot(initial,bytes);NewtonOptions options{tolerance,linearTolerance,maximumIterations,maximumLinearIterations,mode,degree,lower};NewtonResult result;
+          {py::gil_scoped_release release;result=self.solve_nonlinear(material,b,x,options);}
+          return publishNewton(result);
+      },py::arg("material"),py::arg("rhs").noconvert(),py::arg("initial").noconvert(),py::arg("nonlinear_tolerance"),py::arg("linear_tolerance"),py::arg("maximum_iterations"),py::arg("maximum_linear_iterations"),py::arg("preconditioner"),py::arg("degree")=32,py::arg("lower_fraction")=.01)
       .def("solve_linear",[](DeviceOperator& self,radia_hdiv_bh::MassOperator& mass,Array<double> rhs,double invChi,double tolerance,int maximumIterations,const std::string& preconditioner,py::object degree,py::object lower){
           const auto n=self.stats().dimension;
           if(rhs.ndim()!=1||std::size_t(rhs.size())!=n)throw py::value_error("Linear material RHS dimension mismatch");

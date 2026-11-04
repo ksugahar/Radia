@@ -119,7 +119,7 @@ class PreparedHDivNonlinear:
                              _DeviceImages(image, image_cyclic, image_cyclic_alternating, cyclic_periodic_boundaries),
                              q2_deformation)
 
-    def _initialize(self, path, law, order, aca, curve_order, images, q2_deformation):
+    def _initialize(self, path, law, order, aca, curve_order, images=None, q2_deformation=None):
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")

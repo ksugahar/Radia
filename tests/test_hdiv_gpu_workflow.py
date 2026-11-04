@@ -96,7 +96,7 @@ def test_snapshot_uses_exact_checked_bytes_after_caller_mutation(tmp_path, monke
         contract.write_text("changed contract")
     monkeypatch.setattr(module, "_verify_mesh_receipt", verify)
     snapshots = []
-    def initialize(self, path, law, order, aca, curve_order):
+    def initialize(self, path, law, order, aca, curve_order, images, q2_deformation):
         assert aca == module.GRAM_ACA_PRESET, aca
         snapshots.append(path)
         assert path.read_bytes() == b"original mesh"
