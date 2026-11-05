@@ -2268,28 +2268,33 @@ def _mons_mixed_cell(host_type, order):
     return [(0, 0, 0)] if order == 1 else [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, -1)]
 
 
+def _mixed_lattice_weights(host_type):
+    """Vertex weights at the Q2 lattice of the trilinear map of a straight tet, triangle or pyramid from the unit cube."""
+    if host_type == _HOST_TRI:
+        return np.array([(iu/2*(1-iv/2), iv/2, (1-iv/2)*(1-iu/2)) for iv in range(3) for iu in range(3)])
+    rows = []
+    for iz in range(3):
+        for iy in range(3):
+            for ix in range(3):
+                a, b, c = ix/2, iy/2, iz/2
+                if host_type == _HOST_TET:
+                    x, y, z = a*(1-b)*(1-c), b*(1-c), c
+                    rows.append((x, y, z, 1-x-y-z))
+                else:
+                    rows.append(((1-c)*(1-a)*(1-b), (1-c)*a*(1-b), (1-c)*a*b, (1-c)*(1-a)*b, c))
+    return np.array(rows)
+
+
+_MIXED_LATTICE_WEIGHTS = {host_type: _mixed_lattice_weights(host_type) for host_type in (_HOST_TET, _HOST_TRI, _HOST_PYRAMID)}
+
+
 def _mixed_lattice_nodes(mesh, e, host_type):
     """Q2 lattice of the trilinear map from the unit cube, from the NGSolve element vertices."""
     if host_type == _HOST_HEX:
         return _hex_q2_lattice_nodes_ngsolve_linear(mesh, e)
     if host_type == _HOST_QUAD:
         return _quad_q2_lattice_nodes_ngsolve_linear(mesh, e)
-    v = np.array([mesh[w].point for w in mesh[e].vertices], dtype=float)
-    if host_type == _HOST_TRI:
-        return np.array([(iu/2*(1-iv/2))*v[0] + (iv/2)*v[1] + (1-iv/2)*(1-iu/2)*v[2]
-                         for iv in range(3) for iu in range(3)])
-    nodes = []
-    for iz in range(3):
-        for iy in range(3):
-            for ix in range(3):
-                c = (ix/2, iy/2, iz/2)
-                if host_type == _HOST_TET:
-                    x, y, z = c[0]*(1-c[1])*(1-c[2]), c[1]*(1-c[2]), c[2]
-                    nodes.append(x*v[0] + y*v[1] + z*v[2] + (1-x-y-z)*v[3])
-                else:
-                    bottom = (1-c[0])*(1-c[1])*v[0] + c[0]*(1-c[1])*v[1] + c[0]*c[1]*v[2] + (1-c[0])*c[1]*v[3]
-                    nodes.append((1-c[2])*bottom + c[2]*v[4])
-    return np.array(nodes)
+    return _MIXED_LATTICE_WEIGHTS[host_type] @ np.array([mesh[w].point for w in mesh[e].vertices], dtype=float)
 
 
 _HEX_CORNERS = np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)], dtype=float)
