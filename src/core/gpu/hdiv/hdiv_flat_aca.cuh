@@ -269,7 +269,7 @@ class FlatAcaOracle {
             const auto rowHosts=hostAt[s.row+s.rows]-rowHost,columnHosts=hostAt[s.column+s.columns]-columnHost;
             spans.push_back({s.row,s.column,s.columns,s.offset,pairs,rowHost,columnHost,columnHosts});pairs=flatSum(pairs,checkedProduct(rowHosts,columnHosts));}
         const std::size_t maxCount=prepared.hexPrepared.order==2?27:8,nOut=std::size_t(prepared.hexPrepared.d.out.n)*prepared.hexPrepared.d.out.n*prepared.hexPrepared.d.out.n;
-        const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries+nOut*2*maxCount;
+        const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries+nOut*3*maxCount;
         int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
         const std::size_t blocks=std::size_t(std::max(properties.multiProcessorCount,1));
         flatReserve(flatSum(flatSum(checkedProduct(hosts.size(),sizeof(AcaHostStart)),checkedProduct(spans.size(),sizeof(AcaPairSpan))),checkedProduct(checkedProduct(blocks,stride),sizeof(double))),

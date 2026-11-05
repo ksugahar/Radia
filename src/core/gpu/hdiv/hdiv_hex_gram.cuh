@@ -184,6 +184,19 @@ __device__ inline void hexFarInner(const HexDevice& d,int s,const double* p,int 
         const double xi[3]={d.out.x[q%n1],d.out.x[(q/n1)%n1],hexCell(d,s)?d.out.x[q/(n1*n1)]:0.0};
         for(int l=0;l<nS;++l)inner[l]+=w*hexDensity(d,s,hexExponent(d,s,l),xi);}
 }
+// The far rule's source densities, once per block: every target point reads the same table.
+__device__ inline void hexFarDensities(const HexDevice& d,int s,int nS,double* table){
+    const int n1=d.out.n,np=hexCell(d,s)?n1*n1*n1:n1*n1;
+    for(int q=threadIdx.x;q<np;q+=blockDim.x){const double xi[3]={d.out.x[q%n1],d.out.x[(q/n1)%n1],hexCell(d,s)?d.out.x[q/(n1*n1)]:0.0};
+        for(int l=0;l<nS;++l)table[std::size_t(q)*nS+l]=hexDensity(d,s,hexExponent(d,s,l),xi);}
+    __syncthreads();
+}
+__device__ inline void hexFarInnerTable(const HexDevice& d,int s,const double* p,int nS,const double* table,double* inner){
+    const int n1=d.out.n,np=hexCell(d,s)?n1*n1*n1:n1*n1;const double* X=d.farX+3*std::size_t(s)*d.farStride;const double* W=d.farW+std::size_t(s)*d.farStride;
+    for(int q=0;q<np;++q){const double dx=p[0]-X[3*q],dy=p[1]-X[3*q+1],dz=p[2]-X[3*q+2];const double r=sqrt(dx*dx+dy*dy+dz*dz);
+        if(r<1e-300)continue;const double w=W[q]/r;const double* row=table+std::size_t(q)*nS;
+        for(int l=0;l<nS;++l)inner[l]+=w*row[l];}
+}
 // Exact sub-simplex potentials of an affine source (CPU PhiInnerHexAffine{Cell,Face}Vec). BDM2 reads the
 // host coefficient tables; a BDM1 graded pair passes the coefficients of its nS monomials in local.
 __device__ inline void hexAffineInner(const HexDevice& d,int s,const double* p,int nS,double* inner,const double* local=nullptr){
@@ -191,17 +204,19 @@ __device__ inline void hexAffineInner(const HexDevice& d,int s,const double* p,i
     if(hexCell(d,s)){
         // HEXREF_TETS corners as Q2 lattice nodes (CPU m_cellSubV is the Q2 map at the corners).
         const int corner[8]={0,2,8,6,18,20,26,24},tets[6][4]={{0,1,2,6},{0,2,3,6},{0,3,7,6},{0,7,4,6},{0,4,5,6},{0,5,1,6}};
+        // A BDM1 charge has degree at most 3 on a cell and 2 on a face; its other polynomial coefficients are zero.
+        const int used=d.order==2?84:20;
         for(int sub=0;sub<6;++sub){double V[4][3];for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=nd[3*corner[tets[sub][i]]+k]-c[k];
-            double moments[84];rad_hdiv_cuda::TetPotentialMomentsUpTo6(V,lp,moments);
+            double moments[84];if(d.order==2)rad_hdiv_cuda::TetPotentialMomentsUpTo6(V,lp,moments);else rad_hdiv_cuda::TetPotentialMomentsUpTo3(V,lp,moments);
             for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*84:d.cellCoeff+(std::size_t(s)*27+e[0]+3*e[1]+9*e[2])*84;
-                double v=0.0;for(int i=0;i<84;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
+                double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
         return;
     }
-    const int corner[4]={0,2,8,6},tris[2][3]={{0,1,2},{0,2,3}};const int f=s-d.cells;
+    const int corner[4]={0,2,8,6},tris[2][3]={{0,1,2},{0,2,3}};const int f=s-d.cells,used=d.order==2?35:10;
     for(int sub=0;sub<2;++sub){double V[3][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)V[i][k]=nd[3*corner[tris[sub][i]]+k]-c[k];
-        double moments[35];rad_hdiv_cuda::TriPotentialMomentsUpTo4(V,lp,moments);
+        double moments[35];if(d.order==2)rad_hdiv_cuda::TriPotentialMomentsUpTo4(V,lp,moments);else rad_hdiv_cuda::TriPotentialMomentsUpTo2(V,lp,moments);
         for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*35:d.faceCoeff+(std::size_t(f)*9+e[0]+3*e[1])*35;
-            double v=0.0;for(int i=0;i<35;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
+            double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
 }
 // CPU PhiInnerHexRadialHostVec: radial cones from the reference point over
 // the complete host (six square faces of the cube, four edges of the quad).
@@ -477,7 +492,8 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         const int ncoeff=cellS?84:35;
         for(int l=threadIdx.x;l<nS;l+=blockDim.x)if(!hexMonomialCoeff(lin,scaleInv,cellS,hexExponent(d,s,l),scratch+std::size_t(l)*ncoeff))atomicExch(invalid,1);
         local=scratch;__syncthreads();}
-    double* rows=scratch+std::size_t(npS)*(4+nS)+(graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0));const int width=nS+nT;
+    const int farPoints=cls==hexFarClass?(cellS?N*N*N:N*N):0;if(farPoints)hexFarDensities(d,s,nS,scratch);
+    double* rows=scratch+std::size_t(npS)*(4+nS)+(graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0))+std::size_t(farPoints)*nS;const int width=nS+nT;
     for(int q=threadIdx.x;q<npT;q+=blockDim.x){double xi[3],wq;
         if(product){const int a=q/(N*nc),b=(q/nc)%N,c=q%nc;xi[0]=R.x[a];xi[1]=R.x[b];xi[2]=cellT?R.x[c]:0.0;wq=R.w[a]*R.w[b]*(cellT?R.w[c]:1.0);}
         else{const int ix=q%N,iy=(q/N)%N,iz=q/(N*N);xi[0]=R.x[ix];xi[1]=R.x[iy];xi[2]=cellT?R.x[iz]:0.0;wq=R.w[ix]*R.w[iy]*(cellT?R.w[iz]:1.0);}
@@ -485,7 +501,7 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         if(product){for(int p=0;p<npS;++p){const double* sp=source+std::size_t(p)*(4+nS);
                 const double dx=X[0]-sp[0],dy=X[1]-sp[1],dz=X[2]-sp[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
-        else if(cls==hexFarClass)hexFarInner(d,s,X,nS,row);
+        else if(cls==hexFarClass)hexFarInnerTable(d,s,X,nS,scratch,row);
         else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
         else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
         else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
@@ -740,11 +756,11 @@ struct HexPrepared {
             check(cub::DeviceScan::ExclusiveSum(temporary.data,bytes,blockSizes.data,offsets.data,int(pairs),stream));++launches;
             check(cudaStreamSynchronize(stream));}
         const std::size_t total=last(offsets,blockSizes,pairs,stream,record,"hex_block_values");
-        // Phase-1 rows of the widest family: outer tensor (or pair product) points x (source + target) charges.
+        // Phase-1 rows of the widest family: outer tensor (or pair product) points x (source + target) charges, plus the far density table.
         const std::size_t maxCount=order==2?27:8,nOut=std::size_t(d.out.n)*d.out.n*d.out.n;
         const std::size_t nPair=std::size_t(std::max(d.pair.n,d.pairAffine.n)),nPair3=nPair*nPair*nPair;
         const std::size_t nNear=std::size_t(d.nearOut.n),nNear3=nNear*nNear*nNear;
-        const std::size_t stride=std::max({nOut*2*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
+        const std::size_t stride=std::max({nOut*3*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
                                            order==1||typed?std::size_t(hexGradedCoeff(order))+nNear3*2*maxCount:std::size_t(0)});
         // One block per processor: more would only share processors and lengthen each kernel.
         int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
