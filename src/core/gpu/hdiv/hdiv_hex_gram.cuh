@@ -197,26 +197,26 @@ __device__ inline void hexFarInnerTable(const HexDevice& d,int s,const double* p
         if(r<1e-300)continue;const double w=W[q]/r;const double* row=table+std::size_t(q)*nS;
         for(int l=0;l<nS;++l)inner[l]+=w*row[l];}
 }
-// Exact sub-simplex potentials of an affine source (CPU PhiInnerHexAffine{Cell,Face}Vec). BDM2 reads the
+// Exact potentials of an affine source from its outer faces (CPU PhiInnerHexAffine{Cell,Face}Vec). BDM2 reads the
 // host coefficient tables; a BDM1 graded pair passes the coefficients of its nS monomials in local.
 __device__ inline void hexAffineInner(const HexDevice& d,int s,const double* p,int nS,double* inner,const double* local=nullptr){
     const double* nd=hexNodes(d,s);const double* c=d.affineCenter+3*std::size_t(s);const double lp[3]={p[0]-c[0],p[1]-c[1],p[2]-c[2]};
     if(hexCell(d,s)){
-        // HEXREF_TETS corners as Q2 lattice nodes (CPU m_cellSubV is the Q2 map at the corners).
-        const int corner[8]={0,2,8,6,18,20,26,24},tets[6][4]={{0,1,2,6},{0,2,3,6},{0,3,7,6},{0,7,4,6},{0,4,5,6},{0,5,1,6}};
+        // The corners as Q2 lattice nodes, one face in order and then the opposite one.
+        const int corner[8]={0,2,8,6,18,20,26,24};
         // A BDM1 charge has degree at most 3 on a cell and 2 on a face; its other polynomial coefficients are zero.
         const int used=d.order==2?84:20;
-        for(int sub=0;sub<6;++sub){double V[4][3];for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=nd[3*corner[tets[sub][i]]+k]-c[k];
-            double moments[84];if(d.order==2)rad_hdiv_cuda::TetPotentialMomentsUpTo6(V,lp,moments);else rad_hdiv_cuda::TetPotentialMomentsUpTo3(V,lp,moments);
-            for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*84:d.cellCoeff+(std::size_t(s)*27+e[0]+3*e[1]+9*e[2])*84;
-                double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
+        double C[8][3];for(int i=0;i<8;++i)for(int k=0;k<3;++k)C[i][k]=nd[3*corner[i]+k]-c[k];
+        double moments[84];if(d.order==2)rad_hdiv_cuda::HexPotentialMomentsUpTo6(C,lp,moments);else rad_hdiv_cuda::HexPotentialMomentsUpTo3(C,lp,moments);
+        for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*84:d.cellCoeff+(std::size_t(s)*27+e[0]+3*e[1]+9*e[2])*84;
+            double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}
         return;
     }
-    const int corner[4]={0,2,8,6},tris[2][3]={{0,1,2},{0,2,3}};const int f=s-d.cells,used=d.order==2?35:10;
-    for(int sub=0;sub<2;++sub){double V[3][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)V[i][k]=nd[3*corner[tris[sub][i]]+k]-c[k];
-        double moments[35];if(d.order==2)rad_hdiv_cuda::TriPotentialMomentsUpTo4(V,lp,moments);else rad_hdiv_cuda::TriPotentialMomentsUpTo2(V,lp,moments);
-        for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*35:d.faceCoeff+(std::size_t(f)*9+e[0]+3*e[1])*35;
-            double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}}
+    const int corner[4]={0,2,8,6};const int f=s-d.cells,used=d.order==2?35:10;
+    double V[4][3];for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=nd[3*corner[i]+k]-c[k];
+    double moments[35];if(d.order==2)rad_hdiv_cuda::QuadPotentialMomentsUpTo4(V,lp,moments);else rad_hdiv_cuda::QuadPotentialMomentsUpTo2(V,lp,moments);
+    for(int l=0;l<nS;++l){const int* e=hexExponent(d,s,l);const double* coeff=local?local+std::size_t(l)*35:d.faceCoeff+(std::size_t(f)*9+e[0]+3*e[1])*35;
+        double v=0.0;for(int i=0;i<used;++i)v+=coeff[i]*moments[i];inner[l]+=v;}
 }
 // CPU PhiInnerHexRadialHostVec: radial cones from the reference point over
 // the complete host (six square faces of the cube, four edges of the quad).

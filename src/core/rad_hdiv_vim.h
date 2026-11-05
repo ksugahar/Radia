@@ -70,6 +70,14 @@ void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],
                               double out[84]);                                    /* total-degree <= 6 moments */
+void HexPotentialMomentsUpTo3(const double C[8][3], const double r[3],
+                              double out[20]);                                    /* outer faces of a flat-faced hexahedron */
+void HexPotentialMomentsUpTo6(const double C[8][3], const double r[3],
+                              double out[84]);
+void QuadPotentialMomentsUpTo2(const double V[4][3], const double r[3],
+                              double out[10]);                                    /* a flat quadrilateral */
+void QuadPotentialMomentsUpTo4(const double V[4][3], const double r[3],
+                              double out[35]);
 void TetPotentialMomentsDirectionalUpTo3(const double V[4][3],const double dV[4][3],
     const double r[3],const double dr[3],double value[20],double direction[20]);
 void TetPotentialMomentsDirectionalUpTo6(const double V[4][3],const double dV[4][3],
