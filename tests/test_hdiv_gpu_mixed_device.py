@@ -35,6 +35,8 @@ ACA = dict(eps=1e-10, eta=2.0, leaf_size=8, max_rank=200, rank_cap="dense")
 # or crossing the Chebyshev axes moves the solution by order one, far beyond EXPANSION_REL (PROPOSED).
 EXPANSION = dict(ACA, eps=1e-5, eta=1.5, leaf_size=64, expansion_order=6)
 EXPANSION_REL = 5e-3
+STOP_ACA = dict(ACA, eps=1e-5, leaf_size=32)
+STOP_REL = 2e-5
 BH_TABLE = np.array([[0., 0.], [50., .3], [100., .6], [200., 1.], [500., 1.3], [1e3, 1.45], [5e3, 1.65],
                      [2e4, 1.85], [1e5, 2.1], [1e6, 3.24]])
 _GEOMETRY = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents",
@@ -262,6 +264,24 @@ def test_mixed_kernel_expansion_stays_near_the_exact_device_gram(tmp_path, reque
     relative = np.linalg.norm(result["x"] - exact["x"])/np.linalg.norm(exact["x"])
     request.node.user_properties += [("relative", float(relative)), ("rank_sum", counters["rank_sum"])]
     assert relative <= EXPANSION_REL, f"order={order} relative={relative:.3e} limit={EXPANSION_REL:.0e}"
+
+
+def test_aca_stop_verifies_rows_before_a_leaf_stops(tmp_path, request, cuda):
+    """Guards: a small last term does not stop a leaf until probe rows agree with its factors.
+
+    Assumes: the dense device route is the reference on identical inputs. Without the probes the distance is six times
+    the one with them on this mesh, because a few leaves stop early by hundreds of eps. The limit is a proposed value.
+    """
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import mixed_grid
+    path = tmp_path / "grid.vol"
+    mixed_grid((6, 6, 6)).ngmesh.Save(str(path))
+    exact, _ = _solved(path, 1, cuda, None, "dense")
+    result, assembly = _solved(path, 1, cuda, STOP_ACA, "aca")
+    counters = assembly["hmatrix"]
+    assert counters["lowrank_leaves"] > 100, counters
+    relative = np.linalg.norm(result["x"] - exact["x"])/np.linalg.norm(exact["x"])
+    request.node.user_properties += [("relative", float(relative)), ("rank_sum", counters["rank_sum"])]
+    assert relative <= STOP_REL, f"relative={relative:.3e} limit={STOP_REL:.0e} lowrank={counters['lowrank_leaves']}"
 
 
 def test_tangent_rule_is_refused_outside_mixed_meshes(tmp_path, cuda):
