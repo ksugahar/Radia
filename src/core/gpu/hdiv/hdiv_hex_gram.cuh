@@ -50,7 +50,9 @@ struct HexDevice {
     const double* cellCoeff;const double* faceCoeff;const double* affineCenter;
     const double* farX;const double* farW;int farStride;
     const unsigned long long* keys;const std::size_t* offsets;const double* values;std::size_t pairs;
-    HexRule out,in,pair,pairAffine,nearOut,inSelf;double nearGrade,farInner,candidate;int order;
+    // nearCell: plain outer rule of the cell targets of near pairs on a mixed mesh, empty when they take the graded nearOut.
+    // innerSwitch: a near target point beyond (1 + innerSwitch) source radii reads the far rule; 0 keeps the near inner everywhere.
+    HexRule out,in,pair,pairAffine,nearOut,inSelf,nearCell;double nearGrade,farInner,innerSwitch,candidate;int order;
     // Host types of a mixed mesh (radia_hdiv_typed::HostType); null on a pure hex mesh.
     const int* type;
 };
@@ -465,12 +467,17 @@ __device__ inline void hexCenterForms(const double* nd,bool cell,double lin[3][4
     const double mid[3]={0.5,0.5,0.5};if(cell)hexMapX(nd,mid,ac);else quadMapX(nd,mid,ac);
     for(int a=0;a<(cell?3:2);++a)lin[a][0]+=lin[a][1]*ac[0]+lin[a][2]*ac[1]+lin[a][3]*ac[2];
 }
+// Beyond the corner radius a point lies outside a straight source, where the far tensor rule converges.
+__device__ inline bool hexBeyondSource(const HexDevice& d,int s,const double* p){
+    const double* c=d.center+3*std::size_t(s);const double dx=p[0]-c[0],dy=p[1]-c[1],dz=p[2]-c[2],limit=(1.0+d.innerSwitch)*d.size[s];
+    return dx*dx+dy*dy+dz*dz>=limit*limit;
+}
 // Phase 1 tabulates, per target point, the inner source vector and the
 // target weights; phase 2 sums every block entry over the points in the CPU
 // accumulation order (Neumaier for the pair product, as the CPU).
 __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int nT,int nS,double* scratch,double* out,int* invalid){
     const bool cellT=hexCell(d,t),cellS=hexCell(d,s),product=cls==hexProductClass,graded=cls==hexGradedClass;
-    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?d.nearOut:d.out;
+    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?(cellT&&d.nearCell.n?d.nearCell:d.nearOut):d.out;
     const int N=R.n,nc=cellT?N:1,npT=N*N*nc;int npS=0;
     double* source=scratch;
     if(product){const int ncs=cellS?N:1;npS=N*N*ncs;
@@ -492,8 +499,11 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         const int ncoeff=cellS?84:35;
         for(int l=threadIdx.x;l<nS;l+=blockDim.x)if(!hexMonomialCoeff(lin,scaleInv,cellS,hexExponent(d,s,l),scratch+std::size_t(l)*ncoeff))atomicExch(invalid,1);
         local=scratch;__syncthreads();}
-    const int farPoints=cls==hexFarClass?(cellS?N*N*N:N*N):0;if(farPoints)hexFarDensities(d,s,nS,scratch);
-    double* rows=scratch+std::size_t(npS)*(4+nS)+(graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0))+std::size_t(farPoints)*nS;const int width=nS+nT;
+    const bool switched=graded&&d.innerSwitch>0.0;const int nFar=d.out.n;
+    const int farPoints=cls==hexFarClass||switched?(cellS?nFar*nFar*nFar:nFar*nFar):0;
+    const std::size_t gradedCoeff=graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0);
+    double* farTable=scratch+gradedCoeff;if(farPoints)hexFarDensities(d,s,nS,farTable);
+    double* rows=scratch+std::size_t(npS)*(4+nS)+gradedCoeff+std::size_t(farPoints)*nS;const int width=nS+nT;
     for(int q=threadIdx.x;q<npT;q+=blockDim.x){double xi[3],wq;
         if(product){const int a=q/(N*nc),b=(q/nc)%N,c=q%nc;xi[0]=R.x[a];xi[1]=R.x[b];xi[2]=cellT?R.x[c]:0.0;wq=R.w[a]*R.w[b]*(cellT?R.w[c]:1.0);}
         else{const int ix=q%N,iy=(q/N)%N,iz=q/(N*N);xi[0]=R.x[ix];xi[1]=R.x[iy];xi[2]=cellT?R.x[iz]:0.0;wq=R.w[ix]*R.w[iy]*(cellT?R.w[iz]:1.0);}
@@ -501,7 +511,7 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         if(product){for(int p=0;p<npS;++p){const double* sp=source+std::size_t(p)*(4+nS);
                 const double dx=X[0]-sp[0],dy=X[1]-sp[1],dz=X[2]-sp[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
-        else if(cls==hexFarClass)hexFarInnerTable(d,s,X,nS,scratch,row);
+        else if(cls==hexFarClass||(switched&&hexBeyondSource(d,s,X)))hexFarInnerTable(d,s,X,nS,farTable,row);
         else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
         else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
         else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
@@ -725,9 +735,9 @@ struct HexPrepared {
         upload(cells,b.cells,"cell_q2_nodes_m");upload(faces,b.faces,"face_q2_nodes_m");upload(first,firstH,"hex_host_first");upload(count,countH,"hex_host_count");
         upload(chargeHost,globalH,"charge_host");upload(exponents,b.expo,"charge_exponents");upload(invalid,HostVector<int>{0},"hex_invalid_flag");
         d.cellNodes=cells.data;d.faceNodes=faces.data;d.cells=int(cellsN);d.hosts=int(hosts);d.first=first.data;d.count=count.data;
-        d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;
+        d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;d.innerSwitch=b.innerSwitch;
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
-        d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);
+        d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);d.nearCell=rule(b.ruleNearCell,b.ruleNearCellW);
         const bool typed=!b.hostTypes.empty();if(typed){upload(types,b.hostTypes,"host_types");d.type=types.data;}
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
         cellCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
@@ -761,9 +771,10 @@ struct HexPrepared {
         // Phase-1 rows of the widest family: outer tensor (or pair product) points x (source + target) charges, plus the far density table.
         const std::size_t maxCount=order==2?27:8,nOut=std::size_t(d.out.n)*d.out.n*d.out.n;
         const std::size_t nPair=std::size_t(std::max(d.pair.n,d.pairAffine.n)),nPair3=nPair*nPair*nPair;
-        const std::size_t nNear=std::size_t(d.nearOut.n),nNear3=nNear*nNear*nNear;
+        const std::size_t nNear=std::size_t(d.nearOut.n),nNearCell=std::size_t(d.nearCell.n?d.nearCell.n:d.nearOut.n);
+        const std::size_t nearPoints=d.nearCell.n?std::max(nNear*nNear,nNearCell*nNearCell*nNearCell):nNear*nNear*nNear;
         const std::size_t stride=std::max({nOut*3*maxCount,order==1&&!typed?nPair3*(4+maxCount)+nPair3*2*maxCount:std::size_t(0),
-                                           order==1||typed?std::size_t(hexGradedCoeff(order))+nNear3*2*maxCount:std::size_t(0)});
+                                           order==1||typed?std::size_t(hexGradedCoeff(order))+(d.innerSwitch>0.0?nOut*maxCount:std::size_t(0))+nearPoints*2*maxCount:std::size_t(0)});
         // One block per processor: more would only share processors and lengthen each kernel.
         int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
         const std::size_t launchItems=std::size_t(std::max(properties.multiProcessorCount,1));

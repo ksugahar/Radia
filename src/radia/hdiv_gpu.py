@@ -769,13 +769,13 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
         rows = np.concatenate([np.c_[np.full(len(rules[name][0]), index, dtype=np.float64),
                                      np.asarray(rules[name][0], dtype=np.float64),
                                      np.asarray(rules[name][1], dtype=np.float64)]
-                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self"))
+                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self", "near_cell"))
                                if name in rules])
         empty = np.zeros((0, 4))
         arguments = dict(common, cell_vertices=cells_m, face_vertices=faces_m, tet_rule=empty, tri_rule=empty,
                          tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30, family=family,
                          hex_rules=np.ascontiguousarray(rows),
-                         hex_bands=np.array([inputs["near_grade"], inputs["far_inner"]], dtype=np.float64))
+                         hex_bands=np.array([inputs["near_grade"], inputs["far_inner"], inputs["inner_switch"]], dtype=np.float64))
     elif curved:
         numbers = (np.ravel(tables["cell_numbers"]), np.ravel(tables["face_numbers"]))
         if not (np.array_equal(numbers[0], inputs["cell_vertices"]) and np.array_equal(numbers[1], inputs["face_vertices"])):
