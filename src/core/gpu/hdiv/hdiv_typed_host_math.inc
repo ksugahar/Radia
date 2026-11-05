@@ -366,8 +366,38 @@ RADIA_TYPED_KERNEL inline bool quadTangent(const double* nd,const double* base,c
     for(int l=0;l<nS;++l){const int* e=exponents+3*l;if(e[0]>order||e[1]>order)return false;inner[l]+=N[e[0]+3*e[1]];}
     return true;
 }
-// The rational charge reads the level rule on the tangent pyramid, whose base is a parallelogram.
-RADIA_TYPED_KERNEL inline bool pyramidTangent(const double* nd,const double* base,const double* p,const int* exponents,int nS,const double* lx,const double* lw,int ln,const double* gx,const double* gw,int nq,double* inner){
+// At the reference point (x0,y0,z0), with u = x0/(1-z0) and v = y0/(1-z0), the first order Taylor polynomial of the rational
+// charge x y/(1-z) is q = v x + u y - u v (1-z), and x y/(1-z) - q = (1-z)(x/(1-z) - u)(y/(1-z) - v). So the charge is a
+// combination of the polynomial charges plus a difference that vanishes at the point, where a plain rule then converges.
+RADIA_TYPED_KERNEL inline void rationalBase(const double* y,double& u,double& v){
+    const double top=1.0-y[2];u=top>1e-300?y[0]/top:0.0;v=top>1e-300?y[1]/top:0.0;
+}
+RADIA_TYPED_KERNEL inline double rationalTaylorPotential(const int* exponents,int nS,const double* potentials,double u,double v){
+    double sum=0.0;
+    for(int l=0;l<nS;++l){const int* e=exponents+3*l;
+        if(e[2]<0)continue;
+        sum+=(e[0]==1?v:e[1]==1?u:e[2]==1?u*v:-u*v)*potentials[l];}
+    return sum;
+}
+// Rational charge of a straight pyramid at p; inner holds the potentials of its polynomial charges and nothing else.
+RADIA_TYPED_KERNEL inline void straightPyramidRational(const double* nd,const double* p,const int* exponents,int nS,const double* gx,const double* gw,int nq,double* inner){
+    int rational=-1;for(int l=0;l<nS;++l)if(exponents[3*l+2]<0)rational=l;
+    if(rational<0)return;
+    double lin[3][4],scaleInv=0.0;
+    if(!affineForms(pyramidHost,nd,lin,scaleInv)){inner[rational]=NAN;return;}
+    double y[3],u,v;for(int a=0;a<3;++a)y[a]=lin[a][0]+lin[a][1]*p[0]+lin[a][2]*p[1]+lin[a][3]*p[2];
+    clampPyramid(y);rationalBase(y,u,v);
+    double sum=rationalTaylorPotential(exponents,nS,inner,u,v);
+    for(int iz=0;iz<nq;++iz)for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
+        const double c[3]={gx[ix],gx[iy],gx[iz]},top=1.0-c[2];double point[3],X[3],J[3][3];
+        collapse(pyramidHost,c,point);pyramidMap(nd,point,X,J);
+        const double d[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},r=norm3(d);
+        if(r>1e-300)sum+=gw[ix]*gw[iy]*gw[iz]*top*top*top*(c[0]-u)*(c[1]-v)/r;
+    }
+    inner[rational]=sum;
+}
+// The rational charge takes its Taylor polynomial on the tangent pyramid, whose base is a parallelogram.
+RADIA_TYPED_KERNEL inline bool pyramidTangent(const double* nd,const double* base,const double* p,const int* exponents,int nS,const double* gx,const double* gw,int nq,double* inner){
     constexpr int pyramidCharges=5;
     if(nS>pyramidCharges)return false;
     double X0[3],J[3][3];pyramidMap(nd,base,X0,J);
@@ -379,25 +409,31 @@ RADIA_TYPED_KERNEL inline bool pyramidTangent(const double* nd,const double* bas
     for(int i=0;i<5;++i)for(int k=0;k<3;++k)tangent[3*node[i]+k]=X0[k]+J[k][0]*(corner[i][0]-base[0])+J[k][1]*(corner[i][1]-base[1])+J[k][2]*(corner[i][2]-base[2]);
     for(int k=0;k<3;++k)center[k]=X0[k]+J[k][0]*(middle[0]-base[0])+J[k][1]*(middle[1]-base[1])+J[k][2]*(middle[2]-base[2]);
     if(!affineForms(pyramidHost,tangent,lin,scaleInv)||!chargePolynomials(lin,scaleInv,center,true,exponents,nS,coeff))return false;
-    affinePotentials(pyramidHost,tangent,center,p,nS,coeff,inner);
-    for(int l=0;l<nS;++l)if(exponents[3*l+2]<0)inner[l]+=pyramidRationalPotential(tangent,center,p,lx,lw,ln);
+    double potentials[pyramidCharges],u,v;
+    for(int l=0;l<nS;++l)potentials[l]=0.0;
+    affinePotentials(pyramidHost,tangent,center,p,nS,coeff,potentials);
+    rationalBase(base,u,v);
+    for(int l=0;l<nS;++l)inner[l]+=exponents[3*l+2]<0?rationalTaylorPotential(exponents,nS,potentials,u,v):potentials[l];
     for(int iz=0;iz<nq;++iz)for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
         const double c[3]={gx[ix],gx[iy],gx[iz]};double y[3],F[3],T[3],JF[3][3];
         const double det=collapse(pyramidHost,c,y);pyramidMap(nd,y,F,JF);
         for(int k=0;k<3;++k)T[k]=X0[k]+J[k][0]*(y[0]-base[0])+J[k][1]*(y[1]-base[1])+J[k][2]*(y[2]-base[2]);
-        const double delta=gw[ix]*gw[iy]*gw[iz]*det*kernelDifference(p,F,T,guard);
-        for(int l=0;l<nS;++l)inner[l]+=delta*monomial(exponents+3*l,y);
+        const double a[3]={p[0]-F[0],p[1]-F[1],p[2]-F[2]},b[3]={p[0]-T[0],p[1]-T[1],p[2]-T[2]},ra=norm3(a),rb=norm3(b);
+        if(!(ra>guard&&rb>guard))continue;
+        const double w=gw[ix]*gw[iy]*gw[iz]*det,polynomial=v*y[0]+u*y[1]-u*v*(1.0-y[2]);
+        for(int l=0;l<nS;++l){const int* e=exponents+3*l;const double density=monomial(e,y);
+            inner[l]+=w*(e[2]<0?density/ra-polynomial/rb:density*(1.0/ra-1.0/rb));}
     }
     return true;
 }
 // Potentials of a warped hex, quad or pyramid source at p. The base is the target's own point on a self pair, whose unit
-// cube point comes in selfCube, otherwise the clamped preimage of p. lx,lw,ln are the level rule of a rational charge.
-RADIA_TYPED_KERNEL inline bool warpedPotentials(int type,const double* nd,const double* p,const double* selfCube,const int* exponents,int nS,int order,const double* lx,const double* lw,int ln,const double* gx,const double* gw,int nq,double* inner){
+// cube point comes in selfCube, otherwise the clamped preimage of p.
+RADIA_TYPED_KERNEL inline bool warpedPotentials(int type,const double* nd,const double* p,const double* selfCube,const int* exponents,int nS,int order,const double* gx,const double* gw,int nq,double* inner){
     if(order<1||order>2)return false;
     double base[3];
     if(type==pyramidHost){
         if(selfCube)collapse(type,selfCube,base);else pyramidAnchor(nd,p,base);
-        return pyramidTangent(nd,base,p,exponents,nS,lx,lw,ln,gx,gw,nq,inner);
+        return pyramidTangent(nd,base,p,exponents,nS,gx,gw,nq,inner);
     }
     if(type==hexHost){
         if(selfCube){base[0]=selfCube[0];base[1]=selfCube[1];base[2]=selfCube[2];}else hexAnchor(nd,p,base);

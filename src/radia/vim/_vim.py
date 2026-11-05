@@ -2417,7 +2417,8 @@ def _mixed_gram_rules(p):
     far rule, and 0 keeps the near inner everywhere. A far pair at or beyond the ratio of a far level to its summed
     radii takes that level's count instead of the outer one. A near target point on a warped hex, quad or pyramid source
     takes the closed form on the tangent image of the source plus the bounded remainder on the tangent count per axis,
-    and the count 0 keeps the radial and fan rules. These are proposed values, from convergence on small meshes.
+    and the rational pyramid charge its Taylor polynomial at the point of p plus the same rule on the difference. The
+    count 0 keeps the radial, fan and level rules. These are proposed values, from convergence on small meshes.
     A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
     return ((5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
@@ -2437,9 +2438,10 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
     Every pair takes QuadBlockTyped: each host is the trilinear image of a unit cube with its density in
     the cube measure, so the far and near rules serve all of them. A pair is near when it is self, touching,
     or within _MIXED_NEAR_BAND of its summed sizes. Beyond the inner switch radius of the source a near target
-    point reads the far rule. Closer, the near inner is exact on an affine source, by levels on the rational charge of
-    an affine pyramid, and on a warped hex, quad or pyramid source the closed form on its tangent image plus a bounded
-    remainder. A pair of two different hosts integrates one direction, with the cheaper host as source."""
+    point reads the far rule. Closer, the near inner is exact on an affine source, and on a warped hex, quad or pyramid
+    source the closed form on its tangent image plus a bounded remainder; the rational pyramid charge takes its Taylor
+    polynomial at the point of p plus a difference that vanishes there. A pair of two different hosts integrates one
+    direction, with the cheaper host as source."""
     p = int(fes.globalorder)
     t0 = time.perf_counter()
     cb = _charge_basis_mixed(fes, materialize_mass=materialize_mass)
