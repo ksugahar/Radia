@@ -288,21 +288,31 @@ __global__ void acaDenseFill(FlatDevice d,const std::size_t* perm,const double* 
 // One host of the permuted charge order, and a dense leaf as a grid of directed host pairs.
 struct AcaHostStart {std::size_t start;int host;};
 struct AcaPairSpan {std::size_t row,column,columns,offset,firstPair,rowHost,columnHost,columnHosts;};
-// HEX and mixed hosts, one directed host pair per item. A near pair reads the table; a far pair evaluates its
-// tensor block once, where entry by entry it would repeat the double sum for every charge pair. That block is the
-// direct term alone, so with images every pair folds its terms entry by entry.
+// HEX and mixed hosts, one directed host pair per item. Each term of a pair, direct or image, reads the table when
+// near; a far one evaluates its tensor block once, where entry by entry it would repeat the double sum for every
+// charge pair. A far image term folds both directed blocks, like the entry route and the CPU GetHexSymBlock.
 __global__ void __launch_bounds__(hexThreads) acaDensePairs(HexDevice d,const AcaHostStart* hosts,const AcaPairSpan* spans,std::size_t count,const double* sigma,
         std::size_t first,std::size_t items,double* scratch,std::size_t stride,std::size_t blockEntries,double* coefficients,int* invalid){
     for(std::size_t item=first+blockIdx.x;item<first+items;item+=gridDim.x){
         std::size_t lo=0,hi=count;while(hi-lo>1){const auto mid=(lo+hi)/2;if(spans[mid].firstPair<=item)lo=mid;else hi=mid;}
         const AcaPairSpan s=spans[lo];const auto local=item-s.firstPair;
         const AcaHostStart target=hosts[s.rowHost+local/s.columnHosts],source=hosts[s.columnHost+local%s.columnHosts];
-        const int t=target.host,h=source.host,nT=d.count[t],nS=d.count[h];const bool isFar=d.imageCount==0&&!hexCandidate(d,t,h);
-        double* block=scratch+std::size_t(blockIdx.x)*stride;
-        if(isFar){hexTensorBlock(d,t,h,0,hexFarClass,nT,nS,block+blockEntries,block,invalid);__syncthreads();}
+        const int t=target.host,h=source.host,nT=d.count[t],nS=d.count[h];
+        double* sum=scratch+std::size_t(blockIdx.x)*stride;double* block=sum+blockEntries;
+        double* reverse=d.imageCount?block+blockEntries:block;double* work=reverse+blockEntries;
+        for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x)sum[e]=0.0;
+        for(int img=0;img<=d.imageCount;++img){const double sign=img?d.images[img-1].sign:1.0;
+            if(hexCandidate(d,t,h,img)){
+                for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x)sum[e]+=sign*hexTermEntry(d,std::size_t(d.first[t]+e/nS),std::size_t(d.first[h]+e%nS),img);
+            }else{
+                hexTensorBlock(d,t,h,img,hexFarClass,nT,nS,work,block,invalid);__syncthreads();
+                if(img){hexTensorBlock(d,h,t,img,hexFarClass,nS,nT,work,reverse,invalid);__syncthreads();}
+                for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x)sum[e]+=sign*(img?0.5*(block[e]+reverse[(e%nS)*nT+e/nS]):block[e]);
+            }
+            __syncthreads();}
         const auto base=s.offset+(target.start-s.row)*s.columns+(source.start-s.column);
         for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x){const int lt=e/nS,ls=e%nS;const auto a=std::size_t(d.first[t]+lt),b=std::size_t(d.first[h]+ls);
-            const double value=(isFar?block[e]:hexEntry(d,a,b))*((1./sigma[a])*(1./sigma[b]));if(!isfinite(value))atomicExch(invalid,1);
+            const double value=sum[e]*((1./sigma[a])*(1./sigma[b]));if(!isfinite(value))atomicExch(invalid,1);
             coefficients[base+std::size_t(lt)*s.columns+ls]=value;}
         __syncthreads();
     }
@@ -480,7 +490,7 @@ class FlatAcaOracle {
             const auto rowHosts=hostAt[s.row+s.rows]-rowHost,columnHosts=hostAt[s.column+s.columns]-columnHost;
             spans.push_back({s.row,s.column,s.columns,s.offset,pairs,rowHost,columnHost,columnHosts});pairs=flatSum(pairs,checkedProduct(rowHosts,columnHosts));}
         const std::size_t maxCount=prepared.hexPrepared.order==2?27:8,nOut=std::size_t(prepared.hexPrepared.d.out.n)*prepared.hexPrepared.d.out.n*prepared.hexPrepared.d.out.n;
-        const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries+nOut*3*maxCount;
+        const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries*(prepared.hexPrepared.d.imageCount?3:2)+nOut*3*maxCount;
         const std::size_t blocks=processors();
         flatReserve(flatSum(flatSum(checkedProduct(hosts.size(),sizeof(AcaHostStart)),checkedProduct(spans.size(),sizeof(AcaPairSpan))),checkedProduct(checkedProduct(blocks,stride),sizeof(double))),
             "Flat ACA dense host pairs would exceed the GPU reserve");
@@ -583,7 +593,7 @@ public:
         }
         const auto denseStarted=std::chrono::steady_clock::now();
         if(!p.deferredDense.empty()){
-            if(prepared.hex&&block.images.empty())fillDenseHosts(p,coefficients,residentStream);else fillDenseEntries(p,coefficients,devicePermutation,residentStream);
+            if(prepared.hex)fillDenseHosts(p,coefficients,residentStream);else fillDenseEntries(p,coefficients,devicePermutation,residentStream);
             if((invalidCode=prepared.flag(residentStream,transfers,"dense_flag"))!=0)throw std::runtime_error("Flat ACA dense leaf produced a nonfinite entry");
         }
         check(cudaMemcpyAsync(scale,sigma.data,n*sizeof(double),cudaMemcpyDeviceToDevice,residentStream));

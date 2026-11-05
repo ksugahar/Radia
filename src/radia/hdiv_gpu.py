@@ -676,14 +676,12 @@ def _expected_hex_ledger(arguments):
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
                      ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
                      ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
-    images = arguments.get("image_masks") is not None
-    if images:
+    if arguments.get("image_masks") is not None:
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
-        expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size, ("dense_flag", "D2H"): 4})
-        # A dense leaf with images fills entry by entry; without them it fills host pair by host pair.
-        expected.update({("aca_dense_spans", "H2D"): None} if images else
-                        {("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None})
+        expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -703,14 +701,12 @@ def _expected_mixed_ledger(arguments):
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
                      ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
                      ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
-    images = arguments.get("image_masks") is not None
-    if images:
+    if arguments.get("image_masks") is not None:
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
-        expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size, ("dense_flag", "D2H"): 4})
-        # As on the HEX route: a dense leaf with images fills entry by entry.
-        expected.update({("aca_dense_spans", "H2D"): None} if images else
-                        {("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None})
+        expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
     if arguments["compression"] == _GRAM_EXPANSION:
         expected.update({("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
     return expected
