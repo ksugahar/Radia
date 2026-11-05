@@ -117,7 +117,7 @@ def run_validation(args):
         cpu_cell_x = np.asarray(cpu_cell["_m_coefficients"], dtype=float)
         rad.UtiDelAll()
         cpu_saturating = vim.Solve(ring, bh_table=np.array(BH_TABLE), H_ext=external, order=args.hdiv_order, gram_eps=args.gram_eps,
-                                   tol=args.solve_tol, nl_tol=args.nonlinear_tol)
+                                   tol=args.solve_tol, nl_tol=args.reference_nonlinear_tol)
         cpu_saturating_mz = _mean_mz(cpu_saturating, ring)
         cpu_saturating_h = np.asarray(vim.FieldFromSolution(cpu_saturating, probes, algorithm="direct"), float)
     runs = {}
@@ -204,6 +204,8 @@ def parse_args(argv=None):
     parser.add_argument("--solve-tol", type=float, default=1.0e-10)
     parser.add_argument("--device-tol", type=float, default=1.0e-10)
     parser.add_argument("--nonlinear-tol", type=float, default=1.0e-9)
+    parser.add_argument("--reference-nonlinear-tol", type=float, default=1.0e-11,
+                        help="CPU Newton tolerance of the reference: at 1e-9 it can stop short of its own converged state")
     parser.add_argument("--max-iterations", type=int, default=4000)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=4)

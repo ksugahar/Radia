@@ -189,7 +189,7 @@ def _nonlinear_case(paths, checked, probes, args):
     with ng.TaskManager():
         rad.UtiDelAll()
         cpu_ring = vim.Solve(ring, bh_table=np.array(BH_TABLE), H_ext=_applied(args), order=args.hdiv_order, gram_eps=args.gram_eps, leaf=args.leaf,
-                             curve_order=2, tol=args.solve_tol, nl_tol=args.nonlinear_tol)
+                             curve_order=2, tol=args.solve_tol, nl_tol=args.reference_nonlinear_tol)
         cpu_mean = _mean_tangential_magnetization(cpu_ring, ring)
         cpu_h = np.asarray(vim.FieldFromSolution(cpu_ring, probes, algorithm="direct"), float)
     del keep
@@ -347,6 +347,8 @@ def parse_args(argv=None):
     parser.add_argument("--solve-tol", type=float, default=1.0e-10)
     parser.add_argument("--device-tol", type=float, default=1.0e-10)
     parser.add_argument("--nonlinear-tol", type=float, default=1.0e-9)
+    parser.add_argument("--reference-nonlinear-tol", type=float, default=1.0e-11,
+                        help="CPU Newton tolerance of the reference: at 1e-9 it can stop short of its own converged state")
     parser.add_argument("--max-iterations", type=int, default=4000)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=4)
