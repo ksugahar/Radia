@@ -156,9 +156,9 @@ def _hdiv_space_with_image_constraints(
     base = ng.HDiv(mesh, order=int(order))
     periodic_slave_dofs = ()
     if cyclic_periodic_boundaries:
-        if image_planes:
+        if any(float(sign) > 0.0 for _axis, sign in image_planes):
             raise NotImplementedError(
-                "vim.Solve: mirror image constraints and an azimuthal "
+                "vim.Solve: a '+' mirror constraint and an azimuthal "
                 "periodic HDiv trace cannot be combined")
         if not mesh.ngmesh.GetIdentifications():
             raise ValueError(
@@ -869,14 +869,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             raise ValueError(
                 "vim.Solve: image_cyclic_alternating needs an EVEN pole count (the (-1)^k pattern must "
                 "close around the ring); got N=%d" % n_fold)
-        if image_masks:
-            raise NotImplementedError(
-                "vim.Solve: combining image= mirror planes with image_cyclic= is not wired yet; "
-                "pass one or the other")
-        for k in range(1, n_fold):
-            image_masks.append(0)                                  # pure rotation, no mirror
-            image_signs.append(-1.0 if (image_cyclic_alternating and k % 2) else 1.0)
-            image_rot_angle.append(2.0*math.pi*k/n_fold)
+        image_masks, image_signs, image_rot_angle = _image.cyclic_image_terms(
+            image_planes, n_fold, bool(image_cyclic_alternating))
     if cyclic_periodic_boundaries:
         if image_cyclic is None:
             raise ValueError(
@@ -1160,12 +1154,12 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         # the physical average is their mean -- in-plane components cancel
         # around a ring, and every component for most alternating patterns.
         total = M_avg_reduced.copy()
-        for _sign, _angle in zip(image_signs, image_rot_angle):
+        for _mask, _sign, _angle in zip(image_masks, image_signs, image_rot_angle):
             _c, _s = math.cos(_angle), math.sin(_angle)
             total += _sign*np.array([
                 _c*M_avg_reduced[0] - _s*M_avg_reduced[1],
                 _s*M_avg_reduced[0] + _c*M_avg_reduced[1],
-                M_avg_reduced[2]])
+                -M_avg_reduced[2] if _mask & 4 else M_avg_reduced[2]])
         M_avg = total/(len(image_rot_angle) + 1)
     out = _OperatorBackedResult(
                M=M_el, M_avg=M_avg, gfM=gfM, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
