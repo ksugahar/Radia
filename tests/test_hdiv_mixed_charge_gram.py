@@ -10,9 +10,11 @@ orientation moves the factors far beyond DEMAG_REL. The energies of the rational
 pyramid match a reduction that shares no rule with the Gram. The mass matches a long rule on a mesh
 mapped onto a ball, whose cells the default rule of u*v*dx underintegrates. Both routes refuse a cell
 whose map changes sign, the bound behind that refusal holds against the element map, and every mesh
-family of the record stays one-signed.
-Assumes: NGSolve owns the HDiv basis, orientation and Piola maps; the values guard code,
-not the accuracy of a physical model, and DEMAG_REL, RATIONAL_REL and SOLVE_REL are PROPOSED detectors.
+family of the record stays one-signed. On warped cells the tangent closed form with its bounded remainder stays
+near the radial, fan and level rules at count 0, which integrate the same entries with no closed form of the source;
+dropping the remainder or the rational Taylor term moves the operator beyond WARPED_INNER_REL.
+Assumes: NGSolve owns the HDiv basis, orientation and Piola maps; the values guard code, not the accuracy of a
+physical model, and DEMAG_REL, RATIONAL_REL, SOLVE_REL and WARPED_INNER_REL are PROPOSED detectors.
 """
 import numpy as np
 import pytest
@@ -29,6 +31,7 @@ RATIONAL_REL = 5e-4
 EIG_ROUNDOFF = 1e-12
 SOLVE_REL = 1e-7
 MASS_REL = 1e-5
+WARPED_INNER_REL = 1e-2
 _CUBES = dict(pyramids=pyramid_cube, transition=transition_cube, grid=lambda: mixed_grid((2, 2, 2)))
 
 
@@ -76,6 +79,21 @@ def test_mixed_charge_gram_trace_on_warped_pyramids(order):
     fes, B, G, M = _assemble(pyramid_cube(.3), order)
     factors = _factors(fes, B, G, M)
     assert abs(factors.sum() - 1) <= DEMAG_REL, f"order={order} factors={factors} sum={factors.sum()} expected 1"
+
+
+@pytest.mark.parametrize("name,order", [("warped", 1), ("warped", 2), ("ball", 1)])
+def test_tangent_rule_stays_near_the_rules_without_a_closed_form(monkeypatch, name, order):
+    mesh = pyramid_cube(.2) if name == "warped" else mixed_grid((2, 2, 2), lengths=(2., 2., 2.), origin=(-1., -1., -1.), mapping=to_ball(1.))
+    rules = list(V._mixed_gram_rules(order))
+    assert rules[6] > 0, f"production tangent count {rules[6]}, expected a tangent rule"
+    _, B, G, M = _assemble(mesh, order)
+    rules[1], rules[6] = (6 if order == 1 else 14), 0
+    monkeypatch.setattr(V, "_mixed_gram_rules", lambda p: tuple(rules))
+    _, B0, G0, _ = _assemble(mesh, order)
+    assert np.array_equal(B, B0)
+    difference = B.T @ (G - G0) @ B
+    distance = float(np.abs(np.linalg.eigvals(np.linalg.solve(M, .5*(difference + difference.T)))).max())
+    assert distance <= WARPED_INNER_REL, f"{name} order={order} operator distance {distance:.3e}, limit {WARPED_INNER_REL:.0e}"
 
 
 def test_rational_charge_energies_match_their_reduction():

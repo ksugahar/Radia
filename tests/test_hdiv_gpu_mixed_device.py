@@ -264,6 +264,20 @@ def test_mixed_kernel_expansion_stays_near_the_exact_device_gram(tmp_path, reque
     assert relative <= EXPANSION_REL, f"order={order} relative={relative:.3e} limit={EXPANSION_REL:.0e}"
 
 
+def test_tangent_rule_is_refused_outside_mixed_meshes(tmp_path, cuda):
+    """Guards: a pure hex mesh keeps its own near rules and never takes the tangent rule of the mixed family."""
+    from radia import hdiv_gpu
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, oriented
+    points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+    path = tmp_path / "hex.vol"
+    build_mesh(points, [oriented(points, list(range(8)))]).ngmesh.Save(str(path))
+    setup = hdiv_gpu._prepare_device_components(path, 1, cuda, aca=None, compression="dense")
+    assert setup["family"] == "hex"
+    gram = dict(setup["charge_gram"], hex_rules=np.vstack([setup["charge_gram"]["hex_rules"], [10., .5, 1.]]))
+    with pytest.raises(ValueError, match="belongs to mixed meshes"):
+        cuda._ResidentHDiv.from_flat_charges(**gram, dofs=setup["dofs"], backend="gpu")
+
+
 def test_kernel_expansion_is_refused_outside_mixed_meshes(tmp_path, cuda):
     """Guards: the route is not silently replaced by another compression on a family it does not cover."""
     from radia import hdiv_gpu
