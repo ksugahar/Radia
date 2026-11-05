@@ -353,13 +353,20 @@ RADIA_TYPED_KERNEL inline bool quadTangent(const double* nd,const double* base,c
     faceTensorPotentials(moments,forms,order,0,N);
     const double scale=1.0/sqrt(det),guard=1e-6*sqrt(fmax(aa,bb));
     for(double& value:N)value*=scale;
-    for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
-        const double eta[2]={gx[ix],gx[iy]},d[2]={eta[0]-base[0],eta[1]-base[1]};
-        double F[3],T[3];quadMapX(nd,eta,F);
-        for(int k=0;k<3;++k)T[k]=X0[k]+T0[k][0]*d[0]+T0[k][1]*d[1];
-        double py=gw[ix]*gw[iy]*kernelDifference(p,F,T,guard);
-        for(int b=0;b<=order;++b,py*=eta[1]){double px=py;
-            for(int a=0;a<=order;++a,px*=eta[0])N[a+3*b]+=px;}
+    // On the surface the difference jumps with the direction at the base point, so it is integrated on four triangles from that
+    // point: the Duffy map makes it smooth. A base point on a side leaves that triangle empty.
+    const double cu[5]={0.0,1.0,1.0,0.0,0.0},cv[5]={0.0,0.0,1.0,1.0,0.0};
+    for(int side=0;side<4;++side){
+        const double e0[2]={cu[side]-base[0],cv[side]-base[1]},e1[2]={cu[side+1]-cu[side],cv[side+1]-cv[side]},area=e0[0]*e1[1]-e0[1]*e1[0];
+        if(!(area>0.0))continue;
+        for(int is=0;is<nq;++is)for(int it=0;it<nq;++it){
+            const double s=gx[is],eta[2]={base[0]+s*(e0[0]+gx[it]*e1[0]),base[1]+s*(e0[1]+gx[it]*e1[1])},d[2]={eta[0]-base[0],eta[1]-base[1]};
+            double F[3],T[3];quadMapX(nd,eta,F);
+            for(int k=0;k<3;++k)T[k]=X0[k]+T0[k][0]*d[0]+T0[k][1]*d[1];
+            double py=gw[is]*gw[it]*s*area*kernelDifference(p,F,T,guard);
+            for(int b=0;b<=order;++b,py*=eta[1]){double px=py;
+                for(int a=0;a<=order;++a,px*=eta[0])N[a+3*b]+=px;}
+        }
     }
     for(int l=0;l<nS;++l){const int* e=exponents+3*l;if(e[0]>order||e[1]>order)return false;inner[l]+=N[e[0]+3*e[1]];}
     return true;
