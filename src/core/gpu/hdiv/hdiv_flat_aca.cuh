@@ -381,9 +381,19 @@ __global__ void __launch_bounds__(hexThreads) acaSigmaHosts(FlatDevice fd,double
         __syncthreads();}
 }
 // HEX and mixed hosts, one directed host pair per item.
+// Cost of one directed host pair: its far terms (an image term evaluates both directions) and whether each host is a cell.
+// Scheduling only: each pair writes its own entries.
+__global__ void acaPairCost(HexDevice d,const AcaHostStart* hosts,const AcaPairSpan* spans,std::size_t count,std::size_t pairs,unsigned char* cost,unsigned* order){
+    const auto item=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(item>=pairs)return;
+    std::size_t lo=0,hi=count;while(hi-lo>1){const auto mid=(lo+hi)/2;if(spans[mid].firstPair<=item)lo=mid;else hi=mid;}
+    const AcaPairSpan s=spans[lo];const auto local=item-s.firstPair;
+    const int t=hosts[s.rowHost+local/s.columnHosts].host,h=hosts[s.columnHost+local%s.columnHosts].host;
+    int farTerms=0;for(int img=0;img<=d.imageCount;++img)if(!hexCandidate(d,t,h,img))farTerms+=img?2:1;
+    cost[item]=static_cast<unsigned char>((farTerms<63?farTerms:63)<<2|(hexCell(d,t)?2:0)|(hexCell(d,h)?1:0));order[item]=unsigned(item);
+}
 __global__ void __launch_bounds__(hexThreads) acaDensePairs(HexDevice d,const AcaHostStart* hosts,const AcaPairSpan* spans,std::size_t count,const double* sigma,
-        std::size_t first,std::size_t items,double* scratch,std::size_t stride,std::size_t blockEntries,double* coefficients,int* invalid){
-    for(std::size_t item=first+blockIdx.x;item<first+items;item+=gridDim.x){
+        const unsigned* order,std::size_t first,std::size_t items,double* scratch,std::size_t stride,std::size_t blockEntries,double* coefficients,int* invalid){
+    for(std::size_t slot=first+blockIdx.x;slot<first+items;slot+=gridDim.x){const std::size_t item=order[slot];
         std::size_t lo=0,hi=count;while(hi-lo>1){const auto mid=(lo+hi)/2;if(spans[mid].firstPair<=item)lo=mid;else hi=mid;}
         const AcaPairSpan s=spans[lo];const auto local=item-s.firstPair;
         const AcaHostStart target=hosts[s.rowHost+local/s.columnHosts],source=hosts[s.columnHost+local%s.columnHosts];
@@ -598,9 +608,20 @@ class FlatAcaOracle {
             "Flat ACA dense host pairs would exceed the GPU reserve");
         Buffer<AcaPairSpan> deviceSpans;deviceSpans.upload(spans);transfers.push_back({"aca_dense_pair_spans","H2D",checkedProduct(spans.size(),sizeof(AcaPairSpan))});
         Buffer<double> scratch;scratch.allocate(checkedProduct(blocks,stride));
+        // A launch waits for its slowest pair: costly pairs run first and together, as the HEX pair table does.
+        if(pairs>std::size_t(INT_MAX))throw std::runtime_error("ACA dense host pairs exceed the work sort");
+        Buffer<unsigned char> cost,sortedCost;Buffer<unsigned> unordered,order;
+        {std::size_t sortBytes=0;check(cub::DeviceRadixSort::SortPairsDescending(nullptr,sortBytes,cost.data,sortedCost.data,unordered.data,order.data,int(pairs),0,8,residentStream));
+            flatReserve(flatSum(checkedProduct(pairs,2*(sizeof(unsigned char)+sizeof(unsigned))),sortBytes),"Flat ACA dense pair order would exceed the GPU reserve");
+            cost.allocate(pairs);sortedCost.allocate(pairs);unordered.allocate(pairs);order.allocate(pairs);
+            acaPairCost<<<unsigned((pairs+127)/128),128,0,residentStream>>>(prepared.hexPrepared.d,deviceHosts.data,deviceSpans.data,spans.size(),pairs,cost.data,unordered.data);
+            check(cudaGetLastError());++launches;
+            Buffer<unsigned char> temporary;temporary.allocate(std::max<std::size_t>(1,sortBytes));
+            check(cub::DeviceRadixSort::SortPairsDescending(temporary.data,sortBytes,cost.data,sortedCost.data,unordered.data,order.data,int(pairs),0,8,residentStream));++launches;
+            check(cudaStreamSynchronize(residentStream));}
         HexLaunchPace pace(blocks);
         for(std::size_t item=0;item<pairs;){const auto here=pace.begin(pairs-item);
-            acaDensePairs<<<unsigned(std::min(blocks,here)),hexThreads,0,residentStream>>>(prepared.hexPrepared.d,deviceHosts.data,deviceSpans.data,spans.size(),sigma.data,item,here,scratch.data,stride,blockEntries,coefficients,prepared.invalid.data);
+            acaDensePairs<<<unsigned(std::min(blocks,here)),hexThreads,0,residentStream>>>(prepared.hexPrepared.d,deviceHosts.data,deviceSpans.data,spans.size(),sigma.data,order.data,item,here,scratch.data,stride,blockEntries,coefficients,prepared.invalid.data);
             check(cudaGetLastError());check(cudaStreamSynchronize(residentStream));++launches;pace.end();item+=here;}
     }
 public:
