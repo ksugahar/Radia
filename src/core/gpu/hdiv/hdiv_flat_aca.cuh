@@ -209,6 +209,27 @@ __global__ void acaDenseFill(FlatDevice d,const std::size_t* perm,const double* 
     const double value=acaEntry(d,perm,sigma,s.row+i,s.column+j);if(!isfinite(value))atomicExch(invalid,1);
     coefficients[s.offset+i*s.columns+j]=value;
 }
+// One host of the permuted charge order, and a dense leaf as a grid of directed host pairs.
+struct AcaHostStart {std::size_t start;int host;};
+struct AcaPairSpan {std::size_t row,column,columns,offset,firstPair,rowHost,columnHost,columnHosts;};
+// HEX and mixed hosts, one directed host pair per item. A near pair reads the table; a far pair evaluates its
+// tensor block once, where entry by entry it would repeat the double sum for every charge pair.
+__global__ void __launch_bounds__(hexThreads) acaDensePairs(HexDevice d,const AcaHostStart* hosts,const AcaPairSpan* spans,std::size_t count,const double* sigma,
+        std::size_t first,std::size_t items,double* scratch,std::size_t stride,std::size_t blockEntries,double* coefficients,int* invalid){
+    for(std::size_t item=first+blockIdx.x;item<first+items;item+=gridDim.x){
+        std::size_t lo=0,hi=count;while(hi-lo>1){const auto mid=(lo+hi)/2;if(spans[mid].firstPair<=item)lo=mid;else hi=mid;}
+        const AcaPairSpan s=spans[lo];const auto local=item-s.firstPair;
+        const AcaHostStart target=hosts[s.rowHost+local/s.columnHosts],source=hosts[s.columnHost+local%s.columnHosts];
+        const int t=target.host,h=source.host,nT=d.count[t],nS=d.count[h];const bool isFar=!hexCandidate(d,t,h);
+        double* block=scratch+std::size_t(blockIdx.x)*stride;
+        if(isFar){hexTensorBlock(d,t,h,hexFarClass,nT,nS,block+blockEntries,block,invalid);__syncthreads();}
+        const auto base=s.offset+(target.start-s.row)*s.columns+(source.start-s.column);
+        for(int e=threadIdx.x;e<nT*nS;e+=blockDim.x){const int lt=e/nS,ls=e%nS;const auto a=std::size_t(d.first[t]+lt),b=std::size_t(d.first[h]+ls);
+            const double value=(isFar?block[e]:hexEntry(d,a,b))*((1./sigma[a])*(1./sigma[b]));if(!isfinite(value))atomicExch(invalid,1);
+            coefficients[base+std::size_t(lt)*s.columns+ls]=value;}
+        __syncthreads();
+    }
+}
 struct FlatAcaStats {
     std::size_t elements=0,clusters=0,denseLeaves=0,lowrankLeaves=0,admissibleBlocks=0,rankCapPromotions=0,storagePromotions=0,zeroRankLeaves=0,
         rankSum=0,maxRank=0,steps=0,factorCoefficients=0,denseCoefficients=0,batches=0;
@@ -223,6 +244,44 @@ class FlatAcaOracle {
     HostVector<HostUnique<Buffer<double>>> chunks{HostFaultAllocator<HostUnique<Buffer<double>>>("aca.chunks")};
     HostVector<std::size_t> rankOf{HostFaultAllocator<std::size_t>("aca.rank-of")};
     bool compressed=false;std::size_t activeBytes=0;
+    void fillDenseEntries(const Plan& p,double* coefficients,const std::size_t* devicePermutation,cudaStream_t residentStream){
+        HostVector<AcaDenseSpan> spans{HostFaultAllocator<AcaDenseSpan>("aca.dense-spans")};std::size_t entries=0;
+        for(const auto& s:p.deferredDense){spans.push_back({s.row,s.column,s.rows,s.columns,s.offset,entries});entries+=checkedProduct(s.rows,s.columns);}
+        flatReserve(checkedProduct(spans.size(),sizeof(AcaDenseSpan)),"Flat ACA dense-span upload would exceed the GPU reserve");
+        Buffer<AcaDenseSpan> deviceSpans;deviceSpans.upload(spans);transfers.push_back({"aca_dense_spans","H2D",checkedProduct(spans.size(),sizeof(AcaDenseSpan))});
+        const FlatDevice device=prepared.device();constexpr std::size_t batch=std::size_t(1)<<16;
+        for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);
+            acaDenseFill<<<unsigned((here+127)/128),128,0,residentStream>>>(device,devicePermutation,sigma.data,deviceSpans.data,spans.size(),first,here,coefficients,prepared.invalid.data);
+            check(cudaGetLastError());check(cudaStreamSynchronize(residentStream));++launches;}
+    }
+    // Host metadata only: the permuted hosts and, per dense leaf, its host ranges. Their product enumerates the work.
+    void fillDenseHosts(const Plan& p,double* coefficients,cudaStream_t residentStream){
+        const auto n=block.charges();const int cellHosts=int(block.cellCount());
+        HostVector<AcaHostStart> hosts{HostFaultAllocator<AcaHostStart>("aca.dense-hosts")};
+        HostVector<std::size_t> hostAt(n+1,0,HostFaultAllocator<std::size_t>("aca.dense-host-index"));
+        for(std::size_t i=0;i<n;++i){const auto a=partition.permutation[i];const int g=block.kind[a]==0?block.host[a]:cellHosts+block.host[a];
+            if(hosts.empty()||hosts.back().host!=g)hosts.push_back({i,g});
+            hostAt[i]=hosts.size()-1;}
+        hostAt[n]=hosts.size();
+        HostVector<AcaPairSpan> spans{HostFaultAllocator<AcaPairSpan>("aca.dense-pair-spans")};std::size_t pairs=0;
+        for(const auto& s:p.deferredDense){const auto rowHost=hostAt[s.row],columnHost=hostAt[s.column];
+            if(hosts[rowHost].start!=s.row||hosts[columnHost].start!=s.column)throw std::invalid_argument("ACA dense leaf does not start at a host");
+            const auto rowHosts=hostAt[s.row+s.rows]-rowHost,columnHosts=hostAt[s.column+s.columns]-columnHost;
+            spans.push_back({s.row,s.column,s.columns,s.offset,pairs,rowHost,columnHost,columnHosts});pairs=flatSum(pairs,checkedProduct(rowHosts,columnHosts));}
+        const std::size_t maxCount=prepared.hexPrepared.order==2?27:8,nOut=std::size_t(prepared.hexPrepared.d.out.n)*prepared.hexPrepared.d.out.n*prepared.hexPrepared.d.out.n;
+        const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries+nOut*2*maxCount;
+        int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
+        const std::size_t blocks=std::size_t(std::max(properties.multiProcessorCount,1));
+        flatReserve(flatSum(flatSum(checkedProduct(hosts.size(),sizeof(AcaHostStart)),checkedProduct(spans.size(),sizeof(AcaPairSpan))),checkedProduct(checkedProduct(blocks,stride),sizeof(double))),
+            "Flat ACA dense host pairs would exceed the GPU reserve");
+        Buffer<AcaHostStart> deviceHosts;deviceHosts.upload(hosts);transfers.push_back({"aca_dense_host_starts","H2D",checkedProduct(hosts.size(),sizeof(AcaHostStart))});
+        Buffer<AcaPairSpan> deviceSpans;deviceSpans.upload(spans);transfers.push_back({"aca_dense_pair_spans","H2D",checkedProduct(spans.size(),sizeof(AcaPairSpan))});
+        Buffer<double> scratch;scratch.allocate(checkedProduct(blocks,stride));
+        HexLaunchPace pace(blocks);
+        for(std::size_t item=0;item<pairs;){const auto here=pace.begin(pairs-item);
+            acaDensePairs<<<unsigned(std::min(blocks,here)),hexThreads,0,residentStream>>>(prepared.hexPrepared.d,deviceHosts.data,deviceSpans.data,spans.size(),sigma.data,item,here,scratch.data,stride,blockEntries,coefficients,prepared.invalid.data);
+            check(cudaGetLastError());check(cudaStreamSynchronize(residentStream));++launches;pace.end();item+=here;}
+    }
 public:
     HostVector<FlatTransfer> transfers{HostFaultAllocator<FlatTransfer>("aca.transfers")};
     std::size_t ownedBytes=0,launches=0;int invalidCode=0;FlatAcaStats stats;
@@ -337,15 +396,8 @@ public:
             check(cudaMemcpyAsync(coefficients+span.a,chunk+kept[k].v,span.columns*span.rank*sizeof(double),cudaMemcpyDeviceToDevice,residentStream));
             check(cudaMemcpyAsync(coefficients+span.b,chunk+kept[k].u,span.rows*span.rank*sizeof(double),cudaMemcpyDeviceToDevice,residentStream));
         }
-        HostVector<AcaDenseSpan> spans{HostFaultAllocator<AcaDenseSpan>("aca.dense-spans")};std::size_t entries=0;
-        for(const auto& s:p.deferredDense){spans.push_back({s.row,s.column,s.rows,s.columns,s.offset,entries});entries+=checkedProduct(s.rows,s.columns);}
-        if(!spans.empty()){
-            flatReserve(checkedProduct(spans.size(),sizeof(AcaDenseSpan)),"Flat ACA dense-span upload would exceed the GPU reserve");
-            Buffer<AcaDenseSpan> deviceSpans;deviceSpans.upload(spans);transfers.push_back({"aca_dense_spans","H2D",checkedProduct(spans.size(),sizeof(AcaDenseSpan))});
-            const FlatDevice device=prepared.device();constexpr std::size_t batch=std::size_t(1)<<16;
-            for(std::size_t first=0;first<entries;first+=batch){const auto here=std::min(batch,entries-first);
-                acaDenseFill<<<unsigned((here+127)/128),128,0,residentStream>>>(device,devicePermutation,sigma.data,deviceSpans.data,spans.size(),first,here,coefficients,prepared.invalid.data);
-                check(cudaGetLastError());check(cudaStreamSynchronize(residentStream));++launches;}
+        if(!p.deferredDense.empty()){
+            if(prepared.hex)fillDenseHosts(p,coefficients,residentStream);else fillDenseEntries(p,coefficients,devicePermutation,residentStream);
             if((invalidCode=prepared.flag(residentStream,transfers,"dense_flag"))!=0)throw std::runtime_error("Flat ACA dense leaf produced a nonfinite entry");
         }
         check(cudaMemcpyAsync(scale,sigma.data,n*sizeof(double),cudaMemcpyDeviceToDevice,residentStream));

@@ -10,8 +10,8 @@
 // the smootherstep-graded outer tensor rule with the analytic inner on affine
 // sources and the cone/fan inner on distorted ones. Every host pair of the pair table (all pairs for dense, the
 // near candidates for ACA) is computed once per direction and stored as
-// 0.5 (G_AB + G_BA^T), the CPU GetHexSymBlock; ACA entries beyond the table
-// are far products evaluated per entry. Only geometry and charges cross H2D,
+// 0.5 (G_AB + G_BA^T), the CPU GetHexSymBlock; beyond the table ACA evaluates the
+// far product once per host pair in a dense leaf and per entry on low-rank rows and columns. Only geometry and charges cross H2D,
 // the 1D rules as kernel arguments; no Gram value leaves the device.
 // A mixed tet, pyramid and hex mesh adds the host types and takes one family for
 // every pair, as the CPU QuadBlockTyped: the graded near rule on self, touching and
@@ -19,6 +19,7 @@
 // A pair of two different hosts integrates one direction, with the cheaper host as
 // source, and the block is not symmetrized.
 #pragma once
+#include <chrono>
 #include <climits>
 #include <cmath>
 #include <cub/device/device_radix_sort.cuh>
@@ -621,6 +622,20 @@ __global__ void hexWorkCost(HexDevice d,const HexWork* work,std::size_t items,un
     double lin[3][4],scaleInv=0.0;
     cost[i]=d.type[w.s]==pyramidHost&&!affineForms(d.type[w.s],hexNodes(d,w.s),lin,scaleInv)?5:4;
 }
+__global__ void hexCostCount(const unsigned char* cost,std::size_t items,unsigned long long* counts){
+    const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i<items)atomicAdd(counts+cost[i],1ULL);
+}
+// Host-side launch size. A launch runs one block per processor; a block takes more items while
+// kernels stay short, so a slow item is shared out instead of holding every other processor.
+// Scheduling only: each block writes its own values.
+class HexLaunchPace {
+    std::size_t blocks,items;std::chrono::steady_clock::time_point started;
+public:
+    explicit HexLaunchPace(std::size_t processors):blocks(processors),items(processors){}
+    std::size_t begin(std::size_t remaining){started=std::chrono::steady_clock::now();return std::min(items,remaining);}
+    void end(){const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+        if(seconds<.02)items*=2;else if(seconds>.1)items=std::max(blocks,items/2);}
+};
 // 0.5 (G_AB + G_BA^T) into the lo-host row orientation, or the one integrated direction of a mixed mesh pair (CPU GetHexSymBlock).
 __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const std::size_t* offsets,std::size_t pairs,const double* raw,double* values,int* invalid){
     const auto p=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(p>=pairs)return;
@@ -736,23 +751,30 @@ struct HexPrepared {
         const std::size_t launchItems=std::size_t(std::max(properties.multiProcessorCount,1));
         const std::size_t items=checkedProduct(2,pairs);
         if(items>std::size_t(INT_MAX))throw std::runtime_error("HEX pair table exceeds the work sort");
-        const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(items,2*sizeof(HexWork)+2)+checkedProduct(launchItems*stride,sizeof(double));
+        constexpr std::size_t costClasses=6;
+        const std::size_t bytes=checkedProduct(3*total,sizeof(double))+checkedProduct(items,2*sizeof(HexWork)+2)+checkedProduct(launchItems*stride,sizeof(double))+costClasses*sizeof(unsigned long long);
         {std::size_t free,totalMemory;check(cudaMemGetInfo(&free,&totalMemory));
             if(!fitsAboveReserve(free,totalMemory,bytes))throw std::runtime_error("HEX Gram pair table would exceed the GPU reserve");}
         values.allocate(total);Buffer<double> raw,scratch;Buffer<HexWork> unordered,work;raw.allocate(2*total);unordered.allocate(items);work.allocate(items);scratch.allocate(launchItems*stride);
         const unsigned pairBlocks=unsigned((pairs+127)/128);
         hexPairWork<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,unordered.data);check(cudaGetLastError());++launches;
         // A launch waits for its slowest item, so costly near pairs run together, not one per launch among cheap ones.
+        unsigned long long classItems[costClasses]={};
         {Buffer<unsigned char> cost,sorted,temporary;cost.allocate(items);sorted.allocate(items);
             hexWorkCost<<<unsigned((items+127)/128),128,0,stream>>>(d,unordered.data,items,cost.data);check(cudaGetLastError());++launches;
             std::size_t sortBytes=0;check(cub::DeviceRadixSort::SortPairs(nullptr,sortBytes,cost.data,sorted.data,unordered.data,work.data,int(items),0,8,stream));
             temporary.allocate(std::max<std::size_t>(1,sortBytes));
             check(cub::DeviceRadixSort::SortPairs(temporary.data,sortBytes,cost.data,sorted.data,unordered.data,work.data,int(items),0,8,stream));++launches;
-            check(cudaStreamSynchronize(stream));}
-        // Bounded launches keep every kernel short on display-attached GPUs.
-        for(std::size_t item=0;item<items;item+=launchItems){const auto here=std::min(launchItems,items-item);
-            hexBlocks<<<unsigned(here),hexThreads,0,stream>>>(d,work.data,item,here,scratch.data,stride,raw.data,invalid.data);
-            check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;}
+            Buffer<unsigned long long> classes;classes.allocate(costClasses);check(cudaMemsetAsync(classes.data,0,sizeof(classItems),stream));
+            hexCostCount<<<unsigned((items+127)/128),128,0,stream>>>(sorted.data,items,classes.data);check(cudaGetLastError());++launches;
+            check(cudaMemcpyAsync(classItems,classes.data,sizeof(classItems),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+            record("hex_cost_classes","D2H",sizeof(classItems));}
+        // Bounded launches keep every kernel short on display-attached GPUs. Class 0 holds the absent directions; the pace restarts where the cost jumps.
+        std::size_t item=classItems[0];
+        for(std::size_t c=1;c<costClasses;++c){HexLaunchPace pace(launchItems);const std::size_t end=item+classItems[c];
+            while(item<end){const auto here=pace.begin(end-item);
+                hexBlocks<<<unsigned(std::min(launchItems,here)),hexThreads,0,stream>>>(d,work.data,item,here,scratch.data,stride,raw.data,invalid.data);
+                check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;pace.end();item+=here;}}
         if((invalidCode=flag(stream,record,"hex_block_flag"))!=0)
             throw std::runtime_error(invalidCode==3?"HEX host pair needs the sub-simplex pair rule between a near band below the distorted far switch, which has no device route"
                                     :invalidCode==1?"HEX graded near rule produced a nonfinite source polynomial"

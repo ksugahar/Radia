@@ -609,11 +609,12 @@ def _expected_hex_ledger(arguments):
     expected.update((("charge_" + name, "H2D"), arguments[name].nbytes) for name in _CHARGE_TABLE_KEYS
                     if not name.endswith("exponents"))
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
-                     ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
-                     ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+                     ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
+                     ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -631,11 +632,12 @@ def _expected_mixed_ledger(arguments):
         ("charge_row_host", 4*arguments["charge_host"].size), ("charge_host_first", 4*hosts),
         ("charge_host_dof_start", 4*hosts), ("charge_host_entry", 8*hosts))}
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
-                     ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
-                     ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+                     ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
+                     ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
     return expected
 
 
