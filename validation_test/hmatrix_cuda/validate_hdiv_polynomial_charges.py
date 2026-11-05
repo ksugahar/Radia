@@ -31,8 +31,8 @@ from rational_pyramid_reference import energies, separated_integral
 # (outer, pyramid, graded near, plain near of cell targets, inner switch, far levels, tangent). The first row is the
 # proposed profile; the others keep the graded rule, the near inner, one far rule and the radial, fan and level rules,
 # so the series converges to a common reference.
-TYPED_PROFILES = {1: [(5, 6, 10, 8, .25, ((4, 1.1), (3, 1.7)), 5), (5, 6, 10, 0, 0., (), 0), (8, 8, 12, 0, 0., (), 0), (10, 10, 16, 0, 0., (), 0), (12, 10, 20, 0, 0., (), 0), (16, 14, 30, 0, 0., (), 0)],
-                  2: [(6, 14, 10, 8, .25, ((5, 1.1), (4, 1.6), (3, 3.4)), 5), (6, 14, 10, 0, 0., (), 0), (8, 14, 12, 0, 0., (), 0), (6, 30, 16, 0, 0., (), 0), (10, 30, 24, 0, 0., (), 0), (16, 40, 30, 0, 0., (), 0)]}
+TYPED_PROFILES = {1: [(5, 8, 10, 8, .25, ((4, 1.1), (3, 1.7)), 8), (5, 6, 10, 0, 0., (), 0), (8, 8, 12, 0, 0., (), 0), (10, 10, 16, 0, 0., (), 0), (12, 10, 20, 0, 0., (), 0), (16, 14, 30, 0, 0., (), 0)],
+                  2: [(6, 8, 10, 8, .25, ((5, 1.1), (4, 1.6), (3, 3.4)), 12), (6, 14, 10, 0, 0., (), 0), (8, 14, 12, 0, 0., (), 0), (6, 30, 16, 0, 0., (), 0), (10, 30, 24, 0, 0., (), 0), (16, 40, 30, 0, 0., (), 0)]}
 FLAT_PROFILES = [dict(), dict(intorder=20, far_quad=8), dict(intorder=30, far_quad=10), dict(intorder=40, far_quad=12), dict(intorder=60, far_quad=14),
                  dict(intorder=40, far_quad=12, eps=1e-14), dict(intorder=60, far_quad=14, eps=1e-14)]
 MESHES = dict(tets=tet_cube, pyramids=pyramid_cube, transition=transition_cube, grid=lambda: mixed_grid((2, 2, 2)))

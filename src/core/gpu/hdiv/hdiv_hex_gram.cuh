@@ -386,14 +386,14 @@ __device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const doubl
 // its Taylor polynomial or on levels on its rational charge, by the tangent rule or radial from the anchor on a non-parallelogram pyramid.
 __device__ inline bool hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
     using namespace radia_hdiv_typed;
-    const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;const HexRule& Q=d.tangent;
+    const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;
     if(analytic)affinePotentials(type,nd,center,p,nS,coeff,inner);
     if(type!=pyramidHost)return true;
     if(analytic){
-        if(d.tangent.n)straightPyramidRational(nd,p,e,nS,Q.x,Q.w,Q.n,inner);
+        if(d.tangent.n)straightPyramidRational(nd,p,e,nS,R.x,R.w,R.n,inner);
         else for(int l=0;l<nS;++l)if(e[3*l+2]<0)inner[l]+=pyramidRationalPotential(nd,center,p,R.x,R.w,R.n);
         return true;}
-    if(d.tangent.n)return warpedPotentials(type,nd,p,t==s?xi:nullptr,e,nS,d.order,Q.x,Q.w,Q.n,inner);
+    if(d.tangent.n)return warpedPotentials(type,nd,p,t==s?xi:nullptr,e,nS,d.order,d.tangent.x,d.tangent.w,d.tangent.n,inner);
     double anchor[3];if(t==s)collapse(type,xi,anchor);else pyramidAnchor(nd,p,anchor);
     pyramidRadial(nd,p,anchor,e,0,nS,R.x,R.w,R.n,inner);return true;
 }

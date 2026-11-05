@@ -95,13 +95,16 @@ there can be disturbed by the host.
   inner switch are proposed values, not an adopted criterion. Cell targets of near pairs take a plain rule and face
   targets the graded one, and a near target point beyond the switch radius of the source reads the far rule. A far
   pair takes fewer points the further apart it is. A near point on a warped source takes the closed form on the
-  tangent image of the source plus the bounded remainder, checked here against the radial and fan rules.
-- Rational pyramid charge: on an affine pyramid each level `z` of `xy/(1-z)` is a parallelogram carrying a polynomial,
-  whose potential is exact, and the rule in `z` is split at the level of the point. The radial rule it replaced did not
-  converge at order 2 on the small meshes of the record. A non-parallelogram pyramid keeps a radial rule on all charges.
+  tangent image of the source plus the bounded remainder, on the tangent count per axis for a hex or pyramid source and
+  on four Duffy triangles from the base point for a quad source. Tangent count 0 keeps the radial and fan rules, which
+  are the comparison route here.
+- Rational pyramid charge: on an affine pyramid it takes its Taylor polynomial at the point, whose potential is exact,
+  plus a plain rule on the difference, which vanishes at the point. At tangent count 0 each level `z` of `xy/(1-z)` is a
+  parallelogram carrying a polynomial, and the rule in `z` is split at the level of the point. The radial rule did not
+  converge at order 2 on the small meshes of the record; a non-parallelogram pyramid at tangent count 0 keeps it.
 - Measured limits of the counts, on small meshes against the finest profile of the same route, so they say how far the
   rule converged and nothing about the formulation. Order 2 on affine pyramids converges geometrically when the pyramid
-  and near counts rise together; at the proposed (outer 6, pyramid 14, near 10) the field difference is about `5e-5`.
+  and near counts rise together; at (outer 6, pyramid 14, near 10) with tangent count 0 the field difference is about `5e-5`.
   Order 2 on non-parallelogram pyramids is slower and not monotone: the field difference stays near `3e-5` to `4e-5` from
   (6, 14, 16) to (6, 20, 16). Order 1 on the same mesh reaches about `2e-6` at (5, 14, 16), and its proposed (5, 6, 10)
   gives about `2e-4`. Those warped cells keep a one-signed map, so their slower rate is not an inversion. The flat tet route at its default is about `1e-3` in the field at order 2 on the cube of the record,

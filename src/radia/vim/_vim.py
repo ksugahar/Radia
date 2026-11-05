@@ -2410,25 +2410,25 @@ _MIXED_GLNEAR_CELL_N = 8
 _MIXED_INNER_SWITCH = 0.25
 _MIXED_NEAR_BAND = 0.5
 _MIXED_FAR_LEVELS = {1: ((4, 1.1), (3, 1.7)), 2: ((5, 1.1), (4, 1.6), (3, 3.4))}
-_MIXED_TANGENT_N = 5
+_MIXED_PYRAMID_N = 8
 
 
 def _mixed_gram_rules(p):
     """1D outer, pyramid, graded near and plain near counts, inner switch, far levels and tangent count of the mixed Gram, for CPU and device.
 
-    The pyramid count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
-    charge of an affine one. The graded near rule serves face targets, and the plain near rule cell targets,
+    The graded near rule serves face targets, and the plain near rule cell targets,
     whose count 0 hands them to the graded rule. A near target point beyond (1 + switch) source radii reads the
     far rule, and 0 keeps the near inner everywhere. A far pair at or beyond the ratio of a far level to its summed
     radii takes that level's count instead of the outer one. A near target point on a warped hex, quad or pyramid source
     takes the closed form on the tangent image of the source plus the bounded remainder on the tangent count per axis,
-    and the rational pyramid charge its Taylor polynomial at the point of p plus the same rule on the difference. A quad
-    source takes that remainder on four Duffy triangles from the base point, with the pyramid count per axis. The tangent
-    count 0 keeps the radial, fan and level rules. These are proposed values, from convergence on small meshes.
+    and the rational pyramid charge its Taylor polynomial at the point of p plus a rule on the difference. The pyramid
+    count serves that difference and the remainder of a quad source, on four Duffy triangles from the base point. The
+    tangent count 0 keeps the radial, fan and level rules on the pyramid count. These are proposed values, from
+    convergence on small meshes and a stretched ball.
     A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
-    return ((5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
-            _MIXED_FAR_LEVELS[p], _MIXED_TANGENT_N)
+    return ((5 if p == 1 else 6), _MIXED_PYRAMID_N, _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
+            _MIXED_FAR_LEVELS[p], (8 if p == 1 else 12))
 
 
 def _mixed_far_level_rows(far_levels):
