@@ -20,6 +20,8 @@ visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane loads the bi
 import contextlib
 import math
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -144,6 +146,28 @@ def _tet_connected_ring(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
     return path
 
 
+_STORED_P2 = """
+import sys
+import ngsolve as ng
+from radia.vim._vim import _curve_mesh
+for source, target in zip(sys.argv[1::2], sys.argv[2::2]):
+    mesh = ng.Mesh(source)
+    _curve_mesh(mesh, 2)
+    mesh.ngmesh.Save(target)
+"""
+
+
+def _stored_p2(paths):
+    """P2 copies of hand-made meshes, written by a fresh process and left alone when loaded.
+
+    Curve(2) of a loaded mesh with no geometry projects its boundary edges onto the last OCC geometry of the process, here
+    moving a straight midpoint at radius 40 mm to radius 15 mm.
+    """
+    copies = {name: path.with_name(path.stem + "-p2.vol") for name, path in paths.items()}
+    subprocess.run([sys.executable, "-c", _STORED_P2] + [str(item) for name in paths for item in (paths[name], copies[name])], check=True)
+    return copies
+
+
 @pytest.fixture(scope="module")
 def cuda():
     if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
@@ -157,7 +181,11 @@ def meshes(tmp_path_factory):
     from netgen.occ import Box, Pnt, Sphere
     root = tmp_path_factory.mktemp("tet-images")
     half_ball = Sphere(Pnt(0.0, 0.0, 0.0), 0.02)*Box(Pnt(0.0, -0.05, -0.05), Pnt(0.05, 0.05, 0.05))
-    return dict(cut=_occ(root/"cut.vol", Box(Pnt(0.0, -0.01, -0.01), Pnt(0.02, 0.01, 0.01)), 0.012),
+    stored = _stored_p2(dict(sector2=_tet_sector(root/"curved-sector2.vol", 2, FOLD), ring2=_tet_ring(root/"curved-ring2.vol", 2, FOLD),
+                             connected2=_tet_connected_ring(root/"curved-connected2.vol", 2, FOLD),
+                             apart=_tet_sector(root/"curved-apart.vol", 2, FOLD, span=0.8)))
+    return dict(curved_sector2=stored["sector2"], curved_ring2=stored["ring2"], curved_connected2=stored["connected2"], curved_apart=stored["apart"],
+                cut=_occ(root/"cut.vol", Box(Pnt(0.0, -0.01, -0.01), Pnt(0.02, 0.01, 0.01)), 0.012),
                 corner=_occ(root/"corner.vol", Box(Pnt(0.0, 0.0, -0.01), Pnt(0.02, 0.02, 0.01)), 0.014),
                 gap=_occ(root/"gap.vol", Box(Pnt(0.004, -0.01, -0.01), Pnt(0.024, 0.01, 0.01)), 0.012),
                 far=_occ(root/"far.vol", Box(Pnt(0.2, -0.01, -0.01), Pnt(0.22, 0.01, 0.01)), 0.012),
@@ -166,8 +194,7 @@ def meshes(tmp_path_factory):
                 sector2=_tet_sector(root/"sector2.vol", 2, FOLD),
                 apart=_tet_sector(root/"apart.vol", 2, FOLD, span=0.8),
                 ring=_tet_ring(root/"ring.vol", 1, FOLD),
-                ring2=_tet_ring(root/"ring2.vol", 2, FOLD),
-                connected2=_tet_connected_ring(root/"connected2.vol", 2, FOLD))
+                ring2=_tet_ring(root/"ring2.vol", 2, FOLD))
 
 
 def _terms(image=None, cyclic=None):
@@ -343,8 +370,8 @@ def _sampled_pairs(n, count=RING_PAIR_SAMPLE):
 
 @pytest.mark.parametrize("order", [1, 2])
 def test_curved_sector_entries_equal_the_connected_ring_at_the_seam(meshes, request, cuda, order):
-    table, _, _ = _plain(meshes["sector2"], order, 2, cuda)
-    ring_table, _, gram = _plain(meshes["connected2"], order, 2, cuda)
+    table, _, _ = _plain(meshes["curved_sector2"], order, 2, cuda)
+    ring_table, _, gram = _plain(meshes["curved_connected2"], order, 2, cuda)
     kept, index = _connected_ring_index(table, ring_table, FOLD)
     n = table["charge_host"].size
     assert 0 < kept.size < n, f"expected seam faces to drop out of the connected ring: kept={kept.size} charges={n}"
@@ -379,9 +406,9 @@ def _one_number_per_vertex(ring):
 
 def test_curved_seam_faces_equal_the_direct_device_ring(meshes, request, cuda):
     order = 1
-    table, _, _ = _plain(meshes["sector2"], order, 2, cuda)
-    ring_table, _, _ = _plain(meshes["ring2"], order, 2, cuda)
-    kept, _ = _connected_ring_index(table, _plain(meshes["connected2"], order, 2, cuda)[0], FOLD)
+    table, _, _ = _plain(meshes["curved_sector2"], order, 2, cuda)
+    ring_table, _, _ = _plain(meshes["curved_ring2"], order, 2, cuda)
+    kept, _ = _connected_ring_index(table, _plain(meshes["curved_connected2"], order, 2, cuda)[0], FOLD)
     index = _ring_index(table, ring_table, FOLD)
     seam = np.setdiff1d(np.arange(table["charge_host"].size), kept)
     assert seam.size, "the sector has no seam-face charge"
@@ -526,7 +553,7 @@ def _cpu_solve(path, order, curve_order, **kw):
 
 @pytest.mark.parametrize("name,order,curve_order,compression,images", [
     ("gap", 1, 1, "dense", dict(image="-x")), ("cut", 2, 1, "dense", dict(image="-x")), ("cut", 2, 1, "aca", dict(image="-x")),
-    ("half_ball", 1, 2, "dense", dict(image="-x")), ("apart", 1, 2, "dense", dict(image_cyclic=FOLD))])
+    ("half_ball", 1, 2, "dense", dict(image="-x")), ("curved_apart", 1, 2, "dense", dict(image_cyclic=FOLD))])
 def test_linear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, curve_order, compression, images):
     import ngsolve as ng
     with prepared.PreparedHDivLinear(meshes[name], backend="gpu", order=order, gram_compression=compression, curve_order=curve_order,
