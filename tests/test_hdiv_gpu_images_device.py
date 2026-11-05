@@ -132,7 +132,9 @@ def meshes(tmp_path_factory):
         sector2=_sector(root/"sector2.vol", 2, 8),
         ring1=_sector(root/"ring1.vol", 1, 8, copies=8),
         ring2=_sector(root/"ring2.vol", 2, 8, copies=8),
-        poles=_box(root/"poles.vol", (0.032, -0.006, 0.004), (0.048, 0.006, 0.010), (2, 1, 1)))
+        poles=_box(root/"poles.vol", (0.032, -0.006, 0.004), (0.048, 0.006, 0.010), (2, 1, 1)),
+        # Long enough that a dense ACA leaf holds host pairs beyond the direct candidate radius, which an image may still bring near.
+        bar=_box(root/"bar.vol", (0.0, -0.01, -0.01), (0.32, 0.01, 0.01), (16, 1, 1)))
 
 
 def _terms(image=None, cyclic=None, alternating=False):
@@ -305,7 +307,7 @@ def prepared(monkeypatch):
 @pytest.mark.parametrize("name,order,compression,images", [
     ("cut", 2, "dense", dict(image="-x")), ("cut", 1, "aca", dict(image="-x")), ("corner", 2, "dense", dict(image="-x-y")),
     ("gap", 2, "aca", dict(image="-x")), ("poles", 2, "dense", dict(image_cyclic=6)), ("poles", 2, "aca", dict(image_cyclic=6)),
-    ("poles", 1, "dense", dict(image_cyclic=6))])
+    ("poles", 1, "dense", dict(image_cyclic=6)), ("bar", 1, "aca", dict(image="-x"))])
 def test_image_operator_matches_cpu(meshes, request, cuda, name, order, compression, images):
     import ngsolve as ng
     from radia import hdiv_gpu
