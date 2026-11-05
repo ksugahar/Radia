@@ -61,10 +61,11 @@ def _deficit(mesh, order):
     fes = _hdiv_space_with_image_constraints(mesh, order, [], SEAM)[0]
     u, v = fes.TnT()
     rule = {ng.HEX: ng.IntegrationRule(ng.HEX, 12)}
-    mass = ng.BilinearForm(u*v*ng.dx(intrules=rule)).Assemble()
-    load = ng.LinearForm(_field()*v*ng.dx(intrules=rule)).Assemble()
+    with ng.TaskManager():
+        mass = ng.BilinearForm(u*v*ng.dx(intrules=rule)).Assemble()
+        load = ng.LinearForm(_field()*v*ng.dx(intrules=rule)).Assemble()
+        exact = float(ng.Integrate(ng.InnerProduct(_field(), _field()), mesh, order=12))
     r = np.array(load.vec.FV().NumPy())
-    exact = float(ng.Integrate(ng.InnerProduct(_field(), _field()), mesh, order=12))
     return exact, (exact - float(r @ np.linalg.solve(np.array(mass.mat.ToDense()), r)))/exact
 
 
