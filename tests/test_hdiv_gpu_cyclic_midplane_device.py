@@ -3,7 +3,9 @@
 Guards: `image="-z"` with `image_cyclic` and the azimuthal periodic trace on the device, whose image terms T = M o R
 combine a mirror with a rotation, on the dense route at BDM1 and BDM2.
 Assumes: an annular HEX yoke, a field along +z, a mesh that is the mirror of its upper half. The ring is the same device
-route with every image removed and the CPU route shares the discretization, so this is parity, not independent accuracy.
+route with every image removed. The CPU reference is its exact dense operators of the same reduced space with the mass on
+the device's material rule, because the default mass rule of `vim.Solve` under-integrates these cells (1.3e-5 in the mean at
+order 2). This is parity of one discretization, not independent accuracy.
 The limits are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is bypassed
 for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane loads the
 binding through the provenance-checked loader.
@@ -68,23 +70,53 @@ def _device_mean(prepared, path, order, **images):
         return _mean_z(device, result["x"]), device.dofs
 
 
+def _cpu_mean(hdiv_gpu, path, order, seam):
+    """Mean M_z of the exact dense CPU operators on the same reduced space and the device's material rule."""
+    import ngsolve as ng
+    from scipy.sparse import csr_matrix
+    from radia.vim import _image
+    from radia.vim._solve import _hdiv_space_with_image_constraints
+    from radia.vim._vim import _build_charge_gram_hex
+    mesh = ng.Mesh(str(path))
+    fes = _hdiv_space_with_image_constraints(mesh, order, list(_image.parse_image_string("-z")), seam)[0]
+    terms = hdiv_gpu._device_image_terms("-z", FOLD)
+    with ng.TaskManager():
+        B, gram, _, _ = _build_charge_gram_hex(fes, eps=1e-10, build_hmatrix=False, materialize_mass=False, excluded_boundaries=seam,
+                                               image_masks=terms["image_masks"].tolist(), image_signs=terms["image_signs"].tolist(),
+                                               image_rot_angle=terms["image_rotations"].tolist())
+        u, v = fes.TnT()
+        mass = ng.BilinearForm(fes)
+        mass += u*v*ng.dx(intrules={ng.HEX: ng.IntegrationRule(ng.HEX, 2*max(6, 2*order + 2))})
+        mass.Assemble()
+        source = ng.LinearForm(fes)
+        source += ng.CF((0.0, 0.0, 1e5))*v*ng.dx
+        source.Assemble()
+    gram.build_exact_dense_normalized_gram(maximum_memory_mb=256)
+    B = csr_matrix(B)
+    rows, cols, values = mass.mat.COO()
+    M = csr_matrix((values, (rows, cols)), shape=(fes.ndof, fes.ndof)).toarray()
+    G = np.column_stack([B.T @ np.asarray(gram.matvec_sym(np.ascontiguousarray(B[:, k].toarray().ravel()))) for k in range(fes.ndof)])
+    field = ng.GridFunction(fes)
+    field.vec.FV().NumPy()[:] = np.linalg.solve(G + INV_CHI*M, np.array(source.vec.FV().NumPy()))
+    return float(ng.Integrate(field[2], mesh))/float(ng.Integrate(ng.CF(1.0), mesh)), fes.ndof
+
+
 @pytest.mark.parametrize("order", (1, 2))
 def test_the_half_sector_reproduces_the_ring_and_the_cpu_route(tmp_path, request, prepared, cuda, order):
     cpu = _cpu_test()
     seam = cpu.SEAM
     ring_path, half_path = tmp_path/"ring.vol", tmp_path/"half.vol"
-    half_mesh = cpu._yoke(half_path, 2, FOLD, (0.0, 0.004))
+    cpu._yoke(half_path, 2, FOLD, (0.0, 0.004))
     cpu._yoke(ring_path, 2, FOLD, (-0.004, 0.0, 0.004), ring=True)
     images = dict(image="-z", image_cyclic=FOLD, cyclic_periodic_boundaries=seam)
     ring, ring_dofs = _device_mean(prepared, ring_path, order)
     half, half_dofs = _device_mean(prepared, half_path, order, **images)
     lone, _ = _device_mean(prepared, half_path, order)
-    reference = cpu._solve(half_mesh, order, **images)
-    cpu_half = float(reference["M_avg"][2])
+    cpu_half, cpu_dofs = _cpu_mean(prepared, half_path, order, seam)
     ring_error, cpu_error, lone_error = abs(half - ring)/abs(ring), abs(half - cpu_half)/abs(cpu_half), abs(lone - ring)/abs(ring)
     request.node.user_properties += [("half_dofs", int(half_dofs)), ("ring_dofs", int(ring_dofs)), ("ring_error", float(ring_error)),
                                      ("cpu_error", float(cpu_error)), ("lone_error", float(lone_error))]
-    assert half_dofs == int(reference["ndof"]), (half_dofs, reference["ndof"])
+    assert half_dofs == cpu_dofs, (half_dofs, cpu_dofs)
     assert ring_error <= RING_REL, f"order={order} half={half!r} ring={ring!r} error={ring_error:.3e} limit={RING_REL:.0e}"
     assert cpu_error <= CPU_REL, f"order={order} device={half!r} cpu={cpu_half!r} error={cpu_error:.3e} limit={CPU_REL:.0e}"
     assert lone_error > 1e3*RING_REL, f"a half sector without images passes: {lone!r} ring {ring!r}"

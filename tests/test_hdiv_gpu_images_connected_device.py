@@ -3,8 +3,7 @@
 Guards: on a one-cell polar sector, which holds both vertices of each identified pair, straight and with a Q2 deformation,
 BDM1 and BDM2, the device energy operator on the dense and the compressed routes, the mass and the linear solve on
 ``Compress(Periodic(HDiv))`` agree with the CPU operators of that space on identical inputs, also when a master carries the
-larger number of its pair. A two-cell sector reproduces the explicit ring, where the CPU image dispatch selects a far rule
-for touching seam pairs. Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped DOF
+larger number of its pair. A two-cell sector reproduces the explicit ring. Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped DOF
 move these far beyond the detectors. A labeled seam without the pair, a sector without identifications and an antiperiodic
 pair refuse.
 Assumes: the CPU operators of the same reduced space are the reference, with the mass taken on the device's material rule,
@@ -23,10 +22,6 @@ import numpy as np
 import pytest
 
 OPERATOR_REL = 1e-9
-# The CPU dispatch reads a rotated pair through the inverse rotation of its source, so a pair of a straight one-cell BDM2
-# sector near a rule band takes another rule there: entries 9.3e-9 apart at fold 12, both 1.4e-7 from the explicit ring.
-# Operator and solve take this band there: measured 9.1e-8 and 7.2e-8 on the numbering whose master has the larger number.
-RULE_BAND_REL = 2e-7
 ACA_OPERATOR_REL = 1e-5
 MASS_REL = 1e-12
 LINEAR_REL = 1e-8
@@ -180,11 +175,10 @@ def test_operator_mass_and_solve_match_the_cpu_reduced_space(meshes, request, cu
     finally:
         mass.close()
         operator.close()
-    band = order == 2 and deform is None
-    limit = ACA_OPERATOR_REL if compression != "dense" else RULE_BAND_REL if band else OPERATOR_REL
+    limit = ACA_OPERATOR_REL if compression != "dense" else OPERATOR_REL
     request.node.user_properties += [("dofs", nd), ("solve_relative", float(relative))] + [("max_relative_" + k, float(v)) for k, v in worst.items()]
     assert worst["operator"] <= limit and worst["mass"] <= MASS_REL, f"{name} order={order} {compression} {worst} limits {limit:.0e} {MASS_REL:.0e}"
-    solve_limit = ACA_OPERATOR_REL if compression != "dense" else RULE_BAND_REL if band else LINEAR_REL
+    solve_limit = ACA_OPERATOR_REL if compression != "dense" else LINEAR_REL
     assert relative <= solve_limit, f"{name} order={order} {compression} solve relative={relative:.3e} limit={solve_limit:.0e}"
 
 
