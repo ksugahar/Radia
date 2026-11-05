@@ -2401,25 +2401,30 @@ def _charge_basis_mixed(fes, *, materialize_mass=True):
 
 
 _MIXED_GLNEAR_N = 10
+_MIXED_GLNEAR_CELL_N = 8
+_MIXED_INNER_SWITCH = 0.25
 _MIXED_NEAR_BAND = 0.5
 
 
 def _mixed_gram_rules(p):
-    """1D outer, pyramid and graded near point counts of the mixed Gram, shared by the CPU and device routes.
+    """1D outer, pyramid, graded near and plain near counts and the inner switch of the mixed Gram, for CPU and device.
 
-    The middle count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
-    charge of an affine one. These are proposed values, from convergence on small meshes. A fixed count
-    is a relative error per touching cell pair, so it stays a floor under mesh refinement.
+    The pyramid count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
+    charge of an affine one. The graded near rule serves face targets, and the plain near rule cell targets,
+    whose count 0 hands them to the graded rule. A near target point beyond (1 + switch) source radii reads the
+    far rule, and 0 keeps the near inner everywhere. These are proposed values, from convergence on small meshes.
+    A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
-    return (5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N
+    return (5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH
 
 
 def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materialize_mass=True, build_hmatrix=True):
     """Charge Gram of a straight tet, pyramid and hex mesh via the hex-mode C++ H-matrix.
 
     Every pair takes QuadBlockTyped: each host is the trilinear image of a unit cube with its density in
-    the cube measure, so one far and one graded near rule serve all of them. A pair is near when it is
-    self, touching, or within _MIXED_NEAR_BAND of its summed sizes. The near inner is exact on an affine
+    the cube measure, so the far and near rules serve all of them. A pair is near when it is self, touching,
+    or within _MIXED_NEAR_BAND of its summed sizes. Beyond the inner switch radius of the source a near target
+    point reads the far rule. Closer, the near inner is exact on an affine
     tet, triangle or pyramid source, by levels on the rational charge of an affine pyramid, radial on a
     non-parallelogram pyramid, and a hex or quad source keeps its own inner rules. A pair of two different hosts integrates one
     direction, with the cheaper host as source."""
@@ -2427,10 +2432,11 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
     t0 = time.perf_counter()
     cb = _charge_basis_mixed(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
-    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch = _mixed_gram_rules(p)
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
     gln, gwn = _g01(glnear_n)
+    glc, gwc = _g01(glnear_cell_n) if glnear_cell_n else (_EMPTY_F64, _EMPTY_F64)
     glp, gwp = _g01(_HEX_GLPAIR_N)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
@@ -2450,7 +2456,8 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
         gl_in_self=_f64_buffer(gli), gw_in_self=_f64_buffer(gwi),
         gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
         gl_pair_affine=_f64_buffer(glp), gw_pair_affine=_f64_buffer(gwp),
-        host_types=_i32_buffer(cb["host_types"]))
+        host_types=_i32_buffer(cb["host_types"]),
+        gl_near_cell=_f64_buffer(glc), gw_near_cell=_f64_buffer(gwc), inner_switch=inner_switch)
     build_charge_gram.last_timings = {"charge_basis_wall_s": t1 - t0, "charge_gram_cpp_wall_s": time.perf_counter() - t1}
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
@@ -2702,14 +2709,15 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
         face_nodes.append(_mixed_lattice_nodes(mesh, e, host_type).ravel())
         for a, b in (_mons_quad(p) if host_type == _HOST_QUAD else _mons_tri(p)):
             host.append(h); kind.append(1); expo.extend((a, b, 0))
-    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch = _mixed_gram_rules(p)
+    plain_near = dict(near_cell=_g01(glnear_cell_n)) if glnear_cell_n else {}
     return dict(
         family="mixed", n_el=len(vels), cell_nodes=np.concatenate(cell_nodes), face_nodes=np.concatenate(face_nodes),
         host_types=np.array(host_types, dtype=np.int32), charge_host=np.array(host, dtype=np.int32),
         charge_kind=np.array(kind, dtype=np.int32), charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N),
-                   near=_g01(glnear_n), inner_self=_g01(glin_n)),
-        near_grade=_MIXED_NEAR_BAND, far_inner=1.0)
+                   near=_g01(glnear_n), inner_self=_g01(glin_n), **plain_near),
+        near_grade=_MIXED_NEAR_BAND, far_inner=1.0, inner_switch=inner_switch)
 
 
 def _prepare_gpu_hex_charge_inputs(fes, *, backend):
@@ -2761,7 +2769,7 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N), **graded),
-        near_grade=1.0, far_inner=1.0)
+        near_grade=1.0, far_inner=1.0, inner_switch=0.0)
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,

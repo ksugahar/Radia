@@ -47,7 +47,7 @@ struct FlatBlock {
     // reference monomials grouped by host, and the four [0,1] Gauss rules
     // (outer tensor, radial inner, pair product, affine pair product) with the
     // near band and the radial reach of the CPU hex Gram.
-    bool hex=false;double nearGrade=1.0,farInner=1.0;
+    bool hex=false;double nearGrade=1.0,farInner=1.0,innerSwitch=0.0;
     // Mixed mesh: one radia_hdiv_typed::HostType per host, cells then faces; hex is also set and the lattices are the host maps.
     HostVector<int> hostTypes{HostFaultAllocator<int>("hex.host-types")};
     HostVector<double> ruleOut{HostFaultAllocator<double>("hex.out")},ruleOutW{HostFaultAllocator<double>("hex.out-w")},
@@ -55,7 +55,8 @@ struct FlatBlock {
         rulePair{HostFaultAllocator<double>("hex.pair")},rulePairW{HostFaultAllocator<double>("hex.pair-w")},
         rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")},
         ruleNear{HostFaultAllocator<double>("hex.near")},ruleNearW{HostFaultAllocator<double>("hex.near-w")},
-        ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")};
+        ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")},
+        ruleNearCell{HostFaultAllocator<double>("hex.near-cell")},ruleNearCellW{HostFaultAllocator<double>("hex.near-cell-w")};
     std::size_t charges()const{return host.size();}
     std::size_t cellStride()const{return hex?81:curved?30:12;}
     std::size_t faceStride()const{return hex?27:curved?18:9;}
@@ -131,6 +132,12 @@ struct FlatBlock {
                 throw std::invalid_argument("HEX near rules take 1..16 Gauss points for BDM1 and mixed meshes, none for pure BDM2");
             for(std::size_t k=0;k<rule->size();++k)if(!std::isfinite((*rule)[k])||!std::isfinite(w[k])||!((*rule)[k]>0)||!((*rule)[k]<1)||!(w[k]>0))
                 throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");}
+        // A mixed mesh may take a plain outer rule on its cell targets and the far rule beyond the switch radius; a pure hex mesh takes neither.
+        if(!typed&&(!ruleNearCell.empty()||innerSwitch!=0.0))throw std::invalid_argument("HEX plain near rule and inner switch belong to mixed meshes");
+        if(!std::isfinite(innerSwitch)||innerSwitch<0)throw std::invalid_argument("HEX inner switch must be finite and not negative");
+        if(ruleNearCell.size()>std::size_t(hexRuleCap)||ruleNearCellW.size()!=ruleNearCell.size())throw std::invalid_argument("HEX plain near rule takes 0..16 Gauss points");
+        for(std::size_t k=0;k<ruleNearCell.size();++k)if(!std::isfinite(ruleNearCell[k])||!std::isfinite(ruleNearCellW[k])||!(ruleNearCell[k]>0)||!(ruleNearCell[k]<1)||!(ruleNearCellW[k]>0))
+            throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
         const int monomials=(order+1)*(order+1);
         for(std::size_t g=0;g<count.size();++g)if(count[g]>(g<cellTotal?monomials*(order+1):monomials))
             throw std::invalid_argument("HEX host carries more charges than its tensor monomials");
