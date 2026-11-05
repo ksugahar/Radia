@@ -786,7 +786,7 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
         rows = np.concatenate([np.c_[np.full(len(rules[name][0]), index, dtype=np.float64),
                                      np.asarray(rules[name][0], dtype=np.float64),
                                      np.asarray(rules[name][1], dtype=np.float64)]
-                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self", "near_cell", "far_1", "far_2", "far_3"))
+                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self", "near_cell", "far_1", "far_2", "far_3", "tangent"))
                                if name in rules])
         empty = np.zeros((0, 4))
         ratios = list(inputs["far_ratios"]) + [0.]*(3 - len(inputs["far_ratios"]))

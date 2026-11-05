@@ -57,6 +57,7 @@ struct FlatBlock {
         ruleNear{HostFaultAllocator<double>("hex.near")},ruleNearW{HostFaultAllocator<double>("hex.near-w")},
         ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")},
         ruleNearCell{HostFaultAllocator<double>("hex.near-cell")},ruleNearCellW{HostFaultAllocator<double>("hex.near-cell-w")},
+        ruleTangent{HostFaultAllocator<double>("hex.tangent")},ruleTangentW{HostFaultAllocator<double>("hex.tangent-w")},
         ruleFar[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1")},HostVector<double>{HostFaultAllocator<double>("hex.far-2")},HostVector<double>{HostFaultAllocator<double>("hex.far-3")}},
         ruleFarW[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-2-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-3-w")}};
     double farRatio[hexFarLevels]={0.0,0.0,0.0};
@@ -138,6 +139,9 @@ struct FlatBlock {
         // A mixed mesh may take a plain outer rule on its cell targets and the far rule beyond the switch radius; a pure hex mesh takes neither.
         if(!typed&&(!ruleNearCell.empty()||innerSwitch!=0.0))throw std::invalid_argument("HEX plain near rule and inner switch belong to mixed meshes");
         if(!std::isfinite(innerSwitch)||innerSwitch<0)throw std::invalid_argument("HEX inner switch must be finite and not negative");
+        if(!typed&&!ruleTangent.empty())throw std::invalid_argument("HEX tangent rule belongs to mixed meshes");
+        if(ruleTangent.size()>std::size_t(hexRuleCap)||ruleTangentW.size()!=ruleTangent.size())throw std::invalid_argument("HEX tangent rule takes 0..16 Gauss points");
+        for(std::size_t k=0;k<ruleTangent.size();++k)if(!std::isfinite(ruleTangent[k])||!std::isfinite(ruleTangentW[k])||!(ruleTangent[k]>0)||!(ruleTangent[k]<1)||!(ruleTangentW[k]>0))throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
         if(ruleNearCell.size()>std::size_t(hexRuleCap)||ruleNearCellW.size()!=ruleNearCell.size())throw std::invalid_argument("HEX plain near rule takes 0..16 Gauss points");
         for(std::size_t k=0;k<ruleNearCell.size();++k)if(!std::isfinite(ruleNearCell[k])||!std::isfinite(ruleNearCellW[k])||!(ruleNearCell[k]>0)||!(ruleNearCell[k]<1)||!(ruleNearCellW[k]>0))
             throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");

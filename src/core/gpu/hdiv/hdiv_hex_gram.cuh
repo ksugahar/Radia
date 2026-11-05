@@ -53,39 +53,14 @@ struct HexDevice {
     const unsigned long long* keys;const std::size_t* offsets;const double* values;std::size_t pairs;
     // nearCell: plain outer rule of the cell targets of near pairs on a mixed mesh, empty when they take the graded nearOut.
     // innerSwitch: a near target point beyond (1 + innerSwitch) source radii reads the far rule; 0 keeps the near inner everywhere.
-    HexRule out,in,pair,pairAffine,nearOut,inSelf,nearCell;double nearGrade,farInner,innerSwitch,candidate;int order;
+    // tangent: remainder rule of the tangent closed form of a warped source on a mixed mesh; empty keeps the radial and fan rules.
+    HexRule out,in,pair,pairAffine,nearOut,inSelf,nearCell,tangent;double nearGrade,farInner,innerSwitch,candidate;int order;
     // Far rule by separation on a mixed mesh: a pair at or beyond farRatio[k] of its summed radii takes farLevel[k].
     HexRule farLevel[hexFarLevels];double farRatio[hexFarLevels];const double* farLevelX[hexFarLevels];const double* farLevelW[hexFarLevels];
     // Host types of a mixed mesh (radia_hdiv_typed::HostType); null on a pure hex mesh.
     const int* type;
 };
-__device__ inline void hexLag3(double t,double v[3],double d[3]){
-    v[0]=2.0*(t-0.5)*(t-1.0);v[1]=4.0*t*(1.0-t);v[2]=2.0*t*(t-0.5);
-    d[0]=4.0*t-3.0;d[1]=4.0-8.0*t;d[2]=4.0*t-1.0;
-}
-__device__ inline void hexMapX(const double* nd,const double* xi,double X[3]){
-    double vx[3],dx[3],vy[3],dy[3],vz[3],dz[3];hexLag3(xi[0],vx,dx);hexLag3(xi[1],vy,dy);hexLag3(xi[2],vz,dz);
-    X[0]=X[1]=X[2]=0.0;
-    for(int iz=0;iz<3;++iz)for(int iy=0;iy<3;++iy){const double syz=vy[iy]*vz[iz];
-        for(int ix=0;ix<3;++ix){const double* n=nd+3*(ix+3*iy+9*iz);const double s=vx[ix]*syz;X[0]+=s*n[0];X[1]+=s*n[1];X[2]+=s*n[2];}}
-}
-__device__ inline void hexMapJ(const double* nd,const double* xi,double X[3],double J[3][3]){
-    double vx[3],dx[3],vy[3],dy[3],vz[3],dz[3];hexLag3(xi[0],vx,dx);hexLag3(xi[1],vy,dy);hexLag3(xi[2],vz,dz);
-    for(int k=0;k<3;++k){X[k]=0.0;J[k][0]=J[k][1]=J[k][2]=0.0;}
-    for(int iz=0;iz<3;++iz)for(int iy=0;iy<3;++iy)for(int ix=0;ix<3;++ix){const double* n=nd+3*(ix+3*iy+9*iz);
-        const double s=vx[ix]*vy[iy]*vz[iz],gx=dx[ix]*vy[iy]*vz[iz],gy=vx[ix]*dy[iy]*vz[iz],gz=vx[ix]*vy[iy]*dz[iz];
-        for(int k=0;k<3;++k){X[k]+=s*n[k];J[k][0]+=gx*n[k];J[k][1]+=gy*n[k];J[k][2]+=gz*n[k];}}
-}
-__device__ inline void quadMapX(const double* nd,const double* uv,double X[3]){
-    double vu[3],du[3],vv[3],dv[3];hexLag3(uv[0],vu,du);hexLag3(uv[1],vv,dv);X[0]=X[1]=X[2]=0.0;
-    for(int iv=0;iv<3;++iv)for(int iu=0;iu<3;++iu){const double* n=nd+3*(iu+3*iv);const double s=vu[iu]*vv[iv];X[0]+=s*n[0];X[1]+=s*n[1];X[2]+=s*n[2];}
-}
-__device__ inline void quadMapT(const double* nd,const double* uv,double X[3],double T[3][2]){
-    double vu[3],du[3],vv[3],dv[3];hexLag3(uv[0],vu,du);hexLag3(uv[1],vv,dv);
-    for(int k=0;k<3;++k){X[k]=0.0;T[k][0]=T[k][1]=0.0;}
-    for(int iv=0;iv<3;++iv)for(int iu=0;iu<3;++iu){const double* n=nd+3*(iu+3*iv);const double s=vu[iu]*vv[iv];
-        for(int k=0;k<3;++k){X[k]+=s*n[k];T[k][0]+=du[iu]*vv[iv]*n[k];T[k][1]+=vu[iu]*dv[iv]*n[k];}}
-}
+using radia_hdiv_typed::hexLag3;using radia_hdiv_typed::hexMapX;using radia_hdiv_typed::hexMapJ;using radia_hdiv_typed::quadMapX;using radia_hdiv_typed::quadMapT;
 __device__ inline bool hexCell(const HexDevice& d,int g){return g<d.cells;}
 __device__ inline const double* hexNodes(const HexDevice& d,int g){
     return g<d.cells?d.cellNodes+81*std::size_t(g):d.faceNodes+27*std::size_t(g-d.cells);}
@@ -401,21 +376,23 @@ __device__ inline void hexConeFanInner(const HexDevice& d,int s,const double* p,
 // cone/fan rule on a distorted one, its apex the outer point itself (self) or the source's closest point.
 __device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,int nS,double* inner,const double* local){
     if(d.affine[s]){hexAffineInner(d,s,p,nS,inner,local);return true;}
+    if(d.tangent.n)return radia_hdiv_typed::warpedPotentials(d.type[s],hexNodes(d,s),p,t==s?xi:nullptr,hexExponent(d,s,0),nS,d.order,d.inSelf.x,d.inSelf.w,d.inSelf.n,d.tangent.x,d.tangent.w,d.tangent.n,inner);
     if(t==s){hexConeFanInner(d,s,p,xi,nS,inner);return true;}
     double ref[3]={0.5,0.5,0.0};
     if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),p,ref):quadClosest(hexNodes(d,s),p,ref)))return false;
     hexConeFanInner(d,s,p,ref,nS,inner);return true;
 }
 // CPU QuadBlockTyped inner of a tet, triangle or pyramid source: exact on the polynomial charges of an
-// affine source, on levels on its rational charge, radial from the anchor on a non-parallelogram pyramid.
-__device__ inline void hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
+// affine source, on levels on its rational charge, by the tangent rule or radial from the anchor on a non-parallelogram pyramid.
+__device__ inline bool hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
     using namespace radia_hdiv_typed;
     const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;
     if(analytic)affinePotentials(type,nd,center,p,nS,coeff,inner);
-    if(type!=pyramidHost)return;
-    if(analytic){for(int l=0;l<nS;++l)if(e[3*l+2]<0)inner[l]+=pyramidRationalPotential(nd,center,p,R.x,R.w,R.n);return;}
+    if(type!=pyramidHost)return true;
+    if(analytic){for(int l=0;l<nS;++l)if(e[3*l+2]<0)inner[l]+=pyramidRationalPotential(nd,center,p,R.x,R.w,R.n);return true;}
+    if(d.tangent.n)return warpedPotentials(type,nd,p,t==s?xi:nullptr,e,nS,d.order,R.x,R.w,R.n,d.tangent.x,d.tangent.w,d.tangent.n,inner);
     double anchor[3];if(t==s)collapse(type,xi,anchor);else pyramidAnchor(nd,p,anchor);
-    pyramidRadial(nd,p,anchor,e,0,nS,R.x,R.w,R.n,inner);
+    pyramidRadial(nd,p,anchor,e,0,nS,R.x,R.w,R.n,inner);return true;
 }
 // CPU QuadBlockHexCompositeProduct inner: the exact self radial, the radial
 // rule anchored at the (clamped) source pre-image near the source, the outer
@@ -528,8 +505,8 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
         else if(cls==hexFarClass||(switched&&hexBeyondSource(d,s,X)))hexFarInnerTable(d,s,X,nS,farTable,row,farLevel);
         else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
-        else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
-        else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
+        else if(typedSource){if(!hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row))atomicExch(invalid,7);}
+        else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,d.tangent.n?7:5);}
         else if(!hexCompositeInner(d,t,s,X,xi,nS,row))atomicExch(invalid,4);
         for(int l=0;l<nT;++l)row[nS+l]=wq*hexDensity(d,t,hexExponent(d,t,l),xi);
     }
@@ -753,7 +730,7 @@ struct HexPrepared {
         d.cellNodes=cells.data;d.faceNodes=faces.data;d.cells=int(cellsN);d.hosts=int(hosts);d.first=first.data;d.count=count.data;
         d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;d.innerSwitch=b.innerSwitch;
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
-        d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);d.nearCell=rule(b.ruleNearCell,b.ruleNearCellW);
+        d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);d.nearCell=rule(b.ruleNearCell,b.ruleNearCellW);d.tangent=rule(b.ruleTangent,b.ruleTangentW);
         for(int k=0;k<hexFarLevels;++k){d.farLevel[k]=rule(b.ruleFar[k],b.ruleFarW[k]);d.farRatio[k]=b.farRatio[k];}
         const bool typed=!b.hostTypes.empty();if(typed){upload(types,b.hostTypes,"host_types");d.type=types.data;}
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
@@ -830,6 +807,7 @@ struct HexPrepared {
                                     :invalidCode==4?"HEX composite near rule could not invert the source host map"
                                     :invalidCode==5?"HEX graded near rule could not find the closest source point"
                                     :invalidCode==6?"Mixed charge Gram has a degenerate tet or triangle source"
+                                    :invalidCode==7?"Mixed charge Gram has a degenerate tangent of a warped source"
                                     :"HEX pair-domain Duffy block exceeds 8 x 8 charges");
         hexSymmetrize<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,raw.data,values.data,invalid.data);check(cudaGetLastError());++launches;
         if((invalidCode=flag(stream,record,"hex_symmetrize_flag"))!=0)throw std::runtime_error("HEX device Gram produced a nonfinite block entry");

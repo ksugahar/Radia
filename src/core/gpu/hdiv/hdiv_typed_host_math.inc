@@ -218,4 +218,195 @@ RADIA_TYPED_KERNEL inline double pyramidRationalPotential(const double* nd,const
     }
     return total;
 }
+RADIA_TYPED_KERNEL inline void hexLag3(double t,double v[3],double d[3]){
+    v[0]=2.0*(t-0.5)*(t-1.0);v[1]=4.0*t*(1.0-t);v[2]=2.0*t*(t-0.5);
+    d[0]=4.0*t-3.0;d[1]=4.0-8.0*t;d[2]=4.0*t-1.0;
+}
+RADIA_TYPED_KERNEL inline void hexMapX(const double* nd,const double* xi,double X[3]){
+    double vx[3],dx[3],vy[3],dy[3],vz[3],dz[3];hexLag3(xi[0],vx,dx);hexLag3(xi[1],vy,dy);hexLag3(xi[2],vz,dz);
+    X[0]=X[1]=X[2]=0.0;
+    for(int iz=0;iz<3;++iz)for(int iy=0;iy<3;++iy){const double syz=vy[iy]*vz[iz];
+        for(int ix=0;ix<3;++ix){const double* n=nd+3*(ix+3*iy+9*iz);const double s=vx[ix]*syz;X[0]+=s*n[0];X[1]+=s*n[1];X[2]+=s*n[2];}}
+}
+RADIA_TYPED_KERNEL inline void hexMapJ(const double* nd,const double* xi,double X[3],double J[3][3]){
+    double vx[3],dx[3],vy[3],dy[3],vz[3],dz[3];hexLag3(xi[0],vx,dx);hexLag3(xi[1],vy,dy);hexLag3(xi[2],vz,dz);
+    for(int k=0;k<3;++k){X[k]=0.0;J[k][0]=J[k][1]=J[k][2]=0.0;}
+    for(int iz=0;iz<3;++iz)for(int iy=0;iy<3;++iy)for(int ix=0;ix<3;++ix){const double* n=nd+3*(ix+3*iy+9*iz);
+        const double s=vx[ix]*vy[iy]*vz[iz],gx=dx[ix]*vy[iy]*vz[iz],gy=vx[ix]*dy[iy]*vz[iz],gz=vx[ix]*vy[iy]*dz[iz];
+        for(int k=0;k<3;++k){X[k]+=s*n[k];J[k][0]+=gx*n[k];J[k][1]+=gy*n[k];J[k][2]+=gz*n[k];}}
+}
+RADIA_TYPED_KERNEL inline void quadMapX(const double* nd,const double* uv,double X[3]){
+    double vu[3],du[3],vv[3],dv[3];hexLag3(uv[0],vu,du);hexLag3(uv[1],vv,dv);X[0]=X[1]=X[2]=0.0;
+    for(int iv=0;iv<3;++iv)for(int iu=0;iu<3;++iu){const double* n=nd+3*(iu+3*iv);const double s=vu[iu]*vv[iv];X[0]+=s*n[0];X[1]+=s*n[1];X[2]+=s*n[2];}
+}
+RADIA_TYPED_KERNEL inline void quadMapT(const double* nd,const double* uv,double X[3],double T[3][2]){
+    double vu[3],du[3],vv[3],dv[3];hexLag3(uv[0],vu,du);hexLag3(uv[1],vv,dv);
+    for(int k=0;k<3;++k){X[k]=0.0;T[k][0]=T[k][1]=0.0;}
+    for(int iv=0;iv<3;++iv)for(int iu=0;iu<3;++iu){const double* n=nd+3*(iu+3*iv);const double s=vu[iu]*vv[iv];
+        for(int k=0;k<3;++k){X[k]+=s*n[k];T[k][0]+=du[iu]*vv[iv]*n[k];T[k][1]+=vu[iu]*dv[iv]*n[k];}}
+}
+// Tangent rule of a warped source. With F linearized at a base point to T, the potential of a charge at p is the closed
+// form on the straight image T(host) plus the integral of density*(1/|p-F| - 1/|p-T|), which stays bounded at the base
+// point because F - T is of second order there. A density is an exact polynomial in the reference coordinates, so the
+// closed form has no fit error, and the remainder takes a plain rule on the unit cube.
+// Reference point of a hex nearest p: Newton on the map, staying inside the cube.
+RADIA_TYPED_KERNEL inline void hexAnchor(const double* nd,const double* p,double y[3]){
+    y[0]=y[1]=y[2]=0.5;
+    for(int it=0;it<8;++it){
+        double X[3],J[3][3];hexMapJ(nd,y,X,J);
+        const double r[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]};
+        const double det=J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
+        if(!finiteValue(det)||fabs(det)<1e-300)return;
+        const double id=1.0/det;
+        y[0]+=id*(r[0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])-J[0][1]*(r[1]*J[2][2]-J[1][2]*r[2])+J[0][2]*(r[1]*J[2][1]-J[1][1]*r[2]));
+        y[1]+=id*(J[0][0]*(r[1]*J[2][2]-J[1][2]*r[2])-r[0]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])+J[0][2]*(J[1][0]*r[2]-r[1]*J[2][0]));
+        y[2]+=id*(J[0][0]*(J[1][1]*r[2]-r[1]*J[2][1])-J[0][1]*(J[1][0]*r[2]-r[1]*J[2][0])+r[0]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]));
+        for(int k=0;k<3;++k)y[k]=fmin(fmax(y[k],0.0),1.0);
+    }
+}
+// Reference point of a quad nearest p: projected Gauss-Newton on the unit square.
+RADIA_TYPED_KERNEL inline void quadAnchor(const double* nd,const double* p,double y[3]){
+    y[0]=y[1]=0.5;y[2]=0.0;
+    for(int it=0;it<8;++it){
+        double X[3],T[3][2];quadMapT(nd,y,X,T);
+        const double r[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]};
+        const double aa=T[0][0]*T[0][0]+T[1][0]*T[1][0]+T[2][0]*T[2][0],ab=T[0][0]*T[0][1]+T[1][0]*T[1][1]+T[2][0]*T[2][1],bb=T[0][1]*T[0][1]+T[1][1]*T[1][1]+T[2][1]*T[2][1];
+        const double ra=T[0][0]*r[0]+T[1][0]*r[1]+T[2][0]*r[2],rb=T[0][1]*r[0]+T[1][1]*r[1]+T[2][1]*r[2],det=aa*bb-ab*ab;
+        if(!finiteValue(det)||det<1e-300)return;
+        y[0]=fmin(fmax(y[0]+(bb*ra-ab*rb)/det,0.0),1.0);y[1]=fmin(fmax(y[1]+(aa*rb-ab*ra)/det,0.0),1.0);
+    }
+}
+// One linear form on a moment functional: out[k] = l(x) x^k, for the moments of degree <= deg.
+RADIA_TYPED_KERNEL inline void momentsTimesLinear(const double* in,const double l[4],int deg,double* out){
+    for(int total=0;total<=deg;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int az=total-ax-ay;
+        out[polyIndex(ax,ay,az)]=l[0]*in[polyIndex(ax,ay,az)]+l[1]*in[polyIndex(ax+1,ay,az)]+l[2]*in[polyIndex(ax,ay+1,az)]+l[3]*in[polyIndex(ax,ay,az+1)];}
+}
+// The first and, at order 2, second power of one form on the moments, leaving degree <= keep after the last power.
+RADIA_TYPED_KERNEL inline void axisPowers(const double* in,const double l[4],int order,int keep,double* first,double* second){
+    momentsTimesLinear(in,l,keep+order-1,first);
+    if(order==2)momentsTimesLinear(first,l,keep,second);
+}
+// Potentials of the tensor monomials of exponents 0..order on a straight parallelogram (index a+3b) or parallelepiped
+// (index a+3b+9c), from the physical moments: the inverse forms act on the moments, one axis at a time.
+RADIA_TYPED_KERNEL inline void faceTensorPotentials(const double* M,const double forms[][4],int order,int offset,double* N){
+    double y1[20],y2[10];axisPowers(M,forms[1],order,order,y1,y2);
+    for(int b=0;b<=order;++b){const double* Mb=b==0?M:b==1?y1:y2;double x1[4],x2[1];axisPowers(Mb,forms[0],order,0,x1,x2);
+        N[offset+3*b]=Mb[0];N[offset+1+3*b]=x1[0];if(order==2)N[offset+2+3*b]=x2[0];}
+}
+RADIA_TYPED_KERNEL inline void cellTensorPotentials(const double* M,const double forms[3][4],int order,double* N){
+    double z1[56],z2[35];axisPowers(M,forms[2],order,2*order,z1,z2);
+    for(int c=0;c<=order;++c)faceTensorPotentials(c==0?M:c==1?z1:z2,forms,order,9*c,N);
+}
+// Difference of the kernels at p; a rule point on p itself takes the bounded integrand as zero.
+RADIA_TYPED_KERNEL inline double kernelDifference(const double* p,const double* F,const double* T,double guard){
+    const double a[3]={p[0]-F[0],p[1]-F[1],p[2]-F[2]},b[3]={p[0]-T[0],p[1]-T[1],p[2]-T[2]};
+    const double ra=norm3(a),rb=norm3(b);
+    return ra>guard&&rb>guard?1.0/ra-1.0/rb:0.0;
+}
+RADIA_TYPED_KERNEL inline bool hexTangent(const double* nd,const double* base,const double* p,const int* exponents,int nS,int order,const double* gx,const double* gw,int nq,double* inner){
+    double X0[3],J[3][3];hexMapJ(nd,base,X0,J);
+    const double m00=J[1][1]*J[2][2]-J[1][2]*J[2][1],m01=J[1][0]*J[2][2]-J[1][2]*J[2][0],m02=J[1][0]*J[2][1]-J[1][1]*J[2][0];
+    const double det=J[0][0]*m00-J[0][1]*m01+J[0][2]*m02;
+    const double col[3][3]={{J[0][0],J[1][0],J[2][0]},{J[0][1],J[1][1],J[2][1]},{J[0][2],J[1][2],J[2][2]}};
+    const double n0=norm3(col[0]),n1=norm3(col[1]),n2=norm3(col[2]);
+    if(!finiteValue(det)||!(fabs(det)>1e-10*n0*n1*n2))return false;
+    const double id=1.0/det,mid[3]={0.5-base[0],0.5-base[1],0.5-base[2]};
+    double forms[3][4]={{0.5,m00*id,-(J[0][1]*J[2][2]-J[0][2]*J[2][1])*id,(J[0][1]*J[1][2]-J[0][2]*J[1][1])*id},
+                        {0.5,-m01*id,(J[0][0]*J[2][2]-J[0][2]*J[2][0])*id,-(J[0][0]*J[1][2]-J[0][2]*J[1][0])*id},
+                        {0.5,m02*id,-(J[0][0]*J[2][1]-J[0][1]*J[2][0])*id,(J[0][0]*J[1][1]-J[0][1]*J[1][0])*id}};
+    double center[3],lp[3],C[8][3];
+    for(int k=0;k<3;++k){center[k]=X0[k]+J[k][0]*mid[0]+J[k][1]*mid[1]+J[k][2]*mid[2];lp[k]=p[k]-center[k];}
+    // One face in order and then the opposite one.
+    const double hx[8]={-0.5,0.5,0.5,-0.5,-0.5,0.5,0.5,-0.5},hy[8]={-0.5,-0.5,0.5,0.5,-0.5,-0.5,0.5,0.5},hz[8]={-0.5,-0.5,-0.5,-0.5,0.5,0.5,0.5,0.5};
+    for(int i=0;i<8;++i)for(int k=0;k<3;++k)C[i][k]=J[k][0]*hx[i]+J[k][1]*hy[i]+J[k][2]*hz[i];
+    double moments[84],N[27];
+    if(order==2)RADIA_TYPED_FIELD::HexPotentialMomentsUpTo6(C,lp,moments);else RADIA_TYPED_FIELD::HexPotentialMomentsUpTo3(C,lp,moments);
+    cellTensorPotentials(moments,forms,order,N);
+    const double scale=1.0/fabs(det),guard=1e-6*fmax(n0,fmax(n1,n2));
+    const int modes=(order+1)*(order+1)*(order+1);
+    for(int m=0;m<modes;++m)N[m]*=scale;
+    for(int iz=0;iz<nq;++iz)for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
+        const double eta[3]={gx[ix],gx[iy],gx[iz]},d[3]={eta[0]-base[0],eta[1]-base[1],eta[2]-base[2]};
+        double F[3],T[3];hexMapX(nd,eta,F);
+        for(int k=0;k<3;++k)T[k]=X0[k]+J[k][0]*d[0]+J[k][1]*d[1]+J[k][2]*d[2];
+        const double delta=gw[ix]*gw[iy]*gw[iz]*kernelDifference(p,F,T,guard);
+        double pz=delta;
+        for(int c=0;c<=order;++c,pz*=eta[2]){double py=pz;
+            for(int b=0;b<=order;++b,py*=eta[1]){double px=py;
+                for(int a=0;a<=order;++a,px*=eta[0])N[a+3*b+9*c]+=px;}}
+    }
+    for(int l=0;l<nS;++l){const int* e=exponents+3*l;if(e[0]>order||e[1]>order||e[2]>order)return false;inner[l]+=N[e[0]+3*e[1]+9*e[2]];}
+    return true;
+}
+RADIA_TYPED_KERNEL inline bool quadTangent(const double* nd,const double* base,const double* p,const int* exponents,int nS,int order,const double* gx,const double* gw,int nq,double* inner){
+    double X0[3],T0[3][2];quadMapT(nd,base,X0,T0);
+    const double aa=T0[0][0]*T0[0][0]+T0[1][0]*T0[1][0]+T0[2][0]*T0[2][0],ab=T0[0][0]*T0[0][1]+T0[1][0]*T0[1][1]+T0[2][0]*T0[2][1],bb=T0[0][1]*T0[0][1]+T0[1][1]*T0[1][1]+T0[2][1]*T0[2][1];
+    const double det=aa*bb-ab*ab;
+    if(!finiteValue(det)||!(det>1e-20*aa*bb))return false;
+    const double i00=bb/det,i01=-ab/det,i11=aa/det,mid[2]={0.5-base[0],0.5-base[1]};
+    double forms[2][4]={{0.5,0.0,0.0,0.0},{0.5,0.0,0.0,0.0}},center[3],lp[3],V[4][3];
+    for(int k=0;k<3;++k){forms[0][k+1]=i00*T0[k][0]+i01*T0[k][1];forms[1][k+1]=i01*T0[k][0]+i11*T0[k][1];
+        center[k]=X0[k]+T0[k][0]*mid[0]+T0[k][1]*mid[1];lp[k]=p[k]-center[k];}
+    const double hu[4]={-0.5,0.5,0.5,-0.5},hv[4]={-0.5,-0.5,0.5,0.5};
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=T0[k][0]*hu[i]+T0[k][1]*hv[i];
+    double moments[35],N[9];
+    if(order==2)RADIA_TYPED_FIELD::QuadPotentialMomentsUpTo4(V,lp,moments);else RADIA_TYPED_FIELD::QuadPotentialMomentsUpTo2(V,lp,moments);
+    faceTensorPotentials(moments,forms,order,0,N);
+    const double scale=1.0/sqrt(det),guard=1e-6*sqrt(fmax(aa,bb));
+    const int modes=(order+1)*(order+1);
+    for(int m=0;m<modes;++m)N[m]*=scale;
+    for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
+        const double eta[2]={gx[ix],gx[iy]},d[2]={eta[0]-base[0],eta[1]-base[1]};
+        double F[3],T[3];quadMapX(nd,eta,F);
+        for(int k=0;k<3;++k)T[k]=X0[k]+T0[k][0]*d[0]+T0[k][1]*d[1];
+        double py=gw[ix]*gw[iy]*kernelDifference(p,F,T,guard);
+        for(int b=0;b<=order;++b,py*=eta[1]){double px=py;
+            for(int a=0;a<=order;++a,px*=eta[0])N[a+3*b]+=px;}
+    }
+    for(int l=0;l<nS;++l){const int* e=exponents+3*l;if(e[0]>order||e[1]>order)return false;inner[l]+=N[e[0]+3*e[1]];}
+    return true;
+}
+// The rational charge reads the level rule on the tangent pyramid, whose base is a parallelogram.
+RADIA_TYPED_KERNEL inline bool pyramidTangent(const double* nd,const double* base,const double* p,const int* exponents,int nS,const double* lx,const double* lw,int ln,const double* gx,const double* gw,int nq,double* inner){
+    constexpr int pyramidCharges=5;
+    if(nS>pyramidCharges)return false;
+    double X0[3],J[3][3];pyramidMap(nd,base,X0,J);
+    const double col[3][3]={{J[0][0],J[1][0],J[2][0]},{J[0][1],J[1][1],J[2][1]},{J[0][2],J[1][2],J[2][2]}};
+    const double guard=1e-6*fmax(norm3(col[0]),fmax(norm3(col[1]),norm3(col[2])));
+    // The five corners at their lattice nodes; the straight routines read no other node.
+    double tangent[57],lin[3][4],scaleInv=0.0,center[3],coeff[pyramidCharges*cellPolynomials];
+    const int node[5]={0,2,8,6,18};const double corner[5][3]={{0,0,0},{1,0,0},{1,1,0},{0,1,0},{0,0,1}},middle[3]={0.25,0.25,0.5};
+    for(int i=0;i<5;++i)for(int k=0;k<3;++k)tangent[3*node[i]+k]=X0[k]+J[k][0]*(corner[i][0]-base[0])+J[k][1]*(corner[i][1]-base[1])+J[k][2]*(corner[i][2]-base[2]);
+    for(int k=0;k<3;++k)center[k]=X0[k]+J[k][0]*(middle[0]-base[0])+J[k][1]*(middle[1]-base[1])+J[k][2]*(middle[2]-base[2]);
+    if(!affineForms(pyramidHost,tangent,lin,scaleInv)||!chargePolynomials(lin,scaleInv,center,true,exponents,nS,coeff))return false;
+    affinePotentials(pyramidHost,tangent,center,p,nS,coeff,inner);
+    for(int l=0;l<nS;++l)if(exponents[3*l+2]<0)inner[l]+=pyramidRationalPotential(tangent,center,p,lx,lw,ln);
+    for(int iz=0;iz<nq;++iz)for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
+        const double c[3]={gx[ix],gx[iy],gx[iz]};double y[3],F[3],T[3],JF[3][3];
+        const double det=collapse(pyramidHost,c,y);pyramidMap(nd,y,F,JF);
+        for(int k=0;k<3;++k)T[k]=X0[k]+J[k][0]*(y[0]-base[0])+J[k][1]*(y[1]-base[1])+J[k][2]*(y[2]-base[2]);
+        const double delta=gw[ix]*gw[iy]*gw[iz]*det*kernelDifference(p,F,T,guard);
+        for(int l=0;l<nS;++l)inner[l]+=delta*monomial(exponents+3*l,y);
+    }
+    return true;
+}
+// Potentials of a warped hex, quad or pyramid source at p. The base is the target's own point on a self pair, whose unit
+// cube point comes in selfCube, otherwise the clamped preimage of p. lx,lw,ln are the level rule of a rational charge.
+RADIA_TYPED_KERNEL inline bool warpedPotentials(int type,const double* nd,const double* p,const double* selfCube,const int* exponents,int nS,int order,const double* lx,const double* lw,int ln,const double* gx,const double* gw,int nq,double* inner){
+    if(order<1||order>2)return false;
+    double base[3];
+    if(type==pyramidHost){
+        if(selfCube)collapse(type,selfCube,base);else pyramidAnchor(nd,p,base);
+        return pyramidTangent(nd,base,p,exponents,nS,lx,lw,ln,gx,gw,nq,inner);
+    }
+    if(type==hexHost){
+        if(selfCube){base[0]=selfCube[0];base[1]=selfCube[1];base[2]=selfCube[2];}else hexAnchor(nd,p,base);
+        return hexTangent(nd,base,p,exponents,nS,order,gx,gw,nq,inner);
+    }
+    if(type==quadHost){
+        if(selfCube){base[0]=selfCube[0];base[1]=selfCube[1];base[2]=0.0;}else quadAnchor(nd,p,base);
+        return quadTangent(nd,base,p,exponents,nS,order,gx,gw,nq,inner);
+    }
+    return false;
+}
 } // namespace radia_hdiv_typed
