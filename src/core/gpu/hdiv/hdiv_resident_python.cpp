@@ -269,6 +269,15 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
     },py::arg("knots").noconvert(),py::arg("coefficients").noconvert(),py::arg("integral_base").noconvert(),
       py::arg("amplitudes").noconvert(),py::arg("cap"),py::arg("barrier_slope"),py::arg("last_field"),py::arg("initial_reluctivity"),py::arg("backend"));
     m.doc()="Private shared B^T G B CUDA component; explicit shared material PCG; no FE assembly or nonlinear MMM solver";
+    m.def("_diagnostic_aca_leaf",[](Array<double> diagonal,Array<double> outer,double eps,int maxRank,const std::string& backend){
+        if(backend!="gpu")throw py::value_error("The ACA diagnostic leaf requires explicit backend='gpu'");
+        if(diagonal.ndim()!=1||outer.ndim()!=1||diagonal.size()!=outer.size()||diagonal.size()<1||diagonal.size()>4096)
+            throw py::value_error("The ACA diagnostic leaf takes two matching vectors of 1..4096 entries");
+        const radia_hmatrix_cuda::HostVector<double> d(diagonal.data(),diagonal.data()+diagonal.size()),w(outer.data(),outer.data()+outer.size());
+        int rank=0,status=0,steps=0;
+        {py::gil_scoped_release release;acaDiagnosticLeaf(d,w,eps,maxRank,rank,status,steps);}
+        py::dict report;report["rank"]=rank;report["status"]=status;report["steps"]=steps;return report;
+    },py::arg("diagonal").noconvert(),py::arg("outer").noconvert(),py::arg("eps"),py::arg("max_rank"),py::arg("backend"));
     m.def("_diagnostic_flat_charge_entries",[](Array<double> cells,Array<double> faces,Array<std::int32_t> host,Array<std::int32_t> kind,
         Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,Array<double> triLow,double farFactor,
         Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend,const std::string& family,

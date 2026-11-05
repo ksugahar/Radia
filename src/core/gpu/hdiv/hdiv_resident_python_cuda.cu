@@ -5,6 +5,7 @@
 #include "hdiv_flat_gram.cuh"
 #include "hdiv_flat_diagnostic.cuh"
 #include "hdiv_flat_aca.cuh"
+#include "hdiv_aca_diagnostic.cuh"
 #include "hdiv_flat_charge_map.cuh"
 #include "hdiv_flat_field.cuh"
 #include <mutex>
@@ -150,6 +151,9 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.images=radia_hmatrix_cuda::flatImageRows(input.imageMasks,input.imageSigns,input.imageAngles);
     block.validate();return block;
 }
+}
+void acaDiagnosticLeaf(const radia_hmatrix_cuda::HostVector<double>& diagonal,const radia_hmatrix_cuda::HostVector<double>& outer,double eps,int maxRank,int& rank,int& status,int& steps){
+    const auto report=radia_hmatrix_cuda::acaDiagnosticLeaf(diagonal,outer,eps,maxRank);rank=report.rank;status=report.status;steps=report.steps;
 }
 radia_hmatrix_cuda::HostVector<double> flatDiagnosticEntries(const FlatInput& input,const radia_hmatrix_cuda::HostVector<std::size_t>& rows,
     const radia_hmatrix_cuda::HostVector<std::size_t>& cols){

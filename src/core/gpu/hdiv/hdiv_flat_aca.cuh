@@ -194,7 +194,8 @@ struct AcaFactorEntry {const double* factors;
 // term does not stop a leaf by itself: where clusters are symmetric, singular
 // pairs come nearly equal and that term misses the next one. Probe rows must then
 // agree with the factors, the mean row of the remainder at eps; the first that
-// does not becomes the next pivot.
+// does not becomes the next pivot, or sends a leaf at its rank cap dense. These
+// rows are samples: passing them is evidence, not a bound on the whole leaf.
 template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,double* scratch,double eps,int* active){
     __shared__ double sv[acaThreads];__shared__ std::size_t si[acaThreads];
     AcaLeafState L=leaves[blockIdx.x];if(L.status!=acaActive)return;
@@ -221,6 +222,7 @@ template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,do
                 leaves[blockIdx.x]=L;}
             return;
         }
+        if(L.rank>=L.cap){if(threadIdx.x==0){used[i]=1.0;L.maxAbs=maxAbs;++L.steps;L.status=acaRankCap;leaves[blockIdx.x]=L;}return;}
     }
     if(!(best>1e-15*maxAbs)){
         const auto next=acaNextRow(L,used,i,sv,si);
@@ -255,7 +257,7 @@ template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,do
         used[i]=1.0;L.maxAbs=fmax(maxAbs,columnAbs);L.rank=int(k+1);++L.steps;L.frobenius2=frobenius2;
         if(bad||!isfinite(term)||!isfinite(frobenius2)||!(frobenius2>0))L.status=acaNonfinite;
         else if(std::size_t(L.rank)==(rows<columns?rows:columns))L.status=acaConverged;
-        else if(settled&&(L.rank>=L.cap||probeRow==acaNone))L.status=acaConverged;
+        else if(settled&&probeRow==acaNone)L.status=acaConverged;
         else if(settled){L.probe=acaProbes;L.pivotRow=int(probeRow);atomicAdd(active,1);}
         else if(L.rank>=L.cap)L.status=acaRankCap;
         else if(nextRow==acaNone)L.status=acaConverged;
