@@ -46,6 +46,20 @@ def gram(inputs, aca=None):
     return hdiv_gpu._device_gram_arguments(charge, inputs, geometry, aca)
 
 
+def test_kernel_expansion_takes_explicit_parameters_and_has_no_preset():
+    """Guards: gram_compression="hca" never falls back to a preset, and its order stays in the native range."""
+    preset = hdiv_gpu.GRAM_ACA_PRESET
+    assert hdiv_gpu._checked_gram_compression("hca", dict(preset, expansion_order=6)) == dict(preset, expansion_order=6)
+    for bad in (None, dict(preset), dict(preset, expansion_order=2), dict(preset, expansion_order=9),
+                dict(preset, expansion_order=5.), dict(preset, expansion_order=True)):
+        with pytest.raises(ValueError, match="expansion_order"):
+            hdiv_gpu._checked_gram_compression("hca", bad)
+    with pytest.raises(ValueError, match="requires exactly"):
+        hdiv_gpu._checked_gram_compression("aca", dict(preset, expansion_order=6))
+    with pytest.raises(ValueError, match="out of range"):
+        hdiv_gpu._checked_gram_compression("hca", dict(preset, eps=0., expansion_order=6))
+
+
 def test_staged_inputs_map_to_primitive_rows_with_explicit_aca_parameters():
     arguments = gram(staged())
     preset = hdiv_gpu.GRAM_ACA_PRESET

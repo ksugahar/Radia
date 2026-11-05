@@ -31,6 +31,10 @@ MEAN_REL = 1e-7
 INV_CHI = 0.1
 PAIR_SAMPLE = 20000
 ACA = dict(eps=1e-10, eta=2.0, leaf_size=8, max_rank=200, rank_cap="dense")
+# The kernel expansion is a detector setting here, not an adopted profile: dropping the charge scale
+# or crossing the Chebyshev axes moves the solution by order one, far beyond EXPANSION_REL (PROPOSED).
+EXPANSION = dict(ACA, eps=1e-5, eta=1.5, leaf_size=64, expansion_order=6)
+EXPANSION_REL = 5e-3
 BH_TABLE = np.array([[0., 0.], [50., .3], [100., .6], [200., 1.], [500., 1.3], [1e3, 1.45], [5e3, 1.65],
                      [2e4, 1.85], [1e5, 2.1], [1e6, 3.24]])
 _GEOMETRY = ("cell_vertices", "face_vertices", "charge_host", "charge_kind", "charge_exponents",
@@ -224,6 +228,52 @@ def test_mixed_device_nonlinear_solve_matches_the_cpu_solver(meshes, request, cu
     relative = np.linalg.norm(device - cpu["M_avg"])/np.linalg.norm(cpu["M_avg"])
     request.node.user_properties += [("dofs", nd), ("relative", float(relative))]
     assert relative <= MEAN_REL, f"{name} order={order} device={device} cpu={cpu['M_avg']} relative={relative:.3e}"
+
+
+def _solved(path, order, cuda, aca, compression):
+    from radia import hdiv_gpu
+    setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=aca, compression=compression)
+    nd = setup["dofs"]
+    rhs = np.ascontiguousarray(setup["rhs_operator"] @ np.array([0., 0., 1e5]))
+    operator = cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu")
+    mass = cuda._ResidentMass.from_flat_tables(**setup["evaluation_tables"], dofs=nd, backend="gpu")
+    try:
+        assembly = hdiv_gpu._checked_device_assembly(operator.assembly(), setup["charge_gram"])
+        return operator.solve_linear(mass, rhs, INV_CHI, 1e-11, 6000, "mass-diagonal"), assembly
+    finally:
+        mass.close()
+        operator.close()
+
+
+@pytest.mark.parametrize("order", (1, 2))
+def test_mixed_kernel_expansion_stays_near_the_exact_device_gram(tmp_path, request, cuda, order):
+    """Guards: far blocks built from the kernel at Chebyshev nodes solve to nearly the dense device solution.
+
+    Assumes: the dense device route is the reference on identical inputs; this is not an accuracy claim.
+    """
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import mixed_grid
+    path = tmp_path / "grid.vol"
+    mixed_grid((4, 4, 4)).ngmesh.Save(str(path))
+    exact, _ = _solved(path, order, cuda, None, "dense")
+    result, assembly = _solved(path, order, cuda, EXPANSION, "hca")
+    counters = assembly["hmatrix"]
+    assert counters["expansion_order"] == 6 and counters["lowrank_leaves"] > 0, counters
+    assert counters["moment_coefficients"] > 0 and counters["kernel_rank_sum"] > 0, counters
+    relative = np.linalg.norm(result["x"] - exact["x"])/np.linalg.norm(exact["x"])
+    request.node.user_properties += [("relative", float(relative)), ("rank_sum", counters["rank_sum"])]
+    assert relative <= EXPANSION_REL, f"order={order} relative={relative:.3e} limit={EXPANSION_REL:.0e}"
+
+
+def test_kernel_expansion_is_refused_outside_mixed_meshes(tmp_path, cuda):
+    """Guards: the route is not silently replaced by another compression on a family it does not cover."""
+    from radia import hdiv_gpu
+    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import tet_cube
+    path = tmp_path / "tets.vol"
+    tet_cube().ngmesh.Save(str(path))
+    setup = hdiv_gpu._prepare_device_components(path, 1, cuda, aca=EXPANSION, compression="hca")
+    assert setup["family"] != "mixed"
+    with pytest.raises(ValueError, match="belongs to mixed meshes"):
+        cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=setup["dofs"], backend="gpu")
 
 
 def test_mixed_device_refuses_unsupported_requests(meshes, cuda):
