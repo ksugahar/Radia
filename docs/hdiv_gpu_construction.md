@@ -132,6 +132,12 @@ shared seam vertices on the same device route, read from stored P2 meshes. A loa
 mesh with no geometry must not be curved after an OCC mesh in the same process:
 `Curve(2)` projects its boundary edges onto that stale geometry.
 
+The CPU typed route refuses images, so a mixed sector is held against the dense CPU
+equation folded from the entries of its explicit copies. That route integrates a
+pair of two hosts from one side, so the copies of one explicit solve differ from
+each other and the subspace equation is one row of that matrix, not its mean; the
+distance to the explicit solve is first order in that one-sided rule.
+
 ## Qualification
 
 The device flat Gram applies the same affine P1 self/touching rule as the CPU
