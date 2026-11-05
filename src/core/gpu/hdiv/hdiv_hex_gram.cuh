@@ -692,6 +692,8 @@ struct HexPrepared {
     Buffer<int> first,count,chargeHost,exponents,invalid,types;Buffer<unsigned char> affine;
     Buffer<unsigned long long> keys;Buffer<std::size_t> offsets;
     HexDevice d{};int order=1;
+    // Work items and wall time per cost class, for the setup record.
+    unsigned long long classItems[6]={};std::size_t classMicroseconds[6]={};
     static HexRule rule(const HostVector<double>& x,const HostVector<double>& w){
         HexRule r{};r.n=int(x.size());for(int k=0;k<r.n;++k){r.x[k]=x[k];r.w[k]=w[k];}return r;}
     // CPU HexGradedTensorCloud: the C2 smootherstep clusters the 1D near rule at both ends of every axis.
@@ -775,7 +777,6 @@ struct HexPrepared {
         const unsigned pairBlocks=unsigned((pairs+127)/128);
         hexPairWork<<<pairBlocks,128,0,stream>>>(d,keys.data,offsets.data,pairs,unordered.data);check(cudaGetLastError());++launches;
         // A launch waits for its slowest item, so costly near pairs run together, not one per launch among cheap ones.
-        unsigned long long classItems[costClasses]={};
         {Buffer<unsigned char> cost,sorted,temporary;cost.allocate(items);sorted.allocate(items);
             hexWorkCost<<<unsigned((items+127)/128),128,0,stream>>>(d,unordered.data,items,cost.data);check(cudaGetLastError());++launches;
             std::size_t sortBytes=0;check(cub::DeviceRadixSort::SortPairs(nullptr,sortBytes,cost.data,sorted.data,unordered.data,work.data,int(items),0,8,stream));
@@ -787,10 +788,11 @@ struct HexPrepared {
             record("hex_cost_classes","D2H",sizeof(classItems));}
         // Bounded launches keep every kernel short on display-attached GPUs. Class 0 holds the absent directions; the pace restarts where the cost jumps.
         std::size_t item=classItems[0];
-        for(std::size_t c=1;c<costClasses;++c){HexLaunchPace pace(launchItems);const std::size_t end=item+classItems[c];
+        for(std::size_t c=1;c<costClasses;++c){HexLaunchPace pace(launchItems);const std::size_t end=item+classItems[c];const auto classStarted=std::chrono::steady_clock::now();
             while(item<end){const auto here=pace.begin(end-item);
                 hexBlocks<<<unsigned(std::min(launchItems,here)),hexThreads,0,stream>>>(d,work.data,item,here,scratch.data,stride,raw.data,invalid.data);
-                check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;pace.end();item+=here;}}
+                check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;pace.end();item+=here;}
+            classMicroseconds[c]=std::size_t(std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-classStarted).count());}
         if((invalidCode=flag(stream,record,"hex_block_flag"))!=0)
             throw std::runtime_error(invalidCode==3?"HEX host pair needs the sub-simplex pair rule between a near band below the distorted far switch, which has no device route"
                                     :invalidCode==1?"HEX graded near rule produced a nonfinite source polynomial"

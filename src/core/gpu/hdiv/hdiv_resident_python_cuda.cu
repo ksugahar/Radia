@@ -169,7 +169,9 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         result->record.counters={{"elements",s.elements},{"clusters",s.clusters},{"dense_leaves",s.denseLeaves},
             {"lowrank_leaves",s.lowrankLeaves},{"admissible_blocks",s.admissibleBlocks},{"rank_cap_promotions",s.rankCapPromotions},
             {"storage_promotions",s.storagePromotions},{"zero_rank_leaves",s.zeroRankLeaves},{"rank_sum",s.rankSum},{"max_rank",s.maxRank},{"aca_steps",s.steps},
-            {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients}};
+            {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients},
+            {"far_pairs",s.farPairs},{"mid_pairs",s.midPairs},{"graded_pairs",s.gradedPairs},{"far_microseconds",s.farMicroseconds},
+            {"mid_microseconds",s.midMicroseconds},{"graded_microseconds",s.gradedMicroseconds},{"aca_microseconds",s.acaMicroseconds},{"dense_microseconds",s.denseMicroseconds}};
         return result;
     }
     throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense' or 'aca'");

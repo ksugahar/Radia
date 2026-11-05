@@ -33,7 +33,8 @@ class PreparedHDivNonlinear:
     radia.vim; unsupported geometry or a missing native binding raises.
 
     ``gram_aca`` holds the device ACA parameters of the charge Gram
-    (eps, eta, leaf_size, max_rank, rank_cap). Leaf size and admissibility
+    (eps, eta, leaf_size, max_rank, rank_cap). ``leaf_size`` counts charges, as
+    the CPU cluster tree does, and a host is never split. Leaf size and admissibility
     are problem dependent and are never chosen automatically; ``None``
     selects the documented CPU charge-Gram preset ``GRAM_ACA_PRESET``.
     ``stats()`` reports the parameters actually used.
@@ -501,7 +502,8 @@ GRAM_ACA_PRESET = dict(eps=1e-10, eta=2.0, leaf_size=64, max_rank=200, rank_cap=
 _ACA_OPTIONAL_ROWS = (("aca_leaf_spans", "H2D"), ("aca_leaf_status", "D2H"), ("aca_active_count", "D2H"))
 _ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admissible_blocks",
                  "rank_cap_promotions", "storage_promotions", "zero_rank_leaves", "rank_sum", "max_rank", "aca_steps",
-                 "aca_batches", "factor_coefficients", "dense_coefficients")
+                 "aca_batches", "factor_coefficients", "dense_coefficients", "far_pairs", "mid_pairs", "graded_pairs",
+                 "far_microseconds", "mid_microseconds", "graded_microseconds", "aca_microseconds", "dense_microseconds")
 
 
 def _checked_gram_compression(compression, aca):
