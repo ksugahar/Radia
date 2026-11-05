@@ -910,12 +910,8 @@ def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=
             raise ValueError("image_cyclic must be an N-fold count >= 2: %r" % (image_cyclic,))
         if image_cyclic_alternating and image_cyclic % 2:
             raise ValueError("image_cyclic_alternating needs an even pole count: %r" % (image_cyclic,))
-        if masks:
-            raise NotImplementedError("Mirror image planes and image_cyclic cannot be combined, as on the CPU route")
-        fold = int(image_cyclic)
-        masks = [0]*(fold - 1)
-        signs = [-1.0 if image_cyclic_alternating and k % 2 else 1.0 for k in range(1, fold)]
-        angles = [2.0*math.pi*k/fold for k in range(1, fold)]
+        planes = _image.parse_image_string(image) if image is not None else []
+        masks, signs, angles = _image.cyclic_image_terms(planes, int(image_cyclic), bool(image_cyclic_alternating))
     elif image_cyclic_alternating:
         raise ValueError("image_cyclic_alternating requires image_cyclic")
     if not masks:

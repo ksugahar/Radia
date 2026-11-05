@@ -1,4 +1,5 @@
 """Mirror-image utilities for HDiv-VIM symmetry reduction."""
+import math
 
 
 def parse_image_string(image):
@@ -33,3 +34,31 @@ def image_group(planes):
                 sign *= plane_sign
         images.append((tuple(sorted(axes)), sign))
     return images
+
+
+def cyclic_image_terms(planes, n_fold, alternating=False):
+    """Return the (masks, signs, angles) of an N-fold rotation group, with an optional ``-z`` midplane.
+
+    Each term is T = M o R: rotate about +z, then mirror on the mask axes. The rotations
+    come first, because the connected sector pairs its seam with the first angle. Only the
+    midplane commutes with every rotation about +z, and only its antisymmetric ``-z`` form
+    leaves the HDiv normal trace free, which is what a field crossing the midplane needs.
+    """
+    planes = list(planes)
+    if planes and planes != [(2, -1)]:
+        raise NotImplementedError(
+            "image_cyclic combines only with the '-z' midplane mirror; got planes %r" % (planes,))
+    masks, signs, angles = [], [], []
+    for k in range(1, n_fold):
+        masks.append(0)
+        signs.append(-1.0 if alternating and k % 2 else 1.0)
+        angles.append(2.0*math.pi*k/n_fold)
+    if planes:
+        masks.append(4)
+        signs.append(-1.0)
+        angles.append(0.0)
+        for k in range(1, n_fold):
+            masks.append(4)
+            signs.append(1.0 if alternating and k % 2 else -1.0)
+            angles.append(2.0*math.pi*k/n_fold)
+    return masks, signs, angles
