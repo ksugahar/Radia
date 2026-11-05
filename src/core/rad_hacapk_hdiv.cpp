@@ -6196,8 +6196,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
         if (sep >= level.ratio*(m_size[repA] + m_size[repB])) { glFar = &level.gl; gwFar = &level.gw; }
     int axisOrder = 1;
     for (int v : expS) axisOrder = std::max(axisOrder, v);
-    const std::vector<double>& remainderX = self ? m_glInSelf : m_glTangent;
-    const std::vector<double>& remainderW = self ? m_gwInSelf : m_gwTangent;
+    const std::vector<double>& remainderX = typeS == quadHost ? m_glInSelf : m_glTangent;
+    const std::vector<double>& remainderW = typeS == quadHost ? m_gwInSelf : m_gwTangent;
     const auto warped = [&](const double* p, const double* cubeT, double* inn) {
         if (!warpedPotentials(typeS, ndS, p, self ? cubeT : nullptr, expS.data(), nS, axisOrder,
                               remainderX.data(), remainderW.data(), (int)remainderX.size(), inn))

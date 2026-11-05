@@ -376,7 +376,7 @@ __device__ inline void hexConeFanInner(const HexDevice& d,int s,const double* p,
 // cone/fan rule on a distorted one, its apex the outer point itself (self) or the source's closest point.
 __device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,int nS,double* inner,const double* local){
     if(d.affine[s]){hexAffineInner(d,s,p,nS,inner,local);return true;}
-    if(d.tangent.n){const HexRule& Q=t==s?d.inSelf:d.tangent;return radia_hdiv_typed::warpedPotentials(d.type[s],hexNodes(d,s),p,t==s?xi:nullptr,hexExponent(d,s,0),nS,d.order,Q.x,Q.w,Q.n,inner);}
+    if(d.tangent.n){const HexRule& Q=d.type[s]==radia_hdiv_typed::quadHost?d.inSelf:d.tangent;return radia_hdiv_typed::warpedPotentials(d.type[s],hexNodes(d,s),p,t==s?xi:nullptr,hexExponent(d,s,0),nS,d.order,Q.x,Q.w,Q.n,inner);}
     if(t==s){hexConeFanInner(d,s,p,xi,nS,inner);return true;}
     double ref[3]={0.5,0.5,0.0};
     if(!(hexCell(d,s)?hexQ2Closest(hexNodes(d,s),p,ref):quadClosest(hexNodes(d,s),p,ref)))return false;
@@ -386,7 +386,7 @@ __device__ inline bool hexGradedInner(const HexDevice& d,int t,int s,const doubl
 // its Taylor polynomial or on levels on its rational charge, by the tangent rule or radial from the anchor on a non-parallelogram pyramid.
 __device__ inline bool hexTypedInner(const HexDevice& d,int t,int s,const double* p,const double* xi,bool analytic,const double* center,const double* coeff,int nS,double* inner){
     using namespace radia_hdiv_typed;
-    const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;const HexRule& Q=t==s?d.inSelf:d.tangent;
+    const int type=d.type[s];const double* nd=hexNodes(d,s);const int* e=hexExponent(d,s,0);const HexRule& R=d.inSelf;const HexRule& Q=d.tangent;
     if(analytic)affinePotentials(type,nd,center,p,nS,coeff,inner);
     if(type!=pyramidHost)return true;
     if(analytic){
