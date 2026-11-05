@@ -581,7 +581,7 @@ public:
         }
         const auto denseStarted=std::chrono::steady_clock::now();
         if(!p.deferredDense.empty()){
-            if(prepared.hex)fillDenseHosts(p,coefficients,residentStream);else fillDenseEntries(p,coefficients,devicePermutation,residentStream);
+            if(prepared.hex&&block.images.empty())fillDenseHosts(p,coefficients,residentStream);else fillDenseEntries(p,coefficients,devicePermutation,residentStream);
             if((invalidCode=prepared.flag(residentStream,transfers,"dense_flag"))!=0)throw std::runtime_error("Flat ACA dense leaf produced a nonfinite entry");
         }
         check(cudaMemcpyAsync(scale,sigma.data,n*sizeof(double),cudaMemcpyDeviceToDevice,residentStream));
