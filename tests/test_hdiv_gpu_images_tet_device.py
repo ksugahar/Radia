@@ -194,7 +194,8 @@ def meshes(tmp_path_factory):
                 sector2=_tet_sector(root/"sector2.vol", 2, FOLD),
                 apart=_tet_sector(root/"apart.vol", 2, FOLD, span=0.8),
                 ring=_tet_ring(root/"ring.vol", 1, FOLD),
-                ring2=_tet_ring(root/"ring2.vol", 2, FOLD))
+                ring2=_tet_ring(root/"ring2.vol", 2, FOLD),
+                thin=_tet_sector(root/"thin.vol", 32, FOLD, inner=0.2, outer=0.205, half=0.0025))
 
 
 def _terms(image=None, cyclic=None):
@@ -511,6 +512,35 @@ def test_image_operator_matches_cpu(meshes, request, cuda, name, order, curve_or
     request.node.user_properties += [("dofs", nd), ("max_relative", worst)]
     assert rows[("image_transforms", "H2D")] == 72*terms["image_masks"].size
     assert worst <= limit, f"{name} order={order} {compression} {images} relative={worst:.3e} limit={limit:.0e}"
+
+
+def test_compressed_thin_sector_keeps_its_eps_where_an_image_is_near(meshes, request, cuda):
+    """Guards: a block whose clusters are apart directly and near under a rotation stays dense.
+
+    Assumes: the dense device operator is the reference, held by the entry and operator tests. On a thin sector the two ends are
+    apart and touch under one rotation; compressing that block moves the operator past the requested eps. The limit is PROPOSED.
+    """
+    from radia import hdiv_gpu
+    import ngsolve as ng
+    aca = dict(eps=1e-3, eta=2.0, leaf_size=8, max_rank=200, rank_cap="dense")
+    images = hdiv_gpu._DeviceImages(None, FOLD)
+    with ng.TaskManager():
+        dense = hdiv_gpu._prepare_device_components(meshes["thin"], 1, cuda, aca=None, compression="dense", images=images)
+        compressed = hdiv_gpu._prepare_device_components(meshes["thin"], 1, cuda, aca=aca, compression="aca", images=images)
+    nd = dense["dofs"]
+    operators = [cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], dofs=nd, backend="gpu") for setup in (dense, compressed)]
+    try:
+        rng = np.random.default_rng(1)
+        worst = 0.0
+        for _ in range(4):
+            x = np.ascontiguousarray(rng.standard_normal(nd))
+            reference = operators[0].apply(x)
+            worst = max(worst, float(np.linalg.norm(operators[1].apply(x) - reference)/np.linalg.norm(reference)))
+    finally:
+        for operator in operators:
+            operator.close()
+    request.node.user_properties += [("dofs", nd), ("max_relative", worst)]
+    assert 1e-8 < worst <= aca["eps"], f"relative={worst:.3e} eps={aca['eps']:.0e}: above eps the block was compressed, far below it nothing was"
 
 
 def _cpu_equation(path, order, curve_order, terms, rhs):
