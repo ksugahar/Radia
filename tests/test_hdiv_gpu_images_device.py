@@ -452,7 +452,7 @@ def test_a_plus_plane_solve_and_a_labeled_seam_refuse(meshes, prepared):
 
 def test_mirror_and_cyclic_together_refuse():
     from radia import hdiv_gpu
-    with pytest.raises(NotImplementedError, match="cannot be combined"):
+    with pytest.raises(NotImplementedError, match="combines only with the '-z' midplane"):
         hdiv_gpu._device_image_terms("-x", 4)
     with pytest.raises(ValueError, match="even pole count"):
         hdiv_gpu._device_image_terms(None, 5, True)
