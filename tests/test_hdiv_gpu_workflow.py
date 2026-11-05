@@ -31,6 +31,12 @@ def test_explicit_backend_before_native_import():
             module.PreparedHDivNonlinear("missing.vol", {}, backend=backend, label_contract="missing.json", mesh_check_receipt="missing.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
 
 
+@pytest.mark.parametrize("image", [None, "-z"])
+def test_alternating_without_a_cyclic_count_refuses(image):
+    with pytest.raises(ValueError, match="requires image_cyclic"):
+        load(API)._device_image_terms(image, None, True)
+
+
 def test_solve_reuses_native_owner_and_close_releases_after_error():
     module = load(API)
     owner = module.PreparedHDivNonlinear.__new__(module.PreparedHDivNonlinear)
