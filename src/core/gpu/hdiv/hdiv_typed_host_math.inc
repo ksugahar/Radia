@@ -319,12 +319,11 @@ RADIA_TYPED_KERNEL inline bool hexTangent(const double* nd,const double* base,co
     // One face in order and then the opposite one.
     const double hx[8]={-0.5,0.5,0.5,-0.5,-0.5,0.5,0.5,-0.5},hy[8]={-0.5,-0.5,0.5,0.5,-0.5,-0.5,0.5,0.5},hz[8]={-0.5,-0.5,-0.5,-0.5,0.5,0.5,0.5,0.5};
     for(int i=0;i<8;++i)for(int k=0;k<3;++k)C[i][k]=J[k][0]*hx[i]+J[k][1]*hy[i]+J[k][2]*hz[i];
-    double moments[84],N[27];
+    double moments[84],N[27]={0.0};
     if(order==2)RADIA_TYPED_FIELD::HexPotentialMomentsUpTo6(C,lp,moments);else RADIA_TYPED_FIELD::HexPotentialMomentsUpTo3(C,lp,moments);
     cellTensorPotentials(moments,forms,order,N);
     const double scale=1.0/fabs(det),guard=1e-6*fmax(n0,fmax(n1,n2));
-    const int modes=(order+1)*(order+1)*(order+1);
-    for(int m=0;m<modes;++m)N[m]*=scale;
+    for(double& value:N)value*=scale;
     for(int iz=0;iz<nq;++iz)for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
         const double eta[3]={gx[ix],gx[iy],gx[iz]},d[3]={eta[0]-base[0],eta[1]-base[1],eta[2]-base[2]};
         double F[3],T[3];hexMapX(nd,eta,F);
@@ -349,12 +348,11 @@ RADIA_TYPED_KERNEL inline bool quadTangent(const double* nd,const double* base,c
         center[k]=X0[k]+T0[k][0]*mid[0]+T0[k][1]*mid[1];lp[k]=p[k]-center[k];}
     const double hu[4]={-0.5,0.5,0.5,-0.5},hv[4]={-0.5,-0.5,0.5,0.5};
     for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=T0[k][0]*hu[i]+T0[k][1]*hv[i];
-    double moments[35],N[9];
+    double moments[35],N[9]={0.0};
     if(order==2)RADIA_TYPED_FIELD::QuadPotentialMomentsUpTo4(V,lp,moments);else RADIA_TYPED_FIELD::QuadPotentialMomentsUpTo2(V,lp,moments);
     faceTensorPotentials(moments,forms,order,0,N);
     const double scale=1.0/sqrt(det),guard=1e-6*sqrt(fmax(aa,bb));
-    const int modes=(order+1)*(order+1);
-    for(int m=0;m<modes;++m)N[m]*=scale;
+    for(double& value:N)value*=scale;
     for(int iy=0;iy<nq;++iy)for(int ix=0;ix<nq;++ix){
         const double eta[2]={gx[ix],gx[iy]},d[2]={eta[0]-base[0],eta[1]-base[1]};
         double F[3],T[3];quadMapX(nd,eta,F);
