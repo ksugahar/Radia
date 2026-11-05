@@ -898,6 +898,10 @@ def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=
     and, for a cyclic list, the float64 rotation angles about +z. A mirror and a cyclic list
     together are refused as on the CPU route; the native binding repeats the closure checks.
     """
+    if image is None and image_cyclic is None:
+        if image_cyclic_alternating:
+            raise ValueError("image_cyclic_alternating requires image_cyclic")
+        return None
     import numpy as np
     from radia.vim import _image
     masks, signs, angles = [], [], None
@@ -912,8 +916,6 @@ def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=
             raise ValueError("image_cyclic_alternating needs an even pole count: %r" % (image_cyclic,))
         planes = _image.parse_image_string(image) if image is not None else []
         masks, signs, angles = _image.cyclic_image_terms(planes, int(image_cyclic), bool(image_cyclic_alternating))
-    elif image_cyclic_alternating:
-        raise ValueError("image_cyclic_alternating requires image_cyclic")
     if not masks:
         return None
     terms = dict(image_masks=np.ascontiguousarray(masks, dtype=np.int32),
@@ -1181,9 +1183,11 @@ def _fe_sources(mesh, fes):
 
 def _applied_source(fespace, uniform, applied_field):
     """The weak source: ``uniform @ H`` of a constant H in A/m, or the ``vim.Solve`` form of a CoefficientFunction."""
+    import sys
     import numpy as np
-    import ngsolve as ng
-    if isinstance(applied_field, ng.CoefficientFunction):
+    # A CoefficientFunction exists only once NGSolve is loaded; a constant field needs no NGSolve.
+    ng = sys.modules.get("ngsolve")
+    if ng is not None and isinstance(applied_field, ng.CoefficientFunction):
         if applied_field.dim != 3:
             raise ValueError("applied_field must be a 3-component CoefficientFunction: dim %r" % (applied_field.dim,))
         source = ng.LinearForm(fespace)

@@ -81,7 +81,8 @@ def build_yoke_mesh(*, fold, cells, radial, levels, ring, inner_radius, outer_ra
 
 def _mean_z(field, mesh):
     import ngsolve as ng
-    return float(ng.Integrate(field[2], mesh))/float(ng.Integrate(ng.CF(1.0), mesh))
+    with ng.TaskManager():
+        return float(ng.Integrate(field[2], mesh))/float(ng.Integrate(ng.CF(1.0), mesh))
 
 
 def _solve(path, checked, args, *, compression, nonlinear, **images):
