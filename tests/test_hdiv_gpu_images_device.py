@@ -31,6 +31,9 @@ ACA_OPERATOR_REL = 1e-5
 RING_REL = 1e-5
 FIELD_REL = 1e-9
 SOLVE_REL = 1e-7
+# The CPU Newton stops on its residual: at 1e-9 it stands 1.6e-7 from its own converged state on the HEX -x cut, and two
+# runs on one input can take different paths there. At 1e-11 it is converged, so the reference is that state.
+REFERENCE_NL_TOL = 1e-11
 ACA_SOLVE_REL = 1e-5
 INV_CHI = 1.0/499.0
 SEAM = ("periodic_min", "periodic_max")
@@ -398,7 +401,7 @@ def test_linear_solve_and_field_match_cpu(meshes, request, prepared, cuda, name,
 
 @pytest.mark.parametrize("name,order,images", [("cut", 2, dict(image="-x")), ("poles", 2, dict(image_cyclic=6))])
 def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, images):
-    _, x_cpu = _cpu_solve(meshes[name], order, bh_table=_BH, nl_tol=1e-9, **images)
+    _, x_cpu = _cpu_solve(meshes[name], order, bh_table=_BH, nl_tol=REFERENCE_NL_TOL, **images)
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
     relative = np.linalg.norm(solved["x"] - x_cpu)/np.linalg.norm(x_cpu)

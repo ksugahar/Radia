@@ -250,7 +250,7 @@ def test_nonlinear_solve_matches_the_explicit_copies(meshes, request, prepared, 
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve(applied, tolerance=1e-9, linear_tolerance=1e-10)
         means = _device_means(device, solved["x"])
-    reference, spread = _cpu_means(meshes[name + "_copies"], len(means), order, applied, images, bh_table=_BH, nl_tol=1e-9)
+    reference, spread = _cpu_means(meshes[name + "_copies"], len(means), order, applied, images, bh_table=_BH, nl_tol=1e-11)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
     request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("newton", int(solved["newton_iterations"]))]
     assert relative <= SOLVE_REL, f"{name} order={order} {images} relative={relative:.3e} limit={SOLVE_REL:.0e}"

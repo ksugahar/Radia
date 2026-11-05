@@ -31,6 +31,9 @@ OPERATOR_REL = 1e-9
 SECTOR_OPERATOR_REL = 1e-6
 ACA_OPERATOR_REL = 1e-5
 SOLVE_REL = 1e-7
+# The CPU Newton stops on its residual: at 1e-9 it stands 1.6e-7 from its own converged state on the HEX -x cut, and two
+# runs on one input can take different paths there. At 1e-11 it is converged, so the reference is that state.
+REFERENCE_NL_TOL = 1e-11
 SECTOR_SOLVE_REL = 1e-6
 ACA_SOLVE_REL = 1e-5
 FIELD_REL = 1e-9
@@ -593,7 +596,7 @@ def test_sector_nonlinear_solve_matches_the_explicit_ring(meshes, request, prepa
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes["sector2"], _BH, backend="gpu", order=1, **_RECEIPT, image_cyclic=FOLD) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
         means = _device_means(device, solved["x"])
-    reference, spread = _ring_means(meshes["ring2"], len(means), 1, bh_table=_BH, nl_tol=1e-9)
+    reference, spread = _ring_means(meshes["ring2"], len(means), 1, bh_table=_BH, nl_tol=REFERENCE_NL_TOL)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
     request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("newton", int(solved["newton_iterations"]))]
     assert relative <= SECTOR_SOLVE_REL, f"relative={relative:.3e} limit={SECTOR_SOLVE_REL:.0e}"
@@ -601,7 +604,7 @@ def test_sector_nonlinear_solve_matches_the_explicit_ring(meshes, request, prepa
 
 @pytest.mark.parametrize("name,order,images", [("cut", 2, dict(image="-x"))])
 def test_nonlinear_solve_matches_cpu(meshes, request, prepared, cuda, name, order, images):
-    x_cpu, _ = _cpu_solve(meshes[name], order, 1, bh_table=_BH, nl_tol=1e-9, **images)
+    x_cpu, _ = _cpu_solve(meshes[name], order, 1, bh_table=_BH, nl_tol=REFERENCE_NL_TOL, **images)
     with prepared.PreparedHDivNonlinear.from_bh_table(meshes[name], _BH, backend="gpu", order=order, **_RECEIPT, **images) as device:
         solved = device.solve((0.0, 0.0, 1e5), tolerance=1e-9, linear_tolerance=1e-10)
     relative = np.linalg.norm(solved["x"] - x_cpu)/np.linalg.norm(x_cpu)
