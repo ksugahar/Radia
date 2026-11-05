@@ -680,7 +680,7 @@ def _expected_hex_ledger(arguments):
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("aca_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
                          ("dense_flag", "D2H"): 4})
     return expected
 
@@ -705,10 +705,10 @@ def _expected_mixed_ledger(arguments):
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("aca_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
                          ("dense_flag", "D2H"): 4})
     if arguments["compression"] == _GRAM_EXPANSION:
-        expected.update({("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
+        expected.update({("aca_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
     return expected
 
 
