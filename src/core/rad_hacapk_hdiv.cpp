@@ -4844,18 +4844,56 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const do
     }
 }
 
+// The complete host from its outer faces; the pure hex routes that sum PhiInnerHexAffineCellSubVec reach the same
+// value through the six sub-tets, so the device and CPU comparison of those routes checks this form.
 void RadHACApKChargeGram::PhiInnerHexAffineCellVec(int hS, const double p[3],
                                                    const std::vector<int>& srcG, double* inn) const
 {
-    for (int subB = 0; subB < 6; ++subB)
-        PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+    const double* nd = &m_hexNodes[(size_t)hS*81];
+    const double* center = &m_hexAffineCenter[(size_t)hS*3];
+    static const int corner[8] = {0, 2, 8, 6, 18, 20, 26, 24};
+    double C[8][3];
+    for (int i = 0; i < 8; ++i)
+        for (int k = 0; k < 3; ++k) C[i][k] = nd[3*corner[i] + k] - center[k];
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
+    double moments[HEX_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::HexPotentialMomentsUpTo3(C, local_p, moments);
+    else                       rad_hdiv::HexPotentialMomentsUpTo6(C, local_p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1] + axisCount*axisCount*e[2];
+        const double* coeff = &m_hexAffineCoeff[
+            ((size_t)hS*m_hexAffineMonoCount + mono)*m_hexAffinePolyCount];
+        double s = 0.0;
+        for (int i = 0; i < m_hexAffinePolyCount; ++i) s += coeff[i] * moments[i];
+        inn[ls] += s;
+    }
 }
 
 void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
                                                    const std::vector<int>& srcG, double* inn) const
 {
-    for (int subB = 0; subB < 2; ++subB)
-        PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
+    const double* nd = &m_quadNodes[(size_t)hS*27];
+    const double* center = &m_quadAffineCenter[(size_t)hS*3];
+    static const int corner[4] = {0, 2, 8, 6};
+    double V[4][3];
+    for (int i = 0; i < 4; ++i)
+        for (int k = 0; k < 3; ++k) V[i][k] = nd[3*corner[i] + k] - center[k];
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
+    double moments[QUAD_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::QuadPotentialMomentsUpTo2(V, local_p, moments);
+    else                       rad_hdiv::QuadPotentialMomentsUpTo4(V, local_p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1];
+        const double* coeff = &m_quadAffineCoeff[
+            ((size_t)hS*m_quadAffineMonoCount + mono)*m_quadAffinePolyCount];
+        double value = 0.0;
+        for (int i = 0; i < m_quadAffinePolyCount; ++i) value += coeff[i]*moments[i];
+        inn[ls] += value;
+    }
 }
 
 // Smooth affine host pairs do not need degree-six analytic potential recurrences at every outer point.
