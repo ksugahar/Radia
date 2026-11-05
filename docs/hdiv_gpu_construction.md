@@ -126,6 +126,12 @@ orientation of the periodic wrapper as non-matrix inputs. Its paired faces carry
 no charge. It refuses a mesh numbering on which the wrapper ties no DOF. The
 limits of the device image tests and validations are PROPOSED, not adopted.
 
+The curved TET sector at its seam has no CPU reference: the CPU route takes a far
+rule for those touching pairs. Its entries are held against a connected ring with
+shared seam vertices on the same device route, read from stored P2 meshes. A loaded
+mesh with no geometry must not be curved after an OCC mesh in the same process:
+`Curve(2)` projects its boundary edges onto that stale geometry.
+
 ## Qualification
 
 The device flat Gram applies the same affine P1 self/touching rule as the CPU
