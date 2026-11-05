@@ -10,20 +10,25 @@
 #include <functional>
 #include <numeric>
 #include "hdiv_flat_gram.cuh"
+#include "hdiv_flat_expansion.cuh"
 namespace radia_hmatrix_cuda {
 // rankCapDense: a leaf that reaches maxRank unconverged is stored as an exact
 // dense leaf of the same operator (counted); otherwise construction fails.
+// expansionOrder: Chebyshev nodes per axis of the kernel expansion of far blocks; 0 runs ACA on Gram entries.
+// With it, admissibility is max(width) <= eta gap on tight boxes, because interpolation needs both boxes separated.
 struct FlatAcaOptions {
-    double eps=0,eta=0;std::size_t leafSize=0,maxRank=0;bool rankCapDense=false;
+    double eps=0,eta=0;std::size_t leafSize=0,maxRank=0;bool rankCapDense=false;int expansionOrder=0;
     void validate()const{
         if(!std::isfinite(eps)||!(eps>0)||!(eps<1))throw std::invalid_argument("ACA eps must be finite in (0,1)");
         if(!std::isfinite(eta)||!(eta>0))throw std::invalid_argument("ACA admissibility eta must be finite and positive");
         if(!leafSize||leafSize>4096)throw std::invalid_argument("ACA leaf size must be in [1,4096] charges");
         if(!maxRank||maxRank>1024)throw std::invalid_argument("ACA max rank must be in [1,1024]");
+        if(expansionOrder&&(expansionOrder<3||expansionOrder>hcaOrderCap))throw std::invalid_argument("Kernel expansion order must be in [3,8]");
     }
 };
-struct FlatAcaBlock {std::size_t row,column,rows,columns;bool admissible;};
+struct FlatAcaBlock {std::size_t row,column,rows,columns;bool admissible;std::size_t rowBox,columnBox;};
 struct FlatAcaPartition {
+    HostVector<HcaBox> boxes{HostFaultAllocator<HcaBox>("aca.boxes")};
     HostVector<std::size_t> permutation{HostFaultAllocator<std::size_t>("aca.permutation")};
     HostVector<FlatAcaBlock> blocks{HostFaultAllocator<FlatAcaBlock>("aca.blocks")};
     std::size_t elements=0,clusters=0;
@@ -37,7 +42,7 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
     HostVector<std::size_t> cellElement(cellCount,none,HostFaultAllocator<std::size_t>("aca.cell-element")),
         faceElement(faceCount,none,HostFaultAllocator<std::size_t>("aca.face-element"));
     for(std::size_t a=0;a<n;++a)(block.kind[a]==0?cellElement:faceElement)[std::size_t(block.host[a])]=0;
-    HostVector<double> centre{HostFaultAllocator<double>("aca.centre")},radius{HostFaultAllocator<double>("aca.radius")};
+    HostVector<double> centre{HostFaultAllocator<double>("aca.centre")},radius{HostFaultAllocator<double>("aca.radius")},tight{HostFaultAllocator<double>("aca.tight")};
     std::size_t elements=0;
     // Centre: corner mean; support radius: every geometry node (curved P2 nodes bound the curved host).
     auto addElement=[&](const double* V,int vertices,int nodes){
@@ -50,6 +55,9 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
         for(int i=0;i<corners;++i)for(int k=0;k<3;++k)C[3*i+k]=L[3*node[i]+k];
         double c[3]={0,0,0};for(int i=0;i<corners;++i)for(int k=0;k<3;++k)c[k]+=C[3*i+k];for(int k=0;k<3;++k)c[k]/=corners;double r=0;
         for(int i=0;i<(corners==8?27:9);++i){const double dx=L[3*i]-c[0],dy=L[3*i+1]-c[1],dz=L[3*i+2]-c[2];r=std::max(r,std::sqrt(dx*dx+dy*dy+dz*dz));}
+        if(options.expansionOrder)for(int k=0;k<3;++k){double lo=L[k],hi=L[k];
+            for(int i=1;i<(corners==8?27:9);++i){lo=std::min(lo,L[3*i+k]);hi=std::max(hi,L[3*i+k]);}
+            tight.push_back(lo);tight.push_back(hi);}
         centre.insert(centre.end(),c,c+3);radius.push_back(r);return elements++;};
     for(std::size_t h=0;h<cellCount;++h)if(cellElement[h]!=none)cellElement[h]=block.hex?addHex(block.cells.data()+81*h,8)
         :addElement(block.cells.data()+block.cellStride()*h,4,int(block.cellStride()/3));
@@ -60,7 +68,7 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
     for(std::size_t a=0;a<n;++a)++offsets[elementOf(a)+1];
     for(std::size_t e=0;e<elements;++e)offsets[e+1]+=offsets[e];
     {auto next=offsets;for(std::size_t a=0;a<n;++a)members[next[elementOf(a)]++]=a;}
-    struct Node {std::size_t first,count,charge=0,charges=0,left=0,right=0;double lo[3],hi[3],width=0;bool leaf=true;};
+    struct Node {std::size_t first,count,charge=0,charges=0,left=0,right=0;double lo[3],hi[3],width=0,tlo[3],thi[3],twidth=0;bool leaf=true;};
     HostVector<Node> nodes{HostFaultAllocator<Node>("aca.nodes")};
     HostVector<std::size_t> order(elements,0,HostFaultAllocator<std::size_t>("aca.order"));std::iota(order.begin(),order.end(),std::size_t(0));
     std::function<std::size_t(std::size_t,std::size_t)> build=[&](std::size_t first,std::size_t count)->std::size_t{
@@ -70,6 +78,11 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
             for(int k=0;k<3;++k){const double c=centre[3*e+k];clo[k]=std::min(clo[k],c);chi[k]=std::max(chi[k],c);
                 node.lo[k]=std::min(node.lo[k],c-radius[e]);node.hi[k]=std::max(node.hi[k],c+radius[e]);}}
         double w=0;for(int k=0;k<3;++k)w+=(node.hi[k]-node.lo[k])*(node.hi[k]-node.lo[k]);node.width=std::sqrt(w);
+        if(options.expansionOrder){double tw=0;
+            for(int k=0;k<3;++k){node.tlo[k]=std::numeric_limits<double>::infinity();node.thi[k]=-std::numeric_limits<double>::infinity();
+                for(std::size_t i=first;i<first+count;++i){node.tlo[k]=std::min(node.tlo[k],tight[6*order[i]+2*k]);node.thi[k]=std::max(node.thi[k],tight[6*order[i]+2*k+1]);}
+                tw+=(node.thi[k]-node.tlo[k])*(node.thi[k]-node.tlo[k]);}
+            node.twidth=std::sqrt(tw);}
         int axis=0;for(int k=1;k<3;++k)if(chi[k]-clo[k]>chi[axis]-clo[axis])axis=k;
         const auto index=nodes.size();nodes.push_back(node);
         if(nodeCharges<=options.leafSize||!(chi[axis]>clo[axis]))return index;
@@ -84,17 +97,21 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
         result.permutation.insert(result.permutation.end(),members.begin()+std::ptrdiff_t(offsets[e]),members.begin()+std::ptrdiff_t(offsets[e+1]));}
     if(result.permutation.size()!=n)throw std::runtime_error("ACA partition does not cover every charge exactly once");
     for(auto& node:nodes){node.charge=start[node.first];node.charges=start[node.first+node.count]-node.charge;}
+    if(options.expansionOrder)for(const auto& node:nodes){HcaBox box{};for(int k=0;k<3;++k){box.lo[k]=node.tlo[k];box.hi[k]=node.thi[k];}
+        box.charge=node.charge;box.charges=node.charges;result.boxes.push_back(box);}
     auto admissible=[&](const Node& s,const Node& t){
+        if(options.expansionOrder){double tgap=0;for(int k=0;k<3;++k){const double d=std::max({0.0,t.tlo[k]-s.thi[k],s.tlo[k]-t.thi[k]});tgap+=d*d;}
+            tgap=std::sqrt(tgap);return tgap>0&&std::max(s.twidth,t.twidth)<=options.eta*tgap;}
         double gap=0;for(int k=0;k<3;++k){const double d=std::max({0.0,t.lo[k]-s.hi[k],s.lo[k]-t.hi[k]});gap+=d*d;}
         gap=std::sqrt(gap);return gap>0&&std::min(s.width,t.width)<=options.eta*gap;};
     // Upper/diagonal blocks only: s precedes t in charge order whenever s != t.
     std::function<void(std::size_t,std::size_t)> split=[&](std::size_t si,std::size_t ti){
         const Node s=nodes[si],t=nodes[ti];
         if(si==ti){
-            if(s.leaf){result.blocks.push_back({s.charge,s.charge,s.charges,s.charges,false});return;}
+            if(s.leaf){result.blocks.push_back({s.charge,s.charge,s.charges,s.charges,false,si,ti});return;}
             split(s.left,s.left);split(s.left,s.right);split(s.right,s.right);return;}
-        if(admissible(s,t)){result.blocks.push_back({s.charge,t.charge,s.charges,t.charges,true});return;}
-        if(s.leaf&&t.leaf){result.blocks.push_back({s.charge,t.charge,s.charges,t.charges,false});return;}
+        if(admissible(s,t)){result.blocks.push_back({s.charge,t.charge,s.charges,t.charges,true,si,ti});return;}
+        if(s.leaf&&t.leaf){result.blocks.push_back({s.charge,t.charge,s.charges,t.charges,false,si,ti});return;}
         if(s.leaf){split(si,t.left);split(si,t.right);return;}
         if(t.leaf){split(s.left,ti);split(s.right,ti);return;}
         split(s.left,t.left);split(s.left,t.right);split(s.right,t.left);split(s.right,t.right);};
@@ -107,7 +124,7 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
 // Per-leaf ACA state; offsets index the batch scratch. Norms stay on the device.
 struct AcaLeafState {
     std::size_t row,column,rows,columns,u,v,residual,used;
-    double frobenius2,maxAbs;int rank,status,pivotRow,steps;
+    double frobenius2,maxAbs;int rank,status,pivotRow,steps,cap,factorRank;
 };
 enum AcaStatus:int {acaActive=0,acaConverged=1,acaRankCap=2,acaNonfinite=3,acaDenseSmaller=4};
 constexpr int acaThreads=128;
@@ -135,18 +152,29 @@ __device__ inline std::size_t acaNextRow(const AcaLeafState& L,const double* use
     for(auto r=std::size_t(threadIdx.x);r<L.rows;r+=acaThreads)if(r!=skip&&used[r]==0.0){value=0;index=r;break;}
     acaBlockArgmax(value,index,sv,si);return index;
 }
+// What one ACA step reads: Gram entries of the permuted charges.
+struct AcaGramEntry {FlatDevice d;const std::size_t* perm;const double* sigma;
+    __device__ double operator()(const AcaLeafState& L,std::size_t i,std::size_t j)const{return acaEntry(d,perm,sigma,L.row+i,L.column+j);}};
+// The kernel between the Chebyshev nodes of two clusters; row and column name the clusters here.
+struct AcaKernelEntry {HcaNodes e;const HcaBox* boxes;
+    __device__ double operator()(const AcaLeafState& L,std::size_t i,std::size_t j)const{double a[3],b[3];
+        hcaNode(e,boxes[L.row],int(i),a);hcaNode(e,boxes[L.column],int(j),b);
+        const double dx=a[0]-b[0],dy=a[1]-b[1],dz=a[2]-b[2];return hexInvFourPi/sqrt(dx*dx+dy*dy+dz*dz);}};
+// The product of low-rank factors, recompressed; row and column are the offsets of the factors here.
+struct AcaFactorEntry {const double* factors;
+    __device__ double operator()(const AcaLeafState& L,std::size_t i,std::size_t j)const{double sum=0.0;
+        for(int r=0;r<L.factorRank;++r)sum+=factors[L.row+i+L.rows*r]*factors[L.column+j+L.columns*r];return sum;}};
 // One ACA step for every active leaf of the batch (one block per leaf). A
 // negligible pivot row is marked used and the next unused row is tried; the
 // leaf converges by row exhaustion only after every row was tried.
-__global__ void acaStep(FlatDevice d,const std::size_t* perm,const double* sigma,AcaLeafState* leaves,double* scratch,
-                        int maxRank,double eps,int* active){
+template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,double* scratch,double eps,int* active){
     __shared__ double sv[acaThreads];__shared__ std::size_t si[acaThreads];
     AcaLeafState L=leaves[blockIdx.x];if(L.status!=acaActive)return;
     const std::size_t i=std::size_t(L.pivotRow),k=std::size_t(L.rank),rows=L.rows,columns=L.columns;
     double* U=scratch+L.u;double* V=scratch+L.v;double* R=scratch+L.residual;double* used=scratch+L.used;
     double best=-1,rowAbs=0;std::size_t jstar=acaNone;int bad=0;
     for(auto j=std::size_t(threadIdx.x);j<columns;j+=acaThreads){
-        const double e=acaEntry(d,perm,sigma,L.row+i,L.column+j);if(!isfinite(e))bad=1;rowAbs=fmax(rowAbs,fabs(e));
+        const double e=entry(L,i,j);if(!isfinite(e))bad=1;rowAbs=fmax(rowAbs,fabs(e));
         double r=e;for(std::size_t l=0;l<k;++l)r-=U[i+rows*l]*V[j+columns*l];
         R[j]=r;if(fabs(r)>best){best=fabs(r);jstar=j;}
     }
@@ -166,7 +194,7 @@ __global__ void acaStep(FlatDevice d,const std::size_t* perm,const double* sigma
     double nv2=0,nu2=0,columnAbs=0,nextBest=-1;std::size_t nextRow=acaNone;
     for(auto j=std::size_t(threadIdx.x);j<columns;j+=acaThreads){const double v=R[j]/pivot;V[j+columns*k]=v;nv2+=v*v;}
     for(auto r=std::size_t(threadIdx.x);r<rows;r+=acaThreads){
-        const double e=acaEntry(d,perm,sigma,L.row+r,L.column+jstar);if(!isfinite(e))bad=1;columnAbs=fmax(columnAbs,fabs(e));
+        const double e=entry(L,r,jstar);if(!isfinite(e))bad=1;columnAbs=fmax(columnAbs,fabs(e));
         double c=e;for(std::size_t l=0;l<k;++l)c-=U[r+rows*l]*V[jstar+columns*l];
         U[r+rows*k]=c;nu2+=c*c;
         if(r!=i&&used[r]==0.0&&fabs(c)>nextBest){nextBest=fabs(c);nextRow=r;}
@@ -186,7 +214,7 @@ __global__ void acaStep(FlatDevice d,const std::size_t* perm,const double* sigma
         used[i]=1.0;L.maxAbs=fmax(maxAbs,columnAbs);L.rank=int(k+1);++L.steps;L.frobenius2=frobenius2;
         if(bad||!isfinite(term)||!isfinite(frobenius2)||!(frobenius2>0))L.status=acaNonfinite;
         else if(sqrt(term)<=eps*sqrt(frobenius2)||std::size_t(L.rank)==(rows<columns?rows:columns))L.status=acaConverged;
-        else if(L.rank>=maxRank)L.status=acaRankCap;
+        else if(L.rank>=L.cap)L.status=acaRankCap;
         else if(nextRow==acaNone)L.status=acaConverged;
         // Factors of this rank already take as much as the dense leaf, and the rank only grows.
         else if(std::size_t(L.rank)*(rows+columns)>=rows*columns)L.status=acaDenseSmaller;
@@ -236,7 +264,8 @@ __global__ void __launch_bounds__(hexThreads) acaDensePairs(HexDevice d,const Ac
 struct FlatAcaStats {
     std::size_t elements=0,clusters=0,denseLeaves=0,lowrankLeaves=0,admissibleBlocks=0,rankCapPromotions=0,storagePromotions=0,zeroRankLeaves=0,
         rankSum=0,maxRank=0,steps=0,factorCoefficients=0,denseCoefficients=0,batches=0,farPairs=0,midPairs=0,gradedPairs=0,
-        farMicroseconds=0,midMicroseconds=0,gradedMicroseconds=0,acaMicroseconds=0,denseMicroseconds=0;
+        farMicroseconds=0,midMicroseconds=0,gradedMicroseconds=0,acaMicroseconds=0,denseMicroseconds=0,
+        kernelRankSum=0,momentCoefficients=0,momentMicroseconds=0,expansionOrder=0;
 };
 // Compress before the resident plan exists (ranks size the plan), then
 // materialize into the resident coefficients on its stream. Factors move D2D.
@@ -248,6 +277,143 @@ class FlatAcaOracle {
     HostVector<HostUnique<Buffer<double>>> chunks{HostFaultAllocator<HostUnique<Buffer<double>>>("aca.chunks")};
     HostVector<std::size_t> rankOf{HostFaultAllocator<std::size_t>("aca.rank-of")};
     bool compressed=false;std::size_t activeBytes=0;
+    Buffer<int> active;std::size_t statesBytes=0,reportBytes=0,activeCount=0;
+    // Upload the leaves of one batch, step them to the end and read back their (rank, status) pairs.
+    template<class Entry>HostVector<int> runLeaves(const Entry& entry,const HostVector<AcaLeafState>& states,double eps,Buffer<double>& work,std::size_t scratch){
+        check(cudaMemsetAsync(work.data,0,scratch*sizeof(double),stream));
+        Buffer<AcaLeafState> deviceStates;deviceStates.upload(states);statesBytes+=checkedProduct(states.size(),sizeof(AcaLeafState));
+        int running=int(states.size());
+        // A step adds rank or retires one row, so rows + cap steps bound every leaf.
+        std::size_t bound=0;for(const auto& s:states)bound=std::max(bound,s.rows+std::size_t(s.cap));
+        for(std::size_t step=0;running&&step<bound;++step){
+            check(cudaMemsetAsync(active.data,0,sizeof(int),stream));
+            acaStep<Entry><<<unsigned(states.size()),acaThreads,0,stream>>>(entry,deviceStates.data,work.data,eps,active.data);
+            check(cudaGetLastError());++launches;
+            check(cudaMemcpyAsync(&running,active.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+            activeCount+=sizeof(int);++stats.steps;
+        }
+        if(running)throw std::runtime_error("ACA did not terminate within its step bound");
+        Buffer<int> report;report.allocate(2*states.size());
+        acaReport<<<unsigned((states.size()+127)/128),128,0,stream>>>(deviceStates.data,states.size(),report.data);check(cudaGetLastError());++launches;
+        HostVector<int> ranks(2*states.size(),0,HostFaultAllocator<int>("aca.report"));
+        check(cudaMemcpyAsync(ranks.data(),report.data,ranks.size()*sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+        reportBytes+=ranks.size()*sizeof(int);
+        return ranks;
+    }
+    // Keep a converged leaf's factors, or count why it is stored dense. Returns whether it was kept.
+    bool keepFactors(int rankValue,int status,std::size_t blockIndex,std::size_t state,std::size_t& chunkCount,HostVector<Kept>& batchKept){
+        const auto rank=std::size_t(rankValue);const auto& b=partition.blocks[blockIndex];
+        if(status==acaNonfinite)throw std::runtime_error("ACA produced a nonfinite pivot, entry or norm");
+        if(status==acaRankCap){if(!options.rankCapDense)throw std::runtime_error("ACA leaf reached max_rank without converging");++stats.rankCapPromotions;return false;}
+        if(status==acaDenseSmaller){++stats.storagePromotions;return false;}
+        if(status!=acaConverged||rank>std::min(b.rows,b.columns))throw std::runtime_error("ACA leaf status or rank invalid");
+        // Rank 0 means every row was negligible: the leaf is stored dense, never dropped.
+        if(!rank){++stats.zeroRankLeaves;return false;}
+        if(checkedProduct(rank,b.rows+b.columns)>=checkedProduct(b.rows,b.columns)){++stats.storagePromotions;return false;}
+        batchKept.push_back({blockIndex,rank,chunks.size(),chunkCount,chunkCount+b.rows*rank,state});
+        chunkCount+=rank*(b.rows+b.columns);rankOf[blockIndex]=rank;
+        return true;
+    }
+    // U (rows x rank) and V (columns x rank) are leading slices of the scratch columns.
+    void moveFactors(const HostVector<AcaLeafState>& states,const HostVector<Kept>& batchKept,const Buffer<double>& work,std::size_t chunkCount,std::size_t& live){
+        if(!chunkCount)return;
+        flatReserve(checkedProduct(chunkCount,sizeof(double)),"Flat ACA factor storage would exceed the GPU reserve");
+        auto chunk=makeHostUnique<Buffer<double>>("aca.chunk");chunk->allocate(chunkCount);
+        for(const auto& k:batchKept){const auto& st=states[k.state];const auto& b=partition.blocks[k.block];
+            check(cudaMemcpyAsync(chunk->data+k.u,work.data+st.u,b.rows*k.rank*sizeof(double),cudaMemcpyDeviceToDevice,stream));
+            check(cudaMemcpyAsync(chunk->data+k.v,work.data+st.v,b.columns*k.rank*sizeof(double),cudaMemcpyDeviceToDevice,stream));}
+        check(cudaStreamSynchronize(stream));live+=checkedProduct(chunkCount,sizeof(double));chunks.push_back(std::move(chunk));
+        kept.insert(kept.end(),batchKept.begin(),batchKept.end());
+    }
+    // The hosts of the permuted charge order, and the host index at each permuted charge.
+    void permutedHosts(HostVector<AcaHostStart>& hosts,HostVector<std::size_t>& hostAt)const{
+        const auto n=block.charges();const int cellHosts=int(block.cellCount());
+        hostAt.assign(n+1,0);
+        for(std::size_t i=0;i<n;++i){const auto a=partition.permutation[i];const int g=block.kind[a]==0?block.host[a]:cellHosts+block.host[a];
+            if(hosts.empty()||hosts.back().host!=g)hosts.push_back({i,g});
+            hostAt[i]=hosts.size()-1;}
+        hostAt[n]=hosts.size();
+    }
+    std::size_t processors()const{int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
+        return std::size_t(std::max(properties.multiProcessorCount,1));}
+    // Far blocks from the kernel at the Chebyshev nodes of their clusters, batch by batch: ACA on K, the moments times
+    // its factors, then ACA on that product, which also proves the block low rank at the requested tolerance.
+    void compressExpansion(const HostVector<std::size_t>& admissible,std::size_t& live,std::size_t& peakScratch){
+        const int n1=options.expansionOrder,q=n1*n1*n1;const HcaNodes nodes=hcaNodes(n1);const HexDevice hd=prepared.device().hexd;
+        stats.expansionOrder=std::size_t(n1);
+        HostVector<HcaBox> boxes=partition.boxes;HostVector<unsigned char> used(boxes.size(),0,HostFaultAllocator<unsigned char>("aca.box-used"));
+        for(const auto b:admissible){used[partition.blocks[b].rowBox]=1;used[partition.blocks[b].columnBox]=1;}
+        std::size_t tableSize=0;for(std::size_t b=0;b<boxes.size();++b)if(used[b]){boxes[b].table=tableSize;tableSize=flatSum(tableSize,checkedProduct(boxes[b].charges,std::size_t(q)));}
+        stats.momentCoefficients=tableSize;
+        HostVector<AcaHostStart> hosts{HostFaultAllocator<AcaHostStart>("aca.dense-hosts")};
+        HostVector<std::size_t> hostAt(HostFaultAllocator<std::size_t>("aca.dense-host-index"));permutedHosts(hosts,hostAt);
+        HostVector<HcaMomentItem> items{HostFaultAllocator<HcaMomentItem>("aca.moment-items")};
+        for(std::size_t b=0;b<boxes.size();++b)if(used[b])for(auto h=hostAt[boxes[b].charge];h<hostAt[boxes[b].charge+boxes[b].charges];++h)items.push_back({b,hosts[h].start,hosts[h].host});
+        const std::size_t blocks=processors(),maxCount=hd.order==2?27:8,nOut=std::size_t(hd.out.n)*hd.out.n*hd.out.n,stride=nOut*(maxCount+3*n1);
+        const std::size_t expansionBytes=flatSum(flatSum(checkedProduct(tableSize,sizeof(double)),checkedProduct(boxes.size(),sizeof(HcaBox))),
+            flatSum(checkedProduct(items.size(),sizeof(HcaMomentItem)),checkedProduct(checkedProduct(blocks,stride),sizeof(double))));
+        flatReserve(expansionBytes,"Kernel expansion moments would exceed the GPU reserve");
+        Buffer<double> moments;moments.allocate(tableSize);
+        Buffer<HcaBox> deviceBoxes;deviceBoxes.upload(boxes);transfers.push_back({"hca_boxes","H2D",checkedProduct(boxes.size(),sizeof(HcaBox))});
+        {const auto started=std::chrono::steady_clock::now();
+            Buffer<HcaMomentItem> deviceItems;deviceItems.upload(items);transfers.push_back({"hca_moment_items","H2D",checkedProduct(items.size(),sizeof(HcaMomentItem))});
+            Buffer<double> scratch;scratch.allocate(checkedProduct(blocks,stride));
+            HexLaunchPace pace(blocks);
+            for(std::size_t item=0;item<items.size();){const auto here=pace.begin(items.size()-item);
+                hcaMoments<<<unsigned(std::min(blocks,here)),hexThreads,0,stream>>>(hd,nodes,deviceBoxes.data,deviceItems.data,sigma.data,item,here,scratch.data,stride,moments.data,prepared.invalid.data);
+                check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;pace.end();item+=here;}
+            if((invalidCode=prepared.flag(stream,transfers,"hca_moment_flag"))!=0)throw std::runtime_error("Kernel expansion produced a nonfinite moment");
+            stats.momentMicroseconds=std::size_t(std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-started).count());}
+        const std::size_t kernelRank=std::min(options.maxRank,std::size_t(q)/2+1),kernelNeed=2*std::size_t(q)*kernelRank+2*std::size_t(q),batchDoubles=batchScratchBytes/sizeof(double);
+        std::size_t spanBytes=0;
+        for(std::size_t first=0;first<admissible.size();){
+            HostVector<AcaLeafState> states{HostFaultAllocator<AcaLeafState>("aca.states")};std::size_t scratch=0,factorBound=0;
+            for(;first<admissible.size();++first){const auto& b=partition.blocks[admissible[first]];
+                const auto reach=checkedProduct(b.rows+b.columns,std::min({kernelRank,b.rows,b.columns}));
+                if(!states.empty()&&(scratch+kernelNeed>batchDoubles||factorBound+reach>batchDoubles))break;
+                const auto u=scratch,v=u+std::size_t(q)*kernelRank,r=v+std::size_t(q)*kernelRank;
+                states.push_back(AcaLeafState{b.rowBox,b.columnBox,std::size_t(q),std::size_t(q),u,v,r,r+q,0.,0.,0,acaActive,0,0,int(kernelRank),0});
+                scratch+=kernelNeed;factorBound+=reach;}
+            const auto firstLeaf=first-states.size();
+            const auto kernelBytes=checkedProduct(scratch,sizeof(double))+checkedProduct(states.size(),sizeof(AcaLeafState)+2*sizeof(int));
+            flatReserve(kernelBytes,"Kernel expansion batch scratch would exceed the GPU reserve");peakScratch=std::max(peakScratch,flatSum(kernelBytes,expansionBytes));
+            Buffer<double> work;work.allocate(scratch);
+            const auto kernelRanks=runLeaves(AcaKernelEntry{nodes,deviceBoxes.data},states,options.eps*hcaKernelEps,work,scratch);
+            // Moments times the factors of K, for each leaf that converged; the others are stored dense and counted.
+            HostVector<HcaProductSpan> spans{HostFaultAllocator<HcaProductSpan>("aca.product-spans")};
+            HostVector<AcaLeafState> factorStates{HostFaultAllocator<AcaLeafState>("aca.factor-states")};HostVector<std::size_t> factorBlock{HostFaultAllocator<std::size_t>("aca.factor-block")};
+            std::size_t productSize=0,factorScratch=0;
+            for(std::size_t s=0;s<states.size();++s){const auto rank=std::size_t(kernelRanks[2*s]);const int status=kernelRanks[2*s+1];const auto index=admissible[firstLeaf+s];
+                const auto& b=partition.blocks[index];
+                // A leaf whose K did not compress is stored dense, for the reason keepFactors counts.
+                if(status!=acaConverged||!rank){std::size_t none=0;HostVector<Kept> unused{HostFaultAllocator<Kept>("aca.batch-kept")};
+                    keepFactors(int(rank),status,index,s,none,unused);continue;}
+                stats.kernelRankSum+=rank;
+                const auto outU=productSize,outV=outU+b.rows*rank;productSize=outV+b.columns*rank;
+                spans.push_back({b.rows,rank,boxes[b.rowBox].table,states[s].u,outU});spans.push_back({b.columns,rank,boxes[b.columnBox].table,states[s].v,outV});
+                const auto slots=std::min({rank,b.rows,b.columns}),u=factorScratch,v=u+b.rows*slots,r=v+b.columns*slots;
+                factorStates.push_back(AcaLeafState{outU,outV,b.rows,b.columns,u,v,r,r+b.columns,0.,0.,0,acaActive,0,0,int(slots),int(rank)});
+                factorBlock.push_back(index);factorScratch=r+b.columns+b.rows;
+            }
+            if(spans.empty()){++stats.batches;continue;}
+            const auto factorBytes=flatSum(flatSum(checkedProduct(productSize,sizeof(double)),checkedProduct(factorScratch,sizeof(double))),checkedProduct(checkedProduct(spans.size(),sizeof(HcaProductSpan))+factorStates.size(),sizeof(AcaLeafState)+2*sizeof(int)));
+            flatReserve(factorBytes,"Kernel expansion factors would exceed the GPU reserve");peakScratch=std::max(peakScratch,flatSum(flatSum(kernelBytes,factorBytes),expansionBytes));
+            Buffer<double> product;product.allocate(productSize);
+            {Buffer<HcaProductSpan> deviceSpans;deviceSpans.upload(spans);spanBytes+=checkedProduct(spans.size(),sizeof(HcaProductSpan));
+                HexLaunchPace pace(blocks);
+                for(std::size_t item=0;item<spans.size();){const auto here=pace.begin(spans.size()-item);
+                    hcaProduct<<<unsigned(std::min(blocks,here)),hexThreads,0,stream>>>(deviceSpans.data,q,moments.data,work.data,product.data,item,here);
+                    check(cudaGetLastError());check(cudaStreamSynchronize(stream));++launches;pace.end();item+=here;}}
+            Buffer<double> factorWork;factorWork.allocate(factorScratch);
+            const auto ranks=runLeaves(AcaFactorEntry{product.data},factorStates,options.eps,factorWork,factorScratch);
+            std::size_t chunkCount=0;HostVector<Kept> batchKept{HostFaultAllocator<Kept>("aca.batch-kept")};
+            // The cap here is the rank of the factors, which reproduce the product exactly when reached.
+            for(std::size_t s=0;s<factorStates.size();++s)keepFactors(ranks[2*s],ranks[2*s+1]==acaRankCap?acaConverged:ranks[2*s+1],factorBlock[s],s,chunkCount,batchKept);
+            moveFactors(factorStates,batchKept,factorWork,chunkCount,live);
+            ++stats.batches;
+        }
+        if(spanBytes)transfers.push_back({"hca_product_spans","H2D",spanBytes});
+    }
     void fillDenseEntries(const Plan& p,double* coefficients,const std::size_t* devicePermutation,cudaStream_t residentStream){
         HostVector<AcaDenseSpan> spans{HostFaultAllocator<AcaDenseSpan>("aca.dense-spans")};std::size_t entries=0;
         for(const auto& s:p.deferredDense){spans.push_back({s.row,s.column,s.rows,s.columns,s.offset,entries});entries+=checkedProduct(s.rows,s.columns);}
@@ -260,13 +426,8 @@ class FlatAcaOracle {
     }
     // Host metadata only: the permuted hosts and, per dense leaf, its host ranges. Their product enumerates the work.
     void fillDenseHosts(const Plan& p,double* coefficients,cudaStream_t residentStream){
-        const auto n=block.charges();const int cellHosts=int(block.cellCount());
         HostVector<AcaHostStart> hosts{HostFaultAllocator<AcaHostStart>("aca.dense-hosts")};
-        HostVector<std::size_t> hostAt(n+1,0,HostFaultAllocator<std::size_t>("aca.dense-host-index"));
-        for(std::size_t i=0;i<n;++i){const auto a=partition.permutation[i];const int g=block.kind[a]==0?block.host[a]:cellHosts+block.host[a];
-            if(hosts.empty()||hosts.back().host!=g)hosts.push_back({i,g});
-            hostAt[i]=hosts.size()-1;}
-        hostAt[n]=hosts.size();
+        HostVector<std::size_t> hostAt(HostFaultAllocator<std::size_t>("aca.dense-host-index"));permutedHosts(hosts,hostAt);
         HostVector<AcaPairSpan> spans{HostFaultAllocator<AcaPairSpan>("aca.dense-pair-spans")};std::size_t pairs=0;
         for(const auto& s:p.deferredDense){const auto rowHost=hostAt[s.row],columnHost=hostAt[s.column];
             if(hosts[rowHost].start!=s.row||hosts[columnHost].start!=s.column)throw std::invalid_argument("ACA dense leaf does not start at a host");
@@ -274,8 +435,7 @@ class FlatAcaOracle {
             spans.push_back({s.row,s.column,s.columns,s.offset,pairs,rowHost,columnHost,columnHosts});pairs=flatSum(pairs,checkedProduct(rowHosts,columnHosts));}
         const std::size_t maxCount=prepared.hexPrepared.order==2?27:8,nOut=std::size_t(prepared.hexPrepared.d.out.n)*prepared.hexPrepared.d.out.n*prepared.hexPrepared.d.out.n;
         const std::size_t blockEntries=maxCount*maxCount,stride=blockEntries+nOut*3*maxCount;
-        int gpu=0;check(cudaGetDevice(&gpu));cudaDeviceProp properties;check(cudaGetDeviceProperties(&properties,gpu));
-        const std::size_t blocks=std::size_t(std::max(properties.multiProcessorCount,1));
+        const std::size_t blocks=processors();
         flatReserve(flatSum(flatSum(checkedProduct(hosts.size(),sizeof(AcaHostStart)),checkedProduct(spans.size(),sizeof(AcaPairSpan))),checkedProduct(checkedProduct(blocks,stride),sizeof(double))),
             "Flat ACA dense host pairs would exceed the GPU reserve");
         Buffer<AcaHostStart> deviceHosts;deviceHosts.upload(hosts);transfers.push_back({"aca_dense_host_starts","H2D",checkedProduct(hosts.size(),sizeof(AcaHostStart))});
@@ -291,6 +451,7 @@ public:
     std::size_t ownedBytes=0,launches=0;int invalidCode=0;FlatAcaStats stats;
     static constexpr std::size_t batchScratchBytes=std::size_t(256)<<20;
     FlatAcaOracle(const FlatBlock& b,const FlatAcaOptions& o):block(b),options(o){
+        if(options.expansionOrder&&block.hostTypes.empty())throw std::invalid_argument("The kernel expansion of the charge Gram belongs to mixed meshes");
         partition=flatAcaPartition(block,options);stats.elements=partition.elements;stats.clusters=partition.clusters;
         resourceFaultPoint("aca.stream.create");check(cudaStreamCreateWithFlags(&stream,cudaStreamNonBlocking));resourceAcquired();
     }
@@ -306,14 +467,16 @@ public:
         sigma.allocate(n);const FlatDevice device=prepared.device();
         acaSigma<<<unsigned((n+127)/128),128,0,stream>>>(device,sigma.data,prepared.invalid.data);check(cudaGetLastError());++launches;
         if((invalidCode=prepared.flag(stream,transfers,"energy_flag"))!=0)throw std::runtime_error("Flat device Gram produced a nonfinite or nonpositive self-energy");
-        Buffer<std::size_t> perm;perm.upload(partition.permutation);
-        transfers.push_back({"aca_permutation","H2D",checkedProduct(n,sizeof(std::size_t))});
         rankOf.assign(partition.blocks.size(),0);
         HostVector<std::size_t> admissible{HostFaultAllocator<std::size_t>("aca.admissible")};
         for(std::size_t b=0;b<partition.blocks.size();++b)if(partition.blocks[b].admissible)admissible.push_back(b);
         stats.admissibleBlocks=admissible.size();
-        const auto maxRank=options.maxRank;std::size_t statesBytes=0,reportBytes=0,activeCount=0,peakScratch=0;const auto acaStarted=std::chrono::steady_clock::now();
-        Buffer<int> active;active.allocate(1);
+        const auto maxRank=options.maxRank;std::size_t peakScratch=0;const auto acaStarted=std::chrono::steady_clock::now();
+        active.allocate(1);
+        if(options.expansionOrder){if(!admissible.empty())compressExpansion(admissible,live,peakScratch);}
+        else{
+        Buffer<std::size_t> perm;perm.upload(partition.permutation);
+        transfers.push_back({"aca_permutation","H2D",checkedProduct(n,sizeof(std::size_t))});
         for(std::size_t first=0;first<admissible.size();){
             // Bounded batch: U, V, residual row and used flags per leaf.
             HostVector<AcaLeafState> states{HostFaultAllocator<AcaLeafState>("aca.states")};std::size_t scratch=0;
@@ -322,55 +485,20 @@ public:
                 const auto leafRank=std::min({maxRank,b.rows,b.columns});const auto need=checkedProduct(b.rows+b.columns,leafRank)+b.columns+b.rows;
                 if(!states.empty()&&checkedProduct(scratch+need,sizeof(double))>batchScratchBytes)break;
                 AcaLeafState s{b.row,b.column,b.rows,b.columns,scratch,scratch+b.rows*leafRank,scratch+(b.rows+b.columns)*leafRank,
-                    scratch+(b.rows+b.columns)*leafRank+b.columns,0.,0.,0,acaActive,0,0};
+                    scratch+(b.rows+b.columns)*leafRank+b.columns,0.,0.,0,acaActive,0,0,int(maxRank),0};
                 states.push_back(s);scratch+=need;}
             const auto batchBytes=checkedProduct(scratch,sizeof(double))+checkedProduct(states.size(),sizeof(AcaLeafState)+2*sizeof(int));
             flatReserve(batchBytes,"Flat ACA batch scratch would exceed the GPU reserve");peakScratch=std::max(peakScratch,batchBytes);
-            Buffer<double> work;work.allocate(scratch);check(cudaMemsetAsync(work.data,0,scratch*sizeof(double),stream));
-            Buffer<AcaLeafState> deviceStates;deviceStates.upload(states);statesBytes+=checkedProduct(states.size(),sizeof(AcaLeafState));
-            int running=int(states.size());
-            // A step adds rank or retires one row, so rows + maxRank steps bound every leaf.
-            std::size_t bound=0;for(const auto& s:states)bound=std::max(bound,s.rows+maxRank);
-            for(std::size_t step=0;running&&step<bound;++step){
-                check(cudaMemsetAsync(active.data,0,sizeof(int),stream));
-                acaStep<<<unsigned(states.size()),acaThreads,0,stream>>>(device,perm.data,sigma.data,deviceStates.data,work.data,int(maxRank),options.eps,active.data);
-                check(cudaGetLastError());++launches;
-                check(cudaMemcpyAsync(&running,active.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
-                activeCount+=sizeof(int);++stats.steps;
-            }
-            if(running)throw std::runtime_error("ACA did not terminate within its step bound");
-            Buffer<int> report;report.allocate(2*states.size());
-            acaReport<<<unsigned((states.size()+127)/128),128,0,stream>>>(deviceStates.data,states.size(),report.data);check(cudaGetLastError());++launches;
-            HostVector<int> ranks(2*states.size(),0,HostFaultAllocator<int>("aca.report"));
-            check(cudaMemcpyAsync(ranks.data(),report.data,ranks.size()*sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
-            reportBytes+=ranks.size()*sizeof(int);
+            Buffer<double> work;work.allocate(scratch);
+            const auto ranks=runLeaves(AcaGramEntry{device,perm.data,sigma.data},states,options.eps,work,scratch);
             const auto firstLeaf=first-states.size();std::size_t chunkCount=0;
             HostVector<Kept> batchKept{HostFaultAllocator<Kept>("aca.batch-kept")};
-            for(std::size_t s=0;s<states.size();++s){const auto rank=std::size_t(ranks[2*s]);const int status=ranks[2*s+1];
-                const auto& b=partition.blocks[admissible[firstLeaf+s]];
-                if(status==acaNonfinite)throw std::runtime_error("ACA produced a nonfinite pivot, entry or norm");
-                if(status==acaRankCap){if(!options.rankCapDense)throw std::runtime_error("ACA leaf reached max_rank without converging");++stats.rankCapPromotions;continue;}
-                if(status==acaDenseSmaller){++stats.storagePromotions;continue;}
-                if(status!=acaConverged||rank>std::min(b.rows,b.columns))throw std::runtime_error("ACA leaf status or rank invalid");
-                // Rank 0 means every row was negligible: the leaf is stored dense, never dropped.
-                if(!rank){++stats.zeroRankLeaves;continue;}
-                if(checkedProduct(rank,b.rows+b.columns)>=checkedProduct(b.rows,b.columns)){++stats.storagePromotions;continue;}
-                batchKept.push_back({admissible[firstLeaf+s],rank,chunks.size(),chunkCount,chunkCount+b.rows*rank,s});
-                chunkCount+=rank*(b.rows+b.columns);rankOf[admissible[firstLeaf+s]]=rank;
-            }
-            if(chunkCount){
-                flatReserve(checkedProduct(chunkCount,sizeof(double)),"Flat ACA factor storage would exceed the GPU reserve");
-                auto chunk=makeHostUnique<Buffer<double>>("aca.chunk");chunk->allocate(chunkCount);
-                // U (rows x rank) and V (columns x rank) are leading slices of the scratch columns.
-                for(const auto& k:batchKept){const auto& st=states[k.state];const auto& b=partition.blocks[k.block];
-                    check(cudaMemcpyAsync(chunk->data+k.u,work.data+st.u,b.rows*k.rank*sizeof(double),cudaMemcpyDeviceToDevice,stream));
-                    check(cudaMemcpyAsync(chunk->data+k.v,work.data+st.v,b.columns*k.rank*sizeof(double),cudaMemcpyDeviceToDevice,stream));}
-                check(cudaStreamSynchronize(stream));live+=checkedProduct(chunkCount,sizeof(double));chunks.push_back(std::move(chunk));
-                kept.insert(kept.end(),batchKept.begin(),batchKept.end());
-            }
+            for(std::size_t s=0;s<states.size();++s)keepFactors(ranks[2*s],ranks[2*s+1],admissible[firstLeaf+s],s,chunkCount,batchKept);
+            moveFactors(states,batchKept,work,chunkCount,live);
             ++stats.batches;
         }
-        stats.acaMicroseconds=std::size_t(std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-acaStarted).count());
+        }
+        stats.acaMicroseconds=std::size_t(std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-acaStarted).count())-stats.momentMicroseconds;
         if(prepared.hex){const auto& h=prepared.hexPrepared;
             stats.farPairs=h.classItems[1];stats.midPairs=h.classItems[2]+h.classItems[3];stats.gradedPairs=h.classItems[4]+h.classItems[5];
             stats.farMicroseconds=h.classMicroseconds[1];stats.midMicroseconds=h.classMicroseconds[2]+h.classMicroseconds[3];stats.gradedMicroseconds=h.classMicroseconds[4]+h.classMicroseconds[5];}

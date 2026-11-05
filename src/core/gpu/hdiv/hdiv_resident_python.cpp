@@ -97,8 +97,8 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     const std::string& family,py::object cellNumbers,py::object faceNumbers,py::object curveGl,py::object curveGw,
     py::object cellMassRule,py::object faceMassRule,py::object hexRules,py::object hexBands,py::object hostTypes,py::object mixedCharges) {
     if(backend!="gpu")throw py::value_error("The device charge Gram requires explicit backend='gpu'");
-    if(compression!="dense"&&compression!="aca")throw py::value_error("compression must be explicit 'dense' or 'aca'");
-    if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' and rejected for 'dense'");
+    if(compression!="dense"&&compression!="aca"&&compression!="hca")throw py::value_error("compression must be explicit 'dense', 'aca' or 'hca'");
+    if((compression=="dense")!=aca.is_none())throw py::value_error("ACA parameters are required for compression='aca' or 'hca' and rejected for 'dense'");
     const auto n=std::size_t(host.size());
     if(host.ndim()!=1||n<1||n>std::size_t(INT_MAX)||!dofs||dofs>std::size_t(INT_MAX)||kind.ndim()!=1||std::size_t(kind.size())!=n||
        expo.ndim()!=1||std::size_t(expo.size())!=3*n)
@@ -137,10 +137,11 @@ std::shared_ptr<DeviceOperator> constructFlat(Array<double> cells,Array<double> 
     if(hex){input.hexRules=flat(typed(hexRules,"hex_rules",double{}));input.hexBands=flat(typed(hexBands,"hex_bands",double{}));}
     if(hostTypes.is_none()==mixed||mixedCharges.is_none()==mixed)throw py::value_error("host_types and mixed_charges are required for family='mixed' and rejected otherwise");
     if(mixed)input.hostTypes=integers(typed(hostTypes,"host_types",std::int32_t{}));
-    if(compression=="aca"){
+    if(compression!="dense"){
         if(!py::isinstance<py::dict>(aca))throw py::value_error("aca must be a dictionary");
         auto d=py::reinterpret_borrow<py::dict>(aca);
-        if(d.size()!=5)throw py::value_error("ACA schema requires eps,eta,leaf_size,max_rank,rank_cap");
+        if(d.size()!=(compression=="hca"?6u:5u))throw py::value_error("ACA schema requires eps,eta,leaf_size,max_rank,rank_cap, and expansion_order for 'hca'");
+        if(compression=="hca"){if(!d.contains("expansion_order"))throw py::value_error("Missing expansion_order");input.acaExpansionOrder=int(integer(d,"expansion_order"));}
         for(const char* key:{"eps","eta","leaf_size","max_rank","rank_cap"})if(!d.contains(key))throw py::value_error("Missing ACA parameter");
         if(!py::isinstance<py::float_>(d["eps"])||!py::isinstance<py::float_>(d["eta"]))throw py::value_error("ACA eps and eta require float values");
         if(!py::isinstance<py::str>(d["rank_cap"]))throw py::value_error("ACA rank_cap must be 'dense' or 'fail'");
