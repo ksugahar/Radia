@@ -2268,28 +2268,76 @@ def _mons_mixed_cell(host_type, order):
     return [(0, 0, 0)] if order == 1 else [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, -1)]
 
 
+def _mixed_lattice_weights(host_type):
+    """Vertex weights at the Q2 lattice of the trilinear map of a straight tet, triangle or pyramid from the unit cube."""
+    if host_type == _HOST_TRI:
+        return np.array([(iu/2*(1-iv/2), iv/2, (1-iv/2)*(1-iu/2)) for iv in range(3) for iu in range(3)])
+    rows = []
+    for iz in range(3):
+        for iy in range(3):
+            for ix in range(3):
+                a, b, c = ix/2, iy/2, iz/2
+                if host_type == _HOST_TET:
+                    x, y, z = a*(1-b)*(1-c), b*(1-c), c
+                    rows.append((x, y, z, 1-x-y-z))
+                else:
+                    rows.append(((1-c)*(1-a)*(1-b), (1-c)*a*(1-b), (1-c)*a*b, (1-c)*(1-a)*b, c))
+    return np.array(rows)
+
+
+_MIXED_LATTICE_WEIGHTS = {host_type: _mixed_lattice_weights(host_type) for host_type in (_HOST_TET, _HOST_TRI, _HOST_PYRAMID)}
+
+
 def _mixed_lattice_nodes(mesh, e, host_type):
     """Q2 lattice of the trilinear map from the unit cube, from the NGSolve element vertices."""
     if host_type == _HOST_HEX:
         return _hex_q2_lattice_nodes_ngsolve_linear(mesh, e)
     if host_type == _HOST_QUAD:
         return _quad_q2_lattice_nodes_ngsolve_linear(mesh, e)
-    v = np.array([mesh[w].point for w in mesh[e].vertices], dtype=float)
-    if host_type == _HOST_TRI:
-        return np.array([(iu/2*(1-iv/2))*v[0] + (iv/2)*v[1] + (1-iv/2)*(1-iu/2)*v[2]
-                         for iv in range(3) for iu in range(3)])
-    nodes = []
-    for iz in range(3):
-        for iy in range(3):
-            for ix in range(3):
-                c = (ix/2, iy/2, iz/2)
-                if host_type == _HOST_TET:
-                    x, y, z = c[0]*(1-c[1])*(1-c[2]), c[1]*(1-c[2]), c[2]
-                    nodes.append(x*v[0] + y*v[1] + z*v[2] + (1-x-y-z)*v[3])
-                else:
-                    bottom = (1-c[0])*(1-c[1])*v[0] + c[0]*(1-c[1])*v[1] + c[0]*c[1]*v[2] + (1-c[0])*c[1]*v[3]
-                    nodes.append((1-c[2])*bottom + c[2]*v[4])
-    return np.array(nodes)
+    return _MIXED_LATTICE_WEIGHTS[host_type] @ np.array([mesh[w].point for w in mesh[e].vertices], dtype=float)
+
+
+_HEX_CORNERS = np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)], dtype=float)
+
+
+def _mixed_jacobian_extremes(xyz, cells):
+    """Smallest and largest map determinant of each straight cell of one vertex count, shape (cells, count, 3).
+
+    A tet determinant is constant. A pyramid determinant is bilinear in the base coordinates x/(1-z), y/(1-z), so
+    its four base corners bound it exactly. A hex determinant is triquadratic and is sampled on five points per axis.
+    """
+    v = xyz[cells]
+    if cells.shape[1] == 4:
+        dets = np.linalg.det(v[:, :3] - v[:, 3:])[:, None]
+    elif cells.shape[1] == 5:
+        apex = v[:, 4]
+        dets = np.stack([np.linalg.det(np.stack((v[:, b] - v[:, a], v[:, c] - v[:, d], apex - v[:, corner]), axis=1))
+                         for corner, a, b, d, c in ((0, 0, 1, 0, 3), (1, 0, 1, 1, 2), (2, 3, 2, 1, 2), (3, 3, 2, 0, 3))], axis=1)
+    else:
+        t = np.linspace(0., 1., 5)
+        ref = np.stack(np.meshgrid(t, t, t, indexing="ij"), axis=-1).reshape(-1, 3)
+        factor = _HEX_CORNERS[None]*ref[:, None] + (1 - _HEX_CORNERS[None])*(1 - ref[:, None])
+        slope = 2*_HEX_CORNERS[None] - 1
+        gradient = np.stack((slope[..., 0]*factor[..., 1]*factor[..., 2], factor[..., 0]*slope[..., 1]*factor[..., 2],
+                             factor[..., 0]*factor[..., 1]*slope[..., 2]), axis=-1)
+        dets = np.linalg.det(np.einsum("qia,cib->cqab", gradient, v))
+    return dets.min(axis=1), dets.max(axis=1)
+
+
+def _require_one_signed_mixed_jacobians(mesh):
+    """Refuse a straight cell whose map changes sign: no rule converges on it, so no integral on it means anything."""
+    xyz = np.array([v.point for v in mesh.vertices], dtype=float)
+    numbers = {}
+    for element in mesh.Elements(ng.VOL):
+        numbers.setdefault(len(element.vertices), []).append((element.nr, [v.nr for v in element.vertices]))
+    refused = []
+    for count, rows in numbers.items():
+        low, high = _mixed_jacobian_extremes(xyz, np.array([row[1] for row in rows], dtype=np.int64))
+        refused += [(rows[i][0], count, float(low[i]), float(high[i])) for i in np.flatnonzero(low*high <= 0)]
+    if refused:
+        cell, count, low, high = refused[0]
+        raise ValueError(f"Mixed HDiv-VIM refuses {len(refused)} cells whose map changes sign or vanishes: cell {cell} "
+                         f"with {count} vertices has a determinant from {low:.6e} to {high:.6e}. Mesh the body without inverted cells.")
 
 
 def _charge_basis_mixed(fes, *, materialize_mass=True):
@@ -2298,11 +2346,12 @@ def _charge_basis_mixed(fes, *, materialize_mass=True):
     Interior faces are conforming, so charges are the cell densities and the exterior face traces, each a
     reference-frame monomial in the reference measure (the Piola Jacobian cancels, as on the hex route).
     The mass takes the material rule, the one the device route uses: NGSolve's default order is short on a
-    non-parallelogram pyramid or hex, by 1.5e-3 of the mass on a coarse ball and 1.2e-5 of its mean."""
+    non-parallelogram pyramid or hex, by about 1e-3 of the mass on a coarse ball."""
     mesh = fes.mesh
     p = int(fes.globalorder)
     if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
         raise NotImplementedError("Mixed HDiv-VIM requires HDiv order 1 or 2 on straight undeformed geometry")
+    _require_one_signed_mixed_jacobians(mesh)
     nn = ng.specialcf.normal(mesh.dim)
     L2v = ng.L2(mesh, order=p)
     L2b = ng.SurfaceL2(mesh, order=p)
@@ -2357,36 +2406,59 @@ def _charge_basis_mixed(fes, *, materialize_mass=True):
 
 
 _MIXED_GLNEAR_N = 10
+_MIXED_GLNEAR_CELL_N = 8
+_MIXED_INNER_SWITCH = 0.25
 _MIXED_NEAR_BAND = 0.5
+_MIXED_FAR_LEVELS = {1: ((4, 1.1), (3, 1.7)), 2: ((5, 1.1), (4, 1.6), (3, 3.4))}
+_MIXED_PYRAMID_N = 8
 
 
 def _mixed_gram_rules(p):
-    """1D outer, pyramid and graded near point counts of the mixed Gram, shared by the CPU and device routes.
+    """1D outer, pyramid, graded near and plain near counts, inner switch, far levels and tangent count of the mixed Gram, for CPU and device.
 
-    The middle count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
-    charge of an affine one. These are proposed values, from convergence on small meshes. A fixed count
-    is a relative error per touching cell pair, so it stays a floor under mesh refinement.
+    The graded near rule serves face targets, and the plain near rule cell targets,
+    whose count 0 hands them to the graded rule. A near target point beyond (1 + switch) source radii reads the
+    far rule, and 0 keeps the near inner everywhere. A far pair at or beyond the ratio of a far level to its summed
+    radii takes that level's count instead of the outer one. A near target point on a warped hex, quad or pyramid source
+    takes the closed form on the tangent image of the source plus the bounded remainder on the tangent count per axis,
+    and the rational pyramid charge its Taylor polynomial at the point of p plus the same rule on the difference. The
+    pyramid count serves the remainder of a quad source, on four Duffy triangles from the base point. The tangent count
+    0 keeps the radial, fan and level rules on the pyramid count. These are proposed values, from convergence on small
+    meshes and on cells of aspect 10.
+    A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
-    return (5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N
+    return ((5 if p == 1 else 6), _MIXED_PYRAMID_N, _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
+            _MIXED_FAR_LEVELS[p], (8 if p == 1 else 12))
+
+
+def _mixed_far_level_rows(far_levels):
+    """(level, point, weight) rows and the ratios of the far levels, for the CPU constructor."""
+    rows = [np.column_stack((np.full(n, level, dtype=np.float64), *_g01(n))) for level, (n, _) in enumerate(far_levels)]
+    return (np.concatenate(rows).ravel() if rows else _EMPTY_F64,
+            np.array([ratio for _, ratio in far_levels], dtype=np.float64))
 
 
 def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materialize_mass=True, build_hmatrix=True):
     """Charge Gram of a straight tet, pyramid and hex mesh via the hex-mode C++ H-matrix.
 
     Every pair takes QuadBlockTyped: each host is the trilinear image of a unit cube with its density in
-    the cube measure, so one far and one graded near rule serve all of them. A pair is near when it is
-    self, touching, or within _MIXED_NEAR_BAND of its summed sizes. The near inner is exact on an affine
-    tet, triangle or pyramid source, by levels on the rational charge of an affine pyramid, radial on a
-    non-parallelogram pyramid, and a hex or quad source keeps its own inner rules. A pair of two different hosts integrates one
+    the cube measure, so the far and near rules serve all of them. A pair is near when it is self, touching,
+    or within _MIXED_NEAR_BAND of its summed sizes. Beyond the inner switch radius of the source a near target
+    point reads the far rule. Closer, the near inner is exact on an affine source, and on a warped hex, quad or pyramid
+    source the closed form on its tangent image plus a bounded remainder; the rational pyramid charge takes its Taylor
+    polynomial at the point of p plus a difference that vanishes there. A pair of two different hosts integrates one
     direction, with the cheaper host as source."""
     p = int(fes.globalorder)
     t0 = time.perf_counter()
     cb = _charge_basis_mixed(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
-    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch, far_levels, tangent_n = _mixed_gram_rules(p)
+    far_rows, far_ratios = _mixed_far_level_rows(far_levels)
+    glt, gwt = _g01(tangent_n) if tangent_n else (_EMPTY_F64, _EMPTY_F64)
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
     gln, gwn = _g01(glnear_n)
+    glc, gwc = _g01(glnear_cell_n) if glnear_cell_n else (_EMPTY_F64, _EMPTY_F64)
     glp, gwp = _g01(_HEX_GLPAIR_N)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
@@ -2406,7 +2478,10 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
         gl_in_self=_f64_buffer(gli), gw_in_self=_f64_buffer(gwi),
         gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
         gl_pair_affine=_f64_buffer(glp), gw_pair_affine=_f64_buffer(gwp),
-        host_types=_i32_buffer(cb["host_types"]))
+        host_types=_i32_buffer(cb["host_types"]),
+        gl_near_cell=_f64_buffer(glc), gw_near_cell=_f64_buffer(gwc), inner_switch=inner_switch,
+        far_level_rows=_f64_buffer(far_rows), far_level_ratios=_f64_buffer(far_ratios),
+        gl_tangent=_f64_buffer(glt), gw_tangent=_f64_buffer(gwt))
     build_charge_gram.last_timings = {"charge_basis_wall_s": t1 - t0, "charge_gram_cpp_wall_s": time.perf_counter() - t1}
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
@@ -2638,6 +2713,7 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
     p = int(fes.globalorder)
     if p not in (1, 2) or mesh.GetCurveOrder() >= 2 or mesh.deformation is not None:
         raise NotImplementedError("Mixed device charge input requires HDiv order 1 or 2 on straight undeformed geometry")
+    _require_one_signed_mixed_jacobians(mesh)
     if not 0 < fes.ndof <= 2**31 - 1:
         raise ValueError("Device charge DOF or element budget exceeded")
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
@@ -2657,14 +2733,19 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
         face_nodes.append(_mixed_lattice_nodes(mesh, e, host_type).ravel())
         for a, b in (_mons_quad(p) if host_type == _HOST_QUAD else _mons_tri(p)):
             host.append(h); kind.append(1); expo.extend((a, b, 0))
-    glout_n, glin_n, glnear_n = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch, far_levels, tangent_n = _mixed_gram_rules(p)
+    plain_near = dict(near_cell=_g01(glnear_cell_n)) if glnear_cell_n else {}
+    plain_near.update({"far_%d" % (level + 1): _g01(n) for level, (n, _) in enumerate(far_levels)})
+    if tangent_n:
+        plain_near["tangent"] = _g01(tangent_n)
     return dict(
         family="mixed", n_el=len(vels), cell_nodes=np.concatenate(cell_nodes), face_nodes=np.concatenate(face_nodes),
         host_types=np.array(host_types, dtype=np.int32), charge_host=np.array(host, dtype=np.int32),
         charge_kind=np.array(kind, dtype=np.int32), charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N),
-                   near=_g01(glnear_n), inner_self=_g01(glin_n)),
-        near_grade=_MIXED_NEAR_BAND, far_inner=1.0)
+                   near=_g01(glnear_n), inner_self=_g01(glin_n), **plain_near),
+        near_grade=_MIXED_NEAR_BAND, far_inner=1.0, inner_switch=inner_switch,
+        far_ratios=[ratio for _, ratio in far_levels])
 
 
 def _prepare_gpu_hex_charge_inputs(fes, *, backend, excluded_boundaries=(), live_deformation=False):
@@ -2718,7 +2799,7 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend, excluded_boundaries=(), live
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N), **graded),
-        near_grade=1.0, far_inner=1.0)
+        near_grade=1.0, far_inner=1.0, inner_switch=0.0, far_ratios=[])
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,

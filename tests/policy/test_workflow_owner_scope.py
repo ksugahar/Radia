@@ -192,7 +192,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
             if path.startswith("src/core/")}
     assert {p for p in shared if p.startswith("src/core/")} == core | {
         "src/core/radia_mex_sparse_symmetry.h", "src/core/gpu/hdiv/cmake/HDivKernels.cmake"}
-    assert len(core - gpu_sources) == 36
+    assert len(core - gpu_sources) == 40
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):

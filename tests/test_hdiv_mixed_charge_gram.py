@@ -8,9 +8,13 @@ reaches the dense equation of the same operators. Loud refusals of order 3, curv
 geometry and images. Dropping the typed near rule, the rational pyramid charge or the face
 orientation moves the factors far beyond DEMAG_REL. The energies of the rational charge on one
 pyramid match a reduction that shares no rule with the Gram. The mass matches a long rule on a mesh
-mapped onto a ball, whose cells the default rule of u*v*dx underintegrates.
-Assumes: NGSolve owns the HDiv basis, orientation and Piola maps; the values guard code,
-not the accuracy of a physical model, and DEMAG_REL, RATIONAL_REL and SOLVE_REL are PROPOSED detectors.
+mapped onto a ball, whose cells the default rule of u*v*dx underintegrates. Both routes refuse a cell
+whose map changes sign, the bound behind that refusal holds against the element map, and every mesh
+family of the record stays one-signed. On warped cells the tangent closed form with its bounded remainder stays
+near the radial, fan and level rules at count 0, which integrate the same entries with no closed form of the source;
+dropping the remainder or the rational Taylor term moves the operator beyond WARPED_INNER_REL.
+Assumes: NGSolve owns the HDiv basis, orientation and Piola maps; the values guard code, not the accuracy of a
+physical model, and DEMAG_REL, RATIONAL_REL, SOLVE_REL and WARPED_INNER_REL are PROPOSED detectors.
 """
 import numpy as np
 import pytest
@@ -18,7 +22,7 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 from radia.vim import _solve as solve
 from radia.vim import _vim as V
-from test_hdiv_connected_meshes import connected_mesh
+from tests.test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, mixed_grid, oriented, pyramid_cube, to_ball, transition_cube
 from validation_test.hmatrix_cuda.rational_pyramid_reference import energies
 
@@ -27,6 +31,7 @@ RATIONAL_REL = 5e-4
 EIG_ROUNDOFF = 1e-12
 SOLVE_REL = 1e-7
 MASS_REL = 1e-5
+WARPED_INNER_REL = 1e-2
 _CUBES = dict(pyramids=pyramid_cube, transition=transition_cube, grid=lambda: mixed_grid((2, 2, 2)))
 
 
@@ -76,6 +81,21 @@ def test_mixed_charge_gram_trace_on_warped_pyramids(order):
     assert abs(factors.sum() - 1) <= DEMAG_REL, f"order={order} factors={factors} sum={factors.sum()} expected 1"
 
 
+@pytest.mark.parametrize("name,order", [("warped", 1), ("warped", 2), ("ball", 1)])
+def test_tangent_rule_stays_near_the_rules_without_a_closed_form(monkeypatch, name, order):
+    mesh = pyramid_cube(.2) if name == "warped" else mixed_grid((2, 2, 2), lengths=(2., 2., 2.), origin=(-1., -1., -1.), mapping=to_ball(1.))
+    rules = list(V._mixed_gram_rules(order))
+    assert rules[6] > 0, f"production tangent count {rules[6]}, expected a tangent rule"
+    _, B, G, M = _assemble(mesh, order)
+    rules[1], rules[6] = (6 if order == 1 else 14), 0
+    monkeypatch.setattr(V, "_mixed_gram_rules", lambda p: tuple(rules))
+    _, B0, G0, _ = _assemble(mesh, order)
+    assert np.array_equal(B, B0)
+    difference = B.T @ (G - G0) @ B
+    distance = float(np.abs(np.linalg.eigvals(np.linalg.solve(M, .5*(difference + difference.T)))).max())
+    assert distance <= WARPED_INNER_REL, f"{name} order={order} operator distance {distance:.3e}, limit {WARPED_INNER_REL:.0e}"
+
+
 def test_rational_charge_energies_match_their_reduction():
     points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1)]
     mesh = build_mesh(points, [oriented(points, [0, 1, 2, 3, 4])])
@@ -102,6 +122,49 @@ def test_mixed_mass_rule_is_long_enough_on_warped_cells(order):
     expected[np.asarray(rows), np.asarray(cols)] = np.asarray(values)
     relative = float(np.linalg.norm(M - expected)/np.linalg.norm(expected))
     assert relative <= MASS_REL, f"order={order} relative={relative:.3e} limit={MASS_REL:.0e}"
+
+
+_TWISTED_PYRAMID = [(0, 0, 0), (1, 0, 0), (1, 1, 2.2), (0, 1, 0), (.5, .5, .5)]
+_TWISTED_HEX = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (.2, .2, .2), (0, 1, 1)]
+
+
+def _one_cell(points):
+    return build_mesh(points, [list(range(len(points)))])
+
+
+@pytest.mark.parametrize("points", [_TWISTED_PYRAMID, _TWISTED_HEX], ids=["pyramid", "hex"])
+@pytest.mark.parametrize("route", ["cpu", "device"])
+def test_mixed_route_refuses_a_cell_whose_map_changes_sign(points, route):
+    with ng.TaskManager():
+        fes = ng.HDiv(_one_cell(points), order=1)
+        with pytest.raises(ValueError, match="changes sign"):
+            if route == "cpu":
+                V._build_charge_gram_mixed(fes, build_hmatrix=False)
+            else:
+                V._prepare_gpu_mixed_charge_inputs(fes, backend="gpu")
+
+
+@pytest.mark.parametrize("name", ["warped", "twisted", "hex"])
+def test_mixed_jacobian_extremes_bound_the_element_map(name):
+    points = dict(warped=[(0, 0, 0), (1, 0, 0), (1.2, 1, .3), (0, 1, 0), (.5, .5, .8)], twisted=_TWISTED_PYRAMID, hex=_TWISTED_HEX)[name]
+    mesh = _one_cell(points)
+    element = next(iter(mesh.Elements(ng.VOL)))
+    jacobian = ng.specialcf.JacobianMatrix(3)
+    values = np.asarray(jacobian(mesh.GetTrafo(element)(ng.IntegrationRule(element.type, 14)))).reshape(-1, 3, 3)
+    sampled = np.linalg.det(values)
+    low, high = V._mixed_jacobian_extremes(np.array([v.point for v in mesh.vertices], dtype=float), np.array([[v.nr for v in element.vertices]]))
+    # The element's own orientation sets one overall sign; the bounds must then hold with the same sign.
+    sign = np.sign(sampled[np.argmax(np.abs(sampled))])*np.sign(low[0] if abs(low[0]) > abs(high[0]) else high[0])
+    bound_low, bound_high = sorted((sign*low[0], sign*high[0]))
+    assert bound_low <= sampled.min() + 1e-12 and sampled.max() <= bound_high + 1e-12, (
+        f"{name}: sampled [{sampled.min()}, {sampled.max()}] outside bound [{bound_low}, {bound_high}]")
+
+
+@pytest.mark.parametrize("name,mesh", [("cube", pyramid_cube), ("warped", lambda: pyramid_cube(.3)), ("transition", transition_cube),
+                                       ("grid", lambda: mixed_grid((3, 3, 3))), ("connected", lambda: connected_mesh("tet-pyramid-hex")),
+                                       ("ball", lambda: mixed_grid((6, 6, 6), lengths=(2., 2., 2.), origin=(-1., -1., -1.), mapping=to_ball(1.)))])
+def test_mixed_meshes_of_the_record_are_one_signed(name, mesh):
+    V._require_one_signed_mixed_jacobians(mesh())
 
 
 @pytest.mark.parametrize("order", [1, 2])

@@ -320,6 +320,22 @@ def test_nonlinear_solve_matches_the_explicit_copies(meshes, request, prepared, 
     assert relative <= limit, f"{name} order={order} {images} relative={relative:.3e} spread={spread:.3e} limit={limit:.3e}"
 
 
+def test_the_kernel_expansion_refuses_images(meshes, cuda):
+    """Guards: the expansion reads the direct term only; images fail in Python and in native code and are never dropped.
+
+    Assumes: the route's own parameters reach the refusal; its accuracy is not read here.
+    """
+    from radia import hdiv_gpu
+    aca = dict(hdiv_gpu.GRAM_ACA_PRESET, expansion_order=6)
+    with pytest.raises(NotImplementedError, match="no image route"):
+        hdiv_gpu._prepare_device_components(meshes["sector"], 1, cuda, aca=aca, compression="hca",
+                                            images=hdiv_gpu._DeviceImages(image_cyclic=8))
+    setup = hdiv_gpu._prepare_device_components(meshes["sector"], 1, cuda, aca=aca, compression="hca")
+    with pytest.raises(ValueError, match="no image route"):
+        cuda._ResidentHDiv.from_flat_charges(**setup["charge_gram"], **hdiv_gpu._device_image_terms(image_cyclic=8),
+                                             dofs=setup["dofs"], backend="gpu")
+
+
 def test_a_compressed_trace_a_periodic_sector_and_a_field_request_refuse(meshes, prepared, cuda):
     with pytest.raises(NotImplementedError, match="compressed normal trace"):
         prepared.PreparedHDivLinear(meshes["cut"], backend="gpu", order=1, gram_compression="dense", **_RECEIPT, image="+x")

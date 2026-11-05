@@ -131,14 +131,15 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.curved=input.family=="curved-tet";block.hex=input.family=="hex"||input.family=="mixed";
     block.hostTypes.assign(input.hostTypes.begin(),input.hostTypes.end());
     if(block.hex){
-        if(input.hexRules.size()%3||input.hexBands.size()!=2)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and two bands");
-        radia_hmatrix_cuda::HostVector<double>* points[6]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf};
-        radia_hmatrix_cuda::HostVector<double>* weights[6]={&block.ruleOutW,&block.ruleInW,&block.rulePairW,&block.rulePairAffineW,&block.ruleNearW,&block.ruleInSelfW};
+        if(input.hexRules.size()%3||input.hexBands.size()!=6)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and six bands");
+        radia_hmatrix_cuda::HostVector<double>* points[11]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf,&block.ruleNearCell,&block.ruleFar[0],&block.ruleFar[1],&block.ruleFar[2],&block.ruleTangent};
+        radia_hmatrix_cuda::HostVector<double>* weights[11]={&block.ruleOutW,&block.ruleInW,&block.rulePairW,&block.rulePairAffineW,&block.ruleNearW,&block.ruleInSelfW,&block.ruleNearCellW,&block.ruleFarW[0],&block.ruleFarW[1],&block.ruleFarW[2],&block.ruleTangentW};
         int previous=0;
         for(std::size_t i=0;i<input.hexRules.size();i+=3){const double r=input.hexRules[i];
-            if(!(r==0||r==1||r==2||r==3||r==4||r==5)||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..5");
+            if(!(r>=0&&r<=10&&r==std::floor(r))||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..10");
             previous=int(r);points[previous]->push_back(input.hexRules[i+1]);weights[previous]->push_back(input.hexRules[i+2]);}
-        block.nearGrade=input.hexBands[0];block.farInner=input.hexBands[1];
+        block.nearGrade=input.hexBands[0];block.farInner=input.hexBands[1];block.innerSwitch=input.hexBands[2];
+        for(int k=0;k<3;++k)block.farRatio[k]=input.hexBands[3+k];
     }else if(!input.hexRules.empty()||!input.hexBands.empty())throw std::invalid_argument("TET geometry takes no HEX rules");
     block.gl.assign(input.gl.begin(),input.gl.end());block.gw.assign(input.gw.begin(),input.gw.end());
     block.cellNumbers.assign(input.cellNumbers.begin(),input.cellNumbers.end());block.faceNumbers.assign(input.faceNumbers.begin(),input.faceNumbers.end());
@@ -159,7 +160,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
     const auto n=input.host.size();
     if(!n||!charges.dofs)throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
     const auto block=flatBlock(input);radia_hdiv_bh::validateFlatChargeMap(input,charges);
-    const auto budget=chargeBudget(block,input,charges,input.compression=="aca");
+    const auto budget=chargeBudget(block,input,charges,input.compression=="aca"||input.compression=="hca");
     const auto owner=radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner");
     if(input.compression=="dense"){
         if(input.acaEps!=0||input.acaEta!=0||input.acaLeafSize||input.acaMaxRank||input.acaRankCapDense)
@@ -171,9 +172,9 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         radia_hmatrix_cuda::FlatGramOracle oracle(block);
         return std::allocate_shared<Operator>(owner,plan,oracle,false,input,charges,budget);
     }
-    if(input.compression=="aca"){
+    if(input.compression=="aca"||input.compression=="hca"){
         radia_hmatrix_cuda::FlatAcaOptions options;options.eps=input.acaEps;options.eta=input.acaEta;
-        options.leafSize=input.acaLeafSize;options.maxRank=input.acaMaxRank;options.rankCapDense=input.acaRankCapDense;
+        options.leafSize=input.acaLeafSize;options.maxRank=input.acaMaxRank;options.rankCapDense=input.acaRankCapDense;options.expansionOrder=input.acaExpansionOrder;
         // Ranks are known only after device compression; they size the plan.
         radia_hmatrix_cuda::FlatAcaOracle oracle(block,options);oracle.compress();
         auto plan=radia_hmatrix_cuda::packLeaves(n,oracle.leaves<LeafInput>(),oracle.permutation(),radia_hmatrix_cuda::HostVector<double>(n,1.));
@@ -182,10 +183,14 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         result->record.counters={{"elements",s.elements},{"clusters",s.clusters},{"dense_leaves",s.denseLeaves},
             {"lowrank_leaves",s.lowrankLeaves},{"admissible_blocks",s.admissibleBlocks},{"rank_cap_promotions",s.rankCapPromotions},
             {"storage_promotions",s.storagePromotions},{"zero_rank_leaves",s.zeroRankLeaves},{"rank_sum",s.rankSum},{"max_rank",s.maxRank},{"aca_steps",s.steps},
-            {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients}};
+            {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients},
+            {"far_pairs",s.farPairs},{"mid_pairs",s.midPairs},{"graded_pairs",s.gradedPairs},{"far_microseconds",s.farMicroseconds},
+            {"mid_microseconds",s.midMicroseconds},{"graded_microseconds",s.gradedMicroseconds},{"aca_microseconds",s.acaMicroseconds},{"dense_microseconds",s.denseMicroseconds}};
+        if(options.expansionOrder){result->record.counters.push_back({"expansion_order",s.expansionOrder});result->record.counters.push_back({"kernel_rank_sum",s.kernelRankSum});
+            result->record.counters.push_back({"moment_coefficients",s.momentCoefficients});result->record.counters.push_back({"moment_microseconds",s.momentMicroseconds});}
         return result;
     }
-    throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense' or 'aca'");
+    throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense', 'aca' or 'hca'");
 }
 std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces){
     using namespace radia_hmatrix_cuda;

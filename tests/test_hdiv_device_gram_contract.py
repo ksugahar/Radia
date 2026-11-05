@@ -46,6 +46,20 @@ def gram(inputs, aca=None):
     return hdiv_gpu._device_gram_arguments(charge, inputs, geometry, aca)
 
 
+def test_kernel_expansion_takes_explicit_parameters_and_has_no_preset():
+    """Guards: gram_compression="hca" never falls back to a preset, and its order stays in the native range."""
+    preset = hdiv_gpu.GRAM_ACA_PRESET
+    assert hdiv_gpu._checked_gram_compression("hca", dict(preset, expansion_order=6)) == dict(preset, expansion_order=6)
+    for bad in (None, dict(preset), dict(preset, expansion_order=2), dict(preset, expansion_order=9),
+                dict(preset, expansion_order=5.), dict(preset, expansion_order=True)):
+        with pytest.raises(ValueError, match="expansion_order"):
+            hdiv_gpu._checked_gram_compression("hca", bad)
+    with pytest.raises(ValueError, match="requires exactly"):
+        hdiv_gpu._checked_gram_compression("aca", dict(preset, expansion_order=6))
+    with pytest.raises(ValueError, match="out of range"):
+        hdiv_gpu._checked_gram_compression("hca", dict(preset, eps=0., expansion_order=6))
+
+
 def test_staged_inputs_map_to_primitive_rows_with_explicit_aca_parameters():
     arguments = gram(staged())
     preset = hdiv_gpu.GRAM_ACA_PRESET
@@ -437,7 +451,7 @@ def hex_staged(cell=(2, 2, 2), face=(2, 2, 0)):
     rule = (np.array([.25, .75]), np.array([.5, .5]))
     inputs = dict(family="hex", n_el=1, cell_nodes=np.arange(81.), face_nodes=np.arange(27.),
                   charge_host=[0, 0], charge_kind=[0, 1], charge_expo=list(cell) + list(face),
-                  rules=dict(out=rule, inner=rule, pair=rule, pair_affine=rule), near_grade=1., far_inner=1.)
+                  rules=dict(out=rule, inner=rule, pair=rule, pair_affine=rule), near_grade=1., far_inner=1., inner_switch=0., far_ratios=[])
     charge = dict(cell_class=np.zeros(1, np.int32), cell_dofs=np.arange(6, dtype=np.int32)[None],
                   cell_tables=np.ones((1, 1, 6)), cell_exponents=np.array([cell], np.int32),
                   face_class=np.zeros(1, np.int32), face_dofs=np.arange(3, dtype=np.int32)[None],
@@ -450,7 +464,7 @@ def test_hex_rules_cross_as_indexed_rows_with_bands_and_no_tet_rule():
     arguments = hdiv_gpu._device_gram_arguments(charge, inputs, geometry, None)
     assert arguments["family"] == "hex" and arguments["far_factor"] == 1e30
     assert arguments["hex_rules"].shape == (8, 3) and arguments["hex_rules"][:, 0].tolist() == [0, 0, 1, 1, 2, 2, 3, 3]
-    assert arguments["hex_bands"].tolist() == [1., 1.]
+    assert arguments["hex_bands"].tolist() == [1., 1., 0., 0., 0., 0.]
     assert all(arguments[name].shape == (0, 4) for name in ("tet_rule", "tri_rule", "tet_low_rule", "tri_low_rule"))
     ledger = hdiv_gpu._expected_device_ledger(dict(arguments, compression="dense"))
     assert ("cell_q2_nodes_m", "H2D") in ledger and ("hex_invalid_flag", "H2D") in ledger
@@ -503,5 +517,7 @@ def test_every_connected_element_mix_is_the_mixed_family(monkeypatch, counts):
 def test_hex_gram_downloads_only_flags_and_table_sizes():
     source = (HDIV / "hdiv_hex_gram.cuh").read_text(encoding="utf-8")
     downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
-    assert sorted(d.split(",")[2].strip() for d in downloads) == ["sizeof(int)", "sizeof(x)", "sizeof(y)"], downloads
+    # The flag, the two rule checks and the item count of each cost class that paces the launches; never a matrix.
+    expected = ["sizeof(classItems)", "sizeof(int)", "sizeof(x)", "sizeof(y)"]
+    assert sorted(d.split(",")[2].strip() for d in downloads) == expected, downloads
     assert "cudaMemcpyToSymbol" not in source and "cudaMemcpyHostToDevice" not in source

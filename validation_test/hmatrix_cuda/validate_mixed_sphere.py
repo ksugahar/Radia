@@ -109,7 +109,7 @@ def main():
     meshes = parser.add_mutually_exclusive_group(required=True)
     meshes.add_argument("--receipt-python", type=Path, help="Generate each ball and check it with this interpreter")
     meshes.add_argument("--prepared", type=Path, help="Folder of ball-<n>.vol already checked, with their receipts")
-    parser.add_argument("--levels", type=int, nargs="+", default=[2, 4, 6, 8])
+    parser.add_argument("--levels", type=int, nargs="+", default=[2, 4, 6])
     parser.add_argument("--orders", type=int, nargs="+", choices=[1, 2], default=[1, 2])
     parser.add_argument("--cpu-levels", type=int, nargs="*", default=[2, 4])
     parser.add_argument("--field", type=float, default=1e5)

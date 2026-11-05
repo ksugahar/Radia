@@ -91,11 +91,29 @@ there can be disturbed by the host.
 
 - Charge Gram: every pair takes the typed route on the trilinear image of the unit cube, on CPU and device, from one
   source (`src/core/rad_hdiv_field_*.inc`, `src/core/gpu/hdiv/hdiv_typed_host_math.inc`). Its 1D rules come from
-  `_mixed_gram_rules` in `src/radia/vim/_vim.py` as kernel arguments; the near band and the near and pyramid counts are
-  proposed values, not an adopted criterion.
-- Rational pyramid charge: on an affine pyramid each level `z` of `xy/(1-z)` is a parallelogram carrying a polynomial,
-  whose potential is exact, and the rule in `z` is split at the level of the point. The radial rule it replaced did not
-  converge at order 2 on the small meshes of the record. A non-parallelogram pyramid keeps a radial rule on all charges.
+  `_mixed_gram_rules` in `src/radia/vim/_vim.py` as kernel arguments; the near band, the near and pyramid counts and the
+  inner switch are proposed values, not an adopted criterion. Cell targets of near pairs take a plain rule and face
+  targets the graded one, and a near target point beyond the switch radius of the source reads the far rule. A far
+  pair takes fewer points the further apart it is. A near point on a warped source takes the closed form on the
+  tangent image of the source plus the bounded remainder, on the tangent count per axis for a hex or pyramid source and
+  on four Duffy triangles from the base point for a quad source. Tangent count 0 keeps the radial and fan rules, which
+  are the comparison route here.
+- Rational pyramid charge: on an affine pyramid it takes its Taylor polynomial at the point, whose potential is exact,
+  plus a plain rule on the difference, which vanishes at the point. At tangent count 0 each level `z` of `xy/(1-z)` is a
+  parallelogram carrying a polynomial, and the rule in `z` is split at the level of the point. The radial rule did not
+  converge at order 2 on the small meshes of the record; a non-parallelogram pyramid at tangent count 0 keeps it.
+- Measured limits of the counts, on small meshes against the finest profile of the same route, so they say how far the
+  rule converged and nothing about the formulation. Order 2 on affine pyramids converges geometrically when the pyramid
+  and near counts rise together; at (outer 6, pyramid 14, near 10) with tangent count 0 the field difference is about `5e-5`.
+  Order 2 on non-parallelogram pyramids is slower and not monotone: the field difference stays near `3e-5` to `4e-5` from
+  (6, 14, 16) to (6, 20, 16). Order 1 on the same mesh reaches about `2e-6` at (5, 14, 16), and its proposed (5, 6, 10)
+  gives about `2e-4`. Those warped cells keep a one-signed map, so their slower rate is not an inversion. The flat tet route at its default is about `1e-3` in the field at order 2 on the cube of the record,
+  and it needs intorder 60 and far quadrature 14 for about `3e-6`; the typed route is not its default.
+- Both mixed routes refuse a cell whose map changes sign. No rule converges on such a cell, and the receipts of `check-vol`
+  do not look at it. The determinant of a straight pyramid is bilinear in its base coordinates, so its four base corners
+  decide exactly; a hex is sampled on five points per axis, which can miss a small inversion between the samples. The ball
+  meshes of the sphere validation use a smooth cube map, on which the checkerboard grid stays one-signed up to `n = 6`;
+  it inverts corner pyramids at `n = 7` and `n = 8`, and the radial max-norm map used before inverts pyramids from `n = 3`.
 - Reference: a polynomial magnetization has no jump across interior faces, so its charge on any mesh of a cube is that
   of the cube, whose box integrals have closed forms after a Duffy map at the corner (Duffy, SIAM J. Numer. Anal. 19, 1982;
   Bailey, Borwein and Crandall, J. Comput. Appl. Math. 206, 2007, for the cube and square values it reproduces). It covers

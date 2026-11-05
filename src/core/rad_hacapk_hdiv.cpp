@@ -3644,7 +3644,10 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> gl_in_self, std::vector<double> gw_in_self,
     std::vector<double> gl_pair, std::vector<double> gw_pair,
     std::vector<double> gl_pair_affine, std::vector<double> gw_pair_affine,
-    std::vector<int> host_types)
+    std::vector<int> host_types,
+    std::vector<double> gl_near_cell, std::vector<double> gw_near_cell, double inner_switch,
+    std::vector<double> far_level_rows, std::vector<double> far_level_ratios,
+    std::vector<double> gl_tangent, std::vector<double> gw_tangent)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf), m_hostType(std::move(host_types)),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
@@ -3652,6 +3655,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_glOut(std::move(gl_out)), m_gwOut(std::move(gw_out)),
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
       m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
+      m_glNearCell(std::move(gl_near_cell)), m_gwNearCell(std::move(gw_near_cell)), m_innerSwitch(inner_switch),
+      m_glTangent(std::move(gl_tangent)), m_gwTangent(std::move(gw_tangent)),
       m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
       m_glPair(std::move(gl_pair)), m_gwPair(std::move(gw_pair)),
       m_glPairAffine(std::move(gl_pair_affine)), m_gwPairAffine(std::move(gw_pair_affine)),
@@ -3668,6 +3673,35 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     if (m_glNear.size() != m_gwNear.size())
         throw std::invalid_argument("HEX ChargeGram gl_near/gw_near sizes differ");
     if (m_glNear.empty()) { m_glNear = m_glOut; m_gwNear = m_gwOut; }   // legacy: one outer rule for both
+    if (m_glNearCell.size() != m_gwNearCell.size())
+        throw std::invalid_argument("HEX ChargeGram gl_near_cell/gw_near_cell sizes differ");
+    if (!std::isfinite(m_innerSwitch) || m_innerSwitch < 0.0)
+        throw std::invalid_argument("HEX ChargeGram inner_switch must be finite and not negative");
+    if (m_hostType.empty() && (!m_glNearCell.empty() || m_innerSwitch != 0.0))
+        throw std::invalid_argument("HEX ChargeGram plain near rule and inner switch belong to mixed meshes");
+    if (m_glTangent.size() != m_gwTangent.size() || (m_hostType.empty() && !m_glTangent.empty()))
+        throw std::invalid_argument("HEX ChargeGram tangent rule belongs to mixed meshes and takes one weight per point");
+    if (far_level_rows.size() % 3 != 0 || (m_hostType.empty() && !far_level_ratios.empty()))
+        throw std::invalid_argument("HEX ChargeGram far levels are (level, point, weight) rows of a mixed mesh");
+    m_farLevels.resize(far_level_ratios.size());
+    for (size_t k = 0; k < m_farLevels.size(); ++k) m_farLevels[k].ratio = far_level_ratios[k];
+    for (size_t i = 0; i < far_level_rows.size(); i += 3) {
+        const int level = (int)far_level_rows[i];
+        if (level < 0 || (size_t)level >= m_farLevels.size())
+            throw std::invalid_argument("HEX ChargeGram far level row out of range");
+        m_farLevels[(size_t)level].gl.push_back(far_level_rows[i+1]);
+        m_farLevels[(size_t)level].gw.push_back(far_level_rows[i+2]);
+    }
+    {
+        double previous = 0.0;
+        size_t points = m_glOut.size();
+        for (const HexFarLevel& level : m_farLevels) {
+            if (level.gl.empty() || level.gl.size() >= points || !std::isfinite(level.ratio) || !(level.ratio > previous))
+                throw std::invalid_argument("HEX ChargeGram far levels need fewer points and a larger ratio each");
+            previous = level.ratio;
+            points = level.gl.size();
+        }
+    }
     if (m_glInSelf.size() != m_gwInSelf.size())
         throw std::invalid_argument("HEX ChargeGram gl_in_self/gw_in_self sizes differ");
     if (m_glInSelf.empty()) { m_glInSelf = m_glIn; m_gwInSelf = m_gwIn; }  // legacy: one radial rule for both
@@ -4587,6 +4621,10 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_exponential_rule_max_anisotropy", HexExponentialRuleMaxAnisotropy());
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
+    out.emplace_back("hex_glnear_cell_n", (double)m_glNearCell.size());
+    out.emplace_back("hex_inner_switch", m_innerSwitch);
+    out.emplace_back("hex_far_levels", (double)m_farLevels.size());
+    out.emplace_back("hex_gltangent_n", (double)m_glTangent.size());
     out.emplace_back("hex_glout_n", (double)m_glOut.size());
     out.emplace_back("hex_glin_n", (double)m_glIn.size());
     out.emplace_back("hex_glin_self_n", (double)m_glInSelf.size());
@@ -4844,18 +4882,56 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const do
     }
 }
 
+// The complete host from its outer faces; the pure hex routes that sum PhiInnerHexAffineCellSubVec reach the same
+// value through the six sub-tets, so the device and CPU comparison of those routes checks this form.
 void RadHACApKChargeGram::PhiInnerHexAffineCellVec(int hS, const double p[3],
                                                    const std::vector<int>& srcG, double* inn) const
 {
-    for (int subB = 0; subB < 6; ++subB)
-        PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+    const double* nd = &m_hexNodes[(size_t)hS*81];
+    const double* center = &m_hexAffineCenter[(size_t)hS*3];
+    static const int corner[8] = {0, 2, 8, 6, 18, 20, 26, 24};
+    double C[8][3];
+    for (int i = 0; i < 8; ++i)
+        for (int k = 0; k < 3; ++k) C[i][k] = nd[3*corner[i] + k] - center[k];
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
+    double moments[HEX_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::HexPotentialMomentsUpTo3(C, local_p, moments);
+    else                       rad_hdiv::HexPotentialMomentsUpTo6(C, local_p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1] + axisCount*axisCount*e[2];
+        const double* coeff = &m_hexAffineCoeff[
+            ((size_t)hS*m_hexAffineMonoCount + mono)*m_hexAffinePolyCount];
+        double s = 0.0;
+        for (int i = 0; i < m_hexAffinePolyCount; ++i) s += coeff[i] * moments[i];
+        inn[ls] += s;
+    }
 }
 
 void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
                                                    const std::vector<int>& srcG, double* inn) const
 {
-    for (int subB = 0; subB < 2; ++subB)
-        PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
+    const double* nd = &m_quadNodes[(size_t)hS*27];
+    const double* center = &m_quadAffineCenter[(size_t)hS*3];
+    static const int corner[4] = {0, 2, 8, 6};
+    double V[4][3];
+    for (int i = 0; i < 4; ++i)
+        for (int k = 0; k < 3; ++k) V[i][k] = nd[3*corner[i] + k] - center[k];
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
+    double moments[QUAD_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::QuadPotentialMomentsUpTo2(V, local_p, moments);
+    else                       rad_hdiv::QuadPotentialMomentsUpTo4(V, local_p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1];
+        const double* coeff = &m_quadAffineCoeff[
+            ((size_t)hS*m_quadAffineMonoCount + mono)*m_quadAffinePolyCount];
+        double value = 0.0;
+        for (int i = 0; i < m_quadAffinePolyCount; ++i) value += coeff[i]*moments[i];
+        inn[ls] += value;
+    }
 }
 
 // Smooth affine host pairs do not need degree-six analytic potential recurrences at every outer point.
@@ -6070,8 +6146,10 @@ static void HexGradedTensorCloud(const double* nd, bool cell, const std::vector<
     }
 }
 
-// Graded outer rule and exact or radial inner on self, touching and near pairs, the outer tensor rule on
-// both hosts beyond them. A hex or quad source of such a pair keeps its own inner rules.
+// Exact or radial inner on self, touching and near pairs, the outer tensor rule on both hosts beyond them. Near
+// face targets take the graded outer rule; near cell targets take the plain one when it is given. A near target
+// point beyond the switch radius reads the far rule, which converges there. A hex or quad source of a near pair
+// keeps its own inner rules.
 std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int kindS, int hS) const
 {
     using namespace radia_hdiv_typed;
@@ -6106,17 +6184,38 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
     const bool sourceAffine = cellS ? (hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
                                     : (hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
     const int nsubS = cellS ? 6 : 2;
+    const double* sourceCenter = &m_cent[(size_t)3*repB];
+    const double switchRadius = (1.0 + m_innerSwitch)*m_size[repB];
+    const auto beyondSource = [&](const double* p) {
+        const double dx = p[0]-sourceCenter[0], dy = p[1]-sourceCenter[1], dz = p[2]-sourceCenter[2];
+        return m_innerSwitch > 0.0 && dx*dx + dy*dy + dz*dz >= switchRadius*switchRadius;
+    };
+    const std::vector<double>* glFar = &m_glOut;
+    const std::vector<double>* gwFar = &m_gwOut;
+    if (!near) for (const HexFarLevel& level : m_farLevels)
+        if (sep >= level.ratio*(m_size[repA] + m_size[repB])) { glFar = &level.gl; gwFar = &level.gw; }
+    int axisOrder = 1;
+    for (int v : expS) axisOrder = std::max(axisOrder, v);
+    const std::vector<double>& remainderX = typeS == quadHost ? m_glInSelf : m_glTangent;
+    const std::vector<double>& remainderW = typeS == quadHost ? m_gwInSelf : m_gwTangent;
+    const auto warped = [&](const double* p, const double* cubeT, double* inn) {
+        if (!warpedPotentials(typeS, ndS, p, self ? cubeT : nullptr, expS.data(), nS, axisOrder,
+                              remainderX.data(), remainderW.data(), (int)remainderX.size(), inn))
+            throw std::runtime_error("typed charge Gram: degenerate tangent of a warped source");
+    };
     const auto inner = [&](const double* p, const double* cubeT, double* inn) {
-        if (!near) {
-            const int n = (int)m_glOut.size(), nz = cellS ? n : 1;
+        if (!near || beyondSource(p)) {
+            const std::vector<double>& gF = *glFar;
+            const std::vector<double>& wF = *gwFar;
+            const int n = (int)gF.size(), nz = cellS ? n : 1;
             for (int iz = 0; iz < nz; ++iz) for (int iy = 0; iy < n; ++iy) for (int ix = 0; ix < n; ++ix) {
-                const double c[3] = {m_glOut[ix], m_glOut[iy], cellS ? m_glOut[iz] : 0.0};
+                const double c[3] = {gF[ix], gF[iy], cellS ? gF[iz] : 0.0};
                 double X[3];
                 if (cellS) HexQ2MapX(ndS, c, X); else QuadQ2MapX(ndS, c, X);
                 const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
                 const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
                 if (r < 1e-300) continue;
-                const double w = m_gwOut[ix]*m_gwOut[iy]*(cellS ? m_gwOut[iz] : 1.0)/r;
+                const double w = wF[ix]*wF[iy]*(cellS ? wF[iz] : 1.0)/r;
                 for (int l = 0; l < nS; ++l) inn[l] += w*density(typeS, &expS[(size_t)3*l], c);
             }
             return;
@@ -6127,9 +6226,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
             if (typeS != pyramidHost) return;
             const int nq = (int)m_glInSelf.size();
             if (analytic) {
-                for (int l = 0; l < nS; ++l)
+                if (!m_glTangent.empty())
+                    straightPyramidRational(ndS, p, expS.data(), nS, remainderX.data(), remainderW.data(), (int)remainderX.size(), inn);
+                else for (int l = 0; l < nS; ++l)
                     if (expS[(size_t)3*l + 2] < 0)
                         inn[l] += pyramidRationalPotential(ndS, center, p, m_glInSelf.data(), m_gwInSelf.data(), nq);
+                return;
+            }
+            if (!m_glTangent.empty()) {
+                warped(p, cubeT, inn);
                 return;
             }
             double anchor[3];
@@ -6139,6 +6244,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
         }
         if (sourceAffine) {
             for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, p, srcG, inn);
+            return;
+        }
+        if (!m_glTangent.empty()) {
+            warped(p, cubeT, inn);
             return;
         }
         double anchor[3] = {cubeT[0], cubeT[1], cubeT[2]};
@@ -6155,14 +6264,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
         }
         PhiInnerHexConeFanVec(kindS, hS, p, anchor, srcG, inn);
     };
-    const std::vector<double>& gl = near ? m_glNear : m_glOut;
-    const std::vector<double>& gw = near ? m_gwNear : m_gwOut;
+    const bool plainNear = near && cellT && !m_glNearCell.empty(), graded = near && !plainNear;
+    const std::vector<double>& gl = plainNear ? m_glNearCell : near ? m_glNear : *glFar;
+    const std::vector<double>& gw = plainNear ? m_gwNearCell : near ? m_gwNear : *gwFar;
     const int n = (int)gl.size(), nz = cellT ? n : 1;
     std::vector<double> t((size_t)n), w((size_t)n), inn((size_t)nS);
     for (int i = 0; i < n; ++i) {
         const double s = gl[i];
-        t[i] = near ? s*s*s*(10.0 - 15.0*s + 6.0*s*s) : s;
-        w[i] = near ? gw[i]*30.0*s*s*(1.0-s)*(1.0-s) : gw[i];
+        t[i] = graded ? s*s*s*(10.0 - 15.0*s + 6.0*s*s) : s;
+        w[i] = graded ? gw[i]*30.0*s*s*(1.0-s)*(1.0-s) : gw[i];
     }
     for (int iz = 0; iz < nz; ++iz) for (int iy = 0; iy < n; ++iy) for (int ix = 0; ix < n; ++ix) {
         const double c[3] = {t[ix], t[iy], cellT ? t[iz] : 0.0};
