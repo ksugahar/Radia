@@ -103,6 +103,7 @@ public:
             Csr galerkin = multiply_csr(ledger, space.pt.view(), ap.view(), name);
             k_fix_zero_rows<<<blocks_of(galerkin.n), TH>>>(galerkin.n, galerkin.rowptr.p, galerkin.columns.p, galerkin.values.p);
             ck_kernels(name);
+            options.constant_kernel = s == 0;
             reports.push_back(space.amg.build(ledger, std::move(galerkin), options, name));
         }
         return reports;

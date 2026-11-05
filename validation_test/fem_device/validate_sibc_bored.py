@@ -7,8 +7,10 @@ preconditioner on the device from mesh arrays: AMS at p=1 and BDDC over AMS at p
 
 The bored_workpiece README gates FEM against its BEM power at 2 %, and its FEM power balance at
 1e-5. Those values are read from validate.LIMITS, unchanged; no approval ID for them was found, so
-this script reports them as the case's gates, not as an adopted criterion. SOLUTION_REL is a
-PROPOSED detector. Writes one JSON. Timings are diagnostic. Usage:
+this script reports them as the case's gates, not as an adopted criterion. FIELD_REL and POWER_REL
+are PROPOSED detectors. The air carries only the small gauge mass, so the gradient part of A is weakly
+determined and the raw vector difference is recorded, not gated: the comparison uses the curl in the
+air and the tangential trace on the surface. Writes one JSON. Timings are diagnostic. Usage:
     python validate_sibc_bored.py --reference-only --out unused --work scratch_dir [--cases 0.012/1 0.012/2 ...]
     python validate_sibc_bored.py --out result.json --work scratch_dir [--cases 0.012/1 0.012/2 ...]
 The first form is the CPU stage, with no device; the second runs the production entry on the device and
@@ -30,7 +32,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/radia/panels"))
 sys.path.insert(0, str(ROOT / "src"))
 
-SOLUTION_REL = 1e-6
+FIELD_REL = 1e-6
+POWER_REL = 1e-6
 BEM_FINEST_W = 73.634332  # bored_workpiece README, finest BEM surface
 AIR_RADIUS = .18
 
@@ -135,6 +138,25 @@ def surface_power(g, mesh, sibc, omega, Z_s):
     return 0.5 * Z_s.real * (omega / abs(Z_s)) ** 2 * tangential
 
 
+def gauge_invariant_differences(fes, mesh, sibc, actual, reference):
+    """norm(curl(A1 - A2)) over norm(curl A2) in the air, and the same ratio of the tangential trace on the surface."""
+    g, r = ng.GridFunction(fes), ng.GridFunction(fes)
+    g.vec.FV().NumPy()[:] = actual
+    r.vec.FV().NumPy()[:] = reference
+    order = 2 * fes.globalorder + 2
+
+    def volume(cf):
+        return ng.Integrate(ng.InnerProduct(cf, ng.Conj(cf)), mesh, order=order).real
+
+    def surface(cf):
+        tangent = cf - ng.InnerProduct(cf, ng.specialcf.normal(3)) * ng.specialcf.normal(3)
+        return ng.Integrate(ng.InnerProduct(tangent, ng.Conj(tangent)), mesh, ng.BND, definedon=mesh.Boundaries(sibc), order=order).real
+
+    field = float(np.sqrt(volume(ng.curl(g) - ng.curl(r)) / volume(ng.curl(r))))
+    trace = float(np.sqrt(surface(g - r) / surface(r)))
+    return field, trace
+
+
 def run_case(case, kelvin, text, work):
     h, order = parse_case(text)
     reference_file = np.load(reference_path(work, text))
@@ -151,6 +173,7 @@ def run_case(case, kelvin, text, work):
         raise RuntimeError("the device and CPU right-hand sides differ, so the inputs are not identical")
     free = np.array(list(fes.FreeDofs()), dtype=bool)
     difference = float(np.linalg.norm(data["field"][free] - reference[free]) / np.linalg.norm(reference[free]))
+    field_difference, trace_difference = gauge_invariant_differences(fes, mesh, sibc, data["field"], reference)
     g = ng.GridFunction(fes)
     g.vec.FV().NumPy()[:] = data["field"]
     power = surface_power(g, mesh, sibc, omega, Z_s)
@@ -163,10 +186,12 @@ def run_case(case, kelvin, text, work):
     gates = {"true_residual": {"actual": device["true_residual"], "bound": limits["true_residual"], "pass": device["true_residual"] <= limits["true_residual"]},
              "fem_power_balance": {"actual": abs(source_work / power - 1), "bound": limits["fem_power_balance"], "pass": abs(source_work / power - 1) <= limits["fem_power_balance"]},
              "bem_fem_power": {"actual": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W, "bound": limits["bem_fem_power"], "pass": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W <= limits["bem_fem_power"]},
-             "solution_vs_sparsecholesky_proposed": {"actual": difference, "bound": SOLUTION_REL, "pass": difference <= SOLUTION_REL},
-             "power_vs_cpu_route_proposed": {"actual": abs(power_entry - power_cpu) / power_cpu, "bound": SOLUTION_REL, "pass": abs(power_entry - power_cpu) / power_cpu <= SOLUTION_REL}}
+             "curl_field_vs_sparsecholesky_proposed": {"actual": field_difference, "bound": FIELD_REL, "pass": field_difference <= FIELD_REL},
+             "surface_trace_vs_sparsecholesky_proposed": {"actual": trace_difference, "bound": FIELD_REL, "pass": trace_difference <= FIELD_REL},
+             "power_vs_cpu_route_proposed": {"actual": abs(power_entry - power_cpu) / power_cpu, "bound": POWER_REL, "pass": abs(power_entry - power_cpu) / power_cpu <= POWER_REL}}
     return {"case": text, "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
-            "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": kelvin.BDDC_AMS_COARSE_CYCLES if order > 1 else None, "solution_difference_vs_sparsecholesky": difference,
+            "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": kelvin.BDDC_AMS_COARSE_CYCLES if order > 1 else None, "raw_vector_difference_vs_sparsecholesky_recorded": difference,
+            "curl_field_difference_vs_sparsecholesky": field_difference, "surface_trace_difference_vs_sparsecholesky": trace_difference,
             "power_W": power_entry, "power_field_formula_W": power, "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": power_cpu, "source_work_W": source_work, "bem_finest_W": BEM_FINEST_W,
             "gates": gates, "hierarchy": device["hierarchy"], "nonzeros": device["nonzeros"], "device": device["device"], "device_peak_bytes": device["device_peak_bytes"], "ledger": device["ledger"],
             "timing_diagnostic": {**device["timing_diagnostic"], "production_entry_seconds": device_seconds, "cpu_route_seconds": float(reference_file["seconds"])}}
@@ -190,7 +215,7 @@ def main():
     for text in args.cases:
         row = run_case(case, kelvin, text, args.work)
         cases.append(row)
-        print(f"{text}: ndof {row['ndof']} iterations {row['device_iterations']} true residual {row['true_residual']:.3e} difference {row['solution_difference_vs_sparsecholesky']:.3e} "
+        print(f"{text}: ndof {row['ndof']} iterations {row['device_iterations']} true residual {row['true_residual']:.3e} curl {row['curl_field_difference_vs_sparsecholesky']:.3e} trace {row['surface_trace_difference_vs_sparsecholesky']:.3e} raw {row['raw_vector_difference_vs_sparsecholesky_recorded']:.3e} "
               f"power {row['power_W']:.6f} W (CPU {row['power_cpu_route_W']:.6f}, BEM {BEM_FINEST_W})", flush=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     result = {"schema": "radia.fem-device-sibc-bored.v1", "source_commit": head, "ngsolve": ng.__version__, "python": platform.python_version(), "approval_id_for_gates": None,

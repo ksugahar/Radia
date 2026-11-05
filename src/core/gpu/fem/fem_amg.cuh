@@ -166,14 +166,15 @@ __global__ void k_gj_snapshot(int n, int pivot, const double* a, double* row, do
     row[i] = a[size_t(pivot) * n + i];
     column[i] = a[size_t(i) * n + pivot];
 }
-// One Gauss-Jordan sweep. A pivot at or below the relative limit marks a kernel
-// direction of a positive semidefinite coarse operator: that unknown stays zero.
-__global__ void k_gj_sweep(int n, int pivot, double limit, const double* row, const double* column, const double* diag, double* a, int* pinned) {
+// One Gauss-Jordan sweep. A seed row, or a pivot at or below the relative limit,
+// marks a kernel direction of a positive semidefinite coarse operator: that unknown
+// stays zero.
+__global__ void k_gj_sweep(int n, int pivot, double limit, const int* seed, const double* row, const double* column, const double* diag, double* a, int* pinned) {
     const long long index = (long long)(blockIdx.x) * blockDim.x + threadIdx.x;
     if (index >= (long long)(n) * n) return;
     const int i = int(index / n), j = int(index % n);
     const double p = row[pivot];
-    if (!(p > limit * diag[pivot])) {
+    if (seed[pivot] || !(p > limit * diag[pivot])) {
         if (i == pivot || j == pivot) a[index] = 0;
         if (index == 0) atomicAdd(pinned, 1);
         return;
@@ -183,6 +184,36 @@ __global__ void k_gj_sweep(int n, int pivot, double limit, const double* row, co
     else if (i == pivot) a[index] = row[j] * d;
     else if (j == pivot) a[index] = -column[i] * d;
     else a[index] -= column[i] * row[j] * d;
+}
+// Connected components of the coarsest level: every row takes the smallest label it sees.
+__global__ void k_label_init(int n, int* label, int* kernel) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    label[i] = i;
+    kernel[i] = 1;
+}
+__global__ void k_label_sweep(int n, const int* rp, const int* ci, const double* av, const int* label, int* next, int* changed) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    int smallest = label[i];
+    for (int k = rp[i]; k < rp[i + 1]; ++k)
+        if (av[k] != 0. && label[ci[k]] < smallest) smallest = label[ci[k]];
+    next[i] = smallest;
+    if (smallest != label[i]) atomicExch(changed, 1);
+}
+__global__ void k_component_kernel(int n, const int* rp, const double* av, const int* label, int* kernel) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    double sum = 0, scale = 0;
+    for (int k = rp[i]; k < rp[i + 1]; ++k) {
+        sum += av[k];
+        scale += fabs(av[k]);
+    }
+    if (!(fabs(sum) <= 1e-10 * scale)) atomicExch(kernel + label[i], 0);
+}
+__global__ void k_kernel_seeds(int n, int constant_kernel, const int* label, const int* kernel, int* seed) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) seed[i] = label[i] == i && (constant_kernel || kernel[i]);
 }
 __global__ void k_verify_dense(long long count, const double* a, int* bad) {
     const long long i = (long long)(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -197,6 +228,7 @@ struct AmgOptions {
     int dense_max = 2048;      // PROPOSED: the largest device dense coarse inverse.
     double pin_limit = 1e-12;  // PROPOSED: relative pivot limit of that inverse.
     int coarse_sweeps = 10;    // Above dense_max the coarsest level uses l1-Jacobi sweeps.
+    bool constant_kernel = false;  // The operator annihilates constants by construction: a gradient space.
 };
 
 struct AmgLevel {
@@ -318,18 +350,39 @@ private:
         dense_.allocate(size_t(count), name);
         Dev<double> diag(size_t(n), name), row(size_t(n), name), column(size_t(n), name);
         Dev<int> pinned(1, name), bad(1, name);
+        Dev<int> seed = kernel_seeds(ledger, l, name);
         pinned.zero();
         bad.zero();
         k_dense_clear<<<blocks_of(count), TH>>>(count, dense_.p);
         k_dense_fill<<<blocks_of(n), TH>>>(n, l.a.rowptr.p, l.a.columns.p, l.a.values.p, dense_.p, diag.p);
         for (int k = 0; k < n; ++k) {
             k_gj_snapshot<<<blocks_of(n), TH>>>(n, k, dense_.p, row.p, column.p);
-            k_gj_sweep<<<blocks_of(count), TH>>>(n, k, options_.pin_limit, row.p, column.p, diag.p, dense_.p, pinned.p);
+            k_gj_sweep<<<blocks_of(count), TH>>>(n, k, options_.pin_limit, seed.p, row.p, column.p, diag.p, dense_.p, pinned.p);
         }
         k_verify_dense<<<blocks_of(count), TH>>>(count, dense_.p, bad.p);
         ck_kernels(name);
         check_flag(ledger, bad, "device AMG: the dense coarse inverse is not finite");
         pinned_ = read_scalar(ledger, pinned.p);
+    }
+    // One unknown of each kernel component stays zero before the elimination starts. The rest of
+    // that component is then positive definite; left to the last pivot, the kernel leaves a rounding
+    // value of either sign whose inverse spoils the whole coarse level. A component is a kernel when
+    // the operator annihilates constants by construction or when each of its rows sums to zero; the
+    // lowest row number is the seed, which is the rule of the CPU coarse factorization.
+    Dev<int> kernel_seeds(Ledger& ledger, const AmgLevel& l, const char* name) const {
+        const int n = l.a.n, blocks = blocks_of(n);
+        Dev<int> label(size_t(n), name), next(size_t(n), name), kernel(size_t(n), name), seed(size_t(n), name), changed(1, name);
+        k_label_init<<<blocks, TH>>>(n, label.p, kernel.p);
+        for (int sweep = 0; sweep <= n; ++sweep) {
+            changed.zero();
+            k_label_sweep<<<blocks, TH>>>(n, l.a.rowptr.p, l.a.columns.p, l.a.values.p, label.p, next.p, changed.p);
+            std::swap(label.p, next.p);
+            if (read_scalar(ledger, changed.p) == 0) break;
+        }
+        k_component_kernel<<<blocks, TH>>>(n, l.a.rowptr.p, l.a.values.p, label.p, kernel.p);
+        k_kernel_seeds<<<blocks, TH>>>(n, options_.constant_kernel ? 1 : 0, label.p, kernel.p, seed.p);
+        ck_kernels(name);
+        return seed;
     }
     AmgOptions options_;
     std::vector<AmgLevel> levels_;

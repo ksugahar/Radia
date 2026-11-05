@@ -1,7 +1,8 @@
 """Device AMG, AMS and BDDC solves against sparse Cholesky on identical inputs.
 
 Guards: H1 AMG with CG, real and complex curl-curl with AMS, the complex SIBC form with a boundary
-term, and BDDC at p=2,3 for H1 and HCurl each reach the sparse Cholesky solution of the same form,
+term, and BDDC at p=2,3 for H1 and HCurl, with and without a boundary element group, each reach the
+sparse Cholesky solution of the same form,
 with the Dirichlet lift kept and only permitted payload families crossing. A wrong Galerkin
 product, gradient, interpolation, harmonic extension or Schur complement breaks convergence or the
 agreement; a wrong true residual raises.
@@ -111,6 +112,18 @@ def test_complex_hcurl_bddc(route, order):
     fes = ng.HCurl(mesh, order=order, complex=True, dirichlet=".*")
     coefficients = route.Coefficients(stiff=1.0, mass_im=30.0, stiff_aux=1.0, mass_aux=30.0)
     _check(route, route.solve_hcurl, fes, coefficients, _rhs(fes, "HCurl") + 0j, bonus=(2, 2, 2), cycles=3)
+
+
+@pytest.mark.parametrize("order", [2, 3])
+def test_complex_hcurl_bddc_with_sibc_term_and_gauge_mass(route, order):
+    # The production surface-impedance form: curl-curl, a mass far below the curl term and a
+    # complex boundary term, so the Schur complement carries a boundary element group.
+    mesh = _cube(4)
+    fes = ng.HCurl(mesh, order=order, nograds=True, complex=True, dirichlet="left|right")
+    robin = 40.0 * (1 + 1j)
+    coefficients = route.Coefficients(stiff=1.0, mass=1e-6, stiff_aux=1.0, mass_aux=1e-6, trace={"back": robin.real},
+                                      trace_im={"back": robin.imag}, trace_aux={"back": abs(robin)})
+    _check(route, route.solve_hcurl, fes, coefficients, _rhs(fes, "HCurl") + 0j, bonus=(4, 0, 0), cycles=3)
 
 
 def _other_mesh(name):
