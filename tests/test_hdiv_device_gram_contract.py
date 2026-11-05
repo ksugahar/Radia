@@ -517,5 +517,7 @@ def test_every_connected_element_mix_is_the_mixed_family(monkeypatch, counts):
 def test_hex_gram_downloads_only_flags_and_table_sizes():
     source = (HDIV / "hdiv_hex_gram.cuh").read_text(encoding="utf-8")
     downloads = re.findall(r"cudaMemcpy\w*\(([^;]*)DeviceToHost", source)
-    assert sorted(d.split(",")[2].strip() for d in downloads) == ["sizeof(int)", "sizeof(x)", "sizeof(y)"], downloads
+    # The flag, the two rule checks and the item count of each cost class that paces the launches; never a matrix.
+    expected = ["sizeof(classItems)", "sizeof(int)", "sizeof(x)", "sizeof(y)"]
+    assert sorted(d.split(",")[2].strip() for d in downloads) == expected, downloads
     assert "cudaMemcpyToSymbol" not in source and "cudaMemcpyHostToDevice" not in source
