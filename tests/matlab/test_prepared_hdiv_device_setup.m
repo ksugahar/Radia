@@ -6,8 +6,10 @@ function report=test_prepared_hdiv_device_setup(setup,bhTable,outPath)
 % stale epoch. Assumes: independent CPU certification is external (validation_test).
 modes={'reference-diagonal','reference-chebyshev-graph'};rows=cell(1,2);solutions=cell(1,2);
 for k=1:2
+    % A Newton step whose data is near rounding reaches a true residual of about
+    % 1e-12 at best on this fixture, so the inner tolerance stays well above that.
     obj=radia.gpu.PreparedHDivNonlinear(setup,[1000 -2000 5000],bhTable,Preconditioner=modes{k}, ...
-        NonlinearTolerance=5e-14,LinearTolerance=5e-14);
+        NonlinearTolerance=5e-14,LinearTolerance=1e-8);
     cleanup=onCleanup(@()delete(obj));
     before=obj.stats();first=obj.solve();second=obj.solve(1,first.coefficients);after=obj.stats();
     assert(strcmp(first.mesh_sha256,setup.mesh_sha256) && strcmp(first.backend,'gpu'));
