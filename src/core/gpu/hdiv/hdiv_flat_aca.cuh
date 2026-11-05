@@ -124,10 +124,12 @@ inline FlatAcaPartition flatAcaPartition(const FlatBlock& block,const FlatAcaOpt
 // Per-leaf ACA state; offsets index the batch scratch. Norms stay on the device.
 struct AcaLeafState {
     std::size_t row,column,rows,columns,u,v,residual,used;
-    double frobenius2,maxAbs;int rank,status,pivotRow,steps,cap,factorRank;
+    double frobenius2,maxAbs;int rank,status,pivotRow,steps,cap,factorRank,probe;
 };
 enum AcaStatus:int {acaActive=0,acaConverged=1,acaRankCap=2,acaNonfinite=3,acaDenseSmaller=4};
 constexpr int acaThreads=128;
+// Rows that must agree with the factors before a leaf with a small last term stops.
+constexpr int acaProbes=8;
 constexpr std::size_t acaNone=~std::size_t(0);  // device-safe "no index"
 __device__ inline double acaEntry(const FlatDevice& d,const std::size_t* perm,const double* sigma,std::size_t i,std::size_t j){
     const auto a=perm[i],b=perm[j];return flatEntry(d,a,b)*((1./sigma[a])*(1./sigma[b]));
@@ -152,6 +154,14 @@ __device__ inline std::size_t acaNextRow(const AcaLeafState& L,const double* use
     for(auto r=std::size_t(threadIdx.x);r<L.rows;r+=acaThreads)if(r!=skip&&used[r]==0.0){value=0;index=r;break;}
     acaBlockArgmax(value,index,sv,si);return index;
 }
+// The unused row nearest the evenly spaced target of one probe, or none; the same row in every thread.
+__device__ inline std::size_t acaProbeRow(const AcaLeafState& L,const double* used,std::size_t skip,int probe,double* sv,std::size_t* si){
+    const double target=double(2*probe-1)*double(L.rows)/double(2*acaProbes);
+    double value=-double(L.rows)-1.0;std::size_t index=acaNone;
+    for(auto r=std::size_t(threadIdx.x);r<L.rows;r+=acaThreads){const double distance=fabs(double(r)-target);
+        if(r!=skip&&used[r]==0.0&&-distance>value){value=-distance;index=r;}}
+    acaBlockArgmax(value,index,sv,si);return index;
+}
 // What one ACA step reads: Gram entries of the permuted charges.
 struct AcaGramEntry {FlatDevice d;const std::size_t* perm;const double* sigma;
     __device__ double operator()(const AcaLeafState& L,std::size_t i,std::size_t j)const{return acaEntry(d,perm,sigma,L.row+i,L.column+j);}};
@@ -166,7 +176,11 @@ struct AcaFactorEntry {const double* factors;
         for(int r=0;r<L.factorRank;++r)sum+=factors[L.row+i+L.rows*r]*factors[L.column+j+L.columns*r];return sum;}};
 // One ACA step for every active leaf of the batch (one block per leaf). A
 // negligible pivot row is marked used and the next unused row is tried; the
-// leaf converges by row exhaustion only after every row was tried.
+// leaf converges by row exhaustion only after every row was tried. A small last
+// term does not stop a leaf by itself: where clusters are symmetric, singular
+// pairs come nearly equal and that term misses the next one. Probe rows must then
+// agree with the factors, the mean row of the remainder at eps; the first that
+// does not becomes the next pivot.
 template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,double* scratch,double eps,int* active){
     __shared__ double sv[acaThreads];__shared__ std::size_t si[acaThreads];
     AcaLeafState L=leaves[blockIdx.x];if(L.status!=acaActive)return;
@@ -183,6 +197,17 @@ template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,do
     {std::size_t ignored=0;acaBlockArgmax(rowAbs,ignored,sv,si);}
     const double maxAbs=fmax(L.maxAbs,rowAbs);
     if(bad||!isfinite(best)){if(threadIdx.x==0){L.status=acaNonfinite;leaves[blockIdx.x]=L;}return;}
+    if(L.probe>0){
+        double row2=0;for(auto j=std::size_t(threadIdx.x);j<columns;j+=acaThreads)row2+=R[j]*R[j];
+        row2=acaBlockSum(row2,sv);
+        if(row2<=eps*eps*L.frobenius2/double(rows)){
+            const auto next=acaProbeRow(L,used,i,L.probe-1,sv,si);
+            if(threadIdx.x==0){used[i]=1.0;L.maxAbs=maxAbs;++L.steps;
+                if(L.probe==1||next==acaNone)L.status=acaConverged;else{--L.probe;L.pivotRow=int(next);atomicAdd(active,1);}
+                leaves[blockIdx.x]=L;}
+            return;
+        }
+    }
     if(!(best>1e-15*maxAbs)){
         const auto next=acaNextRow(L,used,i,sv,si);
         if(threadIdx.x==0){used[i]=1.0;L.maxAbs=maxAbs;++L.steps;
@@ -209,16 +234,20 @@ template<class Entry>__global__ void acaStep(Entry entry,AcaLeafState* leaves,do
         for(auto r=std::size_t(threadIdx.x);r<rows;r+=acaThreads)uu+=U[r+rows*l]*U[r+rows*k];
         for(auto j=std::size_t(threadIdx.x);j<columns;j+=acaThreads)vv+=V[j+columns*l]*V[j+columns*k];
         cross+=acaBlockSum(uu,sv)*acaBlockSum(vv,sv);}
+    const double term=nu2*nv2,frobenius2=L.frobenius2+2*cross+term;
+    const bool settled=sqrt(term)<=eps*sqrt(frobenius2);
+    const auto probeRow=settled?acaProbeRow(L,used,i,acaProbes,sv,si):acaNone;
     if(threadIdx.x==0){
-        const double term=nu2*nv2,frobenius2=L.frobenius2+2*cross+term;
         used[i]=1.0;L.maxAbs=fmax(maxAbs,columnAbs);L.rank=int(k+1);++L.steps;L.frobenius2=frobenius2;
         if(bad||!isfinite(term)||!isfinite(frobenius2)||!(frobenius2>0))L.status=acaNonfinite;
-        else if(sqrt(term)<=eps*sqrt(frobenius2)||std::size_t(L.rank)==(rows<columns?rows:columns))L.status=acaConverged;
+        else if(std::size_t(L.rank)==(rows<columns?rows:columns))L.status=acaConverged;
+        else if(settled&&(L.rank>=L.cap||probeRow==acaNone))L.status=acaConverged;
+        else if(settled){L.probe=acaProbes;L.pivotRow=int(probeRow);atomicAdd(active,1);}
         else if(L.rank>=L.cap)L.status=acaRankCap;
         else if(nextRow==acaNone)L.status=acaConverged;
         // Factors of this rank already take as much as the dense leaf, and the rank only grows.
         else if(std::size_t(L.rank)*(rows+columns)>=rows*columns)L.status=acaDenseSmaller;
-        else{L.pivotRow=int(nextRow);atomicAdd(active,1);}
+        else{L.probe=0;L.pivotRow=int(nextRow);atomicAdd(active,1);}
         leaves[blockIdx.x]=L;
     }
 }
