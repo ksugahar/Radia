@@ -98,7 +98,8 @@ def test_the_coefficient_function_is_the_checked_tensor(tmp_path):
     from radia.kelvin_star import star_kelvin_mu_cf, star_kelvin_source_h_cf
     block = Box(Pnt(0.65, -0.05, -0.3), Pnt(0.95, 0.25, -0.1))
     block.mat("kelvin")
-    mesh = ng.Mesh(OCCGeometry(block).GenerateMesh(maxh=0.2))
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(block).GenerateMesh(maxh=0.2))
     boundary = BOUNDARIES["disk"]
     assembled = star_kelvin_mu_cf(mesh, boundary, CENTER)
     probes = np.array([[0.70, 0.02, -0.15], [0.90, 0.20, -0.25], [0.81, 0.12, -0.28], [0.72, 0.21, -0.18]])
@@ -120,7 +121,8 @@ def test_a_relative_permeability_on_the_exterior_refuses(tmp_path):
     from radia.kelvin_star import star_kelvin_mu_cf
     block = Box(Pnt(0.65, -0.05, -0.3), Pnt(0.95, 0.25, -0.1))
     block.mat("kelvin")
-    mesh = ng.Mesh(OCCGeometry(block).GenerateMesh(maxh=0.2))
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(block).GenerateMesh(maxh=0.2))
     with pytest.raises(ValueError, match="override Kelvin"):
         star_kelvin_mu_cf(mesh, BOUNDARIES["disk"], CENTER, mu_r_by_material={"kelvin": 2.0})
     with pytest.raises(ValueError, match="not mesh materials"):
