@@ -3,8 +3,9 @@
 Guards: on boxes with one or two mirror planes (touching or with a gap, affine or distorted), and on a polar sector
 whose rotated copies touch it at the seam (linear and Q2), BDM1 and BDM2, the device entries, the energy operator on the
 dense and the compressed routes, the linear and nonlinear solves and the direct field with images agree with the CPU
-route on identical inputs. Dropping the image sum, a sign, the symmetrized image block, the self rule of an on-plane
-host or the inverse point map moves them far beyond the detectors. A sector of several cells is compared with the
+route on identical inputs. Dropping the image sum, a sign, the symmetrized image block or the inverse point map moves them
+far beyond the detectors. The self branch of an on-plane host under its image is not separated, affine or trapezoid: a
+point on the plane is its own image, so both branches read one point. A sector of several cells is compared with the
 direct route of the explicitly meshed ring, since the CPU image dispatch reads those touching pairs through the inverse
 rotation of the source and selects a far rule; that CPU entry error stays visible in the recorded properties. Every
 list the CPU route refuses is refused here. A probe whose image lands on a source face raises on the closed-form route.
@@ -105,6 +106,11 @@ def _shear(x, y, z):
     return (x*(1.0 + 8.0*y), y + 0.2*x, z*(1.0 + 6.0*x))
 
 
+def _trapezoid(x, y, z):
+    """Keeps the plane x = 0 and makes the host on it a trapezoid there, so its self rule is not the affine one."""
+    return (x*(1.0 + 8.0*y), y + 0.2*x, z*(1.0 + 30.0*y))
+
+
 @pytest.fixture(scope="module")
 def cuda():
     if not os.environ.get("RADIA_HDIV_NATIVE_TEST_DIR"):
@@ -121,6 +127,7 @@ def meshes(tmp_path_factory):
         corner=_box(root/"corner.vol", (0.0, 0.0, -0.01), (0.02, 0.02, 0.01), (2, 1, 1)),
         gap=_box(root/"gap.vol", (0.004, -0.01, -0.01), (0.024, 0.01, 0.01), (2, 1, 1)),
         distorted=_box(root/"distorted.vol", (0.0, -0.01, -0.01), (0.02, 0.01, 0.01), (2, 1, 1), _shear),
+        trapezoid=_box(root/"trapezoid.vol", (0.0, -0.01, -0.01), (0.02, 0.01, 0.01), (2, 1, 1), _trapezoid),
         sector=_sector(root/"sector.vol", 1, 8),
         sector2=_sector(root/"sector2.vol", 2, 8),
         ring1=_sector(root/"ring1.vol", 1, 8, copies=8),
@@ -192,7 +199,7 @@ def _radial_q2(mesh):
 
 _ENTRY_CASES = [("cut", "-x", None, False, (), None), ("cut", "+x", None, False, (), None), ("corner", "-x-y", None, False, (), None),
                 ("corner", "+x-y", None, False, (), None), ("gap", "-x", None, False, (), None),
-                ("distorted", "-x", None, False, (), None), ("poles", None, 6, True, (), None),
+                ("distorted", "-x", None, False, (), None), ("trapezoid", "-x", None, False, (), None), ("poles", None, 6, True, (), None),
                 ("sector", None, 8, False, SEAM, None), ("sector", None, 8, False, SEAM, _radial_q2)]
 
 
