@@ -120,11 +120,11 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
     block.hostTypes.assign(input.hostTypes.begin(),input.hostTypes.end());
     if(block.hex){
         if(input.hexRules.size()%3||input.hexBands.size()!=6)throw std::invalid_argument("HEX geometry requires (rule,point,weight) rows and six bands");
-        radia_hmatrix_cuda::HostVector<double>* points[10]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf,&block.ruleNearCell,&block.ruleFar[0],&block.ruleFar[1],&block.ruleFar[2]};
-        radia_hmatrix_cuda::HostVector<double>* weights[10]={&block.ruleOutW,&block.ruleInW,&block.rulePairW,&block.rulePairAffineW,&block.ruleNearW,&block.ruleInSelfW,&block.ruleNearCellW,&block.ruleFarW[0],&block.ruleFarW[1],&block.ruleFarW[2]};
+        radia_hmatrix_cuda::HostVector<double>* points[11]={&block.ruleOut,&block.ruleIn,&block.rulePair,&block.rulePairAffine,&block.ruleNear,&block.ruleInSelf,&block.ruleNearCell,&block.ruleFar[0],&block.ruleFar[1],&block.ruleFar[2],&block.ruleTangent};
+        radia_hmatrix_cuda::HostVector<double>* weights[11]={&block.ruleOutW,&block.ruleInW,&block.rulePairW,&block.rulePairAffineW,&block.ruleNearW,&block.ruleInSelfW,&block.ruleNearCellW,&block.ruleFarW[0],&block.ruleFarW[1],&block.ruleFarW[2],&block.ruleTangentW};
         int previous=0;
         for(std::size_t i=0;i<input.hexRules.size();i+=3){const double r=input.hexRules[i];
-            if(!(r>=0&&r<=9&&r==std::floor(r))||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..9");
+            if(!(r>=0&&r<=10&&r==std::floor(r))||int(r)<previous)throw std::invalid_argument("HEX rule rows must be grouped by rule index 0..10");
             previous=int(r);points[previous]->push_back(input.hexRules[i+1]);weights[previous]->push_back(input.hexRules[i+2]);}
         block.nearGrade=input.hexBands[0];block.farInner=input.hexBands[1];block.innerSwitch=input.hexBands[2];
         for(int k=0;k<3;++k)block.farRatio[k]=input.hexBands[3+k];

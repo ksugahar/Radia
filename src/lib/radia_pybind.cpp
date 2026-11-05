@@ -3762,7 +3762,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          F64Array gl_pair_a, F64Array gw_pair_a,
                          F64Array gl_pair_affine_a, F64Array gw_pair_affine_a, I32Array host_types_a,
                          F64Array gl_near_cell_a, F64Array gw_near_cell_a, double inner_switch,
-                         F64Array far_level_rows_a, F64Array far_level_ratios_a) {
+                         F64Array far_level_rows_a, F64Array far_level_ratios_a,
+                         F64Array gl_tangent_a, F64Array gw_tangent_a) {
                  auto hex_cell_nodes = to_1d_vector<double>(hex_cell_nodes_a, "hex_cell_nodes");
                  auto quad_face_nodes = to_1d_vector<double>(quad_face_nodes_a, "quad_face_nodes");
                  auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
@@ -3795,6 +3796,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  auto gw_near_cell = to_1d_vector<double>(gw_near_cell_a, "gw_near_cell");
                  auto far_level_rows = to_1d_vector<double>(far_level_rows_a, "far_level_rows");
                  auto far_level_ratios = to_1d_vector<double>(far_level_ratios_a, "far_level_ratios");
+                 auto gl_tangent = to_1d_vector<double>(gl_tangent_a, "gl_tangent");
+                 auto gw_tangent = to_1d_vector<double>(gw_tangent_a, "gw_tangent");
                  return build_charge_gram_released(
                      [&]() { return std::make_shared<RadHACApKChargeGram>(
                          std::move(hex_cell_nodes), std::move(quad_face_nodes), n_el, n_bf,
@@ -3812,7 +3815,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(gl_pair), std::move(gw_pair),
                          std::move(gl_pair_affine), std::move(gw_pair_affine), std::move(host_types),
                          std::move(gl_near_cell), std::move(gw_near_cell), inner_switch,
-                         std::move(far_level_rows), std::move(far_level_ratios)); },
+                         std::move(far_level_rows), std::move(far_level_ratios),
+                         std::move(gl_tangent), std::move(gw_tangent)); },
                      eps, leaf, eta, build, "hex BDM1/BDM2 charge Gram H-matrix build failed");
              }),
              py::arg("hex_cell_nodes"), py::arg("quad_face_nodes"), py::arg("n_el"), py::arg("n_bf"),
@@ -3831,6 +3835,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("host_types") = I32Array(0),
              py::arg("gl_near_cell") = F64Array(0), py::arg("gw_near_cell") = F64Array(0), py::arg("inner_switch") = 0.0,
              py::arg("far_level_rows") = F64Array(0), py::arg("far_level_ratios") = F64Array(0),
+             py::arg("gl_tangent") = F64Array(0), py::arg("gw_tangent") = F64Array(0),
              "HEX BDM1/BDM2 mode: Q1/Q2 monomial charges (8/27 per hex volume + 4/9 per quad-face) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "

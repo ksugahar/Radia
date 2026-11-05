@@ -41,7 +41,8 @@ struct FlatInput {
     radia_hmatrix_cuda::HostVector<double> gl,gw;
     // HEX: rows (rule, point, weight) with rule 0 outer, 1 radial inner,
     // 2 pair product, 3 affine pair product, 4 near outer, 5 fine inner (BDM1 only), 6 plain near outer of cell targets
-    // (mixed only, absent when they take rule 4) and 7..9 far levels (mixed only); bands = (near_grade, far_inner,
+    // (mixed only, absent when they take rule 4), 7..9 far levels (mixed only) and 10 the tangent remainder of a warped
+    // source (mixed only, absent when it keeps the radial and fan rules); bands = (near_grade, far_inner,
     // inner_switch, then the separation ratio of each far level, 0 when absent).
     radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
     radia_hmatrix_cuda::HostVector<int> hostTypes;

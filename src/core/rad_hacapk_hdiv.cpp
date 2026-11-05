@@ -3646,7 +3646,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> gl_pair_affine, std::vector<double> gw_pair_affine,
     std::vector<int> host_types,
     std::vector<double> gl_near_cell, std::vector<double> gw_near_cell, double inner_switch,
-    std::vector<double> far_level_rows, std::vector<double> far_level_ratios)
+    std::vector<double> far_level_rows, std::vector<double> far_level_ratios,
+    std::vector<double> gl_tangent, std::vector<double> gw_tangent)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf), m_hostType(std::move(host_types)),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
@@ -3655,6 +3656,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
       m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
       m_glNearCell(std::move(gl_near_cell)), m_gwNearCell(std::move(gw_near_cell)), m_innerSwitch(inner_switch),
+      m_glTangent(std::move(gl_tangent)), m_gwTangent(std::move(gw_tangent)),
       m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
       m_glPair(std::move(gl_pair)), m_gwPair(std::move(gw_pair)),
       m_glPairAffine(std::move(gl_pair_affine)), m_gwPairAffine(std::move(gw_pair_affine)),
@@ -3677,6 +3679,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         throw std::invalid_argument("HEX ChargeGram inner_switch must be finite and not negative");
     if (m_hostType.empty() && (!m_glNearCell.empty() || m_innerSwitch != 0.0))
         throw std::invalid_argument("HEX ChargeGram plain near rule and inner switch belong to mixed meshes");
+    if (m_glTangent.size() != m_gwTangent.size() || (m_hostType.empty() && !m_glTangent.empty()))
+        throw std::invalid_argument("HEX ChargeGram tangent rule belongs to mixed meshes and takes one weight per point");
     if (far_level_rows.size() % 3 != 0 || (m_hostType.empty() && !far_level_ratios.empty()))
         throw std::invalid_argument("HEX ChargeGram far levels are (level, point, weight) rows of a mixed mesh");
     m_farLevels.resize(far_level_ratios.size());
@@ -4620,6 +4624,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_glnear_cell_n", (double)m_glNearCell.size());
     out.emplace_back("hex_inner_switch", m_innerSwitch);
     out.emplace_back("hex_far_levels", (double)m_farLevels.size());
+    out.emplace_back("hex_gltangent_n", (double)m_glTangent.size());
     out.emplace_back("hex_glout_n", (double)m_glOut.size());
     out.emplace_back("hex_glin_n", (double)m_glIn.size());
     out.emplace_back("hex_glin_self_n", (double)m_glInSelf.size());
@@ -6189,6 +6194,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
     const std::vector<double>* gwFar = &m_gwOut;
     if (!near) for (const HexFarLevel& level : m_farLevels)
         if (sep >= level.ratio*(m_size[repA] + m_size[repB])) { glFar = &level.gl; gwFar = &level.gw; }
+    int axisOrder = 1;
+    for (int v : expS) axisOrder = std::max(axisOrder, v);
+    const auto warped = [&](const double* p, const double* cubeT, double* inn) {
+        if (!warpedPotentials(typeS, ndS, p, self ? cubeT : nullptr, expS.data(), nS, axisOrder, m_glInSelf.data(), m_gwInSelf.data(), (int)m_glInSelf.size(),
+                              m_glTangent.data(), m_gwTangent.data(), (int)m_glTangent.size(), inn))
+            throw std::runtime_error("typed charge Gram: degenerate tangent of a warped source");
+    };
     const auto inner = [&](const double* p, const double* cubeT, double* inn) {
         if (!near || beyondSource(p)) {
             const std::vector<double>& gF = *glFar;
@@ -6217,6 +6229,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
                         inn[l] += pyramidRationalPotential(ndS, center, p, m_glInSelf.data(), m_gwInSelf.data(), nq);
                 return;
             }
+            if (!m_glTangent.empty()) {
+                warped(p, cubeT, inn);
+                return;
+            }
             double anchor[3];
             if (self) collapse(typeS, cubeT, anchor); else pyramidAnchor(ndS, p, anchor);
             pyramidRadial(ndS, p, anchor, expS.data(), 0, nS, m_glInSelf.data(), m_gwInSelf.data(), nq, inn);
@@ -6224,6 +6240,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
         }
         if (sourceAffine) {
             for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, p, srcG, inn);
+            return;
+        }
+        if (!m_glTangent.empty()) {
+            warped(p, cubeT, inn);
             return;
         }
         double anchor[3] = {cubeT[0], cubeT[1], cubeT[2]};
