@@ -38,6 +38,7 @@ constexpr double hexMaxAnisotropy=12.0,hexAffineExactNear=1.0,hexDistortedFar=1.
 // CPU HOST_CONE_SINH_MIN_WIDTH and HOST_CONE_SINH_MAX_WIDTH.
 constexpr double hexSinhMinWidth=1e-3,hexSinhMaxWidth=1.0;
 struct HexRule {double x[hexRuleCap],w[hexRuleCap];int n;};
+constexpr int hexFarLevels=3;
 enum HexClass:int {hexFarClass=0,hexDuffyClass=1,hexProductClass=2,hexAffineClass=3,hexCompositeClass=4,hexGradedClass=5,hexSubPairClass=6};
 // Global host g: cells 0..cells-1, then boundary quads. Charges of one host
 // are contiguous (first[g], count[g]); exponents are reference xi powers.
@@ -53,6 +54,8 @@ struct HexDevice {
     // nearCell: plain outer rule of the cell targets of near pairs on a mixed mesh, empty when they take the graded nearOut.
     // innerSwitch: a near target point beyond (1 + innerSwitch) source radii reads the far rule; 0 keeps the near inner everywhere.
     HexRule out,in,pair,pairAffine,nearOut,inSelf,nearCell;double nearGrade,farInner,innerSwitch,candidate;int order;
+    // Far rule by separation on a mixed mesh: a pair at or beyond farRatio[k] of its summed radii takes farLevel[k].
+    HexRule farLevel[hexFarLevels];double farRatio[hexFarLevels];const double* farLevelX[hexFarLevels];const double* farLevelW[hexFarLevels];
     // Host types of a mixed mesh (radia_hdiv_typed::HostType); null on a pure hex mesh.
     const int* type;
 };
@@ -99,6 +102,17 @@ __device__ inline void hexNeumaier(double& sum,double& comp,double x){
 __device__ inline double hexSep(const HexDevice& d,int t,int s){
     const double* a=d.center+3*std::size_t(t);const double* b=d.center+3*std::size_t(s);
     const double dx=a[0]-b[0],dy=a[1]-b[1],dz=a[2]-b[2];return sqrt(dx*dx+dy*dy+dz*dz);}
+// Level 0 is the outer rule; a level with no points is absent.
+__device__ inline int hexFarLevel(const HexDevice& d,int t,int s){
+    const double sep=hexSep(d,t,s),sz=d.size[t]+d.size[s];int level=0;
+    for(int k=0;k<hexFarLevels;++k)if(d.farLevel[k].n&&sep>=d.farRatio[k]*sz)level=k+1;
+    return level;
+}
+__device__ inline const HexRule& hexFarRule(const HexDevice& d,int level){return level?d.farLevel[level-1]:d.out;}
+__device__ inline const double* hexFarPoints(const HexDevice& d,int level,int s){const int n=hexFarRule(d,level).n;
+    return (level?d.farLevelX[level-1]:d.farX)+3*std::size_t(s)*(n*n*n);}
+__device__ inline const double* hexFarWeights(const HexDevice& d,int level,int s){const int n=hexFarRule(d,level).n;
+    return (level?d.farLevelW[level-1]:d.farW)+std::size_t(s)*(n*n*n);}
 // CPU HexHostsTouch: a shared Q2 lattice node within 1e-9 of the radius sum.
 __device__ inline bool hexTouch(const HexDevice& d,int t,int s){
     if(t==s)return true;
@@ -187,14 +201,14 @@ __device__ inline void hexFarInner(const HexDevice& d,int s,const double* p,int 
         for(int l=0;l<nS;++l)inner[l]+=w*hexDensity(d,s,hexExponent(d,s,l),xi);}
 }
 // The far rule's source densities, once per block: every target point reads the same table.
-__device__ inline void hexFarDensities(const HexDevice& d,int s,int nS,double* table){
-    const int n1=d.out.n,np=hexCell(d,s)?n1*n1*n1:n1*n1;
-    for(int q=threadIdx.x;q<np;q+=blockDim.x){const double xi[3]={d.out.x[q%n1],d.out.x[(q/n1)%n1],hexCell(d,s)?d.out.x[q/(n1*n1)]:0.0};
+__device__ inline void hexFarDensities(const HexDevice& d,int s,int nS,double* table,int level=0){
+    const HexRule& R=hexFarRule(d,level);const int n1=R.n,np=hexCell(d,s)?n1*n1*n1:n1*n1;
+    for(int q=threadIdx.x;q<np;q+=blockDim.x){const double xi[3]={R.x[q%n1],R.x[(q/n1)%n1],hexCell(d,s)?R.x[q/(n1*n1)]:0.0};
         for(int l=0;l<nS;++l)table[std::size_t(q)*nS+l]=hexDensity(d,s,hexExponent(d,s,l),xi);}
     __syncthreads();
 }
-__device__ inline void hexFarInnerTable(const HexDevice& d,int s,const double* p,int nS,const double* table,double* inner){
-    const int n1=d.out.n,np=hexCell(d,s)?n1*n1*n1:n1*n1;const double* X=d.farX+3*std::size_t(s)*d.farStride;const double* W=d.farW+std::size_t(s)*d.farStride;
+__device__ inline void hexFarInnerTable(const HexDevice& d,int s,const double* p,int nS,const double* table,double* inner,int level=0){
+    const int n1=hexFarRule(d,level).n,np=hexCell(d,s)?n1*n1*n1:n1*n1;const double* X=hexFarPoints(d,level,s);const double* W=hexFarWeights(d,level,s);
     for(int q=0;q<np;++q){const double dx=p[0]-X[3*q],dy=p[1]-X[3*q+1],dz=p[2]-X[3*q+2];const double r=sqrt(dx*dx+dy*dy+dz*dz);
         if(r<1e-300)continue;const double w=W[q]/r;const double* row=table+std::size_t(q)*nS;
         for(int l=0;l<nS;++l)inner[l]+=w*row[l];}
@@ -477,7 +491,8 @@ __device__ inline bool hexBeyondSource(const HexDevice& d,int s,const double* p)
 // accumulation order (Neumaier for the pair product, as the CPU).
 __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int nT,int nS,double* scratch,double* out,int* invalid){
     const bool cellT=hexCell(d,t),cellS=hexCell(d,s),product=cls==hexProductClass,graded=cls==hexGradedClass;
-    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?(cellT&&d.nearCell.n?d.nearCell:d.nearOut):d.out;
+    const int farLevel=cls==hexFarClass&&d.type?hexFarLevel(d,t,s):0;
+    const HexRule& R=product?(d.affine[t]&&d.affine[s]?d.pairAffine:d.pair):graded?(cellT&&d.nearCell.n?d.nearCell:d.nearOut):hexFarRule(d,farLevel);
     const int N=R.n,nc=cellT?N:1,npT=N*N*nc;int npS=0;
     double* source=scratch;
     if(product){const int ncs=cellS?N:1;npS=N*N*ncs;
@@ -499,10 +514,10 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         const int ncoeff=cellS?84:35;
         for(int l=threadIdx.x;l<nS;l+=blockDim.x)if(!hexMonomialCoeff(lin,scaleInv,cellS,hexExponent(d,s,l),scratch+std::size_t(l)*ncoeff))atomicExch(invalid,1);
         local=scratch;__syncthreads();}
-    const bool switched=graded&&d.innerSwitch>0.0;const int nFar=d.out.n;
+    const bool switched=graded&&d.innerSwitch>0.0;const int nFar=hexFarRule(d,farLevel).n;
     const int farPoints=cls==hexFarClass||switched?(cellS?nFar*nFar*nFar:nFar*nFar):0;
     const std::size_t gradedCoeff=graded?std::size_t(hexGradedCoeff(d.order)):std::size_t(0);
-    double* farTable=scratch+gradedCoeff;if(farPoints)hexFarDensities(d,s,nS,farTable);
+    double* farTable=scratch+gradedCoeff;if(farPoints)hexFarDensities(d,s,nS,farTable,farLevel);
     double* rows=scratch+std::size_t(npS)*(4+nS)+gradedCoeff+std::size_t(farPoints)*nS;const int width=nS+nT;
     for(int q=threadIdx.x;q<npT;q+=blockDim.x){double xi[3],wq;
         if(product){const int a=q/(N*nc),b=(q/nc)%N,c=q%nc;xi[0]=R.x[a];xi[1]=R.x[b];xi[2]=cellT?R.x[c]:0.0;wq=R.w[a]*R.w[b]*(cellT?R.w[c]:1.0);}
@@ -511,7 +526,7 @@ __device__ inline void hexTensorBlock(const HexDevice& d,int t,int s,int cls,int
         if(product){for(int p=0;p<npS;++p){const double* sp=source+std::size_t(p)*(4+nS);
                 const double dx=X[0]-sp[0],dy=X[1]-sp[1],dz=X[2]-sp[2];const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
                 const double w=sp[3]/r;for(int l=0;l<nS;++l)row[l]+=w*sp[4+l];}}
-        else if(cls==hexFarClass||(switched&&hexBeyondSource(d,s,X)))hexFarInnerTable(d,s,X,nS,farTable,row);
+        else if(cls==hexFarClass||(switched&&hexBeyondSource(d,s,X)))hexFarInnerTable(d,s,X,nS,farTable,row,farLevel);
         else if(cls==hexAffineClass)hexAffineInner(d,s,X,nS,row);
         else if(typedSource)hexTypedInner(d,t,s,X,xi,analytic,typedCenter,local,nS,row);
         else if(graded){if(!hexGradedInner(d,t,s,X,xi,nS,row,local))atomicExch(invalid,5);}
@@ -610,11 +625,11 @@ __global__ void hexPrepareHosts(HexDevice d,double* center,double* size,unsigned
         if(!hexMonomialCoeff(lin,scaleInv,cell,e,dst))atomicExch(invalid,1);}
 }
 // Outer tensor rule points of every host (CPU GetHexFarRule): x fastest.
-__global__ void hexFarRules(HexDevice d,double* X,double* W){
+__global__ void hexFarRules(HexDevice d,HexRule R,double* X,double* W){
     const int g=int(blockIdx.x)*blockDim.x+threadIdx.x;if(g>=d.hosts)return;
-    const int n1=d.out.n,np=hexCell(d,g)?n1*n1*n1:n1*n1;
-    for(int q=0;q<np;++q){const int ix=q%n1,iy=(q/n1)%n1,iz=q/(n1*n1);const double xi[3]={d.out.x[ix],d.out.x[iy],hexCell(d,g)?d.out.x[iz]:0.0};
-        hexPoint(d,g,xi,X+3*(std::size_t(g)*d.farStride+q));W[std::size_t(g)*d.farStride+q]=d.out.w[ix]*d.out.w[iy]*(hexCell(d,g)?d.out.w[iz]:1.0);}
+    const int n1=R.n,np=hexCell(d,g)?n1*n1*n1:n1*n1;const std::size_t stride=std::size_t(n1)*n1*n1;
+    for(int q=0;q<np;++q){const int ix=q%n1,iy=(q/n1)%n1,iz=q/(n1*n1);const double xi[3]={R.x[ix],R.x[iy],hexCell(d,g)?R.x[iz]:0.0};
+        hexPoint(d,g,xi,X+3*(std::size_t(g)*stride+q));W[std::size_t(g)*stride+q]=R.w[ix]*R.w[iy]*(hexCell(d,g)?R.w[iz]:1.0);}
 }
 __device__ inline bool hexCandidate(const HexDevice& d,int i,int j){return !(hexSep(d,i,j)>d.candidate*(d.size[i]+d.size[j])+1e-12);}
 __global__ void hexCountPairs(HexDevice d,std::size_t* counts){
@@ -673,14 +688,15 @@ __global__ void hexSymmetrize(HexDevice d,const unsigned long long* keys,const s
 // Far tensor product of one charge pair beyond the pair table.
 __device__ inline double hexFarEntry(const HexDevice& d,std::size_t a,std::size_t b){
     const int t=d.chargeHost[a],s=d.chargeHost[b];const int* ea=d.exponents+3*a;const int* eb=d.exponents+3*b;
-    const int n1=d.out.n,npT=hexCell(d,t)?n1*n1*n1:n1*n1,npS=hexCell(d,s)?n1*n1*n1:n1*n1;
-    const double* XT=d.farX+3*std::size_t(t)*d.farStride;const double* WT=d.farW+std::size_t(t)*d.farStride;
-    const double* XS=d.farX+3*std::size_t(s)*d.farStride;const double* WS=d.farW+std::size_t(s)*d.farStride;
+    const int level=d.type?hexFarLevel(d,t,s):0;const HexRule& R=hexFarRule(d,level);
+    const int n1=R.n,npT=hexCell(d,t)?n1*n1*n1:n1*n1,npS=hexCell(d,s)?n1*n1*n1:n1*n1;
+    const double* XT=hexFarPoints(d,level,t);const double* WT=hexFarWeights(d,level,t);
+    const double* XS=hexFarPoints(d,level,s);const double* WS=hexFarWeights(d,level,s);
     double sum=0.0;
-    for(int qt=0;qt<npT;++qt){const double xt[3]={d.out.x[qt%n1],d.out.x[(qt/n1)%n1],hexCell(d,t)?d.out.x[qt/(n1*n1)]:0.0};double inner=0.0;
+    for(int qt=0;qt<npT;++qt){const double xt[3]={R.x[qt%n1],R.x[(qt/n1)%n1],hexCell(d,t)?R.x[qt/(n1*n1)]:0.0};double inner=0.0;
         for(int qs=0;qs<npS;++qs){const double dx=XT[3*qt]-XS[3*qs],dy=XT[3*qt+1]-XS[3*qs+1],dz=XT[3*qt+2]-XS[3*qs+2];
             const double r=sqrt(dx*dx+dy*dy+dz*dz);if(r<1e-300)continue;
-            const double xs[3]={d.out.x[qs%n1],d.out.x[(qs/n1)%n1],hexCell(d,s)?d.out.x[qs/(n1*n1)]:0.0};inner+=(WS[qs]/r)*hexDensity(d,s,eb,xs);}
+            const double xs[3]={R.x[qs%n1],R.x[(qs/n1)%n1],hexCell(d,s)?R.x[qs/(n1*n1)]:0.0};inner+=(WS[qs]/r)*hexDensity(d,s,eb,xs);}
         sum+=(WT[qt]*hexDensity(d,t,ea,xt))*inner;}
     return sum*hexInvFourPi;
 }
@@ -698,7 +714,7 @@ __device__ inline double hexEntry(const HexDevice& d,std::size_t a,std::size_t b
 // symmetrized blocks. Raw directed blocks, work items and scratch live only
 // inside prepare(); the counts that size the table are the only D2H values.
 struct HexPrepared {
-    Buffer<double> cells,faces,center,size,affineCenter,cellCoeff,faceCoeff,farX,farW,values;
+    Buffer<double> cells,faces,center,size,affineCenter,cellCoeff,faceCoeff,farX,farW,values,levelX[hexFarLevels],levelW[hexFarLevels];
     Buffer<int> first,count,chargeHost,exponents,invalid,types;Buffer<unsigned char> affine;
     Buffer<unsigned long long> keys;Buffer<std::size_t> offsets;
     HexDevice d{};int order=1;
@@ -738,6 +754,7 @@ struct HexPrepared {
         d.chargeHost=chargeHost.data;d.exponents=exponents.data;d.order=order;d.nearGrade=b.nearGrade;d.farInner=b.farInner;d.innerSwitch=b.innerSwitch;
         d.out=rule(b.ruleOut,b.ruleOutW);d.in=rule(b.ruleIn,b.ruleInW);d.pair=rule(b.rulePair,b.rulePairW);d.pairAffine=rule(b.rulePairAffine,b.rulePairAffineW);
         d.nearOut=graded(rule(b.ruleNear,b.ruleNearW));d.inSelf=rule(b.ruleInSelf,b.ruleInSelfW);d.nearCell=rule(b.ruleNearCell,b.ruleNearCellW);
+        for(int k=0;k<hexFarLevels;++k){d.farLevel[k]=rule(b.ruleFar[k],b.ruleFarW[k]);d.farRatio[k]=b.farRatio[k];}
         const bool typed=!b.hostTypes.empty();if(typed){upload(types,b.hostTypes,"host_types");d.type=types.data;}
         center.allocate(3*hosts);size.allocate(hosts);affine.allocate(hosts);affineCenter.allocate(3*hosts);
         cellCoeff.allocate(order==2&&!typed?std::max<std::size_t>(1,checkedProduct(cellsN,27*84)):1);
@@ -750,7 +767,10 @@ struct HexPrepared {
         d.farStride=d.out.n*d.out.n*d.out.n;
         farX.allocate(checkedProduct(hosts,3*std::size_t(d.farStride)));farW.allocate(checkedProduct(hosts,std::size_t(d.farStride)));
         d.farX=farX.data;d.farW=farW.data;
-        hexFarRules<<<hostBlocks,128,0,stream>>>(d,farX.data,farW.data);check(cudaGetLastError());++launches;
+        hexFarRules<<<hostBlocks,128,0,stream>>>(d,d.out,farX.data,farW.data);check(cudaGetLastError());++launches;
+        for(int k=0;k<hexFarLevels;++k)if(d.farLevel[k].n){const std::size_t points=checkedProduct(checkedProduct(std::size_t(d.farLevel[k].n),d.farLevel[k].n),d.farLevel[k].n);
+            levelX[k].allocate(checkedProduct(hosts,3*points));levelW[k].allocate(checkedProduct(hosts,points));d.farLevelX[k]=levelX[k].data;d.farLevelW[k]=levelW[k].data;
+            hexFarRules<<<hostBlocks,128,0,stream>>>(d,d.farLevel[k],levelX[k].data,levelW[k].data);check(cudaGetLastError());++launches;}
         // Dense keeps every host pair; ACA every pair inside the HexHostsTouch radius, which holds every non-far family.
         d.candidate=dense?1e300:1.05;
         Buffer<std::size_t> hostPairs,hostStarts;hostPairs.allocate(hosts);hostStarts.allocate(hosts);

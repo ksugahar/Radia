@@ -56,7 +56,10 @@ struct FlatBlock {
         rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")},
         ruleNear{HostFaultAllocator<double>("hex.near")},ruleNearW{HostFaultAllocator<double>("hex.near-w")},
         ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")},
-        ruleNearCell{HostFaultAllocator<double>("hex.near-cell")},ruleNearCellW{HostFaultAllocator<double>("hex.near-cell-w")};
+        ruleNearCell{HostFaultAllocator<double>("hex.near-cell")},ruleNearCellW{HostFaultAllocator<double>("hex.near-cell-w")},
+        ruleFar[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1")},HostVector<double>{HostFaultAllocator<double>("hex.far-2")},HostVector<double>{HostFaultAllocator<double>("hex.far-3")}},
+        ruleFarW[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-2-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-3-w")}};
+    double farRatio[hexFarLevels]={0.0,0.0,0.0};
     std::size_t charges()const{return host.size();}
     std::size_t cellStride()const{return hex?81:curved?30:12;}
     std::size_t faceStride()const{return hex?27:curved?18:9;}
@@ -138,6 +141,14 @@ struct FlatBlock {
         if(ruleNearCell.size()>std::size_t(hexRuleCap)||ruleNearCellW.size()!=ruleNearCell.size())throw std::invalid_argument("HEX plain near rule takes 0..16 Gauss points");
         for(std::size_t k=0;k<ruleNearCell.size();++k)if(!std::isfinite(ruleNearCell[k])||!std::isfinite(ruleNearCellW[k])||!(ruleNearCell[k]>0)||!(ruleNearCell[k]<1)||!(ruleNearCellW[k]>0))
             throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
+        // A far level has fewer points than the outer rule and starts further out than the level before it.
+        {double previous=0.0;std::size_t previousPoints=ruleOut.size();bool ended=false;
+            for(int k=0;k<hexFarLevels;++k){const auto& x=ruleFar[k];const auto& w=ruleFarW[k];
+                if(x.empty()){if(!w.empty()||farRatio[k]!=0.0)throw std::invalid_argument("HEX far level has a ratio but no rule");ended=true;continue;}
+                if(!typed||ended)throw std::invalid_argument("HEX far levels belong to mixed meshes and fill their slots in order");
+                if(w.size()!=x.size()||x.size()>=previousPoints||!std::isfinite(farRatio[k])||!(farRatio[k]>previous))throw std::invalid_argument("HEX far levels need fewer points and a larger ratio each");
+                for(std::size_t q=0;q<x.size();++q)if(!std::isfinite(x[q])||!std::isfinite(w[q])||!(x[q]>0)||!(x[q]<1)||!(w[q]>0))throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
+                previous=farRatio[k];previousPoints=x.size();}}
         const int monomials=(order+1)*(order+1);
         for(std::size_t g=0;g<count.size();++g)if(count[g]>(g<cellTotal?monomials*(order+1):monomials))
             throw std::invalid_argument("HEX host carries more charges than its tensor monomials");

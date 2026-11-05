@@ -2404,18 +2404,28 @@ _MIXED_GLNEAR_N = 10
 _MIXED_GLNEAR_CELL_N = 8
 _MIXED_INNER_SWITCH = 0.25
 _MIXED_NEAR_BAND = 0.5
+_MIXED_FAR_LEVELS = {1: ((4, 1.1), (3, 1.7)), 2: ((5, 1.1), (4, 1.6), (3, 3.4))}
 
 
 def _mixed_gram_rules(p):
-    """1D outer, pyramid, graded near and plain near counts and the inner switch of the mixed Gram, for CPU and device.
+    """1D outer, pyramid, graded near and plain near counts, inner switch and far levels of the mixed Gram, for CPU and device.
 
     The pyramid count is the radial rule of a non-parallelogram pyramid and the level rule of the rational
     charge of an affine one. The graded near rule serves face targets, and the plain near rule cell targets,
     whose count 0 hands them to the graded rule. A near target point beyond (1 + switch) source radii reads the
-    far rule, and 0 keeps the near inner everywhere. These are proposed values, from convergence on small meshes.
-    A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
+    far rule, and 0 keeps the near inner everywhere. A far pair at or beyond the ratio of a far level to its summed
+    radii takes that level's count instead of the outer one. These are proposed values, from convergence on small
+    meshes. A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
-    return (5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH
+    return ((5 if p == 1 else 6), (6 if p == 1 else 14), _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
+            _MIXED_FAR_LEVELS[p])
+
+
+def _mixed_far_level_rows(far_levels):
+    """(level, point, weight) rows and the ratios of the far levels, for the CPU constructor."""
+    rows = [np.column_stack((np.full(n, level, dtype=np.float64), *_g01(n))) for level, (n, _) in enumerate(far_levels)]
+    return (np.concatenate(rows).ravel() if rows else _EMPTY_F64,
+            np.array([ratio for _, ratio in far_levels], dtype=np.float64))
 
 
 def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materialize_mass=True, build_hmatrix=True):
@@ -2432,7 +2442,8 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
     t0 = time.perf_counter()
     cb = _charge_basis_mixed(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
-    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch, far_levels = _mixed_gram_rules(p)
+    far_rows, far_ratios = _mixed_far_level_rows(far_levels)
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
     gln, gwn = _g01(glnear_n)
@@ -2457,7 +2468,8 @@ def _build_charge_gram_mixed(fes, *, eps=1e-12, leafsize=64, eta=2.0, materializ
         gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
         gl_pair_affine=_f64_buffer(glp), gw_pair_affine=_f64_buffer(gwp),
         host_types=_i32_buffer(cb["host_types"]),
-        gl_near_cell=_f64_buffer(glc), gw_near_cell=_f64_buffer(gwc), inner_switch=inner_switch)
+        gl_near_cell=_f64_buffer(glc), gw_near_cell=_f64_buffer(gwc), inner_switch=inner_switch,
+        far_level_rows=_f64_buffer(far_rows), far_level_ratios=_f64_buffer(far_ratios))
     build_charge_gram.last_timings = {"charge_basis_wall_s": t1 - t0, "charge_gram_cpp_wall_s": time.perf_counter() - t1}
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
@@ -2709,15 +2721,17 @@ def _prepare_gpu_mixed_charge_inputs(fes, *, backend):
         face_nodes.append(_mixed_lattice_nodes(mesh, e, host_type).ravel())
         for a, b in (_mons_quad(p) if host_type == _HOST_QUAD else _mons_tri(p)):
             host.append(h); kind.append(1); expo.extend((a, b, 0))
-    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch = _mixed_gram_rules(p)
+    glout_n, glin_n, glnear_n, glnear_cell_n, inner_switch, far_levels = _mixed_gram_rules(p)
     plain_near = dict(near_cell=_g01(glnear_cell_n)) if glnear_cell_n else {}
+    plain_near.update({"far_%d" % (level + 1): _g01(n) for level, (n, _) in enumerate(far_levels)})
     return dict(
         family="mixed", n_el=len(vels), cell_nodes=np.concatenate(cell_nodes), face_nodes=np.concatenate(face_nodes),
         host_types=np.array(host_types, dtype=np.int32), charge_host=np.array(host, dtype=np.int32),
         charge_kind=np.array(kind, dtype=np.int32), charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N),
                    near=_g01(glnear_n), inner_self=_g01(glin_n), **plain_near),
-        near_grade=_MIXED_NEAR_BAND, far_inner=1.0, inner_switch=inner_switch)
+        near_grade=_MIXED_NEAR_BAND, far_inner=1.0, inner_switch=inner_switch,
+        far_ratios=[ratio for _, ratio in far_levels])
 
 
 def _prepare_gpu_hex_charge_inputs(fes, *, backend):
@@ -2769,7 +2783,7 @@ def _prepare_gpu_hex_charge_inputs(fes, *, backend):
         charge_host=np.array(host, dtype=np.int32), charge_kind=np.array(kind, dtype=np.int32),
         charge_expo=np.array(expo, dtype=np.int32),
         rules=dict(out=_g01(glout_n), inner=_g01(glin_n), pair=_g01(_HEX_GLPAIR_N), pair_affine=_g01(_HEX_GLPAIR_N), **graded),
-        near_grade=1.0, far_inner=1.0, inner_switch=0.0)
+        near_grade=1.0, far_inner=1.0, inner_switch=0.0, far_ratios=[])
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,

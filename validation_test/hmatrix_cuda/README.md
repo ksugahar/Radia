@@ -93,7 +93,8 @@ there can be disturbed by the host.
   source (`src/core/rad_hdiv_field_*.inc`, `src/core/gpu/hdiv/hdiv_typed_host_math.inc`). Its 1D rules come from
   `_mixed_gram_rules` in `src/radia/vim/_vim.py` as kernel arguments; the near band, the near and pyramid counts and the
   inner switch are proposed values, not an adopted criterion. Cell targets of near pairs take a plain rule and face
-  targets the graded one, and a near target point beyond the switch radius of the source reads the far rule.
+  targets the graded one, and a near target point beyond the switch radius of the source reads the far rule. A far
+  pair takes fewer points the further apart it is.
 - Rational pyramid charge: on an affine pyramid each level `z` of `xy/(1-z)` is a parallelogram carrying a polynomial,
   whose potential is exact, and the rule in `z` is split at the level of the point. The radial rule it replaced did not
   converge at order 2 on the small meshes of the record. A non-parallelogram pyramid keeps a radial rule on all charges.
