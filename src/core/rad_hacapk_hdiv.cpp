@@ -6196,9 +6196,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
         if (sep >= level.ratio*(m_size[repA] + m_size[repB])) { glFar = &level.gl; gwFar = &level.gw; }
     int axisOrder = 1;
     for (int v : expS) axisOrder = std::max(axisOrder, v);
+    const std::vector<double>& remainderX = self ? m_glInSelf : m_glTangent;
+    const std::vector<double>& remainderW = self ? m_gwInSelf : m_gwTangent;
     const auto warped = [&](const double* p, const double* cubeT, double* inn) {
         if (!warpedPotentials(typeS, ndS, p, self ? cubeT : nullptr, expS.data(), nS, axisOrder,
-                              m_glTangent.data(), m_gwTangent.data(), (int)m_glTangent.size(), inn))
+                              remainderX.data(), remainderW.data(), (int)remainderX.size(), inn))
             throw std::runtime_error("typed charge Gram: degenerate tangent of a warped source");
     };
     const auto inner = [&](const double* p, const double* cubeT, double* inn) {
@@ -6225,7 +6227,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
             const int nq = (int)m_glInSelf.size();
             if (analytic) {
                 if (!m_glTangent.empty())
-                    straightPyramidRational(ndS, p, expS.data(), nS, m_glTangent.data(), m_gwTangent.data(), (int)m_glTangent.size(), inn);
+                    straightPyramidRational(ndS, p, expS.data(), nS, remainderX.data(), remainderW.data(), (int)remainderX.size(), inn);
                 else for (int l = 0; l < nS; ++l)
                     if (expS[(size_t)3*l + 2] < 0)
                         inn[l] += pyramidRationalPotential(ndS, center, p, m_glInSelf.data(), m_gwInSelf.data(), nq);
