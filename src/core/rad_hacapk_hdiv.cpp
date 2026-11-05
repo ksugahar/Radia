@@ -6227,7 +6227,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockTyped(int kindT, int hT, int k
             const int nq = (int)m_glInSelf.size();
             if (analytic) {
                 if (!m_glTangent.empty())
-                    straightPyramidRational(ndS, p, expS.data(), nS, m_glInSelf.data(), m_gwInSelf.data(), (int)m_glInSelf.size(), inn);
+                    straightPyramidRational(ndS, p, expS.data(), nS, remainderX.data(), remainderW.data(), (int)remainderX.size(), inn);
                 else for (int l = 0; l < nS; ++l)
                     if (expS[(size_t)3*l + 2] < 0)
                         inn[l] += pyramidRationalPotential(ndS, center, p, m_glInSelf.data(), m_gwInSelf.data(), nq);

@@ -2421,10 +2421,10 @@ def _mixed_gram_rules(p):
     far rule, and 0 keeps the near inner everywhere. A far pair at or beyond the ratio of a far level to its summed
     radii takes that level's count instead of the outer one. A near target point on a warped hex, quad or pyramid source
     takes the closed form on the tangent image of the source plus the bounded remainder on the tangent count per axis,
-    and the rational pyramid charge its Taylor polynomial at the point of p plus a rule on the difference. The pyramid
-    count serves that difference and the remainder of a quad source, on four Duffy triangles from the base point. The
-    tangent count 0 keeps the radial, fan and level rules on the pyramid count. These are proposed values, from
-    convergence on small meshes and a stretched ball.
+    and the rational pyramid charge its Taylor polynomial at the point of p plus the same rule on the difference. The
+    pyramid count serves the remainder of a quad source, on four Duffy triangles from the base point. The tangent count
+    0 keeps the radial, fan and level rules on the pyramid count. These are proposed values, from convergence on small
+    meshes and on cells of aspect 10.
     A fixed count is a relative error per touching cell pair, so it stays a floor under mesh refinement.
     """
     return ((5 if p == 1 else 6), _MIXED_PYRAMID_N, _MIXED_GLNEAR_N, _MIXED_GLNEAR_CELL_N, _MIXED_INNER_SWITCH,
