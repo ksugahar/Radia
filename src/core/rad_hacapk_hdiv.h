@@ -312,7 +312,8 @@ public:
                         std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {},
                         std::vector<int> host_types = {},
                         std::vector<double> gl_near_cell = {}, std::vector<double> gw_near_cell = {},
-                        double inner_switch = 0.0);
+                        double inner_switch = 0.0,
+                        std::vector<double> far_level_rows = {}, std::vector<double> far_level_ratios = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -969,6 +970,8 @@ private:
     std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
     std::vector<double> m_glNearCell, m_gwNearCell;     // mixed mesh: plain tensor OUTER of near cell targets; empty -> m_glNear
     double m_innerSwitch = 0.0;                         // mixed mesh: near points beyond (1 + this) source radii read the far rule
+    struct HexFarLevel { double ratio; std::vector<double> gl, gw; };
+    std::vector<HexFarLevel> m_farLevels;               // mixed mesh: far rule of pairs at or beyond ratio of their summed sizes
     std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
     std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
     // The same rule for pairs whose BOTH hosts are affine (2026-09-07): with affine maps the Duffy
