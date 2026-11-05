@@ -17,7 +17,6 @@ SEAM = ("sector_low", "sector_high")
 MU_R = 10.0
 FOLD = 8
 LIMIT = 1e-6
-PROBES = ((0.024, 0.0, 0.006), (0.04, 0.0, 0.006), (0.06, 0.0, 0.006), (0.04, 0.01, 0.009))
 
 
 def _yoke(path, cells, fold, levels, *, ring=False, inner=0.03, outer=0.05):
