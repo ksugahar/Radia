@@ -3,15 +3,18 @@
 Guards: the CPU route refuses images on a mixed mesh, so the reference is the CPU typed route on the explicitly meshed
 copies. On a transition cube set off from its rotated copies and on a polar sector of hexes, pyramids and tets whose rotated
 copies touch it at the seam, BDM1 and BDM2, the device entries with images equal the sum of the CPU entries over the copies,
-alternating signs included. On those meshes and on a transition cube set off from or cut by its mirror, the dense and
-compressed linear solves and the nonlinear solve reproduce the element means of the CPU solve of the explicit mesh,
-averaged over its copies. A classification that ignores the image or a typed inner integral on the unmapped point moves
-them far beyond the detectors. A space with a compressed trace, a connected periodic sector and a field request refuse.
+alternating signs included, and the device operator and linear solve equal the dense CPU equation folded from those entries.
+On those meshes and on a transition cube set off from or cut by its mirror, the dense and compressed linear solves and the
+nonlinear solve reproduce the element means of the CPU solve of the explicit mesh, averaged over its copies, as closely as
+those copies agree. A classification that ignores the image or a typed inner integral on the unmapped point moves them far
+beyond the detectors. A space with a compressed trace, a connected periodic sector and a field request refuse.
 Assumes: the CPU typed route on a mesh of explicit copies is the reference; a solve in the mirror-symmetric or cyclic
 subspace is the same discretization only when the copies carry the same elements, so the copies are built from one cell
-list. That route integrates a touching pair from its lower-numbered side only, so the copies of one explicit solve differ
-from each other (recorded as reference_spread); their mean is what a solve in the subspace can match. The REL values are
-PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is
+list. That route integrates a pair of two hosts from one side only, chosen by cost and then by number, so the explicit matrix
+is not invariant under the group: the copies of one solve differ (recorded as reference_spread), and the subspace equation is
+one row of that matrix, not its mean. Its difference from the explicit solve is therefore first order in that one-sided rule,
+measured up to about the spread; only the folded equation is the same equation at the seam. The REL values and the factor on
+the spread are PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is
 bypassed for scratch meshes. Optional GPU lane: skips visibly unless RADIA_HDIV_NATIVE_TEST_DIR is set; a configured lane
 loads the binding through the provenance-checked loader.
 """
@@ -25,8 +28,10 @@ import numpy as np
 import pytest
 
 ENTRY_REL = 1e-9
+OPERATOR_REL = 1e-9
 SOLVE_REL = 1e-6
 ACA_SOLVE_REL = 1e-5
+SPREAD_FACTOR = 2.0
 INV_CHI = 1.0/499.0
 PAIR_SAMPLE = 1500
 _BH = [[0.0, 0.0], [200.0, 0.8], [1000.0, 1.4], [5000.0, 1.7], [50000.0, 1.95], [500000.0, 2.6]]
@@ -241,8 +246,66 @@ def test_linear_solve_matches_the_explicit_copies(meshes, request, prepared, cud
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
     request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("iterations", int(solved["iterations"]))]
     assert ("image_transforms", "H2D") in rows
-    limit = SOLVE_REL if compression == "dense" else ACA_SOLVE_REL
-    assert relative <= limit, f"{name} order={order} {compression} {images} relative={relative:.3e} limit={limit:.0e}"
+    limit = (SOLVE_REL if compression == "dense" else ACA_SOLVE_REL) + SPREAD_FACTOR*spread
+    assert relative <= limit, f"{name} order={order} {compression} {images} relative={relative:.3e} spread={spread:.3e} limit={limit:.3e}"
+
+
+def _folded_gram(base, copies, gram, fold, signs):
+    """The Gram of the sector in its subspace, from the exact dense CPU Gram of the explicit copies, on the rule the entries test holds."""
+    table = base["charge_gram"]
+    cells, faces, _ = _hosts(base)
+    _, _, ring = _hosts(copies)
+    kinds, hosts = np.asarray(table["charge_kind"], dtype=np.int64), np.asarray(table["charge_host"], dtype=np.int64)
+    keys = [(int(kind), int(host), tuple(int(e) for e in table["charge_exponents"][3*index:3*index + 3])) for index, (kind, host) in enumerate(zip(kinds, hosts))]
+    first = np.array([ring[key] for key in keys])
+    rows = np.zeros((len(keys), len(keys)))
+    for column, (kind, host, exponents) in enumerate(keys):
+        lifted = np.zeros(fold*len(keys))
+        for k in range(fold):
+            lifted[ring[kind, host + k*(faces if kind else cells), exponents]] = signs[k]
+        rows[:, column] = np.asarray(gram.matvec_sym(lifted))[first]
+    folded = np.triu(rows) + np.triu(rows, 1).T
+    same = (kinds[:, None] == kinds[None, :]) & (hosts[:, None] == hosts[None, :])
+    folded[same] = 0.5*(rows + rows.T)[same]
+    return folded
+
+
+@pytest.mark.parametrize("order,alternating", [(1, False), (1, True), (2, False)])
+def test_operator_and_solve_equal_the_folded_cpu_equation(meshes, request, prepared, cuda, order, alternating):
+    import ngsolve as ng
+    from scipy.sparse import csr_matrix
+    from radia.vim._vim import _build_charge_gram_mixed
+    fold = _FOLD["sector"]
+    applied = (0.0, 0.0, 1e5)
+    with ng.TaskManager():
+        base = prepared._prepare_device_components(meshes["sector"], order, cuda, aca=None, compression="dense",
+                                                   images=prepared._DeviceImages(None, fold, alternating))
+        copies = prepared._prepare_device_components(meshes["sector_copies"], order, cuda, aca=None, compression="dense")
+        B, _, M, _ = _build_charge_gram_mixed(ng.HDiv(ng.Mesh(str(meshes["sector"])), order=order), build_hmatrix=False)
+        _, gram, _, _ = _build_charge_gram_mixed(ng.HDiv(ng.Mesh(str(meshes["sector_copies"])), order=order), build_hmatrix=False)
+        gram.build_exact_dense_normalized_gram(maximum_memory_mb=2048)
+    folded = _folded_gram(base, copies, gram, fold, [(-1.0)**k if alternating else 1.0 for k in range(fold)])
+    B = csr_matrix(B)
+    nd = base["dofs"]
+    assert nd == B.shape[1] and folded.shape[0] == B.shape[0]
+    operator = cuda._ResidentHDiv.from_flat_charges(**base["charge_gram"], dofs=nd, backend="gpu")
+    try:
+        rng = np.random.default_rng(order)
+        worst = 0.0
+        for _ in range(4):
+            x = rng.standard_normal(nd)
+            expected = B.T @ (folded @ (B @ x))
+            worst = max(worst, float(np.linalg.norm(operator.apply(np.ascontiguousarray(x)) - expected)/np.linalg.norm(expected)))
+    finally:
+        operator.close()
+    reference = np.linalg.solve((B.T @ (folded @ B.toarray())) + INV_CHI*csr_matrix(M).toarray(), base["rhs_operator"] @ np.array(applied))
+    with prepared.PreparedHDivLinear(meshes["sector"], backend="gpu", order=order, gram_compression="dense", image_cyclic=fold,
+                                     image_cyclic_alternating=alternating, **_RECEIPT) as device:
+        solved = device.solve(applied, INV_CHI, tolerance=1e-10, max_iterations=4000)
+    relative = float(np.linalg.norm(solved["x"] - reference)/np.linalg.norm(reference))
+    request.node.user_properties += [("dofs", nd), ("operator_relative", worst), ("solve_relative", relative), ("iterations", int(solved["iterations"]))]
+    assert worst <= OPERATOR_REL, f"order={order} alternating={alternating} operator relative={worst:.3e} limit={OPERATOR_REL:.0e}"
+    assert relative <= SOLVE_REL, f"order={order} alternating={alternating} solve relative={relative:.3e} limit={SOLVE_REL:.0e}"
 
 
 @pytest.mark.parametrize("name,order,images,applied", [("sector", 1, dict(image_cyclic=8), (0.0, 0.0, 1e5)), ("cut", 2, dict(image="-x"), (1e5, 0.0, 0.0))])
@@ -253,7 +316,8 @@ def test_nonlinear_solve_matches_the_explicit_copies(meshes, request, prepared, 
     reference, spread = _cpu_means(meshes[name + "_copies"], len(means), order, applied, images, bh_table=_BH, nl_tol=1e-11)
     relative = np.linalg.norm(means - reference)/np.linalg.norm(reference)
     request.node.user_properties += [("solve_relative", float(relative)), ("reference_spread", spread), ("newton", int(solved["newton_iterations"]))]
-    assert relative <= SOLVE_REL, f"{name} order={order} {images} relative={relative:.3e} limit={SOLVE_REL:.0e}"
+    limit = SOLVE_REL + SPREAD_FACTOR*spread
+    assert relative <= limit, f"{name} order={order} {images} relative={relative:.3e} spread={spread:.3e} limit={limit:.3e}"
 
 
 def test_a_compressed_trace_a_periodic_sector_and_a_field_request_refuse(meshes, prepared, cuda):
