@@ -267,10 +267,9 @@ def test_mixed_kernel_expansion_stays_near_the_exact_device_gram(tmp_path, reque
 def test_tangent_rule_is_refused_outside_mixed_meshes(tmp_path, cuda):
     """Guards: a pure hex mesh keeps its own near rules and never takes the tangent rule of the mixed family."""
     from radia import hdiv_gpu
-    from validation_test.hmatrix_cuda.hdiv_mixed_meshes import build_mesh, oriented
-    points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+    from ngsolve.meshes import MakeStructured3DMesh
     path = tmp_path / "hex.vol"
-    build_mesh(points, [oriented(points, list(range(8)))]).ngmesh.Save(str(path))
+    MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1).ngmesh.Save(str(path))
     setup = hdiv_gpu._prepare_device_components(path, 1, cuda, aca=None, compression="dense")
     assert setup["family"] == "hex"
     gram = dict(setup["charge_gram"], hex_rules=np.vstack([setup["charge_gram"]["hex_rules"], [10., .5, 1.]]))
