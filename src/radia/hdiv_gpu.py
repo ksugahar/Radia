@@ -898,9 +898,9 @@ def _device_image_terms(image=None, image_cyclic=None, image_cyclic_alternating=
     and, for a cyclic list, the float64 rotation angles about +z. A mirror and a cyclic list
     together are refused as on the CPU route; the native binding repeats the closure checks.
     """
+    if image_cyclic_alternating and image_cyclic is None:
+        raise ValueError("image_cyclic_alternating requires image_cyclic")
     if image is None and image_cyclic is None:
-        if image_cyclic_alternating:
-            raise ValueError("image_cyclic_alternating requires image_cyclic")
         return None
     import numpy as np
     from radia.vim import _image
