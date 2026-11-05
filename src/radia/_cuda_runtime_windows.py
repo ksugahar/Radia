@@ -58,11 +58,19 @@ def _libraries(pins):
     return _library_paths(pins, specs)
 
 
+def check_loaded_cuda_runtime():
+    """Check the actual Windows dependencies of a native import against the verified runtime."""
+    with _lock:
+        if _identity is None:
+            raise ImportError("CUDA runtime was not prepared before the native import")
+        _check_loaded(_identity)
+
+
 def prepare_cuda_runtime():
     """Verify pip RECORD bytes and actual DLL paths on cold and warm calls.
 
-    This registers directories; loading remains the native module's task. A
-    second call after native import verifies its actual Windows dependencies.
+    This registers directories; loading remains the native module's task.
+    ``check_loaded_cuda_runtime`` verifies its actual Windows dependencies after the import.
     """
     if sys.platform != "win32":
         raise RuntimeError("Windows DLL loader used on a different OS")

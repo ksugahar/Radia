@@ -1,4 +1,5 @@
 """Lazy, exact-pin CUDA runtime admission for explicit Python GPU calls."""
+from concurrent.futures import ThreadPoolExecutor
 from importlib import metadata
 import base64
 import hashlib
@@ -43,8 +44,13 @@ def _maps():
     return paths
 
 
+def _record_digest(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").digest()
+
+
 def _library_paths(pins, library_specs=None):
-    found = {}
+    entries = []
     for package, libraries in (_LIBRARIES if library_specs is None else library_specs):
         dist = metadata.distribution(package)
         if dist.version != pins[package]:
@@ -58,13 +64,15 @@ def _library_paths(pins, library_specs=None):
             expected = entry.hash
             if not path.is_file() or expected is None or expected.mode != "sha256":
                 raise ImportError(f"CUDA library has no SHA256 RECORD: {name}")
-            with path.open("rb") as stream:
-                actual = hashlib.file_digest(stream, "sha256").digest()
-            encoded = base64.urlsafe_b64encode(actual).decode().rstrip("=")
-            if encoded != expected.value:
-                raise ImportError(f"CUDA library RECORD mismatch: {name}")
-            found[name] = {"path": str(path), "sha256": actual.hex(),
-                           "distribution": package, "version": dist.version}
+            entries.append((name, path, expected.value, package, dist.version))
+    # hashlib releases the GIL on these sizes; every call still re-reads the bytes of every library.
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(entries)))) as pool:
+        digests = list(pool.map(_record_digest, [entry[1] for entry in entries]))
+    found = {}
+    for (name, path, expected, package, version), actual in zip(entries, digests):
+        if base64.urlsafe_b64encode(actual).decode().rstrip("=") != expected:
+            raise ImportError(f"CUDA library RECORD mismatch: {name}")
+        found[name] = {"path": str(path), "sha256": actual.hex(), "distribution": package, "version": version}
     return found
 
 
@@ -78,6 +86,20 @@ def _check_loaded(libraries, *, require_all=False):
             raise ImportError(f"Conflicting CUDA library already loaded: {conflicts[0]}")
         if require_all and expected not in paths:
             raise ImportError(f"Pip CUDA library load could not be verified: {expected}")
+
+
+def check_loaded_cuda_runtime():
+    """Check what a native import actually loaded against the runtime prepare_cuda_runtime just verified.
+
+    The bytes were read moments ago; a later prepare_cuda_runtime reads them again.
+    """
+    if sys.platform == "win32":
+        from ._cuda_runtime_windows import check_loaded_cuda_runtime as check_windows
+        return check_windows()
+    with _lock:
+        if _identity is None:
+            raise ImportError("CUDA runtime was not prepared before the native import")
+        _check_loaded(_identity["libraries"], require_all=True)
 
 
 def prepare_cuda_runtime():
