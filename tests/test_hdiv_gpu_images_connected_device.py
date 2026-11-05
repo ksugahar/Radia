@@ -3,9 +3,10 @@
 Guards: on a one-cell polar sector, which holds both vertices of each identified pair, straight and with a Q2 deformation,
 BDM1 and BDM2, the device energy operator on the dense and the compressed routes, the mass and the linear solve on
 ``Compress(Periodic(HDiv))`` agree with the CPU operators of that space on identical inputs, also when a master carries the
-larger number of its pair. A two-cell sector reproduces the explicit ring. Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped DOF
-move these far beyond the detectors. A labeled seam without the pair, a sector without identifications and an antiperiodic
-pair refuse.
+larger number of its pair (seams renumbered by ``renumber_periodic_seam``). A two-cell sector reproduces the explicit ring.
+Wrong orientation classes, a seam face left in the skin, a missing image sum or an unmapped DOF move these far beyond the
+detectors. A labeled seam without the pair, a sector without identifications, an antiperiodic pair and seam numberings
+that NGSolve would tie to the wrong face refuse.
 Assumes: the CPU operators of the same reduced space are the reference, with the mass taken on the device's material rule,
 and the ring on its rotated copies; this is parity of one discretization, not independent accuracy. The REL values are
 PROPOSED detectors, not adopted criteria. The checked-mesh receipt gate is not under test and is bypassed for scratch
@@ -96,12 +97,19 @@ def cuda():
 
 @pytest.fixture(scope="module")
 def meshes(tmp_path_factory):
+    import ngsolve as ng
+    from radia.vim import renumber_periodic_seam
     root = tmp_path_factory.mktemp("connected")
-    return dict(sector=_yoke(root/"sector.vol", 1, 12), sector2=_yoke(root/"sector2.vol", 2, 8), ring2=_yoke(root/"ring2.vol", 2, 8, ring=True),
-                unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False),
-                shuffled=_yoke(root/"shuffled.vol", 1, 12, numbering=[5, 0, 1, 7, 2, 6, 4, 3]),
-                swapped=_yoke(root/"swapped.vol", 1, 12, numbering=[2, 6, 7, 5, 1, 3, 0, 4]),
-                untied=_yoke(root/"untied.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
+    meshes = dict(sector=_yoke(root/"sector.vol", 1, 12), sector2=_yoke(root/"sector2.vol", 2, 8), ring2=_yoke(root/"ring2.vol", 2, 8, ring=True),
+                  unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False),
+                  shuffled_raw=_yoke(root/"shuffled_raw.vol", 1, 12, numbering=[5, 0, 1, 7, 2, 6, 4, 3]),
+                  swapped_raw=_yoke(root/"swapped_raw.vol", 1, 12, numbering=[2, 6, 7, 5, 1, 3, 0, 4]),
+                  untied=_yoke(root/"untied.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
+    # The raw numberings tie misoriented seam faces and refuse; their renumbered copies keep each master's number.
+    for name in ("shuffled", "swapped"):
+        meshes[name] = root/f"{name}.vol"
+        renumber_periodic_seam(ng.Mesh(str(meshes[name + "_raw"])), SEAM).ngmesh.Save(str(meshes[name]))
+    return meshes
 
 
 def _applied():
@@ -256,9 +264,10 @@ def test_a_seam_without_a_pair_or_identification_refuses(meshes, prepared, cuda)
         prepared.PreparedHDivLinear(meshes["sector"], cyclic_periodic_boundaries=SEAM, **kw)
     with pytest.raises(ValueError, match="pair of labels"):
         prepared.PreparedHDivLinear(meshes["sector"], image_cyclic=12, cyclic_periodic_boundaries="periodic_min", **kw)
-    # This numbering pairs every vertex, yet the wrapper ties no DOF: the reduction would be a silent no-op.
-    with pytest.raises(ValueError, match="did not identify"):
-        prepared.PreparedHDivLinear(meshes["untied"], image_cyclic=12, cyclic_periodic_boundaries=SEAM, **kw)
+    # These numberings pair every vertex, yet NGSolve would tie a slave seam face to the wrong face or tie none.
+    for name in ("shuffled_raw", "swapped_raw", "untied"):
+        with pytest.raises(ValueError, match="order their vertex numbers"):
+            prepared.PreparedHDivLinear(meshes[name], image_cyclic=12, cyclic_periodic_boundaries=SEAM, **kw)
 
 
 def test_a_deformation_requires_the_hex_family_and_q2(meshes, prepared, cuda):

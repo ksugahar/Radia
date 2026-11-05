@@ -205,6 +205,8 @@ def _hdiv_space_with_image_constraints(
             raise ValueError(
                 "vim.Solve: NGSolve PERIODIC identifications must pair every "
                 "vertex on the two cyclic_periodic_boundaries")
+        from radia.vim._periodic_seam import check_periodic_seam_orientation
+        check_periodic_seam_orientation(mesh, (first, second))
         periodic = ng.Periodic(base)
         active = periodic.FreeDofs()
         periodic_slave_dofs = tuple(
