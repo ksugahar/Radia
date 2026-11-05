@@ -16,9 +16,12 @@ import numpy as np
 
 def periodic_seam_vertex_map(ngmesh, boundary_vertices, boundaries):
     """Master -> slave vertex map (1-based) of the PERIODIC identifications between the two seam boundaries."""
+    from netgen.meshing import IdentificationType
     first, second = boundaries
     vertex_map = {}
-    for endpoint_a, endpoint_b, *_rest in ngmesh.GetIdentifications():
+    for endpoint_a, endpoint_b, identnr in ngmesh.GetIdentifications():
+        if ngmesh.GetIdentificationType(int(identnr)) != IdentificationType.PERIODIC:
+            continue
         endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a))
         endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b))
         if endpoint_a in boundary_vertices[first] and endpoint_b in boundary_vertices[second]:
@@ -48,6 +51,9 @@ def periodic_seam_misoriented_faces(mesh, boundaries):
     """(misoriented, total) seam face pairs; a pair is consistent when its vertex numbers keep their order under the map."""
     first, second = boundaries
     faces = _seam_faces(mesh, boundaries)
+    empty = [name for name in boundaries if not faces[name]]
+    if empty:
+        raise ValueError("vim.Solve: periodic seam boundaries %s have no faces" % empty)
     vertex_map = periodic_seam_vertex_map(
         mesh.ngmesh, {name: {v for face in faces[name] for v in face} for name in boundaries}, boundaries)
     slave_faces = {frozenset(face) for face in faces[second]}
@@ -99,6 +105,10 @@ def renumber_periodic_seam(mesh, boundaries=("periodic_min", "periodic_max")):
         raise ValueError("renumber_periodic_seam: needs a 3D mesh")
     if source.GetCurveOrder() > 1:
         raise ValueError("renumber_periodic_seam: curved meshes are not supported; renumber before curving")
+    geometry = source.GetGeometry()
+    if geometry is not None and type(geometry).__name__ != "NetgenGeometry":
+        raise ValueError("renumber_periodic_seam: a mesh bound to %s geometry would lose it; renumber the plain .vol"
+                         % type(geometry).__name__)
     if len(source.Elements0D()):
         raise ValueError("renumber_periodic_seam: 0D elements are not supported")
     faces = _seam_faces(mesh, boundaries)

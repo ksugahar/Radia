@@ -8,7 +8,8 @@ reduced space. A numbering whose seam faces order their vertices unlike their im
 loses 1.5e-2 (p1) and 8.5e-3 (p2) of the norm, because NGSolve ties its slave face to a non-seam face.
 Assumes: the field is in both spaces on this straight cell; exact representability is the oracle, so 1e-12 is a
 round-off bound, not an accuracy criterion. The check is conservative: it also refuses the shuffled numbering, whose
-stock tie happens to be right.
+stock tie happens to be right. Only PERIODIC identifications count, an empty seam refuses, and a CAD-bound mesh
+is not renumbered.
 """
 
 import math
@@ -24,7 +25,7 @@ EXACT = 32914.709526
 ROUND_OFF = 1e-12
 
 
-def _cell(numbering, fold=12, inner=0.03, outer=0.05, half=0.004):
+def _cell(numbering, fold=12, inner=0.03, outer=0.05, half=0.004, identified=True):
     """One straight annular HEX cell; `numbering` holds the vertex number of each (station, radius, height)."""
     from netgen.meshing import Element2D, Element3D, FaceDescriptor, IdentificationType, Mesh, MeshPoint, Pnt
     mesh = Mesh(dim=3)
@@ -46,7 +47,7 @@ def _cell(numbering, fold=12, inner=0.03, outer=0.05, half=0.004):
         mesh.Add(Element2D(skin, [corners[k] for k in quad]))
     mesh.Add(Element2D(low, [corners[k] for k in (0, 1, 5, 4)]))
     mesh.Add(Element2D(high, [corners[k] for k in (2, 3, 7, 6)]))
-    for ir, iz in np.ndindex(2, 2):
+    for ir, iz in np.ndindex(2, 2) if identified else ():
         mesh.AddPointIdentification(point[0, ir, iz], point[1, ir, iz], identnr=1, type=IdentificationType.PERIODIC)
     return ng.Mesh(mesh)
 
@@ -86,3 +87,22 @@ def test_the_renumbered_seam_reproduces_a_periodic_field(name, order):
     exact, deficit = _deficit(fixed, order)
     assert abs(exact - EXACT) <= 1e-6*EXACT, f"exact norm {exact!r} expected {EXACT!r}"
     assert abs(deficit) <= ROUND_OFF, f"{name} order={order} relative projection deficit={deficit:.3e} limit={ROUND_OFF:.0e}"
+
+
+def test_the_seam_contract_refuses_other_identification_types_empty_seams_and_cad_bound_meshes():
+    from netgen.meshing import IdentificationType
+    from netgen.occ import Box, OCCGeometry
+    from radia.vim import check_periodic_seam_orientation, renumber_periodic_seam
+    closing = _cell(None)
+    pairs = closing.ngmesh.GetIdentifications()
+    closing = _cell(None, identified=False)
+    for a, b, _n in pairs:
+        closing.ngmesh.AddPointIdentification(a, b, identnr=1, type=IdentificationType.CLOSESURFACES)
+    closing = ng.Mesh(closing.ngmesh)
+    with pytest.raises(ValueError, match="no PERIODIC partner"):
+        check_periodic_seam_orientation(closing, SEAM)
+    with pytest.raises(ValueError, match="have no faces"):
+        check_periodic_seam_orientation(_cell(None), ("skin_a", "skin_b"))
+    cad = ng.Mesh(OCCGeometry(Box((0, 0, 0), (1, 1, 1))).GenerateMesh(maxh=0.5))
+    with pytest.raises(ValueError, match="OCCGeometry"):
+        renumber_periodic_seam(cad, SEAM)
