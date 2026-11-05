@@ -5898,11 +5898,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                        || kindT != 0 && face_affine(hT);
     const bool affineS = kindS == 0 && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]
                        || kindS != 0 && face_affine(hS);
-    // Host-pair separation on the image-mapped source centroid: drives the affine near/far product
+    // Host-pair separation |c_t - T c_s|, as in the integrand 1/|x - T y| (a rotation is not its inverse): drives the affine near/far product
     // switch, the distorted-pair far switch, and the general path's near_hosts grading below.
     const int repA = tgtG[0], repB = srcG[0];
     double repBc[3];
-    ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
+    ImageApplyVector(img, &m_cent[(size_t)3*repB], repBc);
     const double sep = std::sqrt(
         (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
@@ -6048,7 +6048,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives the Duffy corner (img>0)
+            double cB[3]; ImageApplyVector(img, cB0, cB);   // T of the source sub-centroid drives the Duffy corner (img>0)
             const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
             const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
@@ -7458,7 +7458,7 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
         if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;
         const int repA = tgtG[0], repB = srcG[0];
         double repBc[3];
-        ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
+        ImageApplyVector(img, &m_cent[(size_t)3*repB], repBc);
         const double sep = std::sqrt(
             (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
           + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
@@ -7477,7 +7477,7 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     if (fac <= 0.0) return true;
     const int repA = tgtG[0], repB = srcG[0];
     double repBc[3];
-    ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
+    ImageApplyVector(img, &m_cent[(size_t)3*repB], repBc);
     const double sep = std::sqrt(
         (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
@@ -7878,7 +7878,7 @@ bool RadHACApKChargeGram::HexPairExponentialRulesResolve(int kindT, int hT, int 
         const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
         double gap2 = 1e300;
         for (int j = 0; j < nS; ++j) {
-            double s[3]; ImageEvalPoint(img, &ndS[3*j], s);
+            double s[3]; ImageApplyVector(img, &ndS[3*j], s);
             for (int i = 0; i < nT; ++i) {
                 const double dx = ndT[3*i]-s[0], dy = ndT[3*i+1]-s[1], dz = ndT[3*i+2]-s[2];
                 gap2 = std::min(gap2, dx*dx + dy*dy + dz*dz);
@@ -7901,7 +7901,7 @@ bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, in
     // a roundoff margin) cannot share a node.  This keeps the O(27*27) node comparison off the far pairs.
     const int repA = tgtG[0], repB = srcG[0];
     double cS[3];
-    ImageEvalPoint(img, &m_cent[(size_t)3*repB], cS);
+    ImageApplyVector(img, &m_cent[(size_t)3*repB], cS);
     const double dx = m_cent[(size_t)3*repA] - cS[0], dy = m_cent[(size_t)3*repA + 1] - cS[1],
                  dz = m_cent[(size_t)3*repA + 2] - cS[2];
     const double radius_sum = m_size[repA] + m_size[repB];
@@ -9689,7 +9689,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
     // grading geometry + the outer eval point, never SELF).  img==0 => identity => byte-identical direct block.
     auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
     const int rt = tgtG[0], rs = srcG[0];
-    double rsc[3]; reflpt(&m_cent[3*rs], rsc);
+    double rsc[3]; ImageApplyVector(img, &m_cent[3*rs], rsc);
     const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1], dzh = m_cent[3*rt+2]-rsc[2];
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
     // self_pair: the (reflected) source host coincides with the target host -> use the EXACT self-radial.
@@ -9719,7 +9719,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*3 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_wCellSubC[sidB*3] : &m_wFaceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid (img>0)
+            double cB[3]; ImageApplyVector(img, cB0, cB);   // T of the source sub-centroid (img>0)
             const double szB = cellS ? m_wCellSubS[sidB] : m_wFaceSubS[sidB];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
             const bool near_sub = near_hosts && std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
