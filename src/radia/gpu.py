@@ -122,10 +122,10 @@ def _native(name):
             raise ImportError("Radia native build provenance mismatch")
     if receipt.get("source_commit") != core_receipt.get("source_commit"):
         raise ImportError("Radia CPU/GPU source revisions differ")
-    from ._cuda_runtime import prepare_cuda_runtime
+    from ._cuda_runtime import check_loaded_cuda_runtime, prepare_cuda_runtime
     prepare_cuda_runtime()
     module = import_module("." + name, __package__)
-    prepare_cuda_runtime()  # Check the actual post-import DLL/ELF closure too.
+    check_loaded_cuda_runtime()  # Check the actual post-import DLL/ELF closure too.
     return module
 
 
