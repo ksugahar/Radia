@@ -75,7 +75,7 @@ struct FlatBlock {
     // reference monomials grouped by host, and the four [0,1] Gauss rules
     // (outer tensor, radial inner, pair product, affine pair product) with the
     // near band and the radial reach of the CPU hex Gram.
-    bool hex=false;double nearGrade=1.0,farInner=1.0;
+    bool hex=false;double nearGrade=1.0,farInner=1.0,innerSwitch=0.0;
     // Mirror and cyclic images of the HEX Gram, in the CPU order (flatImageRows checks them).
     HostVector<HexImage> images{HostFaultAllocator<HexImage>("hex.images")};
     // Mixed mesh: one radia_hdiv_typed::HostType per host, cells then faces; hex is also set and the lattices are the host maps.
@@ -85,7 +85,12 @@ struct FlatBlock {
         rulePair{HostFaultAllocator<double>("hex.pair")},rulePairW{HostFaultAllocator<double>("hex.pair-w")},
         rulePairAffine{HostFaultAllocator<double>("hex.pair-affine")},rulePairAffineW{HostFaultAllocator<double>("hex.pair-affine-w")},
         ruleNear{HostFaultAllocator<double>("hex.near")},ruleNearW{HostFaultAllocator<double>("hex.near-w")},
-        ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")};
+        ruleInSelf{HostFaultAllocator<double>("hex.in-self")},ruleInSelfW{HostFaultAllocator<double>("hex.in-self-w")},
+        ruleNearCell{HostFaultAllocator<double>("hex.near-cell")},ruleNearCellW{HostFaultAllocator<double>("hex.near-cell-w")},
+        ruleTangent{HostFaultAllocator<double>("hex.tangent")},ruleTangentW{HostFaultAllocator<double>("hex.tangent-w")},
+        ruleFar[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1")},HostVector<double>{HostFaultAllocator<double>("hex.far-2")},HostVector<double>{HostFaultAllocator<double>("hex.far-3")}},
+        ruleFarW[hexFarLevels]={HostVector<double>{HostFaultAllocator<double>("hex.far-1-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-2-w")},HostVector<double>{HostFaultAllocator<double>("hex.far-3-w")}};
+    double farRatio[hexFarLevels]={0.0,0.0,0.0};
     std::size_t charges()const{return host.size();}
     std::size_t cellStride()const{return hex?81:curved?30:12;}
     std::size_t faceStride()const{return hex?27:curved?18:9;}
@@ -164,6 +169,23 @@ struct FlatBlock {
                 throw std::invalid_argument("HEX near rules take 1..16 Gauss points for BDM1 and mixed meshes, none for pure BDM2");
             for(std::size_t k=0;k<rule->size();++k)if(!std::isfinite((*rule)[k])||!std::isfinite(w[k])||!((*rule)[k]>0)||!((*rule)[k]<1)||!(w[k]>0))
                 throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");}
+        // A mixed mesh may take a plain outer rule on its cell targets and the far rule beyond the switch radius; a pure hex mesh takes neither.
+        if(!typed&&(!ruleNearCell.empty()||innerSwitch!=0.0))throw std::invalid_argument("HEX plain near rule and inner switch belong to mixed meshes");
+        if(!std::isfinite(innerSwitch)||innerSwitch<0)throw std::invalid_argument("HEX inner switch must be finite and not negative");
+        if(!typed&&!ruleTangent.empty())throw std::invalid_argument("HEX tangent rule belongs to mixed meshes");
+        if(ruleTangent.size()>std::size_t(hexRuleCap)||ruleTangentW.size()!=ruleTangent.size())throw std::invalid_argument("HEX tangent rule takes 0..16 Gauss points");
+        for(std::size_t k=0;k<ruleTangent.size();++k)if(!std::isfinite(ruleTangent[k])||!std::isfinite(ruleTangentW[k])||!(ruleTangent[k]>0)||!(ruleTangent[k]<1)||!(ruleTangentW[k]>0))throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
+        if(ruleNearCell.size()>std::size_t(hexRuleCap)||ruleNearCellW.size()!=ruleNearCell.size())throw std::invalid_argument("HEX plain near rule takes 0..16 Gauss points");
+        for(std::size_t k=0;k<ruleNearCell.size();++k)if(!std::isfinite(ruleNearCell[k])||!std::isfinite(ruleNearCellW[k])||!(ruleNearCell[k]>0)||!(ruleNearCell[k]<1)||!(ruleNearCellW[k]>0))
+            throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
+        // A far level has fewer points than the outer rule and starts further out than the level before it.
+        {double previous=0.0;std::size_t previousPoints=ruleOut.size();bool ended=false;
+            for(int k=0;k<hexFarLevels;++k){const auto& x=ruleFar[k];const auto& w=ruleFarW[k];
+                if(x.empty()){if(!w.empty()||farRatio[k]!=0.0)throw std::invalid_argument("HEX far level has a ratio but no rule");ended=true;continue;}
+                if(!typed||ended)throw std::invalid_argument("HEX far levels belong to mixed meshes and fill their slots in order");
+                if(w.size()!=x.size()||x.size()>=previousPoints||!std::isfinite(farRatio[k])||!(farRatio[k]>previous))throw std::invalid_argument("HEX far levels need fewer points and a larger ratio each");
+                for(std::size_t q=0;q<x.size();++q)if(!std::isfinite(x[q])||!std::isfinite(w[q])||!(x[q]>0)||!(x[q]<1)||!(w[q]>0))throw std::invalid_argument("HEX rules require interior [0,1] points and positive weights");
+                previous=farRatio[k];previousPoints=x.size();}}
         const int monomials=(order+1)*(order+1);
         for(std::size_t g=0;g<count.size();++g)if(count[g]>(g<cellTotal?monomials*(order+1):monomials))
             throw std::invalid_argument("HEX host carries more charges than its tensor monomials");

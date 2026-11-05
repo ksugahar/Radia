@@ -178,7 +178,7 @@ def _gram_case(path, order, terms, *, seam=(), deform=None):
                      charge_kind=np.ascontiguousarray(basis["kind"], dtype=np.int32),
                      charge_exponents=np.ascontiguousarray(basis["expo"], dtype=np.int32).reshape(-1),
                      tet_rule=empty, tri_rule=empty, tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30,
-                     family="hex", hex_rules=_hex_rule_rows(fes), hex_bands=np.array([1.0, 1.0]), **terms)
+                     family="hex", hex_rules=_hex_rule_rows(fes), hex_bands=np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0]), **terms)
     return arguments, gram, deformation
 
 

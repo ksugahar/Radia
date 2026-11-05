@@ -20,12 +20,12 @@
     {
       "CPU": "radia.hdiv_gpu.PreparedHDivLinear",
       "MATLAB": "radia.gpu.solveHDivElements",
-      "scope": "Linear isotropic material; RT0, BDM1 and BDM2 on affine TET; P2 TET and HEX at orders 1/2"
+      "scope": "Linear isotropic material; RT0, BDM1 and BDM2 on affine TET; P2 TET and HEX at orders 1/2; connected tet, pyramid and hex at orders 1/2 on straight geometry"
     },
     {
       "CPU": "radia.hdiv_gpu.PreparedHDivNonlinear",
       "MATLAB": "radia.gpu.PreparedHDivNonlinear and solveNonlinearHDivElements",
-      "scope": "Soft-iron inverse BH; orders 1/2; same-kernel bitwise evidence is case-bound"
+      "scope": "Soft-iron inverse BH; orders 1/2, including connected tet, pyramid and hex on straight geometry; same-kernel bitwise evidence is case-bound"
     }
   ],
   "native_commands": "See the command list in packages/radia-simulink/native/hdiv_device/radia_hdiv_device_mex.cpp",

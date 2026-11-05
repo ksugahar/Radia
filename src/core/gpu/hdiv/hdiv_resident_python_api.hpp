@@ -28,19 +28,22 @@ struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // the 27/9-node Q2 lattices, charges are reference monomials and hexRules /
 // hexBands carry the CPU hex Gram rules; TET rules stay empty. "mixed": as
 // "hex" with the unit-cube lattices of tet, pyramid and hex hosts and hostTypes.
-// compression is "dense" (one deferred dense block) or "aca" (device ACA
-// leaves on a geometric partition); the ACA parameters apply to "aca" only.
+// compression is "dense" (one deferred dense block), "aca" (device ACA leaves on a geometric partition) or
+// "hca" (mixed meshes: far blocks from the Laplace kernel expansion); the ACA parameters apply to the last two.
 struct FlatInput {
     radia_hmatrix_cuda::HostVector<double> cells,faces,tet,tri,tetLow,triLow;
     radia_hmatrix_cuda::HostVector<int> host,kind,expo;
     double farFactor=1e30;
     std::string compression;
-    double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;
+    double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;int acaExpansionOrder=0;
     std::string family="affine-tet";
     radia_hmatrix_cuda::HostVector<int> cellNumbers,faceNumbers;
     radia_hmatrix_cuda::HostVector<double> gl,gw;
     // HEX: rows (rule, point, weight) with rule 0 outer, 1 radial inner,
-    // 2 pair product, 3 affine pair product, 4 near outer and 5 fine inner (BDM1 only); bands = (near_grade, far_inner).
+    // 2 pair product, 3 affine pair product, 4 near outer, 5 fine inner (BDM1 only), 6 plain near outer of cell targets
+    // (mixed only, absent when they take rule 4), 7..9 far levels (mixed only) and 10 the tangent remainder of a warped
+    // source (mixed only, absent when it keeps the radial and fan rules); bands = (near_grade, far_inner,
+    // inner_switch, then the separation ratio of each far level, 0 when absent).
     radia_hmatrix_cuda::HostVector<double> hexRules,hexBands;
     radia_hmatrix_cuda::HostVector<int> hostTypes;
     // Pure HEX images, the CPU lists: mirror mask bits 1 x, 2 y, 4 z; folded sign; z rotation angle (empty: mirror only).

@@ -298,7 +298,7 @@ RAD_FIELD_KERNEL void TriFarMonomialFields(const double V[3][3], const double r[
 // triangle potential (Wilton-Rao-Glisson, IEEE TAP 32(3):276, 1984).  Pure 1/r integral (NO 1/4pi).
 // Port of examples reference radia.vim._core.tri_potential (scalar form); same edge formula as
 // rad_poly_analytical.cpp::RadScalarPotentialFromTriangleFaceGlobal's I_scalar.
-RAD_FIELD_KERNEL double TriPotential(const double V[3][3], const double r[3])
+RAD_FIELD_KERNEL static double polygon_potential(const double (*V)[3], int corners, const double r[3])
 {
     double e1[3], e2[3], n[3];
     for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
@@ -309,9 +309,9 @@ RAD_FIELD_KERNEL double TriPotential(const double V[3][3], const double r[3])
     double p[3]; for (int k=0;k<3;k++) p[k]=r[k]-d*n[k];         // projection onto the plane
     double ad = std::fabs(d);
     double I = 0.0;
-    for (int i=0;i<3;i++){
+    for (int i=0;i<corners;i++){
         const double* a = V[i];
-        const double* b = V[(i+1)%3];
+        const double* b = V[(i+1)%corners];
         double lh[3]; for (int k=0;k<3;k++) lh[k]=b[k]-a[k];
         double ll=v3nrm(lh); if (ll<1e-300) continue; for (int k=0;k<3;k++) lh[k]/=ll;
         double uh[3]; v3cross(lh,n,uh);                         // in-plane unit normal to the edge
@@ -328,6 +328,11 @@ RAD_FIELD_KERNEL double TriPotential(const double V[3][3], const double r[3])
         I += P0*f - ad*beta;
     }
     return I;
+}
+
+RAD_FIELD_KERNEL double TriPotential(const double V[3][3], const double r[3])
+{
+    return polygon_potential(V, 3, r);
 }
 
 // Exact field INT_T (r-r')/|r-r'|^3 dA' of a UNIFORM (sigma=1) flat triangle = -grad_r TriPotential
@@ -663,7 +668,7 @@ struct TriPolySetup {
     double rp[3];
     double e1[3];
     double e2[3];
-    TriPolyEdge edges[3];
+    TriPolyEdge edges[4];
 };
 
 struct TriPolyEdgeDirectional { ValueDirectional xiA[2],t2[2],m2[2],L,l0,d2; };
@@ -742,7 +747,7 @@ RAD_FIELD_KERNEL static ValueDirectional edge_inplane_monomial_poly_directional(
     ValueDirectional s;for(int i=0;i<=deg;++i)s=s+poly[i]*Jl[i];return s;
 }
 
-RAD_FIELD_KERNEL static bool tri_poly_setup(const double P[3][3], const double r[3], TriPolySetup& g)
+RAD_FIELD_KERNEL static bool polygon_poly_setup(const double (*P)[3], int corners, const double r[3], TriPolySetup& g)
 {
     double a1[3], a2[3];
     for (int k = 0; k < 3; ++k) { a1[k] = P[1][k] - P[0][k]; a2[k] = P[2][k] - P[0][k]; }
@@ -758,10 +763,10 @@ RAD_FIELD_KERNEL static bool tri_poly_setup(const double P[3][3], const double r
     for (int k = 0; k < 3; ++k) g.e1[k] = a1[k] / e1n;
     v3cross(g.n, g.e1, g.e2);
     double cen[3] = {0, 0, 0};
-    for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += P[i][k] / 3.0;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < corners; ++i) for (int k = 0; k < 3; ++k) cen[k] += P[i][k] / corners;
+    for (int i = 0; i < corners; ++i) {
         const double* A = P[i];
-        const double* B = P[(i + 1) % 3];
+        const double* B = P[(i + 1) % corners];
         TriPolyEdge& e = g.edges[i];
         double t[3]; for (int k = 0; k < 3; ++k) t[k] = B[k] - A[k];
         e.L = v3nrm(t);
@@ -809,56 +814,65 @@ RAD_FIELD_KERNEL static void edge_l_moments_poly(const TriPolyEdge& e, int nmax,
         return (u > 0.0 ? 1.0 : -1.0) * std::log(2.0 * std::fabs(u));
     };
     W[0] = asinh_safe(u2) - asinh_safe(u1);
-    if (nmax >= 1) W[1] = std::sqrt(u2 * u2 + d2) - std::sqrt(u1 * u1 + d2);
+    const double R2 = std::sqrt(u2 * u2 + d2), R1 = std::sqrt(u1 * u1 + d2);
+    if (nmax >= 1) W[1] = R2 - R1;
+    double power2 = R2, power1 = R1;
     for (int n = 2; n <= nmax; ++n) {
-        const double term = (std::pow(u2, n - 1) * std::sqrt(u2 * u2 + d2)
-                           - std::pow(u1, n - 1) * std::sqrt(u1 * u1 + d2)) / n;
-        W[n] = term - ((n - 1.0) * d2 / n) * W[n - 2];
+        power2 *= u2;
+        power1 *= u1;
+        W[n] = (power2 - power1) / n - ((n - 1.0) * d2 / n) * W[n - 2];
     }
+    // Jl[n] = sum_i C(n,i) l0^(n-i) W[i]: one row of Pascal's triangle per n, l0 by Horner.
+    double row[POLY_MAX_DEG + 4] = {};
+    row[0] = 1.0;
     for (int n = 0; n <= nmax; ++n) {
-        double s = 0.0;
-        for (int i = 0; i <= n; ++i) s += small_comb(n, i) * std::pow(e.l0, n - i) * W[i];
+        double s = row[0] * W[0];
+        for (int i = 1; i <= n; ++i) s = s * e.l0 + row[i] * W[i];
         Jl[n] = s;
+        for (int i = n + 1; i >= 1; --i) row[i] += row[i - 1];
     }
 }
 
-RAD_FIELD_KERNEL static double edge_inplane_monomial_poly(const TriPolyEdge& e, int a, int b,
-                                         const double Jl[POLY_MAX_DEG + 3])
+// table[p][q] = INT_edge xi^p eta^q / R dl for p + q <= top, one polynomial product per entry.
+RAD_FIELD_KERNEL static void edge_monomial_table(const TriPolyEdge& e, int top, const double Jl[POLY_MAX_DEG + 3],
+                                                 double table[POLY_MAX_DEG + 2][POLY_MAX_DEG + 2])
 {
-    double poly[POLY_MAX_DEG + 3] = {};
-    double tmp[POLY_MAX_DEG + 3] = {};
-    int deg = 0;
-    poly[0] = 1.0;
-    auto mul_linear = [&](double c0, double c1) {
-        FieldFill(FieldBegin(tmp), FieldEnd(tmp), 0.0);
-        for (int i = 0; i <= deg; ++i) {
-            tmp[i] += poly[i] * c0;
-            tmp[i + 1] += poly[i] * c1;
+    double first[POLY_MAX_DEG + 3] = {};
+    first[0] = 1.0;
+    for (int p = 0; p <= top; ++p) {
+        double poly[POLY_MAX_DEG + 3];
+        for (int i = 0; i <= p; ++i) poly[i] = first[i];
+        int deg = p;
+        for (int q = 0; q <= top - p; ++q) {
+            double s = 0.0;
+            for (int i = 0; i <= deg; ++i) s += poly[i] * Jl[i];
+            table[p][q] = s;
+            if (q == top - p) break;
+            poly[deg + 1] = poly[deg] * e.t2[1];
+            for (int i = deg; i >= 1; --i) poly[i] = poly[i] * e.xiA[1] + poly[i - 1] * e.t2[1];
+            poly[0] *= e.xiA[1];
+            ++deg;
         }
-        ++deg;
-        for (int i = 0; i <= deg; ++i) poly[i] = tmp[i];
-    };
-    for (int i = 0; i < a; ++i) mul_linear(e.xiA[0], e.t2[0]);
-    for (int i = 0; i < b; ++i) mul_linear(e.xiA[1], e.t2[1]);
-    double s = 0.0;
-    for (int i = 0; i <= deg; ++i) s += poly[i] * Jl[i];
-    return s;
+        if (p == top) break;
+        first[p + 1] = first[p] * e.t2[0];
+        for (int i = p; i >= 1; --i) first[i] = first[i] * e.xiA[0] + first[i - 1] * e.t2[0];
+        first[0] *= e.xiA[0];
+    }
 }
 
-RAD_FIELD_KERNEL static void triangle_inplane_A_moments(const double P[3][3], const double r[3], int degree,
+// A flat polygon of three or four corners; false for a degenerate one, with A zero.
+RAD_FIELD_KERNEL static bool polygon_inplane_A_moments(const double (*P)[3], int corners, const double r[3], int degree,
                                        double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1],
                                        TriPolySetup& g)
 {
-    for (int i = 0; i <= POLY_MAX_DEG; ++i)
-        for (int j = 0; j <= POLY_MAX_DEG; ++j) A[i][j] = 0.0;
     degree = FieldMin(degree, POLY_MAX_DEG);
-    if (!tri_poly_setup(P, r, g)) return;
-    double Jl[3][POLY_MAX_DEG + 3] = {};
-    for (int i = 0; i < 3; ++i) edge_l_moments_poly(g.edges[i], degree + 2, Jl[i]);
-    A[0][0] = TriPotential(P, r);
+    for (int i = 0; i <= degree; ++i)
+        for (int j = 0; j <= degree - i; ++j) A[i][j] = 0.0;
+    if (!polygon_poly_setup(P, corners, r, g)) return false;
+    A[0][0] = polygon_potential(P, corners, r);
     if (degree >= 1) {
         double A1[2] = {0.0, 0.0};
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < corners; ++i) {
             const double er = edge_R_for_poly(g.edges[i]);
             A1[0] += g.edges[i].m2[0] * er;
             A1[1] += g.edges[i].m2[1] * er;
@@ -866,10 +880,17 @@ RAD_FIELD_KERNEL static void triangle_inplane_A_moments(const double P[3][3], co
         A[1][0] = A1[0];
         A[0][1] = A1[1];
     }
+    if (degree < 2) return true;
+    double table[4][POLY_MAX_DEG + 2][POLY_MAX_DEG + 2];
+    for (int i = 0; i < corners; ++i) {
+        double Jl[POLY_MAX_DEG + 3];
+        edge_l_moments_poly(g.edges[i], degree + 1, Jl);
+        edge_monomial_table(g.edges[i], degree + 1, Jl, table[i]);
+    }
     auto Eedge = [&](int j, int p, int q) {
         double s = 0.0;
-        for (int i = 0; i < 3; ++i)
-            s += g.edges[i].m2[j] * edge_inplane_monomial_poly(g.edges[i], p, q, Jl[i]);
+        for (int i = 0; i < corners; ++i)
+            s += g.edges[i].m2[j] * table[i][p][q];
         return s;
     };
     auto Eneg1 = [&](int a, int b) {
@@ -884,6 +905,7 @@ RAD_FIELD_KERNEL static void triangle_inplane_A_moments(const double P[3][3], co
             A[a][b] = (Eneg1(a, b) - h2B) / (k + 1.0);
         }
     }
+    return true;
 }
 
 RAD_FIELD_KERNEL static void triangle_inplane_A_moments_directional(
@@ -987,7 +1009,7 @@ RAD_FIELD_KERNEL static double SurfacePotentialMonomial(const double P[3][3], co
 {
     double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
     TriPolySetup g;
-    triangle_inplane_A_moments(P, r, degree, A, g);
+    if (!polygon_inplane_A_moments(P, 3, r, degree, A, g)) return 0.0;
     double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
     poly2_zero_triangle(poly, alpha[0] + alpha[1] + alpha[2]);
     int deg = 0;
@@ -1010,29 +1032,49 @@ RAD_FIELD_KERNEL static int PotentialMomentIndex(int ax, int ay, int az)
     return idx + ay;
 }
 
+// out[alpha] += factor * INT_face x^alpha / R dA, one polynomial product per moment.
+RAD_FIELD_KERNEL static void add_surface_moments(const TriPolySetup& g,
+                                                 const double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1],
+                                                 int degree, double factor, double* out)
+{
+    double px[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], pxy[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1],
+        poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    px[0][0] = 1.0;
+    int dx = 0;
+    for (int ax = 0; ax <= degree; ++ax) {
+        int dxy = dx;
+        for (int a = 0; a <= dx; ++a)
+            for (int b = 0; b <= dx - a; ++b) pxy[a][b] = px[a][b];
+        for (int ay = 0; ay <= degree - ax; ++ay) {
+            int d = dxy;
+            for (int a = 0; a <= dxy; ++a)
+                for (int b = 0; b <= dxy - a; ++b) poly[a][b] = pxy[a][b];
+            for (int az = 0; az <= degree - ax - ay; ++az) {
+                double s = 0.0;
+                for (int a = 0; a <= d; ++a)
+                    for (int b = 0; b <= d - a; ++b) s += poly[a][b]*A[a][b];
+                out[PotentialMomentIndex(ax, ay, az)] += factor*s;
+                if (az < degree - ax - ay) poly2_mul_linear(poly, d, g.rp[2], g.e1[2], g.e2[2]);
+            }
+            if (ay < degree - ax) poly2_mul_linear(pxy, dxy, g.rp[1], g.e1[1], g.e2[1]);
+        }
+        if (ax < degree) poly2_mul_linear(px, dx, g.rp[0], g.e1[0], g.e2[0]);
+    }
+}
+
+RAD_FIELD_KERNEL static void PolygonPotentialMomentsUpTo(const double (*P)[3], int corners, const double r[3],
+                                        int degree, double* out)
+{
+    FieldFill(out, out + (degree + 1)*(degree + 2)*(degree + 3)/6, 0.0);
+    double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    TriPolySetup g;
+    if (polygon_inplane_A_moments(P, corners, r, degree, A, g)) add_surface_moments(g, A, degree, 1.0, out);
+}
+
 RAD_FIELD_KERNEL static void SurfacePotentialMomentsUpTo(const double P[3][3], const double r[3],
                                         int degree, double* out)
 {
-    double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
-    TriPolySetup g;
-    triangle_inplane_A_moments(P, r, degree, A, g);
-    int idx = 0;
-    for (int total = 0; total <= degree; ++total)
-        for (int ax = 0; ax <= total; ++ax)
-            for (int ay = 0; ay <= total - ax; ++ay) {
-                const int alpha[3] = {ax, ay, total - ax - ay};
-                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
-                poly2_zero_triangle(poly, total);
-                int poly_degree = 0;
-                poly[0][0] = 1.0;
-                for (int coord = 0; coord < 3; ++coord)
-                    for (int p = 0; p < alpha[coord]; ++p)
-                        poly2_mul_linear(poly, poly_degree, g.rp[coord], g.e1[coord], g.e2[coord]);
-                double s = 0.0;
-                for (int a = 0; a <= poly_degree; ++a)
-                    for (int b = 0; b <= poly_degree - a; ++b) s += poly[a][b]*A[a][b];
-                out[idx++] = s;
-            }
+    PolygonPotentialMomentsUpTo(P, 3, r, degree, out);
 }
 
 RAD_FIELD_KERNEL static void TetPotentialMomentsUpTo(const double V[4][3], const double r[3],
@@ -1072,14 +1114,53 @@ RAD_FIELD_KERNEL static void TetPotentialMomentsUpTo(const double V[4][3], const
         h[fi] = v3dot(rmf, nrm);
         SurfacePotentialMomentsUpTo(Fv, r, degree, face_moments[fi]);
     }
-    out[0] = PhiTet(V, r);
-    for (int total = 1; total <= degree; ++total)
+    for (int total = 0; total <= degree; ++total)
         for (int ax = 0; ax <= total; ++ax)
             for (int ay = 0; ay <= total - ax; ++ay) {
                 const int az = total - ax - ay;
                 const int idx = PotentialMomentIndex(ax, ay, az);
                 double s = 0.0;
                 for (int fi = 0; fi < 4; ++fi) s -= h[fi]*face_moments[fi][idx];
+                const int alpha[3] = {ax, ay, az};
+                for (int k = 0; k < 3; ++k)
+                    if (alpha[k] > 0) {
+                        int lower[3] = {ax, ay, az};
+                        --lower[k];
+                        s += r[k]*alpha[k]*out[PotentialMomentIndex(lower[0], lower[1], lower[2])];
+                    }
+                out[idx] = s/(total + 2.0);
+            }
+}
+
+// The same moments of a hexahedron with flat faces: the divergence theorem needs its outer faces only, and the faces
+// a decomposition into tetrahedra would add inside cancel. Corners 0,1,2,3 are one face in order, 4,5,6,7 the opposite.
+RAD_FIELD_KERNEL static void HexPotentialMomentsUpTo(const double C[8][3], const double r[3], int degree, double* out)
+{
+    const int FACES[6][4] = {{0,1,2,3},{4,5,6,7},{0,1,5,4},{1,2,6,5},{2,3,7,6},{3,0,4,7}};
+    double cen[3] = {0.0, 0.0, 0.0};
+    for (int i = 0; i < 8; ++i)
+        for (int k = 0; k < 3; ++k) cen[k] += 0.125*C[i][k];
+    FieldFill(out, out + (degree + 1)*(degree + 2)*(degree + 3)/6, 0.0);
+    for (int fi = 0; fi < 6; ++fi) {
+        double Fv[4][3];
+        double outward[3] = {0.0, 0.0, 0.0};
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 3; ++k) { Fv[j][k] = C[FACES[fi][j]][k]; outward[k] += 0.25*Fv[j][k]; }
+        for (int k = 0; k < 3; ++k) outward[k] -= cen[k];
+        double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+        TriPolySetup g;
+        if (!polygon_inplane_A_moments(Fv, 4, r, degree, A, g)) continue;
+        double rmf[3];
+        for (int k = 0; k < 3; ++k) rmf[k] = r[k]-Fv[0][k];
+        const double side = v3dot(outward, g.n) < 0.0 ? -1.0 : 1.0;
+        add_surface_moments(g, A, degree, -side*v3dot(rmf, g.n), out);
+    }
+    for (int total = 0; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int az = total - ax - ay;
+                const int idx = PotentialMomentIndex(ax, ay, az);
+                double s = out[idx];
                 const int alpha[3] = {ax, ay, az};
                 for (int k = 0; k < 3; ++k)
                     if (alpha[k] > 0) {
@@ -1121,7 +1202,10 @@ RAD_FIELD_KERNEL static void SurfaceReferencePotentialMomentsUpTo(
 {
     double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
     TriPolySetup g;
-    triangle_inplane_A_moments(P, r, degree, A, g);
+    if (!polygon_inplane_A_moments(P, 3, r, degree, A, g)) {
+        FieldFill(out, out + (degree + 1)*(degree + 2)*(degree + 3)/6, 0.0);
+        return;
+    }
     double rpmv0[3];
     for (int k = 0; k < 3; ++k) rpmv0[k] = g.rp[k] - v0[k];
     int idx = 0;
@@ -1357,6 +1441,26 @@ RAD_FIELD_KERNEL void TetPotentialMomentsUpTo3(const double V[4][3], const doubl
 RAD_FIELD_KERNEL void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3], double out[84])
 {
     TetPotentialMomentsUpTo(V, r, 6, out);
+}
+
+RAD_FIELD_KERNEL void HexPotentialMomentsUpTo3(const double C[8][3], const double r[3], double out[20])
+{
+    HexPotentialMomentsUpTo(C, r, 3, out);
+}
+
+RAD_FIELD_KERNEL void HexPotentialMomentsUpTo6(const double C[8][3], const double r[3], double out[84])
+{
+    HexPotentialMomentsUpTo(C, r, 6, out);
+}
+
+RAD_FIELD_KERNEL void QuadPotentialMomentsUpTo2(const double V[4][3], const double r[3], double out[10])
+{
+    PolygonPotentialMomentsUpTo(V, 4, r, 2, out);
+}
+
+RAD_FIELD_KERNEL void QuadPotentialMomentsUpTo4(const double V[4][3], const double r[3], double out[35])
+{
+    PolygonPotentialMomentsUpTo(V, 4, r, 4, out);
 }
 
 #ifndef RAD_FIELD_DEVICE_KERNELS

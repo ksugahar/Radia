@@ -106,9 +106,13 @@ def mixed_grid(shape, *, lengths=(1., 1., 1.), origin=(0., 0., 0.), mapping=None
 
 
 def to_ball(radius):
-    """Volume-filling map of the cube [-1, 1]^3 onto a ball; straight cells converge to the sphere as they refine."""
+    """Smooth map of the cube [-1, 1]^3 onto a ball; straight cells converge to the sphere as they refine.
+
+    The checkerboard grid of ``mixed_grid`` stays one-signed on it up to n = 6. Its corners flatten as n rises, the
+    corner pyramids invert at n = 8, and the mixed route refuses them. The radial max-norm map inverts pyramids from n = 3.
+    """
     def mapping(x, y, z):
-        point = np.array((x, y, z), dtype=float)
-        norm = np.linalg.norm(point)
-        return tuple(radius*point*(np.abs(point).max()/norm)) if norm > 0 else (0., 0., 0.)
+        a, b, c = x*x, y*y, z*z
+        return (radius*x*np.sqrt(1 - b/2 - c/2 + b*c/3), radius*y*np.sqrt(1 - c/2 - a/2 + c*a/3),
+                radius*z*np.sqrt(1 - a/2 - b/2 + a*b/3))
     return mapping

@@ -33,7 +33,8 @@ class PreparedHDivNonlinear:
     radia.vim; unsupported geometry or a missing native binding raises.
 
     ``gram_aca`` holds the device ACA parameters of the charge Gram
-    (eps, eta, leaf_size, max_rank, rank_cap). Leaf size and admissibility
+    (eps, eta, leaf_size, max_rank, rank_cap). ``leaf_size`` counts charges, as
+    the CPU cluster tree does, and a host is never split. Leaf size and admissibility
     are problem dependent and are never chosen automatically; ``None``
     selects the documented CPU charge-Gram preset ``GRAM_ACA_PRESET``.
     ``stats()`` reports the parameters actually used.
@@ -545,7 +546,13 @@ GRAM_ACA_PRESET = dict(eps=1e-10, eta=2.0, leaf_size=64, max_rank=200, rank_cap=
 _ACA_OPTIONAL_ROWS = (("aca_leaf_spans", "H2D"), ("aca_leaf_status", "D2H"), ("aca_active_count", "D2H"))
 _ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admissible_blocks",
                  "rank_cap_promotions", "storage_promotions", "zero_rank_leaves", "rank_sum", "max_rank", "aca_steps",
-                 "aca_batches", "factor_coefficients", "dense_coefficients")
+                 "aca_batches", "factor_coefficients", "dense_coefficients", "far_pairs", "mid_pairs", "graded_pairs",
+                 "far_microseconds", "mid_microseconds", "graded_microseconds", "aca_microseconds", "dense_microseconds")
+# The explicit kernel expansion route of mixed meshes: far blocks from the Laplace kernel at Chebyshev nodes of their
+# clusters, recompressed by ACA. Its parameters have no preset; the order and tolerance are the caller's measured choice.
+_GRAM_EXPANSION = "hca"
+_HCA_COUNTERS = _ACA_COUNTERS + ("expansion_order", "kernel_rank_sum", "moment_coefficients", "moment_microseconds")
+_HCA_OPTIONAL_ROWS = (("hca_boxes", "H2D"), ("hca_moment_items", "H2D"), ("hca_moment_flag", "D2H"), ("hca_product_spans", "H2D"))
 
 
 def _checked_gram_compression(compression, aca):
@@ -554,8 +561,16 @@ def _checked_gram_compression(compression, aca):
         if aca is not None:
             raise ValueError("gram_aca is rejected for gram_compression='dense'")
         return None
+    if compression == _GRAM_EXPANSION:
+        if not isinstance(aca, dict) or "expansion_order" not in aca:
+            raise ValueError("gram_compression='hca' requires gram_aca with its expansion_order: %r" % (aca,))
+        order = aca["expansion_order"]
+        if isinstance(order, bool) or not isinstance(order, numbers.Integral) or not 3 <= order <= 8:
+            raise ValueError("gram_aca expansion_order must be an integer in [3,8]: %r" % (order,))
+        checked = _checked_gram_aca({key: value for key, value in aca.items() if key != "expansion_order"})
+        return dict(checked, expansion_order=int(order))
     if compression != _GRAM_COMPRESSION:
-        raise ValueError("gram_compression must be explicit 'aca' or 'dense': %r" % (compression,))
+        raise ValueError("gram_compression must be explicit 'aca', 'hca' or 'dense': %r" % (compression,))
     return _checked_gram_aca(aca)
 
 
@@ -659,13 +674,14 @@ def _expected_hex_ledger(arguments):
     expected.update((("charge_" + name, "H2D"), arguments[name].nbytes) for name in _CHARGE_TABLE_KEYS
                     if not name.endswith("exponents"))
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
-                     ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
-                     ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+                     ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
+                     ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     if arguments.get("image_masks") is not None:
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -683,13 +699,16 @@ def _expected_mixed_ledger(arguments):
         ("charge_row_host", 4*arguments["charge_host"].size), ("charge_host_first", 4*hosts),
         ("charge_host_dof_start", 4*hosts), ("charge_host_entry", 8*hosts))}
     expected.update({("prepare_flag", "D2H"): 4, ("hex_pair_count", "D2H"): 16, ("hex_block_values", "D2H"): 16,
-                     ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4, ("energy_flag", "D2H"): 4,
-                     ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
+                     ("hex_cost_classes", "D2H"): 48, ("hex_block_flag", "D2H"): 4, ("hex_symmetrize_flag", "D2H"): 4,
+                     ("energy_flag", "D2H"): 4, ("charge_map_flag", "D2H"): 4, ("resident_plan", "H2D"): None})
     if arguments.get("image_masks") is not None:
         expected[("image_transforms", "H2D")] = _IMAGE_ROW_BYTES*arguments["image_masks"].size
     if arguments["compression"] == "aca":
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
-                         ("aca_dense_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
+                         ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
+                         ("dense_flag", "D2H"): 4})
+    if arguments["compression"] == _GRAM_EXPANSION:
+        expected.update({("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -706,12 +725,14 @@ def _checked_device_assembly(assembly, arguments):
         raise RuntimeError("HDiv Gram compression %r, requested %r"
                            % (assembly.get("compression"), arguments["compression"]))
     counters = assembly.get("hmatrix")
-    if arguments["compression"] == "aca" and (set(counters) != set(_ACA_COUNTERS) or not all(
+    want_counters = {"aca": _ACA_COUNTERS, _GRAM_EXPANSION: _HCA_COUNTERS}.get(arguments["compression"])
+    if want_counters is not None and (set(counters) != set(want_counters) or not all(
             type(v) is int and v >= 0 for v in counters.values())):
         raise RuntimeError("HDiv ACA Gram counters rejected: %r" % (counters,))
     assembly["charge_budget"] = _checked_charge_budget(assembly.get("charge_budget"), arguments["compression"])
     expected = _expected_device_ledger(arguments)
-    optional = set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca" else set()
+    optional = (set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca"
+                else set(_ACA_OPTIONAL_ROWS + _HCA_OPTIONAL_ROWS) if arguments["compression"] == _GRAM_EXPANSION else set())
     seen = {}
     for row in assembly["transfer_ledger"]:
         key, size = (row["payload"], row["direction"]), row["bytes"]
@@ -952,13 +973,14 @@ def _device_gram_arguments(tables, inputs, geometry, aca, compression=_GRAM_COMP
         rows = np.concatenate([np.c_[np.full(len(rules[name][0]), index, dtype=np.float64),
                                      np.asarray(rules[name][0], dtype=np.float64),
                                      np.asarray(rules[name][1], dtype=np.float64)]
-                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self"))
+                               for index, name in enumerate(("out", "inner", "pair", "pair_affine", "near", "inner_self", "near_cell", "far_1", "far_2", "far_3", "tangent"))
                                if name in rules])
         empty = np.zeros((0, 4))
+        ratios = list(inputs["far_ratios"]) + [0.]*(3 - len(inputs["far_ratios"]))
         arguments = dict(common, cell_vertices=cells_m, face_vertices=faces_m, tet_rule=empty, tri_rule=empty,
                          tet_low_rule=empty, tri_low_rule=empty, far_factor=1e30, family=family,
                          hex_rules=np.ascontiguousarray(rows),
-                         hex_bands=np.array([inputs["near_grade"], inputs["far_inner"]], dtype=np.float64))
+                         hex_bands=np.array([inputs["near_grade"], inputs["far_inner"], inputs["inner_switch"], *ratios], dtype=np.float64))
     elif curved:
         numbers = (np.ravel(tables["cell_numbers"]), np.ravel(tables["face_numbers"]))
         if not (np.array_equal(numbers[0], inputs["cell_vertices"]) and np.array_equal(numbers[1], inputs["face_vertices"])):
@@ -1052,6 +1074,8 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     from radia.vim._vim import (_curve_mesh, _prepare_gpu_charge_inputs, _prepare_gpu_curved_charge_inputs,
                                 _prepare_gpu_hex_charge_inputs, _prepare_gpu_mixed_charge_inputs)
     aca = _checked_gram_compression(compression, aca)
+    if compression == _GRAM_EXPANSION and images is not None and images.terms is not None:
+        raise NotImplementedError("gram_compression='hca' has no image route: the kernel expansion reads the direct term only")
     curve_order = _checked_curve_order(curve_order, order)
     mesh = ng.Mesh(str(path))
     family = _mesh_family(mesh, curve_order, order)

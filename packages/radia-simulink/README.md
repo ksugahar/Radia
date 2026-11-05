@@ -384,7 +384,7 @@ HDiv solves take a checked setup in one of two ways, and neither builds a matrix
 
 Either way the request names a checked mesh: a versioned label contract, a `check-vol` receipt and its provenance.
 
-RT0 is `prepareHDivDeviceSetup(mesh, 0, ...)`; curved P2 tetrahedra pass `CurveOrder=2`. Pyramid and mixed meshes are refused, as the CPU charge Gram does not implement them. Caller-supplied leaves, mass or charge maps are no longer accepted: the former `HMatrixOperator`, `solveHDivRT0` and `solveCurvedHDiv` are removed.
+RT0 is `prepareHDivDeviceSetup(mesh, 0, ...)`; curved P2 tetrahedra pass `CurveOrder=2`. Meshes of pyramids, or of tetrahedra, pyramids and hexahedra together, run at orders 1 and 2 on straight geometry, without images or internal interfaces; a cell whose map changes sign is refused. Caller-supplied leaves, mass or charge maps are no longer accepted: the former `HMatrixOperator`, `solveHDivRT0` and `solveCurvedHDiv` are removed.
 
 `radia.gpu.prepareHDivDeviceSetup(meshPath, order, LabelContract=..., MeshCheckReceipt=..., MeshCheckReceiptSha256=..., MeshCheckProvenance=...)` runs `radia_simulink.hdiv.prepare_hdiv_device_setup` once at the initialization boundary and returns a checked `radia.hdiv-device-setup.v1` struct of primitive NGSolve tables and vectors. No matrix is built on the host. `PreparedHDivNonlinear(setup, H, bhTable)` then builds the Gram, charge map, evaluation map and reference mass on the device through the plain `radia_hdiv_device` MEX, for the affine tet, curved P2 tet and hex families at orders 1 and 2; order 0 (RT0) is linear only.
 

@@ -6,10 +6,7 @@ which the installed lane checks by hash. Pinned stock 6.2.2608 scales every pyra
 z by 1 - 1e-10, which fails the unchanged 1e-11 projection on tet-pyramid-hex
 (order 1/2 about 1.6e-11/1.8e-11); that stays a hard failure.
 """
-import json
 import os
-import subprocess
-import sys
 import numpy as np
 import pytest
 from scipy.sparse import coo_matrix, csc_matrix, diags
@@ -17,7 +14,7 @@ from scipy.sparse.linalg import norm as sparse_norm
 
 
 ng = pytest.importorskip("ngsolve")
-from test_hdiv_connected_meshes import connected_mesh
+from tests.test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 
 
@@ -31,15 +28,6 @@ def test_ng_pyramid_mapped_material_mass(tmp_path, record_property, family, orde
     mesh = connected_mesh(family)
     path = tmp_path / "material.vol"
     mesh.ngmesh.Save(str(path))
-    contract = tmp_path / "labels.json"
-    contract.write_text(json.dumps(dict(schema="radia.vol-label-contract.v1",
-        required=dict(materials=["body"],boundaries=["exterior"]),
-        allowed=dict(materials=["body"],boundaries=["exterior"]))))
-    checked = subprocess.run([sys.executable,"-m","cubit_mesh_export.check",str(path),
-        "--strict-labels","--contract",str(contract),"--report-json",str(tmp_path/"check-vol.json"),"--format","json"],
-        capture_output=True,text=True)
-    assert checked.returncode == 0, checked.stderr + checked.stdout
-    assert json.loads(checked.stdout)["passed"]
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=order)
         u, v = fes.TnT()

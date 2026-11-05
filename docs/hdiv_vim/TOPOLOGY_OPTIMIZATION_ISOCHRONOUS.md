@@ -289,9 +289,10 @@ Remaining levers, in order:
 * **Partial `(x, A_z)` hodograph as a solving formulation**: evaluated and
   declined (no Green's function/BIE; compactification geometrically
   restricted); retained only as a design-reading chart.
-* **Pyramid elements**: NGSolve HDiv NOT_IMPLEMENTED (checked through the
-  6.2.2606 nightlies) -> tet/hex/wedge meshes only; no mixed hex/tet
-  transition layers.
+* **Pyramid elements**: the HDiv material solve takes straight pyramid and
+  tet-pyramid-hex meshes at orders 1 and 2, without images or internal
+  interfaces ([review](HDiv-MMM_review.md)). This design route has not been
+  run on them and stays on tet/hex/wedge meshes.
 * **Curved hexes**: the accepted 0.78 % demag-spectrum leak on strongly
   curved hexes; tet `Curve(2)` is the supported curved path.
 * **Embedded-design accuracy** is `O(h)` at design boundaries (Sec. 3.7);
