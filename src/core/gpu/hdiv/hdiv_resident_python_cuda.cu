@@ -147,7 +147,7 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
     const auto n=input.host.size();
     if(!n||!charges.dofs)throw std::invalid_argument("Unsupported bounded flat HDiv resident dimensions");
     const auto block=flatBlock(input);radia_hdiv_bh::validateFlatChargeMap(input,charges);
-    const auto budget=chargeBudget(block,input,charges,input.compression=="aca");
+    const auto budget=chargeBudget(block,input,charges,input.compression=="aca"||input.compression=="hca");
     const auto owner=radia_hmatrix_cuda::HostFaultAllocator<Operator>("python.operator-owner");
     if(input.compression=="dense"){
         if(input.acaEps!=0||input.acaEta!=0||input.acaLeafSize||input.acaMaxRank||input.acaRankCapDense)
@@ -159,9 +159,9 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
         radia_hmatrix_cuda::FlatGramOracle oracle(block);
         return std::allocate_shared<Operator>(owner,plan,oracle,false,input,charges,budget);
     }
-    if(input.compression=="aca"){
+    if(input.compression=="aca"||input.compression=="hca"){
         radia_hmatrix_cuda::FlatAcaOptions options;options.eps=input.acaEps;options.eta=input.acaEta;
-        options.leafSize=input.acaLeafSize;options.maxRank=input.acaMaxRank;options.rankCapDense=input.acaRankCapDense;
+        options.leafSize=input.acaLeafSize;options.maxRank=input.acaMaxRank;options.rankCapDense=input.acaRankCapDense;options.expansionOrder=input.acaExpansionOrder;
         // Ranks are known only after device compression; they size the plan.
         radia_hmatrix_cuda::FlatAcaOracle oracle(block,options);oracle.compress();
         auto plan=radia_hmatrix_cuda::packLeaves(n,oracle.leaves<LeafInput>(),oracle.permutation(),radia_hmatrix_cuda::HostVector<double>(n,1.));
@@ -173,9 +173,11 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput& input,const ChargeMa
             {"aca_batches",s.batches},{"factor_coefficients",s.factorCoefficients},{"dense_coefficients",s.denseCoefficients},
             {"far_pairs",s.farPairs},{"mid_pairs",s.midPairs},{"graded_pairs",s.gradedPairs},{"far_microseconds",s.farMicroseconds},
             {"mid_microseconds",s.midMicroseconds},{"graded_microseconds",s.gradedMicroseconds},{"aca_microseconds",s.acaMicroseconds},{"dense_microseconds",s.denseMicroseconds}};
+        if(options.expansionOrder){result->record.counters.push_back({"expansion_order",s.expansionOrder});result->record.counters.push_back({"kernel_rank_sum",s.kernelRankSum});
+            result->record.counters.push_back({"moment_coefficients",s.momentCoefficients});result->record.counters.push_back({"moment_microseconds",s.momentMicroseconds});}
         return result;
     }
-    throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense' or 'aca'");
+    throw std::invalid_argument("Flat charge Gram compression must be explicit 'dense', 'aca' or 'hca'");
 }
 std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces){
     using namespace radia_hmatrix_cuda;

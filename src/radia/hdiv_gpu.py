@@ -504,6 +504,11 @@ _ACA_COUNTERS = ("elements", "clusters", "dense_leaves", "lowrank_leaves", "admi
                  "rank_cap_promotions", "storage_promotions", "zero_rank_leaves", "rank_sum", "max_rank", "aca_steps",
                  "aca_batches", "factor_coefficients", "dense_coefficients", "far_pairs", "mid_pairs", "graded_pairs",
                  "far_microseconds", "mid_microseconds", "graded_microseconds", "aca_microseconds", "dense_microseconds")
+# The explicit kernel expansion route of mixed meshes: far blocks from the Laplace kernel at Chebyshev nodes of their
+# clusters, recompressed by ACA. Its parameters have no preset; the order and tolerance are the caller's measured choice.
+_GRAM_EXPANSION = "hca"
+_HCA_COUNTERS = _ACA_COUNTERS + ("expansion_order", "kernel_rank_sum", "moment_coefficients", "moment_microseconds")
+_HCA_OPTIONAL_ROWS = (("hca_boxes", "H2D"), ("hca_moment_items", "H2D"), ("hca_moment_flag", "D2H"), ("hca_product_spans", "H2D"))
 
 
 def _checked_gram_compression(compression, aca):
@@ -512,8 +517,16 @@ def _checked_gram_compression(compression, aca):
         if aca is not None:
             raise ValueError("gram_aca is rejected for gram_compression='dense'")
         return None
+    if compression == _GRAM_EXPANSION:
+        if not isinstance(aca, dict) or "expansion_order" not in aca:
+            raise ValueError("gram_compression='hca' requires gram_aca with its expansion_order: %r" % (aca,))
+        order = aca["expansion_order"]
+        if isinstance(order, bool) or not isinstance(order, numbers.Integral) or not 3 <= order <= 8:
+            raise ValueError("gram_aca expansion_order must be an integer in [3,8]: %r" % (order,))
+        checked = _checked_gram_aca({key: value for key, value in aca.items() if key != "expansion_order"})
+        return dict(checked, expansion_order=int(order))
     if compression != _GRAM_COMPRESSION:
-        raise ValueError("gram_compression must be explicit 'aca' or 'dense': %r" % (compression,))
+        raise ValueError("gram_compression must be explicit 'aca', 'hca' or 'dense': %r" % (compression,))
     return _checked_gram_aca(aca)
 
 
@@ -640,6 +653,8 @@ def _expected_mixed_ledger(arguments):
         expected.update({("aca_permutation", "H2D"): 8*arguments["charge_host"].size,
                          ("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None,
                          ("dense_flag", "D2H"): 4})
+    if arguments["compression"] == _GRAM_EXPANSION:
+        expected.update({("aca_dense_host_starts", "H2D"): None, ("aca_dense_pair_spans", "H2D"): None, ("dense_flag", "D2H"): 4})
     return expected
 
 
@@ -656,12 +671,14 @@ def _checked_device_assembly(assembly, arguments):
         raise RuntimeError("HDiv Gram compression %r, requested %r"
                            % (assembly.get("compression"), arguments["compression"]))
     counters = assembly.get("hmatrix")
-    if arguments["compression"] == "aca" and (set(counters) != set(_ACA_COUNTERS) or not all(
+    want_counters = {"aca": _ACA_COUNTERS, _GRAM_EXPANSION: _HCA_COUNTERS}.get(arguments["compression"])
+    if want_counters is not None and (set(counters) != set(want_counters) or not all(
             type(v) is int and v >= 0 for v in counters.values())):
         raise RuntimeError("HDiv ACA Gram counters rejected: %r" % (counters,))
     assembly["charge_budget"] = _checked_charge_budget(assembly.get("charge_budget"), arguments["compression"])
     expected = _expected_device_ledger(arguments)
-    optional = set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca" else set()
+    optional = (set(_ACA_OPTIONAL_ROWS) if arguments["compression"] == "aca"
+                else set(_ACA_OPTIONAL_ROWS + _HCA_OPTIONAL_ROWS) if arguments["compression"] == _GRAM_EXPANSION else set())
     seen = {}
     for row in assembly["transfer_ledger"]:
         key, size = (row["payload"], row["direction"]), row["bytes"]

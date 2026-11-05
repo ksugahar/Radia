@@ -28,14 +28,14 @@ struct Stats {std::size_t dimension,owned_bytes,applications;bool closed;};
 // the 27/9-node Q2 lattices, charges are reference monomials and hexRules /
 // hexBands carry the CPU hex Gram rules; TET rules stay empty. "mixed": as
 // "hex" with the unit-cube lattices of tet, pyramid and hex hosts and hostTypes.
-// compression is "dense" (one deferred dense block) or "aca" (device ACA
-// leaves on a geometric partition); the ACA parameters apply to "aca" only.
+// compression is "dense" (one deferred dense block), "aca" (device ACA leaves on a geometric partition) or
+// "hca" (mixed meshes: far blocks from the Laplace kernel expansion); the ACA parameters apply to the last two.
 struct FlatInput {
     radia_hmatrix_cuda::HostVector<double> cells,faces,tet,tri,tetLow,triLow;
     radia_hmatrix_cuda::HostVector<int> host,kind,expo;
     double farFactor=1e30;
     std::string compression;
-    double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;
+    double acaEps=0,acaEta=0;std::size_t acaLeafSize=0,acaMaxRank=0;bool acaRankCapDense=false;int acaExpansionOrder=0;
     std::string family="affine-tet";
     radia_hmatrix_cuda::HostVector<int> cellNumbers,faceNumbers;
     radia_hmatrix_cuda::HostVector<double> gl,gw;
