@@ -971,6 +971,41 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
+def _run_jcf_export(parent):
+    """Read the analysis settings and export the current Cubit mesh."""
+    from cubit_mesh_export.jmag import export_jcf
+
+    config_path, _ = QFileDialog.getOpenFileName(
+        parent, "Select analysis settings", "", "JSON (*.json)")
+    if not config_path:
+        return
+    out, _ = QFileDialog.getSaveFileName(
+        parent, "Export JCF", "mesh.jcf", "JCF (*.jcf)")
+    if not out:
+        return
+    if not out.lower().endswith(".jcf"):
+        out += ".jcf"
+    try:
+        with open(config_path, encoding="utf-8") as stream:
+            config = json.load(stream)
+        if not isinstance(config, dict):
+            raise ValueError("Analysis settings must be a JSON object")
+        library = config.get("material_library")
+        if isinstance(library, str):
+            library_path = os.path.join(os.path.dirname(config_path), library)
+            with open(library_path, encoding="utf-8") as stream:
+                config["material_library"] = json.load(stream)
+        sidesets = config.pop("symmetry_sidesets", [])
+        if not isinstance(sidesets, list) or any(not isinstance(name, str) for name in sidesets):
+            raise ValueError("symmetry_sidesets must be a list of names")
+        result = export_jcf(out, config, symmetry_sidesets=sidesets)
+    except Exception as exc:
+        QMessageBox.warning(parent, "JCF export failed", str(exc))
+        return
+    print(f"Export complete: {out}")
+    return result
+
+
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
@@ -980,6 +1015,11 @@ def launch_export(fmt):
     supported = {
         FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
     }
+    if fmt == "jcf":
+        parent = find_claro()
+        if parent is None:
+            raise RuntimeError("Cubit main window is not available")
+        return _run_jcf_export(parent)
     if fmt not in supported:
         raise ValueError(f"unsupported Cubit export format: {fmt!r}")
     import cubit as cubit_mod
@@ -1017,6 +1057,7 @@ _MENU_SPECS = (
      "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
     ("Nastran BDF (.bdf)...", FMT_NASTRAN,
      "Export mesh to Nastran BDF format (.bdf)"),
+    ("JMAG JCF (.jcf)...", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
     ("VTK (.vtk)...", FMT_VTK,
      "Export mesh to VTK format (.vtk)"),
     ("FEMEEM...", FMT_FEMEEM,
