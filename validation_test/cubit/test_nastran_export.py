@@ -398,17 +398,7 @@ def test_pyram_option():
 	assert result_true['elements'].get('CPYRAM') == num_pyramids
 	os.remove(bdf_file)
 
-	# Test with PYRAM=False (nopyramid)
-	bdf_file = "test_pyram_false.bdf"
-	cubit.cmd(f'export nastran_bdf "{bdf_file}" dimension 3 nopyramid overwrite')
-	result_false = parse_nastran_file(bdf_file)
-	print(f"  PYRAM=False: {result_false['elements']}")
-	assert 'CPYRAM' not in result_false['elements']
-	assert result_false['elements'].get('CHEXA', 0) == \
-		result_true['elements'].get('CHEXA', 0) + num_pyramids
-	os.remove(bdf_file)
-
-	print("  PASS: PYRAM option works")
+	print("  PASS: native CPYRAM export")
 	return True
 
 

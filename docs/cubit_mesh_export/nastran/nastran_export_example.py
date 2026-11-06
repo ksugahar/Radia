@@ -77,9 +77,4 @@ print("\nExporting with pyramids...")
 cubit.cmd('export nastran_bdf "mixed_with_pyramid.bdf" dimension 3 overwrite')
 print("  Created: mixed_with_pyramid.bdf")
 
-# Export with pyramid as degenerate hex, for importers without CPYRAM support
-print("\nExporting without pyramids...")
-cubit.cmd('export nastran_bdf "mixed_no_pyramid.bdf" dimension 3 nopyramid overwrite')
-print("  Created: mixed_no_pyramid.bdf")
-
 print("\nDone!")

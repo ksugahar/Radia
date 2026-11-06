@@ -360,15 +360,6 @@ class ExportDialog(QDialog):
         if fmt not in (FMT_NETGEN, FMT_FEMEEM):
             form.addRow("Dimension:", self._dimension)
 
-        # --- NoPyramid (Nastran only) -------------------------------
-        self._nopyramid = None
-        if fmt == FMT_NASTRAN:
-            self._nopyramid = QComboBox()
-            self._nopyramid.addItems(
-                ["Keep pyramids",
-                 "Convert pyramids to degenerate hexes"])
-            self._nopyramid.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Pyramids:", self._nopyramid)
 
         # --- MEG block label table ----------------------------------
         self._block_table = None
@@ -485,8 +476,6 @@ class ExportDialog(QDialog):
             self._order.setCurrentIndex(int(s["order"]))
         if "dimension" in s:
             self._dimension.setCurrentIndex(int(s["dimension"]))
-        if self._nopyramid and "nopyramid" in s:
-            self._nopyramid.setCurrentIndex(int(s["nopyramid"]))
         if self._scale and "scale" in s:
             self._scale.setText(s["scale"])
         if self._kelvin_enable and "kelvin_enable" in s:
@@ -567,8 +556,6 @@ class ExportDialog(QDialog):
             dim = "2" if self._dimension.currentText() == "2D" else "3"
             cmd = (f'export nastran_bdf "{f}" order {order} '
                    f'dimension {dim}')
-            if self._nopyramid and self._nopyramid.currentIndex() == 1:
-                cmd += " nopyramid"
 
         elif fmt == FMT_VTK:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
@@ -668,8 +655,6 @@ class ExportDialog(QDialog):
             "order": self._order.currentIndex(),
             "dimension": self._dimension.currentIndex(),
         }
-        if self._nopyramid:
-            s["nopyramid"] = self._nopyramid.currentIndex()
         if self._scale:
             s["scale"] = self._scale.text()
         if self._kelvin_enable:

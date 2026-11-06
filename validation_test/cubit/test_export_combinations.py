@@ -10,7 +10,7 @@ Models:
 
 Combinations:
   GMSH:    order(1-3) x dim(2D,3D), MSH4.2 post-processing only
-  Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
+  Nastran: order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
 
 Usage:
@@ -387,31 +387,27 @@ def generate_test_cases():
                     }
                 })
 
-    # --- Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) ---
+    # --- Nastran: order(1,2) x dim(2D,3D) ---
     for model in ['3d', '2d']:
         for order in [1, 2]:
             for dim in [3, 2]:
-                for nopyr in [False, True]:
-                    nopyr_str = "_nopyr" if nopyr else ""
-                    name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
-                    fname = os.path.join(OUT_DIR, f"{name}.bdf")
+                name = f"nastran_{model}_order{order}_dim{dim}"
+                fname = os.path.join(OUT_DIR, f"{name}.bdf")
 
-                    cmd = (f'export nastran_bdf "{fname}" order {order} '
-                           f'dimension {dim} overwrite')
-                    if nopyr:
-                        cmd += ' nopyramid'
+                cmd = (f'export nastran_bdf "{fname}" order {order} '
+                       f'dimension {dim} overwrite')
 
-                    tri_card = "CTRIA3" if order == 1 else "CTRIA6"
-                    cards = [tri_card]
-                    if model == "3d" and dim == 3:
-                        cards.insert(0, "CTETRA")
+                tri_card = "CTRIA3" if order == 1 else "CTRIA6"
+                cards = [tri_card]
+                if model == "3d" and dim == 3:
+                    cards.insert(0, "CTETRA")
 
-                    cases.append({
-                        'name': name, 'model': model,
-                        'cmd': cmd,
-                        'validator': validate_nastran_export,
-                        'expected': {'cards': cards}
-                    })
+                cases.append({
+                    'name': name, 'model': model,
+                    'cmd': cmd,
+                    'validator': validate_nastran_export,
+                    'expected': {'cards': cards}
+                })
 
     # --- VTK: order(1,2) x dim(2D,3D) ---
     for model in ['3d', '2d']:

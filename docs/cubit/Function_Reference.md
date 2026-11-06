@@ -75,14 +75,13 @@ Order 4-5 not supported (use `export netgen`).
 ### export nastran_bdf
 
 ```
-export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | order | 1 | Element order (1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20) |
 | dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
-| nopyramid | off | Convert pyramids to degenerate hex (for importers without CPYRAM support) |
 
 Blocks become PSOLID/PSHELL properties, sidesets become collision-free PSHELL
 properties, and nodesets become SET1 cards. MAT cards are deliberately omitted;

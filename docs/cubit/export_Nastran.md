@@ -6,7 +6,7 @@ mesh-interchange deck.
 ## Command
 
 ```text
-export nastran_bdf "mesh.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export nastran_bdf "mesh.bdf" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
 `export nastran_bdf` is the primary, solver-neutral command.
@@ -24,7 +24,6 @@ in addition to the blocked mesh.
 | `order 2` |  | Quadratic edge nodes generated through NetgenCurver |
 | `dimension 3` | yes | Export compatible 3D and 2D blocked elements |
 | `dimension 2` |  | Export only 2D blocked elements; reject a volume-only selection |
-| `nopyramid` | off | Write each pyramid as a degenerate CHEXA for consumers that do not accept CPYRAM |
 | `overwrite` | off | Replace an existing output file |
 
 The exporter preserves all three GRID coordinates in both dimension modes. It
@@ -74,12 +73,6 @@ cubit.cmd('export nastran_bdf "solid.bdf" order 2 dimension 3 overwrite')
 cubit.cmd("block 10 add tri all")
 cubit.cmd('block 10 name "plate"')
 cubit.cmd('export nastran_bdf "plate.bdf" order 2 dimension 2 overwrite')
-```
-
-For a hybrid HEX/TET mesh whose receiver cannot import CPYRAM:
-
-```python
-cubit.cmd('export nastran_bdf "hybrid.bdf" dimension 3 nopyramid overwrite')
 ```
 
 ## Validation

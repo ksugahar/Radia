@@ -11,7 +11,6 @@ Coverage:
        (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
-    E. Nastran nopyramid flag
     F. FEMEEM scale flag
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
@@ -244,14 +243,6 @@ class TestNastranCommand(_DialogTestBase):
             r'dimension 3 overwrite$')
         # nopyramid default = off
         self.assertNotIn("nopyramid", cmd)
-
-    def test_nopyramid_flag(self):
-        d = self._make_dialog(rem.FMT_NASTRAN)
-        d._nopyramid.setCurrentIndex(1)  # "Yes"
-        self.assertIn("nopyramid", d.cubit_command())
-
-
-class TestVtkCommand(_DialogTestBase):
 
     def test_default_command(self):
         d = self._make_dialog(rem.FMT_VTK)

@@ -34,8 +34,6 @@ Controls pyramid element handling in hybrid hex/tet meshes:
 # Standard export with CPYRAM elements
 cubit.cmd('export nastran_bdf "mesh.bdf" overwrite')
 
-# For importers without CPYRAM support: convert pyramids to degenerate hex
-cubit.cmd('export nastran_bdf "mesh_no_pyramid.bdf" nopyramid overwrite')
 ```
 
 ## Element Mapping
@@ -49,7 +47,7 @@ cubit.cmd('export nastran_bdf "mesh_no_pyramid.bdf" nopyramid overwrite')
 | Tri | - | CTRIA3 |
 | Quad | - | CQUAD4 |
 
-*Pyramid exported as CPYRAM when `PYRAM=True`, degenerate CHEXA when `PYRAM=False`.
+*Pyramids are exported as CPYRAM.
 
 ## Contract boundary
 
