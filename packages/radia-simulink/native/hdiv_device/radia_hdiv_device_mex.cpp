@@ -278,6 +278,8 @@ void withdrawn(int nl,mxArray** out,int nr,const mxArray** in){
 }
 }
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
-    char message[2048]={0};
-    if(!radia_mex::checked(&withdrawn,nl,out,nr,in,message,sizeof(message)))mexErrMsgIdAndTxt("radia:hdiv:device","%s",message);
+    char errorMessage[2048]={0};
+    if(!radia_mex::checked(withdrawn,nl,out,nr,in,errorMessage,sizeof(errorMessage))){
+        mexErrMsgIdAndTxt("radia:hdiv:device","%s",errorMessage);
+    }
 }
