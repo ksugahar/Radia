@@ -1,5 +1,5 @@
 function hdivGPUWorkflowSFunction(block)
-% Shared GPU Newton owner; one explicit rising trigger schedules one solve.
+% Device GPU Newton owner; one explicit rising trigger schedules one solve.
 % Outputs are held and become visible on the next discrete sample (Update).
 % No coil voltage/inductance model, Python call, or CPU fallback is implemented.
 block.NumDialogPrms=1;block.DialogPrmsTunable={'Nontunable'};
@@ -47,8 +47,7 @@ assert(isempty(get_param(block.BlockHandle,'UserData')), ...
 if ~isfolder(c.RunDirectory),mkdir(c.RunDirectory);end
 c.RunDirectory=tempname(c.RunDirectory);mkdir(c.RunDirectory);
 try
-    owner=radia.gpu.PreparedHDivNonlinear(c.MeshPath,c.Order,c.AppliedField,c.BHTable, ...
-        Assembly=c.Assembly,HostSetup=c.HostSetup,Preconditioner=c.Preconditioner);
+    owner=radia.gpu.PreparedHDivNonlinear(c.Setup,c.AppliedField,c.BHTable,Preconditioner=c.Preconditioner);
     try
         set_param(block.BlockHandle,'UserData', ...
             struct('schema','radia.hdiv-gpu-sfun.owner.v1','owner',owner,'runDirectory',c.RunDirectory), ...
@@ -56,7 +55,7 @@ try
     catch e
         delete(owner);rethrow(e);
     end
-    journal(c,'prepared',struct('backend','gpu','preconditioner',c.Preconditioner));
+    journal(c,'prepared',struct('backend','gpu','preconditioner',c.Preconditioner,'mesh_sha256',c.Setup.mesh_sha256));
 catch e
     terminate(block);journal(c,'failed',struct('identifier',e.identifier,'message',e.message));rethrow(e);
 end

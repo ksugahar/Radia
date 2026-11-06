@@ -1,44 +1,60 @@
-# Pending HDiv same-kernel frontend parity
+# HDiv device same-kernel frontend parity
 
-Status: **PENDING**, including both record producers and the admitted Windows GPU
-run. The comparison reader below exists; it is not a completed execution harness.
-Linux GPU smoke, CPU oracle agreement and source-only tests do not satisfy this
-gate. No change to CPU/GPU numerical tolerances is proposed.
+Gate (1) of the CPU/GPU execution policy: pybind11 and the plain MEX on the same
+kernel, bitwise. It is not CPU/GPU accuracy (separate tests compare the device
+route with the CPU-assembled equation) and not a performance measurement.
 
-Build pybind11 and mexcuda from the same exact commit for the same Windows GPU,
-CUDA compiler version and architecture. Record the full commands, artifact hashes
-and runtime identity. Both builds must use `--fmad=false --ftz=false
---prec-div=true --prec-sqrt=true`, without fast math. Matching flags alone do not
-establish parity; any byte difference fails and must be investigated.
+## Build
 
-Feed both frontends identical FP64 factors, permutation, scale, charge-map data
-and vectors, with explicit index-base conversion at the thin MATLAB boundary.
-Hash the canonical zero-based SI input dataset before frontend conversion.
+`tools/build_python_gpu.py` compiles the device HDiv kernels once with nvcc
+(`--fmad=false`, no fast math) into one object. The pybind11 module and
+`packages/radia-simulink/tools/build_hdiv_mex.py` (CMake `matlab_add_mex`, no
+mexcuda) both link that object; the MEX build receipt
+(`radia.hdiv-mex-build.v1`) records the object hash and the pybind11 binary hash
+of the same source SHA. Identical compiler controls therefore hold by
+construction; the comparator checks the object hash instead of a flag list.
 
-- `normalized-leaf-resident-boundary`: use the nontrivial scale/permutation and
-  low-rank leaf fixture of `tests/matlab/test_hmatrix_normalized_leaves.m` on both
-  shared resident routes. Capture the `apply` vector.
-- `explicit-ng-host-hdiv-bh`: use the same two connected affine hex/order1 host
-  payload, linear and analytic cubic material laws, RHS, initial state and solver
-  controls through `radia.hdiv_gpu.PreparedHDivNonlinear` and
-  `radia.gpu.PreparedHDivNonlinear`. Capture `linear_solution`, `cubic_solution`
-  and `cubic_residual_history`. CPU independent-oracle certification is separate.
+## Case `device-flat-tet`
 
-Each frontend must independently emit HDF5 with a UTF-8 `receipt_json` attribute:
-`frontend` (`pybind11` or `mexcuda`), `source_sha`, `input_sha256`, `cuda_compiler`,
-`architecture`, `device_uuid`, `deterministic_flags` (array containing exactly the
-four canonical controls above, once each; extra flags/aliases/overrides rejected), `case`, `output_names`
-(array), plus command/artifact provenance. Outputs are nonempty FP64 datasets in
-`/outputs`, same SI units and canonical ordering. The comparator checks receipt
-agreement and exact shape/dtype/bytes, including signed zero; no tolerance.
+`hdiv_device_parity.py make-input` writes the canonical input HDF5: the NGSolve
+device-construction tables of a Netgen 6:1:1 bar (BDM2), device ACA with leaf
+size 32 so low-rank leaves are exercised, the production inverse-BH payload of a
+fixed soft-iron table, the input vectors and every solver control. Both
+producers read only this file and hash its bytes.
 
-After separately admitted producers finish, run:
+- `hdiv_device_parity.py pybind` runs `_hdiv_cuda`.
+- `produceHDivDeviceMexRecord.m` runs `radia_hdiv_device` (index base and
+  layout: HDF5 row-major tables are read flat, the inverse-BH coefficients as
+  the MATLAB `(knots-1)x4` matrix the gateway expects).
+
+Outputs, FP64 in `/outputs`: `apply` (B^T G B on a fixed vector),
+`linear_solution` (mass-diagonal PCG), `nonlinear_solution` and
+`nonlinear_residual_history` (reference-diagonal frozen-tangent Newton).
+Both producers fail if ACA built no low-rank leaf; the MEX producer also fails
+if a device handle remains live.
+
+## Case `device-mixed`
+
+The same producers and outputs on a connected tet, pyramid and hex grid of the same
+bar (`hdiv_mixed_meshes.mixed_grid`, BDM1, leaf size 8), so the host-type tables, the
+per-class charge map and the three evaluation groups cross both frontends.
+`run_device_boundary.py` runs and compares both cases.
+
+## Receipts and comparison
+
+Each record carries a UTF-8 `receipt_json` attribute: `frontend` (`pybind11` or
+`mex`), the shared build identity (`source_sha`, `kernel_object_sha256`,
+`cuda_compiler`, `python_binary_sha256`, `mex_binary_sha256`), `input_sha256`,
+`device_uuid`, `architecture`, `case`, `output_names`, and the hash of the binary
+actually loaded (`artifact_sha256`). The comparator requires equal shared fields,
+loaded binaries equal to their build receipts, and exact shape, dtype and bytes
+(signed zero included); no tolerance.
 
 ```sh
 python validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py \
   --python-record python.h5 --mex-record mex.h5 --report parity.json
 ```
 
-Record both input files, artifact/runtime identities and report hashes in private
-evidence. Change the pending status only after reviewed evidence from that run.
-No performance measurement or full-package acceptance is included.
+Record the input, both records, the report and the build receipts with their
+hashes in private evidence. Windows only (the plain MEX targets the
+radia-simulink platform); Linux pybind11 builds are outside this gate.

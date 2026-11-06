@@ -80,11 +80,11 @@ def test_python_entry_is_lazy_and_not_a_simulink_dependency():
     spec = importlib.util.spec_from_file_location("hdiv_cold_entry", ROOT / "src/radia/hdiv_gpu.py")
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     assert callable(module.PreparedHDivNonlinear)
-    assert callable(module.prepare_hdiv_host_setup)
+    assert callable(module.prepare_hdiv_device_setup)
     with pytest.raises(ValueError, match="explicit backend"):
         module.PreparedHDivNonlinear("unused.vol", {}, backend="cpu", label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
     with pytest.raises(ValueError, match="explicit backend"):
-        module.prepare_hdiv_host_setup("unused.vol", backend="cpu", label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
+        module.prepare_hdiv_device_setup("unused.vol", backend="cpu", label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
 
 
 def test_cuda_translation_unit_does_not_pull_fe_or_mex_headers():
@@ -185,3 +185,23 @@ def test_bundled_sdk_root_is_not_a_standalone_toolkit(tmp_path):
     matlab, _, _ = sdk_fixture(tmp_path)
     with pytest.raises(RuntimeError, match="explicit MATLAB-bundled root"):
         b.windows_cuda_layout(tmp_path / "standalone CUDA", matlab, "release 12.8, V12.8.61")
+
+
+def test_fault_mex_stays_out_of_the_shipped_tree():
+    # Guards: the build that can fail allocations on demand is test-only; no shipped path names it.
+    # Assumes: wheels and MATLAB wrappers are built from packages/ and src/ only.
+    hits = [str(path) for root in ("packages/radia-simulink", "src/radia") for path in (ROOT / root).rglob("*")
+            if path.suffix in (".py", ".m", ".cpp", ".cu", ".txt", ".toml") and path.is_file()
+            and "radia_hdiv_device_fault" in path.read_text(encoding="utf-8", errors="replace")]
+    assert hits == [], hits
+
+
+def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
+    # Guards: a kernel or adapter change still executes pybind11/MEX parity and the MATLAB device test on its own build.
+    workflow = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
+    job = workflow[workflow.index("\n  cuda-mex:"):]
+    step = job[job.index("- name: Verify HDiv device boundary and same-kernel parity"):]
+    step = step[:step.index("\n      - ")]
+    assert "validation_test/hmatrix_cuda/run_device_boundary.py" in step, step
+    assert "--fault-mex-build" in step and "build_fault_mex.py" in job, step
+    assert "continue-on-error" not in step and "if:" not in step, step

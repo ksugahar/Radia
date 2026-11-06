@@ -3235,8 +3235,8 @@ Without resolving this gradient:
 ### Pyramid Element Warning
 
 Cubit `imprint` between hex volumes and tet volumes creates pyramid transition
-elements. These DO NOT support order >= 2 in NGSolve (DOF count mismatch).
-For order=2, either:
+elements. NGSolve 6.2.2608 implements HDiv on them at order 1 and 2. HCurl order >= 2 with
+Kelvin and Periodic wrapping has not been checked on them here: for such a model, either
 - Use pure tet mesh for all air regions (no hex-tet transition)
 - Or avoid imprint and use conformal tet-only near yoke interface
 
@@ -3248,7 +3248,7 @@ For order=2, either:
 4. **Gauge regularization**: Small mass term (1e-8 * nu0 * u*v dx)
 5. **Verify Periodic**: Check FreeDofs reduced after Periodic() wrapping
 6. **Cubit copy mesh**: Fails if source surface has no mesh or topology differs
-7. **Pyramid order>=2**: Cubit imprint creates pyramids; NGSolve order=2 fails on them
+7. **Pyramid order>=2**: Cubit imprint creates pyramids; see Pyramid Element Warning above
 
 ## Reference
 

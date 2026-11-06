@@ -980,22 +980,29 @@ def hdiv_vim(topic: str = "overview") -> str:
 @mcp.tool()
 def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
                            applied_fields: list[list[float]], result_path: str,
-                           backend: str, order: int = 1,
+                           backend: str, mesh_check_receipt: str, mesh_check_receipt_sha256: str,
+                           mesh_check_provenance: dict, order: int = 1, curve_order: int = 1,
                            preconditioner: str = "reference-diagonal",
-                           tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> str:
+                           tolerance: float = 5e-14, linear_tolerance: float = 1e-6) -> str:
     """Run shared GPU HDiv-MMM Newton for uniform H cases, reusing one owner.
 
     Select backend='gpu' explicitly. Provide a checked body .vol label contract
-    and inverse-BH law JSON or radia.bh-table.v1 {table:[[H,B],...]}; H is A/m,
-    B is tesla. Uses existing Radia law construction. Saves owned
+    with its check-vol receipt, the receipt SHA-256 and provenance, and an
+    inverse-BH law JSON or radia.bh-table.v1 {table:[[H,B],...]}; H is A/m,
+    B is tesla. ``curve_order=2`` curves the mesh with NGSolve Curve(2); a
+    pure-TET mesh is affine or curved P2 TET, a pure-HEX mesh the HEX family.
+    Uses existing Radia law construction. Saves owned
     coefficients, native original-equation residuals and histories, closes all
     GPU owners on success or error. This does not certify CPU parity or mixed
     geometry. CPU analysis uses hdiv_vim_demag_eval, without a silent fallback.
     """
     from .hdiv_gpu import hdiv_nonlinear_gpu_run as run
-    return json.dumps(run(vol_path, label_contract, law_path, applied_fields,
-                          result_path, backend, order, preconditioner,
-                          tolerance, linear_tolerance))
+    return json.dumps(run(vol_path, label_contract, law_path, applied_fields, result_path, backend,
+                          mesh_check_receipt=mesh_check_receipt,
+                          mesh_check_receipt_sha256=mesh_check_receipt_sha256,
+                          mesh_check_provenance=mesh_check_provenance, order=order, curve_order=curve_order,
+                          preconditioner=preconditioner, tolerance=tolerance,
+                          linear_tolerance=linear_tolerance))
 
 
 @mcp.tool()

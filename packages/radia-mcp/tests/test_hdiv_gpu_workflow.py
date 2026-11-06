@@ -22,7 +22,10 @@ def test_mcp_reuse_failure_evidence_and_release(tmp_path, monkeypatch, fail, tab
         def __exit__(self, *_): events.append("region_exit")
 
     class Prepared:
-        def __init__(self, *args, **kwargs): events.append("prepare")
+        family = "curved-tet"
+        def __init__(self, *args, **kwargs):
+            events.append("prepare")
+            assert kwargs["curve_order"] == 2 and kwargs["mesh_check_receipt"] == "receipt.json", kwargs
         @classmethod
         def from_bh_table(cls, *args, **kwargs):
             events.append("table")
@@ -46,15 +49,28 @@ def test_mcp_reuse_failure_evidence_and_release(tmp_path, monkeypatch, fail, tab
     args = ("mesh.vol", "labels.json", str(law), [[1., 2., 3.], [3., 2., 1.]], str(result), "gpu")
     if fail or serialization_failure:
         with pytest.raises((RuntimeError, AttributeError)):
-            module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
+            module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={}, curve_order=2)
     else:
-        assert module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})["closed"]
+        assert module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={}, curve_order=2)["closed"]
     saved = json.loads(result.read_text())
     assert saved["accepted"] is (not (fail or serialization_failure))
     assert saved["independent_cpu_certified"] is False
     assert len(saved["cases"]) == (1 if fail or serialization_failure else 2)
     assert events == ["region_enter"] + (["table"] if table_form else []) + ["prepare", "solve", "solve", "close", "region_exit"]
-    assert saved["preconditioner"] == "reference-diagonal"
+    assert saved["preconditioner"] == "reference-diagonal" and saved["curve_order"] == 2
+    assert saved["family"] == "curved-tet"
     assert len(saved["material_sha256"]) == 64
     with pytest.raises(FileExistsError):
         module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
+
+
+def test_server_forwards_every_workflow_option_by_keyword():
+    import ast
+    tree = ast.parse((ROOT/"src/radia_mcp/radia_ngsolve/server.py").read_text(encoding="utf-8"))
+    tool = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "hdiv_nonlinear_gpu_run")
+    call = next(node for node in ast.walk(tool) if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "run")
+    workflow = load(MCP).hdiv_nonlinear_gpu_run.__code__
+    parameters = list(workflow.co_varnames[:workflow.co_argcount])
+    assert [a.id for a in call.args] == parameters[:len(call.args)] == [a.arg for a in tool.args.args][:len(call.args)]
+    assert {k.arg for k in call.keywords} == set(parameters[len(call.args):]) == {a.arg for a in tool.args.args[len(call.args):]}
+    assert all(isinstance(k.value, ast.Name) and k.value.id == k.arg for k in call.keywords)

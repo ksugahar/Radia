@@ -1,6 +1,7 @@
 """GPU adapter and runtime source contracts.
 
-Guards: Explicit backend selection, exact pip versions/RECORD bytes, conflicting
+Guards: Explicit backend selection, exact pip versions/RECORD bytes (re-hashed on any
+stat-identity change), conflicting
 ELF providers, and resident-handle close/reject behavior without GPU fallback.
 Assumes: CUDA loading and installed metadata are mocked. Temporary files are
 fixtures, not native libraries. No compilation, CUDA context or solve executes.
@@ -163,6 +164,90 @@ def test_windows_rechecks_record_bytes_on_warm_calls(tmp_path, monkeypatch):
     path.write_bytes(b"tampered after the first load")
     with pytest.raises(ImportError, match="RECORD mismatch"):
         windows.prepare_cuda_runtime()
+
+
+def test_record_digest_rehashes_a_same_size_rewrite_with_restored_times(tmp_path, monkeypatch):
+    """Guards: RECORD bytes are re-read on every call; a same-size rewrite with
+    restored atime/mtime (identical stat identity on Windows) still fails."""
+    import os
+    runtime = load("_cuda_runtime")
+    path = tmp_path / "libtest.so.12"
+    path.write_bytes(b"fixture library bytes")
+    expected = base64.urlsafe_b64encode(hashlib.sha256(path.read_bytes()).digest()).decode().rstrip("=")
+    class File:
+        hash = SimpleNamespace(mode="sha256", value=expected)
+        def __str__(self):
+            return path.name
+    dist = SimpleNamespace(version="12.8.1", files=[File()], locate_file=lambda _: path)
+    monkeypatch.setattr(runtime, "_LIBRARIES", (("cuda-fixture", (path.name,)),))
+    monkeypatch.setattr(runtime.metadata, "distribution", lambda _: dist)
+    reads = []
+    digest = runtime.hashlib.file_digest
+    monkeypatch.setattr(runtime.hashlib, "file_digest", lambda *a: reads.append(1) or digest(*a))
+    for _ in range(3):
+        runtime._library_paths({"cuda-fixture": "12.8.1"})
+    assert len(reads) == 3, reads
+    before = path.stat()
+    path.write_bytes(b"fixture library BYTES")  # same size, different bytes
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    with pytest.raises(ImportError, match="RECORD mismatch"):
+        runtime._library_paths({"cuda-fixture": "12.8.1"})
+    assert len(reads) == 4, reads
+
+
+def test_post_import_check_needs_a_prepared_runtime_and_reports_conflicts(tmp_path, monkeypatch):
+    """Guards: the check after a native import stays loud; it only skips reading bytes read moments earlier."""
+    import sys
+    runtime, windows = load("_cuda_runtime"), load("_cuda_runtime_windows")
+    monkeypatch.setitem(sys.modules, "gpu_runtime_fixture._cuda_runtime_windows", windows)
+    runtime.__package__ = "gpu_runtime_fixture"
+    monkeypatch.setattr(runtime.sys, "platform", "win32")
+    with pytest.raises(ImportError, match="was not prepared"):
+        runtime.check_loaded_cuda_runtime()
+    path = tmp_path / "cudart64_12.dll"
+    monkeypatch.setattr(windows, "_identity", {path.name: {"path": str(path)}})
+    monkeypatch.setattr(windows, "_loaded_modules", lambda: {path})
+    monkeypatch.setattr(runtime.hashlib, "file_digest",
+                        lambda *a: pytest.fail("the check after an import must not read the libraries again"))
+    runtime.check_loaded_cuda_runtime()
+    monkeypatch.setattr(windows, "_loaded_modules", lambda: {tmp_path / "cudart64_13.dll"})
+    with pytest.raises(ImportError, match="Conflicting CUDA DLL"):
+        runtime.check_loaded_cuda_runtime()
+
+
+def test_native_import_prepares_once_and_checks_what_the_import_mapped(tmp_path, monkeypatch):
+    """Guards: gpu._native verifies the library bytes before the import and the loaded closure after it."""
+    import json
+    import sys
+    import sysconfig
+    gpu = load("gpu")
+    monkeypatch.setattr(gpu, "__file__", str(tmp_path / "gpu.py"))
+    gpu.__package__ = "gpu_runtime_fixture"
+    binary = tmp_path / ("_gpu_csr" + sysconfig.get_config_var("EXT_SUFFIX"))
+    core_binary = tmp_path / "_radia_pybind.pyd"
+    for path in (binary, core_binary):
+        path.write_bytes(b"fixture " + path.name.encode())
+        Path(str(path) + ".build.json").write_text(json.dumps({
+            "schema": "radia.native-build-provenance.v1", "source_commit": "a" * 40, "source_dirty": False,
+            "binary_name": path.name, "binary_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}))
+    core = SimpleNamespace(__file__=str(core_binary))
+    monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(_radia_pybind=core))
+    monkeypatch.setitem(sys.modules, "radia._radia_pybind", core)
+    calls, native = [], SimpleNamespace()
+
+    def prepare():
+        calls.append("prepare")
+        monkeypatch.setitem(sys.modules, "gpu_runtime_fixture._gpu_csr", native)
+
+    def check():
+        assert sys.modules["gpu_runtime_fixture._gpu_csr"] is native
+        calls.append("check")
+
+    monkeypatch.setitem(sys.modules, "gpu_runtime_fixture", SimpleNamespace(__path__=[]))
+    monkeypatch.setitem(sys.modules, "gpu_runtime_fixture._cuda_runtime",
+                        SimpleNamespace(prepare_cuda_runtime=prepare, check_loaded_cuda_runtime=check))
+    assert gpu._native("_gpu_csr") is native
+    assert calls == ["prepare", "check"], calls
 
 
 def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, monkeypatch):

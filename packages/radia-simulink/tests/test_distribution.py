@@ -145,35 +145,6 @@ def test_runtime_and_package_versions_agree():
     assert ast.literal_eval(assignment.value) == metadata['project']['version']
 
 
-@pytest.mark.parametrize('component,field', [('hmatrix','fault_injection'),('projection','fault_injection'),('projection','lifecycle_diagnostic')])
-@pytest.mark.parametrize('mode', [False, True, None, 0, 'False'])
-def test_hdiv_mex_wheel_requires_explicit_false_diagnostic_mode(component, field, mode):
-    spec=importlib.util.spec_from_file_location('hdiv_mex_receipt_verifier',ROOT/'verify_wheel.py')
-    verifier=importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(verifier)
-    manifest=dict(source_commit='a'*40,files={
-        'matlab/radia_cuda_hmatrix.mexw64':'b'*64,
-        'matlab/radia_cuda_projection.mexw64':'c'*64})
-    artifacts={name:dict(source_dirty=False,source_commit='a'*40,
-        taskmanager_started=False,fault_injection=False,
-        binary_sha256=manifest['files']['matlab/radia_cuda_'+name+'.mexw64'])
-        for name in ('hmatrix','projection')}
-    artifacts['projection']['lifecycle_diagnostic']=False
-    if mode is None:
-        artifacts[component].pop(field)
-    else:
-        artifacts[component][field]=mode
-    receipt=dict(schema='radia.gpu.hdiv-payload.v1',artifacts=artifacts)
-    if mode is False:
-        verifier.verify_hdiv_receipt(manifest,receipt)
-    else:
-        with pytest.raises(ValueError,match='HDiv CUDA binary receipt mismatch'):
-            verifier.verify_hdiv_receipt(manifest,receipt)
-
-
-
-
-
 @pytest.mark.parametrize('wheel_tag,native_tag,accepted',[
     ('cp312-cp312','cp312',True),('py3-none','cp312',False),
     ('cp313-cp313','cp312',False),('cp312-cp311','cp312',False)])

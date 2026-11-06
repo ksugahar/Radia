@@ -21,6 +21,15 @@ def api():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
+@pytest.mark.parametrize("name",["hex_pair","tet_pyramid_hex"])
+def test_committed_receipt_still_binds_the_fixture(name):
+    # The GPU lane consumes these receipts; a changed mesh, contract or receipt must be regenerated.
+    base=ROOT/"tests/fixtures/hdiv";receipt=(base/(name+".receipt.json")).read_bytes()
+    provenance=json.loads((base/(name+".receipt.json.provenance.json")).read_bytes())
+    api()._verify_mesh_receipt((base/(name+".vol")).read_bytes(),(base/(name+".labels.json")).read_bytes(),receipt,
+                               hashlib.sha256(receipt).hexdigest(),provenance)
+
+
 def fixture(tmp_path,compressed=False):
     data=(ROOT/"tests/fixtures/hdiv/hex_pair.vol").read_bytes()
     if compressed:data=gzip.compress(data,mtime=0)
@@ -54,7 +63,7 @@ def test_valid_receipt_relocates_and_preserves_compressed_snapshot(tmp_path,monk
     module=api();mesh,contract,receipt,value,report=fixture(tmp_path,compressed);options=pins(receipt,value,report)
     monkeypatch.setattr(module.metadata,'version',lambda name:'6.2.2608')
     expected=mesh.read_bytes()
-    def initialize(self,snapshot,law,order):
+    def initialize(self,snapshot,law,order,aca,curve_order,images,q2_deformation):
         assert snapshot.name==('mesh.vol.gz' if compressed else 'mesh.vol')
         assert snapshot.read_bytes()==expected
     monkeypatch.setattr(module.PreparedHDivNonlinear,'_initialize',initialize)
@@ -83,7 +92,7 @@ def test_bad_receipt_cannot_reach_workflow_native_or_fe(tmp_path,monkeypatch,mut
         options['mesh_check_receipt_sha256']=hashlib.sha256(receipt.read_bytes()).hexdigest()
     monkeypatch.setattr(module.metadata,'version',lambda name:'6.2.2608')
     touched=[]
-    monkeypatch.setattr(module,'_prepare_host_components',lambda *a,**kw:touched.append('FE-staging'))
+    monkeypatch.setattr(module,'_prepare_device_components',lambda *a,**kw:touched.append('device-staging'))
     def native_constructor(*args, **kwargs):
         touched.append('native-constructor')
         raise AssertionError('Native constructor before receipt')
@@ -105,5 +114,5 @@ def test_bad_receipt_cannot_reach_workflow_native_or_fe(tmp_path,monkeypatch,mut
     monkeypatch.setattr(builtins,'__import__',guarded)
     with pytest.raises(ValueError):module.PreparedHDivNonlinear(mesh,{},backend='gpu',label_contract=contract,**options)
     with pytest.raises(ValueError):module.PreparedHDivNonlinear.from_bh_table(mesh,[],backend='gpu',label_contract=contract,**options)
-    with pytest.raises(ValueError):module.prepare_hdiv_host_setup(mesh,backend='gpu',label_contract=contract,**options)
+    with pytest.raises(ValueError):module.prepare_hdiv_device_setup(mesh,backend='gpu',label_contract=contract,**options)
     assert touched==[],touched

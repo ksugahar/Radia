@@ -76,6 +76,7 @@ from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
 )
 from ._solve import hdiv_demag_solve as _solve_impl  # noqa: F401  (production demag solve)
 from ._solver import HDivSolver  # noqa: F401
+from ._periodic_seam import check_periodic_seam_orientation, renumber_periodic_seam  # noqa: F401  (Periodic(HDiv) seam contract)
 from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; vim.Solve dispatches here)
     PlanarDemagBody,
     maxwell_torque_circle,

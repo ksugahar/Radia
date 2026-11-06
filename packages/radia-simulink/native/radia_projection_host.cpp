@@ -15,8 +15,6 @@
 #include <limits>
 #include <cmath>
 #include <cstdint>
-#include "hdiv_rt0_host.cuh"
-#include "hdiv_element_setup.cuh"
 
 namespace {
 using Point=std::array<double,3>;
@@ -65,7 +63,6 @@ std::shared_ptr<ngcomp::GridFunction> createHeadlessGridFunction(
     return ngcomp::CreateGridFunction(space,"radia_cuda_projection",flags);
 }
 std::map<std::uint64_t,std::unique_ptr<Context>> contexts;
-std::map<std::uint64_t,std::unique_ptr<radia::hdiv_cuda::MaterialStagingContext>> materialContexts;
 #ifdef RADIA_PROJECTION_LIFECYCLE_TEST
 // Only the latest released generation is observed. Weak references do not
 // keep FE payloads alive or accumulate a history of released objects.
@@ -93,7 +90,7 @@ std::array<double,8> probeOwnerPhase(const std::string& filename,const std::stri
     else if(phase=="gridfunction-novisual-update"){level=5;headless=true;}
     else if(phase=="interpolate-novisual"){level=6;headless=true;}
     if(level<0)throw std::invalid_argument("Unknown projection ownership phase");
-    if(!contexts.empty()||!materialContexts.empty())
+    if(!contexts.empty())
         throw std::runtime_error("Ownership phase probe requires no live handles");
     auto mesh=std::make_shared<ngcomp::MeshAccess>(filename);
     if(mesh->GetDimension()!=3)throw std::runtime_error("Phase probe requires 3D mesh");
@@ -140,12 +137,7 @@ std::uint64_t token(const mxArray* a){
     auto t=*static_cast<const std::uint64_t*>(mxGetData(a));
     if(!contexts.count(t))throw std::runtime_error("Stale or wrong projection handle");return t;
 }
-std::uint64_t materialToken(const mxArray* a){
-    if(!mxIsUint64(a)||mxGetNumberOfElements(a)!=1)throw std::runtime_error("Expected scalar uint64 material handle");
-    const auto t=*static_cast<const std::uint64_t*>(mxGetData(a));
-    if(!materialContexts.count(t))throw std::runtime_error("Stale or wrong material staging handle");return t;
-}
-void cleanup(){contexts.clear();materialContexts.clear();}
+void cleanup(){contexts.clear();}
 void arity(int nr,int expected,int nl,int outputs){
     if(nr!=expected||nl!=outputs)throw std::runtime_error("Invalid command arity");
 }
@@ -153,58 +145,6 @@ void arity(int nr,int expected,int nl,int outputs){
 void dispatchProjection(int nl,mxArray* out[],int nr,const mxArray* in[]){
     if(nr<1)throw std::runtime_error("Command required");
     auto command=text(in[0]);
-    if(command=="assemble_hdiv_elements"||command=="assemble_hdiv_elements_sparse_mass"||command=="assemble_hdiv_elements_sparse"){
-        arity(nr,4,nl,1);
-        if(!mxIsDouble(in[2])||mxIsSparse(in[2])||mxIsComplex(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("HDiv order must be scalar double");
-        const double order=mxGetScalar(in[2]);if(!std::isfinite(order)||order<1||order>3||std::floor(order)!=order)throw std::invalid_argument("HDiv order must be 1..3");
-        if(!mxIsDouble(in[3])||mxIsSparse(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=3)throw std::invalid_argument("Applied field must contain three doubles");
-        std::array<double,3> applied;for(int c=0;c<3;++c){applied[c]=mxGetDoubles(in[3])[c];if(!std::isfinite(applied[c]))throw std::invalid_argument("Nonfinite applied field");}
-        out[0]=radia::hdiv_cuda::inspectElements(text(in[1]),int(order),applied,command!="assemble_hdiv_elements",command=="assemble_hdiv_elements_sparse");return;
-    }
-    if(command=="create_hdiv_material_context"){
-        arity(nr,3,nl,1);
-        if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("Material order must be scalar double");
-        const double order=mxGetScalar(in[2]);if(!std::isfinite(order)||order<1||order>2||std::floor(order)!=order)throw std::invalid_argument("Material order must be 1..2");
-        if(materialContexts.size()>=2)throw std::runtime_error("Material staging context count budget exceeded");
-        auto c=std::make_unique<radia::hdiv_cuda::MaterialStagingContext>(text(in[1]),int(order));
-        if(generation>=0x0000ffffffffffffULL)throw std::runtime_error("Projection generation exhausted");
-        const auto t=0x4d41000000000000ULL|generation++;
-        out[0]=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(out[0]))=t;
-        materialContexts.emplace(t,std::move(c));mexLock();mexAtExit(cleanup);return;
-    }
-    if(command=="hdiv_material_context_chunk"){
-        arity(nr,4,nl,1);const auto t=materialToken(in[1]);std::array<double,2> interval{};
-        for(int k=0;k<2;++k){const auto* a=in[k+2];if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=1)throw std::invalid_argument("Material interval must be scalar double");interval[k]=mxGetScalar(a);if(!std::isfinite(interval[k])||std::floor(interval[k])!=interval[k])throw std::invalid_argument("Material interval must be finite integer");}
-        if(interval[0]<0||interval[0]>4096||interval[1]<1||interval[1]>4096)throw std::invalid_argument("Material interval range");
-        out[0]=radia::hdiv_cuda::materialQuadrature(*materialContexts.at(t),std::size_t(interval[0]),std::size_t(interval[1]));return;
-    }
-    if(command=="destroy_hdiv_material_context"){
-        arity(nr,2,nl,0);materialContexts.erase(materialToken(in[1]));mexUnlock();return;
-    }
-    if(command=="hdiv_material_quadrature_chunk"){
-        arity(nr,5,nl,1);std::array<double,3> values{};
-        for(int k=0;k<3;++k){const auto* a=in[k+2];if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=1)throw std::invalid_argument("Material chunk arguments must be scalar doubles");values[k]=mxGetScalar(a);if(!std::isfinite(values[k])||std::floor(values[k])!=values[k])throw std::invalid_argument("Material chunk arguments must be finite integers");}
-        if(values[0]<1||values[0]>2||values[1]<0||values[1]>4096||values[2]<1||values[2]>4096)throw std::invalid_argument("Material chunk argument range");
-        out[0]=radia::hdiv_cuda::materialQuadrature(text(in[1]),int(values[0]),std::size_t(values[1]),std::size_t(values[2]));return;
-    }
-    if(command=="hdiv_material_quadrature"){
-        arity(nr,3,nl,1);
-        if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("Material order must be scalar double");
-        const double order=mxGetScalar(in[2]);if(!std::isfinite(order)||order<1||order>2||std::floor(order)!=order)throw std::invalid_argument("Material order must be 1..2");
-        out[0]=radia::hdiv_cuda::materialQuadrature(text(in[1]),int(order));return;
-    }
-    if(command=="inspect_hdiv_elements"){
-        arity(nr,3,nl,1);
-        if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("HDiv order must be scalar double");
-        const double order=mxGetScalar(in[2]);if(!std::isfinite(order)||order<1||order>3||std::floor(order)!=order)throw std::invalid_argument("HDiv order must be 1..3");
-        out[0]=radia::hdiv_cuda::inspectElements(text(in[1]),int(order));return;
-    }
-    if(command=="assemble_hdiv_rt0"){
-        arity(nr,3,nl,1);
-        if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=3)throw std::invalid_argument("Applied field must contain three real doubles");
-        std::array<double,3> applied;for(int i=0;i<3;++i){applied[i]=mxGetDoubles(in[2])[i];if(!std::isfinite(applied[i]))throw std::invalid_argument("Nonfinite applied field");}
-        out[0]=radia::rt0_cuda::assemble(text(in[1]),applied);return;
-    }
     if(command=="create"){
         arity(nr,4,nl,1);auto c=std::make_unique<Context>();
         if(!mxIsDouble(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=1)
@@ -231,7 +171,7 @@ void dispatchProjection(int nl,mxArray* out[],int nr,const mxArray* in[]){
         contexts.emplace(t,std::move(c));mexLock();mexAtExit(cleanup);return;
     }
     if(command=="live_count"){
-        arity(nr,1,nl,1);out[0]=mxCreateDoubleScalar(contexts.size()+materialContexts.size());return;
+        arity(nr,1,nl,1);out[0]=mxCreateDoubleScalar(contexts.size());return;
     }
 #ifdef RADIA_PROJECTION_LIFECYCLE_TEST
     if(command=="diagnostic_owner_phase"){
@@ -242,16 +182,16 @@ void dispatchProjection(int nl,mxArray* out[],int nr,const mxArray* in[]){
     }
     if(command=="diagnostic_released_owners"){
         arity(nr,1,nl,1);
-        const char* names[]={"last_released_handle","live_projection_contexts","live_material_contexts",
+        const char* names[]={"last_released_handle","live_projection_contexts",
             "mesh_strong_count","space_strong_count","gridfunction_strong_count","targets_strong_count"};
-        out[0]=mxCreateStructMatrix(1,1,7,names);
+        out[0]=mxCreateStructMatrix(1,1,6,names);
         auto* handle=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);
         *static_cast<std::uint64_t*>(mxGetData(handle))=releasedOwners.handle;
         mxSetField(out[0],0,names[0],handle);
-        const double counts[]={double(contexts.size()),double(materialContexts.size()),
+        const double counts[]={double(contexts.size()),
             double(releasedOwners.mesh.use_count()),double(releasedOwners.space.use_count()),
             double(releasedOwners.gf.use_count()),double(releasedOwners.targets.use_count())};
-        for(int i=0;i<6;++i)mxSetField(out[0],0,names[i+1],mxCreateDoubleScalar(counts[i]));
+        for(int i=0;i<5;++i)mxSetField(out[0],0,names[i+1],mxCreateDoubleScalar(counts[i]));
         return;
     }
 #endif

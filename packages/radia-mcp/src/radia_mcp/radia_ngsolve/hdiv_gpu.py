@@ -11,13 +11,15 @@ from pathlib import Path
 def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
                            applied_fields: list[list[float]], result_path: str,
                            backend: str, mesh_check_receipt: str, mesh_check_receipt_sha256: str,
-                           mesh_check_provenance: dict, order: int = 1,
+                           mesh_check_provenance: dict, order: int = 1, curve_order: int = 1,
                            preconditioner: str = "reference-diagonal",
-                           tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> dict:
+                           tolerance: float = 5e-14, linear_tolerance: float = 1e-6) -> dict:
     """Reuse one prepared shared GPU owner for up to eight uniform H cases.
 
     Input is an inverse-BH polynomial payload, or a radia.bh-table.v1 object
     with ``table`` rows [H in A/m, B in tesla], using Radia's existing law fit.
+    ``curve_order`` 1 or 2 selects linear or NGSolve Curve(2) geometry; the
+    record names the geometry family Radia derived from the mesh.
     Output is private execution evidence, not independent CPU certification.
     Optional numerical dependencies load only when this workflow is called.
     """
@@ -29,6 +31,8 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
         raise ValueError("Unsupported explicit shared Newton preconditioner")
     if isinstance(order, bool) or order not in (1, 2):
         raise ValueError("HDiv order must be 1 or 2")
+    if isinstance(curve_order, bool) or curve_order not in (1, 2):
+        raise ValueError("curve_order must be 1 or 2")
     import math
     for value in (tolerance, linear_tolerance):
         if isinstance(value, bool) or not math.isfinite(value) or not 0 < value <= 1e-6:
@@ -46,7 +50,7 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
         pass
     record = dict(schema="radia.hdiv-gpu-workflow.v1", accepted=False,
                   backend="gpu", independent_cpu_certified=False, cases=[],
-                  order=order, preconditioner=preconditioner,
+                  order=order, curve_order=curve_order, preconditioner=preconditioner,
                   tolerance=tolerance, linear_tolerance=linear_tolerance,
                   material_sha256=hashlib.sha256(law_bytes).hexdigest())
 
@@ -81,7 +85,9 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
             with factory(vol_path, material, backend=backend,
                     label_contract=label_contract, mesh_check_receipt=mesh_check_receipt,
                     mesh_check_receipt_sha256=mesh_check_receipt_sha256,
-                    mesh_check_provenance=mesh_check_provenance, order=order) as prepared:
+                    mesh_check_provenance=mesh_check_provenance, order=order,
+                    curve_order=curve_order) as prepared:
+                record["family"] = prepared.family
                 for field in applied_fields:
                     result = prepared.solve(field, preconditioner=preconditioner,
                                             tolerance=tolerance, linear_tolerance=linear_tolerance)

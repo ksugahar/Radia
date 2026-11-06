@@ -31,6 +31,14 @@ verifyEqual(testCase, result.value, 1.25, "AbsTol", 0);
 verifyClass(testCase, result.value, "double");
 end
 
+function testColumnCellConvertsToPythonList(testCase)
+% Guards: column cells such as jsondecode string arrays reach Python as lists.
+result = radia.internal.callPython("builtins", "list", {{'a'; 'b'; 'c'}});
+verifyEqual(testCase, numel(result.value), 3);
+call = @() radia.internal.callPython("builtins", "list", {{'a', 'b'; 'c', 'd'}});
+verifyError(testCase, call, "radia:python:InputShape");
+end
+
 function testIsochronousTopoptHasNamedFallback(testCase)
 result = radia.python.isochronousTopopt( ...
     "density_to_s", {[0, 1], 100});

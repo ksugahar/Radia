@@ -73,7 +73,7 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification.
+**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use GPU workers for declared GPU builds and qualification. `gpu-a100` runs dispatched/nightly validation on exact-SHA wheels; never compiles or gates PRs.
 Deployment: radia uses bound editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve uses metadata pin (6.2.2608).
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
@@ -102,7 +102,7 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Build owns CPU/secondary GPU development, CI/formal artifacts. Validation is primary GPU development in isolated checkouts/venvs, separate from exact-wheel QA/runtime; no Cubit/cme. Source-build scope is unchanged. JMAG evaluation runs no Radia. Timings are diagnostic.
+Build owns CPU/secondary GPU development, CI/formal artifacts. Validation is primary GPU development in isolated checkouts/venvs, separate from exact-wheel QA/runtime; no Cubit/cme. JMAG evaluation runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
 CPU/GPU jobs: build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL. GPU jobs use a separate slot, not a CPU slot; record host CPU use, avoid oversubscription. Validation GPU busy: overflow to a free build GPU slot is pre-authorized; <=1 GPU job/host, <=2 across both. Keep artifact/architecture/ABI/runtime/owner scope; no install/config or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
 Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.
@@ -113,12 +113,12 @@ Historical timings retain provenance; neutral roles only. Keep host maps/origina
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-10-13)**: Remote compute jobs finish only after verified recovery and cleanup of their job-owned scratch. Recover JSON, logs, commands, identities, hashes and non-reconstructible inputs to private storage; verify hashes before deleting the remote copy, then verify and report the deletion. Never blanket-delete scratch: preserve active/queued jobs and CI, resolve approved absolute targets and reject escaping links/junctions. Retention needs an explicit owner, reason and cleanup trigger; compute hosts are not archives.
+Remote compute jobs finish only after verified recovery and cleanup of their job-owned scratch. Recover JSON, logs, commands, identities, hashes and non-reconstructible inputs to private storage; verify hashes before deleting the remote copy, then verify and report the deletion. Never blanket-delete scratch: preserve active/queued jobs and CI, resolve approved absolute targets and reject escaping links/junctions. Retention needs an explicit owner, reason and cleanup trigger; compute hosts are not archives.
 
 ## Build And Release
 
 - Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Validation may build isolated GPU development artifacts within authorized scope, never substitute them into exact-wheel QA or others' runtimes.
-- Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves. History is provenance, not runtime.
+- Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
 - Use `release-quad` / `tools/release_quad.py` for build- and validation-role editable deployment plus CPU/GPU compute builds; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Publish only after owning-distribution CI, artifact hashes, native and required machine gates pass at the release source. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 

@@ -177,6 +177,11 @@
       "owner": "radia",
       "legacy_100": false
     },
+    "hdiv-a100-validation.yml:validate": {
+      "target": "gpu-a100",
+      "owner": "radia",
+      "legacy_100": false
+    },
     "gpu-validation.yml:validate": {
       "target": "gpu-a100",
       "owner": "radia-simulink",
@@ -249,7 +254,7 @@
         "validation_test/induction_heating/fin_return_principle.py",
         "tools/check_ninja_msvc_deps.py"
       ],
-      "audit_sha256": "1a056e770329da60749683778f18cb43a136d8a2ca746c283461a93e3a8d6fa4",
+      "audit_sha256": "2d40ea2595303380a583d01eda043a1b7247aa7eda33eb4b4556e5a975744bd4",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

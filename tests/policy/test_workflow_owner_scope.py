@@ -161,7 +161,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     # Derive the shared core closure from real GPU quote includes and the build
     # receipt, rather than marking every CPU kernel as GPU-owned.
     seeds = set()
-    for source in (ROOT / "packages/radia-simulink/native").iterdir():
+    for source in (ROOT / "packages/radia-simulink/native").rglob("*"):
         if source.suffix not in (".cu", ".cuh", ".h", ".hpp", ".cpp", ".c"):
             continue
         for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', source.read_text(encoding="utf-8"), re.M):
@@ -170,7 +170,6 @@ def test_shared_ams_closure_and_native_consumers_are_real():
                 target = (ROOT / "src/core" / include).resolve()
             if target.is_file() and target.is_relative_to((ROOT / "src/core").resolve()):
                 seeds.add(target.relative_to(ROOT).as_posix())
-    hmatrix_build = (ROOT / "packages/radia-simulink/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
     # Every GPU build script that names or compiles a src/core file seeds the closure.
     for script in sorted((ROOT / "packages/radia-simulink/tools").glob("build_*_cuda.py")):
         text = script.read_text(encoding="utf-8")
@@ -185,18 +184,23 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     gpu_spec.loader.exec_module(gpu_builder)
     gpu_sources = {"src/core/gpu/" + name for name in gpu_builder.SHARED_SOURCES}
     seeds.update(gpu_sources)
+    # The plain HDiv MEX links the nvcc object of this exact kernel translation unit.
+    hdiv_kernels = {"src/core/gpu/" + kernel for name, _, kernel in gpu_builder.COMPONENTS if name == "_hdiv_cuda"}
+    assert hdiv_kernels == {"src/core/gpu/hdiv/hdiv_resident_python_cuda.cu"}, hdiv_kernels
+    seeds.update(hdiv_kernels)
     core = {path for path in CONTRACT.include_closure(ROOT, sorted(seeds), "src/core")
             if path.startswith("src/core/")}
-    assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
-    assert len(core - gpu_sources) == 30
+    assert {p for p in shared if p.startswith("src/core/")} == core | {
+        "src/core/radia_mex_sparse_symmetry.h", "src/core/gpu/hdiv/cmake/HDivKernels.cmake"}
+    assert len(core - gpu_sources) == 41
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):
         missing = [p for p in sorted(core) if not CONTRACT.selected(p, lane[event])]
         assert not missing, (event, missing)
-    assert "src/ext/HACApK" in hmatrix_build
     expected = set(CONTRACT.ROOT_CONFIGS) | set(actual) | core | {
-        "src/ext/HACApK/**", helper, "tests/test_native_build_provenance.py",
+        "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
+        helper, "tests/test_native_build_provenance.py",
         "tests/matlab/fixtures/ltspice_rc.cir", "tools/sparsesolv_ci_impact.py",
         "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json",
         "packages/radia-mcp/src/radia_mcp/ltspice/**",

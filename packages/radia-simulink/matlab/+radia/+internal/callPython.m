@@ -32,7 +32,7 @@ result = struct( ...
     "backend", "python-fallback", ...
     "module", moduleName, ...
     "function", functionName, ...
-    "value", toMatlab(raw), ...
+    "value", {toMatlab(raw)}, ...
     "python", runtime);
 end
 
@@ -75,7 +75,7 @@ if isstring(value)
     if isscalar(value)
         value = py.str(char(value));
     else
-        value = py.list(cellstr(value));
+        value = py.list(reshape(cellstr(value), 1, []));
     end
     return
 end
@@ -91,8 +91,13 @@ if isnumeric(value) || islogical(value)
     return
 end
 if iscell(value)
+    if ~isvector(value) && ~isempty(value)
+        error("radia:python:InputShape", ...
+            "Only cell vectors convert to a Python list; got size %s.", mat2str(size(value)));
+    end
+    % jsondecode returns string arrays as column cells; py.list accepts only 1-by-N.
     items = cellfun(@toPython, value, UniformOutput=false);
-    value = py.list(items);
+    value = py.list(reshape(items, 1, []));
     return
 end
 if isstruct(value) && isscalar(value)

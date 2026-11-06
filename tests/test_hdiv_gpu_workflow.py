@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 import sys
 import threading
-import types
 
 import numpy as np
 import pytest
@@ -32,6 +31,12 @@ def test_explicit_backend_before_native_import():
             module.PreparedHDivNonlinear("missing.vol", {}, backend=backend, label_contract="missing.json", mesh_check_receipt="missing.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
 
 
+@pytest.mark.parametrize("image", [None, "-z"])
+def test_alternating_without_a_cyclic_count_refuses(image):
+    with pytest.raises(ValueError, match="requires image_cyclic"):
+        load(API)._device_image_terms(image, None, True)
+
+
 def test_solve_reuses_native_owner_and_close_releases_after_error():
     module = load(API)
     owner = module.PreparedHDivNonlinear.__new__(module.PreparedHDivNonlinear)
@@ -41,13 +46,16 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     owner.order = 1
     owner.mesh_sha256 = "fixture"
     owner._rhs = np.eye(3)
-    owner._mass = types.SimpleNamespace(indptr=np.arange(4), indices=np.arange(3), data=np.ones(3))
+    owner._mean = 2*np.eye(3)
+    owner.fespace = None
     calls = []
 
     class Native:
         def solve_nonlinear_material(self, material, *args):
+            # Device-table material owns its reference mass: rhs and initial lead, no sparse arrays.
+            assert all(np.ndim(value) == 0 for value in args[2:]), args
             calls.append((material, args))
-            return dict(x=args[3].copy(), relative_residual=0.)
+            return dict(x=args[0].copy(), relative_residual=0.)
 
         def close(self):
             calls.append("operator_closed")
@@ -61,6 +69,7 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
     for field in ([1., 2., 3.], [3., 2., 1.]):
         result = owner.solve(field)
         np.testing.assert_array_equal(result["x"], field)
+        np.testing.assert_array_equal(result["mean_magnetization"], 2*np.asarray(field))
         assert result["backend"] == "gpu"
     assert calls[0][0] is calls[1][0]
     with pytest.raises(ValueError, match="three finite"):
@@ -94,7 +103,8 @@ def test_snapshot_uses_exact_checked_bytes_after_caller_mutation(tmp_path, monke
         contract.write_text("changed contract")
     monkeypatch.setattr(module, "_verify_mesh_receipt", verify)
     snapshots = []
-    def initialize(self, path, law, order):
+    def initialize(self, path, law, order, aca, curve_order, images, q2_deformation):
+        assert aca == module.GRAM_ACA_PRESET, aca
         snapshots.append(path)
         assert path.read_bytes() == b"original mesh"
         assert self.mesh_sha256 == hashlib.sha256(b"original mesh").hexdigest()

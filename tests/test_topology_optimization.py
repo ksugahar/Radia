@@ -3019,7 +3019,7 @@ def test_native_production_tet_complete_gram_and_piola_product_derivative():
     from radia.vim._vim import _charge_basis,build_charge_gram
 
     gradient=np.array([[.073,-.031,.019],[.014,.052,-.027],[-.022,.041,.064]])
-    offset=np.array([.009,-.015,.011]); epsilon=1e-6
+    offset=np.array([.009,-.015,.011]); epsilon=1e-4
     def build(step, scaling=False, translation=False):
         def mapping(x,y,z):
             point=np.array([x,y,z])
