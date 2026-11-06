@@ -337,23 +337,19 @@ __device__ inline bool flatImageFar(const FlatDevice& d,const FlatCharge& a,cons
     const double dx=c[0]-b.center[0],dy=c[1]-b.center[1],dz=c[2]-b.center[2];
     return sqrt(dx*dx+dy*dy+dz*dz)>d.farFactor*(a.size+b.size);
 }
-// CPU P1TouchHosts with an image: graded when a mapped source vertex coincides with a target vertex. -1 marks a vertex
-// inside the gap band without coinciding, which the CPU route refuses and which fails here as a nonfinite entry.
+// CPU P1TouchHosts with an image: graded when a mapped source vertex lies within the gap bound of a target vertex.
 __device__ inline int flatP1TouchImage(const FlatDevice& d,const FlatCharge& t,const FlatCharge& s,const HexImage& m){
     if((t.kind==0?d.cellNonP1:d.faceNonP1)[t.host]||(s.kind==0?d.cellNonP1:d.faceNonP1)[s.host])return 0;
-    const double scale=t.size+s.size,tol=1e-9*scale,gap=1e-4*scale;int touch=0;
+    const double gap=1e-4*(t.size+s.size);
     for(int j=0;j<(s.kind?3:4);++j){double q[3];hexImageVector(m,s.vertices+3*j,q);
         for(int i=0;i<(t.kind?3:4);++i){const double dx=q[0]-t.vertices[3*i],dy=q[1]-t.vertices[3*i+1],dz=q[2]-t.vertices[3*i+2];
-            const double r2=dx*dx+dy*dy+dz*dz;
-            if(r2<=tol*tol)touch=1;else if(r2<gap*gap)return -1;}}
-    return touch;
+            if(dx*dx+dy*dy+dz*dz<gap*gap)return 1;}}
+    return 0;
 }
 // CPU QuadDotRefl: the graded entry of the target vertices mapped by T^-1, else the analytic potential at its mapped rule.
 __device__ inline double flatDirectedImage(const FlatDevice& d,std::size_t target,std::size_t source,const HexImage& m){
     const auto& t=d.charges[target];
-    const int touch=flatP1TouchImage(d,t,d.charges[source],m);
-    if(touch<0)return NAN;
-    if(touch){double mapped[12];for(int i=0;i<(t.kind?3:4);++i)hexImagePoint(m,t.vertices+3*i,mapped+3*i);
+    if(flatP1TouchImage(d,t,d.charges[source],m)){double mapped[12];for(int i=0;i<(t.kind?3:4);++i)hexImagePoint(m,t.vertices+3*i,mapped+3*i);
         radia_hdiv_python::P1ChargeSource moved;
         if(!radia_hdiv_python::p1ChargeSourceInto(t.kind,mapped,t.expo,moved))return NAN;
         return radia_hdiv_p1_diagonal::pairEntry(moved,d.p1[source]);}
