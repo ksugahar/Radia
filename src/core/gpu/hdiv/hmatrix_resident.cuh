@@ -10,7 +10,7 @@
 #include <utility>
 #include <memory>
 #include "hmatrix_host_fault.hpp"
-#include "hmatrix_leaf_coverage.hpp"
+#include "hdiv_device_reserve.hpp"
 
 namespace radia_hmatrix_cuda {
 inline void check(cudaError_t status) {
@@ -48,6 +48,8 @@ struct BorrowedLeaf {
     BorrowedValues a1,a2;bool deferred=false;
 };
 struct DeferredDenseSpan {std::size_t row,column,rows,columns,offset;};
+// Device-generated low-rank leaf of known rank: a1 at a (columns x rank), a2 at b (rows x rank).
+struct DeferredLowrankSpan {std::size_t row,column,rows,columns,rank,a,b;};
 struct CoefficientUpload {std::size_t destination,source,count;};
 struct Plan {
     std::size_t n=0,tmpCount=0,partialCount=0;
@@ -56,6 +58,7 @@ struct Plan {
     HostVector<double> coefficients{HostFaultAllocator<double>("plan.coefficients")},scale{HostFaultAllocator<double>("plan.scale")};
     HostVector<std::size_t> permutation{HostFaultAllocator<std::size_t>("plan.permutation")},rowOffsets{HostFaultAllocator<std::size_t>("plan.row-offsets")},partialIndices{HostFaultAllocator<std::size_t>("plan.partial-indices")};
     HostVector<DeferredDenseSpan> deferredDense{HostFaultAllocator<DeferredDenseSpan>("plan.deferred-dense")};
+    HostVector<DeferredLowrankSpan> deferredLowrank{HostFaultAllocator<DeferredLowrankSpan>("plan.deferred-lowrank")};
     HostVector<CoefficientUpload> uploads{HostFaultAllocator<CoefficientUpload>("plan.uploads")};
 };
 template<class LeafList,class IndexList,class ScaleList>
@@ -78,7 +81,8 @@ inline Plan packLeaves(std::size_t n,const LeafList& leaves,
             throw std::invalid_argument("Diagonal leaf must be square");
         if(leaf.row<leaf.column&&leaf.rows>leaf.column-leaf.row)
             throw std::invalid_argument("Upper leaf overlaps diagonal");
-        if(leaf.deferred&&(leaf.rank||!leaf.a1.empty()||!leaf.a2.empty()))throw std::invalid_argument("Invalid deferred dense storage");
+        if(leaf.deferred&&(!leaf.a1.empty()||!leaf.a2.empty()))throw std::invalid_argument("Invalid deferred leaf storage");
+        if(leaf.deferred&&leaf.rank&&leaf.rank>std::min(leaf.rows,leaf.columns))throw std::invalid_argument("Deferred low-rank leaf rank exceeds its block");
         if(!leaf.deferred&&(leaf.a1.size()!=checkedProduct(leaf.columns,leaf.rank?leaf.rank:leaf.rows)||
            leaf.a2.size()!=(leaf.rank?checkedProduct(leaf.rows,leaf.rank):0))
            )
@@ -96,7 +100,8 @@ inline Plan packLeaves(std::size_t n,const LeafList& leaves,
         const auto firstCount=checkedProduct(leaf.columns,leaf.rank?leaf.rank:leaf.rows),secondCount=leaf.rank?checkedProduct(leaf.rows,leaf.rank):0;
         if(firstCount>std::numeric_limits<std::size_t>::max()-secondCount||firstCount+secondCount>std::numeric_limits<std::size_t>::max()-p.coefficientCount)throw std::overflow_error("Coefficient offset overflow");
         const auto a=p.coefficientCount,b=a+firstCount;p.coefficientCount+=firstCount+secondCount;
-        if(leaf.deferred)p.deferredDense.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,a});
+        if(leaf.deferred&&leaf.rank)p.deferredLowrank.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,leaf.rank,a,b});
+        else if(leaf.deferred)p.deferredDense.push_back({leaf.row,leaf.column,leaf.rows,leaf.columns,a});
         else{
             p.uploads.push_back({a,p.coefficients.size(),firstCount+secondCount});
             if(!leaf.a1.empty())p.coefficients.insert(p.coefficients.end(),leaf.a1.begin(),leaf.a1.end());
@@ -184,31 +189,15 @@ __global__ void reduceOutput(std::size_t n,const std::size_t* offsets,const std:
 }
 template<class T> struct Buffer {
     T* data=nullptr;std::size_t size=0;int device=0;
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-    bool faultCounted=false;
-#endif
     Buffer()=default;Buffer(const Buffer&)=delete;Buffer& operator=(const Buffer&)=delete;
     ~Buffer(){if(data){int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
         const auto status=cudaFree(data);
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        if(faultCounted){if(status==cudaSuccess)deviceFaultState.liveBytes-=size*sizeof(T);else ++deviceFaultState.freeErrors;}
-#else
         (void)status;
-#endif
         if(previous!=device)cudaSetDevice(previous);}}
     void allocate(std::size_t n){
         if(data)throw std::runtime_error("Device buffer already allocated");
         const auto bytes=checkedProduct(n,sizeof(T));check(cudaGetDevice(&device));
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        faultCounted=deviceFaultState.enabled;
-        if(n && faultCounted){auto& s=deviceFaultState;++s.attempts;
-            if(s.failAt && s.attempts==s.failAt)check(cudaErrorMemoryAllocation);
-            if(bytes>std::numeric_limits<std::size_t>::max()-s.liveBytes)throw std::overflow_error("Device diagnostic byte overflow");}
-#endif
         if(n)check(cudaMalloc(reinterpret_cast<void**>(&data),bytes));size=n;
-#ifdef RADIA_HMATRIX_FAULT_INJECTION
-        if(n && faultCounted){auto& s=deviceFaultState;s.liveBytes+=bytes;s.peakBytes=std::max(s.peakBytes,s.liveBytes);}
-#endif
     }
     template<class Allocator>void upload(const std::vector<T,Allocator>& v){allocate(v.size());if(size){
         check(cudaMemcpy(data,v.data(),size*sizeof(T),cudaMemcpyHostToDevice));
@@ -249,6 +238,9 @@ struct DeviceMap {
     }
     void abandon(){offsets.data=nullptr;indices.data=nullptr;values.data=nullptr;}
 };
+// Device-resident SPD mass operand: CSR, unscaled diagonal M_ii and the infinity
+// norm of D^-1 M (independent of inv_chi). The owner keeps the buffers alive.
+struct MassOperand {DeviceMap* map=nullptr;const double* diagonal=nullptr;double bound=1.;std::size_t n=0,bytes=0;bool hasBound=false;};
 } // namespace radia_hmatrix_cuda
 #include "analytic_matrix_build.cuh"
 #include "hdiv_curved_gram.cuh"
@@ -270,7 +262,7 @@ public:
     std::size_t deferredDenseLeaves=0,deferredDenseCoefficients=0,coefficientUploadBytes=0;
     explicit Resident(const Plan& p,const SparseMap* map=nullptr,std::size_t concurrentWorkspace=0):n(p.n),count(p.directions.size()) {
         check(cudaGetDevice(&device));
-        materialized=p.deferredDense.empty();storedCoefficientCount=p.coefficientCount;coefficientUploadBytes=checkedProduct(p.coefficients.size(),sizeof(double));
+        materialized=p.deferredDense.empty()&&p.deferredLowrank.empty();storedCoefficientCount=p.coefficientCount;coefficientUploadBytes=checkedProduct(p.coefficients.size(),sizeof(double));
         deferredDenseLeaves=p.deferredDense.size();for(const auto& span:p.deferredDense)deferredDenseCoefficients+=checkedProduct(span.rows,span.columns);
         for(const auto& direction:p.directions)if(!direction.transpose){
             const auto dense=checkedProduct(direction.inputs,direction.outputs);
@@ -316,13 +308,29 @@ public:
         try{resourceFaultPoint("stream.after-create");}
         catch(...){resourceReleased(cudaStreamDestroy(stream)==cudaSuccess);stream=nullptr;throw;}
     }
+    // Device-built charge map: the builder fills B and B^T in place on this
+    // device; no host CSR exists. Owned bytes match the uploaded-map route.
+    // B, B^T, the DOF vector and the builder scratch are reserved together.
+    template<class Build> void buildChargeMap(std::size_t columns,std::size_t nonzeros,std::size_t scratch,Build&& build){
+        valid(true);if(dofs||!columns||columns>2147483647u)throw std::invalid_argument("Invalid device charge-map state");
+        const auto indices=checkedProduct(checkedProduct(2,nonzeros)+n+columns+2,sizeof(std::size_t));
+        const auto values=checkedProduct(checkedProduct(2,nonzeros)+columns,sizeof(double));
+        if(checkedSum({indices,values})>std::numeric_limits<std::size_t>::max()-ownedBytes)
+            throw std::overflow_error("Device allocation overflow");
+        std::size_t free,total;check(cudaMemGetInfo(&free,&total));
+        if(!fitsAboveReserve(free,total,checkedSum({indices,values,scratch})))
+            throw std::runtime_error("GPU charge-map memory reserve would be exceeded by the map, DOF vector and builder scratch together");
+        build(chargeMap,chargeTranspose);
+        if(chargeMap.rows!=n||chargeTranspose.rows!=columns)throw std::runtime_error("Device charge-map dimension mismatch");
+        ownedBytes+=indices+values;dofs=columns;kernelsPerApplication=6;dofState.allocate(dofs);
+    }
     template<class Oracle> void materializeDeferred(const Plan& p,Oracle& oracle){
-        valid(true);if(materialized||p.deferredDense.empty()||p.n!=n||p.coefficientCount!=coefficients.size)throw std::invalid_argument("Invalid deferred materialization state");
+        valid(true);if(materialized||(p.deferredDense.empty()&&p.deferredLowrank.empty())||p.n!=n||p.coefficientCount!=coefficients.size)throw std::invalid_argument("Invalid deferred materialization state");
         oracle.fillDense(p,coefficients.data,permutation.data,scale.data,stream);
         check(cudaStreamSynchronize(stream));materialized=true;
     }
     void assemble(const AnalyticBlock& block){
-        valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.sources.size()!=n)
+        valid(true);if(materialized||initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.sources.size()!=n)
             throw std::invalid_argument("Analytic assembly requires a fresh single dense block");
         std::size_t extra=checkedProduct(block.sources.size(),sizeof(AnalyticSource));
         const auto quadBytes=checkedProduct(block.quadrature.size(),sizeof(QuadraturePoint));
@@ -335,7 +343,7 @@ public:
         analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());
         int flag=0;check(cudaMemcpyAsync(&flag,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
         if(flag)throw std::runtime_error("Analytic assembly produced invalid energy");
-        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));materialized=true;
     }
     void assembleCurved(const CurvedBlock& block){
         valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.charges.size()!=n)throw std::invalid_argument("Curved assembly requires a fresh dense block");
@@ -427,6 +435,9 @@ public:
     std::size_t dimension()const{return dofs?dofs:n;}
     bool isDemag()const{return dofs!=0;}
     cudaStream_t executionStream(){valid();return stream;}
+    std::size_t fieldStateSize()const{return dofs;}
+    // Device charges q = B x for a field evaluation; only the resident charge map acts.
+    void chargeProducts(const double* x,double* q){valid();if(!dofs)throw std::invalid_argument("This resident has no charge map");chargeMap.apply(x,q,stream);check(cudaGetLastError());check(cudaStreamSynchronize(stream));}
     // Internal device-to-device application for Krylov vectors. No host
     // vector transfer or synchronization; accepted uploaded state is untouched.
     void applyDevice(const double* x,double* y){

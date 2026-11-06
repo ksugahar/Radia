@@ -184,17 +184,28 @@ def verify(path: Path) -> dict:
                 raise ValueError('Incomplete IC CUDA payload')
             ic = json.loads(archive.read('radia_simulink/ic-build.json'))
             verify_ic_receipt(manifest, ic)
-        hdiv_binaries = {'matlab/radia_cuda_hmatrix.mexw64', 'matlab/radia_cuda_projection.mexw64'}
-        if hdiv_binaries.intersection(manifest['files']) or 'hdiv-build.json' in manifest['files']:
-            required = hdiv_binaries | {'hdiv-build.json'} | {
+        if 'matlab/radia_hdiv_device.mexw64' in manifest['files'] or 'hdiv-device-build.json' in manifest['files']:
+            required = {'matlab/radia_hdiv_device.mexw64', 'hdiv-device-build.json'} | {
                 'matlab/+radia/+gpu/' + name for name in
-                ('solveHDivElements.m', 'affineHDivQuadrature.m', 'curvedHDivQuadrature.m',
-                 'HMatrixOperator.m', 'HDivBHMaterial.m', 'PreparedHDivNonlinear.m',
-                 'makeHDivBHMaterial.m', 'solveNonlinearHDivElements.m')}
+                ('solveHDivElements.m', 'solveNonlinearHDivElements.m', 'PreparedHDivNonlinear.m',
+                 'HDivBHMaterial.m', 'makeHDivBHMaterial.m', 'HDivDeviceMass.m', 'HDivDeviceOperator.m',
+                 'prepareHDivDeviceSetup.m', 'loadHDivDeviceSetup.m', 'readHDivDeviceSetup.m',
+                 'AnalyticChargeGram.m')} | {
+                'matlab/+radia/+internal/' + name for name in ('runPythonProcess.m', 'pythonProcessPath.m')}
             if not required.issubset(manifest['files']):
-                raise ValueError('Incomplete HDiv CUDA payload')
-            hdiv = json.loads(archive.read('radia_simulink/hdiv-build.json'))
-            verify_hdiv_receipt(manifest, hdiv)
+                raise ValueError('Incomplete HDiv device payload')
+            device = json.loads(archive.read('radia_simulink/hdiv-device-build.json'))
+            verify_hdiv_device_receipt(manifest, device)
+        projection_files = {'matlab/radia_cuda_projection.mexw64', 'projection-build.json'}
+        if projection_files & set(manifest['files']):
+            if not projection_files <= set(manifest['files']):
+                raise ValueError('Incomplete projection CUDA payload')
+            projection = json.loads(archive.read('radia_simulink/projection-build.json'))
+            if (projection.get('source_dirty') is not False or projection.get('source_commit') != manifest['source_commit']
+                    or projection.get('taskmanager_started') is not False or projection.get('fault_injection') is not False
+                    or projection.get('lifecycle_diagnostic') is not False
+                    or projection.get('binary_sha256') != manifest['files']['matlab/radia_cuda_projection.mexw64']):
+                raise ValueError('Projection CUDA binary receipt mismatch')
         fmm_files = {'fmm-build.json', 'matlab/radia_cuda_fmm.mexw64', 'matlab/+radia/+gpu/LaplaceFMM.m'}
         if fmm_files & set(manifest['files']):
             if not fmm_files <= set(manifest['files']):
@@ -208,6 +219,9 @@ def verify(path: Path) -> dict:
     for relative in manifest['files']:
         if relative.endswith('.mexw64'):
             name = Path(relative).name
+            if name == 'radia_hdiv_device.mexw64':
+                solvers.append('hdiv_device')
+                continue
             if not name.startswith('radia_cuda_'):
                 raise ValueError('Unclassified CUDA solver in GPU wheel: '+relative)
             solvers.append(name.removeprefix('radia_cuda_').removesuffix('.mexw64'))
@@ -217,19 +231,13 @@ def verify(path: Path) -> dict:
                 cuda_solvers=sorted(solvers), distribution_audit=distribution_audit)
 
 
-def verify_hdiv_receipt(manifest, receipt):
-    """Unknown diagnostic mode is not evidence of a release build."""
-    if receipt.get('schema') != 'radia.gpu.hdiv-payload.v1':
-        raise ValueError('Invalid HDiv payload schema')
-    for name in ('hmatrix', 'projection'):
-        native = receipt.get('artifacts', {}).get(name, {})
-        if (native.get('source_dirty') is not False
-                or native.get('source_commit') != manifest['source_commit']
-                or native.get('taskmanager_started') is not False
-                or native.get('fault_injection') is not False
-                or (name == 'projection' and native.get('lifecycle_diagnostic') is not False)
-                or native.get('binary_sha256') != manifest['files']['matlab/radia_cuda_' + name + '.mexw64']):
-            raise ValueError('HDiv CUDA binary receipt mismatch')
+def verify_hdiv_device_receipt(manifest, receipt):
+    if (receipt.get('schema') != 'radia.hdiv-mex-build.v1'
+            or receipt.get('source_dirty') is not False
+            or receipt.get('source_commit') != manifest['source_commit']
+            or receipt.get('mexcuda') is not False
+            or receipt.get('binary_sha256') != manifest['files']['matlab/radia_hdiv_device.mexw64']):
+        raise ValueError('HDiv device MEX receipt mismatch')
 
 
 def verify_ic_receipt(manifest, receipt):

@@ -85,6 +85,18 @@ lane must remain distinct from the disjoint-cell image test.  The same
 contract is available on persistent `vim.HDivSolver` objects so load sweeps
 reuse the periodic ChargeGram.
 
+`validation_ffag_device_cyclic_ring.py` and
+`validation_ffag_device_connected_yoke.py` hold the disjoint-cell and the
+connected contracts on the device route, where every operator is built on the
+GPU and only mesh arrays, tabulated reference data, image rows, right-hand
+sides and results cross, each recorded in a byte ledger.  Their limits are
+PROPOSED, not adopted.  The device mass takes its own material rule, which
+differs from the rule of the CPU linear solve on a non-affine host.  The
+connected gates therefore chain the sector to the device ring and the device
+ring to the CPU equation of the explicit ring on the device's rule; the rows
+against the CPU linear solve stay recorded, ungated, beside the size of the
+rule difference.
+
 `validation_ffag_broken_vim_cyclic_yoke.py` covers the material-topology
 route on genuinely curved-Q2 geometry.  Its BDM2 broken-HDiv operator reduces
 864 explicit-ring charges to 72 sector charges.  The maximum departure of a

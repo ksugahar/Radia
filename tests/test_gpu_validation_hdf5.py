@@ -12,8 +12,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize('relative',[
-    'tests/matlab/test_prepared_hdiv_shared_workflow.m',
-    'tests/matlab/test_prepared_hdiv_host_setup.m',
+    'tests/matlab/test_prepared_hdiv_device_setup.m',
     'validation_test/ams_cuda/checkSharedAMS.m',
     'validation_test/ams_cuda/check_shared_ams.py',
     'validation_test/ngsolve_cuda_mex/checkCsrBackends.m',

@@ -1,5 +1,5 @@
 function tests=test_hdiv_gpu_workflow_config
-% Fast pre-allocation contracts; no MATLAB GPU context is requested.
+% Guards: fast pre-allocation config/setup contracts; no MATLAB GPU context is requested.
 tests=functiontests(localfunctions);
 end
 function setupOnce(t)
@@ -10,25 +10,81 @@ function testExplicitGPUOnly(t)
 c=fixture();c.Backend='cpu';
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:simulink:HDivBackend');
 end
-function testFixedPortBudget(t)
-c=fixture();c.NumDoF=4097;
-verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:simulink:HDivDimensions');
-c=fixture();c.NumDoF=4;
+function testDeclaredPortMatchesSetup(t)
+c=fixture();c.NumDoF=5;
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:simulink:HDivDimensions');
 end
 function testNoSilentOldOptions(t)
-c=fixture();c.FinalResidualOnly=true;
+c=fixture();c.HostSetup=struct();
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:simulink:HDivConfig');
 c=fixture();c.Preconditioner='mass-cholesky';
 verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:simulink:HDivRoute');
 end
-function testPreliminaryConfigDoesNotPublishFEAcceptance(t)
-c=fixture();out=radia.simulink.validateHDivGPUWorkflowConfig(c);
-verifyEqual(t,out,c); % Complete host FE payload checks remain in PreparedHDivNonlinear.
+function testSetupSchemaIsChecked(t)
+c=fixture();c.Setup.schema='radia.hdiv-host-setup.v1';
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:gpu:DeviceSetup');
+c=fixture();c.Setup.charges.cell_dofs=[0.5;1];
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(c),'radia:gpu:DeviceSetup');
+end
+function testChangedPayloadIsCheckedAgain(t)
+c=fixture();radia.simulink.validateHDivGPUWorkflowConfig(c);radia.simulink.validateHDivGPUWorkflowConfig(c);
+bad=c;bad.Setup.evaluation.rule(1)=NaN;
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(bad),'radia:gpu:DeviceSetup');
+bad=c;bad.Setup.charges.cell_dofs=[0.5;1];
+verifyError(t,@()radia.simulink.validateHDivGPUWorkflowConfig(bad),'radia:gpu:DeviceSetup');
+out=radia.simulink.validateHDivGPUWorkflowConfig(c);verifyEqual(t,out.Setup.dofs,4);
+end
+function testWarmAndColdReadsAgree(t)
+good=fixture().Setup;negativeZero=-0;verifyEqual(t,1/negativeZero,-Inf);
+other=good;other.order=2; % a different valid payload: the next read cannot match it
+cases={@(s)setfield(s,'rhs_operator',complex(s.rhs_operator,zeros(4,3))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_vertices',complex(s.charges.cell_vertices,zeros(12,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_dofs',complex(s.charges.cell_dofs,zeros(4,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'evaluation','rule',complex(s.evaluation.rule,zeros(12,1))),'radia:gpu:DeviceSetup'; ...
+    @(s)setfield(s,'charges','cell_vertices',[negativeZero;s.charges.cell_vertices(2:end)]),''; ...
+    @(s)setfield(s,'rhs_operator',sparse(s.rhs_operator)),''; ...
+    @(s)setfield(s,'evaluation','rule',sparse(s.evaluation.rule)),''; ...
+    @(s)setfield(s,'charges','cell_dofs',sparse(s.charges.cell_dofs)),''; ...
+    @(s)setfield(s,'rhs_operator',[negativeZero*ones(4,1) s.rhs_operator(:,2:3)]),''; ...
+    @(s)setfield(s,'charges','far_factor',complex(s.charges.far_factor,0)),''; ...
+    @(s)setfield(s,'rhs_operator',single(s.rhs_operator)),''; ...
+    @(s)setfield(s,'charges','cell_dofs',int32(s.charges.cell_dofs)),''; ...
+    @(s)setfield(s,'schema',char(s.schema)),''};
+for k=1:size(cases,1)
+    variant=cases{k,1}(good);
+    radia.gpu.readHDivDeviceSetup(other);cold=outcome(variant);
+    radia.gpu.readHDivDeviceSetup(other);radia.gpu.readHDivDeviceSetup(good);warm=outcome(variant);
+    verifyEqual(t,warm,cold,sprintf('Warm and cold reads differ, case %d',k));
+    if ~isempty(cases{k,2})
+        verifyEqual(t,cold,uint8(cases{k,2}),sprintf('Not refused, case %d',k));
+    end
+end
+end
+function bytes=outcome(setup)
+try
+    bytes=getByteStreamFromArray(radia.gpu.readHDivDeviceSetup(setup));
+catch e
+    bytes=uint8(e.identifier);
+end
+end
+function testIntegerTablesRestoredToInt32(t)
+out=radia.simulink.validateHDivGPUWorkflowConfig(fixture());
+verifyClass(t,out.Setup.charges.cell_dofs,'int32');verifyClass(t,out.Setup.evaluation.element_points,'int32');
+verifyClass(t,out.Setup.charges.compression,'char');verifyEqual(t,out.Setup.dofs,4);
 end
 function c=fixture()
-c=struct('Backend','gpu','MeshPath','','Order',2,'AppliedField',[1 0 0], ...
-    'BHTable',[0 0;1 1],'NumDoF',3,'Assembly','ngsolve-host-normalized', ...
-    'HostSetup',struct('mass',speye(3)),'Preconditioner','reference-diagonal', ...
-    'SampleTime',.01,'RunDirectory',tempdir);
+% Structural payload only: the native MEX recomputes and checks every dimension.
+charges=struct('cell_vertices',zeros(12,1),'face_vertices',zeros(0,1),'tet_rule',ones(8,1), ...
+    'tri_rule',ones(4,1),'tet_low_rule',zeros(0,1),'tri_low_rule',zeros(0,1),'cell_tables',zeros(6,1), ...
+    'face_tables',zeros(0,1),'charge_host',[0;0],'charge_kind',[0;0],'charge_exponents',[0;0;0;1;0;0], ...
+    'cell_class',0,'cell_dofs',[3;1;0;2],'cell_exponents',[0;0;0;1;0;0],'face_class',zeros(0,1), ...
+    'face_dofs',zeros(0,1),'face_exponents',zeros(0,1),'far_factor',1e30,'compression',"aca",'dofs',4, ...
+    'aca',struct('eps',1e-8,'eta',2,'leaf_size',32,'max_rank',64,'rank_cap',"fail"));
+evaluation=struct('rule',ones(12,1),'reference_shapes',zeros(36,1),'vertices',zeros(12,1), ...
+    'element_class',0,'element_dofs',[3;1;0;2],'element_points',0);
+setup=struct('schema',"radia.hdiv-device-setup.v1",'backend',"gpu",'family',"affine-tet",'order',1,'dofs',4, ...
+    'mesh_sha256',repmat('a',1,64),'label_contract_sha256',repmat('b',1,64),'charges',charges, ...
+    'evaluation',evaluation,'rhs_operator',zeros(4,3),'mean_operator',zeros(3,4));
+c=struct('Backend','gpu','Setup',setup,'AppliedField',[1 0 0],'BHTable',[0 0;1 1],'NumDoF',4, ...
+    'Preconditioner','reference-diagonal','SampleTime',.01,'RunDirectory',tempdir);
 end

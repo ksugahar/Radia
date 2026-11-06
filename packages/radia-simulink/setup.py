@@ -120,24 +120,24 @@ class build_py(_build_py):
             public_python['loaded_runtime_sha256']=runtime['runtime_identity']['sha256']
             (package/'python-build.json').write_text(json.dumps(public_python,indent=2)+'\n')
             expected.update({name,'python-build.json'})
-        hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
+        device = os.environ.get('RADIA_HDIV_DEVICE_BUILD')
+        if device:
+            expected.update(payload_module().stage_device(ROOT, package, commit, device))
         projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
-        if bool(hmatrix) != bool(projection):
-            raise RuntimeError('Select both HDiv HMatrix and projection build directories')
-        if hmatrix:
-            expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
+        if projection:
+            expected.update(payload_module().stage_projection(ROOT, package, commit, projection))
         resident = os.environ.get('RADIA_RESIDENT_AMG_BUILD')
         if resident:
             expected.update(payload_module_resident().stage(ROOT, package, commit, resident))
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
-        hdiv_wrappers = set(payload_module().WRAPPERS)
+        hdiv_wrappers = set(payload_module().DEVICE_WRAPPERS)
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:
                     continue
-                if path.name in hdiv_wrappers or path.name in {"FieldCloud.m", "FieldElements.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "evaluateHDivBHMaterial.m", "evaluateHDivBHChunks.m"}:
+                if path.name in hdiv_wrappers or path.name in {"FieldCloud.m", "FieldElements.m"}:
                     continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.
@@ -192,7 +192,7 @@ class build_py(_build_py):
             bool(python_binding or resident))
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Resident GPU AMG Python adapter"] if resident else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["HDiv device route: RT0 on affine tetrahedra; BDM1, BDM2 on affine and P2 tetrahedra and on hexahedra"] if device else []) + (["Resident GPU AMG Python adapter"] if resident else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=runtime_common,
                         runtime_requirements_by_interface=runtime_interfaces)
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")

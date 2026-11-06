@@ -46,17 +46,21 @@ def test_exact_provider_closure_and_missing_file(tmp_path, monkeypatch, arch, pr
     with pytest.raises(RuntimeError, match="Missing explicit"):
         builder.provider_configuration(arch, provider)
 
-def test_shared_provider_header_selects_both_distributions():
+def test_provider_header_selects_its_only_consumer():
+    # The device kernels use no provider BLAS; a kernel that starts to include this header must add its owner.
     import json
     spec = importlib.util.spec_from_file_location("provider_ownership", ROOT / "tools/ci_distribution_contract.py")
     ownership = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ownership)
     manifest = json.loads((ROOT / "tools/ci_distribution_manifest.json").read_text(encoding="utf-8"))
     path = "src/core/rad_blas.h"
-    assert set(ownership.owner_rule(manifest, path)["owners"]) == {"radia", "radia-simulink"}
-    for lane in ("radia", "radia-simulink"):
-        for event, projection in manifest["lanes"][lane]["events"].items():
-            assert ownership.selected(path, projection), (lane, event, path)
+    assert ownership.owner_rule(manifest, path)["owners"] == ["radia"]
+    for event, projection in manifest["lanes"]["radia"]["events"].items():
+        assert ownership.selected(path, projection), (event, path)
+    included = sorted(str(f.relative_to(ROOT)) for base in ("src/core/gpu", "packages/radia-simulink/native")
+                      for f in (ROOT / base).rglob("*") if f.is_file()
+                      and "rad_blas.h" in f.read_text(encoding="utf-8", errors="ignore"))
+    assert not included, included
 
 
 def test_mkl_boundary_does_not_export_fortran_lapack_declarations():

@@ -7,14 +7,14 @@ import subprocess
 import sys
 
 
-def checked_mesh(mesh, contract, mesh_sha256, contract_sha256, report):
+def checked_mesh(mesh, contract, mesh_sha256, contract_sha256, report, tet_only=True):
     mesh, contract = Path(mesh).resolve(strict=True), Path(contract).resolve(strict=True)
     for path, expected in ((mesh, mesh_sha256), (contract, contract_sha256)):
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise ValueError("Checked input hash mismatch: " + path.name)
     checker = Path(__file__).resolve().parents[2] / "packages/cubit-mesh-export/src/cubit_mesh_export/check.py"
-    subprocess.run([sys.executable, str(checker), str(mesh), "--strict-labels",
-                    "--contract", str(contract), "--tet-only", "--report-json", str(report)], check=True)
+    subprocess.run([sys.executable, str(checker), str(mesh), "--strict-labels", "--contract", str(contract),
+                    *(["--tet-only"] if tet_only else []), "--report-json", str(report)], check=True)
     result = json.loads(Path(report).read_text(encoding="utf-8-sig"))
     if result.get("passed") is not True:
         raise ValueError("Canonical mesh check did not pass")

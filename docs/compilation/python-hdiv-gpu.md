@@ -1,9 +1,13 @@
 # Experimental Python HDiv-MMM CUDA build preparation
 
 `radia.hdiv_gpu.PreparedHDivNonlinear` owns the Python GPU workflow. The shared
-numerical sources live once in `src/core/gpu/hdiv`; MATLAB/Simulink gateways
-consume those sources through mexcuda. Python never imports `radia_simulink`.
-The MATLAB host publisher only converts Radia-owned arrays to its ABI layout.
+numerical sources live once in `src/core/gpu/hdiv`. The plain
+`radia_hdiv_device` MEX links the nvcc object compiled for `_hdiv_cuda` at the
+same commit, without mexcuda; `packages/radia-simulink/tools/build_hdiv_mex.py`
+builds it and the radia-simulink wheel stages it. Python never imports
+`radia_simulink`. `prepare_hdiv_device_setup` returns primitive NGSolve tables
+and vectors, and every Gram, charge, evaluation and mass operator is built on
+the device for the affine, curved P2 and hex families.
 
 This is a development build route, not a release or numerical acceptance.
 HDiv-MMM development changes require a new build of the exact source commit;

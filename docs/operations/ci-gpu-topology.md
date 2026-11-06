@@ -20,6 +20,9 @@ The GPU job audit identified these actual consumers:
 | `radia-optuna.yml:installed-wheel-matlab-e2e` | heavy | heavy + `gpu-rtx` | installed-wheel GPU/Simulink repeated execution |
 | `gpu-validation.yml:validate` | absent | `gpu-a100` | installed GPU/Simulink acceptance, larger CSR solves and Optuna GPU oracle driver |
 | `gpu-validation.yml:nightly-failure` | absent | `ubuntu-latest` | create/update failure issue |
+| `hdiv-a100-validation.yml:validate` | absent | `gpu-a100` | HDiv device tests on the installed exact-SHA radia wheel |
+
+`HDiv A100 validation` runs only through workflow dispatch, at a SHA whose `Radia Native Release` succeeded: that workflow seals its radia wheel as `gpu-radia-wheel`, and this one recovers it, installs it into a run-local environment and runs every test gated on `RADIA_HDIV_NATIVE_TEST_DIR`. A skipped, failed or missing case fails the run. It does not run nightly because Native Release does not build on main pushes, and it is not a required merge check.
 
 `GPU compute validation` runs only nightly or through workflow dispatch. Dispatch at the release ref to validate that exact release SHA. It does not run on PRs and must not be a required merge check. Releases continue to use their existing gates; release management may explicitly request this dispatch and require its successful result for that SHA. No implicit A100 release dependency is introduced.
 

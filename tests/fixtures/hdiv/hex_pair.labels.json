@@ -1,0 +1,1 @@
+{"schema": "radia.vol-label-contract.v1", "required": {"materials": ["body"], "boundaries": ["exterior"]}, "allowed": {"materials": ["body"], "boundaries": ["exterior"]}}

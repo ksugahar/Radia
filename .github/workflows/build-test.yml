@@ -645,3 +645,67 @@ jobs:
           name: radia-wheel
           path: dist/*.whl
           retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Seal the same wheel for exact-SHA compute validation
+      # ----------------------------------------------------------------
+      - name: Seal exact-SHA GPU wheel
+        if: success()
+        shell: pwsh
+        run: |
+          $sealed = Join-Path $env:RUNNER_TEMP "radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $sealed | Out-Null
+          $wheels = @(Get-ChildItem dist -Filter radia-*.whl)
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one radia wheel' }
+          Copy-Item -LiteralPath $wheels[0].FullName -Destination $sealed
+          python tools/ci_gpu_artifact.py seal $sealed --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_GPU_WHEEL_DIR=$sealed" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload sealed GPU wheel
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-radia-wheel
+          path: |
+            ${{ env.RADIA_GPU_WHEEL_DIR }}/*.whl
+            ${{ env.RADIA_GPU_WHEEL_DIR }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
+
+      # ----------------------------------------------------------------
+      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
+      # ----------------------------------------------------------------
+      - name: Build and seal the patched Netgen library
+        if: success()
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $bat = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-netgen-overlay.private.cmd'
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload sealed Netgen library
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-netgen-overlay
+          path: |
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/nglib.dll
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/netgen-overlay.json
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30

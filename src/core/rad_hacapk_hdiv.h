@@ -309,7 +309,12 @@ public:
                         bool near_inner_exact = true,
                         std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
                         std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {},
-                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {});
+                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {},
+                        std::vector<int> host_types = {},
+                        std::vector<double> gl_near_cell = {}, std::vector<double> gw_near_cell = {},
+                        double inner_switch = 0.0,
+                        std::vector<double> far_level_rows = {}, std::vector<double> far_level_ratios = {},
+                        std::vector<double> gl_tangent = {}, std::vector<double> gw_tangent = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -799,6 +804,10 @@ private:
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
+    // Affine P1 self/touching direct pairs (img==0) and all non-far image pairs (img>0) take the
+    // endpoint-graded outer rule; value, image and shape-derivative paths share this gate.
+    bool P1TouchHosts(int kindT, int hostT, int kindS, int hostS, int img) const;
+    double P1TouchEntryValue(int tgt, int src, int img) const;   // graded-rule entry (scalar route)
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, T^-1(p)) -- tgt's outer points mapped by the INVERSE image
     // transform.  Uses Phi_{T(b)}(x) = Phi_b(T^-1(x)) (isometry), so only the eval point moves.
@@ -959,6 +968,11 @@ private:
     // alone multiplies the far cost by (n/4)^6), and touching non-self pairs take the EXACT-anchor radial
     // inner (the source-host reference inverse of the outer point) instead of the static-site radial.
     std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
+    std::vector<double> m_glNearCell, m_gwNearCell;     // mixed mesh: plain tensor OUTER of near cell targets; empty -> m_glNear
+    double m_innerSwitch = 0.0;                         // mixed mesh: near points beyond (1 + this) source radii read the far rule
+    std::vector<double> m_glTangent, m_gwTangent;       // mixed mesh: remainder of the tangent closed form of a warped source; empty -> radial and fan rules
+    struct HexFarLevel { double ratio; std::vector<double> gl, gw; };
+    std::vector<HexFarLevel> m_farLevels;               // mixed mesh: far rule of pairs at or beyond ratio of their summed sizes
     std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
     std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
     // The same rule for pairs whose BOTH hosts are affine (2026-09-07): with affine maps the Duffy
@@ -1351,6 +1365,9 @@ private:
     void BuildHexInnerRules();
     std::vector<HexFarRule> m_hexInnerRules;  // cells, then boundary faces; immutable during fill
     void ResetHexCacheStats();
+    // Directed block of a pair with a tet, pyramid or triangle host; see hdiv_typed_host_math.inc.
+    std::vector<double> QuadBlockTyped(int kindT, int hT, int kindS, int hS) const;
+    int TypedHostOf(int kind, int host) const { return m_hostType[(kind == 0) ? (size_t)host : (size_t)m_n_el + host]; }
     // img (IMA): 0 = direct block; i>0 = image block i-1 (target host x the source host mapped by the image
     // transform T_{i-1}), for the reduced-symmetry image method -- mirrors (1/2,1/4,1/8 models) and cyclic
     // N-fold rotations.  Default 0 keeps the direct hex/wedge Gram byte-identical.
@@ -1393,6 +1410,8 @@ private:
     // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
     // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
     bool m_wedgemode = false;
+    // Hex mode on a mixed mesh: one host type per cell, then per face. Empty on a pure hex mesh.
+    std::vector<int> m_hostType;
     int  m_wedge_n_bf = 0;
     std::vector<double> m_wCellNodes;    // [n_el*54]  18-node tri-P2 (x) z-P2 prism lattice (n = t + 6*iz)
     std::vector<double> m_wFaceNodes;    // [n_bf*27]  9-node slots x 3D (a tri face fills the first 6 = 18)
@@ -1430,7 +1449,7 @@ private:
     std::vector<double> TetChargeGramDirectionalDerivativeImpl(
         const std::vector<double>& cell_vertex_velocity,
         const std::vector<double>& face_vertex_velocity,
-        int selected_host_a,int selected_host_b) const;
+        int selected_host_a,int selected_host_b,bool include_images=true) const;
     std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int img = 0) const;
 
     // HIGH-ORDER (polynomial-charge) mode

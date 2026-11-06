@@ -1,0 +1,19 @@
+{
+  "checker": {
+    "distribution": "cubit-mesh-export",
+    "version": "2.2.8",
+    "record_sha256": "ecba0abb3c08476630eab84519d39bab380336048896b8f4830b484950675d05"
+  },
+  "argv": [
+    "C:\\checker\\venv\\Scripts\\python.exe",
+    "-m",
+    "cubit_mesh_export.check",
+    "C:\\checker\\tmp\\radia-check-vol-uyskga52\\mesh.vol",
+    "--strict-labels",
+    "--contract",
+    "C:\\checker\\tmp\\radia-check-vol-uyskga52\\labels.json",
+    "--format",
+    "json"
+  ],
+  "ngsolve_version": "6.2.2608"
+}

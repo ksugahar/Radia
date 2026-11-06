@@ -71,6 +71,10 @@ Pyramid-specific defects are reported upstream with the exact version and a
 minimal reproducer. Waiting for their fix must not block the other validated mesh
 families or the AMS, CompactAMG and CSR GPU development work.
 
+The mixed rows are `test_hdiv_mixed_charge_gram.py` (CPU), `test_hdiv_gpu_mixed_device.py`
+(GPU lane), `test_hdiv_connected_meshes.py` and `test_hdiv_pyramid_material.py`, and
+`validation_test/hmatrix_cuda/validate_mixed_sphere.py` for convergence.
+
 Apply the same division to GPU testing. Small, deterministic GPU numerical,
 backend-selection, error and lifecycle checks belong in `tests/` (or the owning
 package's lightweight tests). Use an explicit GPU lane with declared prerequisites;

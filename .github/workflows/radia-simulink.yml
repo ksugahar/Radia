@@ -46,8 +46,6 @@ on:
       - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
-      - 'src/ext/HACApK/**'
-      - 'src/core/rad_blas.h'
       - 'src/core/rad_bem_galerkin.h'
       - 'src/core/rad_bem_galerkin.cpp'
       - 'src/core/rad_biot_savart_filaments.cpp'
@@ -57,7 +55,6 @@ on:
       - 'src/core/rad_field_cloud_kernel.h'
       - 'src/core/rad_field_source_kernel.inc'
       - 'src/core/rad_field_sources.h'
-      - 'src/core/rad_hacapk_parallel.h'
       - 'src/core/rad_hdiv_field_evaluator.h'
       - 'src/core/rad_hdiv_field_kernel_api.inc'
       - 'src/core/rad_hdiv_field_math.inc'
@@ -111,16 +108,30 @@ on:
       - 'validation_test/fmm_cuda/**/*.js'
       - 'validation_test/fmm_cuda/**/*.json'
       - 'src/core/gpu/hdiv/analytic_matrix_build.cuh'
+      - 'src/core/gpu/hdiv/hdiv_aca_diagnostic.cuh'
       - 'src/core/gpu/hdiv/hdiv_assembly_profile.cuh'
       - 'src/core/gpu/hdiv/hdiv_curved_gram.cuh'
       - 'src/core/gpu/hdiv/hdiv_curved_moments.cuh'
+      - 'src/core/gpu/hdiv/hdiv_device_reserve.hpp'
+      - 'src/core/gpu/hdiv/hdiv_flat_aca.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_charge_map.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_expansion.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_field.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_hex_field.cuh'
+      - 'src/core/gpu/hdiv/hdiv_hex_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_p1_diagonal_input.hpp'
+      - 'src/core/gpu/hdiv/hdiv_p1_diagonal_math.inc'
+      - 'src/core/gpu/hdiv/hdiv_resident_python_cuda.cu'
+      - 'src/core/gpu/hdiv/hdiv_typed_host_math.inc'
+      - 'src/core/gpu/hdiv/cmake/HDivKernels.cmake'
+      - 'src/core/gpu/hdiv/hdiv_flat_evaluation.cuh'
       - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
-      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
       - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
       - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
       - 'src/core/gpu/hdiv/hmatrix_inverse_bh.cuh'
-      - 'src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp'
       - 'src/core/gpu/hdiv/hmatrix_material_solver.cuh'
       - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
@@ -171,8 +182,6 @@ on:
       - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
-      - 'src/ext/HACApK/**'
-      - 'src/core/rad_blas.h'
       - 'src/core/rad_bem_galerkin.h'
       - 'src/core/rad_bem_galerkin.cpp'
       - 'src/core/rad_biot_savart_filaments.cpp'
@@ -182,7 +191,6 @@ on:
       - 'src/core/rad_field_cloud_kernel.h'
       - 'src/core/rad_field_source_kernel.inc'
       - 'src/core/rad_field_sources.h'
-      - 'src/core/rad_hacapk_parallel.h'
       - 'src/core/rad_hdiv_field_evaluator.h'
       - 'src/core/rad_hdiv_field_kernel_api.inc'
       - 'src/core/rad_hdiv_field_math.inc'
@@ -236,16 +244,30 @@ on:
       - 'validation_test/fmm_cuda/**/*.js'
       - 'validation_test/fmm_cuda/**/*.json'
       - 'src/core/gpu/hdiv/analytic_matrix_build.cuh'
+      - 'src/core/gpu/hdiv/hdiv_aca_diagnostic.cuh'
       - 'src/core/gpu/hdiv/hdiv_assembly_profile.cuh'
       - 'src/core/gpu/hdiv/hdiv_curved_gram.cuh'
       - 'src/core/gpu/hdiv/hdiv_curved_moments.cuh'
+      - 'src/core/gpu/hdiv/hdiv_device_reserve.hpp'
+      - 'src/core/gpu/hdiv/hdiv_flat_aca.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_charge_map.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_diagnostic.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_expansion.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_field.cuh'
+      - 'src/core/gpu/hdiv/hdiv_flat_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_hex_field.cuh'
+      - 'src/core/gpu/hdiv/hdiv_hex_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_p1_diagonal_input.hpp'
+      - 'src/core/gpu/hdiv/hdiv_p1_diagonal_math.inc'
+      - 'src/core/gpu/hdiv/hdiv_resident_python_cuda.cu'
+      - 'src/core/gpu/hdiv/hdiv_typed_host_math.inc'
+      - 'src/core/gpu/hdiv/cmake/HDivKernels.cmake'
+      - 'src/core/gpu/hdiv/hdiv_flat_evaluation.cuh'
       - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
-      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
       - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
       - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
       - 'src/core/gpu/hdiv/hmatrix_inverse_bh.cuh'
-      - 'src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp'
       - 'src/core/gpu/hdiv/hmatrix_material_solver.cuh'
       - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
@@ -327,7 +349,7 @@ jobs:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.gpu_required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
-    timeout-minutes: 60
+    timeout-minutes: 100
     env:
       RADIA_GPU_CI_BUILD: "1"
     steps:
@@ -339,6 +361,11 @@ jobs:
             "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           }
       - uses: actions/checkout@v4
+      - name: Restore LF text in the reused runner workspace
+        shell: pwsh
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          exit $LASTEXITCODE
       - name: Prepare isolated mexcuda environment
         shell: pwsh
         run: |
@@ -350,8 +377,26 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
           $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
-          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
+          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Python GPU calls admit only the exact pip CUDA runtime named in the
+          # radia metadata. The checkout is imported via PYTHONPATH; only its
+          # PEP 517 metadata is registered in this run-local venv (no build).
+          $gpuPins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x.split(';')[0].strip() for x in d['project']['optional-dependencies']['gpu']], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -ne 5) { throw 'Expected five exact CUDA runtime pins' }
+          & $python -m pip install @gpuPins "setuptools>=77"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $purelib = & $python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # setuptools requires an empty metadata directory; move only the dist-info.
+          $metadataDir = Join-Path $env:RUNNER_TEMP "radia-metadata-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $metadataDir | Out-Null
+          & $python -c "import pathlib,sys; from setuptools import build_meta; d=pathlib.Path(sys.argv[1]); (d/'out').mkdir(); n=build_meta.prepare_metadata_for_build_wheel(str(d/'out')); (d/'name.txt').write_text(n,encoding='utf-8')" $metadataDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $distInfo = (Get-Content -Raw (Join-Path $metadataDir 'name.txt')).Trim()
+          if ($distInfo -notmatch '^radia-[^\\/]+\.dist-info$') { throw "Unexpected radia metadata: $distInfo" }
+          Move-Item -Path (Join-Path $metadataDir "out/$distInfo") -Destination $purelib
+          Remove-Item -Recurse -Force $metadataDir
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
       - name: Run owned C++ runtime and sparse symmetry acceptance
         shell: pwsh
@@ -380,16 +425,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $mklRoot = python -c "import sys; from pathlib import Path; print(Path(sys.prefix)/'Library')"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & ./Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot $mklRoot -RequireNativeProvenance
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $projectionStart = [DateTime]::UtcNow
           & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           function Select-ExactBuild($candidates) {
             $accepted = @($candidates | Where-Object {
               $receipt = Join-Path $_.FullName 'build.json'
@@ -400,12 +442,55 @@ jobs:
             if ($accepted.Count -eq 0) { throw 'Missing accepted exact-commit CUDA build' }
             return $accepted[0].FullName
           }
-          $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
           $projection = Select-ExactBuild (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
-          "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          # The plain HDiv MEX links the nvcc kernel object of this exact checkout.
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $toolset = (Get-Content (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14[.]44[.]') { throw 'Default MSVC 14.44 is required' }
+          $cl = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $matlab = Join-Path $env:ProgramFiles 'MATLAB/R2026a'
+          $cuda = Join-Path $matlab 'sys/cuda/win64/cuda'
+          $hdivRoot = Join-Path $env:RUNNER_TEMP "radia-hdiv-device-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $hdivRoot | Out-Null
+          $approval = Join-Path $hdivRoot 'admission.private.json'
+          @{ source_sha=$commit; owner="radia-simulink-$env:GITHUB_RUN_ID"; gpu_build_approved=$true;
+             scope='compile-only sm75+sm80; no GPU execution'; started_utc=[DateTimeOffset]::UtcNow.ToString('o') } |
+            ConvertTo-Json | Set-Content -LiteralPath $approval -Encoding utf8
+          $approvalHash = (Get-FileHash -LiteralPath $approval -Algorithm SHA256).Hash.ToLowerInvariant()
+          $hdivGpu = Join-Path $hdivRoot 'gpu'
+          $hdivDevice = Join-Path $hdivRoot 'mex'
+          $hdivFault = Join-Path $hdivRoot 'fault'
+          $bat = Join-Path $hdivRoot 'build.private.cmd'
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "python tools/build_python_gpu.py --cuda-root `"$cuda`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --architectures 75 80 --components _hdiv_cuda --output `"$hdivGpu`" --admission `"$approval`" --admission-sha256 $approvalHash",
+            'if errorlevel 1 exit /b %errorlevel%',
+            "python packages/radia-simulink/tools/build_hdiv_mex.py --gpu-build `"$hdivGpu`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --output `"$hdivDevice`"",
+            'if errorlevel 1 exit /b %errorlevel%',
+            "python validation_test/hmatrix_cuda/device_fault/build_fault_mex.py --gpu-build `"$hdivGpu`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --output `"$hdivFault`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_HDIV_DEVICE_BUILD=$hdivDevice" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_FAULT_BUILD=$hdivFault" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify HDiv device boundary and same-kernel parity
+        shell: pwsh
+        run: |
+          # pybind11 and the plain MEX on one kernel object, bitwise, the MATLAB device workflow and its failure paths. Small fixed cases, no skip path.
+          & ./Build.ps1 -RadiaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Only the module and the receipt radia.gpu reads; the private receipt
+          # stays in the build root so the packaged tree remains clean.
+          $hdivGpu = Join-Path (Split-Path -Parent $env:RADIA_HDIV_DEVICE_BUILD) 'gpu'
+          Copy-Item -Path (Join-Path $hdivGpu '_hdiv_cuda*.pyd'),(Join-Path $hdivGpu '_hdiv_cuda*.pyd.build.json') -Destination src/radia
+          python validation_test/hmatrix_cuda/run_device_boundary.py --mex-build $env:RADIA_HDIV_DEVICE_BUILD --fault-mex-build $env:RADIA_HDIV_FAULT_BUILD --out "$env:RUNNER_TEMP/radia-hdiv-boundary-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh
         run: |
@@ -465,6 +550,7 @@ jobs:
           path: |
             ${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
             ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-hdiv-boundary-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
           if-no-files-found: error
 

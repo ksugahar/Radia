@@ -21,8 +21,7 @@ def test_every_python_module_has_an_explicit_cpu_ownership_classification():
     assert all(item["classification"] == "cpu-python-only" for item in result["binary_extensions"])
     assert [item["id"] for item in result["gpu_features"]] == [
         "csr-pcg", "ams-experimental", "native-hcurl-newton-ams", "reusable-linear-hcurl-ams",
-        "reusable-gpu-ic0", "laplace-fmm-operators", "bounded-hdiv-mmm",
-        "normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh",
+        "reusable-gpu-ic0", "laplace-fmm-operators", "bounded-hdiv-mmm", "device-hdiv-bh", "device-analytic-gram",
     ]
 
 
@@ -75,42 +74,80 @@ def test_shared_radia_gpu_source_is_allowed_but_arbitrary_sources_are_rejected(t
     assert any("matlab is not GPU-owned" in error for error in MODULE.audit(tmp_path)["errors"])
 
 
-def test_hdiv_frontend_parity_is_pending_with_an_executable_comparator():
-    """Guards: ownership moves cannot silently claim same-kernel MEX parity.
+def _bitwise_module():
+    spec = importlib.util.spec_from_file_location(
+        "bitwise_parity_contract", ROOT / "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-    Assumes: source contracts do not execute either GPU frontend.
+
+def test_hdiv_frontend_parity_status_is_bound_to_its_evidence():
+    """Guards: same-kernel parity is claimed only for the executed case, with hashes for that case.
+
+    Assumes: source contracts execute neither GPU frontend, so they check the record, not the run.
     """
     import json
+    module = _bitwise_module()
     manifest = json.loads((ROOT / "packages/radia-simulink/matlab/python_api_parity_manifest.json").read_text())
-    for feature in manifest["gpu_features"]:
-        if feature["id"] not in {"normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh"}:
-            continue
-        contract = feature["same_kernel_bitwise_parity"]
-        assert contract["status"] == "PENDING", contract
-        assert contract["case"] == feature["id"]
-        assert (ROOT / contract["protocol"]).is_file()
-        spec = importlib.util.spec_from_file_location("bitwise_parity", ROOT / contract["test_reference"])
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        assert callable(module.compare)
+    contracts = [feature["same_kernel_bitwise_parity"] for feature in manifest["gpu_features"]
+                 if "same_kernel_bitwise_parity" in feature]
+    assert contracts, manifest["gpu_features"]
+    for contract in contracts:
+        assert module.check_contract(contract) in ("PENDING", "PASS"), contract
+        assert (ROOT / contract["protocol"]).is_file(), contract
 
 
-def test_bitwise_comparator_rejects_conflicting_compiler_overrides():
-    """Guards: matching receipts cannot hide contradictory compiler controls.
+def test_bitwise_contract_refuses_a_pass_beyond_its_evidence():
+    """Guards: a PASS cannot name other outputs or another case, or omit a hash.
+
+    Assumes: the evidence field list is the comparator's own.
+    """
+    import pytest
+    module = _bitwise_module()
+    case = "device-flat-tet"
+    evidence = {key: "a"*(40 if key == "source_sha" else 64) for key in module.EVIDENCE_HASHES}
+    evidence.update(case=case, outputs=sorted(module.CASES[case]), cuda_compiler="release 12.8", architecture="sm_75")
+    good = dict(status="PASS", case=case, evidence=evidence)
+    assert module.check_contract(good) == "PASS"
+    assert module.check_contract(dict(status="PENDING", case=case)) == "PENDING"
+    bad = [dict(status="PENDING", case=case, evidence=evidence), dict(status="PASS", case=case),
+           dict(good, status="UNKNOWN"), dict(good, case="device-hex"),
+           dict(good, evidence=dict(evidence, outputs=["apply"])),
+           dict(good, evidence=dict(evidence, source_sha="short")),
+           dict(good, evidence=dict(evidence, input_sha256="G"*64)),
+           dict(good, evidence={key: value for key, value in evidence.items() if key != "cuda_compiler"})]
+    for contract in bad:
+        with pytest.raises(ValueError):
+            module.check_contract(contract)
+
+
+def test_bitwise_comparator_requires_one_kernel_object_and_the_loaded_binaries():
+    """Guards: matching outputs cannot pass across different kernels, inputs or loaded binaries.
 
     Assumes: this is source-only validation, not actual compiler/GPU qualification.
     """
     import pytest
     spec = importlib.util.spec_from_file_location(
-        "bitwise_parity_flags", ROOT / "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py")
+        "bitwise_parity_receipts", ROOT / "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    flags = ["--fmad=false", "--ftz=false", "--prec-div=true", "--prec-sqrt=true"]
-    module.validate_deterministic_flags(flags)
-    module.validate_deterministic_flags(list(reversed(flags)))
-    for override in ("--fmad=true", "--ftz=true", "--prec-div=false",
-                     "--prec-sqrt=false", "--use_fast_math", "-fmad=true", flags[0]):
-        with pytest.raises(ValueError, match="overrides forbidden"):
-            module.validate_deterministic_flags(flags + [override])
-    with pytest.raises(ValueError):
-        module.validate_deterministic_flags(flags[:-1])
+    shared = dict(source_sha="a"*40, kernel_object_sha256="b"*64, cuda_compiler="release 12.8, V12.8.61",
+                  python_binary_sha256="c"*64, mex_binary_sha256="d"*64, input_sha256="e"*64,
+                  device_uuid="GPU-0", architecture="sm_75", case="device-flat-tet",
+                  output_names=sorted(module.CASES["device-flat-tet"]))
+    python = dict(shared, frontend="pybind11", artifact_sha256="c"*64)
+    mex = dict(shared, frontend="mex", artifact_sha256="d"*64)
+    assert module.check_receipts(python, mex) == module.CASES["device-flat-tet"]
+    for side, key, value, message in (
+            ("mex", "kernel_object_sha256", "f"*64, "kernel_object_sha256"),
+            ("mex", "input_sha256", "f"*64, "input_sha256"),
+            ("mex", "frontend", "mexcuda", "pybind11 and mex"),
+            ("python", "artifact_sha256", "f"*64, "loaded frontend binary"),
+            ("mex", "artifact_sha256", "c"*64, "loaded frontend binary")):
+        a, b = dict(python), dict(mex)
+        (a if side == "python" else b)[key] = value
+        with pytest.raises(ValueError, match=message):
+            module.check_receipts(a, b)
+    with pytest.raises(ValueError, match="Expected outputs"):
+        module.check_receipts(dict(python, output_names=["apply"]), dict(mex, output_names=["apply"]))

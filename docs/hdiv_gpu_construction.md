@@ -105,7 +105,59 @@ Record transfer bytes/counts, live/peak/closed owned device bytes and device-wid
 free-memory observations separately. Do not sum overlapping intervals or
 attribute another process's allocations to this owner.
 
+## Images
+
+`PreparedHDivLinear` and `PreparedHDivNonlinear` take `image`, `image_cyclic`,
+`image_cyclic_alternating` and, on pure HEX, `cyclic_periodic_boundaries`. The
+terms cross as 72-byte rows of mask, sign and angle, recorded in the byte ledger,
+and the device folds them into each Gram entry and field row; no matrix crosses.
+An image list must be closed under inversion with equal signs and holds at most
+63 images; a list that is not, a mask 0 with angle 0, and a family or mesh with no
+route raise before device allocation.
+
+One direction of a pair under one image is one pair of the explicit copies. Each
+direction takes the rule of its own distance, so a rotation that brings one
+direction into contact at the seam and leaves the other far is integrated as the
+ring would be. The compressed route is admissible only when every image of the
+column cluster is admissible.
+
+The connected sector takes the `Compress(Periodic(HDiv))` numbering and the
+orientation of the periodic wrapper as non-matrix inputs. Its paired faces carry
+no charge. It refuses a mesh numbering on which the wrapper ties no DOF. The
+limits of the device image tests and validations are PROPOSED, not adopted.
+
+The curved TET sector at its seam has no CPU reference: the CPU route takes a far
+rule for those touching pairs. Its entries are held against a connected ring with
+shared seam vertices on the same device route, read from stored P2 meshes. A loaded
+mesh with no geometry must not be curved after an OCC mesh in the same process:
+`Curve(2)` projects its boundary edges onto that stale geometry.
+
+The CPU typed route refuses images, so a mixed sector is held against the dense CPU
+equation folded from the entries of its explicit copies. That route integrates a
+pair of two hosts from one side, so the copies of one explicit solve differ from
+each other and the subspace equation is one row of that matrix, not its mean; the
+distance to the explicit solve is first order in that one-sided rule.
+
 ## Qualification
+
+The device flat Gram applies the same affine P1 self/touching rule as the CPU
+`ChargeGram`. A direct pair is graded when both hosts carry only cell-constant
+or face-degree-at-most-one charges and share a vertex with bitwise-equal
+coordinates; well-separated pairs are tested first, as on the CPU. Graded
+entries use the shared `pairEntry` arithmetic, instantiated with production
+CPU potentials on the host and production device potentials in CUDA; other
+near pairs keep the analytic moment potentials on the outer rule. Curved
+geometry and mixed hex/wedge/polyhedral routes are outside the flat device
+domain and fail before construction. For linear faces the charge
+monomial is `A + gradient . (x - center)` in the triangle's own reference
+vertex frame; NGSolve retains ownership of the FE/Piola/orientation map and
+the charge map B. A reference-vertex permutation changes the polynomial basis
+and cannot be tested by moving vertices without transforming the charge.
+Shared arithmetic does not make the CPU and GPU entries bitwise identical.
+The private `_diagnostic_flat_charge_entries` returns raw device entries for
+explicit charge pairs from a fresh preparation, for comparison with the CPU
+`ChargeGram.entry`; pairs and values cross, no matrix does, and it is never on
+the construction path.
 
 Compare against the independent CPU entry/solve route using identical inputs
 and existing adopted numerical criteria. Include near/self, separated pairs,

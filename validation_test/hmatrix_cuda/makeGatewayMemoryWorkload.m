@@ -39,20 +39,9 @@ switch kind
         f=struct('config',makeResidentAlgebraConfig(), ...
             'reference',jsondecode(fileread(fullfile(inputsDir,'real-thermal-reference.json'))));
         action=@()ihStep(f);
-    case {'hmatrix','hmatrix-profile'}
-        f=struct('setup',radia_cuda_projection('assemble_hdiv_elements_sparse', ...
-            fullfile(inputsDir,'curved-sphere.vol'),1,[1 .2 .1]), ...
-            'reference',load(fullfile(inputsDir,'curved-cpu.mat')));
-        f.config=radia.gpu.curvedHDivQuadrature(1);f.config.geometry_mode='curved';f.config.schema_version=1;
-        for name={'cell_nodes','face_nodes','cell_vertices','face_vertices','host','kind','expo','charge_map'}
-            f.config.(name{1})=f.setup.(name{1});
-        end
-        f.profile=strcmp(kind,'hmatrix-profile');
-        if f.profile
-            f.config.host_vector_cache=true;f.config.host_moment_cache=true;
-            f.config.profile_assembly=true;
-        end
-        action=@()hmatrixStep(f);
+    case 'hdiv-device'
+        f=struct('setup',radia.gpu.loadHDivDeviceSetup(fullfile(inputsDir,'hdiv-device-setup.h5')));
+        action=@()hdivDeviceStep(f);
     otherwise,error('radia:test:memoryKind','Unsupported memory workload');
 end
 end
@@ -111,16 +100,8 @@ assert(norm(heat-f.reference.heat)/norm(f.reference.heat)<=1e-9);
 assert(info.eddy_true_residual<=1e-10 && info.thermal_true_residual<=1e-10);
 clear owner;assert(radia_cuda_ih('live_count')==0);
 end
-function hmatrixStep(f)
-if f.profile
-    h=radia_cuda_hmatrix('create_curved_hdiv',f.config);
-else
-    h=radia_cuda_hmatrix('create_hdiv_hacapk_device_dense',f.config,1e-12,64,2.,64,32*2^20);
-end
-owner=onCleanup(@()radia_cuda_hmatrix('destroy',h));
-value=radia_cuda_hmatrix('solve_linear_material',h,f.setup.mass,f.setup.rhs,2.5,1e-11,1000);
-assert(norm(value.x-f.reference.expected)/norm(f.reference.expected)<1e-8);
-assert(norm(f.reference.rhs-f.reference.system*value.x)/norm(f.reference.rhs)<1e-10);
+function hdivDeviceStep(f)
+value=radia.gpu.solveHDivElements(f.setup,[1 .2 .1],2.5,Tolerance=1e-11);
 assert(value.true_relative_residual<=1e-11);
-clear owner;assert(radia_cuda_hmatrix('live_count')==0);
+assert(radia_hdiv_device('live_count')==0);
 end

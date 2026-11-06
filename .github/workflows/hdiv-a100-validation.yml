@@ -1,0 +1,57 @@
+name: HDiv A100 validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: hdiv-a100-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      OMP_NUM_THREADS: '8'
+      RADIA_NUM_THREADS: '8'
+      MKL_NUM_THREADS: '8'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the hash-verified exact-SHA radia wheel and Netgen library from Radia Native Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/ci_gpu_artifact.py fetch gpu-input --radia --sha ${{ github.sha }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install the verified wheel into a run-local environment
+        run: |
+          $venv = "$env:RUNNER_TEMP/hdiv-a100-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem gpu-input -Recurse -Filter *.whl)
+          if ($wheels.Count -ne 1) { throw 'Expected one verified radia wheel' }
+          & "$venv/Scripts/python.exe" -I -m pip install --only-binary=:all: "$($wheels[0].FullName)[gpu]" pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/netgen_overlay.py install --overlay gpu-input/gpu-netgen-overlay --python "$venv/Scripts/python.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "HDIV_LANE_PYTHON=$venv/Scripts/python.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "HDIV_LANE_WHEEL=$($wheels[0].FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Execute the HDiv device tests on the installed wheel without compilation
+        run: |
+          & $env:HDIV_LANE_PYTHON -I validation_test/hdiv_cuda/run_installed.py --source-commit ${{ github.sha }} --wheel $env:HDIV_LANE_WHEEL --require-gpu A100 --netgen-overlay gpu-input/gpu-netgen-overlay --out gpu-results
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hdiv-a100-validation-${{ github.sha }}
+          path: |
+            gpu-results/result.json
+            gpu-results/junit.xml
+            gpu-input/**/gpu-artifact.json
+            gpu-input/**/download.json
+          if-no-files-found: error
+          retention-days: 30
