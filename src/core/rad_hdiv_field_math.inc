@@ -648,7 +648,6 @@ constexpr int POLY_MAX_MOMENTS =
 // so a POLY_MAX_DEG-sized scratch zeroes and copies ~190 KB per low-degree
 // call; a small capacity performs the same arithmetic on fewer entries.
 static_assert(POLY_MAX_DEG >= 4, "directional moment dispatch needs capacity 4");
-constexpr int poly_moment_count(int cap) { return (cap + 1)*(cap + 2)*(cap + 3)/6; }
 
 RAD_FIELD_KERNEL static inline double small_comb(int n, int k)
 {
@@ -978,7 +977,8 @@ RAD_FIELD_KERNEL static void TetPotentialMomentsUpToDirectionalCap(
     const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
     int degree,double* value,double* direction)
 {
-    constexpr int MOMENTS=poly_moment_count(CAP);
+    // Inline expression: a constexpr host function is not callable from device code.
+    constexpr int MOMENTS=(CAP + 1)*(CAP + 2)*(CAP + 3)/6;
     const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
     ValueDirectional Vd[4][3],rd[3],cen[3];
     for(int i=0;i<4;++i)for(int k=0;k<3;++k){Vd[i][k]={V[i][k],dV[i][k]};cen[k]=cen[k]+Vd[i][k]/4.0;}
