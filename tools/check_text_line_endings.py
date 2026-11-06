@@ -1,8 +1,12 @@
-"""Check tracked index text blobs for CRLF/mixed endings, honoring attributes.
+"""Check tracked text for CRLF/mixed endings, honoring attributes.
 
 Git's index EOL classifier detects binary data; explicit -text/binary evidence
-is preserved. Check the index, not an autocrlf working copy. No files/config are
-modified. UTF-8/LF is the authoring policy; this guard checks line endings only.
+is preserved. The default checks the index and modifies nothing. --worktree
+checks the checked-out bytes of LF index text: a long-lived checkout (a CI
+runner workspace) can keep CRLF files from an older checkout because Git never
+rewrites stat-clean files, which breaks hash-bound fixtures. --repair rewrites
+only those files from the index, then checks again. UTF-8/LF is the authoring
+policy; this guard checks line endings only.
 """
 from __future__ import annotations
 
@@ -40,11 +44,59 @@ def check_index(root: Path) -> dict:
             "auto_binary_files": binary, "violations": violations}
 
 
+def check_worktree(root: Path) -> dict:
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--eol", "-z"],
+        check=True, capture_output=True)
+    violations = []
+    checked = 0
+    for record in result.stdout.split(b"\0"):
+        if not record:
+            continue
+        metadata, path = record.split(b"\t", 1)
+        fields = metadata.decode("ascii").split()
+        if "attr/-text" in fields or fields[0] != "i/lf":
+            continue
+        checked += 1
+        worktree = fields[1].removeprefix("w/")
+        if worktree in {"crlf", "mixed"}:
+            violations.append({"path": path.decode("utf-8"), "worktree_eol": worktree})
+    return {"schema": "radia.worktree-text-eol.v1", "passed": not violations,
+            "checked_lf_index_files": checked, "violations": violations}
+
+
+def repair_worktree(root: Path, violations: list[dict]) -> None:
+    if not violations:
+        return
+    # checkout-index skips a stat-clean file even with --force, so remove the
+    # stale copy first; the index still holds every byte to write back.
+    for v in violations:
+        (root / v["path"]).unlink()
+    paths = b"".join(v["path"].encode("utf-8") + b"\0" for v in violations)
+    subprocess.run(["git", "-C", str(root), "checkout-index", "--force", "--index", "-z", "--stdin"],
+                   input=paths, check=True)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--worktree", action="store_true",
+                        help="check checked-out bytes of LF index text instead of the index")
+    parser.add_argument("--repair", action="store_true",
+                        help="with --worktree, rewrite violating files from the index")
     args = parser.parse_args(argv)
-    result = check_index(args.root.resolve())
+    if args.repair and not args.worktree:
+        parser.error("--repair requires --worktree")
+    root = args.root.resolve()
+    if args.worktree:
+        result = check_worktree(root)
+        if args.repair and result["violations"]:
+            repaired = len(result["violations"])
+            repair_worktree(root, result["violations"])
+            result = check_worktree(root)
+            result["repaired_files"] = repaired
+    else:
+        result = check_index(root)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if result["passed"] else 1
 

@@ -574,3 +574,33 @@ def test_text_eol_guard_rejects_crlf_and_mixed_including_cmd(tmp_path):
     result = guard.check_index(tmp_path)
     assert not result['passed']
     assert {v['path'] for v in result['violations']} == {'bad.py', 'bad.cmd', 'mixed.md'}
+
+
+def test_worktree_eol_repair_restores_stale_crlf_checkout(tmp_path):
+    """Guards: a stale CRLF checkout of LF text is found and rewritten from the index.
+
+    Assumes: a long-lived runner workspace keeps stat-clean CRLF files from an
+    older checkout; -text evidence keeps its checked-out bytes.
+    """
+    import subprocess
+    def git(*args):
+        return subprocess.run(['git', '-C', str(tmp_path), *args], check=True,
+                              capture_output=True).stdout
+    git('init', '-q')
+    git('config', 'user.email', 'ci@example.invalid'); git('config', 'user.name', 'ci')
+    (tmp_path / '.gitattributes').write_bytes(b'* text=auto eol=lf\nsealed.json -text\n')
+    (tmp_path / 'fixture.vol').write_bytes(b'mesh\nnodes\n')
+    (tmp_path / 'sealed.json').write_bytes(b'{"historical": true}\r\n')
+    git('add', '.'); git('commit', '-q', '-m', 'fixture')
+    (tmp_path / 'fixture.vol').write_bytes(b'mesh\r\nnodes\r\n')
+    # The clean filter hashes the CRLF copy to the unchanged LF blob, so
+    # staging records it as stat-clean: Git itself never rewrites it.
+    git('add', 'fixture.vol')
+    assert git('status', '--porcelain') == b''
+    guard = _text_eol_module()
+    result = guard.check_worktree(tmp_path)
+    assert [v['path'] for v in result['violations']] == ['fixture.vol'], result
+    assert guard.main(['--root', str(tmp_path), '--worktree', '--repair']) == 0
+    assert (tmp_path / 'fixture.vol').read_bytes() == b'mesh\nnodes\n'
+    assert (tmp_path / 'sealed.json').read_bytes() == b'{"historical": true}\r\n'
+    assert git('status', '--porcelain') == b''
