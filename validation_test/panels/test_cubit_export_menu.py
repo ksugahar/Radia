@@ -241,8 +241,10 @@ class TestNastranCommand(_DialogTestBase):
             cmd,
             r'^export nastran_bdf "[^"]+\.bdf" order \d+ '
             r'dimension 3 overwrite$')
-        # nopyramid default = off
+        # The removed option must not appear in the command.
         self.assertNotIn("nopyramid", cmd)
+
+class TestVtkCommand(_DialogTestBase):
 
     def test_default_command(self):
         d = self._make_dialog(rem.FMT_VTK)
