@@ -89,6 +89,7 @@ inline py::dict AcceleratorAMS(const HypreBasedAMS& ams) {
     out["l1"]=py::array_t<double>(norms.size(),norms.data());
     out["cycle_type"]=ams.GetCycleType(); out["num_smooth"]=ams.GetNumSmooth();
     out["correction_weight"]=ams.GetCorrectionWeight(); out["beta_zero"]=ams.GetBetaZero();
+    out["reuse_hierarchy"]=ams.GetReuseHierarchy();
     py::array_t<int> free(ams.GetNdofHC());
     auto freedofs=ams.GetFreeDofs();
     auto* free_data=free.mutable_data();

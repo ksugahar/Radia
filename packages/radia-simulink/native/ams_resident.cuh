@@ -9,6 +9,8 @@ struct OwnedArray {
 };
 struct ResidentHierarchy {
     OwnedArray owner;Input input;AMS ams;
+    // Refreshed values the AMS views point to after the first device refresh.
+    std::unique_ptr<AMSRefresh> refresh;
     explicit ResidentHierarchy(const mxArray* source):owner(source),ams(device_node(owner.value,input),input.validation){input.validation.check();}
 };
 struct ResidentAMS {
@@ -54,6 +56,42 @@ bool amsResidentCommand(const std::string& command,int nlhs,mxArray** out,int nr
     if(command=="update"){
         if(nrhs!=3||nlhs!=0)throw std::runtime_error("radia_cuda_ams('update',handle,hierarchy)");
         amsContext(args[1]).replace(args[2]);return true;
+    }
+    if(command=="refresh"){
+        // Device refresh of the resident hierarchy for a new operator on its fine pattern.
+        if(nrhs!=3||nlhs!=1)throw std::runtime_error("info=radia_cuda_ams('refresh',handle,operator)");
+        auto& c=amsContext(args[1]);auto& h=*c.hierarchy;
+        ck(cudaMemset(c.validation.p,0,sizeof(int)));Input input(c.validation.p);CSR op(device_node(args[2],input),input.validation);
+        input.validation.check();
+        if(!h.refresh)h.refresh=std::make_unique<AMSRefresh>();
+        c.graph.reset();auto stats=refreshAMS(h.ams,*h.refresh,op);
+        const char* names[]={"schema","refresh_seconds","refresh_count","owned_bytes","coarse_rows_max","matrix_transfer_bytes","backend"};
+        out[0]=mxCreateStructMatrix(1,1,7,names);
+        mxSetField(out[0],0,names[0],mxCreateString("radia.ams-device-refresh.v1"));
+        double values[]={stats.seconds,double(stats.refreshes),double(stats.owned_bytes),double(stats.coarse_rows_max),0.};
+        for(int k=0;k<5;++k)mxSetField(out[0],0,names[k+1],mxCreateDoubleScalar(values[k]));
+        mxSetField(out[0],0,names[6],mxCreateString("CUDA frozen-interpolation Galerkin refresh; cuSOLVER dense coarsest inverse"));
+        return true;
+    }
+    if(command=="resident_values"){
+        // Validation view: device copies of the hierarchy values the cycle reads.
+        if(nrhs!=2||nlhs!=1)throw std::runtime_error("values=radia_cuda_ams('resident_values',handle)");
+        auto& ams=amsContext(args[1]).hierarchy->ams;
+        const char* top[]={"A","l1","spaces"};out[0]=mxCreateStructMatrix(1,1,3,top);
+        mxSetField(out[0],0,"A",gpuCopy(ams.a.a,ams.a.nz));mxSetField(out[0],0,"l1",gpuCopy(ams.l1,ams.a.n));
+        auto spaces=mxCreateCellMatrix(ams.spaces.size(),1);
+        for(size_t k=0;k<ams.spaces.size();++k){
+            auto& levels=ams.spaces[k]->levels;auto cell=mxCreateCellMatrix(levels.size(),1);
+            for(size_t l=0;l<levels.size();++l){
+                const char* names[]={"A","l1","coarse_kind","coarse"};auto s=mxCreateStructMatrix(1,1,4,names);
+                mxSetField(s,0,"A",gpuCopy(levels[l]->a.a,levels[l]->a.nz));mxSetField(s,0,"l1",gpuCopy(levels[l]->l1,levels[l]->a.n));
+                if(levels[l]->coarse){auto& coarse=*levels[l]->coarse;mxSetField(s,0,"coarse_kind",mxCreateString(coarse.kind.c_str()));
+                    if(coarse.kind=="dense_inverse")mxSetField(s,0,"coarse",gpuCopy(coarse.a,coarse.n*coarse.n));}
+                mxSetCell(cell,l,s);
+            }
+            mxSetCell(spaces,k,cell);
+        }
+        mxSetField(out[0],0,"spaces",spaces);return true;
     }
     if(command!="solve")return false;
     if(nrhs!=7||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams('solve',handle,operator,b,tol,maxiter,use_graph)");

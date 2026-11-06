@@ -10,7 +10,7 @@ arguments
     options.MassCoefficient (1,1) double {mustBeFinite,mustBePositive} = 1
     options.CurrentDensity (1,3) double {mustBeFinite} = [1 0 0]
     options.Gamma (1,1) double {mustBeFinite,mustBeNonnegative} = 0
-    options.AMSReuse (1,1) string {mustBeMember(options.AMSReuse,["adaptive","frozen","rebuild"])} = "adaptive"
+    options.AMSReuse (1,1) string {mustBeMember(options.AMSReuse,["adaptive","frozen","rebuild","refresh"])} = "adaptive"
     options.SetupThreads (1,1) double {mustBeInteger,mustBeInRange(options.SetupThreads,1,64)} = 1
     options.LinearTolerance (1,1) double {mustBeFinite,mustBePositive,mustBeLessThanOrEqual(options.LinearTolerance,1e-6)} = 1e-10
     options.NonlinearTolerance (1,1) double {mustBeFinite,mustBePositive,mustBeLessThanOrEqual(options.NonlinearTolerance,1e-9)} = 1e-9
@@ -24,7 +24,7 @@ nonlinear=radia_cuda_ams('nonlinear_create',fem);
 nonlinearCleanup=onCleanup(@()radia_cuda_ams('nonlinear_release',nonlinear)); %#ok<NASGU>
 context=[];contextCleanup=[]; %#ok<NASGU>
 rhs=fem.rhs;x=zeros(size(rhs),'like',rhs);history=zeros(0,5);
-normRhs=gather(norm(rhs));builds=0;firstIterations=0;rebuildNext=false;
+normRhs=gather(norm(rhs));builds=0;refreshes=0;refreshSeconds=0;firstIterations=0;rebuildNext=false;
 setupSeconds=0;solveSeconds=0;assemblySeconds=0;peakOwned=assembly.gpu_peak_owned_bytes_upper_bound;
 op=fem.mass;relative=inf;lastSolve=[];
 for outer=0:30
@@ -36,12 +36,17 @@ for outer=0:30
     assert(outer<30,'radia:cuda:nonlinear','Newton did not converge');
     if isempty(context)||options.AMSReuse=="rebuild"||(options.AMSReuse=="adaptive"&&rebuildNext)
         wait(device);timer=tic;model.A.values=radia_cuda_ams('nonlinear_raw',nonlinear);
-        [hierarchy,setup]=radia.gpu.prepareAMS(model,SetupThreads=options.SetupThreads);
+        [hierarchy,setup]=radia.gpu.prepareAMS(model,SetupThreads=options.SetupThreads, ...
+            SetupOnGPU=options.AMSReuse~="refresh",ReuseHierarchy=options.AMSReuse=="refresh");
         peakOwned=max(peakOwned,setup.gpu_setup_peak_owned_bytes);
         if isempty(context)
             context=radia.gpu.AMSContext(hierarchy);contextCleanup=onCleanup(@()delete(context));
         else;context.update(hierarchy);end
         clear hierarchy;wait(device);setupSeconds=setupSeconds+toc(timer);builds=builds+1;firstIterations=0;
+    elseif options.AMSReuse=="refresh"
+        % Device refresh for the current tangent: no matrix leaves the GPU.
+        wait(device);timer=tic;context.refresh(op);wait(device);
+        refreshSeconds=refreshSeconds+toc(timer);refreshes=refreshes+1;
     end
     wait(device);timer=tic;[delta,lastSolve]=context.solve(op,-residual,options.LinearTolerance,4000,true);
     wait(device);solveSeconds=solveSeconds+toc(timer);
@@ -61,7 +66,7 @@ end
 if options.ReturnOnGPU;solution=x;else;solution=gather(x);end
 wait(device);
 info=struct('schema','radia.native-hcurl-solve.v1','true_nonlinear_relative_residual',relative, ...
-    'history',history,'hierarchy_builds',builds,'reuse_policy',options.AMSReuse,'assembly',assembly, ...
+    'history',history,'hierarchy_builds',builds,'hierarchy_refreshes',refreshes,'refresh_seconds',refreshSeconds,'reuse_policy',options.AMSReuse,'assembly',assembly, ...
     'setup_seconds',setupSeconds,'assembly_seconds',assemblySeconds,'solve_seconds',solveSeconds, ...
     'total_seconds',toc(total),'max_phase_owned_bytes_upper_bound',peakOwned,'last_linear_solve',lastSolve, ...
     'memory_definition','max of assembly bound and AMS setup owned peak; not aggregate whole-process peak', ...

@@ -33,7 +33,7 @@ def main(args):
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
-             root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/ams_core.cuh',
+             root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/ams_core.cuh',root/'src/core/gpu/ams_refresh.cuh',
              root/'src/core/gpu/snapshot.hpp',package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
              package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
@@ -93,7 +93,7 @@ def main(args):
         with (out/'fem-host-build.log').open('w') as log:
             subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
         flags='NVCCFLAGS=-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
-        eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
+        eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-lcusolver','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
                     str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),nargout=0)
         if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
             or commit!=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()):

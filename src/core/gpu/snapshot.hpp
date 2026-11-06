@@ -58,7 +58,10 @@ struct Node {
     }
 };
 struct Stats { int iterations = 0; double residual = 0; };
+struct RefreshInfo { double seconds = 0; unsigned refreshes = 0; size_t owned_bytes = 0; int coarse_rows_max = 0; };
 void* create(const Node&);
+// Device refresh of an AMS hierarchy for new operator values on its fine pattern.
+RefreshInfo refresh(void*, const double*, size_t);
 Stats solve(void*, const double*, size_t, double*, double, int);
 void apply(void*, const double*, size_t, double*);
 void release(void*) noexcept;

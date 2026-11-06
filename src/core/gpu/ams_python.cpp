@@ -59,6 +59,22 @@ struct Resident {
         py::gil_scoped_release release;std::lock_guard<std::mutex> lock(mutex);
         radia_sparse::release(owner);owner=nullptr;
     }
+    py::dict refresh(py::array_t<double,py::array::c_style> values){
+        if(values.ndim()!=1)throw py::value_error("refresh values must be one-dimensional");
+        std::vector<double> v(values.data(),values.data()+values.size());
+        for(double value:v)if(!std::isfinite(value))throw py::value_error("nonfinite refresh values");
+        radia_sparse::RefreshInfo info;
+        {
+            py::gil_scoped_release release;std::lock_guard<std::mutex> lock(mutex);
+            if(!owner)throw std::runtime_error("GPU hierarchy is closed");
+            info=radia_sparse::refresh(owner,v.data(),v.size());
+        }
+        py::dict out;out["backend"]="gpu";out["refresh_seconds"]=info.seconds;
+        out["refresh_count"]=info.refreshes;out["owned_bytes"]=info.owned_bytes;
+        out["coarse_rows_max"]=info.coarse_rows_max;
+        out["matrix_transfer_bytes"]=v.size()*sizeof(double);
+        return out;
+    }
     py::tuple run(py::array_t<double,py::array::c_style> rhs, bool solve,
                   double tolerance=1e-12,int iterations=10000){
         if(rhs.ndim()!=1||rhs.size()!=n||!std::isfinite(tolerance)||tolerance<=0
@@ -90,6 +106,7 @@ PYBIND11_MODULE(_gpu_ams,m){
     py::class_<Resident>(m,"Resident")
         .def(py::init<py::dict>())
         .def("close",&Resident::close)
+        .def("refresh",&Resident::refresh,py::arg("values").noconvert())
         .def("solve",[](Resident& r,py::array_t<double,py::array::c_style> b,double t,int k){return r.run(b,true,t,k);},
              py::arg("rhs").noconvert(),py::arg("tolerance"),py::arg("max_iterations"))
         .def("apply",[](Resident& r,py::array_t<double,py::array::c_style> b){return r.run(b,false);},

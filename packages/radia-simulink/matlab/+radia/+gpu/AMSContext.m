@@ -12,6 +12,12 @@ classdef AMSContext < handle
             assert(self.NativeHandle~=0,'radia:cuda:released','AMS context is released');
             radia_cuda_ams('update',self.NativeHandle,hierarchy);
         end
+        function info=refresh(self,operator)
+            %REFRESH Recompute the hierarchy values on the GPU for operator (same fine pattern).
+            % Requires a ReuseHierarchy setup; coarsening and interpolation stay frozen.
+            assert(self.NativeHandle~=0,'radia:cuda:released','AMS context is released');
+            info=radia_cuda_ams('refresh',self.NativeHandle,operator);
+        end
         function [x,info]=solve(self,operator,rhs,tolerance,maxIterations,useGraph)
             if nargin<4;tolerance=1e-9;end
             if nargin<5;maxIterations=2000;end

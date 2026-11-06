@@ -6,6 +6,7 @@
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cusolverDn.h>
 #include <cmath>
 #include <algorithm>
 #include <atomic>
@@ -22,6 +23,7 @@
 void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 #include "../../../src/core/gpu/ams_core.cuh"
+#include "../../../src/core/gpu/ams_refresh.cuh"
 const mxArray* field(const mxArray* a,const char* name) {
     if(!mxIsStruct(a)||mxGetNumberOfElements(a)!=1) throw std::runtime_error("scalar struct required");
     auto v=mxGetField(a,0,name); if(!v) throw std::runtime_error(std::string("missing field: ")+name); return v;
