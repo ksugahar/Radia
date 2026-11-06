@@ -4,7 +4,8 @@ Guards: the direct value, the image (IMA) value and the TET shape derivative
 all take the endpoint-graded P1 outer rule for self/touching host pairs.  A
 bypass of any one path brings back the fixed-rule truncation (about 0.5 % on a
 face self entry, about 1.3 % on its derivative) or breaks the exact on-plane
-image identity.
+image identity.  Image pairs whose mapped vertices lie within the gap bound
+stay on the graded rule, so plane-vertex motion is continuous.
 Assumes: the closed-form triangle potential below is independent of the
 production kernels; the 1e-5 relative detector is a PROPOSED surrogate
 threshold, not an adopted acceptance criterion.
@@ -171,48 +172,35 @@ def _moved_images(charge_inputs, d):
                 face_verts=np.ascontiguousarray((faces + [d, 0, 0]).ravel())), cells, faces
 
 
-@pytest.mark.parametrize("d", [1e-6, 1e-5])
-def test_near_coincident_image_vertex_fails_loudly(charge_inputs, d):
-    # Inside the supported gap bound but not coincident, the graded/outer rule
-    # switch would be a finite value jump; the build must refuse before it.
-    kw, _, _ = _moved_images(charge_inputs, d)
-    with pytest.raises(ValueError, match="symmetry gap bound"):
-        _rp._ChargeGramHMatrix(**kw)
+def _translation_derivative_error(charge_inputs, d, h):
+    idx = _subset(charge_inputs)
+    kw, cells, faces = _moved_images(charge_inputs, d)
+    gram, _ = _gram(kw)
+    shift = np.array([1.0, 0.0, 0.0])
+    D = np.asarray(gram.tet_charge_gram_directional_derivative(
+        np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
+        np.ascontiguousarray(np.broadcast_to(shift, faces.shape))))[np.ix_(idx, idx)]
+    fd = (_gram(_moved_images(charge_inputs, d + h)[0])[1] - _gram(_moved_images(charge_inputs, d - h)[0])[1]) / (2 * h)
+    return np.max(np.abs(D - fd)) / np.max(np.abs(fd))
 
 
-def test_reviewed_coincidence_counterexample_no_longer_jumps_silently(charge_inputs):
-    # The reviewed counterexample: two translations bracketing the 1e-9 image
-    # coincidence switch gave entries 4.2e-4 apart.  Below the switch the pair
-    # stays coincident and builds; just above it the build now refuses.
+@pytest.mark.parametrize("d", [0.0, 1e-6, 1e-5])
+def test_normal_plane_motion_inside_the_gap_bound_is_smooth(charge_inputs, d):
+    # Inside the gap bound an image pair stays on the graded rule whether its
+    # vertices coincide or not, so normal motion of plane vertices is accepted
+    # and its derivative matches a central difference that crosses the plane.
+    err = _translation_derivative_error(charge_inputs, d, 2e-6)
+    assert err < DETECTOR_REL, f"normal-motion derivative vs central difference at d={d}: max rel {err:.3e}"
+
+
+def test_reviewed_coincidence_counterexample_is_continuous(charge_inputs):
+    # The reviewed counterexample: two translations bracketing the former 1e-9
+    # coincidence switch gave entries 4.2e-4 apart.  Both now take one rule.
     lower, upper = 7.445361009081802e-10, 7.4602681289318e-10
-    _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, lower)[0])
-    with pytest.raises(ValueError, match="symmetry gap bound"):
-        _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, upper)[0])
-
-
-def test_gap_bound_refuses_just_inside(charge_inputs):
-    # A mirrored vertex moves 2d; the bound is 1e-4 of the summed host sizes,
-    # so with the unit-cube face radius r the face-face refusal starts below
-    # d = 1e-4 r.  The supported side is covered by the continuity test below.
-    r = 0.74535599249993
-    with pytest.raises(ValueError, match="symmetry gap bound"):
-        _rp._ChargeGramHMatrix(**_moved_images(charge_inputs, 0.9e-4 * r)[0])
-
-
-@pytest.mark.parametrize("velocity", [(1.0, 0.0, 0.0), (1.0, 1e13, 0.0), (1.0, 1e100, 1e100),
-                                      (1e200, 0.0, 0.0), (1e-200, 0.0, 0.0)],
-                         ids=["normal", "normal_plus_large_tangent", "normal_plus_huge_tangent",
-                              "huge_normal", "tiny_normal"])
-def test_normal_velocity_of_plane_vertex_fails_loudly(charge_inputs, velocity):
-    # A large common tangential velocity keeps the symmetry and must not mask
-    # the normal component.
-    kw, cells, faces = _moved_images(charge_inputs, 0.0)
-    gram = _rp._ChargeGramHMatrix(**kw)
-    shift = np.array(velocity)
-    with pytest.raises(ValueError, match="normal motion of plane vertices"):
-        gram.tet_charge_gram_directional_derivative(
-            np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
-            np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
+    G_lower = _gram(_moved_images(charge_inputs, lower)[0])[1]
+    G_upper = _gram(_moved_images(charge_inputs, upper)[0])[1]
+    jump = np.max(np.abs(G_upper - G_lower)) / np.max(np.abs(G_lower))
+    assert jump < 1e-9, f"entries across the former coincidence switch differ by max rel {jump:.3e}"
 
 
 @pytest.mark.parametrize("velocity", [(0.0, 1e13, -3.0), (0.0, 1e200, -3e200), (0.0, 1e-200, -3e-200)],
@@ -239,32 +227,11 @@ def test_non_finite_plane_velocity_fails_loudly(charge_inputs, bad, axis):
             np.ascontiguousarray(np.broadcast_to(shift, faces.shape)))
 
 
-def test_far_translated_mesh_builds_on_the_vertex_grid(charge_inputs):
-    # A large common tangential offset (reviewed hash-overflow input) is a
-    # supported mesh; the grid keys are taken relative to the mesh minimum.
-    cells = np.asarray(charge_inputs["cell_verts"]).reshape(-1, 4, 3)
-    faces = np.asarray(charge_inputs["face_verts"]).reshape(-1, 3, 3)
-    off = np.array([0.0, 1e9, 0.0])
-    kw = dict(charge_inputs, image_masks=np.array([1], dtype=np.int32), image_signs=np.array([1.0]),
-              cell_verts=np.ascontiguousarray((cells + off).ravel()),
-              face_verts=np.ascontiguousarray((faces + off).ravel()))
-    _rp._ChargeGramHMatrix(**kw)
-
-
 def test_image_derivative_is_continuous_just_outside_the_gap_bound(charge_inputs):
-    # Bracket on the positive-gap side, outside the fail-loud band, with h < d
+    # Bracket on the positive-gap side, outside the graded band, with h < d
     # still resolvable in FP64.
-    d, h = 4e-4, 2e-5
-    idx = _subset(charge_inputs)
-    kw, cells, faces = _moved_images(charge_inputs, d)
-    gram, _ = _gram(kw)
-    shift = np.array([1.0, 0.0, 0.0])
-    D = np.asarray(gram.tet_charge_gram_directional_derivative(
-        np.ascontiguousarray(np.broadcast_to(shift, cells.shape)),
-        np.ascontiguousarray(np.broadcast_to(shift, faces.shape))))[np.ix_(idx, idx)]
-    fd = (_gram(_moved_images(charge_inputs, d + h)[0])[1] - _gram(_moved_images(charge_inputs, d - h)[0])[1]) / (2 * h)
-    err = np.max(np.abs(D - fd)) / np.max(np.abs(fd))
-    assert err < DETECTOR_REL, f"translation derivative vs central difference at d={d}: max rel {err:.3e}"
+    err = _translation_derivative_error(charge_inputs, 4e-4, 2e-5)
+    assert err < DETECTOR_REL, f"translation derivative vs central difference at d=4e-4: max rel {err:.3e}"
 
 
 @pytest.mark.parametrize("images", [None, ([1], [1.0])], ids=["direct", "image"])

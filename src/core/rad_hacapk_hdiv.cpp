@@ -2423,6 +2423,17 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     const int nc=(int)m_hoCellCharges.size(),nf=(int)m_hoFaceCharges.size();
     if(cell_velocity.size()!=(size_t)nc*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");
     if(face_velocity.size()!=(size_t)nf*9)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");
+    // A pair block reads only the velocities of its two hosts.
+    auto require_finite_velocity=[&](int g){
+        const double*v=g<nc?&cell_velocity[(size_t)g*12]:&face_velocity[(size_t)(g-nc)*9];
+        for(int k=0;k<(g<nc?12:9);++k)
+            if(!std::isfinite(v[k]))throw std::domain_error("TET ChargeGram derivative: non-finite vertex velocity");
+    };
+    if(selected_host_a>=0){
+        if(selected_host_a<nc+nf)require_finite_velocity(selected_host_a);
+        if(selected_host_b>=0&&selected_host_b<nc+nf)require_finite_velocity(selected_host_b);
+    }
+    else for(int g=0;g<nc+nf;++g)require_finite_velocity(g);
     std::vector<double> out;
 
     // Target affine kinematics at a production outer point.  m_qw already
@@ -2529,59 +2540,6 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         for(double&y:b)y*=RAD_INV_FOUR_PI;
         return b;
     };
-    // The graded image rule is valid only while every coinciding vertex pair
-    // stays coincident; a velocity that separates them (normal motion of a
-    // symmetry-plane vertex) leaves the supported domain, so it fails loudly.
-    // The image map is a z-axis rotation followed by axis flips, so z never
-    // mixes with x/y and, without rotation, no axis mixes at all.  Comparing
-    // each unmixed group against its own roundoff scale keeps a large common
-    // motion in another group from masking a forbidden normal mismatch.
-    constexpr double kVelocityRoundoff=64*std::numeric_limits<double>::epsilon();
-    auto require_image_coincidence_kept=[&](int kt,int ht,int ks,int hs,int img){
-        const double*a=kt==0?&m_cellV[(size_t)ht*12]:&m_faceV[(size_t)ht*9];
-        const double*b=ks==0?&m_cellV[(size_t)hs*12]:&m_faceV[(size_t)hs*9];
-        const double*da=kt==0?&cell_velocity[(size_t)ht*12]:&face_velocity[(size_t)ht*9];
-        const double*db=ks==0?&cell_velocity[(size_t)hs*12]:&face_velocity[(size_t)hs*9];
-        const auto&tc=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
-        const auto&sc=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
-        const double tol=1e-9*(m_size[tc[0]]+m_size[sc[0]]);
-        const size_t ii=(size_t)img-1;
-        const bool rotated=ii<m_image_rot_angle.size()&&m_image_rot_angle[ii]!=0.0;
-        for(int j=0;j<(ks?3:4);++j){
-            double corner[3],dcorner[3];ImageApplyVector(img,b+3*j,corner);ImageApplyVector(img,db+3*j,dcorner);
-            for(int i=0;i<(kt?3:4);++i){
-                double r2=0;
-                for(int k=0;k<3;++k){const double r=corner[k]-a[3*i+k];r2+=r*r;}
-                if(r2>tol*tol)continue;
-                const double*vt=da+3*i;
-                // Scale by the group's largest component so finite huge or
-                // tiny velocities neither overflow nor underflow the squares.
-                auto mismatch=[&](int k0,int k1){
-                    double scale=0;
-                    for(int k=k0;k<k1;++k){
-                        // std::max drops NaN, so test each value directly.
-                        if(!std::isfinite(dcorner[k])||!std::isfinite(vt[k]))
-                            throw std::domain_error("P1 image derivative: non-finite "
-                                "velocity at a symmetry-plane vertex");
-                        scale=std::max({scale,std::fabs(dcorner[k]),std::fabs(vt[k])});
-                    }
-                    if(scale==0)return false;
-                    double dv2=0,v2=0;
-                    for(int k=k0;k<k1;++k){
-                        const double m=dcorner[k]/scale,t=vt[k]/scale,dv=m-t;
-                        dv2+=dv*dv;v2+=m*m+t*t;
-                    }
-                    return dv2>kVelocityRoundoff*kVelocityRoundoff*v2;
-                };
-                const bool bad=rotated?(mismatch(0,2)||mismatch(2,3))
-                                      :(mismatch(0,1)||mismatch(1,2)||mismatch(2,3));
-                if(bad)
-                    throw std::domain_error("P1 image derivative: velocity moves a "
-                        "symmetry-plane vertex off its image; normal motion of "
-                        "plane vertices is unsupported");
-            }
-        }
-    };
     const int nh=nc+nf;
     auto pair_block=[&](int ga,int gb){
         const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;
@@ -2617,8 +2575,6 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         // singular self-panel terms.
         for(size_t image=0;include_images&&image<m_image_masks.size();++image){
             const int img=(int)image+1;
-            if(P1TouchHosts(ka,ha,kb,hb,img))
-                require_image_coincidence_kept(ka,ha,kb,hb,img);
             // Each direction takes the rule its parent image block took.
             const auto ab=P1TouchHosts(ka,ha,kb,hb,img)?graded(ka,ha,kb,hb,img):directed(ka,ha,kb,hb,img);
             const auto ba=P1TouchHosts(kb,hb,ka,ha,img)?graded(kb,hb,ka,ha,img):directed(kb,hb,ka,ha,img);
@@ -2847,9 +2803,9 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
 }
 
 namespace {
-// Smallest supported separation, relative to the summed host sizes, between a
-// mapped source vertex and a target vertex that do not coincide.  Below it the
-// graded/outer rule switch would be a visible value jump, so it fails loudly.
+// Separation, relative to the summed host sizes, below which a mapped source
+// vertex counts as touching a target vertex and the image pair takes the
+// graded rule.
 constexpr double kP1ImageGapFraction=1e-4;
 }
 
@@ -2875,28 +2831,21 @@ bool RadHACApKChargeGram::P1TouchHosts(int kindT,int hostT,int kindS,int hostS,i
             if(a[3*i]==b[3*j] && a[3*i+1]==b[3*j+1] && a[3*i+2]==b[3*j+2])return true;
         return false;
     }
-    // Image pair (target, T(source)) takes the rule of the same direct pair
-    // in the unfolded model: graded iff a mapped source vertex coincides with
-    // a target vertex.  Coincidence holds to roundoff only (a plane vertex
-    // reflects onto itself exactly, a sector vertex onto its partner).  The
-    // two rules differ by a finite amount, so a near-coincident vertex would
-    // make the entry jump; such meshes are outside the supported domain.
-    const double scale=m_size[tc[0]]+m_size[sc[0]];
-    const double tol=1e-9*scale,gap=kP1ImageGapFraction*scale;
-    bool touch=false;
+    // Image pair (target, T(source)) takes the graded rule whenever a mapped
+    // source vertex lies within the gap bound of a target vertex: exact
+    // coincidence (a plane vertex reflected onto itself, a sector vertex onto
+    // its partner) and near coincidence alike.  The endpoint-graded rule stays
+    // accurate for a nearby source vertex, so a plane vertex moving off its
+    // plane keeps one continuous rule instead of a switch at roundoff level.
+    const double gap=kP1ImageGapFraction*(m_size[tc[0]]+m_size[sc[0]]);
     for(int j=0;j<(kindS?3:4);++j){
         double corner[3];ImageApplyVector(img,b+3*j,corner);
         for(int i=0;i<(kindT?3:4);++i){
             const double dx=corner[0]-a[3*i],dy=corner[1]-a[3*i+1],dz=corner[2]-a[3*i+2];
-            const double r2=dx*dx+dy*dy+dz*dz;
-            if(r2<=tol*tol)touch=true;
-            else if(r2<gap*gap)
-                throw std::domain_error("P1 image pair: a mapped vertex lies "
-                    "within the symmetry gap bound of a target vertex without "
-                    "coinciding; place symmetry-plane vertices on the plane");
+            if(dx*dx+dy*dy+dz*dz<gap*gap)return true;
         }
     }
-    return touch;
+    return false;
 }
 
 namespace {
@@ -8722,82 +8671,7 @@ void RadHACApKChargeGram::ExtractCoordinates()
 
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
 {
-    ValidateP1ImageGaps();
     return RadHACApKBase::BuildHMatrix(params);
-}
-
-// Serial, conservative pre-check of the P1TouchHosts image gap contract, so an
-// unsupported mesh fails before the parallel build instead of inside it.  Each
-// vertex carries the min/max size of the P1-eligible hosts that own it; a pair
-// is refused whenever ANY owning host pair could fall in the fail-loud band.
-void RadHACApKChargeGram::ValidateP1ImageGaps() const
-{
-    if (!m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo || m_image_masks.empty()) return;
-    struct Key { long long x, y, z; bool operator==(const Key& o) const { return x==o.x && y==o.y && z==o.z; } };
-    struct KeyHash { size_t operator()(const Key& k) const {
-        return (size_t)((uint64_t)k.x*73856093u ^ (uint64_t)k.y*19349663u ^ (uint64_t)k.z*83492791u); } };
-    struct Vert { double p[3]; double lo, hi; };
-    std::vector<Vert> verts;
-    std::map<std::array<double,3>, size_t> index;
-    double hiMax = 0.0;
-    auto addHost = [&](int kind, const std::vector<int>& charges, const double* v) {
-        if (charges.empty()) return;
-        double lo = std::numeric_limits<double>::infinity(), hi = 0.0;
-        for (int c : charges) {
-            const int* e = &m_expo[(size_t)3*c];
-            if (!(e[0]>=0 && e[1]>=0 && e[2]==0 && e[0]+e[1]<=(m_kind[c]==1?1:0))) return;
-            lo = std::min(lo, m_size[c]); hi = std::max(hi, m_size[c]);
-        }
-        hiMax = std::max(hiMax, hi);
-        for (int i = 0; i < (kind?3:4); ++i) {
-            const std::array<double,3> k{v[3*i], v[3*i+1], v[3*i+2]};
-            auto it = index.find(k);
-            if (it == index.end()) { index.emplace(k, verts.size()); verts.push_back({{k[0],k[1],k[2]}, lo, hi}); }
-            else { auto& w = verts[it->second]; w.lo = std::min(w.lo, lo); w.hi = std::max(w.hi, hi); }
-        }
-    };
-    for (size_t h = 0; h < m_hoCellCharges.size(); ++h) addHost(0, m_hoCellCharges[h], &m_cellV[h*12]);
-    for (size_t h = 0; h < m_hoFaceCharges.size(); ++h) addHost(1, m_hoFaceCharges[h], &m_faceV[h*9]);
-    if (verts.empty()) return;
-    const double cell = 2.0*kP1ImageGapFraction*hiMax;
-    if (!(std::isfinite(cell) && cell > 0.0))
-        throw std::domain_error("P1 image gap check: host sizes give no finite positive grid cell");
-    // Keys are taken relative to the mesh minimum and must stay well inside
-    // the signed 64-bit range (neighbor offsets add +-1).
-    double origin[3] = {verts[0].p[0], verts[0].p[1], verts[0].p[2]};
-    for (const auto& w : verts) for (int k = 0; k < 3; ++k) origin[k] = std::min(origin[k], w.p[k]);
-    constexpr double kMaxKey = 4.0e18;
-    auto key = [&](const double* p) {
-        long long c[3];
-        for (int k = 0; k < 3; ++k) {
-            const double t = std::floor((p[k]-origin[k])/cell);
-            if (!(std::fabs(t) < kMaxKey))
-                throw std::domain_error("P1 image gap check: mesh extent exceeds the vertex grid range");
-            c[k] = (long long)t;
-        }
-        return Key{c[0], c[1], c[2]};
-    };
-    std::unordered_map<Key, std::vector<size_t>, KeyHash> grid;
-    for (size_t i = 0; i < verts.size(); ++i) grid[key(verts[i].p)].push_back(i);
-    for (size_t image = 0; image < m_image_masks.size(); ++image) {
-        for (const auto& u : verts) {
-            double q[3]; ImageApplyVector((int)image+1, u.p, q);
-            const Key c = key(q);
-            for (long long dx=-1; dx<=1; ++dx) for (long long dy=-1; dy<=1; ++dy) for (long long dz=-1; dz<=1; ++dz) {
-                auto it = grid.find(Key{c.x+dx, c.y+dy, c.z+dz});
-                if (it == grid.end()) continue;
-                for (size_t j : it->second) {
-                    const auto& w = verts[j];
-                    const double r2 = (q[0]-w.p[0])*(q[0]-w.p[0]) + (q[1]-w.p[1])*(q[1]-w.p[1]) + (q[2]-w.p[2])*(q[2]-w.p[2]);
-                    const double tol = 1e-9*(u.lo+w.lo), gap = kP1ImageGapFraction*(u.hi+w.hi);
-                    if (r2 > tol*tol && r2 < gap*gap)
-                        throw std::domain_error("P1 image pair: a mapped vertex lies "
-                            "within the symmetry gap bound of a target vertex without "
-                            "coinciding; place symmetry-plane vertices on the plane");
-                }
-            }
-        }
-    }
 }
 
 void RadHACApKChargeGram::OnBuildStarting(const RadHACApKParams& params)
