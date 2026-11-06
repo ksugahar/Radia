@@ -2908,16 +2908,39 @@ private:
 double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
 {
     const auto vertices=[&](int c){return m_kind[c]==0?&m_cellV[(size_t)m_host[c]*12]:&m_faceV[(size_t)m_host[c]*9];};
-    const auto target=P1PackCharge(m_kind[tgt],vertices(tgt),&m_expo[(size_t)3*tgt],
-        [&](const double* a,double* b){if(img!=0)ImageEvalPoint(img,a,b);else std::copy_n(a,3,b);});
-    const auto source=P1PackCharge(m_kind[src],vertices(src),&m_expo[(size_t)3*src],
-        [](const double* a,double* b){std::copy_n(a,3,b);});
+    const auto pack_target=[&](int c){return P1PackCharge(m_kind[c],vertices(c),&m_expo[(size_t)3*c],
+        [&](const double* a,double* b){if(img!=0)ImageEvalPoint(img,a,b);else std::copy_n(a,3,b);});};
+    const auto pack_source=[&](int c){return P1PackCharge(m_kind[c],vertices(c),&m_expo[(size_t)3*c],
+        [](const double* a,double* b){std::copy_n(a,3,b);});};
     auto& memo=P1TouchMemo::instance();
-    const auto key=P1TouchMemo::key(target,source);
+    const auto key=P1TouchMemo::key(pack_target(tgt),pack_source(src));
     double value;
     if(memo.find(key,value))return value;
-    value=radia_hdiv_p1_diagonal::pairEntry(radia_hdiv_python::p1ChargeSource(target),
-        radia_hdiv_python::p1ChargeSource(source));
+    // On a miss evaluate the whole host pair: its entries share every outer
+    // point and source potential (the per-entry rule's arithmetic).
+    const auto& tc=m_kind[tgt]==0?m_hoCellCharges[m_host[tgt]]:m_hoFaceCharges[m_host[tgt]];
+    const auto& sc=m_kind[src]==0?m_hoCellCharges[m_host[src]]:m_hoFaceCharges[m_host[src]];
+    constexpr int kMax=radia_hdiv_p1_diagonal::kP1BlockMaxModes;
+    if(tc.size()<=(size_t)kMax&&sc.size()<=(size_t)kMax){
+        radia_hdiv_python::P1Charge tp[kMax],sp[kMax];
+        radia_hdiv_python::P1ChargeSource ts[kMax],ss[kMax];
+        for(size_t i=0;i<tc.size();++i){tp[i]=pack_target(tc[i]);ts[i]=radia_hdiv_python::p1ChargeSource(tp[i]);}
+        for(size_t j=0;j<sc.size();++j){sp[j]=pack_source(sc[j]);ss[j]=radia_hdiv_python::p1ChargeSource(sp[j]);}
+        double block[kMax*kMax];
+        if(radia_hdiv_p1_diagonal::pairBlock(ts,(int)tc.size(),ss,(int)sc.size(),block)){
+            bool found=false;
+            for(size_t i=0;i<tc.size();++i)for(size_t j=0;j<sc.size();++j){
+                const double entry=block[i*sc.size()+j];
+                if(!std::isfinite(entry))throw std::runtime_error("Nonfinite P1 touching integral");
+                memo.store(P1TouchMemo::key(tp[i],sp[j]),entry);
+                if(tc[i]==tgt&&sc[j]==src){value=entry;found=true;}
+            }
+            if(!found)throw std::logic_error("P1 touching entry is not in its host block");
+            return value;
+        }
+    }
+    value=radia_hdiv_p1_diagonal::pairEntry(radia_hdiv_python::p1ChargeSource(pack_target(tgt)),
+        radia_hdiv_python::p1ChargeSource(pack_source(src)));
     if(!std::isfinite(value))throw std::runtime_error("Nonfinite P1 touching integral");
     memo.store(key,value);
     return value;
