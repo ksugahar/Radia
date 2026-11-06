@@ -65,9 +65,34 @@ def check_worktree(root: Path) -> dict:
             "checked_lf_index_files": checked, "violations": violations}
 
 
+def edited_beyond_line_endings(root: Path, violations: list[dict]) -> list[str]:
+    """Paths whose bytes differ from the index blob by more than CRLF -> LF."""
+    paths = [v["path"] for v in violations]
+    specs = b"".join(b":" + p.encode("utf-8") + b"\n" for p in paths)
+    blobs = subprocess.run(["git", "-C", str(root), "cat-file", "--batch"],
+                           input=specs, check=True, capture_output=True).stdout
+    edited, offset = [], 0
+    for path in paths:
+        header_end = blobs.index(b"\n", offset)
+        header = blobs[offset:header_end].split()
+        if len(header) != 3:
+            raise RuntimeError(f"index blob unavailable: {path}")
+        size = int(header[2])
+        indexed = blobs[header_end + 1:header_end + 1 + size]
+        offset = header_end + 1 + size + 1
+        if (root / path).read_bytes().replace(b"\r\n", b"\n") != indexed:
+            edited.append(path)
+    return edited
+
+
 def repair_worktree(root: Path, violations: list[dict]) -> None:
     if not violations:
         return
+    # Rewrite only line-ending drift; a real edit must never be discarded.
+    edited = edited_beyond_line_endings(root, violations)
+    if edited:
+        raise SystemExit("refusing --repair: content differs from the index beyond "
+                         "CRLF -> LF: " + ", ".join(edited))
     # checkout-index skips a stat-clean file even with --force, so remove the
     # stale copy first; the index still holds every byte to write back.
     for v in violations:

@@ -604,3 +604,29 @@ def test_worktree_eol_repair_restores_stale_crlf_checkout(tmp_path):
     assert (tmp_path / 'fixture.vol').read_bytes() == b'mesh\nnodes\n'
     assert (tmp_path / 'sealed.json').read_bytes() == b'{"historical": true}\r\n'
     assert git('status', '--porcelain') == b''
+
+
+def test_worktree_eol_repair_refuses_to_discard_an_edit(tmp_path):
+    """Guards: --repair never overwrites content that differs beyond CRLF -> LF.
+
+    Assumes: a CRLF file whose LF form differs from its index blob is a real
+    edit; repair refuses before touching any file.
+    """
+    import subprocess
+    def git(*args):
+        return subprocess.run(['git', '-C', str(tmp_path), *args], check=True,
+                              capture_output=True).stdout
+    git('init', '-q')
+    git('config', 'user.email', 'ci@example.invalid'); git('config', 'user.name', 'ci')
+    (tmp_path / '.gitattributes').write_bytes(b'* text=auto eol=lf\n')
+    (tmp_path / 'drift.txt').write_bytes(b'same\n')
+    (tmp_path / 'fixture.txt').write_bytes(b'original\n')
+    git('add', '.')
+    (tmp_path / 'drift.txt').write_bytes(b'same\r\n')
+    (tmp_path / 'fixture.txt').write_bytes(b'unsaved edit\r\n')
+    import pytest
+    guard = _text_eol_module()
+    with pytest.raises(SystemExit, match='fixture.txt'):
+        guard.main(['--root', str(tmp_path), '--worktree', '--repair'])
+    assert (tmp_path / 'fixture.txt').read_bytes() == b'unsaved edit\r\n'
+    assert (tmp_path / 'drift.txt').read_bytes() == b'same\r\n'
