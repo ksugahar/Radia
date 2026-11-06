@@ -361,6 +361,11 @@ jobs:
             "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           }
       - uses: actions/checkout@v4
+      - name: Restore LF text in the reused runner workspace
+        shell: pwsh
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          exit $LASTEXITCODE
       - name: Prepare isolated mexcuda environment
         shell: pwsh
         run: |

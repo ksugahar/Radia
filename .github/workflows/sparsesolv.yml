@@ -671,6 +671,12 @@ jobs:
           # Receipt trust requires ancestry against fetched origin/main.
           fetch-depth: 0
 
+      - name: Restore LF text in the reused runner workspace
+        shell: pwsh
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          exit $LASTEXITCODE
+
       - name: Select native AMS impact
         id: native-impact
         shell: pwsh
