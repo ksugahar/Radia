@@ -24,6 +24,7 @@ extern "C" {
 #include <chrono>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <string>
 
@@ -2902,14 +2903,57 @@ namespace {
 // Image entry (1/4pi) INT_tgt Phi_src(T^-1 x) == the direct entry of the
 // target mapped by the linear isometry T^-1 (ImageEvalPoint); the target
 // monomials are reference coordinates, unchanged by the vertex map.
-template<class Map> radia_hdiv_python::P1ChargeSource P1PackCharge(
+template<class Map> radia_hdiv_python::P1Charge P1PackCharge(
     int kind,const double* v,const int* exponent,Map map)
 {
     radia_hdiv_python::P1Charge input;input.kind=kind;
     for(int i=0;i<(kind?3:4);++i)map(v+3*i,&input.vertices[3*i]);
     std::copy_n(exponent,3,input.exponent.begin());
-    return radia_hdiv_python::p1ChargeSource(input);
+    return input;
 }
+
+// Process-wide memo of graded P1 touching entries. pairEntry is a pure function
+// of the two packed charges, so an entry keyed on their exact bits is reused
+// bit for bit by every later Gram on the same geometry (repeated builds of one
+// mesh, image and broken-space variants, shape-derivative rebuilds). Sharded
+// for parallel builds; a full shard is cleared, which only costs recomputation.
+class P1TouchMemo {
+public:
+    using Key=std::array<std::uint64_t,32>;
+    static P1TouchMemo& instance(){static P1TouchMemo memo;return memo;}
+    static Key key(const radia_hdiv_python::P1Charge& t,const radia_hdiv_python::P1Charge& s){
+        Key k{};
+        std::memcpy(&k[0],t.vertices.data(),12*sizeof(double));
+        std::memcpy(&k[12],s.vertices.data(),12*sizeof(double));
+        k[24]=(std::uint64_t)(std::uint32_t)t.kind;k[25]=(std::uint64_t)(std::uint32_t)s.kind;
+        for(int i=0;i<3;++i){k[26+i]=(std::uint64_t)(std::uint32_t)t.exponent[i];k[29+i]=(std::uint64_t)(std::uint32_t)s.exponent[i];}
+        return k;
+    }
+    bool find(const Key& k,double& value){
+        Shard& shard=m_shards[hash(k)%kShards];
+        std::lock_guard<std::mutex> lock(shard.mutex);
+        const auto it=shard.map.find(k);
+        if(it==shard.map.end())return false;
+        value=it->second;return true;
+    }
+    void store(const Key& k,double value){
+        Shard& shard=m_shards[hash(k)%kShards];
+        std::lock_guard<std::mutex> lock(shard.mutex);
+        if(shard.map.size()>=kShardCapacity)shard.map.clear();
+        shard.map.emplace(k,value);
+    }
+private:
+    struct Hash{std::size_t operator()(const Key& k)const{return (std::size_t)hash(k);}};
+    static std::uint64_t hash(const Key& k){
+        std::uint64_t h=1469598103934665603ull;
+        for(std::uint64_t word:k){h^=word;h*=1099511628211ull;h^=h>>29;}
+        return h;
+    }
+    // 64 shards x 16384 entries x ~360 B bounds the memo near 380 MB.
+    static constexpr std::size_t kShards=64,kShardCapacity=16384;
+    struct Shard{std::mutex mutex;std::unordered_map<Key,double,Hash> map;};
+    Shard m_shards[kShards];
+};
 }
 
 double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
@@ -2919,8 +2963,14 @@ double RadHACApKChargeGram::P1TouchEntryValue(int tgt,int src,int img) const
         [&](const double* a,double* b){if(img!=0)ImageEvalPoint(img,a,b);else std::copy_n(a,3,b);});
     const auto source=P1PackCharge(m_kind[src],vertices(src),&m_expo[(size_t)3*src],
         [](const double* a,double* b){std::copy_n(a,3,b);});
-    const double value=radia_hdiv_p1_diagonal::pairEntry(target,source);
+    auto& memo=P1TouchMemo::instance();
+    const auto key=P1TouchMemo::key(target,source);
+    double value;
+    if(memo.find(key,value))return value;
+    value=radia_hdiv_p1_diagonal::pairEntry(radia_hdiv_python::p1ChargeSource(target),
+        radia_hdiv_python::p1ChargeSource(source));
     if(!std::isfinite(value))throw std::runtime_error("Nonfinite P1 touching integral");
+    memo.store(key,value);
     return value;
 }
 
