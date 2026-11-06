@@ -360,17 +360,20 @@ class TestInstallMenu(unittest.TestCase):
         sys.modules.pop("emclaro", None)
         rem._claro_keepalive.clear()
 
-    def test_install_creates_menu_with_6_export_actions(self):
+    def test_install_creates_menu_with_7_export_actions(self):
         self.assertTrue(rem.install_menu())
         self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 1)
         menu_title, actions, component = self.added[0]
         self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
         self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 6)
+        self.assertEqual(len(actions), 7)
         self.assertEqual(
             [action.text for action in actions],
-            [spec[0] for spec in rem._MENU_SPECS],
+            [
+                "Netgen Vol (.vol)...", "GMSH (.msh)...", "Nastran BDF (.bdf)...",
+                "VTK (.vtk)...", "JMAG (.jcf)", "Femtet", "ELF/MAGIC (.meg)",
+            ],
         )
         self.assertTrue(all("launch_export" in action.activate_method
                             for action in actions))
@@ -381,7 +384,7 @@ class TestInstallMenu(unittest.TestCase):
         self.assertEqual(self.removed,
                          [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 2)
-        self.assertEqual(len(rem._claro_keepalive), 7)
+        self.assertEqual(len(rem._claro_keepalive), 8)
 
 
 class TestFindClaro(unittest.TestCase):

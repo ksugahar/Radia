@@ -1057,12 +1057,12 @@ _MENU_SPECS = (
      "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
     ("Nastran BDF (.bdf)...", FMT_NASTRAN,
      "Export mesh to Nastran BDF format (.bdf)"),
-    ("JMAG JCF (.jcf)...", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
     ("VTK (.vtk)...", FMT_VTK,
      "Export mesh to VTK format (.vtk)"),
-    ("FEMEEM...", FMT_FEMEEM,
+    ("JMAG (.jcf)", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
+    ("Femtet", FMT_FEMEEM,
      "Export mesh to FEMEEM format (1st-order tet, directory output)"),
-    ("MEG (ELF/MAGIC)...", FMT_MEG,
+    ("ELF/MAGIC (.meg)", FMT_MEG,
      "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )
 
