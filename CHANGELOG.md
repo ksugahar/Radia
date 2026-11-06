@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.4.3 (candidate)
+
+- **Experimental — HDiv touching integration.** Use a graded rule for P1
+  touching interactions and reuse work across the modes of a host pair.
+  The batching changes floating-point rounding while retaining the quadrature rule.
+- **Experimental — HDiv device images and ACA.** Support mirror and cyclic
+  images, reuse ACA row work, and order dense host pairs by cost. Reject
+  unsupported periodic seam numbering before constructing the reduced space.
+- **Experimental — mixed and pyramid HDiv.** Extend the supported development
+  routes to mixed meshes and pyramid elements.
+- **Experimental — induction-heating fin.** Extend the induction-heating
+  development workflow to fin geometry.
+
+These classifications reflect the current exact-wheel evidence. Linux GPU
+qualification is pending for 5.4.3.
+
 ## 5.4.2 - 2026-10-30
 
 - Give the Python AMS and resident AMG implementations distinct internal C++
