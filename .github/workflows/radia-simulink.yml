@@ -387,6 +387,7 @@ jobs:
           & $python -m pip install @gpuPins "setuptools>=77"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $purelib = & $python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # setuptools requires an empty metadata directory; move only the dist-info.
           $metadataDir = Join-Path $env:RUNNER_TEMP "radia-metadata-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $metadataDir | Out-Null
