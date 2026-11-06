@@ -379,6 +379,14 @@ jobs:
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
           & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Python GPU calls admit only the exact pip CUDA runtime named in the
+          # installed radia metadata; register the checkout without building.
+          $gpuPins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x.split(';')[0].strip() for x in d['project']['optional-dependencies']['gpu']], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -ne 5) { throw 'Expected five exact CUDA runtime pins' }
+          & $python -m pip install @gpuPins "setuptools>=77"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -m pip install --no-deps --no-build-isolation -e .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
       - name: Run owned C++ runtime and sparse symmetry acceptance
         shell: pwsh
