@@ -643,6 +643,12 @@ RAD_FIELD_KERNEL static ValueDirectional TriPotentialDirectionalValue(
 constexpr int POLY_MAX_DEG = RAD_FIELD_POLY_CAP;
 constexpr int POLY_MAX_MOMENTS =
     (POLY_MAX_DEG + 1)*(POLY_MAX_DEG + 2)*(POLY_MAX_DEG + 3)/6;
+// Directional (value + derivative) moment scratch is sized by a compile-time
+// capacity CAP >= the requested degree (exact up to degree 4; RAD_FIELD_POLY_CAP >= 4).  ValueDirectional zero-initialises,
+// so a POLY_MAX_DEG-sized scratch zeroes and copies ~190 KB per low-degree
+// call; a small capacity performs the same arithmetic on fewer entries.
+static_assert(POLY_MAX_DEG >= 4, "directional moment dispatch needs capacity 4");
+constexpr int poly_moment_count(int cap) { return (cap + 1)*(cap + 2)*(cap + 3)/6; }
 
 RAD_FIELD_KERNEL static inline double small_comb(int n, int k)
 {
@@ -718,11 +724,12 @@ RAD_FIELD_KERNEL static ValueDirectional edge_R_for_poly_directional(const TriPo
     return F(u2)-F(u1);
 }
 
+template<int CAP=POLY_MAX_DEG>
 RAD_FIELD_KERNEL static void edge_l_moments_poly_directional(const TriPolyEdgeDirectional& e,int nmax,
-                                             ValueDirectional Jl[POLY_MAX_DEG+3])
+                                             ValueDirectional Jl[CAP+3])
 {
-    nmax=FieldMin(nmax,POLY_MAX_DEG+2);const auto d2=e.d2,d=vd_sqrt(d2),u1=-e.l0,u2=e.L-e.l0;
-    ValueDirectional W[POLY_MAX_DEG+3]{};
+    nmax=FieldMin(nmax,CAP+2);const auto d2=e.d2,d=vd_sqrt(d2),u1=-e.l0,u2=e.L-e.l0;
+    ValueDirectional W[CAP+3]{};
     auto asinh_safe=[&](ValueDirectional u){
         if(d.value>1e-300)return vd_asinh(u/d);
         if(std::fabs(u.value)==0.0)return ValueDirectional{};
@@ -737,10 +744,11 @@ RAD_FIELD_KERNEL static void edge_l_moments_poly_directional(const TriPolyEdgeDi
     for(int n=0;n<=nmax;++n){ValueDirectional s;for(int i=0;i<=n;++i)s=s+small_comb(n,i)*vd_pow(e.l0,n-i)*W[i];Jl[n]=s;}
 }
 
+template<int CAP=POLY_MAX_DEG>
 RAD_FIELD_KERNEL static ValueDirectional edge_inplane_monomial_poly_directional(
-    const TriPolyEdgeDirectional& e,int a,int b,const ValueDirectional Jl[POLY_MAX_DEG+3])
+    const TriPolyEdgeDirectional& e,int a,int b,const ValueDirectional Jl[CAP+3])
 {
-    ValueDirectional poly[POLY_MAX_DEG+3]{},tmp[POLY_MAX_DEG+3]{};int deg=0;poly[0]={1.0,0.0};
+    ValueDirectional poly[CAP+3]{},tmp[CAP+3]{};int deg=0;poly[0]={1.0,0.0};
     auto mul=[&](ValueDirectional c0,ValueDirectional c1){FieldFill(FieldBegin(tmp),FieldEnd(tmp),ValueDirectional{});
         for(int i=0;i<=deg;++i){tmp[i]=tmp[i]+poly[i]*c0;tmp[i+1]=tmp[i+1]+poly[i]*c1;}++deg;for(int i=0;i<=deg;++i)poly[i]=tmp[i];};
     for(int i=0;i<a;++i)mul(e.xiA[0],e.t2[0]);for(int i=0;i<b;++i)mul(e.xiA[1],e.t2[1]);
@@ -908,16 +916,17 @@ RAD_FIELD_KERNEL static bool polygon_inplane_A_moments(const double (*P)[3], int
     return true;
 }
 
+template<int CAP=POLY_MAX_DEG>
 RAD_FIELD_KERNEL static void triangle_inplane_A_moments_directional(
     const ValueDirectional P[3][3],const ValueDirectional r[3],int degree,
-    ValueDirectional A[POLY_MAX_DEG+1][POLY_MAX_DEG+1],TriPolySetupDirectional& g)
+    ValueDirectional A[CAP+1][CAP+1],TriPolySetupDirectional& g)
 {
-    for(int i=0;i<=POLY_MAX_DEG;++i)for(int j=0;j<=POLY_MAX_DEG;++j)A[i][j]={};
-    degree=FieldMin(degree,POLY_MAX_DEG);if(!tri_poly_setup_directional(P,r,g))return;
-    ValueDirectional Jl[3][POLY_MAX_DEG+3]{};for(int i=0;i<3;++i)edge_l_moments_poly_directional(g.edges[i],degree+2,Jl[i]);
+    for(int i=0;i<=CAP;++i)for(int j=0;j<=CAP;++j)A[i][j]={};
+    degree=FieldMin(degree,CAP);if(!tri_poly_setup_directional(P,r,g))return;
+    ValueDirectional Jl[3][CAP+3]{};for(int i=0;i<3;++i)edge_l_moments_poly_directional<CAP>(g.edges[i],degree+2,Jl[i]);
     A[0][0]=TriPotentialDirectionalValue(P,r);
     if(degree>=1){ValueDirectional A1[2]{};for(int i=0;i<3;++i){const auto er=edge_R_for_poly_directional(g.edges[i]);A1[0]=A1[0]+g.edges[i].m2[0]*er;A1[1]=A1[1]+g.edges[i].m2[1]*er;}A[1][0]=A1[0];A[0][1]=A1[1];}
-    auto Eedge=[&](int j,int p,int q){ValueDirectional s;for(int i=0;i<3;++i)s=s+g.edges[i].m2[j]*edge_inplane_monomial_poly_directional(g.edges[i],p,q,Jl[i]);return s;};
+    auto Eedge=[&](int j,int p,int q){ValueDirectional s;for(int i=0;i<3;++i)s=s+g.edges[i].m2[j]*edge_inplane_monomial_poly_directional<CAP>(g.edges[i],p,q,Jl[i]);return s;};
     auto Eneg1=[&](int a,int b){return Eedge(0,a+1,b)+Eedge(1,a,b+1);};
     for(int k=2;k<=degree;++k)for(int a=k;a>=0;--a){const int b=k-a;ValueDirectional h2B;
         if(a>=1)h2B=g.h*g.h*((a-1.0)*(a>=2?A[a-2][b]:ValueDirectional{})-Eedge(0,a-1,b));
@@ -926,50 +935,79 @@ RAD_FIELD_KERNEL static void triangle_inplane_A_moments_directional(
     }
 }
 
+template<int CAP=POLY_MAX_DEG>
 RAD_FIELD_KERNEL static void poly2_mul_linear_directional(
-    ValueDirectional poly[POLY_MAX_DEG+1][POLY_MAX_DEG+1],int& deg,
+    ValueDirectional poly[CAP+1][CAP+1],int& deg,
     ValueDirectional c0,ValueDirectional c1,ValueDirectional c2)
 {
-    ValueDirectional tmp[POLY_MAX_DEG+1][POLY_MAX_DEG+1]{};
+    ValueDirectional tmp[CAP+1][CAP+1]{};
     for(int a=0;a<=deg;++a)for(int b=0;b<=deg-a;++b){const auto v=poly[a][b];tmp[a][b]=tmp[a][b]+v*c0;tmp[a+1][b]=tmp[a+1][b]+v*c1;tmp[a][b+1]=tmp[a][b+1]+v*c2;}
     ++deg;for(int a=0;a<=deg;++a)for(int b=0;b<=deg-a;++b)poly[a][b]=tmp[a][b];
+}
+
+template<int CAP>
+RAD_FIELD_KERNEL static void SurfacePotentialMomentsUpToDirectionalCap(
+    const double P[3][3],const double dP[3][3],const double r[3],const double dr[3],int degree,double* value,double* direction)
+{
+    ValueDirectional Pd[3][3],rd[3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)Pd[i][k]={P[i][k],dP[i][k]};for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
+    ValueDirectional A[CAP+1][CAP+1];TriPolySetupDirectional g;
+    triangle_inplane_A_moments_directional<CAP>(Pd,rd,degree,A,g);int idx=0;
+    for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
+        const int alpha[3]={ax,ay,total-ax-ay};ValueDirectional poly[CAP+1][CAP+1]{};int pd=0;poly[0][0]={1.0,0.0};
+        for(int coord=0;coord<3;++coord)for(int q=0;q<alpha[coord];++q)poly2_mul_linear_directional<CAP>(poly,pd,g.rp[coord],g.e1[coord],g.e2[coord]);
+        ValueDirectional s;for(int a=0;a<=pd;++a)for(int b=0;b<=pd-a;++b)s=s+poly[a][b]*A[a][b];value[idx]=s.value;direction[idx]=s.direction;++idx;
+    }
 }
 
 RAD_FIELD_KERNEL static void SurfacePotentialMomentsUpToDirectional(
     const double P[3][3],const double dP[3][3],const double r[3],const double dr[3],int degree,double* value,double* direction)
 {
-    ValueDirectional Pd[3][3],rd[3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)Pd[i][k]={P[i][k],dP[i][k]};for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
-    ValueDirectional A[POLY_MAX_DEG+1][POLY_MAX_DEG+1];TriPolySetupDirectional g;
-    triangle_inplane_A_moments_directional(Pd,rd,degree,A,g);int idx=0;
-    for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
-        const int alpha[3]={ax,ay,total-ax-ay};ValueDirectional poly[POLY_MAX_DEG+1][POLY_MAX_DEG+1]{};int pd=0;poly[0][0]={1.0,0.0};
-        for(int coord=0;coord<3;++coord)for(int q=0;q<alpha[coord];++q)poly2_mul_linear_directional(poly,pd,g.rp[coord],g.e1[coord],g.e2[coord]);
-        ValueDirectional s;for(int a=0;a<=pd;++a)for(int b=0;b<=pd-a;++b)s=s+poly[a][b]*A[a][b];value[idx]=s.value;direction[idx]=s.direction;++idx;
+    switch(degree){
+    case 0:case 1:SurfacePotentialMomentsUpToDirectionalCap<1>(P,dP,r,dr,degree,value,direction);return;
+    case 2:SurfacePotentialMomentsUpToDirectionalCap<2>(P,dP,r,dr,degree,value,direction);return;
+    case 3:SurfacePotentialMomentsUpToDirectionalCap<3>(P,dP,r,dr,degree,value,direction);return;
+    case 4:SurfacePotentialMomentsUpToDirectionalCap<4>(P,dP,r,dr,degree,value,direction);return;
+    default:SurfacePotentialMomentsUpToDirectionalCap<POLY_MAX_DEG>(P,dP,r,dr,degree,value,direction);
     }
 }
 
 RAD_FIELD_KERNEL static int PotentialMomentIndex(int ax,int ay,int az);
 
-RAD_FIELD_KERNEL static void TetPotentialMomentsUpToDirectional(
+template<int CAP>
+RAD_FIELD_KERNEL static void TetPotentialMomentsUpToDirectionalCap(
     const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
     int degree,double* value,double* direction)
 {
+    constexpr int MOMENTS=poly_moment_count(CAP);
     const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
     ValueDirectional Vd[4][3],rd[3],cen[3];
     for(int i=0;i<4;++i)for(int k=0;k<3;++k){Vd[i][k]={V[i][k],dV[i][k]};cen[k]=cen[k]+Vd[i][k]/4.0;}
     for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
-    ValueDirectional fm[4][POLY_MAX_MOMENTS]{},h[4]{},phi;
-    for(int fi=0;fi<4;++fi){double F[3][3],dF[3][3],fv[POLY_MAX_MOMENTS]{},fd[POLY_MAX_MOMENTS]{};ValueDirectional Fd[3][3];
+    ValueDirectional fm[4][MOMENTS]{},h[4]{},phi;
+    for(int fi=0;fi<4;++fi){double F[3][3],dF[3][3],fv[MOMENTS]{},fd[MOMENTS]{};ValueDirectional Fd[3][3];
         for(int j=0;j<3;++j)for(int k=0;k<3;++k){const int vi=FACES[fi][j];F[j][k]=V[vi][k];dF[j][k]=dV[vi][k];Fd[j][k]=Vd[vi][k];}
-        SurfacePotentialMomentsUpToDirectional(F,dF,r,dr,degree,fv,fd);const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int q=0;q<count;++q)fm[fi][q]={fv[q],fd[q]};
+        SurfacePotentialMomentsUpToDirectionalCap<CAP>(F,dF,r,dr,degree,fv,fd);const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int q=0;q<count;++q)fm[fi][q]={fv[q],fd[q]};
         ValueDirectional e1[3],e2[3],n[3],fc[3],outward[3],rmf[3];for(int k=0;k<3;++k){e1[k]=Fd[1][k]-Fd[0][k];e2[k]=Fd[2][k]-Fd[0][k];fc[k]=(Fd[0][k]+Fd[1][k]+Fd[2][k])/3.0;outward[k]=fc[k]-cen[k];rmf[k]=rd[k]-Fd[0][k];}
         vd_cross(e1,e2,n);const auto nl=vd_norm(n);if(nl.value<1e-300)continue;for(auto& x:n)x=x/nl;if(vd_dot(outward,n).value<0)for(auto& x:n)x=-x;
         h[fi]=vd_dot(rmf,n);phi=phi+0.5*(-h[fi])*fm[fi][0];
     }
-    ValueDirectional out[POLY_MAX_MOMENTS]{};out[0]=phi;
+    ValueDirectional out[MOMENTS]{};out[0]=phi;
     for(int total=1;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int az=total-ax-ay,idx=PotentialMomentIndex(ax,ay,az);ValueDirectional s;
         for(int fi=0;fi<4;++fi)s=s-h[fi]*fm[fi][idx];const int alpha[3]={ax,ay,az};for(int k=0;k<3;++k)if(alpha[k]>0){int lo[3]={ax,ay,az};--lo[k];s=s+rd[k]*double(alpha[k])*out[PotentialMomentIndex(lo[0],lo[1],lo[2])];}out[idx]=s/(total+2.0);}
     const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int i=0;i<count;++i){value[i]=out[i].value;direction[i]=out[i].direction;}
+}
+
+RAD_FIELD_KERNEL static void TetPotentialMomentsUpToDirectional(
+    const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
+    int degree,double* value,double* direction)
+{
+    switch(degree){
+    case 0:case 1:TetPotentialMomentsUpToDirectionalCap<1>(V,dV,r,dr,degree,value,direction);return;
+    case 2:TetPotentialMomentsUpToDirectionalCap<2>(V,dV,r,dr,degree,value,direction);return;
+    case 3:TetPotentialMomentsUpToDirectionalCap<3>(V,dV,r,dr,degree,value,direction);return;
+    case 4:TetPotentialMomentsUpToDirectionalCap<4>(V,dV,r,dr,degree,value,direction);return;
+    default:TetPotentialMomentsUpToDirectionalCap<POLY_MAX_DEG>(V,dV,r,dr,degree,value,direction);
+    }
 }
 
 // Zero only the a+b <= degree triangle of a dense (POLY_MAX_DEG+1)^2 scratch
