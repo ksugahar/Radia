@@ -1024,6 +1024,14 @@ normals, Jacobians, and quadrature.  A small adapter such as
 `CurvedBoundaryView` keeps readability: the default `.vol` parser can continue
 to fail loudly on high-order records unless `EnableCurvedGeometry=true` (or the
 Python equivalent) is explicitly requested.
+
+Curved `.vol` files from Cubit are produced by a native curving trampoline
+(`CallbackGeometry` projection onto ACIS during `BuildCurvedElements`). That
+step is the only part of the Cubit route bound to the Cubit/ACIS/Netgen ABI;
+treat a Cubit update as a reason to rebuild `cubit-mesh-export` and rerun its
+curved-surface regression before trusting new curved meshes.  Routes that hand
+CAD (not a mesh) to a solver that meshes it itself need no trampoline and stay
+in ABI-free Python outside Cubit.
 """
 
 NGSOLVE_MESH = """
