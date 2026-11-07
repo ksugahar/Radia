@@ -656,7 +656,8 @@ jobs:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
-    timeout-minutes: 45
+    # Allow the build, numerical contracts, and full solver-heavy validation in one job.
+    timeout-minutes: 55
     env:
       RADIA_VALIDATION_HOST_ROLE: cpu_validation
       # Bound library pools before the parent and its fresh Python children

@@ -399,13 +399,12 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
         "version": "1.0", "name": "Cubit Mesh Export", "visible": "true",
     }
     buttons = root.findall("WTButton")
-    assert len(buttons) == 6
     action_names = [
         button.find(".//WAction").attrib["name"] for button in buttons
     ]
     assert action_names == [
         "Netgen Vol (.vol)", "GMSH (.msh)", "Nastran (.bdf)",
-        "VTK (.vtk)", "FEMEEM", "MEG (ELF/MAGIC)",
+        "VTK (.vtk)", "MEG (ELF/MAGIC)",
     ]
 
     referenced = [

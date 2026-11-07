@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sys
@@ -133,14 +134,60 @@ def test_export_menu_uses_claro_api_not_qmenubar_injection():
     assert "QMenu(" not in source
 
 
-def test_export_menu_does_not_force_a_journal_save():
-    """A loaded Cubit model must export without creating a root-side log."""
+def test_export_menu_does_not_force_a_journal_save(monkeypatch, tmp_path):
+    """A loaded Cubit model can export to a chosen JCF path without a journal."""
     source = EXPORT_MENU.read_text(encoding="utf-8")
-
     assert "ensure_jou_path" not in source
-    assert "getSaveFileName" not in source
-    assert "save journal" not in source
+    assert "save journal" not in source.lower()
     assert "_current_journal_hint" in source
+
+    tree = ast.parse(source, filename=str(EXPORT_MENU))
+    handler = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                   and node.name == "_run_jcf_export")
+    save_dialogs = {
+        node.lineno for node in ast.walk(tree) if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute) and node.func.attr == "getSaveFileName"
+    }
+    assert save_dialogs and all(handler.lineno <= line <= handler.end_lineno for line in save_dialogs)
+
+    settings = {"unit": "mm"}
+    config = tmp_path / "settings.json"
+    config.write_text(json.dumps(settings), encoding="utf-8")
+    output = tmp_path / "model"
+    calls = []
+
+    def choose_output(parent, title, default, file_filter):
+        assert file_filter == "JCF (*.jcf)"
+        calls.append(("dialog", title))
+        return str(output), file_filter
+
+    def export_jcf(path, spec):
+        calls.append(("export", path, spec))
+        return {"exported": True}
+
+    monkeypatch.setitem(sys.modules, "cubit_mesh_export.jmag",
+                        types.SimpleNamespace(export_jcf=export_jcf))
+    functions = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef)
+        and node.name in {"launch_export", "_run_jcf_export"}
+    ]
+    # Execute the production dispatch and handler without importing Cubit's GUI runtime.
+    namespace = {
+        name: name for name in ("FMT_NETGEN", "FMT_GMSH", "FMT_NASTRAN",
+                                "FMT_VTK", "FMT_FEMEEM", "FMT_MEG")
+    }
+    namespace.update(
+        find_claro=lambda: object(),
+        QFileDialog=types.SimpleNamespace(
+            getOpenFileName=lambda *_: (str(config), "JSON (*.json)"),
+            getSaveFileName=choose_output,
+        ),
+        json=json,
+    )
+    exec(compile(ast.Module(functions, type_ignores=[]), str(EXPORT_MENU), "exec"), namespace)
+    assert namespace["launch_export"]("jcf") == {"exported": True}
+    assert calls == [("dialog", "Export JCF"), ("export", str(output.with_suffix(".jcf")), settings)]
+    assert list(tmp_path.iterdir()) == [config]
 
 
 def test_claro_export_menu_not_removed_through_qt():
