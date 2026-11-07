@@ -78,13 +78,22 @@ def export_jcf(path, spec, *, symmetry_sidesets=()):
 def _read_active_mesh(cubit, unit):
     from mcp_server_jmag.jcf_build import HEX, PRISM, PYRAMID, TET, mesh_from_cubit_data
 
-    kinds = (("hex", HEX, 8, cubit.get_block_hexes), ("tet", TET, 4, cubit.get_block_tets),
-             ("wedge", PRISM, 6, cubit.get_block_wedges), ("pyramid", PYRAMID, 5, cubit.get_block_pyramids))
+    kinds = (
+        ("hex", HEX, 8, cubit.get_block_hexes, cubit.get_volume_hexes),
+        ("tet", TET, 4, cubit.get_block_tets, cubit.get_volume_tets),
+        ("wedge", PRISM, 6, cubit.get_block_wedges, cubit.get_volume_wedges),
+        ("pyramid", PYRAMID, 5, cubit.get_block_pyramids, cubit.get_volume_pyramids),
+    )
+    block_volumes = {block: cubit.get_block_volumes(block)
+                     for block in cubit.get_block_id_list()}
     elements = []
-    for kind, code, arity, block_members in kinds:
+    for kind, code, arity, block_members, volume_members in kinds:
         assigned = set()
-        for block in cubit.get_block_id_list():
-            for local_id in block_members(block):
+        for block, volumes in block_volumes.items():
+            members = set(block_members(block))
+            for volume in volumes:
+                members.update(volume_members(volume))
+            for local_id in members:
                 if local_id in assigned:
                     raise ValueError(f"Cubit {kind} {local_id} belongs to multiple blocks")
                 connectivity = tuple(cubit.get_expanded_connectivity(kind, local_id))
