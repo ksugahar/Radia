@@ -1060,8 +1060,6 @@ _MENU_SPECS = (
     ("VTK (.vtk)...", FMT_VTK,
      "Export mesh to VTK format (.vtk)"),
     ("JMAG (.jcf)", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
-    ("Femtet", FMT_FEMEEM,
-     "Export mesh to FEMEEM format (1st-order tet, directory output)"),
     ("ELF/MAGIC (.meg)", FMT_MEG,
      "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )
