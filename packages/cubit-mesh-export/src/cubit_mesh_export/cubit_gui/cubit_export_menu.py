@@ -995,10 +995,7 @@ def _run_jcf_export(parent):
             library_path = os.path.join(os.path.dirname(config_path), library)
             with open(library_path, encoding="utf-8") as stream:
                 config["material_library"] = json.load(stream)
-        sidesets = config.pop("symmetry_sidesets", [])
-        if not isinstance(sidesets, list) or any(not isinstance(name, str) for name in sidesets):
-            raise ValueError("symmetry_sidesets must be a list of names")
-        result = export_jcf(out, config, symmetry_sidesets=sidesets)
+        result = export_jcf(out, config)
     except Exception as exc:
         QMessageBox.warning(parent, "JCF export failed", str(exc))
         return
