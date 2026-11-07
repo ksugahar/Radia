@@ -239,8 +239,8 @@ def check_official_toolbar_contract() -> list[str]:
     if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Cubit Mesh Export":
         issues.append("toolbar root must be WorkflowToolbar name='Cubit Mesh Export'")
     buttons = root.findall("WTButton")
-    if len(buttons) != 6:
-        issues.append(f"expected 6 official toolbar buttons, found {len(buttons)}")
+    if len(buttons) != 5:
+        issues.append(f"expected 5 official toolbar buttons, found {len(buttons)}")
 
     for filename in root.findall(".//filename"):
         relative = (filename.text or "").split("@TOOLBAR_INSTALL_DIR@/", 1)[-1]
