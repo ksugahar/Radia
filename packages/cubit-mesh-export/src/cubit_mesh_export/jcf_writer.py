@@ -168,9 +168,12 @@ def _outward_normal(m: Mesh, ei: int, kk: int) -> np.ndarray:
 
 
 def _unit(v, what) -> np.ndarray:
+    """``v`` normalized; scaled by its largest component first so that no finite input
+    overflows or underflows the norm."""
     v = np.asarray(v, float)
-    if v.shape != (3,) or not np.all(np.isfinite(v)) or not np.linalg.norm(v):
+    if v.shape != (3,) or not np.all(np.isfinite(v)) or not np.any(v):
         raise JcfError(f"{what} must be a finite nonzero 3-vector")
+    v = v / np.abs(v).max()
     return v / np.linalg.norm(v)
 
 
@@ -275,13 +278,21 @@ def magnet_frame(direction):
     """(x axis, xy-plane axis) of a right-handed system whose z axis is ``direction``: the
     rotation that takes +z to it along the shortest arc. For +x: x = (0, 0, -1), y = (0, 1, 0)."""
     d = _unit(direction, "magnet direction")
-    z = np.array([0.0, 0.0, 1.0])
-    c = float(z @ d)
-    if c < -1 + 1e-12:                                   # -z: half turn about x
+    return _shortest_arc_frame(d)
+
+
+def _shortest_arc_frame(d):
+    """Rodrigues rotation R = I + K + K^2 / (1 + c) with K = [z x d]_x, c = d_z. Near -z,
+    1 + c cancels, so it is taken as s^2 / (1 - c) with s = |z x d| from the transverse
+    components. Only an antiparallel d (s^2 below the smallest normal float) uses the fixed
+    half turn about x."""
+    c = float(d[2])
+    a = np.array([-d[1], d[0], 0.0])                     # z x d
+    s2 = float(d[0] * d[0] + d[1] * d[1])
+    if c < 0 and s2 < np.finfo(float).tiny:              # -z: half turn about x
         return np.array([1.0, 0, 0]), np.array([0, -1.0, 0])
-    a = np.cross(z, d)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
-    R = np.eye(3) + K + K @ K / (1 + c)
+    R = np.eye(3) + K + (K @ K / (1 + c) if c >= 0 else K @ K * ((1 - c) / s2))
     clean = lambda v: np.where(np.abs(v) < 1e-15, 0.0, v)
     return clean(R[:, 0]), clean(R[:, 1])
 

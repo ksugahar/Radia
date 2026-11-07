@@ -16,9 +16,15 @@ The analysis settings are a JSON object that names Cubit blocks and sidesets:
 
 ``material_library`` may also be a file name relative to the settings file (resolved by the
 caller). Every block needs a material. Lengths (``origin``) are in ``unit``. A flow-in sideset
-lists the faces the current crosses; ``normal`` is the flow direction, which picks the coil
-element on the downstream side. Only static analysis is written. Nothing else is imported: the
-writer is :mod:`cubit_mesh_export.jcf_writer`.
+lists the faces the current crosses and ``normal`` is the current direction across them. Each
+face goes to the coil element whose outward normal points along ``normal``, the element the
+current leaves; this is the convention checked against the solver. Only static analysis is
+written.
+
+``boundaries`` replaced the former ``symmetry_sidesets`` list, which is now rejected:
+``"symmetry_sidesets": ["sym"]`` becomes ``"boundaries": {"sym": "symmetry"}``.
+
+Nothing else is imported: the writer is :mod:`cubit_mesh_export.jcf_writer`.
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 """Static solver input (.jcf) export: writer and named-settings contracts, without Cubit.
 
 Guards: the writer stays standalone (stdlib + NumPy), magnets off +z get their own coordinate
-system, flow-in faces from a sideset pick the downstream coil element, pyramid faces map to
+system, flow-in faces from a sideset go to the coil element the current leaves, pyramid faces map to
 local face numbers, and the settings resolver fails loudly on unknown keys, unmaterialled
 blocks and empty sidesets.
 Assumes: the local face table and the magnet coordinate-system form, both checked against the
@@ -64,13 +64,26 @@ def test_writer_is_standalone():
                              "dataclasses", "pathlib", "xml", "numpy", "cubit"}, (name, imported)
 
 
-@pytest.mark.parametrize("d", [(1, 0, 0), (0, 1, 0), (0, 0, -1), (1, 1, 1), (-1, 0, 0.2)])
+NEAR_MINUS_Z = [(1e-6, 0, -1), (2e-6, 0, -1), (3e-7, -4e-7, -1), (1e-9, 1e-9, -1), (0.3, 0.2, -1)]
+FRAME_DIRS = [(1, 0, 0), (0, 1, 0), (0, 0, -1), (1, 1, 1), (-1, 0, 0.2), *NEAR_MINUS_Z,
+              (1e308, 0, 0), (1e308, 1e308, 0), (1e-320, 0, 0), (0, 0, 1e-300)]
+
+
+@pytest.mark.parametrize("d", FRAME_DIRS)
 def test_magnet_frame_has_direction_as_z(mods, d):
     jw, _ = mods
     x, y = jw.magnet_frame(d)
     z = np.cross(x, y)
-    assert np.allclose([x @ x, y @ y, x @ y], [1, 1, 0], atol=1e-12)
-    assert np.allclose(z, np.asarray(d, float) / np.linalg.norm(d), atol=1e-12), (x, y, z)
+    u = np.asarray(d, float) / np.abs(np.asarray(d, float)).max()
+    assert np.allclose([x @ x, y @ y, x @ y], [1, 1, 0], rtol=0, atol=1e-14)
+    assert np.allclose(z, u / np.linalg.norm(u), rtol=0, atol=1e-14), (x, y, z)
+
+
+def test_unit_vectors_fail_loudly(mods):
+    jw, _ = mods
+    for bad in [(0, 0, 0), (np.inf, 0, 0), (np.nan, 0, 1), (1, 0)]:
+        with pytest.raises(jw.JcfError, match="finite nonzero"):
+            jw.magnet_frame(bad)
 
 
 def test_plus_x_frame_matches_the_reference_form(mods):
