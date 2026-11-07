@@ -415,7 +415,7 @@ def build_root_xml(spec: dict, parts: set, groups: list) -> bytes:
             extra_cs.append(_cs_xml(idx, *magnet_frame(d), lu))
             lcs = _p("local_coordinate_id", idx)
         out.append('\t\t<condition name="PermanentMagnet">\n' + _p("pattern_type", 1)
-                   + _point("axis2", d) + _p("magnetization", 1) + _p("id", i)
+                   + _point("axis2", _unit(d, "magnet direction")) + _p("magnetization", 1) + _p("id", i)
                    + _p("angle_from_z_axis", 0) + lcs
                    + f'\t\t\t<group type="elements" key="{key}" />\n\t\t</condition>\n')
     for i, (key, _gid, _e, _k, d) in enumerate([g for g in groups if g[3] == "steel"], 1):

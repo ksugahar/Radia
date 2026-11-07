@@ -102,6 +102,11 @@ def test_magnet_off_z_gets_its_own_coordinate_system(mods, tmp_path):
     assert "local_coordinate_id" not in z and z.count("<coordinate_system ") == 1
     assert '<parameter name="local_coordinate_id">2</parameter>' in x
     assert '<coordinate_system index="2" type="1">' in x
+    # The solver rejects an unnormalized axis2 (error 105030 for 1e308); it must be written unit.
+    jw.write_jcf(m, tmp_path / "big.jcf", {"unit": "m", "materials": mats, "magnets": [{"part": 1, "direction": [1e308, 0, 0]}]})
+    big = _root(tmp_path / "big.jcf")
+    i = big.index('<condition name="PermanentMagnet">')
+    assert "<x>1</x>\n\t\t\t\t<y>0</y>\n\t\t\t\t<z>0</z>" in big[i:big.index("</condition>", i)]   # axis2 normalized
 
 
 def test_flowin_by_sideset_nodes_equals_flowin_by_part(mods, tmp_path):
