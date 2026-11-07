@@ -22,7 +22,6 @@ EXPECTED_ACTIONS = [
     "GMSH (.msh)",
     "Nastran (.bdf)",
     "VTK (.vtk)",
-    "FEMEEM",
     "MEG (ELF/MAGIC)",
 ]
 RESULT_PATH = os.environ.get(

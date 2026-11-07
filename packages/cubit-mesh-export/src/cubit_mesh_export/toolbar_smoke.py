@@ -27,7 +27,6 @@ EXPECTED_ACTIONS = [
     "GMSH (.msh)",
     "Nastran (.bdf)",
     "VTK (.vtk)",
-    "FEMEEM",
     "MEG (ELF/MAGIC)",
 ]
 
@@ -294,7 +293,7 @@ def run_smoke_test(*, restarts: int = 2, timeout: float = 45.0,
     if report["passed"]:
         print(
             "[OK] Cubit Mesh Export is visible and complete on every cold start: "
-            "one toolbar, six visible/enabled actions, persistent toolbar-menu "
+            "one toolbar, five visible/enabled actions, persistent toolbar-menu "
             "entry, Coreform-owned WorkflowToolbar."
         )
         if not keep and not report_json:

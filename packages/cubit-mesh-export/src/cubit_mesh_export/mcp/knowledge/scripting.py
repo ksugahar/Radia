@@ -599,8 +599,6 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 add pyramid all")
 cubit.cmd('export nastran_bdf "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
 
-# RIGHT: use nopyramid when the consumer lacks CPYRAM support
-cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
 # Or use pure tet mesh to avoid pyramids entirely
 ```
 
@@ -747,20 +745,7 @@ cubit.cmd("mesh volume all")
 
 **Warning**: Switching from hex to tet may introduce pyramid transition
 elements at hex-tet interfaces. Some consumers cannot read
-standard pyramid elements — use `PYRAM=False` for Nastran export.
-
-## Consumers Without CPYRAM Support
-
-For those consumers, write degenerate hex pyramids instead of CPYRAM elements:
-
-```python
-# For consumers without CPYRAM: use nopyramid
-cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
-```
-
-With `nopyramid`, pyramid elements are written as degenerate CHEXA
-(8-node hex with repeated nodes) instead of CPYRAM (5-node), which such consumers
-can read.
+standard pyramid elements.
 
 ## Tips
 
@@ -1056,11 +1041,6 @@ manipulation or `import cubit`.
 **Cause**: The receiving solver does not support standard CPYRAM elements.
 When Cubit produces mixed hex-tet meshes, pyramid transition elements are generated.
 
-**Fix**: Use `nopyramid` to write pyramids as degenerate CHEXA:
-```python
-cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
-```
-
 **Alternative**: Avoid pyramids entirely by using pure tet mesh:
 ```python
 cubit.cmd("volume all scheme tetmesh")
@@ -1160,7 +1140,7 @@ Python files loaded by Cubit. Japanese Windows defaults to cp932 encoding.
 ## Problem: "export nastran" Uses Wrong Command
 
 **Symptom**: Exported .bdf uses Cubit's built-in format instead of the exporter
-format with order 2 / nopyramid support.
+format with order 2 support.
 
 **Cause**: Cubit has a built-in `export nastran` command. The package command
 is `export nastran_bdf` to avoid the naming conflict.
@@ -2647,16 +2627,7 @@ for vol_id in volume_ids:
 Do this only when the receiving solver contract asks for a tet-only mesh.  Do
 not use it as an implicit default in MCP helpers; inventory first, then route.
 
-## Method 2: Collapse Pyramid to Degenerate Hex
-
-Some solvers accept degenerate hexahedra (CHEXA with repeated nodes).
-The `export nastran_bdf` command handles this with the `nopyramid` option:
-
-```
-export nastran_bdf "output.bdf" nopyramid   # writes CHEXA instead of CPYRAM
-```
-
-## Method 3: Avoid Pyramids Entirely
+## Method 2: Avoid Pyramids Entirely
 
 - Use tetmesh for all volumes: `volume all scheme tetmesh`
 - Or use hex for all volumes (requires swept/mapped topology)

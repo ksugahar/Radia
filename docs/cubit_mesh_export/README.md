@@ -108,7 +108,7 @@ Requires Cubit installed with the radia plugin (`radia-setup`).
 
 ```
 export gmsh "file.msh" [order {1|2}] [dimension {2|3}] [overwrite]
-export nastran_bdf "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
+export nastran_bdf "file.bdf" [order {1|2}] [dimension {2|3}] [overwrite]
 export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 ```
 

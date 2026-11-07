@@ -279,6 +279,7 @@ jobs:
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
             tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            packages\cubit-mesh-export\tests\test_jcf_export.py `
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
             packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `

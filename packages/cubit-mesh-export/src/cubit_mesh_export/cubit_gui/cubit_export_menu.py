@@ -360,15 +360,6 @@ class ExportDialog(QDialog):
         if fmt not in (FMT_NETGEN, FMT_FEMEEM):
             form.addRow("Dimension:", self._dimension)
 
-        # --- NoPyramid (Nastran only) -------------------------------
-        self._nopyramid = None
-        if fmt == FMT_NASTRAN:
-            self._nopyramid = QComboBox()
-            self._nopyramid.addItems(
-                ["Keep pyramids",
-                 "Convert pyramids to degenerate hexes"])
-            self._nopyramid.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Pyramids:", self._nopyramid)
 
         # --- MEG block label table ----------------------------------
         self._block_table = None
@@ -485,8 +476,6 @@ class ExportDialog(QDialog):
             self._order.setCurrentIndex(int(s["order"]))
         if "dimension" in s:
             self._dimension.setCurrentIndex(int(s["dimension"]))
-        if self._nopyramid and "nopyramid" in s:
-            self._nopyramid.setCurrentIndex(int(s["nopyramid"]))
         if self._scale and "scale" in s:
             self._scale.setText(s["scale"])
         if self._kelvin_enable and "kelvin_enable" in s:
@@ -567,8 +556,6 @@ class ExportDialog(QDialog):
             dim = "2" if self._dimension.currentText() == "2D" else "3"
             cmd = (f'export nastran_bdf "{f}" order {order} '
                    f'dimension {dim}')
-            if self._nopyramid and self._nopyramid.currentIndex() == 1:
-                cmd += " nopyramid"
 
         elif fmt == FMT_VTK:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
@@ -668,8 +655,6 @@ class ExportDialog(QDialog):
             "order": self._order.currentIndex(),
             "dimension": self._dimension.currentIndex(),
         }
-        if self._nopyramid:
-            s["nopyramid"] = self._nopyramid.currentIndex()
         if self._scale:
             s["scale"] = self._scale.text()
         if self._kelvin_enable:
@@ -986,6 +971,38 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
+def _run_jcf_export(parent):
+    """Read the analysis settings and export the current Cubit mesh."""
+    from cubit_mesh_export.jmag import export_jcf
+
+    config_path, _ = QFileDialog.getOpenFileName(
+        parent, "Select analysis settings", "", "JSON (*.json)")
+    if not config_path:
+        return
+    out, _ = QFileDialog.getSaveFileName(
+        parent, "Export JCF", "mesh.jcf", "JCF (*.jcf)")
+    if not out:
+        return
+    if not out.lower().endswith(".jcf"):
+        out += ".jcf"
+    try:
+        with open(config_path, encoding="utf-8") as stream:
+            config = json.load(stream)
+        if not isinstance(config, dict):
+            raise ValueError("Analysis settings must be a JSON object")
+        library = config.get("material_library")
+        if isinstance(library, str):
+            library_path = os.path.join(os.path.dirname(config_path), library)
+            with open(library_path, encoding="utf-8") as stream:
+                config["material_library"] = json.load(stream)
+        result = export_jcf(out, config)
+    except Exception as exc:
+        QMessageBox.warning(parent, "JCF export failed", str(exc))
+        return
+    print(f"Export complete: {out}")
+    return result
+
+
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
@@ -995,6 +1012,11 @@ def launch_export(fmt):
     supported = {
         FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
     }
+    if fmt == "jcf":
+        parent = find_claro()
+        if parent is None:
+            raise RuntimeError("Cubit main window is not available")
+        return _run_jcf_export(parent)
     if fmt not in supported:
         raise ValueError(f"unsupported Cubit export format: {fmt!r}")
     import cubit as cubit_mod
@@ -1034,9 +1056,8 @@ _MENU_SPECS = (
      "Export mesh to Nastran BDF format (.bdf)"),
     ("VTK (.vtk)...", FMT_VTK,
      "Export mesh to VTK format (.vtk)"),
-    ("FEMEEM...", FMT_FEMEEM,
-     "Export mesh to FEMEEM format (1st-order tet, directory output)"),
-    ("MEG (ELF/MAGIC)...", FMT_MEG,
+    ("JMAG (.jcf)", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
+    ("ELF/MAGIC (.meg)", FMT_MEG,
      "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )
 

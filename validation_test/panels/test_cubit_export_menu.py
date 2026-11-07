@@ -11,7 +11,6 @@ Coverage:
        (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
-    E. Nastran nopyramid flag
     F. FEMEEM scale flag
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
@@ -242,14 +241,8 @@ class TestNastranCommand(_DialogTestBase):
             cmd,
             r'^export nastran_bdf "[^"]+\.bdf" order \d+ '
             r'dimension 3 overwrite$')
-        # nopyramid default = off
+        # The removed option must not appear in the command.
         self.assertNotIn("nopyramid", cmd)
-
-    def test_nopyramid_flag(self):
-        d = self._make_dialog(rem.FMT_NASTRAN)
-        d._nopyramid.setCurrentIndex(1)  # "Yes"
-        self.assertIn("nopyramid", d.cubit_command())
-
 
 class TestVtkCommand(_DialogTestBase):
 
@@ -377,7 +370,10 @@ class TestInstallMenu(unittest.TestCase):
         self.assertEqual(len(actions), 6)
         self.assertEqual(
             [action.text for action in actions],
-            [spec[0] for spec in rem._MENU_SPECS],
+            [
+                "Netgen Vol (.vol)...", "GMSH (.msh)...", "Nastran BDF (.bdf)...",
+                "VTK (.vtk)...", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+            ],
         )
         self.assertTrue(all("launch_export" in action.activate_method
                             for action in actions))

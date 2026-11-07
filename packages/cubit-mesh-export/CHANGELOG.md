@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.9
+
+- Export JMAG solver input (.jcf) directly from the Cubit GUI. JSON maps
+  block names to materials and sideset names to boundary conditions, including
+  symmetry on pyramid faces. The exporter works with standard Python and NumPy.
+- Normalize permanent-magnet directions before writing the solver input,
+  preserving small transverse components near negative Z.
+- Hide the FEMEEM action from the Export menu and workflow toolbar.
+
 ## 2.2.8
 
 - Add neutral CAD model capture with explicit millimetre units, source topology,

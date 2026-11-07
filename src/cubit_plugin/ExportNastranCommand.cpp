@@ -104,7 +104,6 @@ std::vector<std::string> ExportNastranCommand::get_syntax()
     "export nastran_bdf <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1 or 2>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
-    "[nopyramid] "
     "[overwrite]"
   );
   return syntax_list;
@@ -114,7 +113,7 @@ std::vector<std::string> ExportNastranCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export nastran_bdf \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
+    "export nastran_bdf \"filename\" [order {1|2}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }
@@ -131,7 +130,6 @@ std::vector<std::string> ExportNastranCommand::get_help()
     "  order 2       2nd-order elements with geometry projection\n"
     "  dimension 3   3D solid mesh output (default)\n"
     "  dimension 2   2D shell mesh output\n"
-    "  nopyramid     Convert pyramid to degenerate hex (solver-compatible)\n"
     "  overwrite     Overwrite existing file without warning\n"
   );
   return help;
@@ -157,9 +155,8 @@ bool ExportNastranCommand::execute(CubitCommandData &data)
   data.get_value("dimension", dim_val);
   std::string dim = (dim_val == 2) ? "2d" : "3d";
 
-  bool pyram = !data.find_keyword("nopyramid");
 
-  return write_nastran(filename, dim, pyram, order);
+  return write_nastran(filename, dim, order);
 }
 
 // ========================================================================
@@ -167,7 +164,7 @@ bool ExportNastranCommand::execute(CubitCommandData &data)
 // ========================================================================
 bool ExportNastranCommand::write_nastran(const std::string &filename,
                                           const std::string &dim,
-                                          bool pyram, int order)
+                                          int order)
 {
   MeshData mesh;
   if (!mesh.extract(order))
@@ -206,7 +203,7 @@ bool ExportNastranCommand::write_nastran(const std::string &filename,
 
   write_header(fid, filename);
   write_nodes(fid, mesh, is_3d);
-  int eid = write_elements(fid, mesh, is_3d, pyram, 1);
+  int eid = write_elements(fid, mesh, is_3d, 1);
   eid = write_sidesets(fid, mesh, is_3d, eid, sideset_pids);
   write_nodesets(fid, mesh);
   write_properties(fid, mesh, is_3d, sideset_pids);
@@ -283,7 +280,7 @@ void ExportNastranCommand::write_nodes(std::ofstream &fid, const MeshData &mesh,
 int ExportNastranCommand::write_element_card(std::ofstream &fid,
                                               const MeshElement &elem,
                                               int eid, int pid,
-                                              bool pyram, int order)
+                                              int order)
 {
   char line[256];
   const auto &raw = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
@@ -352,29 +349,19 @@ int ExportNastranCommand::write_element_card(std::ofstream &fid,
     }
   }
   else if (nv == 5 && (elem.type == PYRAMID5 || elem.type == PYRAMID)) {
-    if (pyram) {
-      if (nn >= 13) {  // PYRAMID13
-        std::snprintf(line, sizeof(line),
-          "CPYRAM  %8d%8d%8d%8d%8d%8d%8d%8d+",
-          eid, pid, c[0], c[1], c[2], c[3], c[4], c[5]);
-        fid << line << "\n";
-        std::snprintf(line, sizeof(line),
-          "+       %8d%8d%8d%8d%8d%8d%8d",
-          c[6], c[7], c[8], c[9], c[10], c[11], c[12]);
-        fid << line << "\n";
-      } else {  // PYRAMID5
-        std::snprintf(line, sizeof(line),
-          "CPYRAM  %8d%8d%8d%8d%8d%8d%8d",
-          eid, pid, c[0], c[1], c[2], c[3], c[4]);
-        fid << line << "\n";
-      }
-    } else {
-      // Degenerate hex representation for consumers without pyramid support
+    if (nn >= 13) {  // PYRAMID13
       std::snprintf(line, sizeof(line),
-        "CHEXA   %8d%8d%8d%8d%8d%8d%8d%8d+",
-        eid, pid, c[0], c[1], c[2], c[3], c[4], c[4]);
+        "CPYRAM  %8d%8d%8d%8d%8d%8d%8d%8d+",
+        eid, pid, c[0], c[1], c[2], c[3], c[4], c[5]);
       fid << line << "\n";
-      std::snprintf(line, sizeof(line), "+       %8d%8d", c[4], c[4]);
+      std::snprintf(line, sizeof(line),
+        "+       %8d%8d%8d%8d%8d%8d%8d",
+        c[6], c[7], c[8], c[9], c[10], c[11], c[12]);
+      fid << line << "\n";
+    } else {  // PYRAMID5
+      std::snprintf(line, sizeof(line),
+        "CPYRAM  %8d%8d%8d%8d%8d%8d%8d",
+        eid, pid, c[0], c[1], c[2], c[3], c[4]);
       fid << line << "\n";
     }
   }
@@ -424,7 +411,7 @@ int ExportNastranCommand::write_element_card(std::ofstream &fid,
 // ========================================================================
 int ExportNastranCommand::write_elements(std::ofstream &fid,
                                           const MeshData &mesh,
-                                          bool is_3d, bool pyram,
+                                          bool is_3d,
                                           int start_eid)
 {
   fid << "$\n$ Element cards\n$\n";
@@ -432,7 +419,7 @@ int ExportNastranCommand::write_elements(std::ofstream &fid,
 
   for (auto &elem : mesh.elements) {
     if (!include_bdf_element(elem, is_3d)) continue;
-    eid = write_element_card(fid, elem, eid, elem.group_id, pyram, mesh.order);
+    eid = write_element_card(fid, elem, eid, elem.group_id, mesh.order);
   }
 
   return eid;
@@ -464,7 +451,7 @@ int ExportNastranCommand::write_sidesets(std::ofstream &fid,
     fid << "\n";
 
     for (auto &face : sg.faces)
-      eid = write_element_card(fid, face, eid, pid, true, mesh.order);
+      eid = write_element_card(fid, face, eid, pid, mesh.order);
   }
   return eid;
 }

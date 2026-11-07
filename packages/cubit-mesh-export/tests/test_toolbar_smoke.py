@@ -1,4 +1,4 @@
-"""Guards: six toolbar identifiers, shipped definitions and probe payloads agree.
+"""Guards: five toolbar identifiers, shipped definitions and probe payloads agree.
 Assumes: offline source contracts; Cubit owns Qt and the optional live GUI probe.
 """
 

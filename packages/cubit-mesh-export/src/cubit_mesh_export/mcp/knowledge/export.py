@@ -43,7 +43,7 @@ this is not a general exact CAD translator. Existing files are never replaced.
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
 | `export gmsh "f.msh" order N` | Gmsh v4.2 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
-| `export nastran_bdf "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | Mesh interchange; `nopyramid` for limited consumers |
+| `export nastran_bdf "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | Mesh interchange |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
 | `export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
@@ -306,7 +306,7 @@ EXPORT_NASTRAN = """
 # Nastran BDF Export (order 1-2)
 
 ```
-export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
 No block assignment required.
@@ -315,7 +315,6 @@ No block assignment required.
 |-----------|---------|-------------|
 | order | 1 | 1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20 (via NetgenCurver) |
 | dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
-| nopyramid | off | Convert pyramids to degenerate hex for consumers without CPYRAM support |
 
 ## Supported Elements
 
@@ -462,25 +461,12 @@ EXPORT_DECISION_GUIDE = """
 -> Use `export nastran_bdf` (order 1-2):
   ```python
   cubit.cmd('export nastran_bdf "mesh.bdf" order 2 overwrite')
-  cubit.cmd('export nastran_bdf "mesh.bdf" order 2 nopyramid overwrite')
   ```
 
 ### Consumer-specific pyramid support
 
 Some consumers cannot read standard CPYRAM elements. When Cubit generates a
-mixed hex-tet mesh, pyramid transition elements appear at the interface. Two
-deliberate routes are available:
-
-1. **Use nopyramid** (recommended): Writes pyramids as degenerate CHEXA
-   ```python
-   cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
-   ```
-
-2. **Use pure tet mesh**: Avoids pyramids entirely
-   ```python
-   cubit.cmd("volume all scheme tetmesh")
-   # ... mesh and export ...
-   ```
+mixed hex-tet mesh, pyramid transition elements appear at the interface. Use a tetrahedral mesh if the receiving application cannot import CPYRAM.
 
 **When to give up on hex**: If Cubit cannot webcut/decompose the geometry
 into sweepable sub-volumes, switch to `tetmesh`. Forcing hex on complex
@@ -519,7 +505,7 @@ Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf"
 The cubit-mesh-export writer uses a different command name to avoid conflict:
 
 ```python
-# CORRECT: mesh-interchange export (supports order 2 and nopyramid)
+# CORRECT: mesh-interchange export (supports order 2)
 cubit.cmd('export nastran_bdf "mesh.bdf" order 2 dimension 3 overwrite')
 
 # DIFFERENT CONTRACT: Cubit's built-in Nastran writer

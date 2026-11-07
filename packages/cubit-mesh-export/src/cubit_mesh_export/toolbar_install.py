@@ -342,7 +342,6 @@ def _toolbar_expected_files(install_dir):
         "scripts/export_gmsh.py",
         "scripts/export_nastran.py",
         "scripts/export_vtk.py",
-        "scripts/export_femeem.py",
         "scripts/export_meg.py",
         "icons/cubit_mesh_export.svg",
     ):
