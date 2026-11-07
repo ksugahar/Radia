@@ -249,6 +249,24 @@ to delegate surface projection to Cubit's ACIS kernel:
 
 No STEP files, no OCC geometry, no SetGeomInfo needed.
 
+## Native ABI Boundary
+
+The CallbackGeometry projection is a trampoline: BuildCurvedElements calls back
+into ACIS once per high-order node, so it must run in-process in C++ and is
+bound to the Cubit, ACIS, Netgen and compiler ABI. Keep that native surface
+minimal: mesh export and the curving trampoline only, Netgen statically linked.
+Planned but not yet implemented: a small `extern "C"` table at the boundary and
+a build-identity check at load that fails with a clear error instead of
+crashing; until then a mismatch can still crash Cubit. After every Cubit update,
+rebuild the plugin and rerun a curved-surface regression that records the
+high-order node deviation from the CAD surface.
+
+`export model_capture` consumers (CAD construction adapters for solvers that
+mesh from CAD themselves) need no trampoline: they run outside Cubit as
+JSON-in/JSON-out Python bound to the capture SHA256 and carry no Cubit ABI.
+The target mesher places its own high-order nodes; verify its reconstructed
+radii and surfaces against the capture samples instead.
+
 ## Refit, compatibility and warnings (2.1.0)
 
 - Step 5 fixes Netgen's odd-order stall; the export log prints the
