@@ -54,6 +54,29 @@ def _root(path):
     return zipfile.ZipFile(path).read("root.xml").decode()
 
 
+@pytest.mark.parametrize("coordinate", [np.nan, np.inf, -np.inf])
+def test_writer_refuses_nonfinite_coordinates(mods, tmp_path, coordinate):
+    jw, _ = mods
+    mesh = _stack(jw)
+    mesh.xyz[0, 0] = coordinate
+    out = tmp_path / "invalid.jcf"
+    materials = [{"part": part, "name": f"part{part}", "mu_r": 1} for part in (1, 2)]
+    with pytest.raises(jw.JcfError, match="coordinates must be finite"):
+        jw.write_jcf(mesh, out, {"unit": "m", "materials": materials})
+    assert not list(tmp_path.iterdir())
+
+
+def test_writer_refuses_nonfinite_volume_from_finite_coordinates(mods, tmp_path):
+    jw, _ = mods
+    mesh = _stack(jw)
+    mesh.xyz[:] *= 1e110
+    out = tmp_path / "overflow.jcf"
+    materials = [{"part": part, "name": f"part{part}", "mu_r": 1} for part in (1, 2)]
+    with pytest.raises(jw.JcfError, match="finite positive volume"):
+        jw.write_jcf(mesh, out, {"unit": "m", "materials": materials})
+    assert not list(tmp_path.iterdir())
+
+
 def test_writer_is_standalone():
     for name in ("jcf_writer.py", "jmag.py"):
         tree = ast.parse((SRC / name).read_text(encoding="utf-8"))

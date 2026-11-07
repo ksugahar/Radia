@@ -533,10 +533,14 @@ def write_jcf(mesh: Mesh, out, spec: dict) -> dict:
         raise JcfError("output must end in .jcf")
     if out.exists():
         raise JcfError(f"refusing to overwrite {out}")
-    vol = element_volumes(mesh)
-    if (vol <= 0).any():
-        bad = mesh.elem_ids[vol <= 0][:5].tolist()
-        raise JcfError(f"{int((vol <= 0).sum())} elements with non-positive volume, e.g. {bad}")
+    if not np.isfinite(mesh.xyz).all():
+        raise JcfError("mesh coordinates must be finite")
+    with np.errstate(over="ignore", invalid="ignore"):
+        vol = element_volumes(mesh)
+    invalid_volume = ~np.isfinite(vol) | (vol <= 0)
+    if invalid_volume.any():
+        bad = mesh.elem_ids[invalid_volume][:5].tolist()
+        raise JcfError(f"{int(invalid_volume.sum())} elements without finite positive volume, e.g. {bad}")
     groups = _groups(mesh, spec)
     root = build_root_xml(spec, set(mesh.part.tolist()), groups)
     out.parent.mkdir(parents=True, exist_ok=True)
