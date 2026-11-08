@@ -16,8 +16,6 @@ The GPU job audit identified these actual consumers:
 | Job | Before | After | Evidence in steps |
 | --- | --- | --- | --- |
 | `radia-simulink.yml:cuda-mex` | heavy | heavy + `gpu-rtx` | mexcuda gateways, Poisson, AMS setup/nonlinear, IC lifecycle, FMM physics and installed GPU acceptance |
-| `radia-optuna.yml:build-test` | heavy | heavy + `gpu-rtx` | `-OptunaMexOnly`, explicit CPU/GPU oracle parity and density lifecycle |
-| `radia-optuna.yml:installed-wheel-matlab-e2e` | heavy | heavy + `gpu-rtx` | installed-wheel GPU/Simulink repeated execution |
 | `gpu-validation.yml:validate` | absent | `gpu-a100` | installed GPU/Simulink acceptance, larger CSR solves and Optuna GPU oracle driver |
 | `gpu-validation.yml:nightly-failure` | absent | `ubuntu-latest` | create/update failure issue |
 | `hdiv-a100-validation.yml:validate` | absent | `gpu-a100` | HDiv device tests on the installed exact-SHA radia wheel |

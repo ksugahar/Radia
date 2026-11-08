@@ -27,13 +27,45 @@ def test_oracle_columns_and_shape_mismatch(inputs):
     with pytest.raises(ValueError,match='shapes mismatch'):inputs.oracle_vectors(data)
 
 
-def test_checked_hash_failure_never_invokes_checker(inputs,tmp_path,monkeypatch):
-    mesh=tmp_path/'mesh.vol';mesh.write_text('input')
-    contract=tmp_path/'contract.json';contract.write_text('{}')
-    def forbidden(*args,**kwargs):raise AssertionError('Hash failure must precede subprocess')
-    monkeypatch.setattr(inputs.subprocess,'run',forbidden)
-    with pytest.raises(ValueError,match='hash mismatch'):
-        inputs.checked_mesh(mesh,contract,'0'*64,'0'*64,tmp_path/'report.json')
+def _stub_receipt_verifier(monkeypatch,verify):
+    package=types.ModuleType('radia');package.__path__=[]
+    module=types.ModuleType('radia.hdiv_gpu');module._verify_mesh_receipt=verify
+    package.hdiv_gpu=module
+    monkeypatch.setitem(sys.modules,'radia',package)
+    monkeypatch.setitem(sys.modules,'radia.hdiv_gpu',module)
+
+
+def _checked_inputs(tmp_path):
+    mesh=tmp_path/'mesh.vol';mesh.write_bytes(b'input')
+    contract=tmp_path/'contract.json';contract.write_bytes(b'{}')
+    receipt=tmp_path/'receipt.json';receipt.write_bytes(b'{}')
+    provenance=tmp_path/'provenance.json';provenance.write_text('{}')
+    digest=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
+    return mesh,contract,digest(mesh),digest(contract),receipt,digest(receipt),provenance
+
+
+def test_checked_hash_failure_never_invokes_receipt_verifier(inputs,tmp_path,monkeypatch):
+    def forbidden(*args,**kwargs):raise AssertionError('Hash failure must precede receipt verification')
+    _stub_receipt_verifier(monkeypatch,forbidden)
+    mesh,contract,_,contract_sha,receipt,receipt_sha,provenance=_checked_inputs(tmp_path)
+    report=tmp_path/'report.json'
+    with pytest.raises(ValueError,match='hash mismatch: mesh'):
+        inputs.checked_mesh(mesh,contract,'0'*64,contract_sha,receipt,receipt_sha,provenance,report)
+    assert not report.exists()
+
+
+def test_checked_mesh_rejects_non_tetrahedral_report(inputs,tmp_path,monkeypatch):
+    quality=dict(volume_element_count=8,tetrahedron_count=0)
+    report_bytes=json.dumps(dict(quality=quality)).encode()
+    import base64
+    _stub_receipt_verifier(monkeypatch,lambda *args:dict(
+        report_base64=base64.b64encode(report_bytes).decode(),checker='stub'))
+    args=_checked_inputs(tmp_path);report=tmp_path/'report.json'
+    with pytest.raises(ValueError,match='exclusively tetrahedral'):inputs.checked_mesh(*args,report)
+    assert not report.exists()
+    quality['tetrahedron_count']=8;report_bytes=json.dumps(dict(quality=quality)).encode()
+    assert inputs.checked_mesh(*args,report)['report']['quality']==quality
+    assert report.read_bytes()==report_bytes
 
 
 def test_explicit_dependency_directory_required(inputs,tmp_path):

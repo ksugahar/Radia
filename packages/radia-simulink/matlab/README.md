@@ -157,13 +157,10 @@ their numerical definitions.
 solver calls through a Python process. NGSolve still owns TaskManager, mesh loading,
 finite-element orientation, curved mappings, and HCurl/HDiv space updates.
 
-Optimization is a separate domain and uses the 21-command `optuna_mex`.
-It has no NGSolve, oneMKL, Radia-core, or Python dependency and is loaded only
-when `radia.optuna` first performs native optimization work. `radia_mex` does
-not expose `optuna.*`, and `optuna_mex` never redirects to `radia_mex` when its
-own binary is absent. An older or partial gateway that does not expose the exact
-21-command contract also fails loudly. This keeps non-optimization MATLAB and Simulink runs from
-paying an optimizer load cost.
+Optimization is a separate domain: its `optuna_mex` gateway is built and
+released by the standalone MATLAB Optuna distribution, not by this repository.
+`radia_mex` does not expose `optuna.*` and never stands in for an absent
+optimizer gateway.
 
 On the current Windows distribution, the MEX gateway does not link
 `python312.lib` and MATLAB does not launch `python.exe`, but the prebuilt
@@ -179,13 +176,6 @@ Use the checked MSVC environment wrapper for the focused MEX build:
 pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -MatlabMexOnly -Verbose
 ```
 
-That command builds both gateways. To build only the independent optimization
-gateway, without requiring NGSolve, use:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -OptunaMexOnly
-```
-
 The equivalent manual CMake route, from an initialized Visual Studio x64
 developer environment, is:
 
@@ -193,12 +183,11 @@ developer environment, is:
 cmake -S . -B build-msvc `
   -DRADIA_BUILD_MATLAB_MEX=ON `
   -DMatlab_ROOT_DIR="C:\Program Files\MATLAB\R2026a"
-cmake --build build-msvc --config Release --target radia_mex optuna_mex -j 8
+cmake --build build-msvc --config Release --target radia_mex -j 8
 ```
 
-The build copies `radia_mex.mexw64` and `optuna_mex.mexw64` into this
-directory. On Windows it also places the required oneMKL dispatch DLLs beside
-`radia_mex`; `optuna_mex` does not use them. These local binary artifacts are
+The build copies `radia_mex.mexw64` into this directory. On Windows it also
+places the required oneMKL dispatch DLLs beside `radia_mex`. These local binary artifacts are
 intentionally excluded from Git. MATLAB's existing OpenMP runtime is reused,
 so `libiomp5md.dll` is not copied beside the MEX.
 
