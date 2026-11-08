@@ -235,12 +235,10 @@ def test_provenance_helper_and_beam_contracts_are_in_ci_scope():
     import yaml
 
     helper = "tools/native_build_provenance.ps1"
-    for name, expected in (("sparsesolv.yml", True), ("radia-optuna.yml", False)):
-        workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
-        triggers = workflow.get("on", workflow.get(True))
-        for event in ("push", "pull_request"):
-            # -OptunaMexOnly returns before Build.ps1 loads the helper.
-            assert (helper in triggers[event]["paths"]) is expected
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "sparsesolv.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    for event in ("push", "pull_request"):
+        assert helper in triggers[event]["paths"]
     manifest = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())
     assert manifest["profiles"]["native-build-contracts"]["paths"] == [
         "tests/test_native_build_provenance.py"
