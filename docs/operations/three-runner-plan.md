@@ -40,8 +40,6 @@ hardware identity and concrete paths remain in the private operator record.
 | `build-test.yml / build-test` | native | 16 threads, 64 GiB, propose 90 min; measure before adoption |
 | `sparsesolv.yml / ams-regression` | native | 16 threads, 64 GiB, existing 45 min |
 | `radia-gpu.yml / cuda-mex` | MATLAB/GPU | 8 threads, 32 GiB, existing 60 min |
-| `radia-optuna.yml / build-test` | MATLAB/GPU | 8 threads, 32 GiB, propose 60 min |
-| `radia-optuna.yml / installed-wheel-matlab-e2e` | MATLAB/GPU | 8 threads, 32 GiB, existing 45 min |
 | `ltspice-data-safety.yml / matlab-data-contracts` | MATLAB/GPU | 8 threads, 32 GiB, existing 5 min |
 | `radia.yml / fast-contracts` | light | 2 threads, 8 GiB, existing 20 min |
 
@@ -225,9 +223,6 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | Workflow | Job | Proposed execution |
 | --- | --- | --- |
 | `build-test.yml` | `build-test` | native |
-| `cubit-mesh-export.yml` | `ci-impact` | GitHub-hosted (retain) |
-| `cubit-mesh-export.yml` | `build-test` | GitHub-hosted (retain) |
-| `cubit-mesh-export.yml` | `publish` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `matlab-data-contracts` | MATLAB/GPU |
 | `policy-lint.yml` | `policy-checks` | GitHub-hosted (retain) |
@@ -243,12 +238,8 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `radia-mcp-matrix.yml` | `selftest` | GitHub-hosted (retain) |
 | `radia-mcp-matrix.yml` | `release-evidence` | GitHub-hosted (retain) |
 | `radia-mcp-matrix.yml` | `publish` | GitHub-hosted (retain) |
-| `radia-optuna.yml` | `ci-impact` | GitHub-hosted (retain) |
-| `radia-optuna.yml` | `build-test` | MATLAB/GPU |
-| `radia-optuna.yml` | `installed-wheel-matlab-e2e` | MATLAB/GPU |
 | `radia.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `radia.yml` | `fast-contracts` | light |
-| `release-radia-optuna.yml` | `publish` | GitHub-hosted (retain) |
 | `release.yml` | `upload-binaries` | GitHub-hosted (retain) |
 | `release.yml` | `verify-promotion` | GitHub-hosted (retain) |
 | `release.yml` | `publish-pypi` | GitHub-hosted (retain) |
