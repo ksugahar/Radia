@@ -78,6 +78,8 @@ def _radial_q2(mesh):
     """A rotation-invariant Q2 deformation; its owner keeps the returned field alive."""
     import ngsolve as ng
     from radia.vim._vim import _curve_mesh
+    # The analytic deformation owns the geometry of these CAD-free fixtures.
+    mesh.ngmesh.SetGeometry(None)
     _curve_mesh(mesh, 2)
     deformation = ng.GridFunction(ng.VectorH1(mesh, order=2))
     square = ng.x*ng.x + ng.y*ng.y
