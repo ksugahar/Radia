@@ -162,8 +162,13 @@ def _hex_rule_rows(fes):
 def _gram_case(path, order, terms, *, seam=(), deform=None):
     """CPU Gram and the device arguments of the same charge basis and lattices."""
     import ngsolve as ng
+    from netgen.meshing import Mesh
     from radia.vim._vim import _build_charge_gram_hex, _charge_basis_hex, _curve_mesh
-    mesh = ng.Mesh(str(path))
+    raw = Mesh(dim=3)
+    raw.Load(str(path))
+    # These fixtures have no CAD. Netgen can attach the last generated geometry to a plain .vol.
+    raw.SetGeometry(None)
+    mesh = ng.Mesh(raw)
     deformation = None
     if deform is not None:
         _curve_mesh(mesh, 2)
