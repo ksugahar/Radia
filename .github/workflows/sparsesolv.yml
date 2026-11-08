@@ -701,6 +701,13 @@ jobs:
           "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install the independent Cubit mesh checker
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        shell: pwsh
+        run: |
+          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.3.1
+          exit $LASTEXITCODE
+
       - name: Install Gmsh post-processing reference separately
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'
         shell: pwsh
@@ -786,7 +793,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.python_required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'
@@ -806,7 +813,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'

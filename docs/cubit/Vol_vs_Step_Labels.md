@@ -2,7 +2,7 @@
 
 This document explains the two file formats that radia-* domain tools
 accept as input, why labels live in `.vol`, and why
-[`cubit-mesh-export`](../../packages/cubit-mesh-export/README.md) is
+[`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export) is
 the single recommended chokepoint for producing labeled `.vol` files.
 
 ## TL;DR
@@ -98,7 +98,7 @@ Producing a labeled `.vol` requires a meshing tool that lets the
 human (or an AI authoring `.jou`) attach **named blocks**, **named
 sidesets**, and **named nodesets** to mesh entities. The lab's
 production tool for this is Coreform Cubit, accessed through
-[`cubit-mesh-export`](../../packages/cubit-mesh-export/README.md):
+[`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export):
 
 ```
 export netgen "model.vol" order N \
@@ -146,7 +146,7 @@ Need labels (material / BND / BBBND) ?
 
 ## See also
 
-- [`cubit-mesh-export README`](../../packages/cubit-mesh-export/README.md)
+- [`cubit-mesh-export README`](https://github.com/ksugahar/cubit-mesh-export)
   — APREPRO surface, label-name conventions (BND / BBND / BBBND tables),
   Kelvin / symmetry options.
 - [`docs/cubit/export_NetgenMesh.md`](export_NetgenMesh.md) —

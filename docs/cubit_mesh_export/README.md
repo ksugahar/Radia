@@ -11,7 +11,7 @@ headlessly through the package's MCP/Python interface. Saved geometry, journals,
 mesh files and check reports provide the handoff. Named regions and boundaries
 connect the mesh to the physical model you define.
 
-Use the [owning package guide](../../packages/cubit-mesh-export/README.md) for
+Use the [owning package guide](https://github.com/ksugahar/cubit-mesh-export) for
 installation and supported operations. Cubit's MCP server is distributed with
 that package, independently of `radia-mcp`. Continue with
 [Radia MCP](../../packages/radia-mcp/README.md) or the
