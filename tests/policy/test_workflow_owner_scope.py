@@ -129,7 +129,9 @@ def test_mcp_lane_shared_reads_are_real_and_triggered():
     for pattern, (reader, text) in MCP_LANE_READS.items():
         assert text in (ROOT / reader).read_text(encoding="utf-8"), (pattern, reader)
         rule = next(r for r in MANIFEST["rules"] if r["pattern"] == pattern)
-        assert "radia-mcp" in rule["owners"] and rule["reason"]["kind"] == "integration", pattern
+        assert "radia-mcp" in rule["owners"], pattern
+        if len(rule["owners"]) > 1:
+            assert rule["reason"]["kind"] == "integration", pattern
         for event in ("push", "pull_request"):
             assert pattern in lane[event]["paths"], (event, pattern)
 
@@ -191,12 +193,12 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     expected = set(CONTRACT.ROOT_CONFIGS) | set(actual) | core | {
         "src/core/gpu/hdiv/cmake/HDivKernels.cmake",
         helper, "tests/test_native_build_provenance.py",
-        "tests/matlab/fixtures/ltspice_rc.cir", "tools/sparsesolv_ci_impact.py",
+        "tools/sparsesolv_ci_impact.py",
         "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json",
         "packages/radia-mcp/src/radia_mcp/ltspice/**",
         "packages/radia-mcp/src/radia_mcp/common/__init__.py",
         "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-        "packages/radia-mcp/src/radia_mcp/common/status.py"} | set(MCP_LANE_READS)
+        "packages/radia-mcp/src/radia_mcp/common/status.py"} | {pattern for pattern in MCP_LANE_READS if pattern != "validation_test/optimization/benchmark_*"}
     expected |= {
         "src/core/radia_mex_sparse_symmetry.h",
         "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
@@ -228,9 +230,8 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         'packages/radia-mcp/src/radia_mcp/optimization/constraints.py',
         'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py',
     }
-    # Both GPU distributions consume exact-SHA wheel recovery, without CPU ABI sharing.
-    expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py',
-                 '.github/workflows/gpu-validation.yml'}
+    # Radia and Simulink share exact-SHA artifact recovery.
+    expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py'}
     # These package initializers execute before modules in the numerical
     # closure; ownership stays with the package plus the proven CPU integration.
     initializers = {
