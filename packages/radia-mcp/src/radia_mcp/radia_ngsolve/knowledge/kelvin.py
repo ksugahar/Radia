@@ -533,7 +533,7 @@ confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
 correct.
 
 **Helper function** (canonical:
-`packages/cubit-mesh-export/src/cubit_mesh_export/cubit_helpers/add_kelvin.py`;
+`cubit_mesh_export.cubit_helpers.add_kelvin (standalone exporter)`;
 back-compat shim at `src/radia/panels/add_kelvin.py`):
 
 ```python

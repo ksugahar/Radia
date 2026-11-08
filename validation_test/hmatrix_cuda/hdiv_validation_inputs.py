@@ -1,29 +1,35 @@
 """Explicit, checked inputs for independent HDiv validation runners."""
 from pathlib import Path
+import base64
 import hashlib
-from importlib.util import find_spec
 import json
 import os
-import subprocess
-import sys
 
 
-def checked_mesh(mesh, contract, mesh_sha256, contract_sha256, report, tet_only=True):
-    mesh, contract = Path(mesh).resolve(strict=True), Path(contract).resolve(strict=True)
-    for path, expected in ((mesh, mesh_sha256), (contract, contract_sha256)):
-        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            raise ValueError("Checked input hash mismatch: " + path.name)
-    spec = find_spec("cubit_mesh_export.check") if find_spec("cubit_mesh_export") else None
-    if spec is None or spec.origin is None:
-        raise RuntimeError("This validation requires the standalone check-vol tool")
-    checker = Path(spec.origin).resolve(strict=True)
-    subprocess.run([sys.executable, str(checker), str(mesh), "--strict-labels", "--contract", str(contract),
-                    *(["--tet-only"] if tet_only else []), "--report-json", str(report)], check=True)
-    result = json.loads(Path(report).read_text(encoding="utf-8-sig"))
-    if result.get("passed") is not True:
-        raise ValueError("Canonical mesh check did not pass")
+def checked_mesh(mesh, contract, mesh_sha256, contract_sha256, receipt, receipt_sha256,
+                 provenance, report, tet_only=True):
+    """Verify the producer's strict receipt without installing Cubit on this host."""
+    from radia.hdiv_gpu import _verify_mesh_receipt
+
+    mesh_bytes = Path(mesh).read_bytes()
+    contract_bytes = Path(contract).read_bytes()
+    for name, payload, expected in (("mesh", mesh_bytes, mesh_sha256),
+                                     ("label contract", contract_bytes, contract_sha256)):
+        if hashlib.sha256(payload).hexdigest() != expected:
+            raise ValueError("Checked input hash mismatch: " + name)
+    evidence = _verify_mesh_receipt(
+        mesh_bytes, contract_bytes, Path(receipt).read_bytes(), receipt_sha256,
+        json.loads(Path(provenance).read_text(encoding="utf-8-sig")))
+    report_bytes = base64.b64decode(evidence["report_base64"], validate=True)
+    result = json.loads(report_bytes)
+    quality = result["quality"]
+    if tet_only:
+        count = quality.get("volume_element_count")
+        if type(count) is not int or count <= 0 or quality.get("tetrahedron_count") != count:
+            raise ValueError("Checked mesh is not exclusively tetrahedral")
+    Path(report).write_bytes(report_bytes)
     return dict(mesh_sha256=mesh_sha256, contract_sha256=contract_sha256,
-                checker_sha256=hashlib.sha256(checker.read_bytes()).hexdigest(), report=result)
+                receipt_sha256=receipt_sha256, checker=evidence["checker"], report=result)
 
 
 def dependency_directories(paths):

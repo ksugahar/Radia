@@ -45,10 +45,8 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # Ensure the exporter GUI module is importable as a side-load.
-_REPO_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(_REPO_ROOT, "packages", "cubit-mesh-export",
-                              "src", "cubit_mesh_export", "cubit_gui"))
+from cubit_mesh_export import __file__ as exporter_file
+sys.path.insert(0, os.path.join(os.path.dirname(exporter_file), "cubit_gui"))
 
 try:
     from PySide6.QtWidgets import (  # noqa: E402

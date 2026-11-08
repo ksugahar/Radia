@@ -1,5 +1,5 @@
 function receipt = validate_cuda(checkout, binaryDirectory, outputJson, densitySamples)
-%VALIDATE_CUDA Reproduce focused upstream parity and transfer-inclusive diagnostics.
+%VALIDATE_CUDA Reproduce focused upstream parity from a standalone radia-optuna checkout.
 arguments
     checkout (1,1) string
     binaryDirectory (1,1) string
@@ -7,7 +7,7 @@ arguments
     densitySamples (1,1) double {mustBeInteger,mustBePositive} = 16384
 end
 binaryDirectory=string(java.io.File(binaryDirectory).getCanonicalPath());
-addpath(fullfile(checkout,'packages','radia-optuna','matlab'));
+addpath(fullfile(checkout,'matlab'));
 addpath(binaryDirectory,'-begin');
 binary=string(java.io.File(which('optuna_mex')).getCanonicalPath());
 expected=string(java.io.File(fullfile(binaryDirectory,"optuna_mex."+mexext)).getCanonicalPath());

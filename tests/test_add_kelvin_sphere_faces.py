@@ -6,17 +6,11 @@ into kelvin_int, so the faces of gap slabs inside the air did too, and the
 exterior mesh was paired by ``min(len(air), len(kelvin))``, which silently
 dropped any face without a partner.
 """
-import importlib.util
 import math
-from pathlib import Path
 
 import pytest
 
-path = (Path(__file__).resolve().parents[1] / "packages" / "cubit-mesh-export"
-        / "src" / "cubit_mesh_export" / "cubit_helpers" / "add_kelvin.py")
-spec = importlib.util.spec_from_file_location("add_kelvin_under_test", path)
-add_kelvin = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(add_kelvin)
+from cubit_mesh_export.cubit_helpers import add_kelvin
 
 R = 0.22
 OFFSET = (3 * R, 0.0, 0.0)
