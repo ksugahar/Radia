@@ -300,7 +300,7 @@ def test_optimize_server_builds_sheet_metal_mesh_routing_code():
 def test_missing_sources_never_report_complete_parity(monkeypatch):
     from radia_mcp.matlab import runtime
 
-    monkeypatch.setattr(runtime, "_radia_repo_root", lambda: (None, None))
+    monkeypatch.setattr(runtime, "_radia_repo_root", lambda: None)
     monkeypatch.setattr(runtime, "_radia_mex_commands", lambda: [])
     monkeypatch.setattr(runtime, "_optuna_mex_commands", lambda: [])
     monkeypatch.setattr(runtime, "_pybind_public_names", lambda: [])
