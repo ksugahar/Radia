@@ -17,21 +17,6 @@
       "target": "ci-native",
       "legacy_100": true
     },
-    "cubit-mesh-export.yml:ci-impact": {
-      "owner": "cubit-mesh-export",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "cubit-mesh-export.yml:build-test": {
-      "owner": "cubit-mesh-export",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "cubit-mesh-export.yml:publish": {
-      "owner": "cubit-mesh-export",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
     "ltspice-data-safety.yml:ci-impact": {
       "owner": "radia-simulink",
       "target": "github-hosted",
@@ -107,26 +92,6 @@
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-optuna.yml:ci-impact": {
-      "owner": "radia-optuna",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "radia-optuna.yml:build-test": {
-      "owner": "radia-optuna",
-      "target": "gpu-rtx",
-      "legacy_100": false
-    },
-    "radia-optuna.yml:installed-wheel-matlab-e2e": {
-      "owner": "radia-optuna",
-      "target": "gpu-rtx",
-      "legacy_100": false
-    },
-    "radia-optuna.yml:installed-wheel-hdf5-storage": {
-      "owner": "radia-optuna",
-      "target": "ci-native",
-      "legacy_100": true
-    },
     "radia.yml:ci-impact": {
       "owner": "radia",
       "target": "github-hosted",
@@ -135,16 +100,6 @@
     "radia.yml:fast-contracts": {
       "owner": "radia",
       "target": "ci-light",
-      "legacy_100": false
-    },
-    "release-radia-optuna.yml:verify": {
-      "owner": "radia-optuna",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-radia-optuna.yml:publish": {
-      "owner": "radia-optuna",
-      "target": "github-hosted",
       "legacy_100": false
     },
     "release.yml:upload-binaries": {
@@ -254,7 +209,7 @@
         "validation_test/induction_heating/fin_return_principle.py",
         "tools/check_ninja_msvc_deps.py"
       ],
-      "audit_sha256": "2d40ea2595303380a583d01eda043a1b7247aa7eda33eb4b4556e5a975744bd4",
+      "audit_sha256": "de8e928e31201cf9c9acaa233cb12bc46fe58950aa40d400aa7a9d69ba7a54fe",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

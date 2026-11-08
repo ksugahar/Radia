@@ -1,6 +1,7 @@
 """Explicit, checked inputs for independent HDiv validation runners."""
 from pathlib import Path
 import hashlib
+from importlib.util import find_spec
 import json
 import os
 import subprocess
@@ -12,7 +13,10 @@ def checked_mesh(mesh, contract, mesh_sha256, contract_sha256, report, tet_only=
     for path, expected in ((mesh, mesh_sha256), (contract, contract_sha256)):
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise ValueError("Checked input hash mismatch: " + path.name)
-    checker = Path(__file__).resolve().parents[2] / "packages/cubit-mesh-export/src/cubit_mesh_export/check.py"
+    spec = find_spec("cubit_mesh_export.check") if find_spec("cubit_mesh_export") else None
+    if spec is None or spec.origin is None:
+        raise RuntimeError("This validation requires the standalone check-vol tool")
+    checker = Path(spec.origin).resolve(strict=True)
     subprocess.run([sys.executable, str(checker), str(mesh), "--strict-labels", "--contract", str(contract),
                     *(["--tet-only"] if tet_only else []), "--report-json", str(report)], check=True)
     result = json.loads(Path(report).read_text(encoding="utf-8-sig"))

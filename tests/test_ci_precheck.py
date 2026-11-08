@@ -135,7 +135,7 @@ def test_mcp_static_commands_match_workflow_in_both_directions():
 
 
 def test_docs_dont_create_an_unneeded_light_environment():
-    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    plan = precheck.build_source_plan("base", git=git_diff(["docs/guide.md"]))
     assert not plan["radia"] and not plan["mcp"]
 
 
@@ -181,7 +181,7 @@ def fake_run(commands, *, selection=None, failing=None):
 
 
 def test_policy_always_runs_and_plan_only_never_claims_tests_passed(tmp_path, monkeypatch):
-    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    plan = precheck.build_source_plan("base", git=git_diff(["docs/guide.md"]))
     monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)
     commands = []
     monkeypatch.setattr(precheck, "_run", fake_run(commands))
@@ -235,7 +235,7 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
     assert env["PYTHONPATH"] == str(ROOT / "packages/radia-mcp/src")
     integration_env = rows["MCP selected integration tests"][1]
     assert integration_env["PYTHONPATH"].split(os.pathsep) == [
-        str(ROOT / "packages/radia-mcp/src"), str(ROOT / "packages/radia-optuna/src")]
+        str(ROOT / "packages/radia-mcp/src"), str(Path(os.environ["RADIA_OPTUNA_SOURCE"]).resolve() / "src")]
     assert "MCP integration source identity" in rows
     assert rows["MCP integration source identity"][1] == integration_env
     assert rows["MCP package test boundary"][1]["PYTHONPATH"] == env["PYTHONPATH"]
@@ -273,7 +273,7 @@ def test_real_integration_child_checks_checkout_and_evidence(tmp_path, shadow):
     else:
         assert result.returncode == 0, result.stderr
         record = json.loads(report.read_text(encoding="utf-8"))
-        assert Path(record["imports"]["radia_optuna"]) == ROOT / "packages/radia-optuna/src/radia_optuna/__init__.py"
+        assert Path(record["imports"]["radia_optuna"]) == Path(env["RADIA_OPTUNA_SOURCE"]) / "src/radia_optuna/__init__.py"
         assert len(record["source_sha"]) == 40
         assert len(record["evidence"]["evidence_manifest"]["sha256"]) == 64
     workflow = (ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8")
@@ -344,9 +344,8 @@ def test_dirty_untracked_input_cannot_qualify(tmp_path, monkeypatch):
 
 
 def test_unexecuted_distribution_lanes_are_explicit():
-    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"]))
-    assert "cubit-mesh-export" in plan["ci_only_lanes"]
-    assert not plan["mcp"]
+    plan = precheck.build_source_plan("base", git=git_diff(["packages/radia-simulink/native/radia_cuda_ams.cu"]))
+    assert "radia-simulink" in plan["ci_only_lanes"]
 
 
 def test_missing_collection_dependencies_stop_before_pytest(tmp_path, monkeypatch):
@@ -359,7 +358,7 @@ def test_missing_collection_dependencies_stop_before_pytest(tmp_path, monkeypatc
 
 
 def test_partial_is_not_a_passing_qualification(tmp_path, monkeypatch):
-    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    plan = precheck.build_source_plan("base", git=git_diff(["docs/guide.md"]))
     monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)
     monkeypatch.setattr(precheck, "_run", fake_run([]))
     out = tmp_path / "report.json"
@@ -445,7 +444,7 @@ def test_relative_report_survives_package_child_working_directory(tmp_path, monk
 
 
 def test_failed_partial_reports_false_not_unknown(tmp_path, monkeypatch):
-    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    plan = precheck.build_source_plan("base", git=git_diff(["docs/guide.md"]))
     monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)
     monkeypatch.setattr(precheck, "_run", fake_run([], failing="policy tests"))
     out = tmp_path / "report.json"

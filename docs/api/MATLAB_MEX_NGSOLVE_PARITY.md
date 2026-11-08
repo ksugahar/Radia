@@ -11,7 +11,7 @@ build without Python support.
 
 The public top-level functions, underscore-prefixed numerical kernels, and
 pybind11 class members are compared against the command inventory in
-`packages/radia-optuna/native/optuna_mex.cpp` during the MCP contract test. Mesh-plumbing helpers
+`radia-optuna/native/optuna_mex.cpp` during the MCP contract test. Mesh-plumbing helpers
 and Python-only regression helpers are classified explicitly instead of being
 silently dropped from the count.
 
@@ -327,7 +327,7 @@ bestSnapshot = study.bestSolution();
 ```
 
 The independently released `radia-optuna` package uses pinned Optuna 5.0.0
-as its behavioral oracle. See the [package contract](../../packages/radia-optuna/README.md)
+as its behavioral oracle. See the [package contract](https://github.com/ksugahar/radia-optuna)
 for the current native, Python fallback, persistence and Simulink boundaries.
 The Radia gateway and its solver dependencies remain separate from the
 21-command `optuna_mex` gateway.
@@ -340,10 +340,10 @@ presence does not establish upstream algorithmic parity.
 
 Compatibility evidence is generated from the pinned version and checked in:
 
-- `packages/radia-optuna/oracles/optuna50_oracle.json`: differential behavior fixtures;
-- `packages/radia-optuna/oracles/optuna50_public_api.json`: upstream API inventory;
-- `packages/radia-optuna/matlab/optuna50_api_coverage.json`: mapped, verified, asserted and unresolved coverage;
-- `packages/radia-optuna/oracles/optuna_test_manifest.json`: test classification and oracle ownership.
+- `radia-optuna/oracles/optuna50_oracle.json`: differential behavior fixtures;
+- `radia-optuna/oracles/optuna50_public_api.json`: upstream API inventory;
+- `radia-optuna/matlab/optuna50_api_coverage.json`: mapped, verified, asserted and unresolved coverage;
+- `radia-optuna/oracles/optuna_test_manifest.json`: test classification and oracle ownership.
 
 Read the coverage record's `full_compatibility_complete` and its constructor
 default audit before making a completeness claim. Earlier 4.9 timing and

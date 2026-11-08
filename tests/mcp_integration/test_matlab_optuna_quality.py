@@ -7,6 +7,7 @@ check uses a presence-only MEX placeholder and makes no native execution claim.
 """
 
 import json
+import os
 from copy import deepcopy
 from radia_mcp.matlab import optuna_quality
 from pathlib import Path
@@ -18,41 +19,37 @@ from radia_mcp.matlab.optuna_quality import (
     matlab_optuna_release_gate,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+OPTUNA_ROOT = Path(os.environ["RADIA_OPTUNA_SOURCE"]).resolve()
 
 
 def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     # A clean source checkout intentionally has no ignored Windows MEX binary.
     # Source health therefore validates the standalone CUDA gateway command table;
     # installed-distribution health remains responsible for requiring the MEX.
-    mex_path = REPO_ROOT / "packages/radia-optuna/matlab" / "optuna_mex.mexw64"
+    mex_path = OPTUNA_ROOT / "matlab" / "optuna_mex.mexw64"
     path_is_file = Path.is_file
     monkeypatch.setattr(
         Path,
         "is_file",
         lambda path: False if path == mex_path else path_is_file(path),
     )
-    health = matlab_optuna_health(str(REPO_ROOT))
+    health = matlab_optuna_health(str(OPTUNA_ROOT))
     manifest = json.loads(
         (
-            REPO_ROOT
-            / "packages"
-            / "radia-optuna"
+            OPTUNA_ROOT
             / "src"
             / "radia_optuna"
             / "manifest.json"
         ).read_text(encoding="utf-8")
     )
     coverage = json.loads(
-        (REPO_ROOT / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json").read_text(
+        (OPTUNA_ROOT / "matlab" / "optuna50_api_coverage.json").read_text(
             encoding="utf-8"
         )
     )
     test_manifest = json.loads(
         (
-            REPO_ROOT
-            / "packages"
-            / "radia-optuna"
+            OPTUNA_ROOT
             / "oracles"
             / "optuna_test_manifest.json"
         ).read_text(encoding="utf-8")
@@ -104,17 +101,17 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
 
 
 def _mock_complete_health(monkeypatch):
-    health = deepcopy(matlab_optuna_health(str(REPO_ROOT)))
+    health = deepcopy(matlab_optuna_health(str(OPTUNA_ROOT)))
     health.update(ok=True, status="ready", errors=[])
     monkeypatch.setattr(optuna_quality, "matlab_optuna_health", lambda *a, **k: health)
 
 
 def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream(monkeypatch):
-    plan = matlab_optuna_oracle_plan("all", str(REPO_ROOT))
+    plan = matlab_optuna_oracle_plan("all", str(OPTUNA_ROOT))
 
-    assert plan["ok"] is matlab_optuna_health(str(REPO_ROOT))["ok"]
+    assert plan["ok"] is matlab_optuna_health(str(OPTUNA_ROOT))["ok"]
     _mock_complete_health(monkeypatch)
-    plan = matlab_optuna_oracle_plan("all", str(REPO_ROOT))
+    plan = matlab_optuna_oracle_plan("all", str(OPTUNA_ROOT))
     assert plan["ok"] is True
     assert plan["execute_with"] == "evaluate_matlab_code"
     assert plan["runtime_owner"] == "MathWorks official MATLAB MCP Server"
@@ -131,19 +128,19 @@ def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream(monkeypatch
     assert "testsuite" in plan["matlab_code"]
     assert plan["output"].endswith("radia-optuna-all-summary.json")
     assert "fopen" in plan["matlab_code"]
-    assert plan["expected_test_count"] == matlab_optuna_health(str(REPO_ROOT))[
+    assert plan["expected_test_count"] == matlab_optuna_health(str(OPTUNA_ROOT))[
         "test_policy"
     ]["entry_count"]
 
 
 def test_benchmark_plan_reads_checked_workload_settings_and_separates_startup(monkeypatch):
     plan = matlab_optuna_benchmark_plan(
-        str(REPO_ROOT), r"C:\temp\radia-optuna-quality-test"
+        str(OPTUNA_ROOT), r"C:\temp\radia-optuna-quality-test"
     )
 
-    assert plan["ok"] is matlab_optuna_health(str(REPO_ROOT))["ok"]
+    assert plan["ok"] is matlab_optuna_health(str(OPTUNA_ROOT))["ok"]
     _mock_complete_health(monkeypatch)
-    plan = matlab_optuna_benchmark_plan(str(REPO_ROOT), r"C:\temp\radia-optuna-quality-test")
+    plan = matlab_optuna_benchmark_plan(str(OPTUNA_ROOT), r"C:\temp\radia-optuna-quality-test")
     assert plan["ok"] is True
     assert plan["settings"] == {
         "trials": 100,
@@ -162,7 +159,7 @@ def test_benchmark_plan_reads_checked_workload_settings_and_separates_startup(mo
 
 
 def _passing_release_evidence() -> dict[str, object]:
-    health = matlab_optuna_health(str(REPO_ROOT))
+    health = matlab_optuna_health(str(OPTUNA_ROOT))
     version = health["distribution"]["version"]
     file_count = health["distribution"]["expected_matlab_file_count"]
     command_count = health["native"]["command_count"]
@@ -276,14 +273,14 @@ def _passing_release_evidence() -> dict[str, object]:
 
 def test_release_gate_accepts_complete_evidence_and_rejects_regression(monkeypatch):
     evidence = _passing_release_evidence()
-    actual_health = matlab_optuna_health(str(REPO_ROOT))
-    result = matlab_optuna_release_gate(evidence, str(REPO_ROOT))
+    actual_health = matlab_optuna_health(str(OPTUNA_ROOT))
+    result = matlab_optuna_release_gate(evidence, str(OPTUNA_ROOT))
     assert result["ok"] is actual_health["ok"]
     # Synthetic passing health tests gate mechanics, not current API closure.
     passing_health = deepcopy(actual_health)
     passing_health.update(ok=True, status="ready", errors=[])
     monkeypatch.setattr(optuna_quality, "matlab_optuna_health", lambda *a, **k: passing_health)
-    result = matlab_optuna_release_gate(evidence, str(REPO_ROOT))
+    result = matlab_optuna_release_gate(evidence, str(OPTUNA_ROOT))
 
     assert result["ok"] is True
     assert result["performance"]["observed_matlab_to_python_ratios"] == {
@@ -295,7 +292,7 @@ def test_release_gate_accepts_complete_evidence_and_rejects_regression(monkeypat
     evidence["performance"]["matlab"]["scalar"]["median_warmed_seconds"] = 2.1
     evidence["table_resume"]["table_names"].remove("SamplerStateTable")
     result = matlab_optuna_release_gate(
-        json.dumps(evidence), str(REPO_ROOT), max_warmed_time_ratio=1.0
+        json.dumps(evidence), str(OPTUNA_ROOT), max_warmed_time_ratio=1.0
     )
 
     assert result["ok"] is False
@@ -310,7 +307,7 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
     import pytest
     from radia_mcp.matlab.optuna_oracle import matlab_optuna_compatibility_contract
 
-    source = REPO_ROOT / "packages/radia-optuna"
+    source = OPTUNA_ROOT
     target = tmp_path / "radia_optuna"
     shutil.copytree(source / "src/radia_optuna", target,
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -321,15 +318,12 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
         shutil.copy2(path, target / "oracles" / path.name)
     (target / "matlab/optuna_mex.mexw64").write_bytes(b"presence-only placeholder")
     shutil.copy2(source / "THIRD_PARTY_NOTICES.md", target / "matlab/THIRD_PARTY_NOTICES.md")
-    source_health = matlab_optuna_health(str(REPO_ROOT))
-    monkeypatch.delenv("RADIA_REPO_ROOT", raising=False)
+    source_health = matlab_optuna_health(str(OPTUNA_ROOT))
+    monkeypatch.delenv("RADIA_OPTUNA_SOURCE", raising=False)
     original = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k:
                         SimpleNamespace(origin=str(target / "__init__.py"))
                         if name == "radia_optuna" else original(name, *a, **k))
-    def no_repository():
-        raise AssertionError("installed evidence must not search a repository")
-    monkeypatch.setattr(optuna_quality, "_repository_candidates", no_repository)
     health = matlab_optuna_health()
     assert health["ok"] is source_health["ok"], health
     assert health["errors"] == source_health["errors"], health

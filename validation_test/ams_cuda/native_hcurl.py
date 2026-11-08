@@ -41,7 +41,6 @@ def main(args):
         with ng.TaskManager():generated=ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh))
         generated.ngmesh.SetMaterial(1,'domain')
         vol=out/'model.vol';generated.ngmesh.Save(str(vol))
-        sys.path.insert(0,str(root/'packages/cubit-mesh-export/src'))
         from cubit_mesh_export.check import check_consistency
         checked=check_consistency(vol,contract=Path(__file__).with_name('native_hcurl_labels.json'),strict_labels=True)
         (out/'vol_check.json').write_text(json.dumps(checked,indent=2)+'\n',encoding='utf-8')
