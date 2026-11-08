@@ -58,7 +58,8 @@ def build(work, out):
                PATH=str(venv / 'Scripts') + os.pathsep + os.environ['PATH'])
     wheels = work / 'wheelhouse'
     run([python, '-I', '-m', 'pip', 'wheel', source, '--no-deps', '--no-build-isolation', '--wheel-dir', wheels,
-         *[f'--config-settings={item}' for item in SETTINGS], f'--config-settings=build-dir={work / "build"}'],
+         *[f'--config-settings={item}' for item in SETTINGS], f'--config-settings=build-dir={work / "build"}',
+         f'--config-settings=cmake.define.CMAKE_MAKE_PROGRAM={(venv / "Scripts/ninja.exe").as_posix()}'],
         env=env, cwd=work)
     built = list(wheels.glob('netgen_mesher-*.whl'))
     if len(built) != 1:
