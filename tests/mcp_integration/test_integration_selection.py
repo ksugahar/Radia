@@ -20,14 +20,10 @@ SPEC.loader.exec_module(SELECTOR)
 
 @pytest.mark.parametrize("changed", [
     "tests/mcp_integration/test_matlab_source_contract.py",
+    ".github/workflows/radia-mcp-matrix.yml",
     "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/manifest.json",
     "validation_test/vim_coupled/results_disk.json",
     "packages/radia-simulink/matlab/+radia/+acoustic/cqGrid.m",
-    "packages/radia-optuna/matlab/optuna50_api_coverage.json",
-    "packages/radia-optuna/oracles/optuna50_oracle.json",
-    "packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
-    "packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
-    "tests/matlab/test_optuna_sampler.m",
     "tests/mcp_server/fixtures/bad_radia_script.py",
     "validation_test/radia_mcp/validation_vol_tet_quality.py",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/netgen_vol.py",
@@ -41,9 +37,6 @@ def test_repository_changes_keep_integration_lane(changed):
 @pytest.mark.parametrize("changed", [
     "validation_test/maglev/results.json",
     "packages/radia-simulink/matlab/+radia/contract.m",
-    "packages/radia-optuna/src/radia_optuna/__init__.py",
-    "packages/radia-optuna/tools/build_mexcuda.m",
-    "packages/radia-optuna/oracles/README.md",
     "tests/matlab/fixtures/optuna_test_manifest.json",
     "tests/matlab/fixtures/generate_optuna_test_manifest.py",
     "docs/README.md",

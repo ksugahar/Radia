@@ -6,7 +6,10 @@ arguments
     withStorage (1,1) logical = true
 end
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,'packages','radia-optuna','matlab'));
+optunaSource = string(getenv('RADIA_OPTUNA_SOURCE'));
+assert(strlength(optunaSource)>0 && isfolder(fullfile(optunaSource,'matlab')), ...
+    'Set RADIA_OPTUNA_SOURCE to the standalone radia-optuna checkout.');
+addpath(fullfile(optunaSource,'matlab'));
 folder=string(tempname(fileparts(outputPath))); mkdir(folder);
 cleanup=onCleanup(@() removeScratch(folder));
 levels=[100,1000,10000]; repeats=7;

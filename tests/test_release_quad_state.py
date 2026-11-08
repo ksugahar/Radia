@@ -92,8 +92,7 @@ def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
 @pytest.mark.parametrize('matched', [True, False])
 def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     versions = dict.fromkeys([
-        'radia', 'radia.__version__', 'cubit-mesh-export', 'cme.__version__',
-        'radia-mcp', 'radia-optuna', 'optuna.__version__'], '1.0.0')
+        'radia', 'radia.__version__', 'radia-mcp'], '1.0.0')
     if not matched:
         versions['radia.__version__'] = '1.0.1'
     monkeypatch.setattr(module, '_read_repo_versions', lambda *_args: versions)

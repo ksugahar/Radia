@@ -472,3 +472,6 @@ memory/
 
 ci-precheck-report.json
 ci-precheck-report-logs/
+
+# Checkout of the pinned standalone integration dependency in CI.
+/.ci-deps/

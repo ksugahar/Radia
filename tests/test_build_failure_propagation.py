@@ -1,4 +1,4 @@
-"""Guards: native/CTest failure propagation and scoped build cleanup; signed Cubit
+"""Guards: native failure propagation and scoped build cleanup; signed Cubit
 payload bytes and mtimes cannot be replaced by an ordinary build.
 
 Assumes: production Build.ps1 AST/guards execute on isolated fixture paths;
@@ -16,7 +16,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = (
     "sparsesolv_ngsolve", "axifem",
-    "cubit_mesh_curver", "cubit_mesh_export_ccm", "cubit_callback_contract",
 )
 
 
@@ -31,20 +30,6 @@ def test_native_build_guard_propagates_failure(tmp_path, target, exit_code):
     assert match, f"missing immediate failure guard for {target}"
     guard = match.group("guard")
     assert f"ERROR: {target} build failed" in guard
-    assert "exit /b 1" in guard
-    _exercise_guard(tmp_path, guard, exit_code)
-
-
-@pytest.mark.parametrize("exit_code", [0, 7])
-def test_native_ctest_guard_propagates_failure(tmp_path, exit_code):
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    match = re.search(
-        r'"\$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure\n'
-        r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
-    )
-    assert match, "missing immediate CTest failure guard"
-    guard = match.group("guard")
-    assert "ERROR: native Cubit callback contract failed" in guard
     assert "exit /b 1" in guard
     _exercise_guard(tmp_path, guard, exit_code)
 
@@ -65,42 +50,6 @@ def _exercise_guard(tmp_path, guard, exit_code):
     assert ("CONTINUED" in result.stdout) == (exit_code == 0)
 
 
-def test_plugin_configuration_failure_cannot_use_stale_build_tree():
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    commands = re.findall(
-        r'"\$CMAKE_EXE" -G Ninja [^\n]*"\$PROJECT_DIR\\src\\cubit_plugin"\n'
-        r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
-    )
-    assert len(commands) == 2
-    assert all("configuration failed" in guard and "exit /b 1" in guard
-               for guard in commands)
-
-
-def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    plugin_block = source[source.index('set "CUBIT_DIR='):source.index(
-        'echo Build completed.', source.index('set "CUBIT_DIR='))]
-    assert '$DetectedCubitCmakeDir = if ($CubitInstallDir)' in source
-    assert '$BuildCubitPlugin = [bool]($CubitInstallDir -and' in source
-    assert ('Test-Path (Join-Path $CubitInstallDir '
-            '"cmake\\CubitConfig.cmake")') in source
-    assert 'set "CUBIT_DIR=$DetectedCubitCmakeDir"' in plugin_block
-    assert 'set "CUBIT_DIR=$CubitCmakeDir"' not in plugin_block
-    assert 'if /I "$BuildCubitPlugin"=="True" (' in plugin_block
-    assert 'if defined CUBIT_DIR' not in plugin_block
-    assert plugin_block.count('-DCubit_DIR="$DetectedCubitCmakeDir"') == 2
-    assert '-DCubit_DIR="$CubitCmakeDir"' not in plugin_block
-    assert '!CUBIT_DIR!' not in plugin_block
-    assert '%CUBIT_DIR%' not in plugin_block
-    guarded_block = plugin_block[
-        plugin_block.index('if /I "$BuildCubitPlugin"=="True" ('):
-        plugin_block.index(') else (')
-    ]
-    for line in guarded_block.splitlines():
-        if re.match(r"\s*(?:echo|rem)\b", line, flags=re.IGNORECASE):
-            assert not re.search(r"(?<!\^)[()]", line), line
-
-
 @pytest.mark.parametrize("radia_only,axi_only,sdk", [
     (False, False, True), (False, False, False),
     (True, False, True), (False, True, True),
@@ -108,9 +57,6 @@ def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
 def test_rebuild_cleans_only_selected_build_directories(tmp_path, radia_only, axi_only, sdk):
     result = _execute_build_scope(tmp_path, "cleanup", radia_only, axi_only, sdk)
     expected = [str((tmp_path / "project/build-msvc").resolve())]
-    if sdk and not (radia_only or axi_only):
-        expected += [str((tmp_path / "project/src/cubit_plugin" / name).resolve())
-                     for name in ("build-pyd", "build-ccm")]
     assert result["removed"] == expected, (result, expected)
 
 

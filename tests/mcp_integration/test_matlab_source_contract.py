@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def _expected_optuna_health_errors() -> list[str]:
     """
     root = Path(__file__).resolve().parents[2]
     coverage = json.loads(
-        (root / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
+        (Path(os.environ["RADIA_OPTUNA_SOURCE"]) / "matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
     )
     if coverage["full_compatibility_complete"]:
         return []
@@ -229,7 +230,7 @@ def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
 
     root = Path(__file__).resolve().parents[2]
     fixture = json.loads(
-        (root / "packages" / "radia-optuna" / "oracles" /
+        (Path(os.environ["RADIA_OPTUNA_SOURCE"]) / "oracles" /
          "optuna50_mcp_oracle.json").read_text(encoding="utf-8")
     )
     upstream_tools = set(fixture["tools"])
@@ -249,8 +250,8 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert closure["surface_entry_count"] == 812
     assert closure["surface_present_count"] == 812
     assert closure["surface_missing_count"] == 0
-    coverage = json.loads((Path(__file__).resolve().parents[2] /
-        "packages/radia-optuna/matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
+    coverage = json.loads((Path(os.environ["RADIA_OPTUNA_SOURCE"]) /
+        "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
     entries = coverage["entries"]
     required = [entry for entry in entries if entry["scope"] == "required"]
     assert closure["oracle_verified_count"] == sum(e["oracle_status"] == "verified" for e in entries)
@@ -267,6 +268,7 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert audit["ok"] is True
     assert audit["test_function_count"] == contract["test_counts"]["total"]
     assert audit["manifest_entry_count"] == contract["test_counts"]["total"]
-    assert audit["policy_identical"] is True
+    assert audit["policy_source"] == "radia-optuna/AGENTS.md"
+    assert len(audit["policy_sha256"]) == 64
     assert audit["missing_manifest_entries"] == []
     assert audit["stale_manifest_entries"] == []

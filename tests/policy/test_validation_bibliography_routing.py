@@ -63,7 +63,7 @@ def test_bibliography_changes_reach_always_on_records_without_solver_admission(c
     require_record_route(document, paths, changed)
     data = contract.load(ROOT)
     assert contract.owner_rule(data, changed)['owners'] == ['radia-mcp']
-    for lane in ('radia', 'sparsesolv', 'radia-simulink', 'radia-optuna'):
+    for lane in ('radia', 'sparsesolv', 'radia-simulink'):
         actual = workflow(Path(data['lanes'][lane]['workflow']).name)
         for event in ('push', 'pull_request'):
             projection = contract.workflow_events(actual).get(event)

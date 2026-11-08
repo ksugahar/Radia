@@ -474,8 +474,8 @@ keep field-projection error separate from Lie truncation error.
 
 ### Related distributions
 
-This monorepo independently releases `radia`, `radia-mcp`, `radia-simulink`,
-and `radia-optuna`. Cubit mesh export and EqnEdit64 have their own repositories.
+This repository releases `radia`, `radia-mcp`, and `radia-simulink`.
+Cubit mesh export, MATLAB Optuna, and EqnEdit64 have their own repositories.
 
 CPU execution belongs to `radia` through Python/pybind11 and NGSolve.
 GPU kernels belong to `radia-simulink`, are compiled with MATLAB mexcuda, and
@@ -493,7 +493,7 @@ the shared CUDA kernels and are not a GPU-user prerequisite.
 The GPU toolchain uses MATLAB-bundled CUDA 12.8 and Visual Studio Build Tools
 2022 / MSVC 14.44; see the package guide for build and validation requirements.
 
-[`radia-optuna`](packages/radia-optuna/README.md) independently owns MATLAB
+[`radia-optuna`](https://github.com/ksugahar/radia-optuna) independently owns MATLAB
 optimization workflows. [Eqnedit64](#eqnedit64) is the independent equation editor.
 These packages are separate from installing and using the Python CPU solver.
 
@@ -595,7 +595,6 @@ src/core/                       C++ Radia and native electromagnetic kernels
 src/radia/                      CPU Python package and NGSolve integration
 packages/radia-simulink/             CUDA MEX, MATLAB, Simulink and LTspice integration
 packages/radia-mcp/             MCP servers and executable domain knowledge
-packages/radia-optuna/          Independent MATLAB/Simulink Optuna package
 tests/                          Small executable samples and fast regressions
 validation_test/                Physics/application samples and validation gates
 docs/                           Feature introductions, saved results and theory

@@ -107,22 +107,12 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
 # proves it (pattern -> (reader, text the reader contains)).
 MCP_LANE_READS = {
     "src/radia/hdiv_gpu.py": ("packages/radia-mcp/src/radia_mcp/radia_ngsolve/hdiv_gpu.py", "from radia.hdiv_gpu import PreparedHDivNonlinear"),
-    "AGENTS.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "AGENTS.md"),
-    "CLAUDE.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "CLAUDE.md"),
     "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
     ".agents/skills/md2html/md2html.py": ("tests/mcp_integration/test_md2html_legacy_cli.py", "md2html.py"),
     "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "makeCircuitFieldStateSpace"),
     "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "buildCircuitFieldStateSpaceModel"),
     "packages/radia-simulink/matlab/+radia/+acoustic/**": ("tests/mcp_integration/test_matlab_source_contract.py", "+acoustic"),
     "packages/radia-simulink/native/radia_cuda_csr_pcg.cu": ("packages/radia-mcp/src/radia_mcp/matlab/runtime.py", "radia_cuda_csr_pcg.cu"),
-    "packages/radia-optuna/matlab/**": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/matlab"),
-    "packages/radia-optuna/native/optuna_mex.cpp": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "optuna_mex.cpp"),
-    "packages/radia-optuna/src/radia_optuna/manifest.json": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "manifest.json"),
-    "packages/radia-optuna/THIRD_PARTY_NOTICES.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "THIRD_PARTY_NOTICES"),
-    "packages/radia-optuna/oracles/optuna*.json": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/oracles"),
-    "packages/radia-optuna/oracles/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/oracles/generate_optuna"),
-    "packages/radia-optuna/tools/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/tools/generate_optuna"),
-    "tests/matlab/test_optuna*.m": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "test_optuna*.m"),
     "validation_test/optimization/benchmark_*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "benchmark_"),
     "validation_test/vim_coupled/results_*.json": ("tests/mcp_integration/test_hdiv_vim_disk_validation_evidence.py", "vim_coupled"),
     "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json": ("tests/mcp_integration/test_team28_cycle_averaged_motion_gate.py", "team28_coilbuilder_dynamic_simulink_results.json"),
@@ -209,7 +199,6 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "packages/radia-mcp/src/radia_mcp/common/status.py"} | set(MCP_LANE_READS)
     expected |= {
         "src/core/radia_mex_sparse_symmetry.h",
-        "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
         "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
         "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
         "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
@@ -233,7 +222,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
                for step in fast["jobs"]["fast-contracts"]["steps"])
     routing_source = (ROOT / "tools/ci_runner_routing.py").read_text(encoding="utf-8")
     assert "tools/ci_runner_routing.json" in routing_source
-    expected |= routing_files | {'tools/ci_tree_receipt.py', 'packages/radia-simulink/src/radia_simulink/simulink/__init__.py', 'packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py', 'packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py'}
+    expected |= routing_files | {'tools/ci_tree_receipt.py', 'packages/radia-simulink/src/radia_simulink/simulink/__init__.py'}
     # The complete numerical closure imports these MCP domain adapters too.
     expected |= {
         'packages/radia-mcp/src/radia_mcp/optimization/constraints.py',
@@ -245,7 +234,6 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     # These package initializers execute before modules in the numerical
     # closure; ownership stays with the package plus the proven CPU integration.
     initializers = {
-        'packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py',
         'packages/radia-simulink/src/radia_simulink/__init__.py',
         'packages/radia-mcp/src/radia_mcp/__init__.py',
         'packages/radia-mcp/src/radia_mcp/peec/__init__.py',
@@ -284,8 +272,6 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     for module in sorted(modules):
         assert module in shared, module
         assert all(CONTRACT.selected(module, lane[event]) for event in ("push", "pull_request")), module
-    objective = ROOT / "tests/matlab/fixtures/radia_optuna_ltspice_objective.m"
-    assert "ltspice_rc.cir" in objective.read_text(encoding="utf-8")
     assert "ltspice_rc.cir" in (ROOT / "tests/matlab/test_ltspice_workflow.m").read_text(encoding="utf-8")
 
 
@@ -433,18 +419,6 @@ def test_job_conditions_are_single_expressions():
                 assert condition.endswith("}}") and condition.count("${{") == 1, (workflow.name, name, condition)
 
 
-def test_cubit_lane_reincludes_every_packaged_markdown_pattern():
-    import tomllib
-    package = ROOT / "packages/cubit-mesh-export"
-    project = tomllib.loads((package / "pyproject.toml").read_text(encoding="utf-8"))
-    expected = {f"packages/cubit-mesh-export/{project['project']['readme']}"}
-    for module, patterns in project["tool"]["setuptools"]["package-data"].items():
-        folder = "packages/cubit-mesh-export/src/" + module.replace(".", "/")
-        expected |= {f"{folder}/{p}" for p in patterns if p.endswith(".md")}
-    for event in ("push", "pull_request"):
-        paths = MANIFEST["lanes"]["cubit-mesh-export"]["events"][event]["paths"]
-        assert "!**/*.md" in paths
-        assert expected <= set(paths[paths.index("!**/*.md") + 1:]), event
 
 
 RADIA_LANE_READS = {'AGENTS.md': ('tests/test_wheel_package_policy.py', 'AGENTS.md'),
@@ -473,7 +447,7 @@ def test_removed_cpu_contracts_keep_an_executable_repository_home():
     transferred = tiers["profiles"]["repo-contracts"]["paths"]
     expected = {
         "tests/test_ci_execution_policy.py", "tests/test_ci_monitor.py",
-        "tests/test_release_quad_optuna_candidate.py", "tests/test_test_tier_policy.py",
+        "tests/test_test_tier_policy.py",
         "tests/test_run_test_tier.py", "tests/test_docs_notebook_contract.py",
         "tests/test_application_interface_manifest.py", "tests/test_matlab_python_parity_manifest.py",
         "tests/test_mdx_runner_pool.py",
@@ -483,4 +457,3 @@ def test_removed_cpu_contracts_keep_an_executable_repository_home():
     assert "tools/run_test_tier.py --profile repo-contracts" in workflow
     assert not set(transferred) & set(tiers["profiles"]["fast-contracts"]["paths"])
     assert all((ROOT / path).is_file() for path in transferred)
-
