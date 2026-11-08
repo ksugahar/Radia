@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import importlib.metadata
+from cubit_mesh_export import check as mesh_checker
 import os
 import platform
 import socket
@@ -132,8 +133,12 @@ def main() -> int:
                     "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
                     "validation_test/induction_heating/test_ih_operator_physics_golden.py",
                     "validation_test/induction_heating/generate_ih_operator_physics_results.py",
-                    "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
                 )
+            },
+            "mesh_checker": {
+                "distribution": "cubit-mesh-export",
+                "version": importlib.metadata.version("cubit-mesh-export"),
+                "module_sha256": _sha256(Path(mesh_checker.__file__)),
             },
             "native_runtime": {
                 "distribution_version": importlib.metadata.version("radia"),

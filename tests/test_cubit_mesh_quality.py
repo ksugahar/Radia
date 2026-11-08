@@ -8,12 +8,8 @@ from pathlib import Path
 import pytest
 
 
-PACKAGE_SRC = Path(__file__).resolve().parents[1] / "packages" / "cubit-mesh-export" / "src"
-CHECK_FILE = PACKAGE_SRC / "cubit_mesh_export" / "check.py"
-SPEC = importlib.util.spec_from_file_location("cubit_mesh_export_check_current", CHECK_FILE)
-CHECK_MODULE = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(CHECK_MODULE)
+from cubit_mesh_export import check as CHECK_MODULE
+
 VERIFY_FILE = (
     Path(__file__).resolve().parents[1]
     / "src" / "radia" / "panels" / "calc_verify_vol.py"
@@ -560,12 +556,7 @@ def test_cli_writes_versioned_json_report_and_requires_explicit_sidecar(
     assert json.loads(error_report.read_text(encoding="utf-8"))["passed"] is False
 
 
-def test_cubit_toolbar_verifier_delegates_to_canonical_checker(
-        tmp_path, monkeypatch):
-    # Root CI intentionally does not install package-level distributions.
-    # Expose the monorepo package source so this integration check exercises
-    # the same public import used by the deployed toolbar.
-    monkeypatch.syspath_prepend(str(PACKAGE_SRC))
+def test_cubit_toolbar_verifier_delegates_to_canonical_checker(tmp_path):
     mesh, vol_path = _save_box(tmp_path)
     sidecar = Path(str(vol_path) + ".json")
     sidecar.write_text(

@@ -60,7 +60,7 @@ def main():
                   source_base_commit=subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}",
                       "rev-parse", "HEAD"], cwd=root, text=True).strip(),
                   source_hashes={str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
-                      for p in [root/"packages/radia-optuna/native/optuna_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m", root/"tests/matlab/test_setup_python_selection.m",
+                      for p in [root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m", root/"tests/matlab/test_setup_python_selection.m",
                                 root/"tests/matlab/test_mex_runtime_setup.m", root/"packages/radia-simulink/matlab/+radia/+internal/callMex.m",
                                 root/"packages/radia-simulink/matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",

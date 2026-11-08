@@ -37,8 +37,9 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 # Auto-Kelvin moved to cubit-mesh-export 2026-05-05.
-CUBIT_HELPERS = ROOT / "packages" / "cubit-mesh-export" / "src" / \
-                "cubit_mesh_export" / "cubit_helpers"
+from cubit_mesh_export import __file__ as exporter_file
+
+CUBIT_HELPERS = Path(exporter_file).parent / "cubit_helpers"
 ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 

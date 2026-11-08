@@ -140,7 +140,7 @@ def test_combined_surface_volume_writer_roundtrips_fields(tmp_path):
     mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
     vol = tmp_path / 'combined_source.vol'
     mesh.ngmesh.Save(str(vol))
-    checker = _source_module('msh42_combined_vol_checker', 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py')
+    from cubit_mesh_export import check as checker
     contract = {'schema': checker.LABEL_CONTRACT_SCHEMA,
                 'materials': {'required': list(mesh.GetMaterials())},
                 'boundaries': {'required': list(mesh.GetBoundaries())}}
@@ -166,7 +166,7 @@ def test_checked_vol_mesh_field_export_and_animation(tmp_path):
     mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
     vol = tmp_path / 'cube.vol'
     mesh.ngmesh.Save(str(vol))
-    checker = _source_module('msh42_vol_checker', 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py')
+    from cubit_mesh_export import check as checker
     contract = {'schema': checker.LABEL_CONTRACT_SCHEMA,
                 'materials': {'required': list(mesh.GetMaterials())},
                 'boundaries': {'required': list(mesh.GetBoundaries())}}
