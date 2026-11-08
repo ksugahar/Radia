@@ -58,7 +58,7 @@ and handoff.
 | --- | --- |
 | `radia` | CPU electromagnetic calculations through Python, pybind11 and NGSolve |
 | [`radia-mcp`](packages/radia-mcp/README.md) | Discovering workflows and operating supported analysis tools through an AI assistant |
-| [`cubit-mesh-export`](packages/cubit-mesh-export/README.md) | Optional Coreform Cubit mesh export and strict solver-mesh checks |
+| [`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export) | Optional Coreform Cubit mesh export and strict solver-mesh checks |
 
 MATLAB GPU development and other independently released packages are described
 under [Related distributions](#related-distributions).
@@ -474,8 +474,8 @@ keep field-projection error separate from Lie truncation error.
 
 ### Related distributions
 
-This monorepo independently releases `radia`, `radia-mcp`, `cubit-mesh-export`,
-`radia-simulink`, and `radia-optuna`. Eqnedit64 is maintained in its own repository.
+This monorepo independently releases `radia`, `radia-mcp`, `radia-simulink`,
+and `radia-optuna`. Cubit mesh export and EqnEdit64 have their own repositories.
 
 CPU execution belongs to `radia` through Python/pybind11 and NGSolve.
 GPU kernels belong to `radia-simulink`, are compiled with MATLAB mexcuda, and
@@ -582,7 +582,6 @@ git clone https://github.com/ksugahar/Radia.git
 Set-Location Radia
 python -m pip install -e ".[dev]"
 python -m pip install -e packages/radia-mcp
-python -m pip install -e packages/cubit-mesh-export
 python -m pip install eqnedit64
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -RadiaOnly
 ```
@@ -596,7 +595,6 @@ src/core/                       C++ Radia and native electromagnetic kernels
 src/radia/                      CPU Python package and NGSolve integration
 packages/radia-simulink/             CUDA MEX, MATLAB, Simulink and LTspice integration
 packages/radia-mcp/             MCP servers and executable domain knowledge
-packages/cubit-mesh-export/     Cubit exporters, plugin and check-vol
 packages/radia-optuna/          Independent MATLAB/Simulink Optuna package
 tests/                          Small executable samples and fast regressions
 validation_test/                Physics/application samples and validation gates

@@ -19,8 +19,8 @@ first.
     pyproject.toml    — entry points + extras
     CHANGELOG.md      — append a release entry
   ```
-- `cubit_mesh_export.mcp` owns Cubit in `packages/cubit-mesh-export`;
-  `radia_mcp.common` owns Radia MCP support. Cubit keeps only its required helpers in its own wheel, with no shared private distribution.
+- `cubit_mesh_export.mcp` owns Cubit in the [cubit-mesh-export repository](https://github.com/ksugahar/cubit-mesh-export).
+  `radia_mcp.common` owns Radia MCP support. Cubit keeps its required helpers in its own wheel.
 - Primary workflows are `@mcp.tool()` functions with docstrings. Fine-grained
   validation/identity helpers use a server-local `CoarseToolRegistry` and
   `@_validation.tool()` so production clients see one searchable catalog and
