@@ -183,3 +183,23 @@ def test_curved_device_linear_solve_matches_cpu_equation(ball, request, cuda, or
     finally:
         mass.close()
         operator.close()
+
+
+def test_native_staging_refuses_a_stored_order_below_the_request(ball, saved_ball, cuda, tmp_path):
+    """The native staging reopens the .vol itself: it uses the stored order and never curves.
+
+    A linear .vol requested at order 2 is refused before any space or table is built, with or
+    without CAD in the file; the stored P2 ball, with and without its CAD, is accepted.
+    """
+    from netgen.occ import OCCGeometry, Pnt, Sphere
+    linear = tmp_path / "ball-linear.vol"
+    OCCGeometry(Sphere(Pnt(0, 0, 0), 0.05)).GenerateMesh(maxh=0.04).Save(str(linear))
+    lines = linear.read_text().splitlines()
+    linear_nocad = tmp_path / "ball-linear-nocad.vol"
+    linear_nocad.write_text("\n".join(lines[:lines.index("endmesh") + 1]) + "\n")
+    for path in (linear, linear_nocad):
+        with pytest.raises(ValueError, match="stored at geometry order 2; it stores order 1"):
+            cuda._MaterialStagingContext(str(path), 1, 2)
+    for path in (ball, saved_ball):
+        staging = cuda._MaterialStagingContext(str(path), 1, 2)
+        assert staging.flat_tables()["dofs"] > 0

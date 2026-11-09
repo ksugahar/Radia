@@ -39,9 +39,9 @@ struct MaterialStagingContext {
     bool excludedBoundary(ngfem::ElementId element)const{
         const auto name=mesh->GetMaterial(element);
         return std::find(excludedBoundaries.begin(),excludedBoundaries.end(),std::string(name))!=excludedBoundaries.end();}
-    // curveOrder 2 applies NGSolve's isoparametric P2 curving to a linear checked
-    // mesh, exactly as the Python FE side does with Mesh.Curve(2). A loaded P2 .vol
-    // stays as stored: it has no CAD callback, so a second Curve would replace it.
+    // curveOrder is the geometry order the .vol stores; staging never curves. A loaded
+    // mesh cannot prove its CAD (NGSolve may bind it to another mesh's geometry), so a
+    // file below the requested order is refused like the Python entries refuse it.
     MaterialStagingContext(const std::string& path,int order,int curveOrder=1,const std::vector<std::string>& periodicBoundaries={}){
         mesh=std::make_shared<ngcomp::MeshAccess>(path);ne=std::size_t(mesh->GetNE(ngfem::VOL));
         // int32 element, DOF and point numbering is the structural bound; device
@@ -49,7 +49,9 @@ struct MaterialStagingContext {
         constexpr std::size_t count=std::numeric_limits<int>::max();
         if(mesh->GetDimension()!=3||!ne||ne>count||mesh->GetDeformation()||mesh->GetCurveOrder()>curveOrder||order<0||order>2||(curveOrder!=1&&curveOrder!=2))
             throw std::invalid_argument("Material quadrature requires bounded RT0/P1/P2 tetrahedral, hexahedral or pyramidal HDiv on an affine or P2-curved mesh");
-        if(curveOrder==2&&mesh->GetCurveOrder()!=2){mesh->Curve(2);if(mesh->GetCurveOrder()!=2)throw std::runtime_error("NGSolve did not curve the mesh to order 2");}
+        if(mesh->GetCurveOrder()!=curveOrder)
+            throw std::invalid_argument("Material staging requires the .vol stored at geometry order "+std::to_string(curveOrder)+
+                                        "; it stores order "+std::to_string(mesh->GetCurveOrder())+" and is never curved here");
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
         nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         if(!periodicBoundaries.empty()){
