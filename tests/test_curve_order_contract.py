@@ -241,6 +241,49 @@ def test_load_vol_detaches_geometry_the_file_does_not_store(tmp_path):
     assert abs(out["sphere_volume"] - 1.0) < 2e-2, out["sphere_volume"]
 
 
+def test_curving_needs_cad_and_straight_order_is_explicit(tmp_path):
+    """Guards: radia.vim._vim._curve_mesh refuses a mesh without CAD; straight_curve_order.
+
+    Assumes: Curve of a mesh without CAD (a Cubit export, a structured mesh) only
+    raises the order of the straight map, so a curved route must not do it silently.
+    """
+    pytest.importorskip("radia._radia_pybind")
+    out = _run(tmp_path, """
+        from netgen.csg import CSGeometry, OrthoBrick, Pnt as CPnt
+        from ngsolve.meshes import MakeStructured3DMesh
+        from radia.mesh_curve import CurveOrderError, load_vol, straight_curve_order
+        from radia.vim._vim import _curve_mesh
+        res = {}
+        MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
+        for name, make in (("structured", lambda: MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)),
+                           ("cadfree_vol", lambda: load_vol("cube.vol"))):
+            m = make()
+            try:
+                _curve_mesh(m, 2); res[name] = ["curved", m.GetCurveOrder()]
+            except CurveOrderError as error:
+                res[name] = ["refused", m.GetCurveOrder(), "straight_curve_order" in str(error)]
+        g = CSGeometry(); g.Add(OrthoBrick(CPnt(-1, -1, -1), CPnt(2, 2, 2))); g.GenerateMesh(maxh=1.0).Save("brick.vol")
+        brick = ng.Mesh("brick.vol")
+        m = ng.Mesh("cube.vol")
+        res["borrowed"] = type(m.ngmesh.GetGeometry()).__name__
+        with ng.TaskManager():
+            straight_curve_order(m, 2)
+        res["straight"] = [m.GetCurveOrder(), type(m.ngmesh.GetGeometry()).__name__,
+                           ng.Integrate(ng.CoefficientFunction(1), m)]
+        s = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=R/2))
+        with ng.TaskManager():
+            _curve_mesh(s, 2)
+        res["occ"] = [s.GetCurveOrder(), rel(s)]
+        print(json.dumps(res))
+    """)
+    assert out["structured"] == ["refused", 1, True], out
+    assert out["cadfree_vol"] == ["refused", 1, True], out
+    assert out["borrowed"] == "CSGeometry", out
+    order, geometry, volume = out["straight"]
+    assert order == 2 and geometry == "NetgenGeometry" and abs(volume - 1.0) < 1e-12, out["straight"]
+    assert out["occ"][0] == 2 and abs(out["occ"][1]) < 5e-3, out["occ"]
+
+
 def test_production_vol_entries_load_through_load_vol():
     """Guards: the HDiv device prepare and soft_iron_from_vol path loads.
 
