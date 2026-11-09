@@ -42,6 +42,15 @@ history of the process. This is why earlier notes in this repository
 disagreed ("flattens", "works", "corrupts the mapping"): each described one
 row of the table.
 
+The borrowed geometry need not come from a loaded file: a CSG or OCC
+`GenerateMesh` earlier in the process is borrowed the same way, and curving a
+CAD-free mesh onto a borrowed CSG geometry can crash the process (access
+violation inside `Curve`). Radia's own path loads (the HDiv device prepare and
+`soft_iron_from_vol`) therefore use `radia.mesh_curve.load_vol(path)`, which
+drops the attached geometry when the file stores none, so the mesh depends only
+on the file. A mesh object loaded by the caller is the caller's
+responsibility: load it with `load_vol` before passing it to a curved route.
+
 The 2026 induction-heating thermal mesh that reported a 6.9e6 m² boundary
 (2.97e8 × the true 0.0233 m²) is the third row: it was meshed in millimetres
 and rescaled with `ngmesh.Scale(1e-3)`.

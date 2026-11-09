@@ -163,8 +163,8 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     is added.  Exactly one of ``mu_r`` (linear) or ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
     (Caller opens ``with ng.TaskManager():``.)
     """
-    import ngsolve as ng
-    mesh = ng.Mesh(str(vol_path))
+    from radia.mesh_curve import load_vol
+    mesh = load_vol(vol_path)
     return soft_iron_from_mesh(mesh, mu_r=mu_r, bh_table=bh_table,
                                material_filter=material_filter, verbose=verbose, order=order)
 

@@ -202,6 +202,62 @@ def test_trailing_text_is_not_a_geometry_archive(meshes):
     assert out["order"] == 1
 
 
+def test_load_vol_detaches_geometry_the_file_does_not_store(tmp_path):
+    """Guards: radia.mesh_curve.load_vol; production curved routes load through it.
+
+    Assumes: Netgen binds a CAD-free .vol to the last geometry restored in the
+    process (here a CSG archive), and Curve onto that geometry is wrong or crashes.
+    """
+    out = _run(tmp_path, """
+        import gzip, shutil
+        from netgen.csg import CSGeometry, Sphere as CSphere, Pnt as CPnt
+        from ngsolve.meshes import MakeStructured3DMesh
+        g = CSGeometry(); g.Add(CSphere(CPnt(0, 0, 0), 1.0)); g.GenerateMesh(maxh=0.5).Save("sphere_csg.vol")
+        MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
+        for plain in ("cube.vol", "sphere_csg.vol"):
+            with open(plain, "rb") as src, gzip.open(plain + ".gz", "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        mc = helper(); res = {}
+        sphere = mc.load_vol("sphere_csg.vol")
+        res["premise"] = type(ng.Mesh("cube.vol").ngmesh.GetGeometry()).__name__
+        for name in ("cube.vol", "cube.vol.gz"):
+            m = mc.load_vol(name)
+            res[name] = [type(m.ngmesh.GetGeometry()).__name__]
+            curve(m, 2)
+            res[name].append(ng.Integrate(ng.CoefficientFunction(1), m))
+        res["sphere_kind"] = [mc.vol_geometry_kind(n) for n in ("sphere_csg.vol", "sphere_csg.vol.gz")]
+        res["sphere_gz_geometry"] = type(mc.load_vol("sphere_csg.vol.gz").ngmesh.GetGeometry()).__name__
+        res["sphere_geometry"] = type(sphere.ngmesh.GetGeometry()).__name__
+        curve(sphere, 2)
+        res["sphere_volume"] = ng.Integrate(ng.CoefficientFunction(1), sphere) / (4 * math.pi / 3)
+        print(json.dumps(res))
+    """)
+    assert out["premise"] == "CSGeometry", out
+    for name in ("cube.vol", "cube.vol.gz"):
+        geometry, volume = out[name]
+        assert geometry == "NetgenGeometry" and abs(volume - 1.0) < 1e-12, (name, out[name])
+    assert out["sphere_kind"] == ["csg", "csg"] and out["sphere_geometry"] == "CSGeometry", out
+    assert out["sphere_gz_geometry"] == "CSGeometry", out
+    assert abs(out["sphere_volume"] - 1.0) < 2e-2, out["sphere_volume"]
+
+
+def test_production_vol_entries_load_through_load_vol():
+    """Guards: the HDiv device prepare and soft_iron_from_vol path loads.
+
+    Assumes: a direct Mesh(path) in these modules would reattach a borrowed geometry.
+    """
+    import ast
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "radia"
+    for relative in ("hdiv_gpu.py", "vim/_radsolve.py"):
+        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+        direct = [node.lineno for node in ast.walk(tree)
+                  if isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) == "Mesh"
+                  and node.args and isinstance(node.args[0], ast.Call) and getattr(node.args[0].func, "id", None) == "str"]
+        loads = [node for node in ast.walk(tree)
+                 if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "load_vol"]
+        assert direct == [] and loads, (relative, direct, len(loads))
+
+
 @pytest.mark.parametrize("factor", [0.8, 1.2, 1e-3])
 def test_mesh_transformed_after_loading_is_rejected(meshes, factor):
     out = _run(meshes, f"""

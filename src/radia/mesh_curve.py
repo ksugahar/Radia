@@ -16,16 +16,20 @@ that file embeds its own CAD in the same units as the mesh:
   ``p``; after another geometry-bearing mesh was loaded in the same process,
   ``GetGeometry()`` returns that other geometry and ``Curve`` uses it.
 
+  The borrowed geometry may come from ``GenerateMesh`` or from loading any
+  earlier geometry-bearing ``.vol``; curving onto it can crash the process.
+
 Because ``GetGeometry()`` cannot tell an embedded CAD from a borrowed one,
-``ensure_curve_order`` takes the provenance from the ``.vol`` file itself.
-Only OCC geometry is supported for curving.  The caller owns ``TaskManager``.
-See ``docs/ngsolve_integration/curve_order.md``.
+``ensure_curve_order`` and ``load_vol`` take the provenance from the ``.vol``
+file itself.  ``ensure_curve_order`` curves only onto OCC geometry.  The caller
+owns ``TaskManager``.  See ``docs/ngsolve_integration/curve_order.md``.
 """
 from __future__ import annotations
 
+import gzip
 import math
 
-__all__ = ["CurveOrderError", "ensure_curve_order", "mesh_measures", "vol_geometry_kind"]
+__all__ = ["CurveOrderError", "ensure_curve_order", "load_vol", "mesh_measures", "vol_geometry_kind"]
 
 
 class CurveOrderError(RuntimeError):
@@ -63,7 +67,8 @@ def _read_vol(vol_path, *, with_points=True):
     from array import array
 
     points, dim, tail = array("d"), 0, []
-    with open(vol_path, "r", errors="ignore") as handle:
+    opener = gzip.open if str(vol_path).lower().endswith(".gz") else open
+    with opener(vol_path, "rt", errors="ignore") as handle:
         lines = iter(handle)
         for line in lines:
             s = line.strip()
@@ -89,6 +94,22 @@ def vol_geometry_kind(vol_path):
     text and ``None`` when nothing follows ``endmesh``.
     """
     return _geometry_kind(_read_vol(vol_path, with_points=False)[2])
+
+
+def load_vol(vol_path):
+    """Load a ``.vol`` (or ``.vol.gz``) bound only to the geometry the file stores.
+
+    Netgen attaches the process's most recent geometry to a file that stores
+    none.  For such a file the attached geometry is dropped, so the mesh and
+    any later ``Curve`` depend only on the file, as in a fresh process.  A file
+    with a stored geometry keeps the one Netgen restored from it.
+    """
+    import ngsolve as ng
+
+    mesh = ng.Mesh(str(vol_path))
+    if vol_geometry_kind(vol_path) is None:
+        mesh.ngmesh.SetGeometry(None)
+    return mesh
 
 
 def _geometry_kind(tail):
