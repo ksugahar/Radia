@@ -35,7 +35,7 @@ DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the n
 import numpy as np
 import scipy.sparse as sp
 
-from radia.mesh_curve import CurveOrderError, add_curve_descriptors as _add_curve_descriptors
+from radia.mesh_curve import CurveOrderError
 
 from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import _material_rule_space, _rule_integrator
@@ -83,38 +83,6 @@ def _require_curve_order(mesh, order, entry):
         f"a Netgen/OCC .vol), export a Cubit mesh at that order (export netgen ... order "
         f"{int(order)}), or call radia.mesh_curve.straight_curve_order(mesh, {int(order)}) for flat "
         f"geometry.")
-
-
-def _curve_mesh(mesh, order):
-    """Raise the geometry order of a path-loaded ``mesh`` onto its own CAD.
-
-    Only for a mesh just loaded with ``radia.mesh_curve.load_vol``, which keeps
-    a geometry only when the file stores it and Netgen restored it (the HDiv
-    device prepare), or one the caller generated in process.
-
-    A stored order of ``order`` or higher is kept: a loaded high-order ``.vol``
-    has no CAD callback, so a second ``Curve`` would replace its geometry. A mesh
-    without CAD (``NetgenGeometry``: a Cubit export, a structured mesh, or
-    ``load_vol`` of a CAD-free file) cannot gain curvature, because ``Curve``
-    would flatten it while reporting the new order, so it is refused. A Netgen
-    mesh with its OCC/CSG geometry, generated in process or loaded with
-    ``radia.mesh_curve.load_vol`` from a ``.vol`` that embeds it, is curved.
-    """
-    current = int(mesh.GetCurveOrder())
-    if current >= int(order):
-        return mesh
-    geometry = mesh.ngmesh.GetGeometry()
-    if geometry is None or type(geometry).__name__ == "NetgenGeometry":
-        raise CurveOrderError(
-            f"geometry order {current} < required {int(order)} and the mesh has no CAD to curve "
-            f"against. A Cubit .vol keeps the order it was exported at (export netgen ... order "
-            f"{int(order)}); a Netgen mesh is curved from its CAD when generated, or loaded with "
-            f"radia.mesh_curve.load_vol from a .vol that embeds the CAD. For flat geometry, "
-            f"radia.mesh_curve.straight_curve_order(mesh, {int(order)}) gives a straight map "
-            f"of that order explicitly.")
-    _add_curve_descriptors(mesh)
-    mesh.Curve(int(order))
-    return mesh
 
 
 # ------------------------------------------------------------------ reference Gauss-Duffy quadrature

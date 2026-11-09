@@ -31,9 +31,8 @@ def _orders(p):
 @pytest.fixture(scope="module")
 def curved_ball():
     from netgen.occ import OCCGeometry, Pnt, Sphere
-    from radia.vim._vim import _curve_mesh
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=.6))
-    _curve_mesh(mesh, 2)
+    mesh.Curve(2)
     assert mesh.GetCurveOrder() == 2
     return mesh
 

@@ -91,13 +91,15 @@ def vol_geometry_kind(vol_path):
 
     Returns ``"occ"`` for an OCC archive (``TextOutArchive`` header, the
     ``netgen::OCCGeometry`` class tag and a ``CASCADE Topology`` block),
-    ``"csg"`` for a CSG description, ``"other"`` for unrecognised trailing
-    text and ``None`` when nothing follows ``endmesh``.
+    ``"csg"`` for text that starts like a CSG description (a label only:
+    Netgen's fallback for an unrestored tail is indistinguishable from a CSG
+    restore, so ``load_vol`` and ``ensure_curve_order`` never trust it),
+    ``"other"`` for unrecognised trailing text and ``None`` when nothing follows
+    ``endmesh``.
     """
     return _geometry_kind(_read_vol(vol_path, with_points=False)[2])
 
 
-_RESTORED_GEOMETRY = {"occ": "OCCGeometry", "csg": "CSGeometry"}
 
 
 def _file_identity(path):
@@ -111,11 +113,14 @@ def load_vol(vol_path):
     """Load a ``.vol`` (or ``.vol.gz``) bound only to the geometry the file stores.
 
     Netgen attaches the process's most recent geometry to a file whose stored
-    geometry it does not restore.  The attached geometry is kept only when the
-    file stores an OCC or CSG archive and Netgen restored exactly that kind;
-    otherwise (no archive, unrecognised trailing text, a failed restore) it is
-    dropped, so the mesh and any later ``Curve`` depend only on the file, as in
-    a fresh process.  The file must not change between the provenance read and
+    geometry it does not restore, also to one whose tail only looks like an
+    archive (``csgsurfaces...``), and the fallback is an object of the same
+    class.  The attached geometry is therefore kept only for an OCC archive
+    (``vol_geometry_kind == "occ"``) restored as ``OCCGeometry``; a malformed OCC
+    archive does not fall back but fails inside Netgen.  Every other file (no
+    archive, unrecognised text, any CSG tail) loads without CAD, so the mesh
+    depends only on the file, as in a fresh process.  The stored geometry order
+    is used as it is either way.  The file must not change between the provenance read and
     the load (same device, inode, size and modification time), else this raises.
     """
     import ngsolve as ng
@@ -127,7 +132,7 @@ def load_vol(vol_path):
     if _file_identity(path) != before:
         raise RuntimeError(f"{path} changed while it was loaded; its geometry provenance is unknown")
     restored = type(mesh.ngmesh.GetGeometry()).__name__
-    if _RESTORED_GEOMETRY.get(kind) != restored:
+    if not (kind == "occ" and restored == "OCCGeometry"):
         mesh.ngmesh.SetGeometry(None)
     return mesh
 

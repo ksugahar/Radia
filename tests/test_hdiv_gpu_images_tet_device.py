@@ -56,9 +56,15 @@ _FACES = (((0, 3, 2), (0, 2, 1)), ((4, 5, 6), (4, 6, 7)), ((1, 2, 6), (1, 6, 5))
           ((0, 1, 5), (0, 5, 4)), ((3, 7, 6), (3, 6, 2)))
 
 
-def _occ(path, shape, maxh):
+def _occ(path, shape, maxh, *, curve=1):
+    """An OCC mesh saved with its CAD; ``curve=2`` curves it where the CAD lives, before saving."""
+    import ngsolve as ng
     from netgen.occ import OCCGeometry
-    OCCGeometry(shape).GenerateMesh(maxh=maxh).Save(str(path))
+    mesh = ng.Mesh(OCCGeometry(shape).GenerateMesh(maxh=maxh))
+    if curve > 1:
+        with ng.TaskManager():
+            mesh.Curve(curve)
+    mesh.ngmesh.Save(str(path))
     return path
 
 
@@ -189,7 +195,7 @@ def meshes(tmp_path_factory):
                 corner=_occ(root/"corner.vol", Box(Pnt(0.0, 0.0, -0.01), Pnt(0.02, 0.02, 0.01)), 0.014),
                 gap=_occ(root/"gap.vol", Box(Pnt(0.004, -0.01, -0.01), Pnt(0.024, 0.01, 0.01)), 0.012),
                 far=_occ(root/"far.vol", Box(Pnt(0.2, -0.01, -0.01), Pnt(0.22, 0.01, 0.01)), 0.012),
-                half_ball=_occ(root/"half_ball.vol", half_ball, 0.016),
+                half_ball=_occ(root/"half_ball.vol", half_ball, 0.016, curve=2),
                 sector=_tet_sector(root/"sector.vol", 1, FOLD),
                 sector2=_tet_sector(root/"sector2.vol", 2, FOLD),
                 apart=_tet_sector(root/"apart.vol", 2, FOLD, span=0.8),
@@ -216,12 +222,9 @@ def _case(path, order, curve_order, terms, cuda):
     import ngsolve as ng
     from radia import hdiv_gpu
     from radia.mesh_curve import load_vol
-    from radia.vim._vim import _curve_mesh
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression="dense", curve_order=curve_order)
         mesh = load_vol(path)
-        if curve_order == 2:
-            _curve_mesh(mesh, 2)
         fes = ng.HDiv(mesh, order=order)
         B, gram, _ = _cpu_gram(fes, terms, 2 if curve_order == 2 else None)
     keys = _KEYS + (_CURVED_KEYS if curve_order == 2 else ())
@@ -278,12 +281,10 @@ def _plain(path, order, curve_order, cuda):
     import ngsolve as ng
     from radia import hdiv_gpu
     from radia.mesh_curve import load_vol
-    from radia.vim._vim import _curve_mesh, build_charge_gram
+    from radia.vim._vim import build_charge_gram
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression="dense", curve_order=curve_order)
         mesh = load_vol(path)
-        if curve_order == 2:
-            _curve_mesh(mesh, 2)
         B, gram, _ = build_charge_gram(ng.HDiv(mesh, order=order), eps=1e-10, curve_order=2 if curve_order == 2 else None,
                                        _materialize_mass=False, _build_hmatrix=False)
     return setup["charge_gram"], B, gram
@@ -550,11 +551,8 @@ def _cpu_equation(path, order, curve_order, terms, rhs):
     import ngsolve as ng
     from scipy.sparse import coo_matrix, csr_matrix
     from radia.mesh_curve import load_vol
-    from radia.vim._vim import _curve_mesh
     with ng.TaskManager():
         mesh = load_vol(path)
-        if curve_order == 2:
-            _curve_mesh(mesh, 2)
         fes = ng.HDiv(mesh, order=order)
         B, gram, _ = _cpu_gram(fes, terms, 2 if curve_order == 2 else None)
         u, v = fes.TnT()
@@ -578,9 +576,6 @@ def _cpu_solve(path, order, curve_order, **kw):
     with ng.TaskManager():
         mesh = load_vol(path)
         extra = dict(curve_order=2) if curve_order == 2 else {}
-        if curve_order == 2:
-            from radia.vim._vim import _curve_mesh
-            _curve_mesh(mesh, 2)
         result = vim.Solve(mesh, H_ext=ng.CF((0.0, 0.0, 1e5)), order=order, gram_eps=1e-10, tol=1e-11, **extra, **kw)
     return np.asarray(result["_m_coefficients"], dtype=np.float64), result
 

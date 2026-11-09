@@ -202,11 +202,12 @@ def test_trailing_text_is_not_a_geometry_archive(meshes):
     assert out["order"] == 1
 
 
-def test_load_vol_detaches_geometry_the_file_does_not_store(tmp_path):
-    """Guards: radia.mesh_curve.load_vol; production curved routes load through it.
+def test_load_vol_keeps_only_a_restored_occ_geometry(tmp_path):
+    """Guards: radia.mesh_curve.load_vol keeps an attached geometry only for a restored OCC archive.
 
-    Assumes: Netgen binds a CAD-free .vol to the last geometry restored in the
-    process (here a CSG archive), and Curve onto that geometry is wrong or crashes.
+    Assumes: Netgen binds a .vol whose tail it does not restore to the last geometry of the
+    process, here a CSG one, also when the tail looks like a CSG archive; a CSG restore cannot
+    be told apart from that fallback, so a CSG geometry is never kept.
     """
     out = _run(tmp_path, """
         import gzip, shutil
@@ -214,54 +215,58 @@ def test_load_vol_detaches_geometry_the_file_does_not_store(tmp_path):
         from ngsolve.meshes import MakeStructured3DMesh
         g = CSGeometry(); g.Add(CSphere(CPnt(0, 0, 0), 1.0)); g.GenerateMesh(maxh=0.5).Save("sphere_csg.vol")
         MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
+        cube = open("cube.vol").read()
+        open("cube_csgtail.vol", "w").write(cube + "csgsurfaces-extra\\n")
+        open("cube_csgbare.vol", "w").write(cube + "csgsurfaces\\n")
+        OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=R/2).Save("occ.vol")
         for plain in ("cube.vol", "sphere_csg.vol"):
             with open(plain, "rb") as src, gzip.open(plain + ".gz", "wb") as dst:
                 shutil.copyfileobj(src, dst)
         mc = helper(); res = {}
-        sphere = mc.load_vol("sphere_csg.vol")
-        res["premise"] = type(ng.Mesh("cube.vol").ngmesh.GetGeometry()).__name__
-        for name in ("cube.vol", "cube.vol.gz"):
-            m = mc.load_vol(name)
-            res[name] = [type(m.ngmesh.GetGeometry()).__name__]
-            curve(m, 2)
-            res[name].append(ng.Integrate(ng.CoefficientFunction(1), m))
-        res["sphere_kind"] = [mc.vol_geometry_kind(n) for n in ("sphere_csg.vol", "sphere_csg.vol.gz")]
-        res["sphere_gz_geometry"] = type(mc.load_vol("sphere_csg.vol.gz").ngmesh.GetGeometry()).__name__
-        res["sphere_geometry"] = type(sphere.ngmesh.GetGeometry()).__name__
-        curve(sphere, 2)
-        res["sphere_volume"] = ng.Integrate(ng.CoefficientFunction(1), sphere) / (4 * math.pi / 3)
+        seed = ng.Mesh("sphere_csg.vol")
+        plain = ng.Mesh("cube_csgtail.vol").ngmesh.GetGeometry()
+        res["premise"] = [mc.vol_geometry_kind("cube_csgtail.vol"), type(plain).__name__,
+                          plain is seed.ngmesh.GetGeometry()]
+        one = ng.CoefficientFunction(1)
+        for name in ("cube.vol", "cube.vol.gz", "cube_csgtail.vol", "cube_csgbare.vol",
+                     "sphere_csg.vol", "sphere_csg.vol.gz"):
+            raw = ng.Mesh(name); m = mc.load_vol(name)
+            res[name] = [type(m.ngmesh.GetGeometry()).__name__, m.GetCurveOrder(),
+                         ng.Integrate(one, m) == ng.Integrate(one, raw)]
+        m = mc.load_vol("occ.vol")
+        res["occ"] = [type(m.ngmesh.GetGeometry()).__name__, m.GetCurveOrder()]
         print(json.dumps(res))
     """)
-    assert out["premise"] == "CSGeometry", out
-    for name in ("cube.vol", "cube.vol.gz"):
-        geometry, volume = out[name]
-        assert geometry == "NetgenGeometry" and abs(volume - 1.0) < 1e-12, (name, out[name])
-    assert out["sphere_kind"] == ["csg", "csg"] and out["sphere_geometry"] == "CSGeometry", out
-    assert out["sphere_gz_geometry"] == "CSGeometry", out
-    assert abs(out["sphere_volume"] - 1.0) < 2e-2, out["sphere_volume"]
+    assert out["premise"] == ["csg", "CSGeometry", True], out["premise"]
+    for name in ("cube.vol", "cube.vol.gz", "cube_csgtail.vol", "cube_csgbare.vol",
+                 "sphere_csg.vol", "sphere_csg.vol.gz"):
+        assert out[name] == ["NetgenGeometry", 1, True], (name, out[name])
+    assert out["occ"] == ["OCCGeometry", 1], out["occ"]
 
 
-def test_curving_needs_cad_and_straight_order_is_explicit(tmp_path):
-    """Guards: radia.vim._vim._curve_mesh refuses a mesh without CAD; straight_curve_order.
+def test_radia_routes_never_curve_and_straight_order_is_explicit(tmp_path):
+    """Guards: radia.vim._vim._require_curve_order; straight_curve_order detaches a borrowed CAD.
 
-    Assumes: Curve of a mesh without CAD (a Cubit export, a structured mesh) only
-    raises the order of the straight map, so a curved route must not do it silently.
+    Assumes: Curve of a mesh without CAD keeps the straight map and only raises the reported
+    order, and Curve onto a borrowed geometry is wrong or crashes, so no Radia route curves.
     """
     pytest.importorskip("radia._radia_pybind")
     out = _run(tmp_path, """
         from netgen.csg import CSGeometry, OrthoBrick, Pnt as CPnt
         from ngsolve.meshes import MakeStructured3DMesh
         from radia.mesh_curve import CurveOrderError, load_vol, straight_curve_order
-        from radia.vim._vim import _curve_mesh
+        from radia.vim._vim import _require_curve_order
         res = {}
         MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
-        for name, make in (("structured", lambda: MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)),
-                           ("cadfree_vol", lambda: load_vol("cube.vol"))):
-            m = make()
+        q3 = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=R/2)); curve(q3, 3)
+        for name, m in (("structured", MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)),
+                        ("cadfree_vol", load_vol("cube.vol")),
+                        ("occ_uncurved", ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=R/2)))):
             try:
-                _curve_mesh(m, 2); res[name] = ["curved", m.GetCurveOrder()]
+                _require_curve_order(m, 2, "probe"); res[name] = ["accepted", m.GetCurveOrder()]
             except CurveOrderError as error:
                 res[name] = ["refused", m.GetCurveOrder(), "straight_curve_order" in str(error)]
+        res["q3"] = [_require_curve_order(q3, 2, "probe") is q3, q3.GetCurveOrder()]
         g = CSGeometry(); g.Add(OrthoBrick(CPnt(-1, -1, -1), CPnt(2, 2, 2))); g.GenerateMesh(maxh=1.0).Save("brick.vol")
         brick = ng.Mesh("brick.vol")
         m = ng.Mesh("cube.vol")
@@ -270,26 +275,22 @@ def test_curving_needs_cad_and_straight_order_is_explicit(tmp_path):
             straight_curve_order(m, 2)
         res["straight"] = [m.GetCurveOrder(), type(m.ngmesh.GetGeometry()).__name__,
                            ng.Integrate(ng.CoefficientFunction(1), m)]
-        s = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=R/2))
-        with ng.TaskManager():
-            _curve_mesh(s, 2)
-        res["occ"] = [s.GetCurveOrder(), rel(s)]
         print(json.dumps(res))
     """)
-    assert out["structured"] == ["refused", 1, True], out
-    assert out["cadfree_vol"] == ["refused", 1, True], out
+    for name in ("structured", "cadfree_vol", "occ_uncurved"):
+        assert out[name] == ["refused", 1, True], (name, out[name])
+    assert out["q3"] == [True, 3], out["q3"]
     assert out["borrowed"] == "CSGeometry", out
     order, geometry, volume = out["straight"]
     assert order == 2 and geometry == "NetgenGeometry" and abs(volume - 1.0) < 1e-12, out["straight"]
-    assert out["occ"][0] == 2 and abs(out["occ"][1]) < 5e-3, out["occ"]
 
 
 def test_public_entries_never_curve_a_borrowed_geometry(tmp_path):
-    """Guards: vim.Solve / MagnetizationSource refuse an uncurved mesh object; load_vol provenance.
+    """Guards: vim.Solve / MagnetizationSource refuse an uncurved mesh; the path seam refuses too.
 
-    Assumes: after a CSG GenerateMesh, a plain Mesh() of a CAD-free .vol (with or
-    without trailing text, gzipped or not) is bound to that CSG geometry, and Curve
-    onto it is wrong or crashes; a stored order and a restored CAD are kept.
+    Assumes: after a CSG GenerateMesh, a plain Mesh() of a CAD-free .vol (with or without
+    trailing text or a fake CSG tail, gzipped or not) is bound to that CSG geometry, and Curve
+    onto it is wrong or crashes; a stored order and an explicitly curved CAD are kept.
     """
     pytest.importorskip("radia._radia_pybind")
     out = _run(tmp_path, """
@@ -297,15 +298,17 @@ def test_public_entries_never_curve_a_borrowed_geometry(tmp_path):
         from netgen.csg import CSGeometry, Sphere as CSphere, Pnt as CPnt
         from ngsolve.meshes import MakeStructured3DMesh
         from radia import vim
-        from radia.mesh_curve import CurveOrderError, load_vol, vol_geometry_kind
-        from radia.vim._vim import _curve_mesh
+        from radia.mesh_curve import CurveOrderError, ensure_curve_order, load_vol, vol_geometry_kind
+        from radia.vim._vim import _require_curve_order
         occ = OCCGeometry(Sphere(Pnt(0, 0, 0), R))
         occ.GenerateMesh(maxh=R/2).Save("occ_flat.vol")
         q2 = ng.Mesh(occ.GenerateMesh(maxh=R/2)); curve(q2, 2); q2.ngmesh.Save("q2.vol")
         lines = open("q2.vol").read().splitlines()
         open("q2_nocad.vol", "w").write("\\n".join(lines[:lines.index("endmesh")+1]) + "\\n")
         MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
-        open("cube_comment.vol", "w").write(open("cube.vol").read() + "# written by another tool\\n")
+        cube = open("cube.vol").read()
+        open("cube_comment.vol", "w").write(cube + "# written by another tool\\n")
+        open("cube_csgtail.vol", "w").write(cube + "csgsurfaces-extra\\n")
         for plain in ("cube.vol", "cube_comment.vol"):
             with open(plain, "rb") as src, gzip.open(plain + ".gz", "wb") as dst:
                 shutil.copyfileobj(src, dst)
@@ -324,35 +327,37 @@ def test_public_entries_never_curve_a_borrowed_geometry(tmp_path):
                 res[entry] = ["ran", m.GetCurveOrder()]
             except CurveOrderError as error:
                 res[entry] = ["refused", m.GetCurveOrder(), "straight_curve_order" in str(error)]
-        for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz"):
+        for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz",
+                     "cube_csgtail.vol", "occ_flat.vol"):
             m = load_vol(name)
             res[name] = [type(m.ngmesh.GetGeometry()).__name__]
             try:
-                _curve_mesh(m, 2); res[name].append("curved")
+                _require_curve_order(m, 2, "HDiv device prepare"); res[name].append("accepted")
             except CurveOrderError:
                 res[name].append("refused")
         one = ng.CoefficientFunction(1.0)
-        stored = ng.Mesh("q2_nocad.vol")
+        stored = load_vol("q2_nocad.vol")
         before = [ng.Integrate(one, stored, ng.BND), ng.Integrate(one, stored)]
         with ng.TaskManager():
             vim.Solve(stored, mu_r=100.0, H_ext=H, order=1, curve_order=2)
         after = [ng.Integrate(one, stored, ng.BND), ng.Integrate(one, stored)]
         res["stored"] = [stored.GetCurveOrder(), max(abs(a/b - 1) for a, b in zip(after, before)), rel(stored)]
         cad = load_vol("occ_flat.vol")
-        res["cad"] = [type(cad.ngmesh.GetGeometry()).__name__]
         with ng.TaskManager():
-            _curve_mesh(cad, 2)
-        res["cad"] += [cad.GetCurveOrder(), rel(cad)]
+            action = ensure_curve_order(cad, 2, vol_path="occ_flat.vol")["action"]
+            vim.Solve(cad, mu_r=100.0, H_ext=H, order=1, curve_order=2)
+        res["cad"] = [action, cad.GetCurveOrder(), rel(cad)]
         print(json.dumps(res))
     """)
     assert out["borrowed"] == "CSGeometry" and out["kind_comment"] == "other", out
     assert out["solve"] == ["refused", 1, True] and out["source"] == ["refused", 1, True], out
-    for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz"):
+    for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz", "cube_csgtail.vol"):
         assert out[name] == ["NetgenGeometry", "refused"], (name, out[name])
+    assert out["occ_flat.vol"] == ["OCCGeometry", "refused"], out["occ_flat.vol"]
     order, change, area = out["stored"]
     assert order == 2 and change == 0.0 and abs(area) < 5e-3, out["stored"]
-    geometry, order, area = out["cad"]
-    assert geometry == "OCCGeometry" and order == 2 and abs(area) < 5e-3, out["cad"]
+    action, order, area = out["cad"]
+    assert action == "curved" and order == 2 and abs(area) < 5e-3, out["cad"]
 
 
 def test_production_vol_entries_load_through_load_vol():
@@ -370,6 +375,21 @@ def test_production_vol_entries_load_through_load_vol():
         loads = [node for node in ast.walk(tree)
                  if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "load_vol"]
         assert direct == [] and loads, (relative, direct, len(loads))
+
+
+def test_production_curved_entries_require_the_stored_order():
+    """Guards: no curved Radia entry calls Curve; each requires the stored geometry order.
+
+    Assumes: a mesh object or a loaded .vol cannot prove where its geometry came from.
+    """
+    import ast
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "radia"
+    for relative in ("hdiv_gpu.py", "vim/_solve.py", "vim/_solver.py", "vim/_magnetization_source.py"):
+        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        names = [getattr(node.func, "attr", getattr(node.func, "id", None)) for node in calls]
+        curving = [node.lineno for node, name in zip(calls, names) if name in ("Curve", "_curve_mesh")]
+        assert curving == [] and "_require_curve_order" in names, (relative, curving)
 
 
 @pytest.mark.parametrize("factor", [0.8, 1.2, 1e-3])
