@@ -30,7 +30,10 @@ def main():
         directories,dll_handles=dependency_directories(a.dependency_dir)
         result['dependency_directories']=list(map(str,directories))
         result['threads']=thread_record(a.cpu_threads)
-        result['mesh_check']=checked_mesh(a.mesh,a.contract,a.mesh_sha256,a.contract_sha256,a.out/'vol_check.json',tet_only=a.geometry!='hex')
+        result['mesh_check']=checked_mesh(a.mesh,a.contract,a.mesh_sha256,a.contract_sha256,
+                                          a.mesh_check_receipt,a.mesh_check_receipt_sha256,
+                                          a.mesh_check_provenance,a.out/'vol_check.json',
+                                          tet_only=a.geometry!='hex')
         import numpy as np
         import ngsolve as ng
         from scipy.sparse import coo_matrix

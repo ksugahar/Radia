@@ -1,11 +1,13 @@
 param(
+    [string]$OptunaSource = $env:RADIA_OPTUNA_SOURCE,
     [ValidateRange(1, 101)]
     [int]$Repeats = 7,
     [string]$Output = ""
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+if (-not $OptunaSource) { throw "Set RADIA_OPTUNA_SOURCE to a standalone radia-optuna checkout." }
+$RepoRoot = (Resolve-Path -LiteralPath $OptunaSource).Path
 $ProbeRoot = $RepoRoot
 foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
     if ($Drive.DisplayRoot -and
@@ -17,7 +19,7 @@ foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
 }
 $MatlabDirPath = Join-Path $ProbeRoot "matlab"
 $MatlabDir = $MatlabDirPath.Replace("\", "/").Replace("'", "''")
-$ManifestPath = Join-Path $ProbeRoot "packages\radia-optuna\src\radia_optuna\manifest.json"
+$ManifestPath = Join-Path $ProbeRoot "src\radia_optuna\manifest.json"
 if (-not (Test-Path -LiteralPath $ManifestPath)) {
     throw "Missing radia-optuna manifest: $ManifestPath"
 }
@@ -46,7 +48,7 @@ foreach ($Repeat in 1..$Repeats) {
 
 $Binary = Join-Path $RepoRoot "matlab\optuna_mex.mexw64"
 if (-not (Test-Path -LiteralPath $Binary)) {
-    throw "Missing $Binary. Run Build.ps1 -OptunaMexOnly first."
+    throw "Missing $Binary. Build the standalone radia-optuna MEX first."
 }
 $Sorted = @($Measurements | Sort-Object)
 $Median = if ($Sorted.Count % 2 -eq 1) {

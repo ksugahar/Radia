@@ -10,10 +10,6 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_SRC = ROOT / "packages" / "cubit-mesh-export" / "src"
-if str(PACKAGE_SRC) not in sys.path:
-    sys.path.insert(0, str(PACKAGE_SRC))
-
 import ngsolve as ng
 from cubit_mesh_export import smoke_test
 from netgen.meshing import (

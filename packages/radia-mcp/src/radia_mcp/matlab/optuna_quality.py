@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -93,19 +94,9 @@ def _read_json(path: Path, errors: list[str], label: str) -> dict[str, Any]:
     return value
 
 
-def _repository_candidates() -> list[Path]:
-    seeds = [Path.cwd(), Path(__file__).resolve()]
-    result: list[Path] = []
-    for seed in seeds:
-        for candidate in (seed, *seed.parents):
-            if candidate not in result:
-                result.append(candidate)
-    return result
-
-
 def _repository_layout(root: Path) -> dict[str, Path | str] | None:
-    matlab_root = root / "packages/radia-optuna/matlab"
-    manifest = root / "packages" / "radia-optuna" / "src" / "radia_optuna" / "manifest.json"
+    matlab_root = root / "matlab"
+    manifest = root / "src" / "radia_optuna" / "manifest.json"
     if not (matlab_root / "optuna50_api_coverage.json").is_file():
         return None
     if not manifest.is_file():
@@ -115,21 +106,15 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         "root": root,
         "matlab_root": matlab_root,
         "manifest": manifest,
-        "notice": root / "packages" / "radia-optuna" / "THIRD_PARTY_NOTICES.md",
-        "oracle": root / "packages" / "radia-optuna" / "oracles" / "optuna50_oracle.json",
+        "notice": root / "THIRD_PARTY_NOTICES.md",
+        "oracle": root / "oracles" / "optuna50_oracle.json",
         "mcp_oracle": root
-        / "packages"
-        / "radia-optuna"
         / "oracles"
         / "optuna50_mcp_oracle.json",
         "inventory": root
-        / "packages"
-        / "radia-optuna"
         / "oracles"
         / "optuna50_public_api.json",
         "test_manifest": root
-        / "packages"
-        / "radia-optuna"
         / "oracles"
         / "optuna_test_manifest.json",
     }
@@ -156,8 +141,9 @@ def _installed_layout(package_root: Path) -> dict[str, Path | str] | None:
 
 
 def _resolve_layout(location: str = "") -> dict[str, Path | str]:
-    if location:
-        supplied = Path(location).expanduser().resolve()
+    configured = location or os.environ.get("RADIA_OPTUNA_SOURCE", "").strip()
+    if configured:
+        supplied = Path(configured).expanduser().resolve()
         candidates = [supplied]
         if supplied.is_file():
             candidates.insert(0, supplied.parent)
@@ -177,7 +163,7 @@ def _resolve_layout(location: str = "") -> dict[str, Path | str]:
                 if layout is not None:
                     return layout
         raise FileNotFoundError(
-            f"{supplied} is neither a Radia repository nor an installed radia-optuna package"
+            f"{supplied} is neither a standalone radia-optuna checkout nor an installed package"
         )
 
     installed = installed_package_root()
@@ -186,11 +172,6 @@ def _resolve_layout(location: str = "") -> dict[str, Path | str]:
         if layout is None:
             raise FileNotFoundError(f"Incomplete installed radia-optuna package: {installed}")
         return layout
-
-    for candidate in _repository_candidates():
-        layout = _repository_layout(candidate)
-        if layout is not None:
-            return layout
 
     raise FileNotFoundError(
         "radia-optuna was not found in a repository or installed Python environment"
@@ -248,7 +229,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     compatibility_path = matlab_root / "optuna_upstream_compatibility.json"
     notice_path = Path(layout["notice"])
     mex_path = matlab_root / "optuna_mex.mexw64"
-    source_path = root / "packages/radia-optuna/native/optuna_mex.cpp"
+    source_path = root / "native/optuna_mex.cpp"
 
     manifest = _read_json(manifest_path, errors, "distribution manifest")
     coverage = _read_json(coverage_path, errors, "API coverage")
@@ -484,18 +465,19 @@ def matlab_optuna_oracle_plan(
             "status": "error",
             "scope": key,
             "errors": health.get("errors", [])
-            or ["oracle execution requires a Radia repository checkout"],
+            or ["oracle execution requires a standalone radia-optuna checkout"],
         }
 
     root = Path(str(health["root"]))
     prefixes = _ORACLE_SCOPE_FILES[key]
     prefix_code = _matlab_cellstr(prefixes)
     root_code = _matlab_literal(str(root))
+    optuna_matlab = _matlab_literal(str(root / "matlab"))
     output = Path(output_path or scratch_root() / f"radia-optuna-{key}-summary.json")
     output_code = _matlab_literal(str(output))
     matlab_code = (
         f"repoRoot=string({root_code}); cd(repoRoot); "
-        "addpath(fullfile(repoRoot,'packages','radia-optuna','matlab')); "
+        f"addpath({optuna_matlab}); "
         "suite=testsuite(fullfile(repoRoot,'tests','matlab'),"
         "'IncludeSubfolders',false); names=string({suite.Name}); "
         f"prefixes=string({prefix_code}); selected=false(size(names)); "
@@ -520,15 +502,15 @@ def matlab_optuna_oracle_plan(
     if key in {"all", "shared", "samplers", "storage"}:
         fixture_commands.extend(
             [
-                "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-                "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
-                "python packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
-                "python packages/radia-optuna/tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output packages/radia-optuna/oracles/optuna_test_manifest.json",
+                "python oracles/generate_optuna50_api_inventory.py",
+                "python oracles/generate_optuna50_oracle.py",
+                "python tools/generate_optuna50_api_coverage.py",
+                "python tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output oracles/optuna_test_manifest.json",
             ]
         )
     if key in {"all", "upstream_mcp"}:
         fixture_commands.append(
-            "python packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py"
+            "python oracles/generate_optuna50_mcp_oracle.py"
         )
 
     return {
@@ -584,7 +566,13 @@ def matlab_optuna_benchmark_plan(
             or ["benchmarking requires a Radia repository checkout"],
         }
     root = Path(str(health["root"]))
-    benchmark_root = root / "validation_test" / "optimization"
+    candidates = [Path(os.environ["RADIA_REPO_ROOT"])] if os.environ.get("RADIA_REPO_ROOT") else []
+    candidates.extend(Path(__file__).resolve().parents)
+    radia_root = next((path for path in candidates if (path / "src/lib/radia_pybind.cpp").is_file()), None)
+    if radia_root is None:
+        return {"schema": "radia-mcp.matlab-optuna-benchmark-plan/v1",
+                "ok": False, "status": "error", "errors": ["Radia benchmark sources not found"]}
+    benchmark_root = radia_root / "validation_test" / "optimization"
     python_script = benchmark_root / "benchmark_optuna50_python.py"
     matlab_script = benchmark_root / "benchmark_matlab_optuna50.m"
     cold_script = benchmark_root / "benchmark_optuna_mex_cold_start.ps1"
@@ -615,12 +603,13 @@ def matlab_optuna_benchmark_plan(
     python_output = output / "optuna50_python.json"
     matlab_output = output / "optuna50_matlab.json"
     cold_output = output / "optuna_mex_cold.json"
-    root_literal = _matlab_literal(str(root))
+    root_literal = _matlab_literal(str(radia_root))
+    optuna_matlab = _matlab_literal(str(root / "matlab"))
     matlab_output_literal = _matlab_literal(str(matlab_output))
     expected_native_commands = int(health["native"]["command_count"])
     matlab_code = (
         f"repoRoot=string({root_literal}); cd(repoRoot); "
-        "addpath(fullfile(repoRoot,'packages','radia-optuna','matlab')); "
+        f"addpath({optuna_matlab}); "
         "addpath(fullfile(repoRoot,'validation_test','optimization')); "
         f"result=benchmark_matlab_optuna50(string({matlab_output_literal})); "
         "nativeStatus=radia.optuna.nativeStatus(); "
@@ -647,7 +636,7 @@ def matlab_optuna_benchmark_plan(
         "cold_start": {
             "scope": "first optuna_mex api.info call; MATLAB startup excluded",
             "powershell_command": (
-                f"pwsh -File \"{cold_script}\" -Repeats 7 -Output \"{cold_output}\""
+                f"pwsh -File \"{cold_script}\" -OptunaSource \"{root}\" -Repeats 7 -Output \"{cold_output}\""
             ),
             "output": str(cold_output),
         },

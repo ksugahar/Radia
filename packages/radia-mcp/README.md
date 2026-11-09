@@ -227,7 +227,7 @@ differences through `matlab_optuna_mcp_route`: table/MAT persistence,
 `OptimizationSession` lifecycle/checkpoint/selection, Simulink controls and
 telemetry, MATLAB parallel execution, the required
 21-command `optuna_mex`, and Radia CAE artifact adapters. Seeded numerical
-oracle checks execute pinned `optuna==4.9.0` directly because the verified
+oracle checks execute pinned `optuna==5.0.0` directly because the verified
 upstream MCP sampler tool does not expose a seed.
 
 The MATLAB difference lane is executable rather than descriptive:

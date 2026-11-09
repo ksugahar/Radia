@@ -2700,7 +2700,7 @@ radia CPU: Build.ps1 / CMake (supported MSVC + MKL + NGSolve)
   +-> axifem.pyd               (axisymmetric FE, optional)
 
 radia-gpu: independent package-owned MATLAB mexcuda targets
-radia-optuna: independent Build.ps1 -OptunaMexOnly -> optuna_mex
+radia-optuna: standalone repository and release; not built here
 cubit-mesh-export: independent Cubit export-backend build
 ```
 
@@ -2743,9 +2743,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 # Focused CPU native lanes
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AxiFemOnly
-
-# Independent radia-optuna mexcuda target; not part of the CPU radia build
-pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 ```
 
 For `radia-gpu`, select the current package-owned target and its independent

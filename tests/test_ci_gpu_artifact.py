@@ -81,8 +81,8 @@ def test_schedule_chooses_newest_complete_successful_main_sha(monkeypatch):
     import json
     old, newest, incomplete = 'a' * 40, 'b' * 40, 'c' * 40
     artifacts = [dict(name=name, expired=False, workflow_run=dict(head_branch='main', head_sha=sha))
-        for sha in (old, newest) for name in ('gpu-simulink-wheel', 'gpu-optuna-wheel')]
-    artifacts.append(dict(name='gpu-simulink-wheel', expired=False,
+        for sha in (old, newest) for name in ('gpu-simulink-wheel',)]
+    artifacts.append(dict(name='unrelated-wheel', expired=False,
         workflow_run=dict(head_branch='main', head_sha=incomplete)))
     routes = []
     def request(route):
@@ -96,7 +96,7 @@ def test_schedule_chooses_newest_complete_successful_main_sha(monkeypatch):
     assert any('page=2' in route for route in routes)
 
 
-def test_schedule_fails_without_complete_pair(monkeypatch):
+def test_schedule_fails_without_required_wheel(monkeypatch):
     monkeypatch.setattr(gpu, 'request', lambda route: b'{"artifacts": []}')
     with pytest.raises(ValueError, match='No main SHA'):
         gpu.newest_main_sha()

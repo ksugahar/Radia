@@ -27,36 +27,11 @@ def test_ltspice_data_ci_is_scoped_and_runs_the_real_matlab_test():
     assert 'Build.ps1' not in code and 'pip install' not in code
 
 
-def test_optuna_ci_does_not_build_for_unrelated_raw_fixtures():
-    root = Path(__file__).resolve().parents[1]
-    workflow = yaml.load(
-        (root / '.github/workflows/radia-optuna.yml').read_text(),
-        Loader=yaml.BaseLoader,
-    )
-    for event in ('push', 'pull_request'):
-        patterns = workflow['on'][event]['paths']
-        def selected(path):
-            included = False
-            for pattern in patterns:
-                if fnmatchcase(path, pattern.lstrip('!')):
-                    included = not pattern.startswith('!')
-            return included
-
-        assert not selected('tests/matlab/fixtures/ltspice_numdgt7_binary.raw')
-        assert not selected('tests/matlab/fixtures/kicad_ltspice_bridge.kicad_sch')
-        # The Optuna/LTspice objective really consumes this shared fixture.
-        assert selected('tests/matlab/fixtures/ltspice_rc.cir')
-        assert selected('tests/matlab/fixtures/generate_sobol_direction_numbers.py')
-        for fixture in (root / 'tests/matlab/fixtures').glob('*optuna*'):
-            assert selected(fixture.relative_to(root).as_posix())
 
 
 def test_markdown_inputs_are_explicitly_scoped():
     root = Path(__file__).resolve().parents[1]
     for name, included, excluded in (
-        ('radia-optuna.yml', ['packages/radia-optuna/README.md',
-          'packages/radia-optuna/MATLAB_README.md', 'packages/radia-optuna/THIRD_PARTY_NOTICES.md',
-          'packages/radia-optuna/OPTUNA_SIMULINK_LAB.md'], ['packages/radia-optuna/HANDOVER.md']),
         ('ltspice-data-safety.yml', [], ['tests/matlab/fixtures/ltspice_numdgt7_README.md']),
         ('radia-simulink.yml', ['docs/ltspice/README.md', 'packages/radia-simulink/README.md'],
           ['packages/radia-simulink/HANDOVER.md']),

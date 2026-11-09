@@ -6,7 +6,7 @@ Radia is AI-native, AI-operable electromagnetic CAE through MCP. Users set analy
 Scope: (1) complete and validate HDiv-MMM topology optimization; (2) improve repository and `radia-mcp` quality, validation, build, CI, packaging and release operation.
 Do not add unrelated features. No backward compatibility: keep only the latest design; delete legacy paths, aliases, flags, shims and old releases; repository health comes first.
 ## Repository Boundaries
-The monorepo independently releases `radia`, `radia-simulink`, `cubit-mesh-export`, `radia-mcp` and `radia-optuna`; EqnEdit64 lives in its own repository. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
+Radia, Simulink and MCP release here. Cubit export, MATLAB Optuna and EqnEdit64 release separately. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 `radia`: Python/pybind11 CPU and GPU, Windows and Linux; its code and tests never import `radia_simulink`. `packages/radia-simulink`: all MATLAB/Simulink/LTspice source, build and distribution, depending on `radia` one-way (the retired `radia-gpu` name is not published). `radia-mcp`: cross-package knowledge/tools, optional GPU backend. `radia-optuna` stays independent. `radia` releases exclude MATLAB/MEX, LTspice and Simulink artifacts and their CI gates; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
