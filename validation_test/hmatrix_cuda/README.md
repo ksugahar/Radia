@@ -6,8 +6,9 @@ Small numerical and lifecycle regressions belong in the lightweight test tier;
 large physical, nonlinear, mixed-mesh and GPU performance studies belong here
 with JSON evidence. Existing tetrahedral results do not certify the other two
 families. The pyramid map of Netgen 6.2.2608 scales every pyramid `z` by `1 - 1e-10`, so
-pyramid results on the stock wheel differ from an exact map at that level. The installed-wheel
-GPU lane runs on that source plus `tools/patches/netgen-pyramid-apex.patch`, built and placed in
+pyramid results on the stock wheel differ from an exact map at that level; its vectorised map also
+drops the base-edge blend of curved pyramids. The installed-wheel GPU lane runs on that source plus
+`tools/patches/netgen-pyramid.patch` (upstream apex clamp 13b47c3a9 and the blend), built and placed in
 its run-local environment by `tools/netgen_overlay.py`.
 
 ## Current device route
