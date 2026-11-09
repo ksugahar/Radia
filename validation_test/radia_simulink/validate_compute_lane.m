@@ -1,4 +1,4 @@
-function validate_compute_lane(payload,optunaPayload,output)
+function validate_compute_lane(payload,output)
 % Compute-only use of exact installed wheels. No compiler or Python solver.
 restoredefaultpath;
 root=fileparts(fileparts(fileparts(mfilename('fullpath'))));
@@ -45,6 +45,4 @@ receipt=struct('schema','radia.gpu.compute-validation.v1','passed',true, ...
     'cases',{records},'source_commit',getenv('GITHUB_SHA'),'backend','gpu');
 fid=fopen(fullfile(output,'csr.json'),'w');assert(fid>=0);
 fprintf(fid,'%s\n',jsonencode(receipt,PrettyPrint=true));fclose(fid);
-addpath(fullfile(root,'validation_test','radia_optuna'));
-validate_cuda(root,optunaPayload,fullfile(output,'optuna.json'),131072);
 end

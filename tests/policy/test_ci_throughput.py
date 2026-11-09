@@ -112,7 +112,7 @@ def test_unproven_tree_never_reuses(change):
 
 @pytest.mark.parametrize('lane', receipt.LANES)
 def test_unrelated_package_never_selects_heavy_lane(lane):
-    for path in ('packages/cubit-mesh-export/src/change.py', 'docs/guide.md'):
+    for path in ('packages/radia-mcp/src/radia_mcp/presentation/tools.py', 'docs/guide.md'):
         assert not impact.lane_required(lane, {path}, None, impact.manifest())[0]
 
 
@@ -192,9 +192,8 @@ def test_numerical_tests_are_retained_and_full_release_is_mandatory():
 
 def test_evidence_changes_do_not_build_gpu_but_executable_helpers_do():
     data = impact.manifest()
-    for path in ('validation_test/ams_cuda/run.py', 'validation_test/ams_cuda/setup_benchmark.py', 'validation_test/radia_optuna/validate_cuda.m'):
-        lane = 'radia-optuna' if 'radia_optuna' in path else 'radia-simulink'
-        assert impact.lane_required(lane, {path}, None, data)[0]
+    for path in ('validation_test/ams_cuda/run.py', 'validation_test/ams_cuda/setup_benchmark.py'):
+        assert impact.lane_required('radia-simulink', {path}, None, data)[0]
     assert impact.lane_required('radia-simulink', {'validation_test/ams_cuda/input.json'}, None, data)[0]
 
 
@@ -204,7 +203,6 @@ def test_evidence_changes_do_not_build_gpu_but_executable_helpers_do():
     ('src/radia/vim/_nonlinear.py', True),
     ('src/core/rad_parallel.h', True),
     ('Build.ps1', True),
-    ('packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py', True),
     ('packages/radia-simulink/matlab/change.m', False),
     ('validation_test/maglev/test_demo_evidence.py', True),
 ])

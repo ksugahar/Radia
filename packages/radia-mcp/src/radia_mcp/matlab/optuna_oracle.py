@@ -18,8 +18,6 @@ from typing import Any
 from .optuna_evidence import checked_evidence, installed_package_root
 
 
-_POLICY_HEADING = "## Optuna"
-
 # Any local function declaration, including bracketed output lists.  The name
 # filter below then applies MATLAB's own rule.  Matching only ``test``-prefixed
 # names missed a shared-behavior test named ``...Test`` entirely: it appeared
@@ -50,40 +48,15 @@ def _json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _has_evidence(candidate: Path) -> bool:
-    return (
-        (candidate / "packages" / "radia-optuna" / "matlab" / "optuna_upstream_compatibility.json").is_file()
-        and (candidate / "packages/radia-optuna/oracles/optuna_test_manifest.json").is_file()
-    )
-
-
 def _repo_root(repo_root: str | os.PathLike[str] | None = None) -> Path:
-    """Resolve the Radia repository that owns the checked Optuna evidence.
-
-    An explicitly requested root is authoritative: if it does not carry the
-    evidence the caller is told so, rather than silently auditing a different
-    checkout that happens to sit above this module.
-    """
-    argument = str(repo_root or "").strip()
-    environment = str(os.environ.get("RADIA_REPO_ROOT", "")).strip()
-    configured = argument or environment
-    if configured:
-        candidate = Path(configured)
-        if not _has_evidence(candidate):
-            source = "repo_root argument" if argument else "RADIA_REPO_ROOT"
-            raise FileNotFoundError(
-                f"The {source} {configured!r} does not contain the checked "
-                "Optuna evidence (packages/radia-optuna/matlab/optuna_upstream_compatibility.json "
-                "and packages/radia-optuna/oracles/optuna_test_manifest.json). Point it at the Radia repository "
-                "root, or omit it to search upward from the installed package."
-            )
-        return candidate.resolve()
-    for candidate in Path(__file__).resolve().parents:
-        if _has_evidence(candidate):
-            return candidate.resolve()
-    raise FileNotFoundError(
-        "Could not locate the Radia repository. Set RADIA_REPO_ROOT or pass repo_root."
-    )
+    """Resolve the standalone Optuna checkout for source audits."""
+    configured = str(repo_root or "").strip() or os.environ.get("RADIA_OPTUNA_SOURCE", "").strip()
+    if not configured:
+        raise FileNotFoundError("Set RADIA_OPTUNA_SOURCE to a standalone radia-optuna checkout.")
+    root = Path(configured).expanduser().resolve()
+    if not (root / "src/radia_optuna/manifest.json").is_file():
+        raise FileNotFoundError(f"Not a standalone radia-optuna checkout: {root}")
+    return root
 
 
 # The checked evidence the compatibility claim rests on, named explicitly.
@@ -102,27 +75,25 @@ _EVIDENCE_KEYS = (
 
 def _evidence_paths(root: Path) -> dict[str, Path]:
     return {
-        "compatibility": root / "packages/radia-optuna/matlab" / "optuna_upstream_compatibility.json",
-        "api_coverage": root / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json",
-        "python_oracle": root / "packages/radia-optuna/oracles/optuna50_oracle.json",
-        "public_api_inventory": root / "packages/radia-optuna/oracles/optuna50_public_api.json",
-        "mcp_oracle": root / "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
-        "test_manifest": root / "packages/radia-optuna/oracles/optuna_test_manifest.json",
-        "python_generator": root / "packages/radia-optuna/oracles/generate_optuna50_oracle.py",
-        "api_inventory_generator": root / "packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-        "api_coverage_generator": root / "packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
-        "mcp_generator": root / "packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
-        "manifest_generator": root / "packages/radia-optuna/tools/generate_optuna_test_manifest.py",
+        "compatibility": root / "matlab" / "optuna_upstream_compatibility.json",
+        "api_coverage": root / "matlab" / "optuna50_api_coverage.json",
+        "python_oracle": root / "oracles/optuna50_oracle.json",
+        "public_api_inventory": root / "oracles/optuna50_public_api.json",
+        "mcp_oracle": root / "oracles/optuna50_mcp_oracle.json",
+        "test_manifest": root / "oracles/optuna_test_manifest.json",
+        "python_generator": root / "oracles/generate_optuna50_oracle.py",
+        "api_inventory_generator": root / "oracles/generate_optuna50_api_inventory.py",
+        "api_coverage_generator": root / "tools/generate_optuna50_api_coverage.py",
+        "mcp_generator": root / "oracles/generate_optuna50_mcp_oracle.py",
+        "manifest_generator": root / "tools/generate_optuna_test_manifest.py",
     }
 
 
 def _contract_location(location=None):
     """Use an explicit source/package root or installed evidence bundle."""
-    configured = str(location or "").strip() or os.environ.get("RADIA_REPO_ROOT", "").strip()
+    configured = str(location or "").strip() or os.environ.get("RADIA_OPTUNA_SOURCE", "").strip()
     if configured:
         root = Path(configured).expanduser().resolve()
-        if _has_evidence(root):
-            return root, root / "packages/radia-optuna", "repository"
         if (root / "manifest.json").is_file():
             return root, root, "installed-distribution"
         if (root / "src/radia_optuna/manifest.json").is_file():
@@ -132,7 +103,7 @@ def _contract_location(location=None):
     if installed is not None:
         return installed, installed, "installed-distribution"
     root = _repo_root()
-    return root, root / "packages/radia-optuna", "repository"
+    return root, root, "package-source"
 
 
 def matlab_optuna_compatibility_contract(
@@ -266,16 +237,6 @@ def matlab_optuna_compatibility_contract(
     }
 
 
-def _policy_block(path: Path) -> str:
-    source = path.read_text(encoding="utf-8")
-    heading = re.search(r"^" + re.escape(_POLICY_HEADING) + r"[ \t]*$", source, re.MULTILINE)
-    if heading is None:
-        return ""
-    following_heading = re.search(r"^#{1,2} ", source[heading.end():], re.MULTILINE)
-    end = heading.end() + following_heading.start() if following_heading else len(source)
-    return source[heading.start():end].strip()
-
-
 def matlab_optuna_oracle_audit(
     repo_root: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
@@ -294,8 +255,7 @@ def matlab_optuna_oracle_audit(
             if name != path.stem and _is_matlab_test_name(name):
                 discovered.add((path.name, name))
 
-    agent_policy = _policy_block(root / "AGENTS.md")
-    claude_policy = _policy_block(root / "CLAUDE.md")
+    agent_policy = (root / "AGENTS.md").read_text(encoding="utf-8").strip()
     missing = sorted(discovered - expected)
     stale = sorted(expected - discovered)
     errors = list(contract["errors"])
@@ -303,8 +263,8 @@ def matlab_optuna_oracle_audit(
         errors.append(f"unclassified MATLAB tests: {missing}")
     if stale:
         errors.append(f"stale manifest entries: {stale}")
-    if not agent_policy or agent_policy != claude_policy:
-        errors.append("AGENTS.md and CLAUDE.md Optuna policies are not synchronized")
+    if not agent_policy:
+        errors.append("Standalone Optuna execution policy is empty")
     missing_files = [str(path) for path in paths.values() if not path.is_file()]
     if missing_files:
         errors.append(f"missing evidence files: {missing_files}")
@@ -319,7 +279,7 @@ def matlab_optuna_oracle_audit(
         "manifest_entry_count": len(expected),
         "missing_manifest_entries": [list(item) for item in missing],
         "stale_manifest_entries": [list(item) for item in stale],
-        "policy_identical": bool(agent_policy and agent_policy == claude_policy),
+        "policy_source": "radia-optuna/AGENTS.md",
         "policy_sha256": (
             hashlib.sha256(agent_policy.encode("utf-8")).hexdigest().upper()
             if agent_policy
@@ -329,11 +289,11 @@ def matlab_optuna_oracle_audit(
             name: _sha256(path) for name, path in paths.items() if path.is_file()
         },
         "regeneration_commands": [
-            "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
-            "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-            "python packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
-            "python packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
-            "python packages/radia-optuna/tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output packages/radia-optuna/oracles/optuna_test_manifest.json",
+            "python oracles/generate_optuna50_oracle.py",
+            "python oracles/generate_optuna50_api_inventory.py",
+            "python tools/generate_optuna50_api_coverage.py",
+            "python oracles/generate_optuna50_mcp_oracle.py",
+            "python tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output oracles/optuna_test_manifest.json",
         ],
         "matlab_verification": {
             "execute_with": "official MATLAB MCP run_matlab_test_file",

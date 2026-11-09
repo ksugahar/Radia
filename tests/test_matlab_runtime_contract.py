@@ -103,17 +103,6 @@ def test_verifier_accepts_each_historical_and_current_schema(tmp_path) -> None:
         assert module.verify_archive(archive)["schema"] == schema
 
 
-def test_mex_handle_unlocks_happen_after_registry_critical_sections() -> None:
-    gateway = _source("packages/radia-optuna/native/optuna_mex.cpp")
-    helper = re.search(r"void DestroyRegistered\(.*?\n\}\n", gateway, flags=re.DOTALL)
-    assert helper is not None
-    helper_source = helper.group(0)
-    assert helper_source.index("registry.erase") < helper_source.index("mexUnlock()")
-    assert helper_source.index("if (!erased)") < helper_source.index("mexUnlock()")
-    assert "while (lock_count > 0)" not in gateway
-
-
-
 def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:
     is_preview = ".ih-release-" in schema
     version = int(schema.rsplit("v", 1)[1])

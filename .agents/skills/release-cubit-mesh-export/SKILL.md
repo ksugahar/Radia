@@ -5,7 +5,8 @@ description: Release and verify the CAD exporter on its sole licensed build targ
 
 # CAD exporter release
 
-`tools/release_cubit_dual.py` deploys cubit-mesh-export only on the build target.
+Run `tools/release_cubit_dual.py` from the standalone
+[cubit-mesh-export](https://github.com/ksugahar/cubit-mesh-export) repository. It deploys cubit-mesh-export only on the build target.
 Solver releases must not install, repoint or version-gate it. The compute
 validation target has no Cubit and is forbidden. Resolve machines and paths privately.
 

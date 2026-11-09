@@ -9,7 +9,10 @@ arguments
     options.ConstantLiar (1,1) logical = true
 end
 root=fileparts(fileparts(fileparts(mfilename('fullpath'))));
-addpath(fullfile(root,'packages','radia-optuna','matlab'));
+optunaSource = string(getenv('RADIA_OPTUNA_SOURCE'));
+assert(strlength(optunaSource)>0 && isfolder(fullfile(optunaSource,'matlab')), ...
+    'Set RADIA_OPTUNA_SOURCE to the standalone radia-optuna checkout.');
+addpath(fullfile(optunaSource,'matlab'));
 started=tic; previous=radia.optuna.executionMode(options.ExecutionMode);
 configureSeconds=toc(started);
 restoreMode=onCleanup(@()radia.optuna.executionMode(previous));

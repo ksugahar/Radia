@@ -52,7 +52,7 @@ def run(command, **kwargs):
 
 
 def source_identity(root):
-    pathspec = ["--", ".", ":(exclude)packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccm"]
+    pathspec = ["--", "."]
     def git(*args):
         return run(["git", "-C", root, *args], capture_output=True,
                    text=True, encoding="utf-8").stdout.rstrip("\n")

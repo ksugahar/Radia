@@ -25,7 +25,6 @@ def _preflight_module():
 def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
-    optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
@@ -48,15 +47,6 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert "'tests/'" not in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
-    assert 'runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]' in optuna
-    assert "windows-radia" not in optuna
-    optuna_self_hosted = optuna.split("  build-test:", 1)[1].split("  installed-wheel-matlab-e2e:", 1)[0]
-    assert "actions/setup-python" not in optuna_self_hosted
-    assert "RADIA_OPTUNA_CI_PYTHON" in optuna_self_hosted
-    assert "-m venv" in optuna_self_hosted
-    assert "pip install pybind11" not in optuna_self_hosted
-    assert "Build and verify Python kernels before linking plain MEX" in optuna_self_hosted
-    assert optuna.count("'.github/workflows/radia-optuna.yml'") == 2
     release_document = yaml.safe_load(release)
     assert set(release_document.get('on', release_document.get(True))) == {'workflow_dispatch'}
     assert "github.ref_type == 'tag'" in release_document['jobs']['verify-promotion']['if']
@@ -499,23 +489,9 @@ def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch,
 def test_host_roles_agree_across_deployment_skills():
     root = ROOT
     cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
-    # The public role table documents CLI identifiers, not physical host names.
-    # Bind its tiers to the actual deployment source instead of historical prose.
     guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
-    documented_tiers = {}
-    for line in guide.read_text(encoding="utf-8").splitlines():
-        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
-        if len(cells) == 3 and cells[2] in {"editable", "wheel"}:
-            assert cells[1] not in documented_tiers, "duplicate deployment target"
-            documented_tiers[cells[1]] = cells[2]
-    source = root / "tools/release_cubit_dual.py"
-    spec = importlib.util.spec_from_file_location("cubit_dual_policy_contract", source)
-    assert spec and spec.loader
-    dual = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(dual)
-    assert documented_tiers == dual.TIERS == {"100": "editable"}
-    assert set(documented_tiers) == set(dual.TARGETS)
-    assert "`tools/release_cubit_dual.py`" in cubit
+    assert "https://github.com/ksugahar/cubit-mesh-export" in cubit
+    assert not (root / "tools/release_cubit_dual.py").exists()
     # Both release agents use the same portable acceptance/cleanup contract.
     import re
     links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))

@@ -3,9 +3,7 @@
   "distributions": [
     "radia",
     "radia-simulink",
-    "radia-mcp",
-    "radia-optuna",
-    "cubit-mesh-export"
+    "radia-mcp"
   ],
   "infrastructure_owner": "repo",
   "rule_semantics": "ordered_last_match_replaces",
@@ -83,31 +81,17 @@
           "radia-mcp": [
             "radia-mcp"
           ],
-          "radia-optuna": [
-            "radia-optuna"
-          ],
-          "cubit-mesh-export": [
-            "cubit-mesh-export"
-          ],
           "radia_simulink": [
             "radia-simulink"
           ],
           "radia_mcp": [
             "radia-mcp"
-          ],
-          "radia_optuna": [
-            "radia-optuna"
-          ],
-          "cubit_mesh_export": [
-            "cubit-mesh-export"
           ]
         },
         "build_system": [
           "radia",
           "radia-simulink",
-          "radia-mcp",
-          "radia-optuna",
-          "cubit-mesh-export"
+          "radia-mcp"
         ],
         "tooling_sections": [
           "tool.black",
@@ -148,9 +132,6 @@
         "options": {
           "RADIA_BUILD_MATLAB_MEX": [
             "radia-simulink"
-          ],
-          "RADIA_BUILD_OPTUNA_MEX_ONLY": [
-            "radia-optuna"
           ]
         }
       },
@@ -178,9 +159,6 @@
         ],
         "AxiFemOnly": [
           "radia"
-        ],
-        "OptunaMexOnly": [
-          "radia-optuna"
         ]
       },
       "MANIFEST.in": {
@@ -468,99 +446,39 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-optuna/**",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/**",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "src/cubit_plugin/**",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tests/test_cubit*",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tests/test_release_cubit_dual.py",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
       "pattern": "docs/cubit/**",
       "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
       "pattern": "docs/cubit_mesh_export/**",
       "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
       "pattern": "docs/jou_translation_bench/**",
       "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
       "pattern": "validation_test/cubit/**",
       "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
       "pattern": "validation_test/cubit_mesh_export/**",
       "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
       "pattern": "validation_test/esrf_radia_examples_cubit/**",
       "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tools/check_cubit_standalone.py",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tools/release_cubit_dual.py",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tools/find_cubit.ps1",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tools/find_cubit.py",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "tools/audit_pyside6_only.py",
-      "owners": [
-        "cubit-mesh-export"
+        "radia"
       ]
     },
     {
@@ -776,43 +694,19 @@
     {
       "pattern": "tests/matlab/test_optuna*.m",
       "owners": [
-        "radia-optuna",
         "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "tests/matlab/private/optuna*.m",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
-      "pattern": "tests/matlab/fixtures/*optuna*",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
-      "pattern": "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
-      "owners": [
-        "radia-optuna"
       ]
     },
     {
       "pattern": "validation_test/radia_optuna/**",
       "owners": [
-        "radia-optuna"
+        "radia"
       ]
     },
     {
       "pattern": "validation_test/optimization/*optuna*",
       "owners": [
-        "radia-optuna"
+        "radia"
       ]
     },
     {
@@ -1020,12 +914,6 @@
       ]
     },
     {
-      "pattern": ".github/workflows/cubit-mesh-export.yml",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
       "pattern": ".github/workflows/ltspice-data-safety.yml",
       "owners": [
         "radia-simulink"
@@ -1062,18 +950,6 @@
       ]
     },
     {
-      "pattern": ".github/workflows/radia-optuna.yml",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
-      "pattern": ".github/workflows/release-radia-optuna.yml",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
       "pattern": ".github/workflows/release.yml",
       "owners": [
         "radia"
@@ -1090,9 +966,7 @@
       "owners": [
         "radia",
         "radia-simulink",
-        "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-mcp"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1105,9 +979,7 @@
       "owners": [
         "radia",
         "radia-simulink",
-        "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-mcp"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1120,9 +992,7 @@
       "owners": [
         "radia",
         "radia-simulink",
-        "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-mcp"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1135,9 +1005,7 @@
       "owners": [
         "radia",
         "radia-simulink",
-        "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-mcp"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1150,9 +1018,7 @@
       "owners": [
         "radia",
         "radia-simulink",
-        "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-mcp"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1409,14 +1275,8 @@
     {
       "pattern": "tests/matlab/fixtures/ltspice_rc.cir",
       "owners": [
-        "radia-simulink",
-        "radia-optuna"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "LTspice integration and Optuna objective consume this circuit fixture."
-      },
-      "selection": "all_owners"
+        "radia-simulink"
+      ]
     },
     {
       "pattern": "tools/sparsesolv_ci_impact.py",
@@ -1424,8 +1284,6 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export",
         "repo"
       ],
       "reason": {
@@ -1440,8 +1298,6 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export",
         "repo"
       ],
       "reason": {
@@ -1456,8 +1312,6 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export",
         "repo"
       ],
       "reason": {
@@ -1535,18 +1389,6 @@
       "reason": {
         "kind": "integration",
         "detail": "CPU-backed IH operator numerical contracts require the built Radia solver and the GPU package adapter."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
-      "owners": [
-        "radia",
-        "cubit-mesh-export"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "CPU-backed IH operator validation checks exported volume consistency with the canonical checker."
       },
       "selection": "all_owners"
     },
@@ -1725,100 +1567,10 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-optuna/matlab/**",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/native/optuna_mex.cpp",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/src/radia_optuna/manifest.json",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/oracles/optuna*.json",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/oracles/generate_optuna*",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-optuna/tools/generate_optuna*",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
-      },
-      "selection": "all_owners"
-    },
-    {
       "pattern": "validation_test/optimization/benchmark_*",
       "owners": [
-        "radia-optuna",
         "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
+      ]
     },
     {
       "pattern": "validation_test/vim_coupled/results_*.json",
@@ -1964,8 +1716,6 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export",
         "repo"
       ],
       "reason": {
@@ -1980,8 +1730,6 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export",
         "repo"
       ],
       "reason": {
@@ -2006,7 +1754,6 @@
       "pattern": "tools/ci_tree_receipt.py",
       "owners": [
         "radia",
-        "radia-optuna",
         "radia-simulink"
       ],
       "reason": {
@@ -2038,30 +1785,6 @@
       "owners": [
         "radia"
       ]
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py",
-      "owners": [
-        "radia",
-        "cubit-mesh-export"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "The per-PR solver-heavy IH operator tests import this dependency through the checked mesh/operator adapter."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py",
-      "owners": [
-        "radia",
-        "cubit-mesh-export"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "The per-PR solver-heavy IH operator tests import this dependency through the checked mesh/operator adapter."
-      },
-      "selection": "all_owners"
     },
     {
       "pattern": "packages/radia-simulink/src/radia_simulink/simulink/__init__.py",
@@ -2102,21 +1825,14 @@
     {
       "pattern": ".github/workflows/gpu-validation.yml",
       "owners": [
-        "radia-simulink",
-        "radia-optuna"
-      ],
-      "reason": {
-        "kind": "shared_build",
-        "detail": "Compute-only validation consumes both independently built GPU wheels."
-      },
-      "selection": "all_owners"
+        "radia-simulink"
+      ]
     },
     {
       "pattern": "tools/ci_gpu_artifact.py",
       "owners": [
         "radia",
-        "radia-simulink",
-        "radia-optuna"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_build",
@@ -2128,8 +1844,7 @@
       "pattern": "tests/test_ci_gpu_artifact.py",
       "owners": [
         "radia",
-        "radia-simulink",
-        "radia-optuna"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_build",
@@ -2154,30 +1869,6 @@
       "owners": [
         "radia-mcp"
       ]
-    },
-    {
-      "pattern": "packages/radia-optuna/validation_records/**",
-      "owners": [
-        "radia-optuna"
-      ]
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/validation_records/**",
-      "owners": [
-        "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
-      "owners": [
-        "radia",
-        "cubit-mesh-export"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
-      },
-      "selection": "all_owners"
     },
     {
       "pattern": "packages/radia-mcp/src/radia_mcp/__init__.py",
@@ -2863,106 +2554,6 @@
       "markdown_inputs": [],
       "content_diff_active": [],
       "required_paths": []
-    },
-    "cubit-mesh-export": {
-      "workflow": ".github/workflows/cubit-mesh-export.yml",
-      "owners": [
-        "cubit-mesh-export"
-      ],
-      "scope": "distribution",
-      "native": true,
-      "events": {
-        "push": {
-          "branches": [
-            "main"
-          ],
-          "tags": [
-            "cubit-mesh-export-v*"
-          ],
-          "paths": [
-            "packages/cubit-mesh-export/**",
-            "src/cubit_plugin/**",
-            "tests/test_cubit_standalone_gui.py",
-            "tools/check_cubit_standalone.py",
-            "tools/release_cubit_dual.py",
-            "tests/test_release_cubit_dual.py",
-            "tests/test_cubit_installers.py",
-            "tests/test_cubit_mesh_quality.py",
-            "tests/test_cubit_menu_startup.py",
-            "tests/test_cubit_auto_kelvin_entry.py",
-            "tools/audit_pyside6_only.py",
-            "validation_test/cubit_mesh_export/**",
-            ".github/workflows/cubit-mesh-export.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "!**/*.md",
-            "packages/cubit-mesh-export/README.md",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md"
-          ]
-        },
-        "pull_request": {
-          "branches": [
-            "main"
-          ],
-          "paths": [
-            "packages/cubit-mesh-export/**",
-            "src/cubit_plugin/**",
-            "tests/test_cubit_standalone_gui.py",
-            "tools/check_cubit_standalone.py",
-            "tools/release_cubit_dual.py",
-            "tests/test_release_cubit_dual.py",
-            "tests/test_cubit_installers.py",
-            "tests/test_cubit_mesh_quality.py",
-            "tests/test_cubit_menu_startup.py",
-            "tests/test_cubit_auto_kelvin_entry.py",
-            "tools/audit_pyside6_only.py",
-            "validation_test/cubit_mesh_export/**",
-            ".github/workflows/cubit-mesh-export.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "!**/*.md",
-            "packages/cubit-mesh-export/README.md",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md"
-          ]
-        },
-        "workflow_dispatch": {}
-      },
-      "selector_refs": [
-        "tools/sparsesolv_ci_impact.py:required_for_event"
-      ],
-      "markdown_inputs": [
-        "packages/cubit-mesh-export/README.md",
-        "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
-        "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md"
-      ],
-      "content_diff_active": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ],
-      "required_paths": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ]
     },
     "ltspice-data-safety": {
       "workflow": ".github/workflows/ltspice-data-safety.yml",
@@ -3692,13 +3283,6 @@
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
             "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
-            "packages/radia-optuna/matlab/**",
-            "packages/radia-optuna/native/optuna_mex.cpp",
-            "packages/radia-optuna/src/radia_optuna/manifest.json",
-            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-            "packages/radia-optuna/oracles/optuna*.json",
-            "packages/radia-optuna/oracles/generate_optuna*",
-            "packages/radia-optuna/tools/generate_optuna*",
             "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
@@ -3737,13 +3321,6 @@
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
             "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
-            "packages/radia-optuna/matlab/**",
-            "packages/radia-optuna/native/optuna_mex.cpp",
-            "packages/radia-optuna/src/radia_optuna/manifest.json",
-            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-            "packages/radia-optuna/oracles/optuna*.json",
-            "packages/radia-optuna/oracles/generate_optuna*",
-            "packages/radia-optuna/tools/generate_optuna*",
             "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
@@ -3792,135 +3369,6 @@
         "MANIFEST.in",
         "tests/test_tier_manifest.json"
       ]
-    },
-    "radia-optuna": {
-      "workflow": ".github/workflows/radia-optuna.yml",
-      "owners": [
-        "radia-optuna"
-      ],
-      "scope": "distribution",
-      "native": true,
-      "events": {
-        "push": {
-          "branches": [
-            "main"
-          ],
-          "tags": [
-            "radia-optuna-v*"
-          ],
-          "paths": [
-            "packages/radia-optuna/**",
-            "tests/matlab/fixtures/*optuna*",
-            "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
-            "tests/matlab/fixtures/ltspice_rc.cir",
-            "tests/matlab/test_optuna*.m",
-            "tests/matlab/private/optuna*.m",
-            "Build.ps1",
-            "CMakeLists.txt",
-            "validation_test/optimization/validate_optuna_cuda.m",
-            "validation_test/radia_optuna/validate_cuda.m",
-            ".github/workflows/radia-optuna.yml",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_tree_receipt.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "tools/ci_gpu_artifact.py",
-            "tests/test_ci_gpu_artifact.py",
-            "!**/*.md",
-            "packages/radia-optuna/README.md",
-            "packages/radia-optuna/MATLAB_README.md",
-            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-            "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
-          ]
-        },
-        "pull_request": {
-          "branches": [
-            "main"
-          ],
-          "paths": [
-            "packages/radia-optuna/**",
-            "tests/matlab/fixtures/*optuna*",
-            "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
-            "tests/matlab/fixtures/ltspice_rc.cir",
-            "tests/matlab/test_optuna*.m",
-            "tests/matlab/private/optuna*.m",
-            "Build.ps1",
-            "CMakeLists.txt",
-            "validation_test/optimization/validate_optuna_cuda.m",
-            "validation_test/radia_optuna/validate_cuda.m",
-            ".github/workflows/radia-optuna.yml",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_tree_receipt.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "tools/ci_gpu_artifact.py",
-            "tests/test_ci_gpu_artifact.py",
-            "!**/*.md",
-            "packages/radia-optuna/README.md",
-            "packages/radia-optuna/MATLAB_README.md",
-            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-            "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
-          ]
-        },
-        "workflow_dispatch": {}
-      },
-      "selector_refs": [
-        "tools/sparsesolv_ci_impact.py:required_for_event"
-      ],
-      "markdown_inputs": [
-        "packages/radia-optuna/README.md",
-        "packages/radia-optuna/MATLAB_README.md",
-        "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
-        "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
-      ],
-      "content_diff_active": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ],
-      "required_paths": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ]
-    },
-    "release-radia-optuna": {
-      "workflow": ".github/workflows/release-radia-optuna.yml",
-      "owners": [
-        "radia-optuna"
-      ],
-      "scope": "distribution",
-      "native": false,
-      "events": {
-        "workflow_dispatch": {
-          "inputs": {
-            "ci_run_id": {
-              "description": "Successful main push/manual CI run gated by release-quad",
-              "required": "true",
-              "type": "string"
-            },
-            "candidate_sha256": {
-              "description": "SHA256 emitted by release_quad optuna-done",
-              "required": "true",
-              "type": "string"
-            }
-          }
-        }
-      },
-      "selector_refs": [],
-      "markdown_inputs": [],
-      "content_diff_active": [],
-      "required_paths": []
     },
     "release": {
       "workflow": ".github/workflows/release.yml",
@@ -3984,8 +3432,6 @@
             "src/radia/planar_charges.py",
             "src/radia/planar_materials.py",
             "src/radia/soft_iron.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py",
             "packages/radia-simulink/src/radia_simulink/simulink/__init__.py",
             "src/radia/_b3d_shim.py",
             "src/radia/bem/coil_inductance_ngsolve.py",
@@ -4201,7 +3647,6 @@
             "tests/test_ih_panel_esim_assembly.py",
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
             "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
             "validation_test/radia_mcp/test_eddy_driven_region.py",
@@ -4254,7 +3699,6 @@
             "validation_test/open_boundary/test_kelvin_connected_ground.py",
             "validation_test/panels/test_strong_coupling_cli_contract.py",
             "tests/_ngsolve_2607.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
             "packages/radia-mcp/src/radia_mcp/__init__.py",
             "packages/radia-mcp/src/radia_mcp/peec/__init__.py",
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/__init__.py",
@@ -4290,8 +3734,6 @@
             "src/radia/planar_charges.py",
             "src/radia/planar_materials.py",
             "src/radia/soft_iron.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py",
             "packages/radia-simulink/src/radia_simulink/simulink/__init__.py",
             "src/radia/_b3d_shim.py",
             "src/radia/bem/coil_inductance_ngsolve.py",
@@ -4507,7 +3949,6 @@
             "tests/test_ih_panel_esim_assembly.py",
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
             "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
             "validation_test/radia_mcp/test_eddy_driven_region.py",
@@ -4560,7 +4001,6 @@
             "validation_test/open_boundary/test_kelvin_connected_ground.py",
             "validation_test/panels/test_strong_coupling_cli_contract.py",
             "tests/_ngsolve_2607.py",
-            "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
             "packages/radia-mcp/src/radia_mcp/__init__.py",
             "packages/radia-mcp/src/radia_mcp/peec/__init__.py",
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/__init__.py",
@@ -4635,8 +4075,7 @@
     "gpu-validation": {
       "workflow": ".github/workflows/gpu-validation.yml",
       "owners": [
-        "radia-simulink",
-        "radia-optuna"
+        "radia-simulink"
       ],
       "scope": "distribution",
       "native": false,

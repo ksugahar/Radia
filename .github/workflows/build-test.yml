@@ -40,12 +40,6 @@ jobs:
 
     env:
       RADIA_VALIDATION_HOST_ROLE: cpu_validation
-      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
-      # cubit_plugin scripts now auto-discover the available installation
-      # via tools/find_cubit.ps1, so this env var is informational. Set
-      # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
-      # runner if needed.
-      CUBIT_PATH: ''
       # Heavy validation tests are an explicit manual gate. Release-tag CI
       # does not spend hours revalidating numerical evidence by default.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
@@ -202,6 +196,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.3.1
+          if ($LASTEXITCODE -ne 0) { throw "Standalone mesh checker install failed" }
           # The full release numerical contracts include STEP coil tests, so the
           # declared STEP CAD extra is installed into this same isolated venv.
           $cadPins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")
@@ -399,7 +395,7 @@ jobs:
       - name: Run full release numerical contracts
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
         run: |
@@ -411,7 +407,7 @@ jobs:
       - name: Execute full release solver-heavy contracts
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           GH_TOKEN: ${{ github.token }}
@@ -441,7 +437,7 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running validation_test pytest gate..."
           Write-Host "Solver distribution only; MCP and Cubit validation belong to their independent release lanes."

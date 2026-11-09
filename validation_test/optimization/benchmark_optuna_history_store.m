@@ -12,7 +12,10 @@ end
 
 here=fileparts(mfilename("fullpath"));
 root=fileparts(fileparts(here));
-addpath(fullfile(root,'packages','radia-optuna','matlab'));
+optunaSource = string(getenv('RADIA_OPTUNA_SOURCE'));
+assert(strlength(optunaSource)>0 && isfolder(fullfile(optunaSource,'matlab')), ...
+    'Set RADIA_OPTUNA_SOURCE to the standalone radia-optuna checkout.');
+addpath(fullfile(optunaSource,'matlab'));
 warmup=buildStudy(32,options.ReportedSteps);
 warmup.get_trials();
 

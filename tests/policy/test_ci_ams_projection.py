@@ -124,7 +124,7 @@ def test_records_exemption_keeps_all_executable_projections_and_unknown_data_clo
     if mutation == 'native-rule':
         after['rules'].append({'pattern': 'src/new_solver/**', 'owners': ['radia']})
     elif mutation in ('lane', 'other-lane'):
-        name = 'sparsesolv' if mutation == 'lane' else 'radia-optuna'
+        name = 'sparsesolv' if mutation == 'lane' else 'radia-simulink'
         after['lanes'][name]['events']['pull_request']['paths'].append('src/new_solver/**')
     elif mutation == 'attribution':
         after['root_content_diff']['unknown'] = 'ignore'

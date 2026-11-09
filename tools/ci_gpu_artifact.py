@@ -10,8 +10,7 @@ import zipfile
 
 
 # Compute validation of the MATLAB payloads consumes wheels built on main pushes.
-COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push'),
-                  ('radia-optuna.yml', 'gpu-optuna-wheel', '&event=push')]
+COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push')]
 # Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
 RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', ''), ('build-test.yml', 'gpu-netgen-overlay', '')]
 
@@ -75,10 +74,10 @@ def newest_main_sha():
             break
         for artifact in artifacts:
             run = artifact.get('workflow_run', {})
-            if artifact['name'] in {'gpu-simulink-wheel', 'gpu-optuna-wheel'} and not artifact['expired'] and run.get('head_branch') == 'main':
+            if artifact['name'] in {name for _, name, _ in COMPUTE_WHEELS} and not artifact['expired'] and run.get('head_branch') == 'main':
                 available.setdefault(run['head_sha'], set()).add(artifact['name'])
         page += 1
-    candidates = {sha for sha, names in available.items() if len(names) == 2}
+    candidates = {sha for sha, names in available.items() if len(names) == len(COMPUTE_WHEELS)}
     page = 1
     while candidates:
         commits = json.loads(request(f'commits?sha=main&per_page=100&page={page}'))
@@ -93,7 +92,7 @@ def newest_main_sha():
                 else:
                     return commit['sha']
         page += 1
-    raise ValueError('No main SHA has both successful sealed GPU artifacts')
+    raise ValueError('No main SHA has the required successful sealed GPU artifacts')
 
 
 def resolve(sha, wheels=COMPUTE_WHEELS):

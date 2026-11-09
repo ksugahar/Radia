@@ -104,18 +104,21 @@ def matlab_official_server_status():
 
 def _radia_repo_root():
     configured = os.environ.get("RADIA_REPO_ROOT", "").strip()
-    candidates = [Path(configured)] if configured else []
-    candidates.extend(HERE.resolve().parents)
-    for candidate in candidates:
-        source = candidate / "packages/radia-optuna/native/optuna_mex.cpp"
-        if source.is_file():
-            return candidate, source
-    return None, None
+    candidates = ([Path(configured)] if configured else []) + list(HERE.resolve().parents)
+    return next((root for root in candidates if (root / "src/lib/radia_pybind.cpp").is_file()), None)
+
+
+def _optuna_mex_source():
+    configured = os.environ.get("RADIA_OPTUNA_SOURCE", "").strip()
+    if not configured:
+        return None
+    source = Path(configured) / "native/optuna_mex.cpp"
+    return source if source.is_file() else None
 
 
 def _mex_command_branches():
     """The CPU Radia MEX is retired; Optuna owns its independent command table."""
-    _root, source = _radia_repo_root()
+    source = _optuna_mex_source()
     if source is None:
         return [], []
     return [], _optuna_source_commands(source)
@@ -142,7 +145,7 @@ def _optuna_native_kernels(optuna_commands):
 
 
 def _pybind_public_names():
-    root, _source = _radia_repo_root()
+    root = _radia_repo_root()
     if root is None:
         return []
     source = root / "src" / "lib" / "radia_pybind.cpp"
@@ -156,7 +159,7 @@ def _pybind_public_names():
 
 
 def _pybind_all_top_level_names():
-    root, _source = _radia_repo_root()
+    root = _radia_repo_root()
     if root is None:
         return []
     source = root / "src" / "lib" / "radia_pybind.cpp"
@@ -168,7 +171,7 @@ def _pybind_all_top_level_names():
 
 def _pybind_class_surface():
     """Return class/member names declared by the Radia pybind translation unit."""
-    root, _source = _radia_repo_root()
+    root = _radia_repo_root()
     if root is None:
         return []
     source = root / "src" / "lib" / "radia_pybind.cpp"
@@ -538,7 +541,7 @@ def matlab_radia_mex_contract(topic="all"):
     allowed = {"all", "mex", "ngsolve", "optimization", "simulink", "limitations"}
     if topic not in allowed:
         raise ValueError(f"unknown topic: {topic}; available: {', '.join(sorted(allowed))}")
-    root, _ = _radia_repo_root()
+    root = _radia_repo_root()
     source = root / "packages/radia-simulink/native/radia_cuda_csr_pcg.cu" if root else None
     optuna_commands = _optuna_mex_commands()
     sections = {
@@ -550,7 +553,7 @@ def matlab_radia_mex_contract(topic="all"):
                     "gpu_boundary": "Caller-assembled CSR operators; NGSolve retains FE ownership",
                     "true_relative_residual_limit": 1e-6},
         "optimization": {"owner": "radia-optuna", "entrypoint": "optuna_mex",
-                         "native_build": "Build.ps1 -OptunaMexOnly",
+                         "native_build": "Standalone radia-optuna build",
                          "health_tool": "matlab_optuna_health"},
         "simulink": {"owner": "radia-simulink", "builder": "radia.simulink.buildCudaPCGBlock",
                      "adapter": "readable Level-2 MATLAB S-Function",

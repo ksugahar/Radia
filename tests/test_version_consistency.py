@@ -27,9 +27,6 @@ _PACKAGES = [
     ("radia-mcp",
      "packages/radia-mcp/pyproject.toml",
      "packages/radia-mcp/src/radia_mcp/__init__.py"),
-    ("cubit-mesh-export",
-     "packages/cubit-mesh-export/pyproject.toml",
-     "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"),
 ]
 
 _VER_RE = re.compile(r'(?:^version|^__version__)\s*=\s*"([^"]+)"', re.M)

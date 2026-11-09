@@ -150,8 +150,6 @@ def gate_version_consistency():
         ("radia", "pyproject.toml", "src/radia/__init__.py"),
         ("radia-mcp", "packages/radia-mcp/pyproject.toml",
          "packages/radia-mcp/src/radia_mcp/__init__.py"),
-        ("cubit-mesh-export", "packages/cubit-mesh-export/pyproject.toml",
-         "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"),
     ]
     fails = []
     for name, pp, init in checks:

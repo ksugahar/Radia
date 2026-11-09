@@ -11,7 +11,7 @@ headlessly through the package's MCP/Python interface. Saved geometry, journals,
 mesh files and check reports provide the handoff. Named regions and boundaries
 connect the mesh to the physical model you define.
 
-Use the [owning package guide](../../packages/cubit-mesh-export/README.md) for
+Use the [owning package guide](https://github.com/ksugahar/cubit-mesh-export) for
 installation and supported operations. Cubit's MCP server is distributed with
 that package, independently of `radia-mcp`. Continue with
 [Radia MCP](../../packages/radia-mcp/README.md) or the
@@ -114,7 +114,7 @@ export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 
 ## See Also
 
-- [src/cubit_plugin/](../../src/cubit_plugin/) - C++ plugin source
+- [src/cubit_plugin/](https://github.com/ksugahar/cubit-mesh-export/tree/main/src/cubit_plugin) - C++ plugin source
 - [validation_test/cubit/](../../validation_test/cubit/) - Cubit validation cases; see each case's execution requirements and recorded evidence
 
 The solver-independent analytic examples now live in `validation_test/radia_mcp/`. Saved showcase records retain the source paths from their original revision; their adjacent historical JSON files remain unchanged.

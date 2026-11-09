@@ -1,6 +1,0 @@
-function formatter=create_default_formatter()
-%CREATE_DEFAULT_FORMATTER Return Optuna 5's public formatter contract.
-formatter=struct( ...
-    "format","%(log_color)s[%(levelname)1.1s %(asctime)s]%(reset)s %(message)s", ...
-    "date_format","");
-end

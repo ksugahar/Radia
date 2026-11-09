@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.source.outputs.sha }}
-      - name: Fetch hash-verified exact-SHA GPU wheels built on RTX
+      - name: Fetch the sealed Radia Simulink wheel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -46,18 +46,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $py = "$env:RUNNER_TEMP/gpu-compute-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/Scripts/python.exe"
           $wheels = @(Get-ChildItem gpu-input -Recurse -Filter *.whl)
-          if ($wheels.Count -ne 2) { throw 'Expected two verified GPU wheels' }
+          if ($wheels.Count -ne 1) { throw 'Expected one verified Simulink wheel' }
           & $py -I -m pip install --no-deps $wheels.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $sim = & $py -I -c "import radia_simulink as r; x=r.verify(); assert x['passed']; assert x['source_commit']=='${{ steps.source.outputs.sha }}'; print(r.matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $opt = & $py -I -c "from radia_optuna import matlab_path; print(matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "GPU_SIMULINK_PAYLOAD=$sim" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "GPU_OPTUNA_PAYLOAD=$opt" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Execute existing installed GPU drivers and larger CSR cases without compilation
         run: |
-          & matlab -batch "assert(strcmp(version('-release'),'2026a')); addpath('validation_test/radia_simulink'); validate_compute_lane(getenv('GPU_SIMULINK_PAYLOAD'),getenv('GPU_OPTUNA_PAYLOAD'),'gpu-results');"
+          & matlab -batch "assert(strcmp(version('-release'),'2026a')); addpath('validation_test/radia_simulink'); validate_compute_lane(getenv('GPU_SIMULINK_PAYLOAD'),'gpu-results');"
           exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()

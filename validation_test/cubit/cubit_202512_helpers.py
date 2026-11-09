@@ -20,7 +20,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RADIA_SRC = REPO_ROOT / "src" / "radia"
-CME_PKG_DIR = REPO_ROOT / "packages" / "cubit-mesh-export" / "src" / "cubit_mesh_export"
 _CUBIT_MODULE = None
 _DLL_HANDLES = []
 
@@ -94,8 +93,10 @@ def init_cubit():
 
 def add_cubit_mesh_curver_to_path() -> None:
     """Expose the low-level pybind module for module-shape tests only."""
-    if str(CME_PKG_DIR) not in sys.path:
-        sys.path.insert(0, str(CME_PKG_DIR))
+    import cubit_mesh_export
+    package_dir = str(Path(cubit_mesh_export.__file__).parent)
+    if package_dir not in sys.path:
+        sys.path.insert(0, package_dir)
 
 
 def export_netgen(cubit, stem: str, order: int = 1) -> Path:
