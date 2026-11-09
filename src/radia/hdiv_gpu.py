@@ -1069,13 +1069,14 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     staged ones and sources and mean field refer to the deformed mesh.
     """
     import ngsolve as ng
+    from radia.mesh_curve import load_vol
     from radia.vim._vim import (_curve_mesh, _prepare_gpu_charge_inputs, _prepare_gpu_curved_charge_inputs,
                                 _prepare_gpu_hex_charge_inputs, _prepare_gpu_mixed_charge_inputs)
     aca = _checked_gram_compression(compression, aca)
     if compression == _GRAM_EXPANSION and images is not None and images.terms is not None:
         raise NotImplementedError("gram_compression='hca' has no image route: the kernel expansion reads the direct term only")
     curve_order = _checked_curve_order(curve_order, order)
-    mesh = ng.Mesh(str(path))
+    mesh = load_vol(path)
     family = _mesh_family(mesh, curve_order, order)
     image_terms = None if images is None else images.checked_terms(mesh, order, family)
     periodic = () if images is None else images.periodic
