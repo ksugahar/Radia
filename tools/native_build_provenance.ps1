@@ -21,13 +21,7 @@ function Get-NativeBuildSourceIdentity {
     param([Parameter(Mandatory)][string]$RepoRoot)
 
     Set-StrictMode -Version Latest
-    # The full build may refresh this tracked distribution artifact. It is an
-    # output, not an input to _radia_pybind or radia_mex, so exclude it from
-    # the source-state race check.
-    $sourcePathspec = @(
-        "--", ".",
-        ":(exclude)packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccm"
-    )
+    $sourcePathspec = @("--", ".")
     $commit = (Invoke-NativeProvenanceGit -RepoRoot $RepoRoot `
         -Arguments @("rev-parse", "HEAD")).Trim().ToLowerInvariant()
     if ($commit -notmatch '^[0-9a-f]{40}$') {

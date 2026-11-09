@@ -33,12 +33,10 @@ Run from the selected repository root:
 ```powershell
 pwsh -NoProfile -File ./Build.ps1 -RadiaOnly
 pwsh -NoProfile -File ./Build.ps1 -CudaMexOnly
-pwsh -NoProfile -File ./Build.ps1 -OptunaMexOnly
 pwsh -NoProfile -File ./Build.ps1 -AxiFemOnly
 ```
 
 Radia CPU execution uses Python/pybind11; GPU execution uses MATLAB mexcuda.
-The independent Optuna MEX target is not a Radia CPU solver build.
 These switches are mutually exclusive. Use the one needed by the change.
 Omitting them invokes the full build. Read current implementation before using
 `-Rebuild` or `-Test`; neither is the default for a focused maintenance fix.
@@ -63,10 +61,8 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
 
 ## Other distributions
 
-- Standalone MATLAB Optuna uses `-OptunaMexOnly` and its independent mexcuda workflow;
-  it must not acquire Radia/NGSolve/MKL dependencies. Use the package mexcuda recipe for GPU numerical kernels and CPU host control.
-  Use bounded OpenMP for suitable parallel host work and retain serial
-  state management and ordered random consumption.
+- MATLAB Optuna and Cubit export are built and released from their standalone
+  repositories; this checkout consumes them only as pinned dependencies.
 - EqnEdit64 is maintained and released in its independent repository.
 - For sparsesolv inspect the current in-repository CMake integration. Do not
   use the retired standalone repository or copy DLLs into global site-packages.

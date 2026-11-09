@@ -30,16 +30,17 @@ Python installation while importing the result from another.
 | `.\Build.ps1 -RadiaOnly` | Main `_radia_pybind` extension only |
 | `.\Build.ps1 -AxiFemOnly` | Fast axifem C++ iteration |
 | `.\Build.ps1 -CudaMexOnly` | Explicit CUDA MEX bridge (independent radia-simulink toolchain) |
-| `.\Build.ps1 -OptunaMexOnly` | Lightweight standalone `optuna_mex` target |
 | `.\Build.ps1 -Test` | Build, source import check, and focused pytest |
 
 The listed `*Only` switches select separate build paths. `-InstallToSitePackages` is
 for an intentional local installation test; editable development normally
 loads the extensions from this checkout.
 
-Coreform Cubit is optional for the Radia core. If installed, `Build.ps1`
-discovers it through `tools/find_cubit.ps1`. The independent
-`cubit-mesh-export` package owns the tracked `.ccm` plugin and its deployment.
+Radia consumes checked `.vol` files without requiring Cubit. Build and deploy
+the optional mesh exporter from the standalone
+[cubit-mesh-export repository](https://github.com/ksugahar/cubit-mesh-export).
+The MATLAB Optuna gateway builds and releases from
+[radia-optuna](https://github.com/ksugahar/radia-optuna).
 
 ## Toolchain Contract
 

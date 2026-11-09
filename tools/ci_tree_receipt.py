@@ -14,7 +14,6 @@ import zipfile
 
 LANES = {
     'sparsesolv': ['ams-regression'],
-    'radia-optuna': ['build-test', 'radia-optuna installed-wheel MATLAB/Simulink E2E'],
     'radia-simulink': ['cuda-mex'],
 }
 

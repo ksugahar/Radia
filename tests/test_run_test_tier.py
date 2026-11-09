@@ -327,7 +327,6 @@ def test_rules_do_not_select_similarly_named_siblings(changed):
 
 @pytest.mark.parametrize('changed', [
     '.github/workflows/ltspice-data-safety.yml',
-    '.github/workflows/radia-optuna.yml',
     'tests/test_ltspice_ci_scope.py',
 ])
 def test_ltspice_scope_regression_is_reachable_from_ci(changed):

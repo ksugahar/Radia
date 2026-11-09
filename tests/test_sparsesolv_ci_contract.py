@@ -423,7 +423,7 @@ ROOT_CASES = [
     ('pyproject.toml', '[tool.setuptools.package-data]\nradia_simulink=["*.m"]\n',
      '[tool.setuptools.package-data]\nradia_simulink=["*.cu"]\n', {'radia-simulink'}),
     ('Build.ps1', "param()\nif ($OptunaMexOnly) { matlab -batch 'old' }\n",
-     "param()\nif ($OptunaMexOnly) { matlab -batch 'new' }\n", {'radia-optuna'}),
+     "param()\nif ($OptunaMexOnly) { matlab -batch 'new' }\n", {'radia', 'radia-simulink', 'radia-mcp'}),
     ('Build.ps1', 'if ($RadiaOnly) { python old }', 'if ($RadiaOnly) { python new }', {'radia'}),
     ('Build.ps1', 'if ($AmsCudaOnly) { python old }', 'if ($AmsCudaOnly) { python new }', {'radia-simulink'}),
     ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "enable" OFF)',
@@ -492,11 +492,11 @@ def test_unparsable_deleted_or_unavailable_roots_fail_closed(path,broken):
 
 
 def test_rename_status_preserves_both_ownership_boundaries():
-    raw='R100\0packages/radia-simulink/old.py\0packages/radia-optuna/new.py\0D\0Build.ps1\0'
-    assert IMPACT.changed_paths(raw)=={'packages/radia-simulink/old.py','packages/radia-optuna/new.py','Build.ps1'}
+    raw='R100\0packages/radia-simulink/old.py\0packages/radia-mcp/src/radia_mcp/matlab/new.py\0D\0Build.ps1\0'
+    assert IMPACT.changed_paths(raw)=={'packages/radia-simulink/old.py','packages/radia-mcp/src/radia_mcp/matlab/new.py','Build.ps1'}
     with pytest.raises(ValueError): IMPACT.changed_paths('R100\0old\0')
     data=IMPACT.manifest()
-    for lane in ('radia-simulink','radia-optuna'):
+    for lane in ('radia-simulink','radia-mcp-matrix'):
         assert IMPACT.lane_required(lane,IMPACT.changed_paths(raw),lambda p:(None,None),data)[0]
 
 
@@ -516,7 +516,7 @@ def test_ams_legacy_exemption_cannot_override_unparsable_or_unknown_content():
         lambda p:(json.dumps(before),json.dumps(after)),IMPACT.manifest())[0]
 
 
-@pytest.mark.parametrize('lane', ['radia-simulink','radia-optuna','sparsesolv','radia-mcp-matrix'])
+@pytest.mark.parametrize('lane', ['radia-simulink','sparsesolv','radia-mcp-matrix'])
 def test_missing_base_or_blob_lookup_cannot_skip_a_lane(lane):
     data=IMPACT.manifest()
     assert IMPACT.required_for_event(lane,'push',{'before':'0'*40},None,data)[0]
@@ -747,8 +747,7 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                 assert 'vcvars64.bat' in scripts and 'call `"$vcvars`" && cmake' in scripts
                 assert '-G "Visual Studio' not in scripts
     inputs = {
-        "sparsesolv": ["packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
-                       "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
+        "sparsesolv": ["packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",

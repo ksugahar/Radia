@@ -144,7 +144,7 @@ def test_lamination_native_coverage_is_retained(changed):
         mutant['lanes']['sparsesolv']['events'][event]['paths'].append('!' + changed)
     assert not impact.lane_required('sparsesolv',{changed},lambda p:(None,None),mutant)[0]
 
-@pytest.mark.parametrize('key', ['radia-simulink.yml:cuda-mex', 'radia-optuna.yml:build-test', 'radia-optuna.yml:installed-wheel-matlab-e2e'])
+@pytest.mark.parametrize('key', ['radia-simulink.yml:cuda-mex'])
 def test_gpu_jobs_cannot_lose_rtx_capability(tree, key):
     root, manifest = tree
     filename, name = key.split(':')

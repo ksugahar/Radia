@@ -21,13 +21,6 @@ Usage:
     python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
 
-    python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
-        Download the exact radia-optuna wheel from one successful main CI run
-        and execute its installed-wheel MATLAB/Simulink test on both machines.
-
-    python tools/release_quad.py optuna-done --wheel <path>
-        Require the retained wheel bytes, source commit, CI run, version, and
-        two-machine candidate state to agree before tagging/publication.
 
     python tools/release_quad.py all
         phase8 -> phase9 with all preconditions enforced.
@@ -53,8 +46,6 @@ Usage:
         Removed. The development tier has no default target; use repoint
         with a reason (policy P02, 2026-09-11).
 
-The independent radia-optuna lane does not install or deploy Radia, Cubit,
-radia-mcp, or NGSolve. It gates one exact CI wheel before publication.
 
 Exit codes:
     0   success
@@ -149,10 +140,6 @@ SSH_100 = "100"
 # from the machine's release runtime (host policy, 2026-10-04).
 MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
 SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
-OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
-OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
-OPTUNA_TARGETS = {"100": ("build", SSH_100, "python")}
-OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
 _KNOWN_SOLVER_TARGETS = {
     "validation": ("validation", None, None),
     "100": ("build", SSH_100, "python"),
@@ -327,7 +314,6 @@ def _release_commit() -> str:
     return commit
 
 
-
 def _release_head():
     return _release_commit()
 
@@ -386,11 +372,7 @@ def _read_repo_versions(labels=None):
     for label, path in [
         ("radia",             REPO / "pyproject.toml"),
         ("radia.__version__", REPO / "src/radia/__init__.py"),
-        ("cubit-mesh-export", REPO / "packages/cubit-mesh-export/pyproject.toml"),
-        ("cme.__version__",   REPO / "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"),
         ("radia-mcp",         REPO / "packages/radia-mcp/pyproject.toml"),
-        ("radia-optuna",      REPO / "packages/radia-optuna/pyproject.toml"),
-        ("optuna.__version__", REPO / "packages/radia-optuna/src/radia_optuna/__init__.py"),
     ]:
         if labels is not None and label not in labels:
             continue
@@ -712,365 +694,6 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         return 4
     info(message)
     ok("supplied Simulink candidate passed on the build target")
-    return 0
-
-
-# ============================================================
-# Standalone radia-optuna exact-wheel candidate gate
-# ============================================================
-
-def _optuna_state_path(wheel_sha256: str) -> Path:
-    return OPTUNA_GATE_ROOT / f"candidate-{wheel_sha256}.json"
-
-
-def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
-    verifier = REPO / "packages/radia-optuna/verify_wheel.py"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(verifier),
-            str(wheel),
-            "--json",
-            "--release-candidate",
-        ],
-        capture_output=True, text=True,
-    )
-    output = ((result.stdout or "") + (result.stderr or "")).strip()
-    if result.returncode != 0:
-        return None, output
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        return None, f"wheel verifier returned invalid JSON: {error}\n{output}"
-    if payload.get("ok") is not True:
-        return None, f"wheel verifier did not report ok=true:\n{output}"
-    return payload, output
-
-
-def _optuna_release_source_ready() -> tuple[bool, str]:
-    """Return the checked-out radia-optuna candidate commit when it is main.
-
-    radia-optuna is released independently of the solver, so its source
-    identity is the checkout HEAD, never the solver ``v<radia version>`` tag.
-    """
-    current = _git("rev-parse", "HEAD", check=False)
-    if current.returncode != 0:
-        return False, current.stderr.strip() or "git rev-parse HEAD failed"
-    head = current.stdout.strip().lower()
-    status = _git("status", "--porcelain", "--untracked-files=no", check=False)
-    if status.returncode != 0:
-        return False, status.stderr.strip() or "git status failed"
-    if status.stdout.strip():
-        return False, "tracked release source is dirty"
-    fetched = _git("fetch", "origin", "main", "--quiet", check=False)
-    if fetched.returncode != 0:
-        return False, fetched.stderr.strip() or "git fetch origin main failed"
-    origin_main = _git("rev-parse", "origin/main", check=False)
-    if origin_main.returncode != 0:
-        return False, origin_main.stderr.strip() or "origin/main is unavailable"
-    remote_head = origin_main.stdout.strip().lower()
-    if head != remote_head:
-        return False, f"HEAD {head} differs from origin/main {remote_head}"
-    return True, head
-
-
-def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str]:
-    ready, source = _optuna_release_source_ready()
-    if not ready:
-        return None, source
-    head = source
-    result = subprocess.run(
-        [
-            "gh", "run", "view", str(ci_run_id), "--json",
-            "databaseId,headSha,headBranch,event,status,conclusion,workflowName,url,jobs",
-        ],
-        cwd=str(REPO), capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        return None, result.stderr.strip() or result.stdout.strip()
-    try:
-        run_info = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        return None, f"gh run view returned invalid JSON: {error}"
-    expected = {
-        "headSha": head,
-        "headBranch": "main",
-        "event": "push",
-        "status": "completed",
-        "conclusion": "success",
-        "workflowName": "radia-optuna",
-    }
-    if run_info.get("event") == "workflow_dispatch":
-        expected["event"] = "workflow_dispatch"
-    mismatches = [
-        f"{key}={run_info.get(key)!r} (expected {value!r})"
-        for key, value in expected.items()
-        if str(run_info.get(key, "")).lower() != str(value).lower()
-    ]
-    if mismatches:
-        return None, "CI run is not the exact successful main run: " + "; ".join(mismatches)
-    jobs = {
-        row.get("name"): (row.get("status"), row.get("conclusion"))
-        for row in run_info.get("jobs", [])
-    }
-    required_jobs = (
-        "build-test",
-        "radia-optuna installed-wheel MATLAB/Simulink E2E",
-    )
-    missing_jobs = [name for name in required_jobs
-                    if jobs.get(name) != ("completed", "success")]
-    if missing_jobs:
-        return None, "CI run lacks successful required jobs: " + ", ".join(missing_jobs)
-
-    Path(r"C:\temp").mkdir(parents=True, exist_ok=True)
-    download_dir = Path(tempfile.mkdtemp(
-        prefix=f"radia-optuna-ci-{ci_run_id}-", dir=tempfile.gettempdir()
-    ))
-    downloaded = subprocess.run(
-        [
-            "gh", "run", "download", str(ci_run_id),
-            "--name", "radia-optuna-wheel", "--dir", str(download_dir),
-        ],
-        cwd=str(REPO), capture_output=True, text=True,
-    )
-    if downloaded.returncode != 0:
-        return None, downloaded.stderr.strip() or downloaded.stdout.strip()
-    wheels = sorted(download_dir.rglob("*.whl"))
-    if len(wheels) != 1:
-        return None, f"expected one radia-optuna wheel artifact, found {len(wheels)}"
-    verification, output = _verify_optuna_wheel(wheels[0])
-    if verification is None:
-        return None, output
-    wheel_sha256 = _sha256_file(wheels[0])
-    retained_dir = OPTUNA_GATE_ROOT / f"{head[:12]}-ci-{ci_run_id}"
-    retained_dir.mkdir(parents=True, exist_ok=True)
-    retained_wheel = retained_dir / wheels[0].name
-    if retained_wheel.exists() and _sha256_file(retained_wheel) != wheel_sha256:
-        return None, f"retained candidate path contains different bytes: {retained_wheel}"
-    if not retained_wheel.exists():
-        copy_file(wheels[0], retained_wheel)
-    return {
-        "ci_run_id": str(ci_run_id),
-        "ci_url": run_info.get("url"),
-        "commit": head,
-        "wheel": str(retained_wheel),
-        "wheel_sha256": wheel_sha256,
-        "version": verification["version"],
-    }, output
-
-
-def _optuna_remote_invocation(
-        runner: str, wheel: str, worker: str, python_command: str,
-        wheel_sha256: str, engine_session: str | None = None) -> str:
-    """PowerShell script that exits nonzero on any failure.
-
-    A terminating error inside the runner leaves $LASTEXITCODE at the last
-    native command's value, often 0, so the exit code cannot come from it
-    alone: the runner's errors exit 1 and a native failure keeps its code.
-    """
-    session_option = (
-        " -EngineSession '" + engine_session.replace("'", "''") + "'"
-        if engine_session else "")
-    return (
-        "$ErrorActionPreference = 'Stop'\n"
-        "try {\n"
-        f"    $pythonExe = (& {python_command} -c \"import sys; print(sys.executable)\").Trim()\n"
-        "    if ($LASTEXITCODE -ne 0) { throw \"Python discovery failed with exit code $LASTEXITCODE\" }\n"
-        f"    & '{runner}' -Wheel '{wheel}' "
-        f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
-        f"-PreverifiedWheelSha256 '{wheel_sha256}' "
-        f"-EngineWorker '{worker}'{session_option}\n"
-        "    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
-        "} catch {\n"
-        "    [Console]::Error.WriteLine(($_ | Out-String))\n"
-        "    exit 1\n"
-        "}\n"
-        "exit 0\n"
-    )
-
-
-def _run_optuna_candidate_target(
-        key: str, wheel: Path, wheel_sha256: str,
-        engine_session: str | None = None) -> tuple[bool, str]:
-    if key not in OPTUNA_TARGETS:
-        return False, f"Unsupported Optuna CUDA acceptance target: {key}"
-    label, host, python_command = OPTUNA_TARGETS[key]
-    if key == "100" and platform.node().strip().lower() == "t7920":
-        host = None
-    if engine_session and engine_session.startswith("com:"):
-        error = _local_com_target_error(key, engine_session)
-        if error:
-            return False, error
-        host = None
-    runner = OPTUNA_WHEEL_RUNNER
-    matlab_tests = REPO / "packages/radia-optuna/tests/matlab"
-    # The solver release Engine worker owns MATLAB session reuse and launch.
-    worker = REPO / "tools/verify_simulink_release.py"
-    if host is None:
-        command = [
-            "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-            str(runner), "-Wheel", str(wheel),
-            "-MatlabExecutable", MATLAB_EXE,
-            "-PythonExecutable", sys.executable,
-            "-PreverifiedWheelSha256", wheel_sha256,
-            "-EngineWorker", str(worker),
-        ]
-        if engine_session:
-            command.extend(["-EngineSession", engine_session])
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-    else:
-        remote_root_posix = f"C:/temp/radia-release-quad/optuna-{wheel_sha256[:16]}"
-        remote_root_windows = remote_root_posix.replace("/", "\\")
-        remote_matlab_windows = remote_root_windows + r"\matlab"
-        prepare = (
-            "$ErrorActionPreference = 'Stop'\n"
-            f"New-Item -ItemType Directory -Force -Path '{remote_matlab_windows}' | Out-Null\n"
-        )
-        created = _run_ssh_powershell(host, prepare, timeout=60)
-        if created.returncode != 0:
-            return False, created.stderr.strip() or created.stdout.strip()
-        sources = [runner, worker, wheel, *sorted(matlab_tests.glob("*.m"))]
-        for source_file in sources:
-            subdir = "matlab/" if source_file.suffix == ".m" else ""
-            destination = f"{remote_root_posix}/{subdir}{source_file.name}"
-            copied = subprocess.run(
-                ["scp", str(source_file), f"{host}:{destination}"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-            if copied.returncode != 0:
-                return False, copied.stderr.strip() or copied.stdout.strip()
-        invocation = _optuna_remote_invocation(
-            remote_root_windows + "\\" + runner.name,
-            remote_root_windows + "\\" + wheel.name,
-            remote_root_windows + "\\" + worker.name,
-            python_command, wheel_sha256, engine_session,
-        )
-        result = _run_ssh_powershell(host, invocation, timeout=1800)
-    output = ((result.stdout or "") + (result.stderr or "")).strip()
-    if result.returncode != 0:
-        return False, output
-    if OPTUNA_SUCCESS_MARKER not in output:
-        return False, f"{label} did not emit {OPTUNA_SUCCESS_MARKER}:\n{output}"
-    return True, output
-
-
-def cmd_optuna_candidate(args):
-    """Download one main-CI wheel and run it on both MATLAB machines."""
-    step("radia-optuna exact-wheel candidate gate (build)")
-    candidate, output = _download_verified_optuna_ci_wheel(args.ci_run_id)
-    if candidate is None:
-        fail(f"invalid radia-optuna CI candidate: {output}")
-        return 2
-    wheel = Path(candidate["wheel"])
-    wheel_sha256 = candidate["wheel_sha256"]
-    state_path = _optuna_state_path(wheel_sha256)
-    state = {
-        "schema": "radia.release-quad.optuna-candidate.v1",
-        **candidate,
-        "targets": {},
-    }
-    if state_path.is_file():
-        previous = json.loads(state_path.read_text(encoding="utf-8"))
-        if (previous.get("wheel_sha256") == wheel_sha256
-                and previous.get("commit") == candidate["commit"]
-                and str(previous.get("ci_run_id")) == str(args.ci_run_id)):
-            state["targets"] = previous.get("targets", {})
-
-    requested = [part.strip().lower() for part in args.target.split(",")]
-    if "all" in requested:
-        requested = list(OPTUNA_TARGETS)
-    unknown = sorted(set(requested) - set(OPTUNA_TARGETS))
-    if unknown:
-        fail(f"unknown radia-optuna target(s): {', '.join(unknown)}")
-        return 2
-    sessions = _engine_sessions(args, requested)
-    if sessions is None:
-        return 2
-    failed = 0
-    for key in requested:
-        label = OPTUNA_TARGETS[key][0]
-        info(f"verifying exact installed wheel on {label}")
-        session_args = [sessions[key]] if key in sessions else []
-        passed, target_output = _run_optuna_candidate_target(
-            key, wheel, wheel_sha256, *session_args
-        )
-        state["targets"][key] = {
-            "label": label,
-            "status": "passed" if passed else "failed",
-            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-            "engine_session": sessions.get(key),
-            "output_tail": target_output[-4000:],
-        }
-        _write_simulink_state(state_path, state, key)
-        if passed:
-            ok(f"radia-optuna wheel passed on {label}")
-        else:
-            failed += 1
-            fail(f"radia-optuna wheel failed on {label}")
-            if target_output:
-                print(target_output[-4000:])
-    if failed:
-        return 4
-    ok(f"retained wheel: {wheel}")
-    ok(f"wheel SHA256: {wheel_sha256}")
-    ok(f"candidate state: {state_path}")
-    return 0
-
-
-def _verify_optuna_candidate_state(wheel_arg: str) -> tuple[int, dict | None]:
-    wheel = Path(wheel_arg).resolve()
-    verification, output = _verify_optuna_wheel(wheel)
-    if verification is None:
-        fail(f"invalid radia-optuna wheel: {output}")
-        return 2, None
-    wheel_sha256 = _sha256_file(wheel)
-    state_path = _optuna_state_path(wheel_sha256)
-    if not state_path.is_file():
-        fail("radia-optuna wheel has no release-quad state. Run "
-             "`release_quad optuna-candidate --ci-run-id <id> --target all`.")
-        return 4, None
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    ready, source = _optuna_release_source_ready()
-    if not ready:
-        fail(source)
-        return 4, None
-    if (state.get("wheel_sha256") != wheel_sha256
-            or state.get("commit") != source
-            or state.get("version") != verification.get("version")):
-        fail("radia-optuna candidate state differs from wheel, version, or HEAD")
-        return 4, None
-    missing = [key for key in OPTUNA_TARGETS
-               if state.get("targets", {}).get(key, {}).get("status") != "passed"]
-    if missing:
-        fail(f"radia-optuna candidate has not passed: {', '.join(missing)}")
-        return 4, None
-    ok("exact radia-optuna wheel passed 100号機")
-    return 0, state
-
-
-def cmd_optuna_done(args):
-    """Definition-of-done gate for the independent radia-optuna wheel."""
-    step("radia-optuna definition of done")
-    rc, state = _verify_optuna_candidate_state(args.wheel)
-    if rc != 0 or state is None:
-        return rc
-    print("")
-    ok("RADIA-OPTUNA DEFINITION OF DONE met")
-    info(f"CI run ID: {state['ci_run_id']}")
-    info(f"commit: {state['commit']}")
-    info(f"wheel: {state['wheel']}")
-    info(f"SHA256: {state['wheel_sha256']}")
-    info("Next: create the matching radia-optuna-v<version> tag, then dispatch "
-         "release-radia-optuna.yml with this CI run ID and SHA256.")
     return 0
 
 
@@ -2044,10 +1667,7 @@ INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
     ".github/workflows/radia-simulink.yml",
     ".github/workflows/radia-simulink-release.yml",
     ".github/workflows/ltspice-data-safety.yml",
-    ".github/workflows/radia-optuna.yml",
-    ".github/workflows/release-radia-optuna.yml",
     ".github/workflows/radia-mcp-matrix.yml",
-    ".github/workflows/cubit-mesh-export.yml",
 })
 
 
@@ -2432,25 +2052,8 @@ def main():
                     help="candidate interpreter on this target, which runs the verifier and "
                          "becomes MATLAB's RADIA_PYTHON_EXECUTABLE (repeatable); it must "
                          "provide the package's radia release")
-    optuna_candidate = sub.add_parser(
-        "optuna-candidate",
-        help="download one main-CI radia-optuna wheel and verify it on the build target")
-    optuna_candidate.add_argument(
-        "--ci-run-id", required=True,
-        help="successful main-push CI run containing radia-optuna-wheel")
-    optuna_candidate.add_argument(
-        "--target", default="all",
-        help="comma list: 100, all")
-    optuna_candidate.add_argument(
-        "--engine-session", action="append", metavar="HOST=NAME",
-        help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable); "
-             "without it a target runs only when no MATLAB exists there")
-    optuna_done = sub.add_parser(
-        "optuna-done",
-        help="require the exact radia-optuna wheel to have passed both machines")
-    optuna_done.add_argument(
-        "--wheel", required=True,
-        help="retained wheel path emitted by optuna-candidate")
+
+
     sub.add_parser("all",
                     help="phase8 -> phase9 in one shot")
     sub.add_parser("verify-editable",
@@ -2515,8 +2118,6 @@ def main():
         "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
         "simulink-candidate": cmd_simulink_candidate,
-        "optuna-candidate":  cmd_optuna_candidate,
-        "optuna-done":       cmd_optuna_done,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "repoint":          cmd_repoint,

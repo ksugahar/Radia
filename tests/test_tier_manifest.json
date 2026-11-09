@@ -163,9 +163,6 @@
     "validation_test/feec/check_wedge_charge_pullback.py": [
       "tests/test_wedge_charge_pullback_contract.py"
     ],
-    "packages/radia-optuna/native/optuna_mex.cpp": [
-      "tests/test_sparsesolv_matlab_contract.py"
-    ],
     "packages/radia-simulink/matlab/+radia/+sparsesolv/": [
       "tests/test_sparsesolv_matlab_contract.py"
     ],
@@ -198,9 +195,6 @@
     ".github/workflows/ltspice-data-safety.yml": [
       "tests/test_ltspice_ci_scope.py"
     ],
-    ".github/workflows/radia-optuna.yml": [
-      "tests/test_ltspice_ci_scope.py"
-    ],
     "tools/ci_preflight_remote.py": [
       "tests/test_ci_preflight_remote.py"
     ],
@@ -208,7 +202,6 @@
       "tests/test_release_quad_state.py",
       "tests/test_release_quad_editable_source.py",
       "tests/test_release_quad_editable_intent.py",
-      "tests/test_release_quad_optuna_candidate.py",
       "tests/test_release_quad_phase9_contract.py",
       "tests/test_release_quad_evidence_motor.py",
       "tests/test_mdx_runner_pool.py"
@@ -218,8 +211,7 @@
       "tests/test_release_quad_editable_intent.py"
     ],
     "tools/verify_simulink_release.py": [
-      "tests/test_simulink_release_package.py",
-      "tests/test_release_quad_optuna_candidate.py"
+      "tests/test_simulink_release_package.py"
     ],
     "tools/audit_taskmanager.py": [
       "tests/test_audit_taskmanager.py"
@@ -652,7 +644,6 @@
         "tests/test_cpu_optuna_dependency_boundary.py",
         "tests/test_ci_execution_policy.py",
         "tests/test_ci_monitor.py",
-        "tests/test_release_quad_optuna_candidate.py",
         "tests/test_test_tier_policy.py",
         "tests/test_run_test_tier.py",
         "tests/test_docs_notebook_contract.py",

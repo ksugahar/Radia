@@ -26,13 +26,11 @@ def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp
     monkeypatch.setattr(module.platform, "node", lambda: controller)
     def run(command, **kwargs):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, 'RADIA_SIMULINK_RELEASE_OK RADIA_OPTUNA_WHEEL_SIMULINK_OK {"status": "passed"}', "")
+        return subprocess.CompletedProcess(command, 0, 'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}', "")
     monkeypatch.setattr(module.subprocess, "run", run)
     passed, _ = module._run_simulink_candidate_target(key, tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK", "com:123")
     assert passed is allowed
-    passed, _ = module._run_optuna_candidate_target(key, tmp_path / "candidate.whl", "a" * 64, "com:123")
-    assert passed is (allowed and key == "100")
-    assert len(calls) == ((2 if key == "100" else 1) if allowed else 0)
+    assert len(calls) == int(allowed)
     for command in calls:
         assert command[0] not in ("ssh", "scp")
         assert "com:123" in command
@@ -92,8 +90,7 @@ def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
 @pytest.mark.parametrize('matched', [True, False])
 def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     versions = dict.fromkeys([
-        'radia', 'radia.__version__', 'cubit-mesh-export', 'cme.__version__',
-        'radia-mcp', 'radia-optuna', 'optuna.__version__'], '1.0.0')
+        'radia', 'radia.__version__', 'radia-mcp'], '1.0.0')
     if not matched:
         versions['radia.__version__'] = '1.0.1'
     monkeypatch.setattr(module, '_read_repo_versions', lambda *_args: versions)

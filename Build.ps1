@@ -12,7 +12,6 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -CudaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AmsCudaOnly
-#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
@@ -20,7 +19,6 @@
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
 #   -AmsCudaOnly  Stage the experimental AMS CUDA gateway and snapshot adapter
-#   -OptunaMexOnly  Build the Optuna CUDA kernels and CPU host control using mexcuda
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
 #   -Test       Run source-tree import test + pytest after build
@@ -53,7 +51,7 @@ param(
     [switch]$CsrPythonBindings,     # optional direct Python CSR CUDA binding
     [switch]$ResidentAmgPython,    # explicit staged resident algebraic GPU validation module
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
-    [switch]$OptunaMexOnly,        # mexcuda kernels + CPU host control
+
     [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
@@ -65,7 +63,7 @@ if ($ProjectionLifecycleDiagnostic -and -not $ProjectionCudaOnly) { throw 'Proje
 if ([bool]$GpuBuildAdmission -ne [bool]$GpuBuildAdmissionSha256) { throw 'GPU build admission and hash must be supplied together' }
 if ($GpuBuildAdmission -and -not ($ProjectionCudaOnly -or $FmmCudaOnly -or $FieldCudaOnly -or $IhCudaOnly -or $AmsCudaOnly -or $CudaMexOnly)) { throw 'GPU build admission requires an isolated native CUDA target' }
 if ($FmmCudaOnly) {
-    if ($RadiaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AmsCudaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test -or $args.Count) {
+    if ($RadiaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AmsCudaOnly -or $AxiFemOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test -or $args.Count) {
         throw '-FmmCudaOnly is an isolated experimental build'
     }
     $fmmBuildArgs = @()
@@ -80,7 +78,7 @@ if ($args.Count -gt 0) {
 }
 
 if ($ProjectionCudaOnly) {
-    if ($RadiaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
         throw '-ProjectionCudaOnly is an isolated experimental build'
     }
     $projectionBuildArgs = @()
@@ -93,7 +91,7 @@ if ($ProjectionCudaOnly) {
 }
 
 if ($IhCudaOnly) {
-    if ($RadiaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
         throw '-IhCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $ihBuildArgs = @()
@@ -105,7 +103,7 @@ if ($IhCudaOnly) {
 }
 
 if ($FieldCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
         throw '-FieldCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $fieldBuildArgs = @()
@@ -117,7 +115,7 @@ if ($FieldCudaOnly) {
 }
 
 if ($AmsCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild) {
+    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $amsBuildArgs = @()
@@ -149,8 +147,8 @@ function Get-NativeBuildResult {
     return 0
 }
 
-if (@($RadiaOnly, $AxiFemOnly, $CudaMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
-    throw "-RadiaOnly, -AxiFemOnly, -CudaMexOnly, and -OptunaMexOnly are mutually exclusive"
+if (@($RadiaOnly, $AxiFemOnly, $CudaMexOnly).Where({ $_ }).Count -gt 1) {
+    throw "-RadiaOnly, -AxiFemOnly, and -CudaMexOnly are mutually exclusive"
 }
 if ($CudaMexOnly) {
     if ($InstallToSitePackages) { throw 'CUDA MEX builds remain staged; no runtime replacement' }
@@ -167,34 +165,6 @@ if ($CudaMexOnly) {
     if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
     return
 }
-if ($OptunaMexOnly) {
-    if ($InstallToSitePackages -or $Rebuild) {
-        throw 'Optuna shared-library build is isolated; install/rebuild switches are unsupported'
-    }
-    $optunaRoot = $PSScriptRoot.Replace("'", "''")
-    if ($RequireNativeProvenance) {
-        $optunaStatus = & git -C $PSScriptRoot status --porcelain
-        if ($LASTEXITCODE -ne 0 -or $optunaStatus) { throw 'Optuna provenance requires clean source' }
-    }
-    # Python-first verification and build directory must be explicit.
-    $python = $env:RADIA_OPTUNA_BUILD_PYTHON
-    $directory = $env:RADIA_OPTUNA_BUILD_DIRECTORY
-    $verification = $env:RADIA_OPTUNA_PYTHON_VERIFICATION
-    if (!$python -or !$directory -or !$verification) {
-        throw 'Set RADIA_OPTUNA_BUILD_PYTHON, RADIA_OPTUNA_BUILD_DIRECTORY and RADIA_OPTUNA_PYTHON_VERIFICATION after package Python validation'
-    }
-    $python = $python.Replace("'", "''")
-    $directory = $directory.Replace("'", "''")
-    $verification = $verification.Replace("'", "''")
-    & matlab -batch "addpath('$optunaRoot/packages/radia-optuna'); buildOptunaMex('$python','$directory','$verification');"
-    if ($LASTEXITCODE -ne 0) { throw 'Optuna plain MEX/shared-library build failed' }
-    if ($Test) {
-        & matlab -batch "addpath('$optunaRoot/validation_test/optimization'); validate_optuna_cuda('$optunaRoot'); addpath('$optunaRoot/validation_test/radia_optuna'); validate_cuda('$optunaRoot','$optunaRoot/packages/radia-optuna/matlab','$optunaRoot/build-optuna-cuda/validation.json');"
-        if ($LASTEXITCODE -ne 0) { throw 'Optuna CUDA validation failed' }
-    }
-    return
-}
-
 # ============================================================================
 # Paths
 # ============================================================================
@@ -231,25 +201,6 @@ if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
     exit 1
 }
 
-# ---- Cubit install discovery ------------------------------------------------
-
-# Picks the highest-version 'Coreform Cubit *' under Program Files or
-# honors $env:CUBIT_INSTALL_DIR. Cubit absence does not block Radia core.
-. "$PROJECT_DIR\tools\find_cubit.ps1"
-if ($CubitInstallDir) {
-    Write-Host "Cubit: $CubitVersion at $CubitInstallDir"
-} else {
-    Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
-}
-
-$DetectedCubitCmakeDir = if ($CubitInstallDir) {
-    Join-Path $CubitInstallDir "cmake"
-} else {
-    ""
-}
-$BuildCubitPlugin = [bool]($CubitInstallDir -and
-    (Test-Path (Join-Path $CubitInstallDir "cmake\CubitConfig.cmake")))
-Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gray
 
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
@@ -355,11 +306,6 @@ if (-not (Test-Path $CMAKE_EXE)) {
     Write-Host "ERROR: CMake not found. Install VS workload with CMake or pip install cmake." -ForegroundColor Red
     exit 1
 }
-$CTEST_EXE = Join-Path (Split-Path -Parent $CMAKE_EXE) "ctest.exe"
-if (-not (Test-Path $CTEST_EXE)) {
-    Write-Host "ERROR: CTest not found beside CMake: $CTEST_EXE" -ForegroundColor Red
-    exit 1
-}
 
 # Ninja generator backend.  Pass the long path explicitly so stale CMake
 # short-path cache entries do not break after Python install path changes.
@@ -395,12 +341,6 @@ Write-Host ""
 
 if ($Rebuild) {
     $BuildDirsToClean = @($BUILD_DIR)
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
-        $BuildDirsToClean += @(
-            "$PROJECT_DIR\src\cubit_plugin\build-pyd",
-            "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-        )
-    }
     $ProjectRoot = [System.IO.Path]::GetFullPath($PROJECT_DIR).TrimEnd('\') + '\'
     foreach ($BuildDirToClean in $BuildDirsToClean) {
         $ResolvedBuildDir = [System.IO.Path]::GetFullPath($BuildDirToClean)
@@ -593,81 +533,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo ========================================
-echo   Building cubit_mesh_curver (Cubit plugin .pyd)
-echo ========================================
-set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
-set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
-rem CUBIT_DIR is auto-discovered via tools/find_cubit.ps1 (highest-version
-rem 'Coreform Cubit *' under C:\Program Files). Override with env var
-rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
-rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
-rem this set; if discovery failed the wrapper exited before us.
-set "CUBIT_DIR=$DetectedCubitCmakeDir"
-set "NETGEN_DIR=$NetgenPackageDir"
-rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
-rem No external NETGEN_SRC_DIR needed.
-
-rem The PowerShell discovery result and paths are embedded as fixed batch
-rem literals. Do not rediscover Cubit from batch state; vcvars may also change
-rem delayed-expansion state, so this block intentionally contains no !VAR! use.
-if /I "$BuildCubitPlugin"=="True" (
-    if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
-    cd /d "%CUBIT_PLUGIN_BUILD%"
-    rem build-pyd: force FULL Netgen mode; disable compact_netgen detection
-    rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
-    rem .ccm/.ccl in build-ccm continue to use compact_netgen without DLL deps.
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" -DCOMPACT_NETGEN_OVERRIDES=NONE -DCUBIT_CALLBACK_CONTRACT_TESTS=ON "$PROJECT_DIR\src\cubit_plugin"
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_curver configuration failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_curver build failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_callback_contract -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_callback_contract build failed
-        exit /b 1
-    )
-    "$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure
-    if errorlevel 1 (
-        echo ERROR: native Cubit callback contract failed
-        exit /b 1
-    )
-
-    rem ========================================
-    rem   Building cubit_mesh_export.ccm; APREPRO commands without Qt deps
-    rem ========================================
-    rem radia 4.80.0 removed the Qt5 RadiaComp.cpp .ccl GUI component;
-    rem all GUI work is now in src/radia/panels/radia_export_menu.py using
-    rem PySide6.  The .ccm has no Qt dependency and builds unconditionally
-    rem when the Cubit SDK is present.
-    echo.
-    echo ========================================
-    echo   Building cubit_mesh_export.ccm - APREPRO commands
-    echo ========================================
-    if not exist "$PROJECT_DIR\src\cubit_plugin\build-ccm" mkdir "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    cd /d "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" "$PROJECT_DIR\src\cubit_plugin"
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_export_ccm configuration failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_export_ccm build failed
-        exit /b 1
-    )
-
-    cd /d "$BUILD_DIR"
-) else (
-    echo SKIP: Cubit SDK not found at $DetectedCubitCmakeDir
-)
-
-echo.
 echo Build completed.
 exit /b 0
 "@
@@ -703,10 +568,6 @@ try {
         }
     }
     $RequiredNativeArtifacts = @()
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
-        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd"
-        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm"
-    }
     $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
@@ -734,7 +595,6 @@ try {
         )
     }
 
-    # Raw Cubit native outputs remain in src/cubit_plugin/build-*.
     # Signed package payloads and their manifest are promoted only through
     # the reviewed release process; an ordinary build never copies or
     # touches them.
