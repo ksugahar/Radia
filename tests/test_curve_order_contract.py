@@ -377,6 +377,38 @@ def test_production_vol_entries_load_through_load_vol():
         assert direct == [] and loads, (relative, direct, len(loads))
 
 
+def test_cubit_export_is_used_at_its_stored_order(tmp_path):
+    """Guards: a committed Cubit order-2 export loads through load_vol at its stored order.
+
+    Assumes: the .vol is produced by cubit-mesh-export (no CAD, order fixed at export);
+    radia CI consumes it without Cubit. After an unrelated CSG mesh in the process a plain
+    Mesh() borrows that CSG, load_vol does not, and the curved routes accept the stored order.
+    """
+    pytest.importorskip("radia._radia_pybind")
+    fixture = pathlib.Path(__file__).resolve().parent / "fixtures" / "cubit" / "mixed_cylinder_o2.vol.gz"
+    out = _run(tmp_path, f"""
+        from netgen.csg import CSGeometry, Sphere as CSphere, Pnt as CPnt
+        from radia.mesh_curve import load_vol, vol_geometry_kind
+        from radia.vim._vim import _require_curve_order
+        g = CSGeometry(); g.Add(CSphere(CPnt(0, 0, 0), 1.0)); keep = g.GenerateMesh(maxh=0.5)
+        path = {str(fixture)!r}
+        one = ng.CoefficientFunction(1)
+        raw = ng.Mesh(path)
+        m = load_vol(path)
+        before = [ng.Integrate(one, m), ng.Integrate(one, m, ng.BND)]
+        accepted = _require_curve_order(m, 2, "Cubit fixture") is m
+        after = [ng.Integrate(one, m), ng.Integrate(one, m, ng.BND)]
+        print(json.dumps({{"kind": vol_geometry_kind(path), "raw": type(raw.ngmesh.GetGeometry()).__name__,
+                           "loaded": type(m.ngmesh.GetGeometry()).__name__, "order": m.GetCurveOrder(),
+                           "accepted": accepted, "unchanged": before == after,
+                           "volume": before[0]/(2*math.pi) - 1, "area": before[1]/(6*math.pi) - 1}}))
+    """)
+    assert [out["kind"], out["raw"], out["loaded"]] == [None, "CSGeometry", "NetgenGeometry"], out
+    assert out["order"] == 2 and out["accepted"] and out["unchanged"], out
+    # radius-1, height-2 cylinder: volume 2*pi, surface 6*pi; the Q2 map is close, a flat map is not
+    assert abs(out["volume"]) < 2e-3 and abs(out["area"]) < 2e-3, out
+
+
 def test_production_curved_entries_require_the_stored_order():
     """Guards: no curved Radia entry calls Curve; each requires the stored geometry order.
 
