@@ -284,6 +284,77 @@ def test_curving_needs_cad_and_straight_order_is_explicit(tmp_path):
     assert out["occ"][0] == 2 and abs(out["occ"][1]) < 5e-3, out["occ"]
 
 
+def test_public_entries_never_curve_a_borrowed_geometry(tmp_path):
+    """Guards: vim.Solve / MagnetizationSource refuse an uncurved mesh object; load_vol provenance.
+
+    Assumes: after a CSG GenerateMesh, a plain Mesh() of a CAD-free .vol (with or
+    without trailing text, gzipped or not) is bound to that CSG geometry, and Curve
+    onto it is wrong or crashes; a stored order and a restored CAD are kept.
+    """
+    pytest.importorskip("radia._radia_pybind")
+    out = _run(tmp_path, """
+        import gzip, shutil
+        from netgen.csg import CSGeometry, Sphere as CSphere, Pnt as CPnt
+        from ngsolve.meshes import MakeStructured3DMesh
+        from radia import vim
+        from radia.mesh_curve import CurveOrderError, load_vol, vol_geometry_kind
+        from radia.vim._vim import _curve_mesh
+        occ = OCCGeometry(Sphere(Pnt(0, 0, 0), R))
+        occ.GenerateMesh(maxh=R/2).Save("occ_flat.vol")
+        q2 = ng.Mesh(occ.GenerateMesh(maxh=R/2)); curve(q2, 2); q2.ngmesh.Save("q2.vol")
+        lines = open("q2.vol").read().splitlines()
+        open("q2_nocad.vol", "w").write("\\n".join(lines[:lines.index("endmesh")+1]) + "\\n")
+        MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2).ngmesh.Save("cube.vol")
+        open("cube_comment.vol", "w").write(open("cube.vol").read() + "# written by another tool\\n")
+        for plain in ("cube.vol", "cube_comment.vol"):
+            with open(plain, "rb") as src, gzip.open(plain + ".gz", "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        g = CSGeometry(); g.Add(CSphere(CPnt(0, 0, 0), 1.0)); keep = g.GenerateMesh(maxh=0.5)
+        H = ng.CoefficientFunction((0.0, 0.0, 1.0e3))
+        res = {"kind_comment": vol_geometry_kind("cube_comment.vol")}
+        for entry in ("solve", "source"):
+            m = ng.Mesh("cube.vol")
+            res["borrowed"] = type(m.ngmesh.GetGeometry()).__name__
+            try:
+                with ng.TaskManager():
+                    if entry == "solve":
+                        vim.Solve(m, mu_r=100.0, H_ext=H, order=1, curve_order=2)
+                    else:
+                        vim.MagnetizationSource(m, (0.0, 0.0, 1.0e5), order=1, curve_order=2)
+                res[entry] = ["ran", m.GetCurveOrder()]
+            except CurveOrderError as error:
+                res[entry] = ["refused", m.GetCurveOrder(), "straight_curve_order" in str(error)]
+        for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz"):
+            m = load_vol(name)
+            res[name] = [type(m.ngmesh.GetGeometry()).__name__]
+            try:
+                _curve_mesh(m, 2); res[name].append("curved")
+            except CurveOrderError:
+                res[name].append("refused")
+        one = ng.CoefficientFunction(1.0)
+        stored = ng.Mesh("q2_nocad.vol")
+        before = [ng.Integrate(one, stored, ng.BND), ng.Integrate(one, stored)]
+        with ng.TaskManager():
+            vim.Solve(stored, mu_r=100.0, H_ext=H, order=1, curve_order=2)
+        after = [ng.Integrate(one, stored, ng.BND), ng.Integrate(one, stored)]
+        res["stored"] = [stored.GetCurveOrder(), max(abs(a/b - 1) for a, b in zip(after, before)), rel(stored)]
+        cad = load_vol("occ_flat.vol")
+        res["cad"] = [type(cad.ngmesh.GetGeometry()).__name__]
+        with ng.TaskManager():
+            _curve_mesh(cad, 2)
+        res["cad"] += [cad.GetCurveOrder(), rel(cad)]
+        print(json.dumps(res))
+    """)
+    assert out["borrowed"] == "CSGeometry" and out["kind_comment"] == "other", out
+    assert out["solve"] == ["refused", 1, True] and out["source"] == ["refused", 1, True], out
+    for name in ("cube.vol", "cube_comment.vol", "cube.vol.gz", "cube_comment.vol.gz"):
+        assert out[name] == ["NetgenGeometry", "refused"], (name, out[name])
+    order, change, area = out["stored"]
+    assert order == 2 and change == 0.0 and abs(area) < 5e-3, out["stored"]
+    geometry, order, area = out["cad"]
+    assert geometry == "OCCGeometry" and order == 2 and abs(area) < 5e-3, out["cad"]
+
+
 def test_production_vol_entries_load_through_load_vol():
     """Guards: the HDiv device prepare and soft_iron_from_vol path loads.
 

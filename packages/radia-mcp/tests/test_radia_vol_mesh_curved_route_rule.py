@@ -19,7 +19,7 @@ def test_plain_vol_mesh_into_curved_solve_is_flagged():
 
 
 def test_path_variable_and_str_wrapper_are_followed():
-    found = _hits(['p = r"C:\\temp\\coil.vol.gz"', "m = ngsolve.Mesh(str(p))",
+    found = _hits(['p = "meshes/coil.vol.gz"', "m = ngsolve.Mesh(str(p))",
                    "out = solve_fn(m, curve_order=k)"])
     assert [f["line"] for f in found] == [3], found
 

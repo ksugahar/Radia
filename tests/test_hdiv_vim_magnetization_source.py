@@ -105,8 +105,9 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
 
     cases = [
         ("tet-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, None, "analytic-tet-bdm2"),
-        ("tet-curved", _box_mesh(-0.3, 0.3, maxh=0.35), 1, 2, "curved-element-exact-bdm1"),
-        ("tet-curved-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, 2,
+        ("tet-curved", straight_curve_order(_box_mesh(-0.3, 0.3, maxh=0.35), 2), 1, 2,
+         "curved-element-exact-bdm1"),
+        ("tet-curved-bdm2", straight_curve_order(_box_mesh(-0.3, 0.3, maxh=0.35), 2), 2, 2,
          "curved-element-exact-bdm2"),
         ("hex-bdm1", MakeStructured3DMesh(
             hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "analytic-tet-bdm1"),

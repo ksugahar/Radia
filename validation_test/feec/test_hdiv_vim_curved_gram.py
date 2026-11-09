@@ -18,6 +18,7 @@ def test_curved_demag_solve_runs_and_converges():
     geo = OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
     mesh = ng.Mesh(geo.GenerateMesh(maxh=1.0))
     with ng.TaskManager():
+        mesh.Curve(2)  # curved where the CAD lives; Solve does not curve a mesh object
         result = Solve(
             mesh, mu_r=100.0,
             H_ext=ng.CoefficientFunction((0, 0, 1.0)),
