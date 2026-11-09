@@ -65,7 +65,7 @@ The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/referen
 ## Mesh And CAD
 STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver boundary is a checked `.vol` regardless of the creation route.
 - Cubit-generated `.vol` files belong to `cubit-mesh-export` on a licensed Cubit machine; build123d + Netgen is the explicit alternative. radia CI consumes committed fixtures: a missing required fixture fails the test; only explicitly optional validation inputs may skip visibly.
-- Drive Cubit headless (APREPRO/Python CLI) and export through `cubit-mesh-export`. LLM/MCP Cubit runs are always batch/nographics and fails rather than launch or attach to a GUI; only `cubit-mesh-export` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
+- Drive Cubit headless (APREPRO/Python CLI) and export through `cubit-mesh-export`. LLM/MCP Cubit runs are always batch/nographics and fail rather than launch or attach to a GUI; only `cubit-mesh-export` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
 - `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; each distribution owns its runtime helpers and needs neither the other MCP package nor a shared private one. Cubit export stays in the C++ `.ccm` backend (`docs/cubit/ABI.md`); the only Radia-owned VTK export surface is `cubit-mesh-export`.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label contract before solver or Simulink initialization. Label checks validate topology/naming; DesignSpec validates physical data. Preserve canonical CAD, mesh, contracts and generation sources; remove only verified scratch or superseded output.
 
