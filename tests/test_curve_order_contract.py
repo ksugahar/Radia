@@ -390,6 +390,12 @@ def test_production_curved_entries_require_the_stored_order():
         names = [getattr(node.func, "attr", getattr(node.func, "id", None)) for node in calls]
         curving = [node.lineno for node, name in zip(calls, names) if name in ("Curve", "_curve_mesh")]
         assert curving == [] and "_require_curve_order" in names, (relative, curving)
+    import re
+    native = root.parents[0] / "core" / "gpu" / "hdiv"
+    calls = [(path.name, match.group(0)) for path in sorted(native.iterdir())
+             if path.suffix in (".hpp", ".cpp", ".cu", ".cuh")
+             for match in re.finditer(r"(?:->|\.)\s*Curve\s*\(", path.read_text(encoding="utf-8"))]
+    assert calls == [], calls  # the native staging reopens the .vol and must use its stored order too
 
 
 @pytest.mark.parametrize("factor", [0.8, 1.2, 1e-3])

@@ -69,7 +69,9 @@ Curvature is a property of how the mesh was made, not something added later:
 No Radia route curves a mesh. The routes that take a mesh object
 (`vim.Solve`, `vim.MagnetizationSource`, `HDivSolver.SolveHysteresis`) and the
 path-based HDiv device prepare require, with `curve_order=2`, a mesh already at
-geometry order 2 and otherwise raise `CurveOrderError`. A mesh carries no
+geometry order 2 and otherwise raise `CurveOrderError`. The native device
+staging, which reopens the `.vol` itself, likewise refuses a stored order other
+than the requested one (`ValueError`) and never curves. A mesh carries no
 reliable provenance (`GetGeometry()` returns the same object for an embedded
 CAD and for one borrowed from another mesh of the process), so curving happens
 where the CAD lives: `Curve(p)` right after `GenerateMesh`, `ensure_curve_order`
