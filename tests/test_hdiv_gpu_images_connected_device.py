@@ -78,8 +78,8 @@ def _yoke(path, cells, fold, *, ring=False, identified=True, numbering=None, inn
 def _radial_q2(mesh):
     """A rotation-invariant Q2 deformation; its owner keeps the returned field alive."""
     import ngsolve as ng
-    from radia.vim._vim import _curve_mesh
-    _curve_mesh(mesh, 2)
+    from radia.mesh_curve import straight_curve_order
+    straight_curve_order(mesh, 2)
     deformation = ng.GridFunction(ng.VectorH1(mesh, order=2))
     square = ng.x*ng.x + ng.y*ng.y
     deformation.Interpolate(ng.CF((2.5*ng.x*square, 2.5*ng.y*square, 1.5*ng.z*square)))
@@ -123,8 +123,9 @@ def _cpu_operators(path, order, fold, deform):
     import ngsolve as ng
     from radia import hdiv_gpu
     from radia.vim._solve import _hdiv_space_with_image_constraints
+    from radia.mesh_curve import load_vol
     from radia.vim._vim import _build_charge_gram_hex
-    mesh = ng.Mesh(str(path))
+    mesh = load_vol(path)
     keep = deform(mesh) if deform else None
     fes = _hdiv_space_with_image_constraints(mesh, order, [], SEAM)[0]
     terms = hdiv_gpu._device_image_terms(None, fold)

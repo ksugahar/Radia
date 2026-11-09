@@ -149,10 +149,10 @@ def _tet_connected_ring(path, cells, fold, inner=0.03, outer=0.05, half=0.004):
 _STORED_P2 = """
 import sys
 import ngsolve as ng
-from radia.vim._vim import _curve_mesh
+from radia.mesh_curve import load_vol, straight_curve_order
 for source, target in zip(sys.argv[1::2], sys.argv[2::2]):
-    mesh = ng.Mesh(source)
-    _curve_mesh(mesh, 2)
+    mesh = load_vol(source)
+    straight_curve_order(mesh, 2)
     mesh.ngmesh.Save(target)
 """
 
@@ -215,10 +215,11 @@ def _case(path, order, curve_order, terms, cuda):
     """CPU charge map and Gram, and the device arguments of the same mesh; the images are added to the geometry."""
     import ngsolve as ng
     from radia import hdiv_gpu
+    from radia.mesh_curve import load_vol
     from radia.vim._vim import _curve_mesh
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression="dense", curve_order=curve_order)
-        mesh = ng.Mesh(str(path))
+        mesh = load_vol(path)
         if curve_order == 2:
             _curve_mesh(mesh, 2)
         fes = ng.HDiv(mesh, order=order)
@@ -276,10 +277,11 @@ def _plain(path, order, curve_order, cuda):
     """Device tables, CPU charge map and direct CPU Gram of a mesh, no image."""
     import ngsolve as ng
     from radia import hdiv_gpu
+    from radia.mesh_curve import load_vol
     from radia.vim._vim import _curve_mesh, build_charge_gram
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression="dense", curve_order=curve_order)
-        mesh = ng.Mesh(str(path))
+        mesh = load_vol(path)
         if curve_order == 2:
             _curve_mesh(mesh, 2)
         B, gram, _ = build_charge_gram(ng.HDiv(mesh, order=order), eps=1e-10, curve_order=2 if curve_order == 2 else None,
@@ -547,9 +549,10 @@ def _cpu_equation(path, order, curve_order, terms, rhs):
     """The dense CPU equation of one image list on the device's mass rule E^T W E, IntegrationRule(TET, 2*max(6, 2p+2))."""
     import ngsolve as ng
     from scipy.sparse import coo_matrix, csr_matrix
+    from radia.mesh_curve import load_vol
     from radia.vim._vim import _curve_mesh
     with ng.TaskManager():
-        mesh = ng.Mesh(str(path))
+        mesh = load_vol(path)
         if curve_order == 2:
             _curve_mesh(mesh, 2)
         fes = ng.HDiv(mesh, order=order)
@@ -571,8 +574,9 @@ def _cpu_solve(path, order, curve_order, **kw):
     import radia as rad
     from radia import vim
     rad.UtiDelAll()
+    from radia.mesh_curve import load_vol
     with ng.TaskManager():
-        mesh = ng.Mesh(str(path))
+        mesh = load_vol(path)
         extra = dict(curve_order=2) if curve_order == 2 else {}
         if curve_order == 2:
             from radia.vim._vim import _curve_mesh

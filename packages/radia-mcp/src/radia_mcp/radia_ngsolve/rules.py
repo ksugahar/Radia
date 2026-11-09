@@ -1153,9 +1153,11 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
         "associates with the mesh: a CAD-less export (Cubit) is flattened while "
         "GetCurveOrder() reports success, or curved onto another mesh's process-global "
         "geometry; a mesh rescaled after meshing (ngmesh.Scale) explodes. Remove the "
-        ".Curve(); use radia.mesh_curve.ensure_curve_order(mesh, k) if a higher order "
-        "is required, or bake the order into the export (Cubit: export netgen ... "
-        "order N). See docs/ngsolve_integration/curve_order.md."
+        ".Curve(); load with radia.mesh_curve.load_vol(path) and use "
+        "radia.mesh_curve.ensure_curve_order(mesh, k) if a higher order is required "
+        "(only a Netgen/OCC .vol with embedded CAD can be curved later), or bake the "
+        "order into the export (Cubit: export netgen ... order N). "
+        "See docs/ngsolve_integration/curve_order.md."
     )
     msg_chain = (
         '.Curve() chained onto Mesh(".vol"). Loading already applies the stored '
@@ -1217,6 +1219,74 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
             findings.append({'line': i, 'severity': 'HIGH',
                              'rule': 'ngsolve-curve-after-vol-import',
                              'message': msg_sep.format(var=cm.group(1))})
+    return findings
+
+
+def check_vol_mesh_into_curved_route(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: a plain ``Mesh(".vol")`` passed to a call that asks for ``curve_order``.
+
+    Netgen binds a ``.vol`` that stores no CAD (Cubit ``export netgen``) to the
+    most recent geometry of the process, from ``GenerateMesh`` or any earlier
+    geometry-bearing file; curving it then projects onto that foreign shape or
+    crashes inside ``Curve``. A Cubit export cannot gain curvature after export
+    at all; only a Netgen/OCC ``.vol`` that embeds its CAD can be curved later.
+    Load with ``radia.mesh_curve.load_vol(path)``, which keeps only the geometry
+    the file stores, so a curved Radia route can tell the two apart and refuse a
+    CAD-free mesh whose stored order is too low.
+    """
+    msg = (
+        "'{var}' comes from a plain Mesh/Load of a .vol and is passed to a call with "
+        "curve_order. A CAD-free .vol (Cubit export) borrows the process's last "
+        "geometry, so curving it uses another shape or crashes; and a Cubit export "
+        "cannot be curved after export. Load it with radia.mesh_curve.load_vol(path); "
+        "for a Cubit mesh export the order you need (export netgen ... order N). "
+        "See docs/ngsolve_integration/curve_order.md."
+    )
+    pathvar_pat = re.compile(r'(\w+)\s*=\s*[rfb]*["\'][^"\']*\.vol(?:\.gz)?\b', re.IGNORECASE)
+    vol_literal_pat = re.compile(
+        r'(\w+)\s*=\s*(?:\w+\.)?Mesh\s*\(\s*(?:str\s*\(\s*)?[rfb]*["\'][^"\']*\.vol', re.IGNORECASE)
+    mesh_of_var_pat = re.compile(r'(\w+)\s*=\s*(?:\w+\.)?Mesh\s*\(\s*(?:str\s*\(\s*)?(\w+)\s*\)?\s*\)')
+    load_pat = re.compile(r'(\w+)\s*\.\s*Load\s*\(\s*[^)]*\.vol\b', re.IGNORECASE)
+    curved_call_pat = re.compile(r'\bcurve_order\s*=\s*(?!None\b|0\b|1\b)')
+    path_vars, vol_mesh_vars, code = set(), set(), []
+    in_doc = False
+    for idx, ln in enumerate(lines, 1):
+        s = ln.strip()
+        if s.count('"""') == 1 or s.count("'''") == 1:
+            in_doc = not in_doc
+            continue
+        if in_doc or s.startswith('#'):
+            continue
+        code.append((idx, s.split('#', 1)[0]))
+    assign_pat = re.compile(r'^(\w+)\s*=(?!=)')
+    detach_pat = re.compile(r'(\w+)\s*\.\s*ngmesh\s*\.\s*SetGeometry\s*\(\s*None\s*\)')
+    findings = []
+    for i, text in code:
+        # One forward pass: a mark holds from its assignment until the name is
+        # rebound or its geometry is detached.
+        if curved_call_pat.search(text):
+            args = set(re.findall(r'[(,]\s*(\w+)\s*(?=[,)])', text))
+            for var in sorted(args & vol_mesh_vars):
+                findings.append({'line': i, 'severity': 'HIGH', 'rule': 'radia-vol-mesh-into-curved-route',
+                                 'message': msg.format(var=var)})
+        target = assign_pat.match(text)
+        if target:
+            name = target.group(1)
+            path_vars.discard(name)
+            vol_mesh_vars.discard(name)
+            pv = pathvar_pat.search(text)
+            if pv and pv.group(1) == name:
+                path_vars.add(name)
+            ml = vol_literal_pat.search(text)
+            mv = mesh_of_var_pat.search(text)
+            if (ml and ml.group(1) == name) or (mv and mv.group(1) == name and mv.group(2) in path_vars):
+                vol_mesh_vars.add(name)
+        lo = load_pat.search(text)
+        if lo:
+            vol_mesh_vars.add(lo.group(1))
+        de = detach_pat.search(text)
+        if de:
+            vol_mesh_vars.discard(de.group(1))
     return findings
 
 
@@ -1640,6 +1710,7 @@ ALL_RULES = [
     check_gridfunction_set_definedon_in_loop,
     check_ngsolve_kelvin_missing_bonus_intorder,
     check_curve_after_vol_import,
+    check_vol_mesh_into_curved_route,
     check_netgen_scale_after_generate,
     check_axisymmetric_h1_over_r,
     check_coil_scalar_potential_as_lift,

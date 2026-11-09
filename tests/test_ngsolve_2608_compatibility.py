@@ -28,7 +28,7 @@ _mesh_helpers = pytest.importorskip("ngsolve.meshes")
 MakeStructured2DMesh = _mesh_helpers.MakeStructured2DMesh
 MakeStructured3DMesh = _mesh_helpers.MakeStructured3DMesh
 
-from radia.vim._vim import _curve_mesh
+from radia.mesh_curve import straight_curve_order
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED_VERSION = "6.2.2608"
@@ -225,7 +225,7 @@ def test_upstream_hdiv_pyramid_passes_the_existing_functional_probe():
 )
 def test_programmatic_structured_meshes_are_curve_safe(family, factory):
     mesh = factory()
-    _curve_mesh(mesh, 2)
+    straight_curve_order(mesh, 2)
     assert mesh.GetCurveOrder() == 2, family
     assert mesh.ngmesh.EdgeDescriptors(), family
 

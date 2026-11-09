@@ -162,11 +162,12 @@ def _hex_rule_rows(fes):
 def _gram_case(path, order, terms, *, seam=(), deform=None):
     """CPU Gram and the device arguments of the same charge basis and lattices."""
     import ngsolve as ng
-    from radia.vim._vim import _build_charge_gram_hex, _charge_basis_hex, _curve_mesh
-    mesh = ng.Mesh(str(path))
+    from radia.mesh_curve import load_vol, straight_curve_order
+    from radia.vim._vim import _build_charge_gram_hex, _charge_basis_hex
+    mesh = load_vol(path)
     deformation = None
     if deform is not None:
-        _curve_mesh(mesh, 2)
+        straight_curve_order(mesh, 2)
         deformation = deform(mesh)
     fes = ng.HDiv(mesh, order=order)
     with ng.TaskManager():

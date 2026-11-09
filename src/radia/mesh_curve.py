@@ -29,7 +29,8 @@ from __future__ import annotations
 import gzip
 import math
 
-__all__ = ["CurveOrderError", "ensure_curve_order", "load_vol", "mesh_measures", "vol_geometry_kind"]
+__all__ = ["CurveOrderError", "add_curve_descriptors", "ensure_curve_order", "load_vol", "mesh_measures",
+           "straight_curve_order", "vol_geometry_kind"]
 
 
 class CurveOrderError(RuntimeError):
@@ -109,6 +110,60 @@ def load_vol(vol_path):
     mesh = ng.Mesh(str(vol_path))
     if vol_geometry_kind(vol_path) is None:
         mesh.ngmesh.SetGeometry(None)
+    return mesh
+
+
+def add_curve_descriptors(mesh):
+    """Add the edge descriptors NGSolve ``Curve`` needs on a programmatic mesh, once."""
+    from netgen.meshing import EdgeDescriptor
+
+    ngmesh = mesh.ngmesh
+    if not ngmesh.EdgeDescriptors():
+        if ngmesh.dim == 2:
+            for index, name in enumerate(mesh.GetBoundaries(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (1, -1)
+                descriptor.domin = 1
+                descriptor.domout = 0
+                descriptor.name = name
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        elif ngmesh.dim == 3:
+            for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (face.surfnr, -1)
+                descriptor.domin = face.domin
+                descriptor.domout = face.domout
+                descriptor.name = face.bcname or f"boundary_{index}"
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        else:
+            raise ValueError(f"unsupported mesh dimension for Curve: {ngmesh.dim}")
+
+
+def straight_curve_order(mesh, order):
+    """Give ``mesh`` a straight element map of polynomial ``order``, without CAD.
+
+    Any attached geometry, its own or borrowed, is detached first, so ``Curve``
+    keeps the current element map and only raises its order.  The result is
+    exact for flat geometry (boxes, hand-built or structured meshes, a mesh an
+    analytic ``SetDeformation`` will move) and wrong for a curved one: a mesh
+    with curved boundaries gets its curvature from its CAD (``Curve`` right after
+    ``GenerateMesh``, ``ensure_curve_order``) or from its export order (Cubit
+    ``export netgen ... order p``).  A stored order of ``order`` or higher is
+    kept.  The caller owns ``TaskManager``.
+    """
+    if int(mesh.GetCurveOrder()) >= int(order):
+        return mesh
+    mesh.ngmesh.SetGeometry(None)
+    add_curve_descriptors(mesh)
+    mesh.Curve(int(order))
     return mesh
 
 
