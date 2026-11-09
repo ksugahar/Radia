@@ -186,7 +186,7 @@ def _fake_device_staging(monkeypatch, calls, validate):
     vim = types.ModuleType("radia.vim._vim")
     vim._prepare_gpu_charge_inputs = lambda *a, **k: calls.append("charge-staging")
     vim._prepare_gpu_curved_charge_inputs = lambda *a, **k: calls.append("curved-charge-staging")
-    vim._curve_mesh = lambda mesh, order: calls.append(("curve", order))
+    vim._require_curve_order = lambda mesh, order, entry: calls.append(("require", order))
     vim._volume_vertex_counts = lambda mesh: frozenset({4})
     vim._prepare_gpu_hex_charge_inputs = lambda *a, **k: calls.append("hex-charge-staging")
     vim._prepare_gpu_mixed_charge_inputs = lambda *a, **k: calls.append("mixed-charge-staging")

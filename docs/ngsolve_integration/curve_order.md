@@ -47,8 +47,11 @@ The borrowed geometry need not come from a loaded file: a CSG or OCC
 CAD-free mesh onto a borrowed CSG geometry can crash the process (access
 violation inside `Curve`). Radia's own path loads (the HDiv device prepare and
 `soft_iron_from_vol`) therefore use `radia.mesh_curve.load_vol(path)`, which
-drops the attached geometry unless the file stores one that Netgen restored, so
-the mesh depends only on the file. A caller that loads a `.vol` itself uses
+keeps an attached geometry only for an OCC archive restored as `OCCGeometry`, so
+the mesh depends only on the file. A CSG geometry is never kept: Netgen's
+fallback for a tail it does not restore (even one that only starts like
+`csgsurfaces`) is an object of the same class, indistinguishable from a real
+CSG restore. A caller that loads a `.vol` itself uses
 `load_vol` as well (lint rule `radia-vol-mesh-into-curved-route`).
 
 ## Where curvature can come from
@@ -58,25 +61,21 @@ Curvature is a property of how the mesh was made, not something added later:
 | Mesh source | Higher geometry order later |
 | --- | --- |
 | Netgen/OCC `GenerateMesh` in this process | yes: `Curve(p)` onto its own CAD |
-| Netgen/OCC `.vol` that embeds its CAD | yes: `ensure_curve_order`, or the path-based HDiv device prepare |
+| Netgen/OCC `.vol` that embeds its CAD | yes, explicitly: `ensure_curve_order` (OCC only, with vertex, box and measure checks) |
+| Netgen CSG `.vol` | no: save it after `Curve(p)` in the producing process |
 | Cubit `export netgen ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
 | structured or hand-built mesh (no CAD) | only a straight map, explicitly: `straight_curve_order(mesh, p)` |
 
-The Radia routes that take a mesh object (`vim.Solve`,
-`vim.MagnetizationSource`, `HDivSolver.SolveHysteresis`) never curve it: with
-`curve_order=2` they require a mesh already at geometry order 2 and otherwise
-raise `CurveOrderError`. A mesh object carries no provenance (`GetGeometry()`
-returns the same object for an embedded CAD and for one borrowed from another
-mesh of the process), so the caller curves where the CAD lives. A stored order
-that is high enough (a Cubit export at order 2, a saved curved Netgen mesh) is
-used as it is.
-
-Only the path-based HDiv device prepare curves, after `load_vol`: the
-attached geometry is kept only when the file stores an OCC or CSG archive and
-Netgen restored exactly that kind; no archive, unrecognised trailing text or a
-failed restore leave the mesh without CAD, and `_curve_mesh` then refuses it.
-`load_vol` also refuses a file that changed between its provenance read and
-the load.
+No Radia route curves a mesh. The routes that take a mesh object
+(`vim.Solve`, `vim.MagnetizationSource`, `HDivSolver.SolveHysteresis`) and the
+path-based HDiv device prepare require, with `curve_order=2`, a mesh already at
+geometry order 2 and otherwise raise `CurveOrderError`. A mesh carries no
+reliable provenance (`GetGeometry()` returns the same object for an embedded
+CAD and for one borrowed from another mesh of the process), so curving happens
+where the CAD lives: `Curve(p)` right after `GenerateMesh`, `ensure_curve_order`
+for a Netgen/OCC `.vol`, or the export order for Cubit. A stored order that is
+high enough is used as it is. `load_vol` also refuses a file that changed
+between its provenance read and the load.
 
 A flat model that needs a P2 map, for example to use the curved kernel or to
 carry an analytic `SetDeformation`, calls `straight_curve_order(mesh, 2)`: it

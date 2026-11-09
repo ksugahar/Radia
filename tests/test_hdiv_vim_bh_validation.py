@@ -47,14 +47,14 @@ def test_mesh_soft_iron_rejects_a_filter_it_cannot_solve():
         vim.MeshSoftIron(mesh, mu_r=100.0, material_filter=["nothing"])
 
 
-def test_curve_mesh_keeps_a_higher_order_geometry():
-    """A mesh already curved above the requested order is not re-curved."""
+def test_required_curve_order_keeps_a_higher_order_geometry():
+    """A mesh already curved above the requested order is used as it is."""
     from netgen.occ import OCCGeometry, Sphere, Pnt
-    from radia.vim._vim import _curve_mesh
+    from radia.vim._vim import _require_curve_order
 
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.8))
     mesh.Curve(3)
-    _curve_mesh(mesh, 2)
+    assert _require_curve_order(mesh, 2, "test") is mesh
     assert mesh.GetCurveOrder() == 3
 
 

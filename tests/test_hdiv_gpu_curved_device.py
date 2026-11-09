@@ -44,33 +44,36 @@ def cuda():
 @pytest.fixture(scope="module")
 def ball(tmp_path_factory):
     from netgen.occ import OCCGeometry, Pnt, Sphere
+    import ngsolve as ng
     path = tmp_path_factory.mktemp("curved") / "ball.vol"
-    OCCGeometry(Sphere(Pnt(0, 0, 0), 0.05)).GenerateMesh(maxh=0.04).Save(str(path))
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 0.05)).GenerateMesh(maxh=0.04))
+    with ng.TaskManager():
+        mesh.Curve(2)  # curved where the CAD lives; the device prepare uses the stored order
+    mesh.ngmesh.Save(str(path))
     return path
 
 
 @pytest.fixture(scope="module")
 def saved_ball(ball, tmp_path_factory):
     import ngsolve as ng
-    from radia.vim._vim import _curve_mesh
+    from radia.mesh_curve import load_vol, vol_geometry_kind
     path = tmp_path_factory.mktemp("curved-saved") / "ball-p2.vol"
-    with ng.TaskManager():
-        mesh = ng.Mesh(str(ball))
-        _curve_mesh(mesh, 2)
-        mesh.ngmesh.Save(str(path))
-        assert ng.Mesh(str(path)).GetCurveOrder() == 2
+    lines = ball.read_text().splitlines()
+    path.write_text("\n".join(lines[:lines.index("endmesh") + 1]) + "\n")  # CAD-free stored P2, as a Cubit export
+    assert vol_geometry_kind(path) is None and load_vol(path).GetCurveOrder() == 2
     return path
 
 
 def _case(path, order, cuda, compression="dense"):
     import ngsolve as ng
     from radia import hdiv_gpu
-    from radia.vim._vim import _curve_mesh, _curved_tet_charge_inputs
+    from radia.mesh_curve import load_vol
+    from radia.vim._vim import _curved_tet_charge_inputs
     with ng.TaskManager():
         setup = hdiv_gpu._prepare_device_components(path, order, cuda, aca=None, compression=compression,
                                                     curve_order=2)
-        mesh = ng.Mesh(str(path))
-        _curve_mesh(mesh, 2)
+        mesh = load_vol(path)
+        assert mesh.GetCurveOrder() == 2
         fes = ng.HDiv(mesh, order=order)
         cbk, kw = _curved_tet_charge_inputs(fes, max(2, 3*order), eps=1e-10, leafsize=64, eta=2., far_quad=3,
                                             ho_far_factor=2., curve_gauss=8, image_masks=[], image_signs=[],
