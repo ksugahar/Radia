@@ -97,18 +97,37 @@ def vol_geometry_kind(vol_path):
     return _geometry_kind(_read_vol(vol_path, with_points=False)[2])
 
 
+_RESTORED_GEOMETRY = {"occ": "OCCGeometry", "csg": "CSGeometry"}
+
+
+def _file_identity(path):
+    import os
+
+    status = os.stat(path)
+    return status.st_dev, status.st_ino, status.st_size, status.st_mtime_ns
+
+
 def load_vol(vol_path):
     """Load a ``.vol`` (or ``.vol.gz``) bound only to the geometry the file stores.
 
-    Netgen attaches the process's most recent geometry to a file that stores
-    none.  For such a file the attached geometry is dropped, so the mesh and
-    any later ``Curve`` depend only on the file, as in a fresh process.  A file
-    with a stored geometry keeps the one Netgen restored from it.
+    Netgen attaches the process's most recent geometry to a file whose stored
+    geometry it does not restore.  The attached geometry is kept only when the
+    file stores an OCC or CSG archive and Netgen restored exactly that kind;
+    otherwise (no archive, unrecognised trailing text, a failed restore) it is
+    dropped, so the mesh and any later ``Curve`` depend only on the file, as in
+    a fresh process.  The file must not change between the provenance read and
+    the load (same device, inode, size and modification time), else this raises.
     """
     import ngsolve as ng
 
-    mesh = ng.Mesh(str(vol_path))
-    if vol_geometry_kind(vol_path) is None:
+    path = str(vol_path)
+    before = _file_identity(path)
+    kind = vol_geometry_kind(path)
+    mesh = ng.Mesh(path)
+    if _file_identity(path) != before:
+        raise RuntimeError(f"{path} changed while it was loaded; its geometry provenance is unknown")
+    restored = type(mesh.ngmesh.GetGeometry()).__name__
+    if _RESTORED_GEOMETRY.get(kind) != restored:
         mesh.ngmesh.SetGeometry(None)
     return mesh
 

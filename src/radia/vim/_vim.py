@@ -64,8 +64,33 @@ def _volume_vertex_counts(mesh):
     return frozenset(int(value) for value in _rp._volume_element_vertex_counts(mesh))
 
 
+def _require_curve_order(mesh, order, entry):
+    """Refuse a mesh object below geometry order ``order``; Radia does not curve it.
+
+    A mesh object carries no provenance: ``GetGeometry()`` returns the same
+    object for an embedded CAD and for one borrowed from another mesh of the
+    process, and curving onto a borrowed geometry projects onto a foreign shape
+    or crashes inside ``Curve``. The caller curves where the CAD lives.
+    """
+    current = int(mesh.GetCurveOrder())
+    if current >= int(order):
+        return mesh
+    raise CurveOrderError(
+        f"{entry}: curve_order={int(order)} needs a mesh already at geometry order {int(order)}; "
+        f"this one is at {current}. Radia does not curve a mesh object, because its geometry may "
+        f"be borrowed from another mesh of the process. Curve it where its CAD lives "
+        f"(Curve({int(order)}) right after GenerateMesh, or radia.mesh_curve.ensure_curve_order for "
+        f"a Netgen/OCC .vol), export a Cubit mesh at that order (export netgen ... order "
+        f"{int(order)}), or call radia.mesh_curve.straight_curve_order(mesh, {int(order)}) for flat "
+        f"geometry.")
+
+
 def _curve_mesh(mesh, order):
-    """Raise the geometry order of ``mesh`` onto its own CAD.
+    """Raise the geometry order of a path-loaded ``mesh`` onto its own CAD.
+
+    Only for a mesh just loaded with ``radia.mesh_curve.load_vol``, which keeps
+    a geometry only when the file stores it and Netgen restored it (the HDiv
+    device prepare), or one the caller generated in process.
 
     A stored order of ``order`` or higher is kept: a loaded high-order ``.vol``
     has no CAD callback, so a second ``Curve`` would replace its geometry. A mesh

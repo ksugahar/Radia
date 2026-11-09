@@ -47,10 +47,9 @@ The borrowed geometry need not come from a loaded file: a CSG or OCC
 CAD-free mesh onto a borrowed CSG geometry can crash the process (access
 violation inside `Curve`). Radia's own path loads (the HDiv device prepare and
 `soft_iron_from_vol`) therefore use `radia.mesh_curve.load_vol(path)`, which
-drops the attached geometry when the file stores none, so the mesh depends only
-on the file. A mesh object loaded by the caller is the caller's
-responsibility: load it with `load_vol` before passing it to a curved route
-(lint rule `radia-vol-mesh-into-curved-route`).
+drops the attached geometry unless the file stores one that Netgen restored, so
+the mesh depends only on the file. A caller that loads a `.vol` itself uses
+`load_vol` as well (lint rule `radia-vol-mesh-into-curved-route`).
 
 ## Where curvature can come from
 
@@ -59,28 +58,30 @@ Curvature is a property of how the mesh was made, not something added later:
 | Mesh source | Higher geometry order later |
 | --- | --- |
 | Netgen/OCC `GenerateMesh` in this process | yes: `Curve(p)` onto its own CAD |
-| Netgen/OCC `.vol` that embeds its CAD | yes: `ensure_curve_order`, or `load_vol` and a curved route |
+| Netgen/OCC `.vol` that embeds its CAD | yes: `ensure_curve_order`, or the path-based HDiv device prepare |
 | Cubit `export netgen ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
 | structured or hand-built mesh (no CAD) | only a straight map, explicitly: `straight_curve_order(mesh, p)` |
 
-The curved Radia routes (`vim.Solve`, `vim.MagnetizationSource`,
-`HDivSolver`, the HDiv device prepare) keep a stored order that is high enough
-and otherwise call `radia.vim._vim._curve_mesh`. It curves only a mesh that
-carries a CAD; a mesh without one (`NetgenGeometry`) raises `CurveOrderError`
-instead of being flattened while `GetCurveOrder()` reports the new order. A
-flat model that needs a P2 map, for example to use the curved kernel or to
-carry an analytic `SetDeformation`, calls `straight_curve_order` first: it
+The Radia routes that take a mesh object (`vim.Solve`,
+`vim.MagnetizationSource`, `HDivSolver.SolveHysteresis`) never curve it: with
+`curve_order=2` they require a mesh already at geometry order 2 and otherwise
+raise `CurveOrderError`. A mesh object carries no provenance (`GetGeometry()`
+returns the same object for an embedded CAD and for one borrowed from another
+mesh of the process), so the caller curves where the CAD lives. A stored order
+that is high enough (a Cubit export at order 2, a saved curved Netgen mesh) is
+used as it is.
+
+Only the path-based HDiv device prepare curves, after `load_vol`: the
+attached geometry is kept only when the file stores an OCC or CSG archive and
+Netgen restored exactly that kind; no archive, unrecognised trailing text or a
+failed restore leave the mesh without CAD, and `_curve_mesh` then refuses it.
+`load_vol` also refuses a file that changed between its provenance read and
+the load.
+
+A flat model that needs a P2 map, for example to use the curved kernel or to
+carry an analytic `SetDeformation`, calls `straight_curve_order(mesh, 2)`: it
 detaches any attached geometry, own or borrowed, and raises the order of the
 current straight map, which is exact only for flat geometry.
-
-An in-memory mesh that borrowed a CAD (a plain `ng.Mesh(path)` of a CAD-free
-file after another geometry was loaded or generated) cannot be told apart from
-its own geometry, so the guard does not catch it; `load_vol` and the lint rule
-cover that case.
-
-The 2026 induction-heating thermal mesh that reported a 6.9e6 m² boundary
-(2.97e8 × the true 0.0233 m²) is the third row: it was meshed in millimetres
-and rescaled with `ngmesh.Scale(1e-3)`.
 
 ## Rules
 
