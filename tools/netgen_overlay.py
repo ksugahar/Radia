@@ -1,7 +1,9 @@
 """Build and install the patched Netgen library consumed by the HDiv installed-wheel lane.
 
 NGSolve and Netgen stay at their pinned wheels. Pinned Netgen scales every pyramid z by
-1 - 1e-10; tools/patches/netgen-pyramid-apex.patch guards the apex only. This tool builds
+1 - 1e-10 and drops the base-edge blend from its vectorised pyramid map;
+tools/patches/netgen-pyramid.patch carries the upstream apex clamp (13b47c3a9) and that
+blend. This tool builds
 that source once and replaces nglib.dll, and nothing else, in a run-local environment. A
 receipt binds the library to the upstream commit and the patch. Never point it at a shared
 runtime; a stock runtime keeps the stock library.
@@ -17,7 +19,7 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PATCH = ROOT / 'tools/patches/netgen-pyramid-apex.patch'
+PATCH = ROOT / 'tools/patches/netgen-pyramid.patch'
 UPSTREAM = 'https://github.com/NGSolve/netgen'
 TAG = 'v6.2.2608'
 UPSTREAM_SHA = '96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e'

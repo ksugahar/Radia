@@ -1,7 +1,7 @@
 """NG-owned pyramid material evaluation; never a mixed charge-Gram certificate.
 
 Guards: staged material tables reproduce the NGSolve mass and a projected constant.
-Assumes: Netgen carries the apex-only pyramid map guard of tools/netgen_overlay.py,
+Assumes: Netgen carries the pyramid apex clamp and base-edge blend of tools/netgen_overlay.py,
 which the installed lane checks by hash. Pinned stock 6.2.2608 scales every pyramid
 z by 1 - 1e-10, which fails the unchanged 1e-11 projection on tet-pyramid-hex
 (order 1/2 about 1.6e-11/1.8e-11); that stays a hard failure.
