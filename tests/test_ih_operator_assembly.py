@@ -3,7 +3,6 @@ from __future__ import annotations
 import gzip
 import importlib.util
 import json
-import shutil
 from pathlib import Path
 
 import numpy as np
@@ -188,11 +187,8 @@ def test_geometry_to_native_config_preserves_power(monkeypatch, tmp_path):
     assert result["radia_result"]["status"] == "passed"
 
 
-def test_crlf_vol_gz_is_materialized_for_ngsolve(monkeypatch, tmp_path):
-    workpiece = _workpiece(tmp_path / "workpiece.vol")
-    compressed = tmp_path / "workpiece.vol.gz"
-    with workpiece.open("rb") as source, gzip.open(compressed, "wb") as target:
-        shutil.copyfileobj(source, target)
+def test_vol_gz_is_materialized_for_ngsolve(monkeypatch, tmp_path):
+    compressed = _workpiece(tmp_path / "workpiece.vol.gz")
     coil = tmp_path / "coil.step"
     coil.write_text("STEP fixture is not parsed by this focused test\n", encoding="ascii")
     seen_workpiece = None
@@ -221,10 +217,7 @@ def test_crlf_vol_gz_is_materialized_for_ngsolve(monkeypatch, tmp_path):
 
 def test_bema_coil_vol_gz_is_materialized_after_contract_check(monkeypatch, tmp_path):
     workpiece = _workpiece(tmp_path / "workpiece.vol")
-    coil = _bema_coil(tmp_path / "coil.vol")
-    compressed = tmp_path / "coil.vol.gz"
-    with coil.open("rb") as source, gzip.open(compressed, "wb") as target:
-        shutil.copyfileobj(source, target)
+    compressed = _bema_coil(tmp_path / "coil.vol.gz")
     seen_coil = None
 
     def capture_materialized(solver_workpiece, solver_coil, *args, **kwargs):
@@ -247,6 +240,30 @@ def test_bema_coil_vol_gz_is_materialized_after_contract_check(monkeypatch, tmp_
     assert config["geometry"]["coil_file"] == str(compressed.resolve())
     assert config["geometry"]["solver_coil_file"] == str(seen_coil)
     assert config["geometry"]["gzip_materialized"] is True
+
+
+def test_crlf_vol_gz_is_refused_before_solver(monkeypatch, tmp_path):
+    """Guards: a CRLF copy compressed to .vol.gz keeps CR in its names and never reaches a solve."""
+    workpiece = _workpiece(tmp_path / "workpiece.vol")
+    compressed = tmp_path / "workpiece.vol.gz"
+    lines = workpiece.read_bytes().replace(b"\r\n", b"\n").split(b"\n")
+    with gzip.open(compressed, "wb") as target:
+        target.write(b"\r\n".join(lines))
+    coil = tmp_path / "coil.step"
+    coil.write_text("not reached\n", encoding="ascii")
+
+    def should_not_run(*args, **kwargs):
+        raise AssertionError("electromagnetic solve must follow check-vol")
+
+    monkeypatch.setattr(assembly, "_solve_unit_current", should_not_run)
+    with pytest.raises(RuntimeError, match=r"'workpiece' is stored as 'workpiece\\r'"):
+        assembly.assemble_ih_operators(
+            compressed,
+            coil,
+            output=tmp_path / "native.json",
+            run_dir=tmp_path / "run",
+            options=assembly.IHOperatorAssemblyOptions(peec_proximity=False),
+        )
 
 
 def test_strict_workpiece_labels_fail_before_solver(monkeypatch, tmp_path):
