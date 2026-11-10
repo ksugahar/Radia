@@ -718,14 +718,19 @@ jobs:
       # Patched Netgen runtime (6.2.2608 + pyramid apex clamp + base-edge blend):
       # the checker refuses pyramid meshes on the stock library. The library lives in
       # a per-run, per-attempt directory; the cache only carries it through a fixed
-      # transfer directory in this job's own runner scratch, cleared before restore.
+      # transfer directory in this job's own runner scratch, which must not exist
+      # before the restore and is never deleted here.
       - name: Prepare the patched Netgen paths
         id: netgen-overlay-paths
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
         shell: pwsh
         run: |
-          $transfer = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache'
-          if (Test-Path -LiteralPath $transfer) { Remove-Item -LiteralPath $transfer -Recurse -Force }
+          # The runner empties RUNNER_TEMP for every job, so a transfer directory present
+          # before the restore was not made by this job: refuse it rather than delete it.
+          $runnerTemp = Get-Item -LiteralPath $env:RUNNER_TEMP -Force
+          if ($runnerTemp.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$env:RUNNER_TEMP is a link; refusing the Netgen transfer" }
+          $transfer = Join-Path $runnerTemp.FullName 'radia-netgen-overlay-cache'
+          if (Test-Path -LiteralPath $transfer) { throw "$transfer exists before the restore; this job cannot prove it owns it" }
           $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if (Test-Path -LiteralPath $overlay) { throw "$overlay already exists; this attempt's library must start empty" }
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -752,8 +757,14 @@ jobs:
         run: |
           $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
           New-Item -ItemType Directory -Path $overlay | Out-Null
-          $transfer = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache'
-          Copy-Item -LiteralPath (Join-Path $transfer 'nglib.dll'), (Join-Path $transfer 'netgen-overlay.json') -Destination $overlay
+          $transfer = Get-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache') -Force
+          $entries = @(Get-ChildItem -LiteralPath $transfer.FullName -Force)
+          if (($transfer.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+              (($entries | ForEach-Object Name | Sort-Object) -join ',') -ne 'netgen-overlay.json,nglib.dll' -or
+              @($entries | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count) {
+            throw "The restored Netgen transfer is not exactly the library and its receipt: $($entries.Name -join ', ')"
+          }
+          Copy-Item -LiteralPath (Join-Path $transfer.FullName 'nglib.dll'), (Join-Path $transfer.FullName 'netgen-overlay.json') -Destination $overlay
 
       - name: Build the patched Netgen library
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
