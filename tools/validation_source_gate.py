@@ -128,11 +128,44 @@ def mkl_build_copy(root):
     return {'package':'mkl','version':package.version,'sha256':sha}
 
 
+def loaded_libraries(name):
+    """Canonical paths of every module called name that this process has loaded."""
+    if sys.platform=='win32':
+        import ctypes
+        from ctypes import wintypes
+        kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+        psapi=ctypes.WinDLL('psapi',use_last_error=True)
+        process=kernel.GetCurrentProcess
+        process.restype=wintypes.HANDLE
+        enum=psapi.EnumProcessModules
+        enum.argtypes=[wintypes.HANDLE,ctypes.POINTER(wintypes.HMODULE),wintypes.DWORD,ctypes.POINTER(wintypes.DWORD)]
+        filename=kernel.GetModuleFileNameW
+        filename.argtypes=[wintypes.HMODULE,wintypes.LPWSTR,wintypes.DWORD]
+        modules=(wintypes.HMODULE*4096)();needed=wintypes.DWORD()
+        if not enum(process(),modules,ctypes.sizeof(modules),ctypes.byref(needed)):
+            raise OSError(ctypes.get_last_error(),'EnumProcessModules failed')
+        if needed.value>ctypes.sizeof(modules): raise ValueError('more loaded modules than the probe can list')
+        paths=[]
+        for module in modules[:needed.value//ctypes.sizeof(wintypes.HMODULE)]:
+            buffer=ctypes.create_unicode_buffer(32768)
+            length=filename(module,buffer,len(buffer))
+            if not length: raise OSError(ctypes.get_last_error(),'GetModuleFileNameW failed')
+            paths.append(Path(buffer.value[:length]))
+    elif sys.platform.startswith('linux'):
+        paths=[Path(line.split(None,5)[5].strip()) for line in Path('/proc/self/maps').read_text().splitlines()
+               if len(line.split(None,5))==6 and line.split(None,5)[5].strip().startswith('/')]
+    else:
+        raise ValueError(f'no loaded-module probe for {sys.platform}; refusing a reusable Netgen identity')
+    return sorted({path.resolve() for path in paths if path.name.lower()==name.lower()})
+
+
 def netgen_runtime():
-    """Bytes of the Netgen library the active interpreter loads.
+    """Bytes of the Netgen library the active interpreter has actually loaded.
 
     Stock and patched runtimes share netgen-mesher==6.2.2608, so the package
-    version alone cannot keep one runtime from reusing another's receipt.
+    version alone cannot keep one runtime from reusing another's receipt. The
+    library is identified from the loader after importing Netgen, never from an
+    installed-file guess; anything ambiguous refuses the identity.
     """
     spec=importlib.util.find_spec('netgen')
     if spec is None or not spec.submodule_search_locations: raise ValueError('netgen package not importable')
@@ -141,6 +174,10 @@ def netgen_runtime():
     libraries=[p for p in package.iterdir() if p.is_file() and re.fullmatch(r'(lib)?nglib\.(dll|so|dylib)',p.name)]
     if len(libraries)!=1 or libraries[0].is_symlink():
         raise ValueError(f'expected one unlinked Netgen library in {package}, found {[p.name for p in libraries]}')
+    importlib.import_module('netgen.libngpy')
+    loaded=loaded_libraries(libraries[0].name)
+    if loaded!=[libraries[0].resolve()]:
+        raise ValueError(f'the loader bound {[str(p) for p in loaded]}, not the venv library {libraries[0].resolve()}')
     return {'package':'netgen-mesher','version':importlib.metadata.version('netgen-mesher'),
             'library':libraries[0].name,'sha256':digest(libraries[0].read_bytes())}
 

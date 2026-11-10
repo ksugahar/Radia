@@ -205,7 +205,8 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
 @pytest.mark.parametrize('workflow, job', [('build-test.yml', 'build-test'), ('sparsesolv.yml', 'ams-regression')])
 def test_netgen_library_is_run_exclusive_and_cache_bound_to_its_toolchain(workflow, job):
     """Guards: each attempt builds or stages the Netgen library into its own empty directory;
-    the cache transfer directory is cleared first and keyed by MSVC toolset, recipe and patch."""
+    the cache transfer directory must be absent before the restore (never deleted), must hold exactly
+    the library and its receipt, and is keyed by MSVC toolset, recipe and patch."""
     steps = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8'))['jobs'][job]['steps']
     names = [step.get('name', '') for step in steps]
     order = ['Prepare the patched Netgen paths', 'Restore the patched Netgen library', 'Stage the cached Netgen library',
@@ -215,7 +216,9 @@ def test_netgen_library_is_run_exclusive_and_cache_bound_to_its_toolchain(workfl
     assert positions == sorted(positions), list(zip(order, positions))
     prepare, restore, stage, build, install, hand, save = (steps[i] for i in positions)
     assert '"radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"' in prepare['run']
-    assert 'already exists' in prepare['run'] and 'Remove-Item -LiteralPath $transfer' in prepare['run']
+    assert 'already exists' in prepare['run'] and 'cannot prove it owns it' in prepare['run']
+    assert 'ReparsePoint' in prepare['run'] and 'ReparsePoint' in stage['run'] and "'netgen-overlay.json,nglib.dll'" in stage['run']
+    assert 'Remove-Item' not in prepare['run'] + stage['run'] + hand['run'], 'the transfer directory is refused, never deleted'
     assert "Microsoft.VCToolsVersion.default.txt" in prepare['run'] and '14\\.44' in prepare['run']
     transfer = '${{ runner.temp }}/radia-netgen-overlay-cache'
     assert restore['uses'] == 'actions/cache/restore@v4' and restore['with']['path'] == transfer
