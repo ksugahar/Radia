@@ -100,6 +100,40 @@ def test_source_scope_includes_physics_inputs_but_not_workflow_routing(tmp_path,
     assert gate.source_fingerprint(tmp_path,{'deps':'2'})[0]!=initial
 
 
+def test_netgen_library_bytes_separate_reuse_between_runtimes(tmp_path,monkeypatch):
+    """Guards: stock, apex-only and blended Netgen libraries share netgen-mesher==6.2.2608,
+    so only the loaded library bytes keep one runtime from reusing another's receipt."""
+    venv=tmp_path/'venv';package=venv/'Lib/site-packages/netgen';package.mkdir(parents=True)
+    (package/'__init__.py').write_text('')
+    monkeypatch.setattr(gate.sys,'prefix',str(venv))
+    monkeypatch.setattr(gate.importlib.util,'find_spec',
+                        lambda name:type('Spec',(),{'submodule_search_locations':[str(package)]})())
+    monkeypatch.setattr(gate.importlib.metadata,'version',lambda name:'6.2.2608')
+    files={'src/solver.py':'physics','tools/validation_source_gate.py':'gate'}
+    for path,text in files.items():
+        p=tmp_path/path;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
+    (tmp_path/'tests').mkdir()
+    (tmp_path/'tests/test_tier_manifest.json').write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(files) if args[0]=='ls-files' and '--others' not in args else '')
+    fingerprints={}
+    for runtime in ('stock','apex-only','blended'):
+        (package/'nglib.dll').write_bytes(runtime.encode())
+        record=gate.netgen_runtime()
+        assert record=={'package':'netgen-mesher','version':'6.2.2608','library':'nglib.dll',
+                        'sha256':gate.digest(runtime.encode())}, record
+        fingerprints[runtime]=gate.source_fingerprint(tmp_path,{'netgen_runtime':record})[0]
+    assert len(set(fingerprints.values()))==3, fingerprints
+    import inspect
+    assert "'netgen_runtime':netgen_runtime()" in inspect.getsource(gate.environment_contract)
+    (package/'nglib.dll').unlink()
+    with pytest.raises(ValueError,match='expected one unlinked Netgen library'):
+        gate.netgen_runtime()
+    monkeypatch.setattr(gate.sys,'prefix',str(tmp_path/'other'))
+    (package/'nglib.dll').write_bytes(b'stock')
+    with pytest.raises(ValueError,match='not owned by the active venv'):
+        gate.netgen_runtime()
+
+
 @pytest.mark.parametrize('lookup', ['miss','error','force','unknown'])
 def test_miss_unknown_force_execute_validation(tmp_path,monkeypatch,lookup):
     monkeypatch.setattr(gate,'git',lambda *a:'a'*40)
