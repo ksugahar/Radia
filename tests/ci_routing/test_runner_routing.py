@@ -202,6 +202,37 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     assert 'netgen_overlay.py build' not in steps[overlay - 1]['run'], steps[overlay - 1]
 
 
+@pytest.mark.parametrize('workflow, job', [('build-test.yml', 'build-test'), ('sparsesolv.yml', 'ams-regression')])
+def test_netgen_library_is_run_exclusive_and_cache_bound_to_its_toolchain(workflow, job):
+    """Guards: each attempt builds or stages the Netgen library into its own empty directory;
+    the cache transfer directory is cleared first and keyed by MSVC toolset, recipe and patch."""
+    steps = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8'))['jobs'][job]['steps']
+    names = [step.get('name', '') for step in steps]
+    order = ['Prepare the patched Netgen paths', 'Restore the patched Netgen library', 'Stage the cached Netgen library',
+             'Build the patched Netgen library', 'Install the patched Netgen library into the CI venv',
+             'Hand the built Netgen library to the cache', 'Save the patched Netgen library']
+    positions = [names.index(name) for name in order]
+    assert positions == sorted(positions), list(zip(order, positions))
+    prepare, restore, stage, build, install, hand, save = (steps[i] for i in positions)
+    assert '"radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"' in prepare['run']
+    assert 'already exists' in prepare['run'] and 'Remove-Item -LiteralPath $transfer' in prepare['run']
+    assert "Microsoft.VCToolsVersion.default.txt" in prepare['run'] and '14\\.44' in prepare['run']
+    transfer = '${{ runner.temp }}/radia-netgen-overlay-cache'
+    assert restore['uses'] == 'actions/cache/restore@v4' and restore['with']['path'] == transfer
+    assert 'msvc${{ steps.netgen-overlay-paths.outputs.toolset }}' in restore['with']['key']
+    assert "hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch')" in restore['with']['key']
+    assert save['uses'] == 'actions/cache/save@v4' and save['with']['path'] == transfer
+    assert save['with']['key'] == '${{ steps.netgen-overlay-cache.outputs.cache-primary-key }}'
+    assert "cache-hit == 'true'" in stage['if'] and "cache-hit != 'true'" in build['if']
+    assert "cache-hit != 'true'" in hand['if'] and "cache-hit != 'true'" in save['if']
+    run_dir = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+    for step in (stage, build, install, hand):
+        assert run_dir in step['run'], step['name']
+    assert '--out `"$overlay`"' in build['run'] and f"--overlay '{run_dir}'" in install['run']
+    text = (ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8')
+    assert "'radia-netgen-overlay')" not in text and '/radia-netgen-overlay\n' not in text
+
+
 def _hdiv_lane():
     spec = importlib.util.spec_from_file_location('hdiv_lane', ROOT / 'validation_test/hdiv_cuda/run_installed.py')
     module = importlib.util.module_from_spec(spec)
