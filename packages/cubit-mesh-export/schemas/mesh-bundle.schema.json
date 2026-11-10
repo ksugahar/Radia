@@ -1,0 +1,1183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/manifest"
+    },
+    {
+      "$ref": "#/$defs/mesh"
+    }
+  ],
+  "$defs": {
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "cubit.mesh-bundle.v1"
+        },
+        "units": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "dimension": {
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "order": {
+          "const": 1
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "placeholder_physics": {
+          "const": true
+        },
+        "analysis_ready": {
+          "const": false
+        },
+        "downstream_identity_verified": {
+          "const": false
+        },
+        "source_length_unit": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "input_snapshot_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "extraction_execution_evidence_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sideset_sid_map": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/marker_map"
+          }
+        },
+        "coordinate_scale": {
+          "enum": [
+            1.0,
+            0.001,
+            1000.0
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "units",
+        "dimension",
+        "order",
+        "files",
+        "provenance",
+        "placeholder_physics",
+        "analysis_ready",
+        "downstream_identity_verified",
+        "source_length_unit",
+        "coordinate_scale",
+        "input_snapshot_sha256",
+        "extraction_execution_evidence_sha256",
+        "sideset_sid_map"
+      ],
+      "additionalProperties": false
+    },
+    "mesh": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "cubit.mesh-snapshot.v1"
+        },
+        "units": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "dimension": {
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "order": {
+          "const": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "minItems": 1
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/element"
+          },
+          "minItems": 1
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/region"
+          },
+          "minItems": 1
+        },
+        "independent_boundary": {
+          "$ref": "#/$defs/boundary"
+        },
+        "sets": {
+          "$ref": "#/$defs/sets"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "correspondence": {
+          "$ref": "#/$defs/maps"
+        },
+        "validation": {
+          "$ref": "#/$defs/validation"
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "source_length_unit": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "coordinate_scale": {
+          "enum": [
+            1.0,
+            0.001,
+            1000.0
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "units",
+        "dimension",
+        "order",
+        "nodes",
+        "elements",
+        "regions",
+        "independent_boundary",
+        "sets",
+        "transform",
+        "correspondence",
+        "validation",
+        "options",
+        "source_length_unit",
+        "coordinate_scale"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "dimension": {
+                "const": 2
+              }
+            },
+            "required": [
+              "dimension"
+            ]
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "properties": {
+                  "sideset_mode": {
+                    "const": "surface_elements"
+                  },
+                  "marker_cards": {
+                    "type": "null"
+                  },
+                  "spc_components": {
+                    "type": "null"
+                  },
+                  "selected_sideset_ids": {
+                    "maxItems": 0
+                  }
+                }
+              },
+              "correspondence": {
+                "properties": {
+                  "markers": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "enum": [
+            "mesh.json",
+            "mesh.bdf",
+            "input-snapshot.json",
+            "extraction-evidence.json",
+            "ordering-oracle.json",
+            "alternate-mesh.e"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "xyz": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "xyz_input": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "id",
+        "xyz",
+        "xyz_input"
+      ],
+      "additionalProperties": false
+    },
+    "element": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "enum": [
+            "TET4",
+            "HEX8",
+            "TRI3",
+            "QUAD4"
+          ]
+        },
+        "region_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 3,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "source_id",
+        "type",
+        "region_id",
+        "node_ids"
+      ],
+      "additionalProperties": false
+    },
+    "region": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "face": {
+      "type": "object",
+      "properties": {
+        "source_surface_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_face_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 3,
+          "maxItems": 4
+        },
+        "source_volume_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_volume_sense": {
+          "enum": [
+            "Forward",
+            "Reversed",
+            "Both",
+            "Unknown"
+          ]
+        }
+      },
+      "required": [
+        "source_surface_id",
+        "source_face_id",
+        "node_ids",
+        "source_volume_id",
+        "source_volume_sense"
+      ],
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "source_curve_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_edge_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "source_surface_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "coedge_sense": {
+          "enum": [
+            "Forward",
+            "Reversed",
+            "Both",
+            "Unknown"
+          ]
+        }
+      },
+      "required": [
+        "source_curve_id",
+        "source_edge_id",
+        "node_ids",
+        "source_surface_id",
+        "coedge_sense"
+      ],
+      "additionalProperties": false
+    },
+    "boundary": {
+      "type": "object",
+      "properties": {
+        "acquisition": {
+          "const": "independent_geometry_query"
+        },
+        "orientation": {
+          "enum": [
+            "outward",
+            "declared_plane_normal"
+          ]
+        },
+        "faces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/face"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edge"
+          }
+        },
+        "collector_source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "orientation_status": {
+          "enum": [
+            "verified",
+            "unverified"
+          ]
+        }
+      },
+      "required": [
+        "acquisition",
+        "orientation",
+        "faces",
+        "edges",
+        "collector_source_sha256",
+        "orientation_status"
+      ],
+      "additionalProperties": false
+    },
+    "sets": {
+      "type": "object",
+      "properties": {
+        "sidesets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sideset"
+          }
+        },
+        "nodesets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nodeset"
+          }
+        }
+      },
+      "required": [
+        "sidesets",
+        "nodesets"
+      ],
+      "additionalProperties": false
+    },
+    "sideset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "faces": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 3,
+            "maxItems": 4
+          }
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "kind": {
+          "enum": [
+            "face",
+            "edge"
+          ]
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "faces",
+        "node_ids",
+        "kind",
+        "edges"
+      ],
+      "additionalProperties": false
+    },
+    "nodeset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "node_ids"
+      ],
+      "additionalProperties": false
+    },
+    "transform": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "identity",
+            "signed_axis_plane"
+          ]
+        },
+        "basis_u": {
+          "enum": [
+            "+x",
+            "-x",
+            "+y",
+            "-y",
+            "+z",
+            "-z"
+          ]
+        },
+        "basis_v": {
+          "enum": [
+            "+x",
+            "-x",
+            "+y",
+            "-y",
+            "+z",
+            "-z"
+          ]
+        },
+        "require_nonnegative_u": {
+          "type": "boolean"
+        },
+        "origin_input": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "origin_output": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "plane_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "plane_tolerance_unit": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "origin_output",
+        "basis_u",
+        "basis_v",
+        "plane_tolerance",
+        "require_nonnegative_u",
+        "origin_input",
+        "plane_tolerance_unit"
+      ],
+      "additionalProperties": false
+    },
+    "maps": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node_map"
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/element_map"
+          }
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/region_map"
+          }
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/marker_map"
+          }
+        }
+      },
+      "required": [
+        "nodes",
+        "elements",
+        "regions",
+        "markers"
+      ],
+      "additionalProperties": false
+    },
+    "node_map": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "grid_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "source_id",
+        "grid_id"
+      ],
+      "additionalProperties": false
+    },
+    "element_map": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_type": {
+          "enum": [
+            "TET4",
+            "HEX8",
+            "TRI3",
+            "QUAD4"
+          ]
+        },
+        "eid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "source_id",
+        "source_type",
+        "eid",
+        "pid"
+      ],
+      "additionalProperties": false
+    },
+    "region_map": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mid": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "source_id",
+        "pid",
+        "mid"
+      ],
+      "additionalProperties": false
+    },
+    "marker_map": {
+      "type": "object",
+      "properties": {
+        "sideset_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "spc_sid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99999999
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temp_sid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99999999
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "spc_components": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[1-6]{1,6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "const": 0.0
+        }
+      },
+      "required": [
+        "sideset_id",
+        "spc_sid",
+        "temp_sid",
+        "spc_components",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "structural_passed": {
+          "type": "boolean"
+        },
+        "independent_boundary_matched": {
+          "enum": [
+            "oriented_match",
+            "unoriented_match",
+            "mismatch",
+            "unavailable"
+          ]
+        },
+        "ordering_certified": {
+          "type": "boolean"
+        },
+        "ordering_evidence_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "producer_self_report": {
+          "const": true
+        }
+      },
+      "required": [
+        "structural_passed",
+        "independent_boundary_matched",
+        "ordering_certified",
+        "ordering_evidence_sha256",
+        "producer_self_report"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "exporter_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_commit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ccm_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "pyd_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "exporter_version",
+        "source_commit",
+        "ccm_sha256",
+        "pyd_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sideset_mode",
+        "marker_cards",
+        "spc_components",
+        "selected_sideset_ids"
+      ],
+      "properties": {
+        "sideset_mode": {
+          "enum": [
+            "surface_elements",
+            "markers",
+            "surface_elements_and_markers"
+          ]
+        },
+        "marker_cards": {
+          "enum": [
+            null,
+            "spc",
+            "temp",
+            "both"
+          ]
+        },
+        "spc_components": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[1-6]{1,6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selected_sideset_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "extraction_evidence": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "cubit.mesh-extraction-evidence.v1"
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "started_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "batch_nographics": {
+          "const": true
+        },
+        "cubit_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "loaded_ccm_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "collector_source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "input_snapshot_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bdf_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ordering_oracle_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_length_unit": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "native_source_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "pyd_used": {
+          "type": "boolean"
+        },
+        "pyd_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "units": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "coordinate_scale": {
+          "enum": [
+            1.0,
+            0.001,
+            1000.0
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "execution_id",
+        "started_utc",
+        "finished_utc",
+        "batch_nographics",
+        "cubit_version",
+        "loaded_ccm_sha256",
+        "collector_source_sha256",
+        "input_snapshot_sha256",
+        "bdf_sha256",
+        "ordering_oracle_sha256",
+        "source_length_unit",
+        "coordinate_scale",
+        "native_source_digest",
+        "pyd_used",
+        "pyd_sha256",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "ordering_oracle": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "cubit.mesh-ordering-oracle.v1"
+        },
+        "native_alternate_format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "alternate_export_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_journal_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ccm_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "native_source_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "node_identity_map_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "typed_ordered_connectivity_match": {
+          "type": "boolean"
+        },
+        "node_coordinate_match": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema",
+        "native_alternate_format",
+        "alternate_export_sha256",
+        "source_journal_sha256",
+        "ccm_sha256",
+        "native_source_digest",
+        "node_identity_map_sha256",
+        "typed_ordered_connectivity_match",
+        "node_coordinate_match"
+      ],
+      "additionalProperties": false
+    },
+    "input_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "cubit.mesh-input-snapshot.v1"
+        },
+        "source_length_unit": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "units": {
+          "enum": [
+            "m",
+            "mm"
+          ]
+        },
+        "dimension": {
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "order": {
+          "const": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "minItems": 1
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/element"
+          },
+          "minItems": 1
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/region"
+          },
+          "minItems": 1
+        },
+        "sets": {
+          "$ref": "#/$defs/sets"
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "coordinate_scale": {
+          "enum": [
+            1.0,
+            0.001,
+            1000.0
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "source_length_unit",
+        "coordinate_scale",
+        "units",
+        "dimension",
+        "order",
+        "nodes",
+        "elements",
+        "regions",
+        "sets",
+        "options",
+        "transform"
+      ]
+    }
+  },
+  "title": "Neutral linear mesh bundle",
+  "description": "Versioned mesh, unit and correspondence contract. Producer claims are independently checked by consumers."
+}
