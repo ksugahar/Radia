@@ -648,7 +648,8 @@ jobs:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
-    timeout-minutes: 45
+    # Pull requests stop after the numerical contracts; other events add solver-heavy validation.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 120 }}
     env:
       RADIA_VALIDATION_HOST_ROLE: cpu_validation
       # Bound library pools before the parent and its fresh Python children
@@ -705,7 +706,7 @@ jobs:
       - name: Restore the patched Netgen library
         id: netgen-overlay-cache
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/radia-netgen-overlay
           key: netgen-overlay-${{ runner.os }}-${{ hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch') }}
@@ -738,6 +739,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Patched Netgen install failed' }
           & $ciPython -c "from cubit_mesh_export.check import require_pyramid_netgen; require_pyramid_netgen(); print('patched Netgen pyramid runtime OK')"
           if ($LASTEXITCODE -ne 0) { throw 'The CI venv does not evaluate pyramids with the patched Netgen' }
+
+      # Save as soon as the built library passes its probe, so a later test failure
+      # does not force the next run to rebuild it.
+      - name: Save the patched Netgen library
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/radia-netgen-overlay
+          key: ${{ steps.netgen-overlay-cache.outputs.cache-primary-key }}
 
       - name: Install Gmsh post-processing reference separately
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'
@@ -839,9 +849,11 @@ jobs:
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
+      # Solver-heavy validation runs on main pushes, the nightly schedule and dispatch,
+      # never as a pull-request gate; the merged source is validated on main.
       - name: Validate solver-heavy source or verify trusted prior evidence
         id: heavy-validation
-        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
+        if: github.event_name != 'pull_request' && steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src'
@@ -855,8 +867,8 @@ jobs:
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $forceArgs = @()
-          # Exact per-case source/environment fingerprints govern trusted reuse; PRs are not forced.
-          if ('${{ github.event_name }}' -notin @('push','pull_request') -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
+          # Exact per-case source/environment fingerprints govern trusted reuse; main pushes are not forced.
+          if ('${{ github.event_name }}' -ne 'push' -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
           python tools/validation_source_gate.py --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $verification = Get-Content -Raw "$env:RUNNER_TEMP/solver-heavy-validation/verification.json" | ConvertFrom-Json
