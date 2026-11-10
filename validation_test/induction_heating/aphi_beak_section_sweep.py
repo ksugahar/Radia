@@ -41,11 +41,19 @@ TIP_X_MM = 3.5
 
 
 def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
-                       box_factor, curve_order):
-    """The beak profile as the meridian of a ring at ``radius_mm``."""
+                       exterior_factor, curve_order):
+    """The beak profile as the meridian of a ring at ``radius_mm``.
+
+    Returns ``(mesh, exterior_radius_m, exterior_center_z_m)``: the air is a
+    half disk about the axis, ``exterior_factor`` times the section's
+    farthest reach, closed by the exact exterior term.  The multipole series
+    converges as ``1 / exterior_factor`` per mode, so the factor, not a fixed
+    margin, keeps the mode count bounded at every ring radius.  Far air is
+    meshed no finer than a twentieth of that radius.
+    """
     from build123d import Plane
     from make_beak_fin_step import _beak_face
-    from netgen.occ import Glue, MoveTo, OCCGeometry, WorkPlane, X, Y
+    from netgen.occ import Circle, Glue, MoveTo, OCCGeometry, X
 
     import ngsolve as ng
 
@@ -63,25 +71,24 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
     section.faces.name = "conductor"
     section.maxh = maxh_conductor_mm * 1e-3
     box = section.bounding_box
-    half = box_factor * max(float(box[1][i]) - float(box[0][i])
-                            for i in range(2))
-    r_max = float(box[1][0]) + half
-    z_half = half + 0.5 * (float(box[1][1]) - float(box[0][1]))
-    air = MoveTo(0, -z_half).Rectangle(r_max, 2 * z_half).Face()
-    air.faces.name = "air"
-    air.maxh = maxh_air_mm * 1e-3
+    center_z = 0.5 * (float(box[0][1]) + float(box[1][1]))
+    reach = max(math.hypot(float(box[i][0]), float(box[j][1]) - center_z)
+                for i in range(2) for j in range(2))
+    radius = exterior_factor * reach
+    air_h = max(maxh_air_mm * 1e-3, radius / 20)
+    disk = Circle((0.0, center_z), radius).Face()
+    half = MoveTo(0.0, center_z - radius).Rectangle(radius, 2 * radius).Face()
+    air = disk * half
+    air.edges.name = "outer"
+    air.edges.Min(X).name = "axis"
+    air.maxh = air_h
     outside = air - section
     outside.faces.name = "air"
     total = Glue([outside, section])
-    total.edges.Min(X).name = "axis"
-    total.edges.Max(X).name = "outer"
-    total.edges.Min(Y).name = "outer"
-    total.edges.Max(Y).name = "outer"
-    mesh = ng.Mesh(OCCGeometry(total, dim=2).GenerateMesh(
-        maxh=maxh_air_mm * 1e-3))
+    mesh = ng.Mesh(OCCGeometry(total, dim=2).GenerateMesh(maxh=air_h))
     if curve_order > 1:
         mesh.Curve(int(curve_order))
-    return mesh
+    return mesh, radius, center_z
 
 
 def shares(result, radius_mm):
@@ -105,18 +112,19 @@ def _compare(rows, planar_path):
     The planar control resolves the same section and imposes the exterior
     field of the same total current on its air boundary, so its truncation
     states the answer instead of obstructing it, and it is anchored on the
-    exact Bessel round wire.  This route pins ``psi = 0`` on a box -- a flux
-    barrier, which behaves as a coaxial return -- so what separates the two is
-    an open-boundary truncation, and the box sweep in ``levels`` measures it.
+    exact Bessel round wire.  This route closes its air with the exact
+    exterior term, so the exterior-factor sweep in ``levels`` should show no
+    dependence on where the air is cut.
     """
     from make_beak_fin_step import TIP_RADIUS
 
     at_150k = [r for r in rows if abs(r["frequency_hz"] - 150_000.0) < 1e-6]
     if not at_150k:
         return {"note": "no 150 kHz level in this run"}
-    # Widest box, largest radius, finest mesh: the least truncated corner.
-    finest = max(at_150k, key=lambda r: (r["box_factor"], r["radius_mm"],
-                                         -r["maxh_conductor_mm"]))
+    # Largest radius, finest mesh, widest air: the least curved corner.
+    finest = max(at_150k, key=lambda r: (r["radius_mm"],
+                                         -r["maxh_conductor_mm"],
+                                         r["exterior_factor"]))
     out = {
         "frequency_hz": 150_000.0,
         "skin_depth_mm": finest["skin_depth_mm"],
@@ -132,12 +140,12 @@ def _compare(rows, planar_path):
             "the beak root and the far end carry square corners, where the "
             "radius of curvature is zero and no term of the expansion "
             "applies at all"),
-        "least_truncated_axisymmetric": {
+        "least_curved_axisymmetric": {
             "beak_loss_fraction": finest["beak_loss_fraction"],
             "tip_loss_fraction": finest["tip_loss_fraction"],
             "radius_mm": finest["radius_mm"],
             "maxh_conductor_mm": finest["maxh_conductor_mm"],
-            "box_factor": finest["box_factor"],
+            "exterior_factor": finest["exterior_factor"],
         },
     }
     if not planar_path.exists():
@@ -159,11 +167,9 @@ def _compare(rows, planar_path):
         "tip_loss_fraction": float(finest["tip_loss_fraction"]
                                    / control["tip_loss_fraction"] - 1.0),
         "what_it_is": (
-            "an open-boundary truncation, not a disagreement about the "
-            "physics.  The residual falls monotonically as the box grows and "
-            "does not reach zero for any box that can usefully be meshed, "
-            "which is the argument for giving this route a Kelvin or DtN "
-            "exterior rather than a wider rectangle"),
+            "the difference between two interior-resolved routes with "
+            "independent open boundaries; what remains is the ring's "
+            "curvature, measured by the radius sweep"),
     }
     return out
 
@@ -171,7 +177,7 @@ def _compare(rows, planar_path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--radius-mm", type=float, nargs="+",
-                        default=[200.0, 400.0])
+                        default=[200.0, 400.0, 1600.0, 6400.0, 25600.0])
     parser.add_argument("--frequency-hz", type=float, nargs="+",
                         default=[5_000.0, 15_000.0, 50_000.0, 150_000.0])
     parser.add_argument("--sigma", type=float, default=5.8e7)
@@ -180,11 +186,12 @@ def main():
     parser.add_argument("--maxh-conductor-mm", type=float, nargs="+",
                         default=[0.08, 0.05])
     parser.add_argument("--maxh-air-mm", type=float, default=20.0)
-    parser.add_argument("--box-factor", type=float, nargs="+",
-                        default=[3.0, 10.0, 30.0, 100.0],
-                        help="air-box half-size in section widths; psi = 0 "
-                             "there is a flux barrier, so this is an open-"
-                             "boundary truncation and has to be swept")
+    parser.add_argument("--exterior-factor", type=float, nargs="+",
+                        default=[1.5, 3.0],
+                        help="exterior radius over the section's farthest reach "
+                             "from the axis centre; the exterior term is "
+                             "exact, so results must not depend on it")
+    parser.add_argument("--exterior-modes", type=int, default=30)
     parser.add_argument("--planar-control", type=Path, default=(
         HERE / "results" / "sibc_patch_corrected_beak_20260922.json"))
     parser.add_argument("--output", type=Path, required=True)
@@ -195,23 +202,27 @@ def main():
     from radia.eddy_axisym_ring import solve_axisym_ring
 
     rows = []
-    for box_factor in args.box_factor:
+    for factor in args.exterior_factor:
         for radius_mm in args.radius_mm:
             for maxh in args.maxh_conductor_mm:
-                mesh = build_section_ring(
+                mesh, ext_radius, ext_z = build_section_ring(
                     radius_mm, maxh_conductor_mm=maxh,
-                    maxh_air_mm=args.maxh_air_mm, box_factor=box_factor,
+                    maxh_air_mm=args.maxh_air_mm, exterior_factor=factor,
                     curve_order=args.curve_order)
                 for frequency in args.frequency_hz:
                     t0 = time.perf_counter()
                     res = solve_axisym_ring(
                         mesh, conductor="conductor", frequency_hz=frequency,
-                        sigma=args.sigma, order=args.order)
+                        sigma=args.sigma, order=args.order,
+                        exterior_radius=ext_radius,
+                        exterior_center_z=ext_z,
+                        exterior_modes=args.exterior_modes)
                     seconds = time.perf_counter() - t0
                     total, beak, tip = shares(res, radius_mm)
                     delta = res.skin_depth_m
                     row = {
-                        "box_factor": box_factor,
+                        "exterior_factor": factor,
+                        "exterior_modes": args.exterior_modes,
                         "radius_mm": radius_mm,
                         "maxh_conductor_mm": maxh,
                         "frequency_hz": frequency,
@@ -227,14 +238,15 @@ def main():
                     rows.append(row)
                     print(json.dumps({"phase": "level", **{
                         k: row[k] for k in (
-                            "box_factor", "radius_mm", "maxh_conductor_mm",
+                            "exterior_factor", "radius_mm",
+                            "maxh_conductor_mm",
                             "frequency_hz", "beak_loss_fraction",
                             "tip_loss_fraction")}}), flush=True)
 
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                           capture_output=True, text=True).stdout.strip()
     report = {
-        "schema": "radia.beak_section_axisym_sweep.v1",
+        "schema": "radia.beak_section_axisym_sweep.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
         "platform_class": platform.system(),
@@ -244,10 +256,14 @@ def main():
         "section": "the tracked beak profile, revolved about the axis",
         "sigma_S_per_m": args.sigma,
         "reference_validation": (
-            "the solver reproduces the exact Bessel round-wire resistance to "
-            "0.6% at a/delta 6 and 12, mesh-converged.  That residual was "
-            "read as the ring's curvature; the box sweep here shows the "
-            "open-boundary truncation is the larger part of it"),
+            "the A_phi drive and exterior term reproduce the exact Bessel "
+            "resistance of a revolved round wire to 1.5e-4 at a/R0 = 1/300 "
+            "and 100 kHz, and the direct-current inductance of a "
+            "rectangular ring to 4.4e-4 of an independent filament "
+            "quadrature over a sixfold range of exterior radius "
+            "(axisym_ring_exterior_validation.py)"),
+        "exterior": ("exact Dirichlet-to-Neumann term on a half disk about "
+                     "the axis, Woodbury-applied"),
         "measure": (
             "dissipation is integrated in the revolved volume measure "
             "2 pi r dr dz, through radia.axisym_measure; the terminal current "
@@ -260,9 +276,7 @@ def main():
             "the radius and its size is measured by varying that radius; it "
             "is not eliminated.  End effects are absent by construction, "
             "which is what makes this the mid-span comparison and not a "
-            "terminal one.  This route's open boundary is a psi = 0 box and "
-            "is NOT converged: it is reported with its truncation measured, "
-            "not as a reference"),
+            "terminal one"),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n",
