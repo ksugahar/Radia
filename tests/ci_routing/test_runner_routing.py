@@ -190,7 +190,16 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     upload = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
     assert 'ci_gpu_artifact.py seal' in steps[upload - 1]['run']
     overlay = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-netgen-overlay')
-    assert 'netgen_overlay.py build' in steps[overlay - 1]['run'] and 'ci_gpu_artifact.py seal' in steps[overlay - 1]['run']
+    assert 'ci_gpu_artifact.py seal' in steps[overlay - 1]['run']
+    # The sealed library is the one every test of the job ran on: built (or restored) and
+    # installed into the CI venv before the build and tests, never rebuilt for the seal.
+    names = [step.get('name', '') for step in steps]
+    built = names.index('Build the patched Netgen library')
+    installed = names.index('Install the patched Netgen library into the CI venv')
+    assert 'netgen_overlay.py build' in steps[built]['run'], steps[built]
+    assert 'netgen_overlay.py install' in steps[installed]['run'], steps[installed]
+    assert built < installed < names.index('Build with MSVC + MKL') < overlay - 1, names
+    assert 'netgen_overlay.py build' not in steps[overlay - 1]['run'], steps[overlay - 1]
 
 
 def _hdiv_lane():

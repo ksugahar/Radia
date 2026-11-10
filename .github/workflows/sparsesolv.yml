@@ -697,8 +697,47 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
         shell: pwsh
         run: |
-          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.3.1
+          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
           exit $LASTEXITCODE
+
+      # Patched Netgen runtime (6.2.2608 + pyramid apex clamp + base-edge blend):
+      # the checker refuses pyramid meshes on the stock library.
+      - name: Restore the patched Netgen library
+        id: netgen-overlay-cache
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/radia-netgen-overlay
+          key: netgen-overlay-${{ runner.os }}-${{ hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch') }}
+
+      - name: Build the patched Netgen library
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $overlay = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay'
+          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $bat = Join-Path $env:RUNNER_TEMP "build-netgen-overlay-$env:GITHUB_RUN_ID.cmd"
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install the patched Netgen library into the CI venv
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          & $ciPython tools/netgen_overlay.py install --overlay (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay') --python $ciPython
+          if ($LASTEXITCODE -ne 0) { throw 'Patched Netgen install failed' }
+          & $ciPython -c "from cubit_mesh_export.check import require_pyramid_netgen; require_pyramid_netgen(); print('patched Netgen pyramid runtime OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'The CI venv does not evaluate pyramids with the patched Netgen' }
 
       - name: Install Gmsh post-processing reference separately
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'

@@ -196,7 +196,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.3.1
+          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
           if ($LASTEXITCODE -ne 0) { throw "Standalone mesh checker install failed" }
           # The full release numerical contracts include STEP coil tests, so the
           # declared STEP CAD extra is installed into this same isolated venv.
@@ -216,6 +216,49 @@ jobs:
             exit $LASTEXITCODE
           }
           Write-Host "build + wheel + pytest + mcp + trimesh + twine + h5py + STEP CAD installed and importable (radia_mcp via PYTHONPATH, not pip-installed)"
+
+      # ----------------------------------------------------------------
+      # Patched Netgen runtime: pinned 6.2.2608 plus the pyramid apex clamp
+      # and base-edge blend. Every test in this job runs on it; the mesh
+      # checker refuses pyramid meshes on the stock library. The cache is
+      # keyed by the recipe and patch; install re-verifies the receipt.
+      # ----------------------------------------------------------------
+      - name: Restore the patched Netgen library
+        id: netgen-overlay-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/radia-netgen-overlay
+          key: netgen-overlay-${{ runner.os }}-${{ hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch') }}
+
+      - name: Build the patched Netgen library
+        if: steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $overlay = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay'
+          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $bat = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-netgen-overlay.private.cmd'
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install the patched Netgen library into the CI venv
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $overlay = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay'
+          & $ciPython tools/netgen_overlay.py install --overlay $overlay --python $ciPython
+          if ($LASTEXITCODE -ne 0) { throw 'Patched Netgen install failed' }
+          & $ciPython -c "from cubit_mesh_export.check import require_pyramid_netgen; require_pyramid_netgen(); print('patched Netgen pyramid runtime OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'The CI venv does not evaluate pyramids with the patched Netgen' }
+          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
@@ -672,24 +715,15 @@ jobs:
       # ----------------------------------------------------------------
       # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
       # ----------------------------------------------------------------
-      - name: Build and seal the patched Netgen library
+      - name: Seal the patched Netgen library
         if: success()
         shell: pwsh
         run: |
-          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not $vs) { throw 'VS2022 build tools are required' }
-          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          # The same library the tests ran on, copied so the seal never enters the cache.
+          $built = Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay'
           $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $bat = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-netgen-overlay.private.cmd'
-          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
-            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
-            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
-          & cmd.exe /d /c "`"$bat`""
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path $overlay | Out-Null
+          Copy-Item -LiteralPath (Join-Path $built 'nglib.dll'), (Join-Path $built 'netgen-overlay.json') -Destination $overlay
           python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
