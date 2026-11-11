@@ -73,7 +73,8 @@ def check_order(order, source_commit):
         binary = package / (name + sysconfig.get_config_var('EXT_SUFFIX'))
         record = json.loads(Path(str(binary) + '.build.json').read_text(encoding='utf-8'))
         payload.verify_payload(binary.name, binary.read_bytes(), record, source_commit,
-                               architectures=('80',) if sys.platform == 'win32' else ('100',))
+                               architectures=('80',) if sys.platform == 'win32' else ('100',),
+                               ptx_architectures=('80',) if sys.platform == 'win32' else ())
         for relative, digest in record['source_hashes'].items():
             if sha(ROOT / relative) != digest:
                 raise RuntimeError('Compiled GPU source closure mismatch: ' + relative)

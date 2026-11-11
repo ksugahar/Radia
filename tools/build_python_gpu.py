@@ -302,7 +302,7 @@ def main():
         receipt = dict(schema="radia.native-build-provenance.v1", source_commit=commit, source_dirty=False,
                        binary_name=binary.name, binary_sha256=sha(binary), source_hashes=source_hashes,
                        pybind_header_hashes=header_hashes, python=sys.version, platform=platform.platform(),
-                       nvcc=nvcc_version, host_compiler=host_version, architectures=args.architectures, ptx_architectures=[],
+                       nvcc=nvcc_version, host_compiler=host_version, architectures=args.architectures, ptx_architectures=["80"] if windows else [],
                        fault_injection=False, device_fault_injection=False, lifecycle_diagnostic=False,
                        private_receipt_sha256=sha(private_receipt), runtime_import_checked=False,
                        generated_at_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
