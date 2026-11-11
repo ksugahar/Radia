@@ -144,13 +144,13 @@ def test_lamination_native_coverage_is_retained(changed):
         mutant['lanes']['sparsesolv']['events'][event]['paths'].append('!' + changed)
     assert not impact.lane_required('sparsesolv',{changed},lambda p:(None,None),mutant)[0]
 
-@pytest.mark.parametrize('key', ['radia-simulink.yml:cuda-mex'])
-def test_gpu_jobs_cannot_lose_rtx_capability(tree, key):
+@pytest.mark.parametrize('key', ['radia-simulink-a100.yml:validate'])
+def test_gpu_jobs_cannot_lose_gpu_capability(tree, key):
     root, manifest = tree
     filename, name = key.split(':')
     path = root / '.github/workflows' / filename
     document = yaml.safe_load(path.read_text(encoding='utf-8'))
-    document['jobs'][name]['runs-on'].remove('gpu-rtx')
+    document['jobs'][name]['runs-on'].remove('gpu-a100')
     path.write_text(yaml.safe_dump(document), encoding='utf-8')
     with pytest.raises(ValueError, match='capability'):
         routing.validate(root, manifest)
@@ -171,6 +171,29 @@ def test_a100_is_compute_only_and_never_a_pr_gate():
     assert "needs.validate.result == 'failure'" in workflow['jobs']['nightly-failure']['if']
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')
+
+
+def test_simulink_build_host_compiles_and_the_a100_only_executes():
+    build = yaml.safe_load((ROOT / '.github/workflows/radia-simulink.yml').read_text(encoding='utf-8'))['jobs']['cuda-mex']
+    assert build['runs-on'] == ['self-hosted', 'Windows', 'X64', '100']
+    built = chr(10).join(step.get('run', '') for step in build['steps'])
+    for executed in ('run_device_boundary.py', 'run_poisson.py', 'ams_cuda/run.py', 'fmm_physics.py', 'ic_cuda/run.py', 'run_installed.py', 'nonlinear_resident.py'):
+        assert executed not in built, executed
+    assert 'ci_gpu_artifact.py bundle' in built
+    assert 'gpuDevice' not in (ROOT / 'packages/radia-simulink/tools/build_cuda_mex.py').read_text(encoding='utf-8')
+    bundle = next(step for step in build['steps'] if step.get('with', {}).get('name') == 'gpu-simulink-validation-bundle')
+    assert 'if' not in bundle, 'every CI run, PR included, offers its bundle to the A100'
+    workflow = yaml.safe_load((ROOT / '.github/workflows/radia-simulink-a100.yml').read_text(encoding='utf-8'))
+    assert set(workflow[True]) == {'workflow_dispatch'}
+    job = workflow['jobs']['validate']
+    assert job['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100']
+    commands = chr(10).join(step.get('run', '') for step in job['steps'])
+    assert '--simulink-bundle --sha $env:ACCEPTANCE_SHA' in commands and 'ci_gpu_artifact.py unbundle' in commands
+    for executed in ('run_device_boundary.py', 'run_poisson.py', 'run_installed.py', 'prepare_ci_evidence.py'):
+        assert executed in commands, executed
+    assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'python -m build', ' build wheel'])
+    evidence = next(step for step in job['steps'] if step.get('with', {}).get('name') == 'radia-simulink-cuda-evidence')
+    assert 'radia-simulink-public-' in evidence['with']['path']
 
 
 def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():

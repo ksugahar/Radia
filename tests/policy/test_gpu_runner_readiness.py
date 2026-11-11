@@ -18,10 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_readiness_is_manual_only_with_fixed_existing_targets():
     data = yaml.load((ROOT / '.github/workflows/gpu-runner-readiness.yml').read_text(), Loader=yaml.BaseLoader)
     assert set(data['on']) == {'workflow_dispatch'}
-    assert data['on']['workflow_dispatch']['inputs']['target']['options'] == ['gpu-a100', 'gpu-rtx']
+    # The build host never executes GPU work, so its RTX readiness target is retired.
+    assert data['on']['workflow_dispatch']['inputs']['target']['options'] == ['gpu-a100']
+    assert set(data['jobs']) == {'a100'}
     assert (ROOT / 'packages/radia-simulink/tools/gpu_readiness/probe_matlab_readiness.m').is_file()
     assert data['permissions'] == {'contents': 'read'}
-    for job, target in [('a100', 'gpu-a100'), ('rtx', 'gpu-rtx')]:
+    for job, target in [('a100', 'gpu-a100')]:
         spec = data['jobs'][job]
         assert target in spec['runs-on']
         assert "github.event_name == 'workflow_dispatch'" in spec['if']

@@ -105,8 +105,18 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
             not in script
         ), relative
 
+    # Every CMake configure carries the one shared binding to the active interpreter;
+    # the former Cubit plugin configures moved to the standalone cubit-mesh-export.
     build_script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
-    assert build_script.count("-DPython3_EXECUTABLE=") >= 3
+    binding = next(line for line in build_script.splitlines() if line.startswith("$PythonCMakeArgs = "))
+    assert '-DPython3_EXECUTABLE=`"$PythonExecutable`"' in binding, binding
+    assert '-Dpybind11_DIR=`"$Pybind11CMakeDir`"' in binding, binding
+    assert build_script.count("-DPython3_EXECUTABLE=") == 1, "Python binding must stay in $PythonCMakeArgs"
+    configures = [chunk.split("\nif errorlevel", 1)[0] for chunk in build_script.split('"$CMAKE_EXE" ')[1:]
+                  if not chunk.startswith("--build")]
+    assert configures, "Build.ps1 has no CMake configure"
+    missing = [chunk.splitlines()[0] for chunk in configures if "$PythonCMakeArgs" not in chunk]
+    assert missing == [], missing
 
     cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "pybind11.get_cmake_dir()" in cmake

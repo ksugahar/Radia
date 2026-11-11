@@ -7,11 +7,6 @@
       "target": "gpu-a100",
       "legacy_100": false
     },
-    "gpu-runner-readiness.yml:rtx": {
-      "owner": "radia-simulink",
-      "target": "gpu-rtx",
-      "legacy_100": false
-    },
     "build-test.yml:build-test": {
       "owner": "radia",
       "target": "ci-native",
@@ -59,8 +54,8 @@
     },
     "radia-simulink.yml:cuda-mex": {
       "owner": "radia-simulink",
-      "target": "gpu-rtx",
-      "legacy_100": false
+      "target": "ci-native",
+      "legacy_100": true
     },
     "radia-mcp-matrix.yml:ci-impact": {
       "owner": "radia-mcp",
@@ -151,6 +146,11 @@
       "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
+    },
+    "radia-simulink-a100.yml:validate": {
+      "owner": "radia-simulink",
+      "target": "gpu-a100",
+      "legacy_100": false
     }
   },
   "light": {
@@ -209,7 +209,7 @@
         "validation_test/induction_heating/fin_return_principle.py",
         "tools/check_ninja_msvc_deps.py"
       ],
-      "audit_sha256": "841a2b195cda14e2779fe098be8061fb8dd96a67cca09ff0ad0a2e9a5a21ca92",
+      "audit_sha256": "d4595b82eeb40b334ce3600a0b0e2fd0af374d195ea0c43b9891f7042365749e",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

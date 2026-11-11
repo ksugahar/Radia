@@ -1665,6 +1665,7 @@ RELEASE_CHECK_RUN = "radia-native-release-build"
 INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
     ".github/workflows/gpu-validation.yml",
     ".github/workflows/radia-simulink.yml",
+    ".github/workflows/radia-simulink-a100.yml",
     ".github/workflows/radia-simulink-release.yml",
     ".github/workflows/ltspice-data-safety.yml",
     ".github/workflows/radia-mcp-matrix.yml",
