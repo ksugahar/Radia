@@ -12,9 +12,10 @@ import zipfile
 
 # Compute validation of the MATLAB payloads consumes wheels built on main pushes.
 COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push')]
-# The compute bundle of one radia-simulink CI run (PR or push): its wheel and every native
-# build output the GPU acceptance executes. The build host compiles; the A100 only runs it.
-SIMULINK_BUNDLE = [('radia-simulink.yml', 'gpu-simulink-validation-bundle', '')]
+# The compute bundle of one radia-simulink push run: its wheel and every native build output
+# the GPU acceptance executes. A pull-request run builds and seals the merge commit, which is
+# not its head SHA, so only push runs are fetched. The build host compiles; the A100 only runs it.
+SIMULINK_BUNDLE = [('radia-simulink.yml', 'gpu-simulink-validation-bundle', '&event=push')]
 BUNDLE = 'radia-simulink-gpu-bundle.zip'
 # Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
 RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', ''), ('build-test.yml', 'gpu-netgen-overlay', '')]
