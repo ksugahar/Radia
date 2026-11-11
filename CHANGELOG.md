@@ -21,8 +21,9 @@
   [the overlay recipe](validation_test/hmatrix_cuda/README.md). The mesh checker
   refuses pyramid inputs with the stock Netgen library.
 
-- Target NVIDIA A100 (sm_80) for Windows CUDA builds. Build and CPU checks
-  run on the build host; FP64 GPU validation runs on A100.
+- Windows GPU modules now contain sm_80 code and compute_80 PTX. GPUs
+  older than Ampere are no longer supported by the Windows GPU modules.
+  CPU features are unaffected. FP64 GPU validation runs on A100.
 
 HDiv-MMM remains experimental across all element families. Linux GPU
 qualification is pending for 5.4.3.
