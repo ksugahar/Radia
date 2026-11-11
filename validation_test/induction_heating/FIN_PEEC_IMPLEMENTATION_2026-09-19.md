@@ -766,11 +766,17 @@ defect.
 For the fin adjudication this changes what the ring is.  It is not a biased
 stand-in for a straight fin: the revolved fin is a geometry of its own, and
 a three-dimensional route meshing that same revolved solid sees the same
-curvature.  A zero-width gap port across the section imposes
-`phi = V theta / (2 pi)` in the conductor, which is exactly the loop drive,
-because an azimuthal `A` has no normal component on any surface of a body of
-revolution.  The axisymmetric solve is therefore an exact reference for a
-gap-driven three-dimensional solve of the revolved fin, at any `R0`.
+curvature.  The axisymmetric solve is the reference for a three-dimensional
+solve of the revolved fin under a matched excitation: magnetoquasistatic,
+the conductor continuous across the port section except for the impressed
+potential jump `V`, `J . n = 0` on the outer surface, no displacement
+current, and a single-valued azimuthal current.  Under those conditions
+`phi = V theta / (2 pi)` satisfies the conductor's continuity equation and
+boundary condition, because an azimuthal `A` has no normal component on a
+surface of revolution, so the drive is the axisymmetric loop voltage.  A
+three-dimensional port that imposes anything else -- a finite gap, a
+terminal on part of the section, a capacitive gap -- is not covered by this
+argument and needs its own check.
 
 ## Required next gates
 

@@ -142,20 +142,50 @@ def _legendre_derivatives(x, modes):
     return out
 
 
+_ARC_TOLERANCE = 1e-5
+
+
 def _check_exterior_arc(mesh, radius, center_z):
-    """Fail unless every ``outer`` vertex lies on the stated semicircle."""
-    pts = set()
-    for el in mesh.Elements(__import__("ngsolve").BND):
-        if el.mat == "outer":
-            pts.update(el.vertices)
-    if not pts:
+    """Fail unless the mapped ``outer`` trace is the stated semicircle.
+
+    Vertices alone are not enough: a chordal (``Curve(1)``) mesh has the same
+    vertices and a different boundary.  The check integrates over the mapped
+    trace, so it sees the curved geometry the solve integrates on: the trace
+    must cover half the circumference, stay on the circle in the mean-square
+    sense, and end on the axis at both poles.
+    """
+    import ngsolve as ng
+
+    names = set(mesh.GetBoundaries())
+    if "outer" not in names:
         raise ValueError("the mesh has no boundary named 'outer'")
-    xy = np.array([mesh[v].point for v in pts], dtype=float)
-    rho = np.hypot(xy[:, 0], xy[:, 1] - center_z)
-    worst = float(np.max(np.abs(rho - radius)) / radius)
-    if worst > 1e-6:
-        raise ValueError(f"'outer' is not a semicircle of radius {radius} "
-                         f"about z = {center_z}: relative miss {worst:.3e}")
+    if "axis" not in names:
+        raise ValueError("the mesh has no boundary named 'axis'")
+    outer = mesh.Boundaries("outer")
+    order = 2 * max(int(mesh.GetCurveOrder()), 1) + 4
+    length = float(ng.Integrate(ng.CF(1.0), mesh, ng.BND, definedon=outer,
+                                order=order))
+    rho = ng.sqrt(ng.x * ng.x + (ng.y - center_z) * (ng.y - center_z))
+    miss = float(ng.Integrate((rho - radius) ** 2, mesh, ng.BND,
+                              definedon=outer, order=order))
+    rms = (max(miss, 0.0) / max(length, 1e-300)) ** 0.5 / radius
+    cover = length / (np.pi * radius) - 1.0
+    poles = []
+    for el in mesh.Elements(ng.BND):
+        if el.mat == "axis":
+            poles.extend(mesh[v].point for v in el.vertices)
+    poles = np.array(poles, dtype=float)
+    reach = (float(np.max(np.abs(poles[:, 1] - center_z))) / radius - 1.0
+             if poles.size else -1.0)
+    if (rms > _ARC_TOLERANCE or abs(cover) > _ARC_TOLERANCE
+            or abs(reach) > _ARC_TOLERANCE
+            or float(np.max(np.abs(poles[:, 0]))) > _ARC_TOLERANCE * radius):
+        raise ValueError(
+            f"'outer' is not the mapped semicircle of radius {radius} about "
+            f"z = {center_z}: rms miss {rms:.2e}, coverage {cover:+.2e}, "
+            f"axis reach {reach:+.2e} (tolerance {_ARC_TOLERANCE:.0e}); "
+            "a chordal or partial boundary is not the exterior the DtN term "
+            "assumes -- curve the mesh")
 
 
 def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
