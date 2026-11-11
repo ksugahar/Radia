@@ -1,0 +1,157 @@
+{
+  "schema": "radia.axisym_ring_exterior_validation.v1",
+  "generated_at_utc": "2026-11-10T23:58:53.738465+00:00",
+  "git_head": "dc4963f726790a6866dc5a2209112d74c05eedcb",
+  "platform_class": "Windows",
+  "python": "3.12.10",
+  "exterior_modes": 30,
+  "dc_inductance": {
+    "section_m": {
+      "r0": 0.04,
+      "r1": 0.06,
+      "z0": -0.01,
+      "z1": 0.01
+    },
+    "filament_quadrature_H": {
+      "60": 1.123267923351056e-07,
+      "120": 1.1233277807571521e-07,
+      "240": 1.1233430796861103e-07
+    },
+    "levels": [
+      {
+        "exterior_radius_m": 0.1,
+        "maxh_conductor_m": 0.0015,
+        "ndof": 3275,
+        "inductance_H": 1.123471477132275e-07,
+        "inductance_relative_error": 0.00011429940548568496,
+        "resistance_ohm": 1.335933461804408e-05
+      },
+      {
+        "exterior_radius_m": 0.1,
+        "maxh_conductor_m": 0.00075,
+        "ndof": 7973,
+        "inductance_H": 1.1234834565825387e-07,
+        "inductance_relative_error": 0.0001249635120088577,
+        "resistance_ohm": 1.335933459663623e-05
+      },
+      {
+        "exterior_radius_m": 0.15,
+        "maxh_conductor_m": 0.0015,
+        "ndof": 3413,
+        "inductance_H": 1.123287052112778e-07,
+        "inductance_relative_error": -4.987574530479488e-05,
+        "resistance_ohm": 1.3359334451322789e-05
+      },
+      {
+        "exterior_radius_m": 0.15,
+        "maxh_conductor_m": 0.00075,
+        "ndof": 8165,
+        "inductance_H": 1.1233027427678823e-07,
+        "inductance_relative_error": -3.59079242642224e-05,
+        "resistance_ohm": 1.335933440430227e-05
+      },
+      {
+        "exterior_radius_m": 0.3,
+        "maxh_conductor_m": 0.0015,
+        "ndof": 3497,
+        "inductance_H": 1.1230337879782804e-07,
+        "inductance_relative_error": -0.0002753314756844816,
+        "resistance_ohm": 1.3359334327730004e-05
+      },
+      {
+        "exterior_radius_m": 0.3,
+        "maxh_conductor_m": 0.00075,
+        "ndof": 8379,
+        "inductance_H": 1.123093775332593e-07,
+        "inductance_relative_error": -0.00022193073338472313,
+        "resistance_ohm": 1.3359334333658813e-05
+      },
+      {
+        "exterior_radius_m": 0.6,
+        "maxh_conductor_m": 0.0015,
+        "ndof": 3875,
+        "inductance_H": 1.1228706132877167e-07,
+        "inductance_relative_error": -0.0004205895838390594,
+        "resistance_ohm": 1.3359334320330878e-05
+      },
+      {
+        "exterior_radius_m": 0.6,
+        "maxh_conductor_m": 0.00075,
+        "ndof": 8565,
+        "inductance_H": 1.1229921830810138e-07,
+        "inductance_relative_error": -0.0003123681548780066,
+        "resistance_ohm": 1.335933415194182e-05
+      }
+    ],
+    "exterior_radius_spread_finest": 0.0004374683180581318
+  },
+  "revolved_wire_skin": [
+    {
+      "ring_radius_m": 0.1,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 1000.0,
+      "maxh_conductor_m": 0.000125,
+      "ndof": 3811,
+      "resistance_per_metre": 0.005493999664337725,
+      "bessel_per_metre": 0.005494090799623026,
+      "relative_error": -1.658787388569838e-05,
+      "loss_vs_half_RI2": 1.6882783966387649e-06
+    },
+    {
+      "ring_radius_m": 0.1,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 100000.0,
+      "maxh_conductor_m": 6.25e-05,
+      "ndof": 9073,
+      "resistance_per_metre": 0.014617599039471268,
+      "bessel_per_metre": 0.0146073104735796,
+      "relative_error": 0.0007043436168676642,
+      "loss_vs_half_RI2": 0.0004029192850414365
+    },
+    {
+      "ring_radius_m": 0.1,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 100000.0,
+      "maxh_conductor_m": 3.125e-05,
+      "ndof": 27757,
+      "resistance_per_metre": 0.014622824854002747,
+      "bessel_per_metre": 0.0146073104735796,
+      "relative_error": 0.0010620969856982576,
+      "loss_vs_half_RI2": 2.7023984908058907e-05
+    },
+    {
+      "ring_radius_m": 0.3,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 1000.0,
+      "maxh_conductor_m": 0.000125,
+      "ndof": 4123,
+      "resistance_per_metre": 0.005494074807103002,
+      "bessel_per_metre": 0.005494090799623026,
+      "relative_error": -2.9108583398107513e-06,
+      "loss_vs_half_RI2": 1.6488761385158313e-06
+    },
+    {
+      "ring_radius_m": 0.3,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 100000.0,
+      "maxh_conductor_m": 6.25e-05,
+      "ndof": 9835,
+      "resistance_per_metre": 0.014603444556531606,
+      "bessel_per_metre": 0.0146073104735796,
+      "relative_error": -0.00026465632088712443,
+      "loss_vs_half_RI2": 0.00045224905941609883
+    },
+    {
+      "ring_radius_m": 0.3,
+      "wire_radius_m": 0.001,
+      "frequency_hz": 100000.0,
+      "maxh_conductor_m": 3.125e-05,
+      "ndof": 30127,
+      "resistance_per_metre": 0.014609556105449195,
+      "bessel_per_metre": 0.0146073104735796,
+      "relative_error": 0.00015373342503122167,
+      "loss_vs_half_RI2": 2.801566800436639e-05
+    }
+  ],
+  "not_claimed": "the round-wire rows carry the ring's own curvature, of order the wire radius over the ring radius; they test the skin operator, not a straight-wire identity"
+}
