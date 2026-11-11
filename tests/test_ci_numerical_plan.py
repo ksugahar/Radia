@@ -295,8 +295,12 @@ def test_workflow_uses_distinct_plan_outputs_and_verified_execution():
         step = next(step for step in steps if step.get('name') == name)
         assert output in step['if'] and '--numerical-plan' in step['run']
     heavy = next(step for step in steps if step.get('id') == 'heavy-validation')
-    assert "-eq 'pull_request'" not in heavy['run']
+    # Solver-heavy validation is never a pull-request gate; main, schedule and dispatch run it.
+    assert heavy['if'].startswith("github.event_name != 'pull_request' && "), heavy['if']
+    assert 'pull_request' not in heavy['run']
     assert 'force_validation' in heavy['run']
+    timeout = workflow['jobs']['ams-regression']['timeout-minutes']
+    assert timeout == "${{ github.event_name == 'pull_request' && 45 || 120 }}", timeout
 
 
 

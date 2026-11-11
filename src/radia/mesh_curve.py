@@ -16,16 +16,21 @@ that file embeds its own CAD in the same units as the mesh:
   ``p``; after another geometry-bearing mesh was loaded in the same process,
   ``GetGeometry()`` returns that other geometry and ``Curve`` uses it.
 
+  The borrowed geometry may come from ``GenerateMesh`` or from loading any
+  earlier geometry-bearing ``.vol``; curving onto it can crash the process.
+
 Because ``GetGeometry()`` cannot tell an embedded CAD from a borrowed one,
-``ensure_curve_order`` takes the provenance from the ``.vol`` file itself.
-Only OCC geometry is supported for curving.  The caller owns ``TaskManager``.
-See ``docs/ngsolve_integration/curve_order.md``.
+``ensure_curve_order`` and ``load_vol`` take the provenance from the ``.vol``
+file itself.  ``ensure_curve_order`` curves only onto OCC geometry.  The caller
+owns ``TaskManager``.  See ``docs/ngsolve_integration/curve_order.md``.
 """
 from __future__ import annotations
 
+import gzip
 import math
 
-__all__ = ["CurveOrderError", "ensure_curve_order", "mesh_measures", "vol_geometry_kind"]
+__all__ = ["CurveOrderError", "add_curve_descriptors", "ensure_curve_order", "load_vol", "mesh_measures",
+           "straight_curve_order", "vol_geometry_kind"]
 
 
 class CurveOrderError(RuntimeError):
@@ -63,7 +68,8 @@ def _read_vol(vol_path, *, with_points=True):
     from array import array
 
     points, dim, tail = array("d"), 0, []
-    with open(vol_path, "r", errors="ignore") as handle:
+    opener = gzip.open if str(vol_path).lower().endswith(".gz") else open
+    with opener(vol_path, "rt", errors="ignore") as handle:
         lines = iter(handle)
         for line in lines:
             s = line.strip()
@@ -85,10 +91,104 @@ def vol_geometry_kind(vol_path):
 
     Returns ``"occ"`` for an OCC archive (``TextOutArchive`` header, the
     ``netgen::OCCGeometry`` class tag and a ``CASCADE Topology`` block),
-    ``"csg"`` for a CSG description, ``"other"`` for unrecognised trailing
-    text and ``None`` when nothing follows ``endmesh``.
+    ``"csg"`` for text that starts like a CSG description (a label only:
+    Netgen's fallback for an unrestored tail is indistinguishable from a CSG
+    restore, so ``load_vol`` and ``ensure_curve_order`` never trust it),
+    ``"other"`` for unrecognised trailing text and ``None`` when nothing follows
+    ``endmesh``.
     """
     return _geometry_kind(_read_vol(vol_path, with_points=False)[2])
+
+
+
+
+def _file_identity(path):
+    import os
+
+    status = os.stat(path)
+    return status.st_dev, status.st_ino, status.st_size, status.st_mtime_ns
+
+
+def load_vol(vol_path):
+    """Load a ``.vol`` (or ``.vol.gz``) bound only to the geometry the file stores.
+
+    Netgen attaches the process's most recent geometry to a file whose stored
+    geometry it does not restore, also to one whose tail only looks like an
+    archive (``csgsurfaces...``), and the fallback is an object of the same
+    class.  The attached geometry is therefore kept only for an OCC archive
+    (``vol_geometry_kind == "occ"``) restored as ``OCCGeometry``; a malformed OCC
+    archive does not fall back but fails inside Netgen.  Every other file (no
+    archive, unrecognised text, any CSG tail) loads without CAD, so the mesh
+    depends only on the file, as in a fresh process.  The stored geometry order
+    is used as it is either way.  The file must not change between the provenance read and
+    the load (same device, inode, size and modification time), else this raises.
+    """
+    import ngsolve as ng
+
+    path = str(vol_path)
+    before = _file_identity(path)
+    kind = vol_geometry_kind(path)
+    mesh = ng.Mesh(path)
+    if _file_identity(path) != before:
+        raise RuntimeError(f"{path} changed while it was loaded; its geometry provenance is unknown")
+    restored = type(mesh.ngmesh.GetGeometry()).__name__
+    if not (kind == "occ" and restored == "OCCGeometry"):
+        mesh.ngmesh.SetGeometry(None)
+    return mesh
+
+
+def add_curve_descriptors(mesh):
+    """Add the edge descriptors NGSolve ``Curve`` needs on a programmatic mesh, once."""
+    from netgen.meshing import EdgeDescriptor
+
+    ngmesh = mesh.ngmesh
+    if not ngmesh.EdgeDescriptors():
+        if ngmesh.dim == 2:
+            for index, name in enumerate(mesh.GetBoundaries(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (1, -1)
+                descriptor.domin = 1
+                descriptor.domout = 0
+                descriptor.name = name
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        elif ngmesh.dim == 3:
+            for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (face.surfnr, -1)
+                descriptor.domin = face.domin
+                descriptor.domout = face.domout
+                descriptor.name = face.bcname or f"boundary_{index}"
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        else:
+            raise ValueError(f"unsupported mesh dimension for Curve: {ngmesh.dim}")
+
+
+def straight_curve_order(mesh, order):
+    """Give ``mesh`` a straight element map of polynomial ``order``, without CAD.
+
+    Any attached geometry, its own or borrowed, is detached first, so ``Curve``
+    keeps the current element map and only raises its order.  The result is
+    exact for flat geometry (boxes, hand-built or structured meshes, a mesh an
+    analytic ``SetDeformation`` will move) and wrong for a curved one: a mesh
+    with curved boundaries gets its curvature from its CAD (``Curve`` right after
+    ``GenerateMesh``, ``ensure_curve_order``) or from its export order (Cubit
+    ``export netgen ... order p``).  A stored order of ``order`` or higher is
+    kept.  The caller owns ``TaskManager``.
+    """
+    if int(mesh.GetCurveOrder()) >= int(order):
+        return mesh
+    mesh.ngmesh.SetGeometry(None)
+    add_curve_descriptors(mesh)
+    mesh.Curve(int(order))
+    return mesh
 
 
 def _geometry_kind(tail):

@@ -356,7 +356,8 @@ endmesh
     assert "volume domains missing material labels: 2" in ownership["issues"]
 
 
-def test_compressed_crlf_vol_labels_are_transport_normalized(tmp_path):
+def test_compressed_crlf_vol_is_refused(tmp_path):
+    """Guards: a CRLF .vol.gz fails the check; Netgen keeps the CR in gzip names, so 'body' selects nothing."""
     _, vol_path = _save_box(tmp_path)
     compressed = tmp_path / "box.vol.gz"
     with vol_path.open("rb") as source, gzip.open(compressed, "wb") as target:
@@ -369,11 +370,9 @@ def test_compressed_crlf_vol_labels_are_transport_normalized(tmp_path):
         required_boundaries=("outer",),
     )
 
-    assert result["passed"]
-    assert result["labels"]["materials"] == ["body"]
-    assert result["labels"]["boundaries"] == ["outer"]
-    assert result["quality"]["materials"] == ["body"]
-    assert result["quality"]["boundaries"] == ["outer"]
+    assert not result["passed"], result["warnings"]
+    assert any("'body' is stored as 'body\\r'" in w for w in result["warnings"]), result["warnings"]
+    assert any("'outer' is stored as 'outer\\r'" in w for w in result["warnings"]), result["warnings"]
 
 
 def test_auto_discovered_cad_sidecar_checks_geometry_and_metadata(tmp_path):
@@ -586,31 +585,36 @@ MIXED_CYLINDER = (
 )
 
 
-def test_curved_pyramid_map_is_an_advisory_not_a_failure():
-    # Cubit export (2.1.0): radius-1, height-2 cylinder, hexes above z=0, tets
-    # below, 37 transition pyramids, order 2.  18 of them share the rim circle
-    # where the z=0 interface meets the curved side, so their base edge is
-    # curved.  NGSolve up to 6.2.2607 maps those inconsistently (~3e-2 of the
-    # element size); a fixed NGSolve maps them consistently.  Either way the
-    # .vol is correct and the gate passes.
+def test_curved_pyramids_map_consistently_on_the_patched_runtime():
+    """Guards: the CI runtime evaluates curved pyramids exactly; the checker passes the order-2 export.
+
+    Assumes: the test venv carries the patched Netgen 6.2.2608 (apex clamp + base-edge blend,
+    tools/netgen_overlay.py). The stock library integrates a unit pyramid off by ~3e-11 and maps
+    the 18 rim pyramids of this cylinder inconsistently by ~3.5e-2; cubit-mesh-export refuses both.
+    """
+    # cubit-mesh-export 2.4.0 export: radius-1, height-2 cylinder, hexes above
+    # z=0, tets below, 37 transition pyramids, order 2, LF line endings.
+    CHECK_MODULE.require_pyramid_netgen()
     result = check_consistency(str(MIXED_CYLINDER))
     pyramids = result["quality"]["curved_pyramid_map"]
 
-    assert result["passed"]
-    assert pyramids["pyramid_count"] == 37
-    assert pyramids["inconsistent_count"] in (0, 18)
-    if pyramids["inconsistent_count"]:
-        assert pyramids["max_relative_deviation"] > 1.0e-3
-        assert len(result["advisories"]) == 1
-        assert result["advisories"][0].startswith("18 of 37 pyramids are curved")
-    else:
-        assert pyramids["max_relative_deviation"] <= pyramids["tolerance"]
-        assert result["advisories"] == []
+    assert result["passed"], result
+    assert pyramids["pyramid_count"] == 37, pyramids
+    assert pyramids["max_relative_deviation"] <= pyramids["tolerance"], pyramids
+    assert result["warnings"] == [], result["warnings"]
 
 
-def test_straight_elements_have_no_curved_pyramid_advisory(tmp_path):
+def test_cubit_fixture_region_names_have_no_carriage_return():
+    """Guards: the committed Cubit export keeps exact region names (Netgen keeps CR inside .vol.gz)."""
+    raw = gzip.decompress(MIXED_CYLINDER.read_bytes())
+    assert b"\r" not in raw, raw.count(b"\r")
+    mesh = ng.Mesh(str(MIXED_CYLINDER))
+    assert mesh.GetMaterials() == ("body",), mesh.GetMaterials()
+
+
+def test_straight_elements_have_no_pyramid_warning(tmp_path):
     _, vol_path = _save_box(tmp_path)
     result = check_consistency(str(vol_path))
 
     assert result["quality"]["curved_pyramid_map"]["pyramid_count"] == 0
-    assert result["advisories"] == []
+    assert result["warnings"] == [], result["warnings"]

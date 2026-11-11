@@ -9,6 +9,7 @@ from netgen.csg import CSGeometry, OrthoBrick, Pnt
 from ngsolve.meshes import MakeStructured3DMesh
 
 from radia import vim
+from radia.mesh_curve import straight_curve_order
 from radia.vim._magnetization_source import _field_coefficient_algorithm
 from tests._ngsolve_2607 import curve_mesh
 
@@ -104,17 +105,18 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
 
     cases = [
         ("tet-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, None, "analytic-tet-bdm2"),
-        ("tet-curved", _box_mesh(-0.3, 0.3, maxh=0.35), 1, 2, "curved-element-exact-bdm1"),
-        ("tet-curved-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, 2,
+        ("tet-curved", straight_curve_order(_box_mesh(-0.3, 0.3, maxh=0.35), 2), 1, 2,
+         "curved-element-exact-bdm1"),
+        ("tet-curved-bdm2", straight_curve_order(_box_mesh(-0.3, 0.3, maxh=0.35), 2), 2, 2,
          "curved-element-exact-bdm2"),
         ("hex-bdm1", MakeStructured3DMesh(
             hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "analytic-tet-bdm1"),
-        ("hex-curved-bdm2", MakeStructured3DMesh(
-            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "analytic-tet-bdm2"),
+        ("hex-curved-bdm2", straight_curve_order(MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2), 2, 2, "analytic-tet-bdm2"),
         ("wedge-bdm1", MakeStructured3DMesh(
             prism=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-bdm1"),
-        ("wedge-curved-bdm2", MakeStructured3DMesh(
-            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-bdm2"),
+        ("wedge-curved-bdm2", straight_curve_order(MakeStructured3DMesh(
+            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 2), 2, 2, "element-cloud-bdm2"),
     ]
     prescribed = ng.CoefficientFunction((1.0e5, 2.0e5, 3.0e5))
     for name, mesh, order, curve_order, expected_kind in cases:

@@ -1,7 +1,9 @@
 """Build and install the patched Netgen library consumed by the HDiv installed-wheel lane.
 
 NGSolve and Netgen stay at their pinned wheels. Pinned Netgen scales every pyramid z by
-1 - 1e-10; tools/patches/netgen-pyramid-apex.patch guards the apex only. This tool builds
+1 - 1e-10 and drops the base-edge blend from its vectorised pyramid map;
+tools/patches/netgen-pyramid.patch carries the upstream apex clamp (13b47c3a9) and that
+blend. This tool builds
 that source once and replaces nglib.dll, and nothing else, in a run-local environment. A
 receipt binds the library to the upstream commit and the patch. Never point it at a shared
 runtime; a stock runtime keeps the stock library.
@@ -17,7 +19,7 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PATCH = ROOT / 'tools/patches/netgen-pyramid-apex.patch'
+PATCH = ROOT / 'tools/patches/netgen-pyramid.patch'
 UPSTREAM = 'https://github.com/NGSolve/netgen'
 TAG = 'v6.2.2608'
 UPSTREAM_SHA = '96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e'
@@ -53,12 +55,19 @@ def build(work, out):
     run([sys.executable, '-m', 'venv', venv])
     python = venv / 'Scripts/python.exe'
     run([python, '-I', '-m', 'pip', 'install', '--only-binary=:all:', *BUILD_PINS])
+    ninja = venv / 'Scripts/ninja.exe'
+    if not ninja.is_file():
+        raise ValueError(f'The pinned ninja is missing at {ninja}')
     env = dict(os.environ, PYTHONNOUSERSITE='1', NETGEN_ARCH='avx2', CMAKE_GENERATOR='Ninja', CC='cl', CXX='cl',
                OpenCascade_DIR=str(venv / 'Lib/cmake/opencascade'), CMAKE_PREFIX_PATH=str(venv / 'Lib'),
                PATH=str(venv / 'Scripts') + os.pathsep + os.environ['PATH'])
     wheels = work / 'wheelhouse'
+    # The superbuild re-parses CMAKE_MAKE_PROGRAM as a CMake string, where a native path
+    # such as C:\actions-runner is an invalid escape; this define overrides the native one.
     run([python, '-I', '-m', 'pip', 'wheel', source, '--no-deps', '--no-build-isolation', '--wheel-dir', wheels,
-         *[f'--config-settings={item}' for item in SETTINGS], f'--config-settings=build-dir={work / "build"}'],
+         *[f'--config-settings={item}' for item in SETTINGS],
+         f'--config-settings=cmake.define.CMAKE_MAKE_PROGRAM={ninja.as_posix()}',
+         f'--config-settings=build-dir={work / "build"}'],
         env=env, cwd=work)
     built = list(wheels.glob('netgen_mesher-*.whl'))
     if len(built) != 1:

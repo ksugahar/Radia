@@ -33,13 +33,20 @@ def _sphere(maxh=0.6):
     return ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh))
 
 
+def _curved_sphere(maxh=0.6):
+    """Curved onto its own CAD right after meshing; Solve does not curve a mesh object."""
+    mesh = _sphere(maxh)
+    mesh.Curve(2)
+    return mesh
+
+
 def test_curved_tet_nonlinear_runs_and_matches_analytic():
     """curve_order=2 + bh_table at RT1: the energy-Newton runs on the curved Gram and a uniform sphere matches
     the analytic spheroid fixed point AND the flat RT1 nonlinear solve (curving-insensitive demag)."""
     H0 = 5000.0
     Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():
-        rc = Solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+        rc = Solve(_curved_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
                               order=1, curve_order=2)
         rf = Solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
     assert rc["nonlinear"] is True
@@ -73,8 +80,8 @@ def test_flat_rt1_nonlinear_matches_analytic():
 def test_curved_tet_nonlinear_jacobi_inner_matches_mass_riesz():
     """The large-run Jacobi inner preconditioner is valid on the curved Gram too."""
     H0 = 5000.0
-    mesh = _sphere(maxh=0.8)
     with ng.TaskManager():
+        mesh = _curved_sphere(maxh=0.8)
         ref = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
                     order=1, curve_order=2)
         tuned = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
