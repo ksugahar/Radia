@@ -55,9 +55,9 @@ def check_toolchain(cuda_root, host, architectures, windows):
     version = capture([nvcc, "--version"])
     if not re.search(r"release 12\.8,", version):
         raise RuntimeError("CUDA toolkit must be 12.8; no compiler override or fallback")
-    expected = ["75", "80"] if windows else ["100"]
+    expected = ["80"] if windows else ["100"]
     if list(architectures) != expected:
-        raise RuntimeError("Explicit architectures must be Windows sm_75+sm_80 or Linux sm_100")
+        raise RuntimeError("Explicit architectures must be Windows sm_80 or Linux sm_100")
     if windows:
         compiler = subprocess.run([str(host)], capture_output=True, text=True, encoding="utf-8", errors="replace")
         host_version = compiler.stdout + compiler.stderr
@@ -67,7 +67,7 @@ def check_toolchain(cuda_root, host, architectures, windows):
         host_version = capture([host, "--version"])
         if not re.search(r"(?:g\+\+|gcc|GCC).*11\.5", host_version):
             raise RuntimeError("Explicit reviewed GCC 11.5 host compiler required")
-    for key in ("NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_CCBIN", "CL", "_CL_", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "CUDAFLAGS"):
+    for key in ("NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_CCBIN", "CL", "_CL_", "LINK", "_LINK_", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "CUDAFLAGS"):
         if os.environ.get(key):
             raise RuntimeError(f"Unreviewed compiler environment: {key}")
     return nvcc, version, host_version
@@ -253,6 +253,8 @@ def main():
                         "-I" + str(CORE), "-o", obj, CORE / cu]
         cuda_command += cuda_sdk_flags
         cuda_command += ["-gencode=arch=compute_" + arch + ",code=sm_" + arch for arch in args.architectures]
+        if windows:
+            cuda_command.append("-gencode=arch=compute_80,code=compute_80")
         if windows:
             cuda_command += ["-Xcompiler", "/MD"]
         if module == "_hdiv_cuda":

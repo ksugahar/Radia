@@ -8,7 +8,7 @@ import re
 import shutil
 
 MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda")
-WINDOWS_ARCHITECTURES = ("75", "80")
+WINDOWS_ARCHITECTURES = ("80",)
 DIAGNOSTIC_FLAGS = ("fault_injection", "device_fault_injection", "lifecycle_diagnostic")
 
 
