@@ -198,10 +198,24 @@ def test_fault_mex_stays_out_of_the_shipped_tree():
 
 def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
     # Guards: a kernel or adapter change still executes pybind11/MEX parity and the MATLAB device test on its own build.
+    # The build host compiles the fault MEX; the A100 job executes the boundary on that bundle.
     workflow = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
-    job = workflow[workflow.index("\n  cuda-mex:"):]
+    build = workflow[workflow.index("\n  cuda-mex:"):]
+    assert "build_fault_mex.py" in build
+    job = (ROOT / ".github/workflows/radia-simulink-a100.yml").read_text(encoding="utf-8")
     step = job[job.index("- name: Verify HDiv device boundary and same-kernel parity"):]
     step = step[:step.index("\n      - ")]
     assert "validation_test/hmatrix_cuda/run_device_boundary.py" in step, step
-    assert "--fault-mex-build" in step and "build_fault_mex.py" in job, step
+    assert "--fault-mex-build" in step and "build_fault_mex.py" not in job, step
     assert "continue-on-error" not in step and "if:" not in step, step
+
+
+def test_a100_acceptance_runs_prebuilt_binaries_only():
+    # Guards: the A100 job executes build-host outputs and never compiles; the IC lifecycle gateway is built on the build host.
+    build = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
+    a100 = (ROOT / ".github/workflows/radia-simulink-a100.yml").read_text(encoding="utf-8")
+    assert "lifecycle_simulation.py --build-only --out build-ic-lifecycle" in build
+    assert "'checkout:build-ic-lifecycle'" in build
+    assert "lifecycle_simulation.py --binary-dir build-ic-lifecycle" in a100
+    compiling = [marker for marker in ("Build.ps1", "--build-only", "mexcuda", "build_python_gpu.py", "build_fault_mex.py", "cmake") if marker in a100]
+    assert compiling == [], compiling

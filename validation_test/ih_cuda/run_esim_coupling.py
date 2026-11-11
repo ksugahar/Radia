@@ -28,7 +28,7 @@ def main():
         script=a.out/'check.m'
         script.write_text(f"setenv('NVCC_CCBIN','{compiler}');setenv('PATH',['{compiler};' getenv('PATH')]);\n"
           "config=fullfile(matlabroot,'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml');\n"
-          f"mexcuda('-v','-R2018a','-f',config,'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80','-I{quote(header)}','-lcublas','-outdir','{quote(a.out)}','{quote(src)}');\n"
+          f"mexcuda('-v','-R2018a','-f',config,'NVCCFLAGS=--fmad=false -gencode=arch=compute_80,code=sm_80','-I{quote(header)}','-lcublas','-outdir','{quote(a.out)}','{quote(src)}');\n"
           f"addpath('{quote(a.out)}');\n"
           "rows=esim_coupling_smoke([300;400;500]);assert(rows(1)<=1e-8 && rows(2)<=1e-8 && rows(3)>=2 && rows(5)<=1e-10 && rows(6)<=1e-10 && rows(7)==5);rejected=false;try,unused=esim_coupling_smoke([299;299;500]);catch e,rejected=contains(e.message,'outside declared table');end;assert(rejected);\n"
           f"f=fopen('{quote(a.out/'native.json')}','w');assert(f>=0);closer=onCleanup(@()fclose(f));fprintf(f,'%s',jsonencode(struct('rows',rows,'matlab',version)));clear closer;\n",encoding='utf-8')

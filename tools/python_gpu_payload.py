@@ -8,11 +8,14 @@ import re
 import shutil
 
 MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda")
-WINDOWS_ARCHITECTURES = ("75", "80")
+WINDOWS_ARCHITECTURES = ("80",)
+# Windows modules also embed compute_80 PTX; Linux sm_100 modules embed none.
+WINDOWS_PTX_ARCHITECTURES = ("80",)
 DIAGNOSTIC_FLAGS = ("fault_injection", "device_fault_injection", "lifecycle_diagnostic")
 
 
-def verify_payload(binary_name, data, record, source_commit, architectures=WINDOWS_ARCHITECTURES):
+def verify_payload(binary_name, data, record, source_commit, architectures=WINDOWS_ARCHITECTURES,
+                   ptx_architectures=WINDOWS_PTX_ARCHITECTURES):
     """Verify compiled artifact identity; a receipt does not prove a GPU solve."""
     if (record.get("schema") != "radia.native-build-provenance.v1"
             or record.get("source_commit") != source_commit
@@ -21,7 +24,7 @@ def verify_payload(binary_name, data, record, source_commit, architectures=WINDO
             or record.get("binary_name") != binary_name
             or record.get("binary_sha256") != hashlib.sha256(data).hexdigest()
             or record.get("architectures") != list(architectures)
-            or record.get("ptx_architectures") != []
+            or record.get("ptx_architectures") != list(ptx_architectures)
             or any(record.get(k) is not False for k in DIAGNOSTIC_FLAGS)):
         raise ValueError("Python GPU artifact source/hash/architecture/build-mode mismatch: " + binary_name)
     for field in ("source_hashes", "pybind_header_hashes"):

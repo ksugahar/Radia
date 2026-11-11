@@ -92,7 +92,7 @@ def main(args):
                          subprocess.list2cmdline(fem_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
         with (out/'fem-host-build.log').open('w') as log:
             subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
-        flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        flags='NVCCFLAGS=-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
                     str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),nargout=0)
         if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}

@@ -311,7 +311,8 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "isolated exact-wheel QA" in normalized
     assert "radia-mcp stays build-editable/validation-wheel" in normalized
     assert "cubit-mesh-export is build-only" in normalized
-    assert "Use GPU workers for declared GPU builds and qualification" in normalized
+    assert "`100` heavy CPU jobs and every compile, CUDA included, without GPU execution" in normalized
+    assert "`gpu-a100` runs GPU acceptance on exact-SHA build-host artifacts; never compiles or gates PRs" in normalized
     assert "retired targets stay excluded" in normalized
     assert "validation has no Cubit/cme" in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized

@@ -25,13 +25,13 @@ def load(name):
 def record(name, data, source="a" * 40):
     return dict(schema="radia.native-build-provenance.v1", source_commit=source,
                 source_dirty=False, binary_name=name, binary_sha256=hashlib.sha256(data).hexdigest(),
-                architectures=["75", "80"], ptx_architectures=[],
+                architectures=["80"], ptx_architectures=["80"],
                 fault_injection=False, device_fault_injection=False, lifecycle_diagnostic=False,
                 source_hashes={"src/core/gpu/kernel.cu": "b" * 64},
                 pybind_header_hashes={"pybind11/header.h": "c" * 64})
 
 
-@pytest.mark.parametrize("mutation", ["none", "missing", "source", "hash", "architecture", "diagnostic", "private"])
+@pytest.mark.parametrize("mutation", ["none", "missing", "source", "hash", "architecture", "ptx", "diagnostic", "private"])
 def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutation):
     payload = load("python_gpu_payload")
     verifier = load("verify_cpu_wheel")
@@ -51,6 +51,7 @@ def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutati
                 if mutation == "source": receipt["source_commit"] = "d" * 40
                 if mutation == "hash": receipt["binary_sha256"] = "0" * 64
                 if mutation == "architecture": receipt["architectures"] = ["75"]
+                if mutation == "ptx": receipt["ptx_architectures"] = []
                 if mutation == "diagnostic": receipt["fault_injection"] = True
             z.writestr("radia/" + name, data)
             z.writestr("radia/" + name + ".build.json", json.dumps(receipt))
@@ -86,7 +87,7 @@ def test_stage_validates_all_members_before_copying(tmp_path):
 
 
 @pytest.mark.parametrize("mutate_sdk", [False, True])
-def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch, mutate_sdk):
+def test_builder_compiles_sm80_with_recorded_compute80_ptx(tmp_path, monkeypatch, mutate_sdk):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "identity", lambda: "a" * 40)
     monkeypatch.setattr(builder, "admission", lambda *a: {"owner": "fixture"})
@@ -112,7 +113,7 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
         fixture.write_bytes(b"#define CUDA_VERSION 12080\n" if relative.endswith("cuda.h") else b"synthetic SDK input")
     monkeypatch.setattr(sys, "argv", ["builder", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl"),
-        "--architectures", "75", "80", "--output", str(tmp_path / "built"),
+        "--architectures", "80", "--output", str(tmp_path / "built"),
         "--admission", str(tmp_path / "admission"), "--admission-sha256", "a" * 64,
         "--components", "_gpu_csr"])
     if mutate_sdk:
@@ -122,9 +123,13 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
         return
     builder.main()
     cuda = commands[0]
-    assert "-gencode=arch=compute_75,code=sm_75" in cuda, cuda
+    assert not any("sm_75" in arg for arg in cuda), cuda
     assert "-gencode=arch=compute_80,code=sm_80" in cuda, cuda
-    assert not any("code=compute_" in arg for arg in cuda), cuda
+    assert [arg for arg in cuda if "code=compute_" in arg] == [
+        "-gencode=arch=compute_80,code=compute_80"
+    ], cuda
+    receipts = list((tmp_path / "built").glob("*.pyd.build.json"))
+    assert [json.loads(r.read_text())["ptx_architectures"] for r in receipts] == [["80"]], receipts
     assert "/MD" in cuda, cuda
     assert cuda[0] == str(matlab / "sys/cuda/win64/cuda/bin/nvcc.exe")
     assert cuda[cuda.index("--libdevice-directory") + 1] == str(matlab / "bin/win64")
@@ -135,7 +140,7 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     assert identity["files"]["libdevice"]["sha256"] == builder.sha(matlab / "bin/win64/libdevice.10.bc")
 
 
-@pytest.mark.parametrize("architectures", [["75"], ["80"], ["75", "75"], ["80", "75"], ["75", "80", "90"]])
+@pytest.mark.parametrize("architectures", [["75"], ["75", "80"], ["80", "80"], ["80", "90"], ["75", "80", "90"]])
 def test_windows_release_rejects_incomplete_or_implicit_architectures(tmp_path, monkeypatch, architectures):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "capture", lambda cmd: "Cuda compilation tools, release 12.8, V12.8")
@@ -192,3 +197,23 @@ def test_coexistence_rejects_colliding_or_missing_public_types(failure):
                "_gpu_ams": SimpleNamespace(Resident=ams)}
     with pytest.raises(RuntimeError, match="distinct Resident types"):
         checker.resident_types(modules)
+
+
+def test_every_cuda_build_targets_the_a100_floor_or_newer():
+    """Guards: GPU development starts at the A100 (sm_80); no build script compiles an older native target.
+
+    Assumes: build commands are written as nvcc -gencode/arch literals or CMake architecture lists.
+    """
+    import re
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    tracked = subprocess.check_output(["git", "-C", str(root), "ls-files", "--", "*.py", "*.ps1", "*.m", "*.cmake",
+                                       "CMakeLists.txt", "*/CMakeLists.txt", "*.yml"], text=True).split()
+    older = re.compile(r"(?:compute|sm)_(?:[1-6][0-9]|7[0-9])\b|CUDA_ARCHITECTURES[^\n]*\b(?:[1-6][0-9]|7[0-9])\b")
+    found = []
+    for name in tracked:
+        if name.startswith("tests/"):
+            continue  # recorded evidence fixtures name the device they ran on
+        text = (root / name).read_text(encoding="utf-8", errors="replace")
+        found += [f"{name}:{number}" for number, line in enumerate(text.splitlines(), 1) if older.search(line)]
+    assert found == [], found

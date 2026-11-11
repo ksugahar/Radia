@@ -1949,6 +1949,12 @@
       ]
     },
     {
+      "pattern": ".github/workflows/radia-simulink-a100.yml",
+      "owners": [
+        "radia-simulink"
+      ]
+    },
+    {
       "pattern": ".github/workflows/gpu-runner-readiness.yml",
       "owners": [
         "radia-simulink"
@@ -4121,6 +4127,29 @@
       "content_diff_active": [],
       "required_paths": []
     },
+    "radia-simulink-a100": {
+      "workflow": ".github/workflows/radia-simulink-a100.yml",
+      "owners": [
+        "radia-simulink"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_dispatch": {
+          "inputs": {
+            "sha": {
+              "description": "Full commit SHA of a successful radia-simulink push run",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
     "gpu-runner-readiness": {
       "workflow": ".github/workflows/gpu-runner-readiness.yml",
       "owners": [
@@ -4134,8 +4163,7 @@
             "target": {
               "type": "choice",
               "options": [
-                "gpu-a100",
-                "gpu-rtx"
+                "gpu-a100"
               ],
               "default": "gpu-a100",
               "required": "true"

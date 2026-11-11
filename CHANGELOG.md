@@ -1,5 +1,33 @@
 # Changelog
 
+## 5.4.3 - 2026-11-11
+
+- Consume Cubit mesh export and MATLAB Optuna from their standalone
+  distributions. The optional `cubit` extra requires `cubit-mesh-export>=2.4.0`
+  on Windows with Python 3.12.
+
+- Use the geometry order saved in HDiv meshes and reject requests to curve a
+  loaded mesh. CAD-free exports retain their saved geometry, including P2 nodes.
+
+- **Experimental — HDiv touching integration.** Use a graded rule for P1
+  touching interactions and reuse work across the modes of a host pair.
+  The batching changes floating-point rounding while retaining the quadrature rule.
+- **Experimental — HDiv device images and ACA.** Support mirror and cyclic
+  images, reuse ACA row work, and order dense host pairs by cost. Reject
+  unsupported periodic seam numbering before constructing the reduced space.
+- **Experimental — mixed and pyramid HDiv.** Extend the supported development
+  routes to mixed meshes and pyramid elements. Curved pyramid validation uses
+  Netgen 6.2.2608 with the apex and base-edge fixes in
+  [the overlay recipe](validation_test/hmatrix_cuda/README.md). The mesh checker
+  refuses pyramid inputs with the stock Netgen library.
+
+- Windows GPU modules now contain sm_80 code and compute_80 PTX. GPUs
+  older than Ampere are no longer supported by the Windows GPU modules.
+  CPU features are unaffected. FP64 GPU validation runs on A100.
+
+HDiv-MMM remains experimental across all element families. Linux GPU
+qualification is pending for 5.4.3.
+
 ## 5.4.2 - 2026-10-30
 
 - Give the Python AMS and resident AMG implementations distinct internal C++

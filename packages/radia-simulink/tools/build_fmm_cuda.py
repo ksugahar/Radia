@@ -37,7 +37,7 @@ def main():
             command=['cl','/nologo','/c','/O2','/MD','/EHsc','/std:c++20','/DWIN32','/DNOMINMAX','/DRAD_MATLAB_HOST','/DMATLAB_MEXCMD_RELEASE=R2018a','/DUSE_MEX_CMD','/DMATLAB_MEX_FILE',*[f'/I{p}' for p in includes],f'/Fo{obj}',str(host)]
             batch=out/(host.stem+'.cmd');batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\nif errorlevel 1 exit /b 1\n'+subprocess.list2cmdline(command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
             with (out/(host.stem+'.log')).open('w') as log:subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
-        engine.mexcuda('-v','-f',str(config),'-R2018a','NVCCFLAGS=-std=c++17 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80','-outdir',str(out),str(source),*objects,str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),str(prefix/'libs/python312.lib'),nargout=0)
+        engine.mexcuda('-v','-f',str(config),'-R2018a','NVCCFLAGS=-std=c++17 --fmad=false -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80','-outdir',str(out),str(source),*objects,str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),str(prefix/'libs/python312.lib'),nargout=0)
         if hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}:raise RuntimeError('Sources changed during build')
         receipt.update(accepted=True,binary_sha256=hashlib.sha256((out/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest(),matlab=engine.version(),compiler_bin=str(cc),configuration=str(config))
     except BaseException as e:receipt['error']=repr(e);raise

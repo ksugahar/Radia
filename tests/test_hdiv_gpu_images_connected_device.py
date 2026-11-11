@@ -35,7 +35,7 @@ SEAM = ("periodic_min", "periodic_max")
 _QUADS = ((0, 3, 2, 1), (4, 5, 6, 7), (1, 2, 6, 5), (3, 0, 4, 7))
 
 
-def _yoke(path, cells, fold, *, ring=False, identified=True, numbering=None, inner=0.03, outer=0.05, half=0.004):
+def _yoke(cells, fold, *, ring=False, identified=True, numbering=None, inner=0.03, outer=0.05, half=0.004):
     """Annular HEX yoke: `cells` per sector, either the closed ring or one sector with labeled cut faces.
 
     `numbering` holds the vertex number of each (station, radius, height) in index order.
@@ -71,8 +71,7 @@ def _yoke(path, cells, fold, *, ring=False, identified=True, numbering=None, inn
     if identified and not ring:
         for ir, iz in np.ndindex(2, 2):
             mesh.AddPointIdentification(point[0, ir, iz], point[total, ir, iz], identnr=1, type=IdentificationType.PERIODIC)
-    mesh.Save(str(path))
-    return path
+    return mesh
 
 
 def _radial_q2(mesh):
@@ -100,15 +99,17 @@ def meshes(tmp_path_factory):
     import ngsolve as ng
     from radia.vim import renumber_periodic_seam
     root = tmp_path_factory.mktemp("connected")
-    meshes = dict(sector=_yoke(root/"sector.vol", 1, 12), sector2=_yoke(root/"sector2.vol", 2, 8), ring2=_yoke(root/"ring2.vol", 2, 8, ring=True),
-                  unidentified=_yoke(root/"unidentified.vol", 1, 12, identified=False),
-                  shuffled_raw=_yoke(root/"shuffled_raw.vol", 1, 12, numbering=[5, 0, 1, 7, 2, 6, 4, 3]),
-                  swapped_raw=_yoke(root/"swapped_raw.vol", 1, 12, numbering=[2, 6, 7, 5, 1, 3, 0, 4]),
-                  untied=_yoke(root/"untied.vol", 1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
-    # The raw numberings tie misoriented seam faces and refuse; their renumbered copies keep each master's number.
+    raw = dict(sector=_yoke(1, 12), sector2=_yoke(2, 8), ring2=_yoke(2, 8, ring=True),
+               unidentified=_yoke(1, 12, identified=False),
+               shuffled_raw=_yoke(1, 12, numbering=[5, 0, 1, 7, 2, 6, 4, 3]),
+               swapped_raw=_yoke(1, 12, numbering=[2, 6, 7, 5, 1, 3, 0, 4]),
+               untied=_yoke(1, 12, numbering=[5, 3, 6, 4, 0, 1, 7, 2]))
+    # Renumber the geometry-free construction before .vol loading can attach a geometry object.
     for name in ("shuffled", "swapped"):
-        meshes[name] = root/f"{name}.vol"
-        renumber_periodic_seam(ng.Mesh(str(meshes[name + "_raw"])), SEAM).ngmesh.Save(str(meshes[name]))
+        raw[name] = renumber_periodic_seam(ng.Mesh(raw[name + "_raw"]), SEAM).ngmesh
+    meshes = {name: root/f"{name}.vol" for name in raw}
+    for name, mesh in raw.items():
+        mesh.Save(str(meshes[name]))
     return meshes
 
 

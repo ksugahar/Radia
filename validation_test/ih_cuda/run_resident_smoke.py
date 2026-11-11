@@ -32,7 +32,7 @@ def main():
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip())
         record['source_commit']=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
         record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,header.with_name("ih_bicgstab_kernels.cuh"),header.with_name("ih_complex_solver.cuh"),header.with_name("ih_thermal_kernels.cuh"),header.with_name("ih_coupled_state.cuh"),header.with_name("ih_preconditioner.cuh"),SELECTOR,Path(__file__))}
-        eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75',
+        eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',
             '-I'+str(header.parent),'-lcublas','-outdir',str(OUT),str(src),nargout=0)
         eng.addpath(str(OUT),nargout=0)
         rng=np.random.default_rng(20261012)

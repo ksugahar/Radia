@@ -53,7 +53,7 @@ def build(package,out,admission):
     engine=matlab.engine.start_matlab('-nodesktop -nosplash')
     try:
         config,toolchain=configure_engine(engine)
-        flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        flags='NVCCFLAGS=-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         engine.mexcuda('-v','-c','-f',str(config),flags,'-outdir',str(out),str(native/'resident_amg_cuda.cu'),nargout=0)
         obj=out/'resident_amg_cuda.obj';vs=discover_vs();compiler=compiler_bin(vs)
         binary=out/('_resident_amg'+sysconfig.get_config_var('EXT_SUFFIX'))

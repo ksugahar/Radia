@@ -29,7 +29,7 @@ def main():
         src=Path(__file__).with_name('esim_cell_smoke.cu');header=ROOT/'packages/radia-simulink/native/ih_esim_cell.cuh'
         sources=[src,header,SELECTOR,Path(__file__),ROOT/'src/radia/esim_cell_problem.py',ROOT/'src/radia/bh_law.py']
         record.update(source_commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),source_dirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip()),source_sha256={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources})
-        eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75','-I'+str(header.parent),'-outdir',str(OUT),str(src),nargout=0)
+        eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80','-I'+str(header.parent),'-outdir',str(OUT),str(src),nargout=0)
         eng.addpath(str(OUT),nargout=0)
         fields=np.array([1e-3,1.,100.,10000.]);cases=[]
         bh=np.array([[0.,0.],[10.,.02],[100.,.18],[1000.,1.],[10000.,1.5],[100000.,1.65]])
