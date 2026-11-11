@@ -42,9 +42,47 @@ history of the process. This is why earlier notes in this repository
 disagreed ("flattens", "works", "corrupts the mapping"): each described one
 row of the table.
 
-The 2026 induction-heating thermal mesh that reported a 6.9e6 m² boundary
-(2.97e8 × the true 0.0233 m²) is the third row: it was meshed in millimetres
-and rescaled with `ngmesh.Scale(1e-3)`.
+The borrowed geometry need not come from a loaded file: a CSG or OCC
+`GenerateMesh` earlier in the process is borrowed the same way, and curving a
+CAD-free mesh onto a borrowed CSG geometry can crash the process (access
+violation inside `Curve`). Radia's own path loads (the HDiv device prepare and
+`soft_iron_from_vol`) therefore use `radia.mesh_curve.load_vol(path)`, which
+keeps an attached geometry only for an OCC archive restored as `OCCGeometry`, so
+the mesh depends only on the file. A CSG geometry is never kept: Netgen's
+fallback for a tail it does not restore (even one that only starts like
+`csgsurfaces`) is an object of the same class, indistinguishable from a real
+CSG restore. A caller that loads a `.vol` itself uses
+`load_vol` as well (lint rule `radia-vol-mesh-into-curved-route`).
+
+## Where curvature can come from
+
+Curvature is a property of how the mesh was made, not something added later:
+
+| Mesh source | Higher geometry order later |
+| --- | --- |
+| Netgen/OCC `GenerateMesh` in this process | yes: `Curve(p)` onto its own CAD |
+| Netgen/OCC `.vol` that embeds its CAD | yes, explicitly: `ensure_curve_order` (OCC only, with vertex, box and measure checks) |
+| Netgen CSG `.vol` | no: save it after `Curve(p)` in the producing process |
+| Cubit `export netgen ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
+| structured or hand-built mesh (no CAD) | only a straight map, explicitly: `straight_curve_order(mesh, p)` |
+
+No Radia route curves a mesh. The routes that take a mesh object
+(`vim.Solve`, `vim.MagnetizationSource`, `HDivSolver.SolveHysteresis`) and the
+path-based HDiv device prepare require, with `curve_order=2`, a mesh already at
+geometry order 2 and otherwise raise `CurveOrderError`. The native device
+staging, which reopens the `.vol` itself, likewise refuses a stored order other
+than the requested one (`ValueError`) and never curves. A mesh carries no
+reliable provenance (`GetGeometry()` returns the same object for an embedded
+CAD and for one borrowed from another mesh of the process), so curving happens
+where the CAD lives: `Curve(p)` right after `GenerateMesh`, `ensure_curve_order`
+for a Netgen/OCC `.vol`, or the export order for Cubit. A stored order that is
+high enough is used as it is. `load_vol` also refuses a file that changed
+between its provenance read and the load.
+
+A flat model that needs a P2 map, for example to use the curved kernel or to
+carry an analytic `SetDeformation`, calls `straight_curve_order(mesh, 2)`: it
+detaches any attached geometry, own or borrowed, and raises the order of the
+current straight map, which is exact only for flat geometry.
 
 ## Rules
 
@@ -109,6 +147,7 @@ mesh's element maps; this is not implemented for the P1 loop extension.
 | Rule | Severity | Flags |
 | --- | --- | --- |
 | `ngsolve-curve-after-vol-import` | HIGH | `.Curve()` on a mesh created from a `.vol` literal, path variable or `.Load` |
+| `radia-vol-mesh-into-curved-route` | HIGH | a mesh from a plain `Mesh(".vol")`, `Mesh(path)` or `.Load` passed to a call with `curve_order` of 2 or more |
 | `netgen-scale-after-generate` | HIGH | `.Scale()` anywhere in a scope on a name that is ever bound to a `GenerateMesh` result (or its alias); flow-insensitive, so a name reused for a shape is reported too |
 | `ngsbem-missing-curvaturesafety` | MODERATE | ngsbem meshes without `curvaturesafety` |
 | `curve-without-export-curved` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export |
@@ -121,8 +160,6 @@ from a function argument; route such code through `ensure_curve_order`.
 These call `Curve` on meshes that may have been loaded; they were not changed
 together with this page and should move to `ensure_curve_order`:
 
-- `src/radia/vim/_vim.py` `_curve_mesh` (no-op when the stored order suffices,
-  otherwise curves a possibly loaded mesh),
 - `packages/radia-mcp/.../vol2d_scalar.py`, `vol2d_thermal.py`,
   `vol2d_circuit.py` (`mesh.Curve(order)` after loading a `.vol`),
 - `gmsh_post_export.vol2msh(..., mesh_curve_order>=2)`.

@@ -298,6 +298,13 @@ on:
       - 'tools/regression_lock.py'
       - 'src/radia/hdiv_gpu.py'
       - 'tests/test_hdiv_gpu_mesh_integration.py'
+      - 'tools/netgen_overlay.py'
+      - 'tools/patches/netgen-pyramid.patch'
+      - 'tests/test_curve_order_contract.py'
+      - 'tests/test_cubit_mesh_quality.py'
+      - 'tests/test_netgen_overlay_tool.py'
+      - 'tests/fixtures/cubit/**'
+      - 'validation_test/hdiv_cuda/run_installed.py'
       - '!**/*.md'
   push:
     branches: [main]
@@ -596,6 +603,13 @@ on:
       - 'tools/regression_lock.py'
       - 'src/radia/hdiv_gpu.py'
       - 'tests/test_hdiv_gpu_mesh_integration.py'
+      - 'tools/netgen_overlay.py'
+      - 'tools/patches/netgen-pyramid.patch'
+      - 'tests/test_curve_order_contract.py'
+      - 'tests/test_cubit_mesh_quality.py'
+      - 'tests/test_netgen_overlay_tool.py'
+      - 'tests/fixtures/cubit/**'
+      - 'validation_test/hdiv_cuda/run_installed.py'
       - '!**/*.md'
   schedule:
     - cron: '17 16 * * *'
@@ -648,7 +662,8 @@ jobs:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
-    timeout-minutes: 45
+    # Pull requests stop after the numerical contracts; other events add solver-heavy validation.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 120 }}
     env:
       RADIA_VALIDATION_HOST_ROLE: cpu_validation
       # Bound library pools before the parent and its fresh Python children
@@ -697,8 +712,102 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
         shell: pwsh
         run: |
-          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.3.1
+          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
           exit $LASTEXITCODE
+
+      # Patched Netgen runtime (6.2.2608 + pyramid apex clamp + base-edge blend):
+      # the checker refuses pyramid meshes on the stock library. The library lives in
+      # a per-run, per-attempt directory; the cache only carries it through a fixed
+      # transfer directory in this job's own runner scratch, which must not exist
+      # before the restore and is never deleted here.
+      - name: Prepare the patched Netgen paths
+        id: netgen-overlay-paths
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        shell: pwsh
+        run: |
+          # The runner empties RUNNER_TEMP for every job, so a transfer directory present
+          # before the restore was not made by this job: refuse it rather than delete it.
+          $runnerTemp = Get-Item -LiteralPath $env:RUNNER_TEMP -Force
+          if ($runnerTemp.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$env:RUNNER_TEMP is a link; refusing the Netgen transfer" }
+          $transfer = Join-Path $runnerTemp.FullName 'radia-netgen-overlay-cache'
+          if (Test-Path -LiteralPath $transfer) { throw "$transfer exists before the restore; this job cannot prove it owns it" }
+          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $overlay) { throw "$overlay already exists; this attempt's library must start empty" }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $toolset = (Get-Content -LiteralPath (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14\.44\.[0-9]+$') { throw "MSVC 14.44 required for the Netgen library, found $toolset" }
+          "overlay=$overlay" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "toolset=$toolset" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "vcvars=$(Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat')" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Restore the patched Netgen library
+        id: netgen-overlay-cache
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/radia-netgen-overlay-cache
+          key: netgen-overlay-${{ runner.os }}-msvc${{ steps.netgen-overlay-paths.outputs.toolset }}-${{ hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch') }}
+
+      - name: Stage the cached Netgen library
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+          New-Item -ItemType Directory -Path $overlay | Out-Null
+          $transfer = Get-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache') -Force
+          $entries = @(Get-ChildItem -LiteralPath $transfer.FullName -Force)
+          if (($transfer.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+              (($entries | ForEach-Object Name | Sort-Object) -join ',') -ne 'netgen-overlay.json,nglib.dll' -or
+              @($entries | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count) {
+            throw "The restored Netgen transfer is not exactly the library and its receipt: $($entries.Name -join ', ')"
+          }
+          Copy-Item -LiteralPath (Join-Path $transfer.FullName 'nglib.dll'), (Join-Path $transfer.FullName 'netgen-overlay.json') -Destination $overlay
+
+      - name: Build the patched Netgen library
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $vcvars = '${{ steps.netgen-overlay-paths.outputs.vcvars }}'
+          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $bat = Join-Path $env:RUNNER_TEMP "build-netgen-overlay-$env:GITHUB_RUN_ID.cmd"
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install the patched Netgen library into the CI venv
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        shell: pwsh
+        run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          # install re-verifies the receipt (upstream SHA, patch hash, library hash) of a restored library.
+          & $ciPython tools/netgen_overlay.py install --overlay '${{ steps.netgen-overlay-paths.outputs.overlay }}' --python $ciPython
+          if ($LASTEXITCODE -ne 0) { throw 'Patched Netgen install failed' }
+          & $ciPython -c "from cubit_mesh_export.check import require_pyramid_netgen; require_pyramid_netgen(); print('patched Netgen pyramid runtime OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'The CI venv does not evaluate pyramids with the patched Netgen' }
+
+      # Save as soon as the built library passes its probe, so a later test failure
+      # does not force the next run to rebuild it.
+      - name: Hand the built Netgen library to the cache
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+          $transfer = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache')
+          Copy-Item -LiteralPath (Join-Path $overlay 'nglib.dll'), (Join-Path $overlay 'netgen-overlay.json') -Destination $transfer
+
+      - name: Save the patched Netgen library
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true') && steps.netgen-overlay-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/radia-netgen-overlay-cache
+          key: ${{ steps.netgen-overlay-cache.outputs.cache-primary-key }}
 
       - name: Install Gmsh post-processing reference separately
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'
@@ -800,9 +909,11 @@ jobs:
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
+      # Solver-heavy validation runs on main pushes, the nightly schedule and dispatch,
+      # never as a pull-request gate; the merged source is validated on main.
       - name: Validate solver-heavy source or verify trusted prior evidence
         id: heavy-validation
-        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
+        if: github.event_name != 'pull_request' && steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src'
@@ -816,8 +927,8 @@ jobs:
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $forceArgs = @()
-          # Exact per-case source/environment fingerprints govern trusted reuse; PRs are not forced.
-          if ('${{ github.event_name }}' -notin @('push','pull_request') -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
+          # Exact per-case source/environment fingerprints govern trusted reuse; main pushes are not forced.
+          if ('${{ github.event_name }}' -ne 'push' -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
           python tools/validation_source_gate.py --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $verification = Get-Content -Raw "$env:RUNNER_TEMP/solver-heavy-validation/verification.json" | ConvertFrom-Json

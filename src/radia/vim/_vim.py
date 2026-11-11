@@ -34,7 +34,8 @@ DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the n
 """
 import numpy as np
 import scipy.sparse as sp
-from netgen.meshing import EdgeDescriptor
+
+from radia.mesh_curve import CurveOrderError
 
 from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import _material_rule_space, _rule_integrator
@@ -63,45 +64,25 @@ def _volume_vertex_counts(mesh):
     return frozenset(int(value) for value in _rp._volume_element_vertex_counts(mesh))
 
 
-def _curve_mesh(mesh, order):
-    """Apply Curve after satisfying NGSolve 6.2.2606 edge descriptors.
+def _require_curve_order(mesh, order, entry):
+    """Refuse a mesh object below geometry order ``order``; Radia does not curve it.
 
-    A mesh already curved to ``order`` or higher is left alone: a loaded
-    high-order ``.vol`` has no CAD callback, so a second ``Curve`` would
-    replace its stored geometry instead of refining it.
+    A mesh object carries no provenance: ``GetGeometry()`` returns the same
+    object for an embedded CAD and for one borrowed from another mesh of the
+    process, and curving onto a borrowed geometry projects onto a foreign shape
+    or crashes inside ``Curve``. The caller curves where the CAD lives.
     """
-    if int(mesh.GetCurveOrder()) >= int(order):
-        return
-    ngmesh = mesh.ngmesh
-    if not ngmesh.EdgeDescriptors():
-        if ngmesh.dim == 2:
-            for index, name in enumerate(mesh.GetBoundaries(), start=1):
-                descriptor = EdgeDescriptor()
-                descriptor.edgenr = index
-                descriptor.surfnr = (1, -1)
-                descriptor.domin = 1
-                descriptor.domout = 0
-                descriptor.name = name
-                added = ngmesh.Add(descriptor)
-                if added != index:
-                    raise RuntimeError(
-                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
-        elif ngmesh.dim == 3:
-            for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
-                descriptor = EdgeDescriptor()
-                descriptor.edgenr = index
-                descriptor.surfnr = (face.surfnr, -1)
-                descriptor.domin = face.domin
-                descriptor.domout = face.domout
-                descriptor.name = face.bcname or f"boundary_{index}"
-                added = ngmesh.Add(descriptor)
-                if added != index:
-                    raise RuntimeError(
-                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
-        else:
-            raise ValueError(f"unsupported mesh dimension for Curve: {ngmesh.dim}")
-    mesh.Curve(int(order))
-    return mesh
+    current = int(mesh.GetCurveOrder())
+    if current >= int(order):
+        return mesh
+    raise CurveOrderError(
+        f"{entry}: curve_order={int(order)} needs a mesh already at geometry order {int(order)}; "
+        f"this one is at {current}. Radia does not curve a mesh object, because its geometry may "
+        f"be borrowed from another mesh of the process. Curve it where its CAD lives "
+        f"(Curve({int(order)}) right after GenerateMesh, or radia.mesh_curve.ensure_curve_order for "
+        f"a Netgen/OCC .vol), export a Cubit mesh at that order (export netgen ... order "
+        f"{int(order)}), or call radia.mesh_curve.straight_curve_order(mesh, {int(order)}) for flat "
+        f"geometry.")
 
 
 # ------------------------------------------------------------------ reference Gauss-Duffy quadrature

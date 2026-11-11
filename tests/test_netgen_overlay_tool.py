@@ -1,6 +1,6 @@
 """The patched Netgen library reaches a run-local environment only through its receipt.
 
-Guards: the patch changes the pyramid scale and nothing else; a changed library, a receipt from
+Guards: the patch is the pyramid apex clamp and the base-edge blend and nothing else; a changed library, a receipt from
 another patch, a shared interpreter, a package outside the environment or another Netgen version
 is refused; install replaces nglib.dll alone; the installed lane refuses a stock library.
 Assumes: nothing is compiled here. That the patched library meets the 1e-11 criterion is shown by
@@ -35,13 +35,17 @@ def _overlay(tmp_path, library=b"patched"):
     return root
 
 
-def test_patch_changes_the_pyramid_scale_and_nothing_else():
+def test_patch_is_the_apex_clamp_and_the_base_edge_blend():
     lines = overlay_tool.PATCH.read_text(encoding="utf-8").splitlines()
-    files = [line for line in lines if line.startswith("diff --git")]
+    files = [line.split()[-1] for line in lines if line.startswith("diff --git")]
     removed = [line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")]
-    assert files == ["diff --git a/libsrc/meshing/curvedelems.cpp b/libsrc/meshing/curvedelems.cpp"], files
-    assert removed == ["z *= (1-1e-10);"], removed
-    assert sum(line.startswith("@@") for line in lines) == 1, lines
+    added = [line[1:].strip() for line in lines if line.startswith("+") and not line.startswith("+++")]
+    assert files == ["b/libsrc/core/autodiffdiff.hpp", "b/libsrc/meshing/curvedelems.cpp",
+                     "b/libsrc/meshing/meshtype.cpp"], files
+    assert "z *= (1-1e-10);" in removed and not any("1e-10" in line for line in added), added
+    assert sum("ClampPyramidApex" in line for line in added) >= 2, added
+    assert any(line.startswith("auto blend = lambda[vi1]+lambda[vi2];") for line in added), added
+    assert any("blend*shape" in line for line in added), added
 
 
 @pytest.mark.parametrize("field,value,message", [("library_sha256", "0"*64, "Overlay library"), ("patch_sha256", "0"*64, "Overlay patch"),

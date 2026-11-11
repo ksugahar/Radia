@@ -1047,9 +1047,10 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
                                q2_deformation=None):
     """FE operators plus the primitive device-Gram payload; no CPU Gram or H-matrix.
 
-    ``curve_order=2`` curves the FE mesh and the native staging mesh with
-    NGSolve ``Curve(2)``; sources, mean field, tables and geometry then all
-    refer to the curved mesh. The geometry family (``family``) follows from
+    ``curve_order=2`` requires a ``.vol`` stored at geometry order 2 (a Cubit
+    export at order 2, a Netgen mesh saved after ``Curve(2)``); a loaded mesh is
+    never curved here. Sources, mean field, tables and geometry then all refer
+    to the stored curved map. The geometry family (``family``) follows from
     the mesh: pure TET by curve order, pure HEX as ``hex``, and a straight mesh
     with pyramids, or with both tets and hexes, as ``mixed``.
 
@@ -1069,13 +1070,14 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     staged ones and sources and mean field refer to the deformed mesh.
     """
     import ngsolve as ng
-    from radia.vim._vim import (_curve_mesh, _prepare_gpu_charge_inputs, _prepare_gpu_curved_charge_inputs,
+    from radia.mesh_curve import load_vol
+    from radia.vim._vim import (_prepare_gpu_charge_inputs, _require_curve_order, _prepare_gpu_curved_charge_inputs,
                                 _prepare_gpu_hex_charge_inputs, _prepare_gpu_mixed_charge_inputs)
     aca = _checked_gram_compression(compression, aca)
     if compression == _GRAM_EXPANSION and images is not None and images.terms is not None:
         raise NotImplementedError("gram_compression='hca' has no image route: the kernel expansion reads the direct term only")
     curve_order = _checked_curve_order(curve_order, order)
-    mesh = ng.Mesh(str(path))
+    mesh = load_vol(path)
     family = _mesh_family(mesh, curve_order, order)
     image_terms = None if images is None else images.checked_terms(mesh, order, family)
     periodic = () if images is None else images.periodic
@@ -1084,7 +1086,7 @@ def _prepare_device_components(path, order, native, *, aca, compression=_GRAM_CO
     # A deformed mesh stages on its straight lattices: only the geometry is replaced below.
     staged_curve = 1 if q2_deformation is not None else curve_order
     if staged_curve == 2:
-        _curve_mesh(mesh, 2)
+        _require_curve_order(mesh, 2, "HDiv device prepare")
     fes = ng.HDiv(mesh, order=order)
     evaluation = _device_evaluation_tables(path, fes, native, staged_curve, family, periodic)
     numbering = _reduced_numbering(fes, images.reduced_space(mesh, order), mesh) if periodic else None

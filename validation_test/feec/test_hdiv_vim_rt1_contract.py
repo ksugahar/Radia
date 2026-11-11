@@ -81,6 +81,7 @@ def test_curved_image_symmetry_is_wired():
     """Curve(2) and IMA share the configured C++ solve and field evaluator."""
     mesh = _half_box()
     with ng.TaskManager():
+        mesh.Curve(2)  # curved where the CAD lives; Solve does not curve a mesh object
         result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x", curve_order=2)
     assert result["curve_order"] == 2 and result["image"] == "+x"
     assert result["symmetry_constrained_dofs"] > 0

@@ -14,6 +14,7 @@ from netgen.meshing import (  # noqa: E402
 )
 
 from radia import vim  # noqa: E402
+from radia.mesh_curve import straight_curve_order  # noqa: E402
 
 
 def _mirror_pair(full):
@@ -33,7 +34,8 @@ def _mirror_pair(full):
     else:
         mesh.Add(Element2D(1, [points[i] for i in (0, 2, 1)]))
     mesh.SetMaterial(1, "iron")
-    return ng.Mesh(mesh)
+    # Flat tetrahedra: the curved RT2 kernel runs on an explicit straight P2 map.
+    return straight_curve_order(ng.Mesh(mesh), 2)
 
 
 def test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff():

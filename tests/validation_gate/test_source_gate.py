@@ -100,6 +100,69 @@ def test_source_scope_includes_physics_inputs_but_not_workflow_routing(tmp_path,
     assert gate.source_fingerprint(tmp_path,{'deps':'2'})[0]!=initial
 
 
+def test_netgen_library_bytes_separate_reuse_between_runtimes(tmp_path,monkeypatch):
+    """Guards: stock, apex-only and blended Netgen libraries share netgen-mesher==6.2.2608,
+    so only the loaded library bytes keep one runtime from reusing another's receipt."""
+    venv=tmp_path/'venv';package=venv/'Lib/site-packages/netgen';package.mkdir(parents=True)
+    (package/'__init__.py').write_text('')
+    monkeypatch.setattr(gate.sys,'prefix',str(venv))
+    monkeypatch.setattr(gate.importlib.util,'find_spec',
+                        lambda name:type('Spec',(),{'submodule_search_locations':[str(package)]})())
+    monkeypatch.setattr(gate.importlib.metadata,'version',lambda name:'6.2.2608')
+    monkeypatch.setattr(gate.importlib,'import_module',lambda name:None)
+    monkeypatch.setattr(gate,'loaded_libraries',lambda name:[(package/name).resolve()])
+    files={'src/solver.py':'physics','tools/validation_source_gate.py':'gate'}
+    for path,text in files.items():
+        p=tmp_path/path;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
+    (tmp_path/'tests').mkdir()
+    (tmp_path/'tests/test_tier_manifest.json').write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(files) if args[0]=='ls-files' and '--others' not in args else '')
+    fingerprints={}
+    for runtime in ('stock','apex-only','blended'):
+        (package/'nglib.dll').write_bytes(runtime.encode())
+        record=gate.netgen_runtime()
+        assert record=={'package':'netgen-mesher','version':'6.2.2608','library':'nglib.dll',
+                        'sha256':gate.digest(runtime.encode())}, record
+        fingerprints[runtime]=gate.source_fingerprint(tmp_path,{'netgen_runtime':record})[0]
+    assert len(set(fingerprints.values()))==3, fingerprints
+    import inspect
+    assert "'netgen_runtime':netgen_runtime()" in inspect.getsource(gate.environment_contract)
+    (package/'nglib.dll').unlink()
+    with pytest.raises(ValueError,match='expected one unlinked Netgen library'):
+        gate.netgen_runtime()
+    monkeypatch.setattr(gate.sys,'prefix',str(tmp_path/'other'))
+    (package/'nglib.dll').write_bytes(b'stock')
+    with pytest.raises(ValueError,match='not owned by the active venv'):
+        gate.netgen_runtime()
+
+
+@pytest.mark.parametrize('bound', ['elsewhere','two','none'])
+def test_netgen_identity_needs_the_loader_to_bind_the_venv_library(tmp_path,monkeypatch,bound):
+    """Guards: a reusable Netgen identity names only bytes the loader actually bound; a library
+    loaded from outside the venv, two copies or none refuse it instead of trusting the file."""
+    venv=tmp_path/'venv';package=venv/'netgen';package.mkdir(parents=True)
+    (package/'nglib.dll').write_bytes(b'patched')
+    other=tmp_path/'stock/nglib.dll';other.parent.mkdir();other.write_bytes(b'stock')
+    monkeypatch.setattr(gate.sys,'prefix',str(venv))
+    monkeypatch.setattr(gate.importlib.util,'find_spec',
+                        lambda name:type('Spec',(),{'submodule_search_locations':[str(package)]})())
+    imported=[]
+    monkeypatch.setattr(gate.importlib,'import_module',imported.append)
+    paths={'elsewhere':[other.resolve()],'two':[other.resolve(),(package/'nglib.dll').resolve()],'none':[]}[bound]
+    monkeypatch.setattr(gate,'loaded_libraries',lambda name:sorted(paths))
+    with pytest.raises(ValueError,match='the loader bound'):
+        gate.netgen_runtime()
+    assert imported==['netgen.libngpy'], imported
+
+
+@pytest.mark.skipif(gate.sys.platform!='win32',reason='Windows loader probe')
+def test_loaded_library_probe_reads_this_process():
+    """Guards: the probe lists modules from the Windows loader, by canonical path and name."""
+    found=gate.loaded_libraries('KERNEL32.DLL')
+    assert len(found)==1 and found[0].name.lower()=='kernel32.dll' and found[0].is_file(), found
+    assert gate.loaded_libraries('no-such-module.dll')==[]
+
+
 @pytest.mark.parametrize('lookup', ['miss','error','force','unknown'])
 def test_miss_unknown_force_execute_validation(tmp_path,monkeypatch,lookup):
     monkeypatch.setattr(gate,'git',lambda *a:'a'*40)
@@ -232,6 +295,8 @@ def test_git_scan_covers_whole_repository_and_ignored_inputs(tmp_path, ignored):
 def build_environment(tmp_path, monkeypatch, flags=''):
     monkeypatch.setattr(gate,'validated_native_inputs',lambda root:set())
     monkeypatch.setattr(gate,'mkl_build_copy',lambda root:{'package':'mkl','version':'test','sha256':'a'*64})
+    # The source-only lane forbids importing Netgen; the real probe is guarded above and runs in the gate.
+    monkeypatch.setattr(gate,'netgen_runtime',lambda:{'package':'netgen-mesher','version':'test','library':'nglib.dll','sha256':'b'*64})
     monkeypatch.setattr(gate.importlib.metadata,'distributions',lambda:[])
     for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS'):
         monkeypatch.setenv(key,'1')

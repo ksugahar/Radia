@@ -6,7 +6,7 @@ from math import pi
 
 from ._hysteresis import PlayHysteresisMaterial, SolveHysteresis
 from ._solve import hdiv_demag_solve
-from ._vim import _curve_mesh
+from ._vim import _require_curve_order
 
 
 class HDivSolver:
@@ -157,8 +157,8 @@ class HDivSolver:
         if self.curve_gauss != 8:
             raise NotImplementedError(
                 "vim.HDivSolver.SolveHysteresis currently uses curve_gauss=8")
-        if self.curve_order == 2 and int(self.mesh.GetCurveOrder()) < 2:
-            _curve_mesh(self.mesh, 2)
+        if self.curve_order == 2:
+            _require_curve_order(self.mesh, 2, "vim.HDivSolver.SolveHysteresis")
         material, nu0 = self._material_and_nu0(play, material, nu0)
         cache = self._history_caches.get(nu0)
         result = SolveHysteresis(
