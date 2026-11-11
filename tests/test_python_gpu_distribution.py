@@ -25,13 +25,13 @@ def load(name):
 def record(name, data, source="a" * 40):
     return dict(schema="radia.native-build-provenance.v1", source_commit=source,
                 source_dirty=False, binary_name=name, binary_sha256=hashlib.sha256(data).hexdigest(),
-                architectures=["80"], ptx_architectures=[],
+                architectures=["80"], ptx_architectures=["80"],
                 fault_injection=False, device_fault_injection=False, lifecycle_diagnostic=False,
                 source_hashes={"src/core/gpu/kernel.cu": "b" * 64},
                 pybind_header_hashes={"pybind11/header.h": "c" * 64})
 
 
-@pytest.mark.parametrize("mutation", ["none", "missing", "source", "hash", "architecture", "diagnostic", "private"])
+@pytest.mark.parametrize("mutation", ["none", "missing", "source", "hash", "architecture", "ptx", "diagnostic", "private"])
 def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutation):
     payload = load("python_gpu_payload")
     verifier = load("verify_cpu_wheel")
@@ -51,6 +51,7 @@ def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutati
                 if mutation == "source": receipt["source_commit"] = "d" * 40
                 if mutation == "hash": receipt["binary_sha256"] = "0" * 64
                 if mutation == "architecture": receipt["architectures"] = ["75"]
+                if mutation == "ptx": receipt["ptx_architectures"] = []
                 if mutation == "diagnostic": receipt["fault_injection"] = True
             z.writestr("radia/" + name, data)
             z.writestr("radia/" + name + ".build.json", json.dumps(receipt))
@@ -86,7 +87,7 @@ def test_stage_validates_all_members_before_copying(tmp_path):
 
 
 @pytest.mark.parametrize("mutate_sdk", [False, True])
-def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monkeypatch, mutate_sdk):
+def test_builder_compiles_sm80_with_recorded_compute80_ptx(tmp_path, monkeypatch, mutate_sdk):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "identity", lambda: "a" * 40)
     monkeypatch.setattr(builder, "admission", lambda *a: {"owner": "fixture"})
@@ -127,6 +128,8 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     assert [arg for arg in cuda if "code=compute_" in arg] == [
         "-gencode=arch=compute_80,code=compute_80"
     ], cuda
+    receipts = list((tmp_path / "built").glob("*.pyd.build.json"))
+    assert [json.loads(r.read_text())["ptx_architectures"] for r in receipts] == [["80"]], receipts
     assert "/MD" in cuda, cuda
     assert cuda[0] == str(matlab / "sys/cuda/win64/cuda/bin/nvcc.exe")
     assert cuda[cuda.index("--libdevice-directory") + 1] == str(matlab / "bin/win64")

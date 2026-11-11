@@ -78,7 +78,7 @@ See the [targeted API ownership audit](../api_inventory/API_SURFACE_2026-10-29_H
 The formal Windows release compiles all four Radia Python GPU modules for
 sm_80 only, using `--architectures 80` with the canonical builder; GPU
 development and validation run on the sm_80 validation host.
-No speculative PTX target is included. The native release workflow stages only
+Each Windows module also embeds compute_80 PTX, recorded as `ptx_architectures` in its build receipt; the Linux sm_100 build embeds none. The native release workflow stages only
 same-source binaries and public build receipts, and requires the complete GPU
 inventory when verifying the wheel. `radia[gpu]` installs the pinned pip runtime;
 it does not create native modules that were omitted from a wheel. Build receipts
