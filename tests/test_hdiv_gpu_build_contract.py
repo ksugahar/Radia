@@ -208,3 +208,14 @@ def test_gpu_lane_runs_the_device_boundary_without_a_skip_path():
     assert "validation_test/hmatrix_cuda/run_device_boundary.py" in step, step
     assert "--fault-mex-build" in step and "build_fault_mex.py" not in job, step
     assert "continue-on-error" not in step and "if:" not in step, step
+
+
+def test_a100_acceptance_runs_prebuilt_binaries_only():
+    # Guards: the A100 job executes build-host outputs and never compiles; the IC lifecycle gateway is built on the build host.
+    build = (ROOT / ".github/workflows/radia-simulink.yml").read_text(encoding="utf-8")
+    a100 = (ROOT / ".github/workflows/radia-simulink-a100.yml").read_text(encoding="utf-8")
+    assert "lifecycle_simulation.py --build-only --out build-ic-lifecycle" in build
+    assert "'checkout:build-ic-lifecycle'" in build
+    assert "lifecycle_simulation.py --binary-dir build-ic-lifecycle" in a100
+    compiling = [marker for marker in ("Build.ps1", "--build-only", "mexcuda", "build_python_gpu.py", "build_fault_mex.py", "cmake") if marker in a100]
+    assert compiling == [], compiling

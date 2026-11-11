@@ -4138,7 +4138,7 @@
         "workflow_dispatch": {
           "inputs": {
             "sha": {
-              "description": "Full commit SHA of a successful radia-simulink CI run",
+              "description": "Full commit SHA of a successful radia-simulink push run",
               "required": "true",
               "type": "string"
             }

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full commit SHA of a successful radia-simulink CI run
+        description: Full commit SHA of a successful radia-simulink push run
         required: true
         type: string
 permissions:
@@ -119,7 +119,7 @@ jobs:
         run: |
           python validation_test/ic_cuda/run.py --binary-dir build-cuda-mex --matlab-dir packages/radia-simulink/matlab --out "$env:RUNNER_TEMP/radia-ic-accuracy-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python validation_test/ic_cuda/lifecycle_simulation.py --out "$env:RUNNER_TEMP/radia-ic-lifecycle-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python validation_test/ic_cuda/lifecycle_simulation.py --binary-dir build-ic-lifecycle --out "$env:RUNNER_TEMP/radia-ic-lifecycle-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
       - name: Install and verify the built distribution
         shell: pwsh

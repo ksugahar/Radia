@@ -432,6 +432,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Test-only IC lifecycle gateway; the A100 run executes it without compiling.
+          python validation_test/ic_cuda/lifecycle_simulation.py --build-only --out build-ic-lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $commit = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           function Select-ExactBuild($candidates) {
@@ -561,7 +564,7 @@ jobs:
           $tag = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $hdiv = Split-Path -Leaf (Split-Path -Parent $env:RADIA_HDIV_DEVICE_BUILD)
           $fmm = Split-Path -Leaf $env:RADIA_FMM_BUILD
-          $entries = @('checkout:build-cuda-mex', 'checkout:build-ams-cuda', "checkout:build-fmm-cuda/$fmm",
+          $entries = @('checkout:build-cuda-mex', 'checkout:build-ams-cuda', 'checkout:build-ic-lifecycle', "checkout:build-fmm-cuda/$fmm",
             "temp:$(Split-Path -Leaf $env:RADIA_HDIV_PROJECTION_BUILD)", "temp:$hdiv/mex", "temp:$hdiv/fault",
             "temp:radia-simulink-wheel-$tag")
           $modules = @(git ls-files --others --ignored --exclude-standard -- src/radia | Where-Object { $_ -notmatch '__pycache__' })
