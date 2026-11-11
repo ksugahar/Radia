@@ -33,7 +33,7 @@ python validation_test/ngsolve_cuda_mex/run_poisson.py `
 
 The build stages `radia_cuda_csr_pcg.mexw64` and `build.json` in
 `build-cuda-mex`; it does not replace an installed or loaded gateway. Targets
-are native sm_75 (RTX 5000), sm_80 (A100), and compute_80 PTX. An A100 target
+are native sm_80 (A100) and compute_80 PTX. An A100 target
 in a binary is not evidence of execution on A100.
 
 The MEX accepts resident real `gpuArray` int32 zero-based CSR indices and

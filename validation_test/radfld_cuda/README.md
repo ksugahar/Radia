@@ -23,7 +23,7 @@ artifact/provenance and release gates are added. Published runtimes are unchange
 
 Build on 100 in an isolated clean checkout with `Build.ps1 -FieldCudaOnly
 -RequireNativeProvenance`. MATLAB-supported MSVC/CUDA configurations compile
-sm_75, sm_80 and compute_80 PTX. CUDA multiply-add contraction is disabled;
+sm_80 and compute_80 PTX. CUDA multiply-add contraction is disabled;
 there is no fast-math override. Exact device buffer counts are admitted only
 when max(2 GiB, 20% total GPU memory) remains free. A100 stays off and is never
 connected to by this workflow.

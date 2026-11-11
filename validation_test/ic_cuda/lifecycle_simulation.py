@@ -15,7 +15,7 @@ def check(engine, out):
     if not config.is_file():
         raise RuntimeError('Supported mexcuda MSVC configuration missing')
     engine.mexcuda('-f', str(config), '-DRADIA_IC_LIFECYCLE_TEST',
-                  'NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',
+                  'NVCCFLAGS=-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',
                   '-lcusparse', '-lcublas', '-outdir', str(out), str(source), nargout=0)
     engine.addpath(str(Path(__file__).parent), nargout=0)
     engine.addpath(str(out), '-begin', nargout=0)
