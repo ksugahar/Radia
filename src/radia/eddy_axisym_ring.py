@@ -156,6 +156,9 @@ def _check_exterior_arc(mesh, radius, center_z):
     """
     import ngsolve as ng
 
+    if not (np.isfinite(radius) and radius > 0 and np.isfinite(center_z)):
+        raise ValueError("exterior_radius must be finite and positive and "
+                         "exterior_center_z finite")
     names = set(mesh.GetBoundaries())
     if "outer" not in names:
         raise ValueError("the mesh has no boundary named 'outer'")
@@ -170,22 +173,31 @@ def _check_exterior_arc(mesh, radius, center_z):
                               definedon=outer, order=order))
     rms = (max(miss, 0.0) / max(length, 1e-300)) ** 0.5 / radius
     cover = length / (np.pi * radius) - 1.0
-    poles = []
-    for el in mesh.Elements(ng.BND):
-        if el.mat == "axis":
-            poles.extend(mesh[v].point for v in el.vertices)
-    poles = np.array(poles, dtype=float)
-    reach = (float(np.max(np.abs(poles[:, 1] - center_z))) / radius - 1.0
-             if poles.size else -1.0)
-    if (rms > _ARC_TOLERANCE or abs(cover) > _ARC_TOLERANCE
-            or abs(reach) > _ARC_TOLERANCE
-            or float(np.max(np.abs(poles[:, 0]))) > _ARC_TOLERANCE * radius):
+    # The axis must be the whole segment between the poles: its length is
+    # 2R, it lies on r = 0, and its extreme points are the poles.
+    axis = mesh.Boundaries("axis")
+    axis_length = float(ng.Integrate(ng.CF(1.0), mesh, ng.BND,
+                                     definedon=axis, order=order))
+    axis_off = float(ng.Integrate(ng.x * ng.x, mesh, ng.BND,
+                                  definedon=axis, order=order))
+    ends = np.array([mesh[v].point for el in mesh.Elements(ng.BND)
+                     if el.mat == "axis" for v in el.vertices], dtype=float)
+    axis_cover = axis_length / (2.0 * radius) - 1.0
+    axis_rms = (max(axis_off, 0.0) / max(axis_length, 1e-300)) ** 0.5 / radius
+    pole_miss = (max(abs(float(ends[:, 1].max()) - (center_z + radius)),
+                     abs(float(ends[:, 1].min()) - (center_z - radius)))
+                 / radius if ends.size else np.inf)
+    diagnostics = (rms, cover, axis_cover, axis_rms, pole_miss)
+    if not all(np.isfinite(d) and abs(d) <= _ARC_TOLERANCE
+               for d in diagnostics):
         raise ValueError(
-            f"'outer' is not the mapped semicircle of radius {radius} about "
-            f"z = {center_z}: rms miss {rms:.2e}, coverage {cover:+.2e}, "
-            f"axis reach {reach:+.2e} (tolerance {_ARC_TOLERANCE:.0e}); "
-            "a chordal or partial boundary is not the exterior the DtN term "
-            "assumes -- curve the mesh")
+            f"'outer' and 'axis' are not the mapped half disk of radius "
+            f"{radius} about z = {center_z}: outer rms miss {rms:.2e}, "
+            f"outer coverage {cover:+.2e}, axis coverage {axis_cover:+.2e}, "
+            f"axis offset {axis_rms:.2e}, pole miss {pole_miss:.2e} "
+            f"(tolerance {_ARC_TOLERANCE:.0e}); a chordal, partial or "
+            "mislabelled boundary is not the exterior the DtN term "
+            "assumes")
 
 
 def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
