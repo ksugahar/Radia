@@ -25,7 +25,7 @@ def load(name):
 def record(name, data, source="a" * 40):
     return dict(schema="radia.native-build-provenance.v1", source_commit=source,
                 source_dirty=False, binary_name=name, binary_sha256=hashlib.sha256(data).hexdigest(),
-                architectures=["75", "80"], ptx_architectures=[],
+                architectures=["80"], ptx_architectures=[],
                 fault_injection=False, device_fault_injection=False, lifecycle_diagnostic=False,
                 source_hashes={"src/core/gpu/kernel.cu": "b" * 64},
                 pybind_header_hashes={"pybind11/header.h": "c" * 64})
@@ -112,7 +112,7 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
         fixture.write_bytes(b"#define CUDA_VERSION 12080\n" if relative.endswith("cuda.h") else b"synthetic SDK input")
     monkeypatch.setattr(sys, "argv", ["builder", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl"),
-        "--architectures", "75", "80", "--output", str(tmp_path / "built"),
+        "--architectures", "80", "--output", str(tmp_path / "built"),
         "--admission", str(tmp_path / "admission"), "--admission-sha256", "a" * 64,
         "--components", "_gpu_csr"])
     if mutate_sdk:
@@ -122,9 +122,11 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
         return
     builder.main()
     cuda = commands[0]
-    assert "-gencode=arch=compute_75,code=sm_75" in cuda, cuda
+    assert not any("sm_75" in arg for arg in cuda), cuda
     assert "-gencode=arch=compute_80,code=sm_80" in cuda, cuda
-    assert not any("code=compute_" in arg for arg in cuda), cuda
+    assert [arg for arg in cuda if "code=compute_" in arg] == [
+        "-gencode=arch=compute_80,code=compute_80"
+    ], cuda
     assert "/MD" in cuda, cuda
     assert cuda[0] == str(matlab / "sys/cuda/win64/cuda/bin/nvcc.exe")
     assert cuda[cuda.index("--libdevice-directory") + 1] == str(matlab / "bin/win64")
@@ -135,7 +137,7 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     assert identity["files"]["libdevice"]["sha256"] == builder.sha(matlab / "bin/win64/libdevice.10.bc")
 
 
-@pytest.mark.parametrize("architectures", [["75"], ["80"], ["75", "75"], ["80", "75"], ["75", "80", "90"]])
+@pytest.mark.parametrize("architectures", [["75"], ["75", "80"], ["80", "80"], ["80", "90"], ["75", "80", "90"]])
 def test_windows_release_rejects_incomplete_or_implicit_architectures(tmp_path, monkeypatch, architectures):
     builder = load("build_python_gpu")
     monkeypatch.setattr(builder, "capture", lambda cmd: "Cuda compilation tools, release 12.8, V12.8")
