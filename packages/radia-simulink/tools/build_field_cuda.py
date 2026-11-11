@@ -65,7 +65,7 @@ def main():
                 subprocess.run(['cmd', '/c', str(batch)], stdout=log, stderr=subprocess.STDOUT, check=True)
             objects.append(str(obj))
         # No fast math: match the CPU operation order, including compensated sums.
-        flags = ('NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75 '
+        flags = ('NVCCFLAGS=--fmad=false '
                  '-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80')
         eng.mexcuda('-v', '-f', str(config), flags, f'-I{core}', '-outdir', str(out),
                     str(package/'native/radia_cuda_field.cu'), *objects, nargout=0)
@@ -76,7 +76,7 @@ def main():
         binary = out/'radia_cuda_field.mexw64'
         record = dict(accepted=True,build_admission=admission,schema='radia.field-cuda-build.v1', source_commit=commit, source_dirty=dirty,
                       source_sha256=hashes, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
-                      matlab=eng.version(), cuda_targets=['sm_75', 'sm_80', 'compute_80 PTX'],
+                      matlab=eng.version(), cuda_targets=['sm_80', 'compute_80 PTX'],
                       source_representation='existing retained point cloud only',
                       cpu_fallback=False, python_runtime_required=False, taskmanager_regions=False)
         (out/'build.json').write_text(json.dumps(record, indent=2)+'\n', encoding='utf-8')

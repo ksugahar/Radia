@@ -100,3 +100,28 @@ def test_schedule_fails_without_required_wheel(monkeypatch):
     monkeypatch.setattr(gpu, 'request', lambda route: b'{"artifacts": []}')
     with pytest.raises(ValueError, match='No main SHA'):
         gpu.newest_main_sha()
+
+
+def test_compute_bundle_round_trip_and_refusals(tmp_path):
+    """Guards: the build-host bundle restores the exact trees on the compute host and never escapes or overwrites."""
+    root, temp, sha = tmp_path / 'build', tmp_path / 'temp', 'a' * 40
+    (root / 'build-x/sub').mkdir(parents=True)
+    (temp / 'projection-1').mkdir(parents=True)
+    (root / 'build-x/sub/gateway.mexw64').write_bytes(b'mex')
+    (temp / 'projection-1/build.json').write_text('{}')
+    sealed = root / 'bundle'
+    gpu.bundle(sealed, root, temp, ['checkout:build-x', 'temp:projection-1'])
+    gpu.seal(sealed, sha)
+    for index, entry in enumerate(['checkout:../x', 'checkout:.', 'temp:missing', 'other:x']):
+        with pytest.raises(ValueError):
+            gpu.bundle(tmp_path / f'bad{index}', root, temp, [entry])
+    compute, scratch = tmp_path / 'compute', tmp_path / 'scratch'
+    compute.mkdir()
+    scratch.mkdir()
+    with pytest.raises(ValueError, match='source mismatch'):
+        gpu.unbundle(sealed, 'b' * 40, compute, scratch)
+    with pytest.raises(ValueError, match='would overwrite'):
+        gpu.unbundle(sealed, sha, root, temp)
+    gpu.unbundle(sealed, sha, compute, scratch)
+    assert (compute / 'build-x/sub/gateway.mexw64').read_bytes() == b'mex'
+    assert (scratch / 'projection-1/build.json').read_text() == '{}'

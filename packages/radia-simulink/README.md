@@ -104,7 +104,7 @@ interpreter initialization, or Python-generated solver snapshot. Native-library
 deployment/packaging acceptance is separate from numerical candidate validation.
 Optional
 `radia-simulink[coupling]` installs Radia for workflows that explicitly need it.
-The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
+The Windows x64 binary contains sm_80 code and compute_80 PTX.
 Develop and build `radia-simulink` on 100. Required release acceptance compares each
 published CUDA solver against Python/NGSolve on 100 (Quadro RTX 5000), and
 requires an independent review of the exact source. Record source/runtime

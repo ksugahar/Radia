@@ -194,3 +194,23 @@ def test_coexistence_rejects_colliding_or_missing_public_types(failure):
                "_gpu_ams": SimpleNamespace(Resident=ams)}
     with pytest.raises(RuntimeError, match="distinct Resident types"):
         checker.resident_types(modules)
+
+
+def test_every_cuda_build_targets_the_a100_floor_or_newer():
+    """Guards: GPU development starts at the A100 (sm_80); no build script compiles an older native target.
+
+    Assumes: build commands are written as nvcc -gencode/arch literals or CMake architecture lists.
+    """
+    import re
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    tracked = subprocess.check_output(["git", "-C", str(root), "ls-files", "--", "*.py", "*.ps1", "*.m", "*.cmake",
+                                       "CMakeLists.txt", "*/CMakeLists.txt", "*.yml"], text=True).split()
+    older = re.compile(r"(?:compute|sm)_(?:[1-6][0-9]|7[0-9])\b|CUDA_ARCHITECTURES[^\n]*\b(?:[1-6][0-9]|7[0-9])\b")
+    found = []
+    for name in tracked:
+        if name.startswith("tests/"):
+            continue  # recorded evidence fixtures name the device they ran on
+        text = (root / name).read_text(encoding="utf-8", errors="replace")
+        found += [f"{name}:{number}" for number, line in enumerate(text.splitlines(), 1) if older.search(line)]
+    assert found == [], found

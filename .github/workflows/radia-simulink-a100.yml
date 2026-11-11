@@ -1,0 +1,163 @@
+name: radia-simulink A100 GPU acceptance
+# Runs the GPU acceptance of one radia-simulink CI run on the A100. The build host
+# compiled and packaged that commit; this workflow never compiles and never gates a PR.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA of a successful radia-simulink CI run
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: radia-simulink-a100
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
+    timeout-minutes: 100
+    env:
+      ACCEPTANCE_SHA: ${{ inputs.sha }}
+    steps:
+      - name: Initialize runner-owned CI scratch
+        shell: pwsh
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          if ($env:ACCEPTANCE_SHA -notmatch '^[0-9a-f]{40}$') { throw 'Expected a full commit SHA' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - name: Restore LF text in the reused runner workspace
+        shell: pwsh
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((git rev-parse HEAD) -ne $env:ACCEPTANCE_SHA) { throw 'Checkout is not the requested commit' }
+      - name: Fetch and restore the hash-verified compute bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $input = Join-Path $env:RUNNER_TEMP 'gpu-input'
+          python tools/ci_gpu_artifact.py fetch $input --simulink-bundle --sha $env:ACCEPTANCE_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ci_gpu_artifact.py unbundle (Join-Path $input 'gpu-simulink-validation-bundle') --sha $env:ACCEPTANCE_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          function Single($items, $what) {
+            $items = @($items)
+            if ($items.Count -ne 1) { throw "Expected one $what in the bundle, found $($items.Count)" }
+            return $items[0].FullName
+          }
+          $hdiv = Single (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'radia-hdiv-device-*') 'HDiv device build'
+          $projection = Single (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*') 'projection build'
+          $fmm = Single (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*') 'FMM build'
+          $wheel = Single (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'radia-simulink-wheel-*') 'wheel directory'
+          python tools/ci_gpu_artifact.py verify $wheel --sha $env:ACCEPTANCE_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_HDIV_DEVICE_BUILD=$(Join-Path $hdiv 'mex')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_FAULT_BUILD=$(Join-Path $hdiv 'fault')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_SIMULINK_WHEEL_DIR=$wheel" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Prepare the isolated GPU acceptance environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-simulink-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          $pins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
+          $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $matlab) { throw 'MATLAB is required for the GPU acceptance' }
+          & $python -m pip install @pins numpy scipy h5py psutil pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Python GPU calls admit only the exact pip CUDA runtime named in the
+          # radia metadata. The checkout is imported via PYTHONPATH; only its
+          # PEP 517 metadata is registered in this run-local venv (no build).
+          $gpuPins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x.split(';')[0].strip() for x in d['project']['optional-dependencies']['gpu']], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -ne 5) { throw 'Expected five exact CUDA runtime pins' }
+          & $python -m pip install @gpuPins "setuptools>=77"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $purelib = & $python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # setuptools requires an empty metadata directory; move only the dist-info.
+          $metadataDir = Join-Path $env:RUNNER_TEMP "radia-metadata-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $metadataDir | Out-Null
+          & $python -c "import pathlib,sys; from setuptools import build_meta; d=pathlib.Path(sys.argv[1]); (d/'out').mkdir(); n=build_meta.prepare_metadata_for_build_wheel(str(d/'out')); (d/'name.txt').write_text(n,encoding='utf-8')" $metadataDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $distInfo = (Get-Content -Raw (Join-Path $metadataDir 'name.txt')).Trim()
+          if ($distInfo -notmatch '^radia-[^\\/]+\.dist-info$') { throw "Unexpected radia metadata: $distInfo" }
+          Move-Item -Path (Join-Path $metadataDir "out/$distInfo") -Destination $purelib
+          Remove-Item -Recurse -Force $metadataDir
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Verify HDiv device boundary and same-kernel parity
+        shell: pwsh
+        run: |
+          # pybind11 and the plain MEX on one kernel object, bitwise, the MATLAB device workflow and its failure paths. Small fixed cases, no skip path.
+          python validation_test/hmatrix_cuda/run_device_boundary.py --mex-build $env:RADIA_HDIV_DEVICE_BUILD --fault-mex-build $env:RADIA_HDIV_FAULT_BUILD --out "$env:RUNNER_TEMP/radia-hdiv-boundary-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - name: Verify GPU boundary and Poisson precision
+        shell: pwsh
+        run: |
+          # Small installation acceptance; CI timings are not performance claims.
+          python validation_test/ngsolve_cuda_mex/run_poisson.py --binary-dir build-cuda-mex --out "$env:RUNNER_TEMP/radia-simulink-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.24 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/run.py --out "$env:RUNNER_TEMP/radia-ams-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/setup_benchmark.py --out "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.08 --rounds 1 --setup-threads 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/fmm_physics.py --binary "$env:RADIA_FMM_BUILD" --out "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - name: Verify IC accuracy and device-switch release lifecycle
+        shell: pwsh
+        run: |
+          python validation_test/ic_cuda/run.py --binary-dir build-cuda-mex --matlab-dir packages/radia-simulink/matlab --out "$env:RUNNER_TEMP/radia-ic-accuracy-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ic_cuda/lifecycle_simulation.py --out "$env:RUNNER_TEMP/radia-ic-lifecycle-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - name: Install and verify the built distribution
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem "$env:RADIA_SIMULINK_WHEEL_DIR/radia_simulink-*.whl")
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one GPU wheel' }
+          $wheel = $wheels[0]
+          python packages/radia-simulink/verify_wheel.py $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installed = "$env:RUNNER_TEMP/radia-simulink-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installedPython = Join-Path $installed 'Scripts/python.exe'
+          & $installedPython -I -m pip install --no-deps $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/radia_simulink/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-simulink-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gpuMatlab = & $installedPython -I -c "import radia_simulink; print(radia_simulink.matlab_path())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/run.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/nonlinear_resident.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.35 --threads 2 --setup-threads 2 --contract
+          exit $LASTEXITCODE
+      - name: Select public numerical evidence
+        if: always()
+        shell: pwsh
+        run: |
+          python packages/radia-simulink/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-simulink-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --setup "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --nonlinear "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --fmm "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-simulink-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: radia-simulink-cuda-evidence
+          path: |
+            ${{ env.RADIA_SIMULINK_WHEEL_DIR }}/*.whl
+            ${{ env.RADIA_SIMULINK_WHEEL_DIR }}/gpu-artifact.json
+            ${{ runner.temp }}/gpu-input/**/download.json
+            ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-hdiv-boundary-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+          if-no-files-found: error

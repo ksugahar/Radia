@@ -28,7 +28,7 @@ def main():
         script=a.out/'check.m'
         script.write_text(f"setenv('NVCC_CCBIN','{compiler}');setenv('PATH',['{compiler};' getenv('PATH')]);\n"
           "config=fullfile(matlabroot,'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml');\n"
-          f"mexcuda('-v','-R2018a','-f',config,'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80','-I{quote(header)}','-outdir','{quote(a.out)}','{quote(src)}');\n"
+          f"mexcuda('-v','-R2018a','-f',config,'NVCCFLAGS=--fmad=false -gencode=arch=compute_80,code=sm_80','-I{quote(header)}','-outdir','{quote(a.out)}','{quote(src)}');\n"
           f"addpath('{quote(a.out)}');\n"
           "rows=temperature_material_smoke([300;400;500]);assert(norm(rows(:,1)-[350;400;500])==0);assert(max(abs(rows(:,2)-[1.5e-7;4e-7;9e-7]))<1e-21);assert(max(rows(:,6))<=1e-6);assert(all(rows(:,4)>=0));for k=1:5,assert(isequal(rows,temperature_material_smoke([300;400;500])));end;rejected=false;try,unused=temperature_material_smoke([299;299;500]);catch e,rejected=contains(e.message,'outside declared table');end;assert(rejected);assert(isequal(rows,temperature_material_smoke([300;400;500])));\n"
           f"f=fopen('{quote(a.out/'native.json')}','w');assert(f>=0);closer=onCleanup(@()fclose(f));fprintf(f,'%s',jsonencode(struct('rows',rows,'matlab',version)));clear closer;\n",encoding='utf-8')
