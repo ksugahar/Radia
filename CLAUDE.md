@@ -118,6 +118,7 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 ## Build And Release
 
 - Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Validation may build isolated GPU development artifacts within authorized scope, never substitute them into exact-wheel QA or others' runtimes.
+- PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
 - Use `release-quad` / `tools/release_quad.py` for build- and validation-role editable deployment plus CPU/GPU compute builds; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Publish only after owning-distribution CI, artifact hashes, native and required machine gates pass at the release source. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
