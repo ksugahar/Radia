@@ -309,6 +309,54 @@ def test_material_context_and_its_live_budget_precede_the_gram(monkeypatch):
     assert calls == ["material"], "no Gram may be built after a material budget failure"
 
 
+def test_prepared_excitation_reuses_a_fixed_rhs_only_in_its_own_workflow(monkeypatch):
+    """Guards: public solves reuse the assembled snapshot and check its FE owner."""
+    prepared, law = _fake_workflow(monkeypatch, [])
+    prepared._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET), 1)
+    prepared.mesh_sha256 = 'fixture'
+    prepared._rhs = np.arange(12., dtype=np.float64).reshape(4, 3)
+    prepared._mean = np.zeros((3, 4))
+    assembled, submitted = [], []
+    applied_source = hdiv_gpu._applied_source
+
+    def record_source(*args):
+        result = applied_source(*args)
+        assembled.append(result)
+        return result
+
+    def record_solve(material, rhs, *args):
+        submitted.append(rhs.copy())
+        return {"x": rhs.copy()}
+
+    monkeypatch.setattr(hdiv_gpu, "_applied_source", record_source)
+    prepared._operator.solve_nonlinear_material = record_solve
+    field = np.array([1., 2., 3.])
+    excitation = prepared.prepare_excitation(field)
+    expected = assembled[0].copy()
+    field[:] = 0.
+    assembled[0][:] = np.nan
+    for scale in (1., .9, 0., -1.):
+        np.testing.assert_array_equal(prepared.solve(excitation, excitation_scale=scale)["x"], expected * scale)
+    assert len(assembled) == 1
+    np.testing.assert_array_equal(prepared.solve([1., 2., 3.])["x"], expected)
+    assert len(assembled) == 2
+
+    other, law = _fake_workflow(monkeypatch, [])
+    other._initialize("mesh.vol", law, 1, dict(hdiv_gpu.GRAM_ACA_PRESET), 1)
+    with pytest.raises(ValueError, match="different HDiv workflow"):
+        other.solve(excitation)
+    with pytest.raises(ValueError, match="requires prepare_excitation"):
+        prepared.solve(field, excitation_scale=.9)
+    with pytest.raises(ValueError, match="finite real scalar"):
+        prepared.solve(excitation, excitation_scale=np.inf)
+    with pytest.raises(ValueError, match="finite RHS"):
+        prepared.solve(excitation, excitation_scale=1e308)
+    assert len(submitted) == 5
+    prepared.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        prepared.solve(excitation)
+
+
 def test_allocations_beyond_the_preflight_bound_fail_and_release(monkeypatch):
     calls = []
     prepared, law = _fake_workflow(monkeypatch, calls, used=911, bound=910)
