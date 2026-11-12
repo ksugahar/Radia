@@ -592,3 +592,15 @@ def test_preapproval_native_bundle_rejects_unaccepted_bytes(tmp_path, change, me
         (native_dir / "sub/_radia_pybind.pyd").write_bytes(b"accepted native")
     with pytest.raises(ValueError, match=message):
         gate.native_bundle(wheel_dir, native_dir)
+
+
+@pytest.mark.parametrize("name", ["radia-5.4.4-cp312-cp312-linux_aarch64.whl",
+                                  "radia-5.4.4-cp312-cp312-manylinux_2_28_x86_64.whl"])
+def test_publication_accepts_only_the_windows_wheel(tmp_path, name):
+    """Guards: PyPI carries only the Windows wheel; Linux is a source distribution."""
+    wheel = tmp_path / "dist" / name
+    wheel.parent.mkdir()
+    wheel.write_bytes(b"not a windows wheel")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="Unexpected wheel"):
+        gate.verify_artifact(None, None, None, wheel.parent, tmp_path, digest)
