@@ -95,6 +95,8 @@ std::shared_ptr<DeviceOperator> createFlat(const FlatInput&,const ChargeMapInput
 std::shared_ptr<DeviceOperator> createAnalyticGram(const radia_hmatrix_cuda::HostVector<double>& cells,const radia_hmatrix_cuda::HostVector<double>& faces);
 // Diagnostic: rank, status and steps of one ACA leaf diag(d) + w w^T; no matrix crosses.
 void acaDiagnosticLeaf(const radia_hmatrix_cuda::HostVector<double>& diagonal,const radia_hmatrix_cuda::HostVector<double>& outer,double eps,int maxRank,int& rank,int& status,int& steps);
+// Diagnostic: the material energy reduction on explicit point energies and amplitudes; returns its block count.
+std::size_t materialEnergyDiagnostic(const radia_hmatrix_cuda::HostVector<double>& energy,const radia_hmatrix_cuda::HostVector<double>& amplitude,double& sum,double& maximum);
 // Diagnostic: raw device flat-Gram entries for explicit charge pairs; no matrix crosses.
 radia_hmatrix_cuda::HostVector<double> flatDiagnosticEntries(const FlatInput&,const radia_hmatrix_cuda::HostVector<std::size_t>& rows,
     const radia_hmatrix_cuda::HostVector<std::size_t>& cols);
