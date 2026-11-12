@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.4.4 - 2026-11-12
+
+- Reuse the assembled excitation for prepared nonlinear HDiv solves when the
+  excitation changes by a scalar factor on the same mesh.
+- Compute HDiv GPU material energy with a fixed-order parallel FP64 reduction.
+  This preserves the quadrature rule and can change rounding in the energy sum.
+
 ## 5.4.3 - 2026-11-11
 
 - Consume Cubit mesh export and MATLAB Optuna from their standalone
