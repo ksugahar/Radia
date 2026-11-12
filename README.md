@@ -135,8 +135,10 @@ model. A solver residual alone does not establish physical accuracy.
 
 ## Quick start
 
-The current production wheel targets **Windows x64**, **Python 3.12**, and
-**NGSolve/Netgen 6.2.2607**.
+The PyPI wheel targets **Windows x64**, **Python 3.12**, and
+**NGSolve/Netgen 6.2.2608**. Linux is distributed as source only: check out a
+release tag from GitHub and build it with `tools/build_linux.py` (see
+[Linux HPC source builds](docs/compilation/linux-hpc.md)).
 
 ```powershell
 python -m pip install --upgrade radia

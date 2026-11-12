@@ -18,8 +18,10 @@ An earlier external Linux trial reported successful IH/HACApK checks using
 NGSolve 6.2.2607 and both GCC and Intel LLVM. That establishes a starting point,
 not certification of 6.2.2608 or of the current source. The 6.2.2608 Intel LLVM
 HPC path must pass an actual build, fresh imports and affected numerical tests
-on the target platform before it is described as verified. Linux wheel
-publication and full-package acceptance are separate from this source build.
+on the target platform before it is described as verified. Radia does not
+publish Linux wheels: PyPI carries only the Windows wheel, and Linux users build
+this source from a GitHub release tag. A wheel built here for site
+qualification is validation evidence, not a distributed artifact.
 
 Avoiding the GCC compiler does not remove GNU C++ runtime dependencies.
 Intel LLVM on Linux can use GNU standard-library headers and `libstdc++` to
