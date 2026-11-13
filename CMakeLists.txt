@@ -377,6 +377,11 @@ if(BUILD_TESTING)
     target_compile_definitions(test_hdiv_p1_touching_rule PRIVATE RADIA_FIELD_SERIAL_ONLY)
     target_compile_features(test_hdiv_p1_touching_rule PRIVATE cxx_std_17)
     add_test(NAME radia.hdiv_p1_touching_rule.cpp COMMAND test_hdiv_p1_touching_rule)
+    add_executable(test_tri_field_hessian tests/cpp/test_tri_field_hessian.cpp src/core/rad_hdiv_vim.cpp)
+    target_include_directories(test_tri_field_hessian PRIVATE src/core/gpu/hdiv src/core)
+    target_compile_definitions(test_tri_field_hessian PRIVATE RADIA_FIELD_SERIAL_ONLY)
+    target_compile_features(test_tri_field_hessian PRIVATE cxx_std_17)
+    add_test(NAME radia.tri_field_hessian.cpp COMMAND test_tri_field_hessian)
 
     add_executable(test_ih_rotation_runtime
         tests/ih_rotation_runtime.cpp
