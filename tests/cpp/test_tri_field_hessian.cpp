@@ -265,11 +265,65 @@ int main()
                         hi ? ", " : "", heights[hi], ok ? "true" : "false", max_rel(t, f));
         }
     }
-    // Near-plane receivers are outside this scope and must be rejected, not approximated.
+    // Rejection contract: a receiver, near or far, whose plane distance is at most
+    // 1e-4 times the longest edge returns false and all 270 outputs zero, even when
+    // the output was pre-filled; receivers at twice that distance are accepted.
+    std::printf("],\n  \"plane_contract\": [");
     {
-        double p[3]; for (int k = 0; k < 3; ++k) p[k] = c[k] + 1e-12 * n[k];
-        static Tensor t;
-        if (rad_hdiv::QuadTriFieldBasisHessian(V, p, t)) { std::fprintf(stderr, "on-plane accepted\n"); ++failures; }
+        double longest = 0.0;
+        for (int a = 0; a < 3; ++a) {
+            double d2 = 0.0;
+            for (int k = 0; k < 3; ++k) d2 += (V[(a+1)%3][k]-V[a][k])*(V[(a+1)%3][k]-V[a][k]);
+            longest = std::fmax(longest, std::sqrt(d2));
+        }
+        const double limit = 1e-4 * longest;
+        struct Probe { const char* name; double point[3]; bool accept; bool quadrature; };
+        std::vector<Probe> probes;
+        auto probe = [&](const char* name, double in_plane, double height, bool accept) {
+            Probe pr{name, {0, 0, 0}, accept, accept && in_plane > 1.0};
+            for (int k = 0; k < 3; ++k) pr.point[k] = c[k] + in_plane*size*e1[k]/size + height*n[k];
+            probes.push_back(pr);
+        };
+        const double just_below = 1.0 - 1e-9;
+        probe("near on plane", 0.1, 0.0, false);
+        probe("near below limit", 0.1, 0.5*limit, false);
+        probe("near at limit", 0.1, -just_below*limit, false);
+        probe("near control", 0.1, 2.0*limit, true);
+        probe("far on plane", 4.0, 0.0, false);
+        probe("far below limit", 4.0, -0.5*limit, false);
+        probe("far at limit", 4.0, just_below*limit, false);
+        probe("far control", 4.0, 2.0*limit, true);
+        probe("far control below", 4.0, -2.0*limit, true);
+        int written = 0;
+        auto report = [&](const char* name, const double (*W)[3], const double p[3], bool accept, bool quad_check) {
+            static Tensor t, q;
+            for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) for (int j = 0; j < 3; ++j) for (int l = 0; l < 3; ++l)
+                t[i][k][j][l] = 7.0 + i + k + j + l;
+            const bool ok = rad_hdiv::QuadTriFieldBasisHessian(W, p, t);
+            int nonzero = 0, nonfinite = 0;
+            for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) for (int j = 0; j < 3; ++j) for (int l = 0; l < 3; ++l) {
+                if (t[i][k][j][l] != 0.0) ++nonzero;
+                if (!std::isfinite(t[i][k][j][l])) ++nonfinite;
+            }
+            double q_rel = -1.0;
+            if (quad_check) { quadrature(W, p, 3, 24, q); q_rel = max_rel(t, q); }
+            const bool pass = accept ? (ok && nonzero > 0 && nonfinite == 0 && (q_rel < 0.0 || q_rel <= DETECTOR_REL))
+                                     : (!ok && nonzero == 0);
+            if (!pass) { std::fprintf(stderr, "plane contract failed: %s\n", name); ++failures; }
+            std::printf("%s{\"name\": \"%s\", \"expected_accept\": %s, \"returned\": %s, \"nonzero_outputs\": %d, "
+                        "\"quadrature_rel\": %.3e, \"pass\": %s}",
+                        written++ ? ", " : "", name, accept ? "true" : "false", ok ? "true" : "false",
+                        nonzero, q_rel, pass ? "true" : "false");
+        };
+        for (const Probe& pr : probes) report(pr.name, V, pr.point, pr.accept, pr.quadrature);
+        // Reviewer reproduction: unit right triangle in z = 0, longest edge sqrt(2).
+        const double U[3][3] = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+        const double r_far[3] = {4.0, 0.25, 0.0}, r_far_low[3] = {4.0, 0.25, 1e-5};
+        const double r_near[3] = {1.0, 0.25, 0.0}, r_far_ok[3] = {4.0, 0.25, 0.01};
+        report("unit far on plane", U, r_far, false, false);
+        report("unit far 1e-5", U, r_far_low, false, false);
+        report("unit near on plane", U, r_near, false, false);
+        report("unit far control 1e-2", U, r_far_ok, true, true);
     }
     // Setup cost: one Hessian call against one QuadTriFieldBasis call at the same receiver.
     {

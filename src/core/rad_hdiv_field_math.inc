@@ -2318,7 +2318,8 @@ RAD_FIELD_KERNEL static void hessian_edge_monomial(const int alpha[3],const doub
 // potential is symmetric and trace free, which gives the components that carry
 // the plane normal.  Far receivers use the collapsed Gauss rule of
 // TriFarMonomialFields on the analytic kernel derivative.  Returns false with
-// zeros for a degenerate triangle or a receiver inside the near-plane limit.
+// zeros for a degenerate triangle or for any receiver, near or far, whose
+// distance from the triangle plane is at most 1e-4 times the longest edge.
 RAD_FIELD_KERNEL bool QuadTriFieldBasisHessian(const double V[3][3], const double r[3],
                                                double out[10][3][3][3])
 {
@@ -2332,6 +2333,31 @@ RAD_FIELD_KERNEL bool QuadTriFieldBasisHessian(const double V[3][3], const doubl
                 alpha[index][0]=ax;alpha[index][1]=ay;alpha[index][2]=total-ax-ay;++index;
             }
     }
+    double e1u[3],e2u[3],n[3];
+    for(int k=0;k<3;++k){e1u[k]=V[1][k]-V[0][k];e2u[k]=V[2][k]-V[0][k];}
+    v3cross(e1u,e2u,n);
+    const double nl=v3nrm(n),e1l=v3nrm(e1u);
+    if(!(nl>1e-300)||!(e1l>1e-300))return false;
+    for(int k=0;k<3;++k)n[k]/=nl;
+    double t1[3],t2[3];
+    for(int k=0;k<3;++k)t1[k]=e1u[k]/e1l;
+    v3cross(n,t1,t2);
+    double centroid[3]={0.0,0.0,0.0};
+    for(int v=0;v<3;++v)for(int k=0;k<3;++k)centroid[k]+=V[v][k]/3.0;
+    double tau[3][3],m[3][3],length[3],p[3][3],l0[3],K3[3][3],K5[3][5];
+    double longest=0.0;
+    for(int e=0;e<3;++e){
+        const double* A=V[e];const double* B=V[(e+1)%3];
+        for(int k=0;k<3;++k)tau[e][k]=B[k]-A[k];
+        length[e]=v3nrm(tau[e]);
+        if(!(length[e]>1e-300))return false;
+        for(int k=0;k<3;++k)tau[e][k]/=length[e];
+        longest=FieldMax(longest,length[e]);
+        edge_outnormal(A,B,n,centroid,m[e]);
+    }
+    double offset[3];for(int k=0;k<3;++k)offset[k]=r[k]-V[0][k];
+    const double h=v3dot(offset,n);
+    if(!(std::fabs(h)>TRI_HESSIAN_PLANE_TOL*longest))return false;
     if(const int nodes=FarNodes(FarRatio(V,3,r),4)){
         const auto& gauss=FarGauss();
         const double e1[3]={V[1][0]-V[0][0],V[1][1]-V[0][1],V[1][2]-V[0][2]};
@@ -2362,31 +2388,6 @@ RAD_FIELD_KERNEL bool QuadTriFieldBasisHessian(const double V[3][3], const doubl
         }
         return true;
     }
-    double e1u[3],e2u[3],n[3];
-    for(int k=0;k<3;++k){e1u[k]=V[1][k]-V[0][k];e2u[k]=V[2][k]-V[0][k];}
-    v3cross(e1u,e2u,n);
-    const double nl=v3nrm(n),e1l=v3nrm(e1u);
-    if(!(nl>1e-300)||!(e1l>1e-300))return false;
-    for(int k=0;k<3;++k)n[k]/=nl;
-    double t1[3],t2[3];
-    for(int k=0;k<3;++k)t1[k]=e1u[k]/e1l;
-    v3cross(n,t1,t2);
-    double centroid[3]={0.0,0.0,0.0};
-    for(int v=0;v<3;++v)for(int k=0;k<3;++k)centroid[k]+=V[v][k]/3.0;
-    double tau[3][3],m[3][3],length[3],p[3][3],l0[3],K3[3][3],K5[3][5];
-    double longest=0.0;
-    for(int e=0;e<3;++e){
-        const double* A=V[e];const double* B=V[(e+1)%3];
-        for(int k=0;k<3;++k)tau[e][k]=B[k]-A[k];
-        length[e]=v3nrm(tau[e]);
-        if(!(length[e]>1e-300))return false;
-        for(int k=0;k<3;++k)tau[e][k]/=length[e];
-        longest=FieldMax(longest,length[e]);
-        edge_outnormal(A,B,n,centroid,m[e]);
-    }
-    double offset[3];for(int k=0;k<3;++k)offset[k]=r[k]-V[0][k];
-    const double h=v3dot(offset,n);
-    if(!(std::fabs(h)>TRI_HESSIAN_PLANE_TOL*longest))return false;
     for(int e=0;e<3;++e){
         double q[3];for(int k=0;k<3;++k)q[k]=r[k]-V[e][k];
         l0[e]=v3dot(q,tau[e]);
