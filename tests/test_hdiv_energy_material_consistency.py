@@ -120,39 +120,42 @@ def test_distinct_materials_and_zero_field_tangent(monkeypatch):
         np.testing.assert_allclose(de, load.vec.FV().NumPy()@m, rtol=2e-6)
 
 
-def _line_search(energy):
+def _line_search(material_energy):
+    """The production `_line_search` closure with N = 0, so E(m) = W(m) - rhs.m."""
     source = ROOT / "src/radia/vim/_solve.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     outer = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
                  and n.name == "_solve_nonlinear_energy_cpp")
     inner = next(n for n in outer.body if isinstance(n, ast.FunctionDef)
                  and n.name == "_line_search")
+    helper = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                  and n.name == "_energy_armijo_line_search")
     from types import SimpleNamespace
     # Keep a non-root residual so these tests isolate Armijo. Root-certificate
     # acceptance is covered separately by the Newton residual regression.
-    namespace = dict(np=np, _energy=energy, material=SimpleNamespace(field=None),
+    namespace = dict(np=np, material=SimpleNamespace(field=None, update=material_energy),
                      _bH=lambda field: np.ones(2), _N_apply=lambda trial: np.zeros(2),
                      nl_tol=1e-8, residual_scale=1., stats={})
-    exec(compile(ast.Module(body=[inner], type_ignores=[]), str(source), "exec"), namespace)
+    exec(compile(ast.Module(body=[helper, inner], type_ignores=[]), str(source), "exec"), namespace)
     return namespace["_line_search"]
 
 
 @pytest.mark.parametrize("value", [2., float("nan"), float("inf")])
 def test_armijo_exhaustion_never_returns_a_step(value):
-    search = _line_search(lambda m, rhs: value)
-    step, energy, count = search(np.ones(2), -np.ones(2), np.zeros(2), 1., 1.)
+    search = _line_search(lambda m: value)
+    step, energy, count = search(np.ones(2), -np.ones(2), np.zeros(2), 1., 1., np.zeros(2))
     assert step is None and energy is None and count == 34
 
 
 @pytest.mark.parametrize("decrement", [0., -1., float("nan")])
 def test_armijo_requires_a_finite_descent_direction(decrement):
-    search = _line_search(lambda m, rhs: 0.)
-    assert search(np.ones(2), -np.ones(2), None, 1., decrement) == (None, None, 0)
+    search = _line_search(lambda m: 0.)
+    assert search(np.ones(2), -np.ones(2), None, decrement, 0., None) == (None, None, 0)
 
 
 def test_armijo_accepts_an_evaluated_step():
-    search = _line_search(lambda m, rhs: float(m@m)/2)
-    assert search(np.ones(2), -np.ones(2), np.zeros(2), 1., 2.) == (1., 0., 0)
+    search = _line_search(lambda m: float(m@m)/2)
+    assert search(np.ones(2), -np.ones(2), np.zeros(2), 2., 1., np.zeros(2)) == (1., 0., 0)
 
 
 def _outer_solver(mass, *, reject_steps=False):
@@ -186,7 +189,10 @@ def _outer_solver(mass, *, reject_steps=False):
                      _f64=lambda v: np.asarray(v, dtype=float))
     checked_budget = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
                           and n.name == "_checked_compensated_memory_mb")
-    exec(compile(ast.Module(body=[checked_budget, outer], type_ignores=[]), str(source), "exec"), namespace)
+    line_search = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                       and n.name == "_energy_armijo_line_search")
+    exec(compile(ast.Module(body=[checked_budget, line_search, outer], type_ignores=[]), str(source), "exec"),
+         namespace)
     return namespace[outer.name], Demag(), captured, calls
 
 
