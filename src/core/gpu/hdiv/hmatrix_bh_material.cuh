@@ -17,9 +17,38 @@ __global__ void materialPointFields(std::size_t n,const double* v,const double* 
     for(int c=0;c<3;++c){field[c*n+q]=w*sec*v[c*n+q];if(dv)action[c*n+q]=w*(sec*dv[c*n+q]+(dif-sec)*direction[c]*dot.get());}
     energy[q]=w*law[2*n+q];
 }
-__global__ void materialEnergyReduction(std::size_t n,const double* energy,const double* amplitude,double* result){
-    if(blockIdx.x||threadIdx.x)return;radia_hmatrix_cuda::CompensatedDeviceSum sum;double maximum=0;
-    for(std::size_t q=0;q<n;++q){sum.add(energy[q]);maximum=fmax(maximum,amplitude[q]);}result[0]=sum.get();result[1]=maximum;
+// Fixed-order compensated material energy and maximum amplitude. The partition is a
+// function of the point count only (materialEnergyReductionBlocks), never of the device:
+// each thread keeps a Neumaier pair over its strided points, pairs merge by TwoSum in a
+// fixed tree, and one block merges the block partials in index order. The result is
+// identical on every device; the maximum starts at 0 and uses fmax like the serial loop.
+__device__ inline void energyMerge(double& s,double& c,double s2,double c2){
+    const double t=s+s2;const double e=fabs(s)>=fabs(s2)?(s-t)+s2:(s2-t)+s;s=t;c=(c+c2)+e;
+}
+__device__ inline void energyTree(double s,double c,double m,double* ss,double* sc,double* sm){
+    const int t=threadIdx.x;ss[t]=s;sc[t]=c;sm[t]=m;__syncthreads();
+    for(int k=int(materialEnergyThreads)/2;k>0;k>>=1){
+        if(t<k){double a=ss[t],b=sc[t];energyMerge(a,b,ss[t+k],sc[t+k]);ss[t]=a;sc[t]=b;sm[t]=fmax(sm[t],sm[t+k]);}
+        __syncthreads();}
+}
+__global__ void __launch_bounds__(materialEnergyThreads) materialEnergyPartials(std::size_t n,const double* energy,const double* amplitude,double* partials){
+    __shared__ double ss[materialEnergyThreads],sc[materialEnergyThreads],sm[materialEnergyThreads];
+    const std::size_t blocks=gridDim.x,stride=blocks*materialEnergyThreads;double s=0,c=0,m=0;
+    for(std::size_t q=std::size_t(blockIdx.x)*materialEnergyThreads+threadIdx.x;q<n;q+=stride){energyMerge(s,c,energy[q],0.);m=fmax(m,amplitude[q]);}
+    energyTree(s,c,m,ss,sc,sm);
+    if(threadIdx.x==0){partials[blockIdx.x]=ss[0];partials[blocks+blockIdx.x]=sc[0];partials[2*blocks+blockIdx.x]=sm[0];}
+}
+__global__ void __launch_bounds__(materialEnergyThreads) materialEnergyTotal(std::size_t blocks,const double* partials,double* result){
+    __shared__ double ss[materialEnergyThreads],sc[materialEnergyThreads],sm[materialEnergyThreads];double s=0,c=0,m=0;
+    for(std::size_t i=threadIdx.x;i<blocks;i+=materialEnergyThreads){energyMerge(s,c,partials[i],partials[blocks+i]);m=fmax(m,partials[2*blocks+i]);}
+    energyTree(s,c,m,ss,sc,sm);
+    if(threadIdx.x==0){result[0]=ss[0]+sc[0];result[1]=sm[0];}
+}
+// partials holds 3*materialEnergyReductionBlocks(n) doubles; result {energy, maximum}.
+inline void launchMaterialEnergyReduction(std::size_t n,const double* energy,const double* amplitude,double* partials,double* result,cudaStream_t stream){
+    const auto blocks=materialEnergyReductionBlocks(n);
+    materialEnergyPartials<<<unsigned(blocks),unsigned(materialEnergyThreads),0,stream>>>(n,energy,amplitude,partials);radia_hmatrix_cuda::check(cudaGetLastError());
+    materialEnergyTotal<<<1,unsigned(materialEnergyThreads),0,stream>>>(blocks,partials,result);radia_hmatrix_cuda::check(cudaGetLastError());
 }
 class MappedMaterial {
     using DeviceMap=radia_hmatrix_cuda::DeviceMap;
@@ -31,7 +60,7 @@ class MappedMaterial {
     DeviceMap E,ET,M;FlatEvaluationOperator flat;bool matrixFree=false;
     void applyE(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.apply(x,y,stream);else E.apply(x,y,stream);}
     void applyET(const double* x,double* y,cudaStream_t stream){if(matrixFree)flat.applyTranspose(x,y,stream);else ET.apply(x,y,stream);}
-    Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,gradient,tangent,totals,massDiagonal,frozenValues;
+    Buffer<double> m,delta,v,dv,amplitude,samples,weights,knots,c,base,field,action,pointEnergy,energyPartials,gradient,tangent,totals,massDiagonal,frozenValues;
     Buffer<int> invalid;
     std::string routeName;radia_hmatrix_cuda::HostVector<LedgerRow> ledger;
     // Reference mass exists only on the device-table route; persistent/transient bytes are exact allocation sizes.
@@ -39,7 +68,7 @@ class MappedMaterial {
     void allocateState(const Law& law){
         m.allocate(nd);delta.allocate(nd);v.allocate(3*nq);dv.allocate(3*nq);amplitude.allocate(nq);samples.allocate(3*nq);
         knots.upload(law.knots);c.upload(law.coefficients);base.upload(law.integralBase);field.allocate(3*nq);action.allocate(3*nq);
-        pointEnergy.allocate(nq);gradient.allocate(nd);tangent.allocate(nd);totals.allocate(2);invalid.allocate(1);
+        pointEnergy.allocate(nq);energyPartials.allocate(3*materialEnergyReductionBlocks(nq));gradient.allocate(nd);tangent.allocate(nd);totals.allocate(2);invalid.allocate(1);
         ledger.push_back({"inverse_bh_law","H2D",(law.knots.size()+law.coefficients.size()+law.integralBase.size())*sizeof(double)});
     }
 public:
@@ -53,7 +82,7 @@ public:
     const auto transpose=e.transpose();
     std::size_t bytes=0;auto add=[&](std::size_t count,std::size_t width){const auto size=checkedProduct(count,width);if(size>(std::size_t(512)<<20)-bytes)throw std::invalid_argument("Mapped material device payload exceeds 512 MiB");bytes+=size;};
     add(e.offsets.size()+e.indices.size()+transpose.offsets.size()+transpose.indices.size(),sizeof(std::size_t));
-    add(e.values.size()+transpose.values.size()+law.knots.size()+law.coefficients.size()+law.integralBase.size()+18*nq+4*nd+2,sizeof(double));add(1,sizeof(int));
+    add(e.values.size()+transpose.values.size()+law.knots.size()+law.coefficients.size()+law.integralBase.size()+18*nq+4*nd+2+3*materialEnergyReductionBlocks(nq),sizeof(double));add(1,sizeof(int));
 
         payloadBound=bytes;check(cudaGetDevice(&device));E.upload(e);ET.upload(transpose);
         setupBytes=(e.offsets.size()+e.indices.size()+transpose.offsets.size()+transpose.indices.size())*sizeof(std::size_t)+
@@ -80,7 +109,7 @@ public:
         allocateState(law);setupBytes+=ledger.back().bytes;frozenValues.allocate(massNonzeros);
         persistentBytes+=(M.offsets.size+M.indices.size)*sizeof(std::size_t)+M.values.size*sizeof(double);
         persistentBytes+=flat.bytes();
-        for(auto* buffer:{&m,&delta,&v,&dv,&amplitude,&samples,&weights,&knots,&c,&base,&field,&action,&pointEnergy,&gradient,&tangent,&totals,&massDiagonal,&frozenValues})
+        for(auto* buffer:{&m,&delta,&v,&dv,&amplitude,&samples,&weights,&knots,&c,&base,&field,&action,&pointEnergy,&energyPartials,&gradient,&tangent,&totals,&massDiagonal,&frozenValues})
             persistentBytes+=buffer->size*sizeof(double);
         persistentBytes+=invalid.size*sizeof(int);
     }
@@ -134,7 +163,7 @@ public:
         materialPointFields<<<blocks,128>>>(nq,v.data,hasDirection?dv.data:nullptr,amplitude.data,samples.data,weights.data,field.data,action.data,pointEnergy.data,invalid.data);check(cudaGetLastError());
         int failed=0;check(cudaMemcpy(&failed,invalid.data,sizeof(int),cudaMemcpyDeviceToHost));if(failed)throw std::runtime_error("Invalid mapped inverse BH tangent or energy");
         applyET(field.data,gradient.data,nullptr);if(hasDirection)applyET(action.data,tangent.data,nullptr);
-        materialEnergyReduction<<<1,1>>>(nq,pointEnergy.data,amplitude.data,totals.data);check(cudaGetLastError());
+        launchMaterialEnergyReduction(nq,pointEnergy.data,amplitude.data,energyPartials.data,totals.data,nullptr);
         MaterialEvaluation out;out.gradient.resize(nd);check(cudaMemcpy(out.gradient.data(),gradient.data,nd*sizeof(double),cudaMemcpyDeviceToHost));
         if(hasDirection){out.tangentAction.resize(nd);check(cudaMemcpy(out.tangentAction.data(),tangent.data,nd*sizeof(double),cudaMemcpyDeviceToHost));}
         double scalar[2];check(cudaMemcpy(scalar,totals.data,2*sizeof(double),cudaMemcpyDeviceToHost));out.energy=scalar[0];out.maximumMagnetization=scalar[1];out.ownedDeviceBytes=payloadBound;

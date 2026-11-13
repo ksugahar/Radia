@@ -65,6 +65,14 @@ inline std::size_t budgetProduct(std::size_t a,std::size_t b){
 inline std::size_t budgetSum(std::initializer_list<std::size_t> terms){
     std::size_t s=0;for(auto t:terms){if(t>std::numeric_limits<std::size_t>::max()-s)throw std::overflow_error("Flat material budget overflow");s+=t;}return s;
 }
+// Fixed partition of the material energy reduction: a function of the point count only, never of
+// the device, so every GPU sums in the same order. Its scratch is 3 doubles per block.
+constexpr std::size_t materialEnergyThreads=256,materialEnergyMaxBlocks=1024;
+inline std::size_t materialEnergyReductionBlocks(std::size_t points){
+    if(!points)throw std::invalid_argument("Material energy reduction needs at least one point");
+    const auto blocks=points/materialEnergyThreads+(points%materialEnergyThreads?1:0);
+    return blocks<materialEnergyMaxBlocks?blocks:materialEnergyMaxBlocks;
+}
 inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationGroups& groups,std::size_t lawDoubles){
     const auto mul=budgetProduct;const auto add=budgetSum;
     const auto nq=groups.at(0).points,nd=groups[0].dofs;
@@ -83,7 +91,7 @@ inline FlatEvaluationBudget flatEvaluationBudget(const FlatEvaluationGroups& gro
     b.bytes[3]=add({mul(triples,3*key+2*real+2*small),mul(nd,real),real,2*small});
     // The reference mass CSR and the frozen tangent values on its pattern.
     b.bytes[4]=add({mul(add({nd,1}),index),mul(triples,index+2*real),mul(nd,real)});
-    b.bytes[5]=add({mul(add({mul(18,nq),mul(4,nd),2,lawDoubles}),real),small});
+    b.bytes[5]=add({mul(add({mul(18,nq),mul(4,nd),2,mul(3,materialEnergyReductionBlocks(nq)),lawDoubles}),real),small});
     return b;
 }
 struct LedgerRow {std::string payload,direction;std::size_t bytes=0;};

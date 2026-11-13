@@ -23,6 +23,12 @@ import tempfile
 import math
 import numbers
 from contextlib import contextmanager
+from typing import NamedTuple
+
+
+class _PreparedExcitation(NamedTuple):
+    owner: object
+    coefficients: bytes
 
 
 class PreparedHDivNonlinear:
@@ -124,6 +130,7 @@ class PreparedHDivNonlinear:
         import numpy as np
         from .gpu import _native
         _hdiv_cuda = _native("_hdiv_cuda")
+        self._excitation_owner = object()
         self._lock = threading.RLock()
         self._operator = self._material = None
         self._closed = False
@@ -156,14 +163,36 @@ class PreparedHDivNonlinear:
             self.close()
             raise
 
-    def solve(self, applied_field, *, initial=None, tolerance=1e-11,
+    def prepare_excitation(self, applied_field):
+        """Assemble a fixed field once and capture its weak RHS in this FE space.
+
+        Pass the result to this object's solve with excitation_scale for changes
+        in amplitude. Assemble again if the field's shape or coil geometry
+        changes. The caller owns the NGSolve TaskManager region.
+        """
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Prepared HDiv workflow has been closed")
+            source = _applied_source(self.fespace, self._rhs, applied_field)
+            return _PreparedExcitation(self._excitation_owner, source.tobytes())
+
+    def solve(self, applied_field, *, excitation_scale=1.0, initial=None, tolerance=1e-11,
               linear_tolerance=1e-6, max_iterations=40, max_linear_iterations=30000,
               preconditioner="reference-diagonal", degree=32, lower_fraction=.01):
-        """Solve an applied H (A/m), uniform or a CoefficientFunction; return coefficients, history and the mean magnetization.
+        """Solve an applied H (A/m) and return coefficients, history and mean magnetization.
+
+        Accept a uniform field, a CoefficientFunction or the result of
+        prepare_excitation. A non-unit excitation_scale requires a prepared
+        excitation and scales the RHS only, with the same nonlinear B-H law.
 
         Native Newton recertifies the original nonlinear equation. This is not
         an independent CPU certificate or a performance claim.
         """
+        if (isinstance(excitation_scale, bool) or not isinstance(excitation_scale, numbers.Real)
+                or not math.isfinite(excitation_scale)):
+            raise ValueError("excitation_scale must be a finite real scalar")
+        if excitation_scale != 1.0 and not isinstance(applied_field, _PreparedExcitation):
+            raise ValueError("excitation_scale requires prepare_excitation")
         if preconditioner not in ("reference-diagonal", "reference-chebyshev", "reference-chebyshev-graph"):
             raise ValueError("Unsupported explicit shared Newton preconditioner")
         for value in (tolerance, linear_tolerance):
@@ -178,7 +207,17 @@ class PreparedHDivNonlinear:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Prepared HDiv workflow has been closed")
-            source = _applied_source(self.fespace, self._rhs, applied_field)
+            if isinstance(applied_field, _PreparedExcitation):
+                if applied_field.owner is not self._excitation_owner:
+                    raise ValueError("Prepared excitation belongs to a different HDiv workflow")
+                source = np.frombuffer(applied_field.coefficients, dtype=np.float64)
+                if excitation_scale != 1.0:
+                    with np.errstate(over="ignore", invalid="ignore"):
+                        source = float(excitation_scale) * source
+                if source.shape != (self.dofs,) or not np.isfinite(source).all():
+                    raise ValueError("Prepared excitation must have a finite RHS in the prepared FE numbering")
+            else:
+                source = _applied_source(self.fespace, self._rhs, applied_field)
             x = np.zeros(self.dofs) if initial is None else np.asarray(initial)
             if x.dtype != np.float64 or x.shape != (self.dofs,) or not np.isfinite(x).all():
                 raise ValueError("initial must be finite FP64 in the prepared FE numbering")
