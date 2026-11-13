@@ -278,6 +278,15 @@ PYBIND11_MODULE(_hdiv_cuda,m) {
         {py::gil_scoped_release release;acaDiagnosticLeaf(d,w,eps,maxRank,rank,status,steps);}
         py::dict report;report["rank"]=rank;report["status"]=status;report["steps"]=steps;return report;
     },py::arg("diagonal").noconvert(),py::arg("outer").noconvert(),py::arg("eps"),py::arg("max_rank"),py::arg("backend"));
+    m.def("_diagnostic_material_energy_reduction",[](Array<double> energy,Array<double> amplitude,const std::string& backend){
+        if(backend!="gpu")throw py::value_error("The material energy reduction diagnostic requires explicit backend='gpu'");
+        if(energy.ndim()!=1||amplitude.ndim()!=1||energy.size()!=amplitude.size()||energy.size()<1)
+            throw py::value_error("The material energy reduction diagnostic takes two matching nonempty vectors");
+        std::size_t bytes=0;const auto e=snapshot(energy,bytes),a=snapshot(amplitude,bytes);
+        double sum=0,maximum=0;std::size_t blocks=0;
+        {py::gil_scoped_release release;blocks=materialEnergyDiagnostic(e,a,sum,maximum);}
+        py::dict report;report["energy"]=sum;report["maximum"]=maximum;report["blocks"]=blocks;return report;
+    },py::arg("energy").noconvert(),py::arg("amplitude").noconvert(),py::arg("backend"));
     m.def("_diagnostic_flat_charge_entries",[](Array<double> cells,Array<double> faces,Array<std::int32_t> host,Array<std::int32_t> kind,
         Array<std::int32_t> expo,Array<double> tet,Array<double> tri,Array<double> tetLow,Array<double> triLow,double farFactor,
         Array<std::uint64_t> rows,Array<std::uint64_t> cols,const std::string& backend,const std::string& family,

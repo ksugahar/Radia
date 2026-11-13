@@ -155,6 +155,14 @@ radia_hmatrix_cuda::FlatBlock flatBlock(const FlatInput& input){
 void acaDiagnosticLeaf(const radia_hmatrix_cuda::HostVector<double>& diagonal,const radia_hmatrix_cuda::HostVector<double>& outer,double eps,int maxRank,int& rank,int& status,int& steps){
     const auto report=radia_hmatrix_cuda::acaDiagnosticLeaf(diagonal,outer,eps,maxRank);rank=report.rank;status=report.status;steps=report.steps;
 }
+std::size_t materialEnergyDiagnostic(const radia_hmatrix_cuda::HostVector<double>& energy,const radia_hmatrix_cuda::HostVector<double>& amplitude,double& sum,double& maximum){
+    using namespace radia_hmatrix_cuda;
+    if(energy.empty()||energy.size()!=amplitude.size())throw std::invalid_argument("Material energy diagnostic takes two matching nonempty vectors");
+    const auto blocks=radia_hdiv_bh::materialEnergyReductionBlocks(energy.size());
+    Buffer<double> e,a,partials,result;e.upload(energy);a.upload(amplitude);partials.allocate(3*blocks);result.allocate(2);
+    radia_hdiv_bh::launchMaterialEnergyReduction(energy.size(),e.data,a.data,partials.data,result.data,nullptr);
+    double out[2];check(cudaMemcpy(out,result.data,2*sizeof(double),cudaMemcpyDeviceToHost));sum=out[0];maximum=out[1];return blocks;
+}
 radia_hmatrix_cuda::HostVector<double> flatDiagnosticEntries(const FlatInput& input,const radia_hmatrix_cuda::HostVector<std::size_t>& rows,
     const radia_hmatrix_cuda::HostVector<std::size_t>& cols){
     if(input.host.empty())throw std::invalid_argument("Flat diagnostic entries require charges");
