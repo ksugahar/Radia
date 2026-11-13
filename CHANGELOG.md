@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.4.5 - 2026-11-13
+
+- Evaluate CPU energy-Newton Armijo steps using the direct energy change
+  to reduce cancellation near convergence. The residual criterion is unchanged.
+- Distribute the Windows x64 wheel through PyPI. Linux builds use the source
+  from the release tag.
+
+## 5.4.4 - 2026-11-12
+
+- Reuse the assembled excitation for prepared nonlinear HDiv solves when the
+  excitation changes by a scalar factor on the same mesh.
+- Compute HDiv GPU material energy with a fixed-order parallel FP64 reduction.
+  This preserves the quadrature rule and can change rounding in the energy sum.
+
 ## 5.4.3 - 2026-11-11
 
 - Consume Cubit mesh export and MATLAB Optuna from their standalone

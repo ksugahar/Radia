@@ -1375,6 +1375,34 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
                        % (rel_step, relative_residual, nl_tol, nit))
 
 
+def _energy_armijo_line_search(m, dm, decrement, material_energy, linear_slope, curvature, evaluate_trial,
+                               *, armijo=1e-4, minimum_step=1e-10):
+    """Backtracking Armijo search on the energy change computed as a difference, not of two totals.
+
+    E(m) = W(m) + 1/2 m.(N m) - rhs.m with N symmetric, so for a trial m + lam dm
+      E(trial) - E(m) = [W(trial) - W(m)] + lam dm.(N m - rhs) + 1/2 lam^2 dm.(N dm).
+    The quadratic and linear totals are each far larger than a late Newton decrease and nearly cancel;
+    subtracting two totals leaves rounding jitter of the H-matrix apply that can exceed the Armijo bound
+    by orders of magnitude. ``linear_slope`` = dm.(N m - rhs) and ``curvature`` = dm.(N dm) are formed
+    once per direction. ``evaluate_trial(trial)`` returns (W(trial), E(trial), residual certified); a
+    certified trial is accepted first, as before. Returns (lam, trial energy, backtracks) or
+    (None, None, backtracks)."""
+    if not (np.isfinite(decrement) and decrement > 0 and np.isfinite(dm).all()
+            and np.isfinite(material_energy) and np.isfinite(linear_slope) and np.isfinite(curvature)):
+        return None, None, 0
+    lam, backtracks = 1.0, 0
+    while lam > minimum_step:
+        trial_material, trial_energy, certified = evaluate_trial(m + lam * dm)
+        if certified:
+            return lam, trial_energy, backtracks
+        change = (trial_material - material_energy) + lam * linear_slope + 0.5 * lam * lam * curvature
+        if np.isfinite(trial_energy) and np.isfinite(change) and change <= -armijo * lam * decrement:
+            return lam, trial_energy, backtracks
+        lam *= 0.5
+        backtracks += 1
+    return None, None, backtracks
+
+
 def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, cg_maxit,
                                 nl_maxit, nl_tol, m0=None, *, inner_tol="auto", warmstart="linear",
                                 continuation_steps=1, reuse_tangent_steps=1, cg_x0=False,
@@ -1397,8 +1425,10 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
 
     Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
     (the merit -- ||R|| stalls in saturation where the inverse-BH
-    H(M) blows up, but E keeps decreasing); a HARD-SATURATION BARRIER in the inverse BH (M cannot exceed
-    Msat) that repels the M-iterates from the unphysical |M| > Mmax region. Convergence requires the
+    H(M) blows up, but E keeps decreasing), tested on the energy change formed directly from the material
+    difference and the symmetric quadratic expansion (`_energy_armijo_line_search`), never as the difference
+    of two energy totals whose rounding exceeds a late Newton decrease; a HARD-SATURATION BARRIER in the
+    inverse BH (M cannot exceed Msat) that repels the M-iterates from the unphysical |M| > Mmax region. Convergence requires the
     assembled nonlinear residual relative to the fixed stage source (or initial residual for zero source).
     A rejected or settled step cannot certify convergence. Single-region (scalar
     bh_table) AND per-region (dict) iron; prescribed fixed-M sources enter through h_ext before this
@@ -1410,12 +1440,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
 
     rhs_src = _geometry_mass_apply(H, h_ext)
     Id = ng.Id(3); uf, vf = fes.TnT()
-    gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0)
+    l2 = ng.L2(mesh, order=0)
     material = _EnergyMaterialQuadrature(fes, bh_table)
-
-    def _reluct(g):
-        material.update(g.vec.FV().NumPy())
-        return material.field, material.tangent
 
     def _N_apply(v):
         if compensated_memory_mb:
@@ -1465,27 +1491,25 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     def _energy(m, rhs):                        # E(m) = INT W_co(|M|) dx + 1/2 m.Nm - rhs.m
         return material.update(m) + 0.5 * float(m @ _N_apply(m)) - float(rhs @ m)
 
-    def _line_search(m, dm, rhs, energy, decrement):
-        if not np.isfinite(decrement) or decrement <= 0 or not np.isfinite(dm).all():
-            return None, None, 0
-        lam, backtracks = 1.0, 0
-        while lam > 1e-10:
-            trial = m + lam * dm
-            trial_energy = _energy(trial, rhs)
-            # Near a root, the energy decrement can be below subtraction
-            # precision. Accept only a fresh original-equation certificate,
-            # never a small step or an energy plateau as convergence evidence.
-            trial_R = _bH(material.field) + _N_apply(trial) - rhs
-            if (np.isfinite(trial_energy) and np.isfinite(trial_R).all()
-                    and float(np.linalg.norm(trial_R)) <= nl_tol * residual_scale):
+    def _line_search(m, dm, rhs, decrement, material_energy, N_m):
+        def evaluate(trial):
+            trial_material = material.update(trial)
+            N_trial = _N_apply(trial)
+            trial_energy = trial_material + 0.5 * float(trial @ N_trial) - float(rhs @ trial)
+            # Accept a fresh original-equation certificate, never a small step
+            # or an energy plateau, as convergence evidence.
+            trial_R = _bH(material.field) + N_trial - rhs
+            certified = bool(np.isfinite(trial_energy) and np.isfinite(trial_R).all()
+                             and float(np.linalg.norm(trial_R)) <= nl_tol * residual_scale)
+            if certified:
                 stats["nonlinear_residual_certified_trials"] = (
                     stats.get("nonlinear_residual_certified_trials", 0) + 1)
-                return lam, trial_energy, backtracks
-            if np.isfinite(trial_energy) and trial_energy <= energy - 1e-4 * lam * decrement:
-                return lam, trial_energy, backtracks
-            lam *= 0.5
-            backtracks += 1
-        return None, None, backtracks
+            return trial_material, trial_energy, certified
+
+        if not (np.isfinite(decrement) and decrement > 0 and np.isfinite(dm).all()):
+            return None, None, 0
+        return _energy_armijo_line_search(
+            m, dm, decrement, material_energy, float(dm @ (N_m - rhs)), float(dm @ _N_apply(dm)), evaluate)
 
     def _forcing_tol(prev_rel_step, stage_final):
         if inner_tol in (None, "fixed"):
@@ -1558,9 +1582,10 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         for it in range(int(nl_maxit)):
             total_nit += 1
             stats["nonlinear_newton_iters"] += 1
-            gfM.vec.FV().NumPy()[:] = m
-            H_cf, nud = _reluct(gfM)
-            R = _bH(H_cf) + _N_apply(m) - rhs_stage
+            material_energy = material.update(m)
+            H_cf, nud = material.field, material.tangent
+            N_m = _N_apply(m)
+            R = _bH(H_cf) + N_m - rhs_stage
             if not np.isfinite(R).all() or not np.isfinite(E):
                 raise RuntimeError("vim.Solve (energy-Newton): non-finite residual or energy")
             if residual_scale is None:
@@ -1586,8 +1611,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                                  compensated_memory_mb=compensated_memory_mb)
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
-            E0 = E
-            lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+            lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, dec, material_energy, N_m)
             stats["nonlinear_line_search_backtracks"] += int(backtracks)
             if lam is None and not rebuild:
                 # A reused/chord tangent can occasionally lose descent.  Pay for one fresh tangent before
@@ -1603,7 +1627,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                                      compensated_memory_mb=compensated_memory_mb)
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
-                lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+                lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, dec, material_energy, N_m)
                 stats["nonlinear_line_search_backtracks"] += int(backtracks)
             if lam is None:
                 stats["nonlinear_final_relative_residual"] = relative_residual
