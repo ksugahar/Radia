@@ -101,7 +101,8 @@ public:
     // s, z:   nodes of the (s, z) map; r = sqrt(s) is the DOF node radius.
     double rg[S::N], zg[S::N];
     double r[S::N], z[S::N], s[S::N];
-    double s_scale, z_scale;
+    double s_scale, z_scale;   // max |s|; z extent of the element
+    double s_tol, z_tol;       // Newton residual tolerances
 
     void Init(const double * rs, const double * zs)
     {
@@ -134,6 +135,17 @@ public:
             s[8] = 0.5 * (s[4] + s[5] + s[6] + s[7]) - 0.25 * (s[0] + s[1] + s[2] + s[3]);
         for (int k = 0; k < S::N; ++k)
             r[k] = std::sqrt(std::max(s[k], 0.0));
+        // Residual tolerance: a small fraction of the element extent, but
+        // never below the round-off of the coordinates themselves (thin
+        // boundary-layer elements far from the axis).
+        double smin = s[0], smx = s[0], zabs = 0.0;
+        for (int k = 0; k < S::N; ++k) {
+            smin = std::min(smin, s[k]); smx = std::max(smx, s[k]);
+            zabs = std::max(zabs, std::fabs(z[k]));
+        }
+        const double eps = 2.220446049250313e-16;
+        s_tol = std::max(1e-12 * (smx - smin), 64.0 * eps * s_scale);
+        z_tol = std::max(1e-12 * z_scale, 64.0 * eps * zabs);
     }
 
     // (r, z) Lagrange map through the sampled nodes and its Jacobian
@@ -177,10 +189,8 @@ public:
     // (xi, eta).  Fails loudly if Newton's method does not converge.
     void Locate(double st, double zt, double & xi, double & eta) const
     {
-        // Converged when the (s, z) residual is at round-off of the element
-        // scale.  The map is singular on an axis edge (s ~ t^2), so the
-        // residual, not the step, is the criterion there.
-        const double tol = 1e-13;
+        // Converged when the (s, z) residual is within s_tol, z_tol (see
+        // Init).  The residual, not the step, is the criterion.
         const double xi0 = xi, eta0 = eta;
         for (int it = 0; it < 60; ++it) {
             double n[S::N], dx[S::N], dy[S::N];
@@ -192,7 +202,7 @@ public:
                 c += dx[k] * z[k]; d += dy[k] * z[k];
             }
             double fs = sp - st, fz = zp - zt;
-            if (std::fabs(fs) <= tol * s_scale && std::fabs(fz) <= tol * z_scale)
+            if (std::fabs(fs) <= s_tol && std::fabs(fz) <= z_tol)
                 return;
             double det = a * d - b * c;
             if (!(std::fabs(det) > 0.0)) break;
