@@ -28,7 +28,17 @@ The drive is NOT ``M`` applied to a constant: that would impose a uniform
 ``E_phi``, which no loop voltage produces, and would leave the field and the
 reconstructed current describing different problems.
 
-The ring's impedance is ``V / I``.  Dividing by the mean circumference gives a
+Terminal quantities.  ``L = Im(V / I) / omega``, but ``R`` is the dissipated
+power ``2 P / |I|^2``, not ``Re(V / I)``.  Once ``omega L >> R`` the current
+``I = int sigma (V / (2 pi r) - j omega A) dr dz`` is a near cancellation in
+its real part, so ``Re(V / I)`` carries the discretization error of ``A``
+amplified by ``omega L / R``: a linear-order beak mesh at 150 kHz gives a
+NEGATIVE terminal resistance while its loss is within 3 % of the quadratic
+one.  The power is a sum of nonnegative terms and is the quantity the
+Galerkin solution approximates in energy.  ``Re(V / I)`` stays available as
+``terminal_resistance_ohm`` and their gap as a resolution diagnostic.
+
+The ring's impedance is ``R + j omega L``.  Dividing by the mean circumference gives a
 per-unit-length figure comparable with a straight conductor, which is exact in
 the limit of a large radius and is how the straight-fin comparison is made.
 
@@ -64,6 +74,7 @@ class AxisymRingResult:
     terminal_current_A: complex
     terminal_impedance_ohm: complex
     resistance_ohm: float
+    terminal_resistance_ohm: float
     inductance_H: float
     ohmic_loss_W: float
     mean_radius_m: float
@@ -307,7 +318,7 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
             f"{_EXTERIOR_TAIL_LIMIT:.0e}); move 'outer' away from the "
             "conductor or keep more modes")
 
-    from radia.axisym_measure import axi_section_integral
+    from radia.axisym_measure import axi_section_integral, axi_volume_integral
 
     radius = ng.x
     j_phi = sigma_cf * (1.0 / (2.0 * np.pi * radius) - 1j * omega * gf_a)
@@ -323,14 +334,23 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
         radius, mesh, definedon=region).real) / area
 
     scale = 1.0 / current
-    impedance = 1.0 / current          # V = 1 was applied
+    terminal = 1.0 / current           # V = 1 was applied
+    j_unit = ng.CF(complex(scale)) * j_phi
+    loss = float(axi_volume_integral((j_unit * ng.Conj(j_unit)).real
+                                     / (2.0 * float(sigma)), mesh,
+                                     definedon=region).real)
+    if not (np.isfinite(loss) and loss > 0):
+        raise RuntimeError(f"nonpositive or nonfinite ring loss {loss!r}")
+    resistance = 2.0 * loss            # per 1 A peak terminal current
+    impedance = complex(resistance, terminal.imag)
     return AxisymRingResult(
         frequency_hz=float(frequency_hz), sigma_S_per_m=float(sigma),
         terminal_current_A=complex(current),
-        terminal_impedance_ohm=complex(impedance),
-        resistance_ohm=float(impedance.real),
-        inductance_H=float(impedance.imag / omega),
-        ohmic_loss_W=float(0.5 * impedance.real),
+        terminal_impedance_ohm=impedance,
+        resistance_ohm=resistance,
+        terminal_resistance_ohm=float(terminal.real),
+        inductance_H=float(terminal.imag / omega),
+        ohmic_loss_W=loss,
         mean_radius_m=mean_radius, ndof=int(fes.ndof),
         skin_depth_m=float(delta), gf_a=gf_a, mesh=mesh,
         conductor=conductor, scale=complex(scale))

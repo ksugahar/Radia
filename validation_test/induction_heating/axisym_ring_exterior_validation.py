@@ -156,8 +156,8 @@ def main():
                 "ndof": res.ndof, "resistance_per_metre": per_metre,
                 "bessel_per_metre": exact,
                 "relative_error": per_metre / exact - 1.0,
-                "loss_vs_half_RI2": res.total_loss()
-                / (0.5 * res.resistance_ohm) - 1.0,
+                "terminal_vs_energy_resistance": res.terminal_resistance_ohm
+                / res.resistance_ohm - 1.0,
             })
             print(json.dumps({"phase": "skin", **skin_rows[-1]}), flush=True)
 
