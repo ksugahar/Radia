@@ -243,11 +243,12 @@ def _branch_ring_solver():
         ring_solver=str(path.relative_to(ROOT)), ring_solver_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
-def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, curve_order, modes):
+def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, curve_order, modes, air_mm, air_divisor):
     solve_axisym_ring, _ = _branch_ring_solver()
     from aphi_beak_section_sweep import build_section_ring
-    mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=maxh, maxh_air_mm=20.0,
-                                                exterior_factor=factor, curve_order=curve_order)
+    mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=maxh, maxh_air_mm=air_mm,
+                                                exterior_factor=factor, curve_order=curve_order,
+                                                air_divisor=air_divisor)
     t0 = time.perf_counter()
     res = solve_axisym_ring(mesh, conductor="conductor", frequency_hz=frequency, sigma=sigma, order=order,
                             exterior_radius=ext_radius, exterior_center_z=ext_z, exterior_modes=modes)
@@ -256,7 +257,7 @@ def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, curve_orde
     beak = res.loss_beyond((radius_mm + ROOT_X_MM)*1e-3)
     tip = res.loss_beyond((radius_mm + TIP_X_MM)*1e-3)
     scale = 0.5*res.resistance_ohm/total
-    return dict(maxh_mm=maxh, exterior_factor=factor, order=order, ndof=int(res.ndof), seconds=seconds,
+    return dict(maxh_mm=maxh, air_maxh_mm=air_mm, air_divisor=air_divisor, exterior_factor=factor, order=order, ndof=int(res.ndof), seconds=seconds,
                 R_ohm=res.resistance_ohm, L_H=res.inductance_H,
                 root_heat_W_per_A2=float((beak - tip)*scale), tip_heat_W_per_A2=float(tip*scale),
                 beak_loss_fraction=float(beak/total), tip_loss_fraction=float(tip/total),
@@ -277,7 +278,14 @@ def main():
     parser.add_argument("--peec-boundary-h-mm", type=float, nargs="+", default=[0.06, 0.04, 0.028])
     parser.add_argument("--peec-interior-h-mm", type=float, default=0.5)
     parser.add_argument("--grading", type=float, default=0.25)
-    parser.add_argument("--ref-maxh-mm", type=float, nargs="+", default=[0.08, 0.05])
+    # One conductor-mesh ladder and one far-air size per reference order: a linear-order reference
+    # needs a much finer air mesh than the quadratic one before its inductance converges.
+    parser.add_argument("--ref-maxh-mm", type=float, nargs="+", action="append",
+                        help="conductor ladder for the matching --ref-order entry (repeat per order)")
+    parser.add_argument("--ref-air-mm", type=float, nargs="+", default=None,
+                        help="far-air mesh size per --ref-order entry")
+    parser.add_argument("--ref-air-divisor", type=float, nargs="+", default=None,
+                        help="far air no finer than exterior radius / divisor, per --ref-order entry")
     parser.add_argument("--ref-exterior-factor", type=float, nargs="+", default=[1.5, 3.0])
     parser.add_argument("--ref-order", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--threads", type=int, default=8)
@@ -288,18 +296,41 @@ def main():
     _, provenance = _branch_ring_solver()      # before any module puts the checkout's src first
     from fin_return_principle import PHYSICAL_TARGETS, physical_verdict
 
+    ladders = args.ref_maxh_mm or [[0.05, 0.035, 0.025]]*len(args.ref_order)
+    airs = args.ref_air_mm or [20.0]*len(args.ref_order)
+    divisors = args.ref_air_divisor or [20.0]*len(args.ref_order)
+    if (not (len(ladders) == len(airs) == len(divisors) == len(args.ref_order))
+            or any(len(l) < 2 for l in ladders)):
+        raise ValueError("one conductor ladder (>= 2 levels), air size and divisor per reference order")
     reference = []
-    for order in args.ref_order:
+    for order, ladder, air, divisor in zip(args.ref_order, ladders, airs, divisors):
         for factor in args.ref_exterior_factor:
-            for maxh in args.ref_maxh_mm:
-                row = solve_reference(args.radius_mm, args.frequency_hz, args.sigma, maxh, factor, order, 3, 30)
+            for maxh in ladder:
+                row = solve_reference(args.radius_mm, args.frequency_hz, args.sigma, maxh, factor, order, 3, 30,
+                                      air, divisor)
                 reference.append(row)
                 print(json.dumps({"phase": "reference", **row}), flush=True)
-    finest = reference[-1]
-    ref_q = quantities(finest)
-    spread = {k: max(abs(quantities(r)[k] - ref_q[k])/abs(ref_q[k]) for r in reference) for k in ref_q}
-    swept = all(len({r[key] for r in reference}) >= 2 for key in ("maxh_mm", "exterior_factor", "order"))
-    consistent = all(r["terminal_vs_energy_R"] <= 1e-3 for r in reference[-1:])
+    top = max(args.ref_order)
+    wide = max(args.ref_exterior_factor)
+    finest = {o: [r for r in reference if r["order"] == o and r["maxh_mm"] == min(l)]
+              for o, l in zip(args.ref_order, ladders)}
+    best = [r for r in finest[top] if r["exterior_factor"] == wide][0]
+    ref_q = quantities(best)
+    rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
+    checks = {}
+    for o, ladder in zip(args.ref_order, ladders):      # mesh: last two levels of every order and exterior
+        lv = sorted(set(ladder))
+        for factor in args.ref_exterior_factor:
+            pick = {r["maxh_mm"]: r for r in reference if r["order"] == o and r["exterior_factor"] == factor}
+            checks[f"mesh_o{o}_f{factor}"] = rel(pick[lv[1]], pick[lv[0]])
+    for r in finest[top]:                                # exterior, at the finest quadratic level
+        checks[f"exterior_f{r['exterior_factor']}"] = rel(r, best)
+    for o in args.ref_order:                             # order, at the finest level and widest exterior
+        r = [x for x in finest[o] if x["exterior_factor"] == wide][0]
+        checks[f"order_o{o}"] = rel(r, best)
+    spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
+    swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
+    consistent = best["terminal_vs_energy_R"] <= 1e-3
     resolved = swept and consistent and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items())
 
     peec = []
@@ -321,10 +352,12 @@ def main():
         skin_depth_mm=1e3/math.sqrt(math.pi*args.frequency_hz*MU0*args.sigma),
         cuts_mm=dict(root=[ROOT_X_MM, TIP_X_MM], tip=[TIP_X_MM, None]),
         normalization="per 1 A peak terminal current; loop-voltage port; exp(+j omega t)",
-        reference_levels=reference, reference_spread_vs_finest=spread,
-        reference_resolved_rule=("at least two levels of order, mesh and exterior; every quantity within one tenth "
-                                 "of its limit of the finest across them; the finest terminal Re(V/I) within 1e-3 "
-                                 "of the dissipation resistance"),
+        reference_levels=reference, reference_checks=checks, reference_spread_max=spread,
+        reference_resolved_rule=("two orders and two exteriors, each order on its own conductor ladder and far-air "
+                                 "size; every quantity within one tenth of its limit for (a) the last two mesh levels "
+                                 "of every order and exterior, (b) each exterior against the widest at the finest "
+                                 "highest order, (c) each order's finest against the highest order's finest; the "
+                                 "highest order's terminal Re(V/I) within 1e-3 of the dissipation resistance"),
         reference_swept=swept, reference_loss_consistent=consistent,
         reference_resolved=resolved, peec_levels=peec,
         peec_change_last_two={k: abs(quantities(peec[-1])[k] - quantities(peec[-2])[k])/abs(quantities(peec[-1])[k])

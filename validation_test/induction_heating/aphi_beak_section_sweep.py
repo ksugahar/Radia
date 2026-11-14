@@ -41,7 +41,8 @@ TIP_X_MM = 3.5
 
 
 def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
-                       exterior_factor, curve_order):
+                       exterior_factor, curve_order, air_divisor=20,
+                       skin_layers_mm=None):
     """The beak profile as the meridian of a ring at ``radius_mm``.
 
     Returns ``(mesh, exterior_radius_m, exterior_center_z_m)``: the air is a
@@ -49,7 +50,11 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
     farthest reach, closed by the exact exterior term.  The multipole series
     converges as ``1 / exterior_factor`` per mode, so the factor, not a fixed
     margin, keeps the mode count bounded at every ring radius.  Far air is
-    meshed no finer than a twentieth of that radius.
+    meshed no finer than ``1 / air_divisor`` of that radius (default a
+    twentieth); a linear-order reference needs a larger divisor.
+    ``skin_layers_mm`` inserts that stack of layers inward from the conductor
+    surface, so the normal resolution can be refined while the surface nodes,
+    the core and the air stay as they are.
     """
     from build123d import Plane
     from make_beak_fin_step import _beak_face
@@ -69,13 +74,14 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
     step.unlink(missing_ok=True)
 
     section.faces.name = "conductor"
+    section.edges.name = "skin"
     section.maxh = maxh_conductor_mm * 1e-3
     box = section.bounding_box
     center_z = 0.5 * (float(box[0][1]) + float(box[1][1]))
     reach = max(math.hypot(float(box[i][0]), float(box[j][1]) - center_z)
                 for i in range(2) for j in range(2))
     radius = exterior_factor * reach
-    air_h = max(maxh_air_mm * 1e-3, radius / 20)
+    air_h = max(maxh_air_mm * 1e-3, radius / float(air_divisor))
     disk = Circle((0.0, center_z), radius).Face()
     half = MoveTo(0.0, center_z - radius).Rectangle(radius, 2 * radius).Face()
     air = disk * half
@@ -85,7 +91,15 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
     outside = air - section
     outside.faces.name = "air"
     total = Glue([outside, section])
-    mesh = ng.Mesh(OCCGeometry(total, dim=2).GenerateMesh(maxh=air_h))
+    layers = []
+    if skin_layers_mm:
+        from netgen.meshing import BoundaryLayerParameters
+
+        layers = [BoundaryLayerParameters(
+            boundary="skin", thickness=[t * 1e-3 for t in skin_layers_mm],
+            domain="conductor", disable_curving=False)]
+    mesh = ng.Mesh(OCCGeometry(total, dim=2).GenerateMesh(
+        maxh=air_h, boundary_layers=layers))
     if curve_order > 1:
         mesh.Curve(int(curve_order))
     return mesh, radius, center_z

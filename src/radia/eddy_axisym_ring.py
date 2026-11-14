@@ -214,7 +214,7 @@ def _check_exterior_arc(mesh, radius, center_z):
 def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
                       exterior_radius, exterior_center_z=0.0,
                       exterior_modes=30, order=2, mu_r=1.0,
-                      solver="umfpack"):
+                      solver="umfpack", curved_quads=False):
     """Solve one voltage-driven axisymmetric eddy operating point.
 
     Args:
@@ -228,6 +228,9 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
         exterior_center_z: axial position of its centre.
         exterior_modes: number of exterior multipoles kept.
         mu_r: relative permeability everywhere, exterior included.
+        curved_quads: select the s-isoparametric quad element for skewed or
+            curved quadrilaterals (boundary-layer meshes); the axis-aligned
+            closed-form quad rejects them loudly.
 
     Returns:
         AxisymRingResult rescaled so the terminal current is exactly 1 A.
@@ -259,7 +262,8 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma,
     sigma_cf = mesh.MaterialCF({conductor: float(sigma)}, default=0.0)
 
     # The axis is pinned by symmetry; 'outer' is natural and closed below.
-    fes = H1Henrotte(mesh, order=order, complex=True, dirichlet="axis")
+    fes = H1Henrotte(mesh, order=order, complex=True, dirichlet="axis",
+                     **({"curvedquad": True} if curved_quads else {}))
     stiffness = ng.BilinearForm(fes, symmetric=True)
     stiffness += AxiHenrotteStiffnessBFI(mu_cf)
     mass = ng.BilinearForm(fes, symmetric=True)
