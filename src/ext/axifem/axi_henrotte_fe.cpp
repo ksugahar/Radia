@@ -364,67 +364,23 @@ AxiHenrotteFE_P1_Triangle::AxiHenrotteFE_P1_Triangle(
     const double rs[3], const double zs[3])
   : AxiHenrotteBaseFE(3, 2)  // 3 DOFs, polynomial degree 2 (in r)
 {
-    for (int i = 0; i < 3; ++i) { r[i] = rs[i]; z[i] = zs[i]; }
-    // Basis: shape_i(r, z) = alpha_i + beta_i*r^2 + gamma_i*z
-    // such that shape_i(r_j, z_j) = delta_ij.
-    // 3x3 system per i: [1, r_j^2, z_j] * (alpha, beta, gamma)^T_i = e_i
-    double s[3] = { r[0]*r[0], r[1]*r[1], r[2]*r[2] };
-    double det = (s[1] - s[0]) * (z[2] - z[0]) - (z[1] - z[0]) * (s[2] - s[0]);
-    double ds_scale = std::max({1.0, std::abs(s[1] - s[0]), std::abs(s[2] - s[0])});
-    double dz_scale = std::max({1.0, std::abs(z[1] - z[0]), std::abs(z[2] - z[0])});
-    if (std::abs(det) <= 1.0e-14 * ds_scale * dz_scale)
-        throw Exception("AxiHenrotteFE_P1_Triangle: singular Vandermonde in (r^2,z)");
-
-    Mat<3,3> V;
-    for (int i = 0; i < 3; ++i) {
-        V(i, 0) = 1.0;
-        V(i, 1) = s[i];
-        V(i, 2) = z[i];
-    }
-    Mat<3,3> Vinv;
-    CalcInverse(V, Vinv);
-    for (int i = 0; i < 3; ++i) {
-        alpha[i] = Vinv(0, i);
-        beta[i] = Vinv(1, i);
-        gamma_[i] = Vinv(2, i);
-    }
+    geo.Init(rs, zs);
 }
 
 void AxiHenrotteFE_P1_Triangle::CalcShape(
     const IntegrationPoint & ip, BareSliceVector<> shape) const
 {
-    // NGSolve ET_TRIG convention matches the P2 path:
-    //   ref (1, 0) <-> mesh vertex 0
-    //   ref (0, 1) <-> mesh vertex 1
-    //   ref (0, 0) <-> mesh vertex 2
-    double xi = ip(0);
-    double eta = ip(1);
-    double rp = r[2] + (r[0] - r[2]) * xi + (r[1] - r[2]) * eta;
-    double zp = z[2] + (z[0] - z[2]) * xi + (z[1] - z[2]) * eta;
-    double sp = rp * rp;
-    for (int i = 0; i < 3; ++i)
-        shape(i) = alpha[i] + beta[i] * sp + gamma_[i] * zp;
+    double v[3];
+    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
+    for (int i = 0; i < 3; ++i) shape(i) = v[i];
 }
 
 void AxiHenrotteFE_P1_Triangle::CalcDShape(
     const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
 {
-    double xi = ip(0);
-    double eta = ip(1);
-    double rp = r[2] + (r[0] - r[2]) * xi + (r[1] - r[2]) * eta;
-    // d phi/dr = beta_i * 2 r ;  d phi/dz = gamma_i
-    // dr/dxi = r_0 - r_2,    dr/deta = r_1 - r_2
-    // dz/dxi = z_0 - z_2,    dz/deta = z_1 - z_2
-    double dr_dxi = r[0] - r[2];
-    double dr_deta = r[1] - r[2];
-    double dz_dxi = z[0] - z[2];
-    double dz_deta = z[1] - z[2];
-    for (int i = 0; i < 3; ++i) {
-        double dphi_dr = beta[i] * 2.0 * rp;
-        double dphi_dz = gamma_[i];
-        dshape(i, 0) = dphi_dr * dr_dxi + dphi_dz * dz_dxi;     // d/dxi
-        dshape(i, 1) = dphi_dr * dr_deta + dphi_dz * dz_deta;   // d/deta
-    }
+    double d[3][2];
+    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
+    for (int i = 0; i < 3; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
 }
 
 // ---------------------------------------------------------------------------

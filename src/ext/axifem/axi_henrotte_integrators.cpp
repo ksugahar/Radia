@@ -6,19 +6,15 @@
 //   axifem_quad.py
 //     _element_matrices_quad_closed_form  (Q1 stiffness)
 //     element_sigma_mass_quad             (Q1 sigma mass)
-//   axifem_core.py
-//     element_matrices                    (P1 triangle stiffness, FEMM prob3big)
-//   sigma_mass.py
-//     element_sigma_mass                  (P1 triangle sigma mass, Hammer 7-point)
+// P1/P2 triangles and curved Q2 quads use the s-isoparametric quadrature of
+// axi_henrotte_siso.hpp.
 //
 // DOF convention (V-DOF): u_j = A_phi at vertex j. This matches the Python
 // references (validation_test/axifem/research/verification/disk_axisym_reference.py).
 // - Q1 closed form: M_V = T M_phi T with T_jj = 2 pi r_j; axis-vertex rows/
 //   cols become zero (caller MUST Dirichlet axis edges).
-// - P1 triangle stiffness: -pi factor applied to FEMM raw matrices, matches
-//   axifem_core.py post-multiplication.
-// - P1 triangle sigma-mass: V-DOF Hammer 7-point integral of N_A_i N_A_j with
-//   N_A_j = r_j psi_j / r (the A_phi basis at vertex j).
+// - Triangles / curved quads: V-DOF integrals with N_A_j = r_j psi_j / r over
+//   the (s, z) element map.
 //
 // The user MUST apply Dirichlet on every axis edge ("axis|...") for axis-
 // touching elements; otherwise the V-DOF zero rows/cols make the system
@@ -43,7 +39,6 @@ using std::abs;
 
 namespace {
 
-constexpr double EPS_AXIS = 1.0e-14;
 constexpr double PI = 3.14159265358979323846;
 
 // ---------------------------------------------------------------------------
@@ -187,154 +182,6 @@ void Q2SigmaMassElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double sigma,
         fe.r_a, fe.r_b, fe.z_a, fe.z_b, 1.0, sigma).sigma_mass, elmat);
 }
 
-// ---------------------------------------------------------------------------
-// P1 triangle stiffness in V-DOF (matches the P2 triangle / the Q2 closed
-// form):  K_ij = (2 pi / mu) r_i r_j INT_T grad(psi_i).grad(psi_j)/r dA,
-// psi_i = alpha_i + beta_i r^2 + gamma_i z (the {1, r^2, z} Henrotte basis).
-//
-// This is the CORRECT axisymmetric V-DOF stiffness: a uniform axial B_z has
-// nodal A_phi V_i = B0 r_i/2 with  sum_j r_j^2 psi_j == r^2, so V lies in the
-// kernel (interior) and order-1 magnetostatics converges (magnetized sphere
-// O(h): -1.8% -> -0.6%, FEMM-P1-like).  It REPLACES the earlier FEMM prob3big
-// A=psi port, which is NOT a V-DOF operator (it does not annihilate the uniform
-// field -- ||(K V_unif)_interior||/scale ~ 0.6 -- so order-1 magnetostatic
-// solves gave a wrong, non-uniform interior field).  The matching V-DOF
-// sigma-mass (P1TriangleSigmaMass) is unchanged, so the eddy path stays
-// consistent.  Axis-touching cells use the same r_q<=EPS_AXIS skip as P2.
-// ---------------------------------------------------------------------------
-void P1TriangleStiffness(const double rn[3], const double zn[3], double mu,
-                          FlatMatrix<double> elmat)
-{
-    Mat<3,3> M_vand;
-    for (int j = 0; j < 3; ++j) {
-        M_vand(j, 0) = 1.0;
-        M_vand(j, 1) = rn[j] * rn[j];
-        M_vand(j, 2) = zn[j];
-    }
-    Mat<3,3> inv_vand;
-    CalcInverse(M_vand, inv_vand);
-    double beta[3]  = { inv_vand(1,0), inv_vand(1,1), inv_vand(1,2) };
-    double gamma[3] = { inv_vand(2,0), inv_vand(2,1), inv_vand(2,2) };
-
-    double drxi  = rn[1] - rn[0];
-    double dreta = rn[2] - rn[0];
-    double dzxi  = zn[1] - zn[0];
-    double dzeta = zn[2] - zn[0];
-    double detJ  = abs(drxi * dzeta - dreta * dzxi);
-
-    // Hammer 7-point (same rule as P1TriangleSigmaMass).
-    const double s15 = 3.872983346207417;
-    const double w_a = 9.0 / 80.0;
-    const double w_b = (155.0 - s15) / 2400.0;
-    const double w_c = (155.0 + s15) / 2400.0;
-    const double a1  = (6.0 + s15) / 21.0;
-    const double a2  = (9.0 - 2.0 * s15) / 21.0;
-    const double b1  = (6.0 - s15) / 21.0;
-    const double b2  = (9.0 + 2.0 * s15) / 21.0;
-    const double pts[7][3] = {
-        {1.0/3.0, 1.0/3.0, w_a},
-        {a1, a1, w_b}, {a2, a1, w_b}, {a1, a2, w_b},
-        {b1, b1, w_c}, {b2, b1, w_c}, {b1, b2, w_c},
-    };
-
-    Mat<3,3> Ke;
-    Ke = 0.0;
-    for (int q = 0; q < 7; ++q) {
-        double xi = pts[q][0], eta = pts[q][1], w = pts[q][2];
-        double r_q = rn[0] + drxi * xi + dreta * eta;
-        if (r_q <= EPS_AXIS) continue;          // integrable 1/r near axis
-        double dpsi_dr[3], dpsi_dz[3];
-        for (int j = 0; j < 3; ++j) {
-            dpsi_dr[j] = 2.0 * beta[j] * r_q;   // d/dr (alpha + beta r^2 + gamma z)
-            dpsi_dz[j] = gamma[j];
-        }
-        double factor = w * detJ / r_q;
-        for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j)
-                Ke(i, j) += factor * (dpsi_dr[i]*dpsi_dr[j] + dpsi_dz[i]*dpsi_dz[j]);
-    }
-    double inv_mu = 1.0 / mu;
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j)
-            elmat(i, j) = 2.0 * PI * inv_mu * rn[i] * rn[j] * Ke(i, j);
-}
-
-// ---------------------------------------------------------------------------
-// P1 triangle sigma-mass in V-DOF via Hammer 7-point quadrature.
-// Verbatim port of <private-path>/.../axifem/sigma_mass.py:element_sigma_mass.
-//
-// Basis for A_phi at vertex j: N_A_j(r, z) = r_j * psi_j(r, z) / r
-// where psi_j = alpha_j + beta_j r^2 + gamma_j z is the {1, r^2, z} basis
-// satisfying psi_j(r_k, z_k) = delta_jk.
-//
-// M_e[i, j] = sigma * Integrate( N_A_i N_A_j * 2 pi r dr dz )
-//           = 2 pi sigma r_i r_j * Integrate( psi_i psi_j / r dr dz )
-//
-// Returned matrix is in V-DOF (DOF = A_phi at vertex), matching the FEMM-
-// style stiffness convention used by P1TriangleStiffness.
-// ---------------------------------------------------------------------------
-void P1TriangleSigmaMass(const double rn[3], const double zn[3], double sigma,
-                         FlatMatrix<double> elmat)
-{
-    // Vandermonde for {1, r^2, z}.
-    Mat<3,3> M_vand;
-    for (int j = 0; j < 3; ++j) {
-        M_vand(j, 0) = 1.0;
-        M_vand(j, 1) = rn[j] * rn[j];
-        M_vand(j, 2) = zn[j];
-    }
-    Mat<3,3> inv_vand;
-    CalcInverse(M_vand, inv_vand);
-    // Column j of inv_vand = (alpha_j, beta_j, gamma_j) for psi_j.
-    double alpha[3] = { inv_vand(0,0), inv_vand(0,1), inv_vand(0,2) };
-    double beta[3]  = { inv_vand(1,0), inv_vand(1,1), inv_vand(1,2) };
-    double gamma[3] = { inv_vand(2,0), inv_vand(2,1), inv_vand(2,2) };
-
-    double drxi  = rn[1] - rn[0];
-    double dreta = rn[2] - rn[0];
-    double dzxi  = zn[1] - zn[0];
-    double dzeta = zn[2] - zn[0];
-    double detJ  = abs(drxi * dzeta - dreta * dzxi);
-
-    const double s15 = 3.872983346207417;
-    const double w_a = 9.0 / 80.0;
-    const double w_b = (155.0 - s15) / 2400.0;
-    const double w_c = (155.0 + s15) / 2400.0;
-    const double a1  = (6.0 + s15) / 21.0;
-    const double a2  = (9.0 - 2.0 * s15) / 21.0;
-    const double b1  = (6.0 - s15) / 21.0;
-    const double b2  = (9.0 + 2.0 * s15) / 21.0;
-    const double pts[7][3] = {
-        {1.0/3.0, 1.0/3.0, w_a},
-        {a1, a1, w_b}, {a2, a1, w_b}, {a1, a2, w_b},
-        {b1, b1, w_c}, {b2, b1, w_c}, {b1, b2, w_c},
-    };
-
-    Mat<3,3> Me;
-    Me = 0.0;
-    for (int q = 0; q < 7; ++q) {
-        double xi = pts[q][0], eta = pts[q][1], w = pts[q][2];
-        double r_q = rn[0] + drxi * xi + dreta * eta;
-        double z_q = zn[0] + dzxi * xi + dzeta * eta;
-        if (r_q <= 0.0) continue;
-        double psi[3];
-        for (int j = 0; j < 3; ++j)
-            psi[j] = alpha[j] + beta[j] * r_q * r_q + gamma[j] * z_q;
-        // V-DOF basis: N_A_j = r_j * psi_j / r
-        double NA[3];
-        for (int j = 0; j < 3; ++j) NA[j] = rn[j] * psi[j] / r_q;
-        // Integrand: sigma * N_A_i * N_A_j * 2 pi r * w * detJ
-        double factor = sigma * 2.0 * PI * r_q * w * detJ;
-        for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j)
-                Me(i, j) += factor * NA[i] * NA[j];
-    }
-
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j)
-            elmat(i, j) = 0.5 * (Me(i, j) + Me(j, i));
-}
-
 }  // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -371,7 +218,7 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
-        P1TriangleStiffness(p1->r, p1->z, mu, elmat);
+        p1->geo.Stiffness(mu, elmat);
         return;
     }
     if (auto * p2 = dynamic_cast<const AxiHenrotteFE_P2_Triangle*>(&fel)) {
@@ -417,7 +264,7 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
-        P1TriangleSigmaMass(p1->r, p1->z, sigma, elmat);
+        p1->geo.SigmaMass(sigma, elmat);
         return;
     }
     if (auto * p2 = dynamic_cast<const AxiHenrotteFE_P2_Triangle*>(&fel)) {

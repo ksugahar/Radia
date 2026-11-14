@@ -154,17 +154,19 @@ the value of the axisymmetric-specific basis.
 
 Triangles are the general-shape path.
 
-- `order=1` triangle: 3 DOFs at vertices, with basis
-  `{1, r², z}`.  The pure-Python reference keeps the FEMM `prob3big.cpp`
-  P1 formula lineage for comparison, while production C++ uses the
-  NGSolve `.vol` mesh route and the V-DOF stiffness lane that reproduces
-  a uniform axial `B_z` field.  Do not describe the production path as a
-  line-for-line FEMM port.
-- `order=2` triangle: 6 DOFs at 3 vertices + 3 edge midnodes, with basis
-  `{1, r², z, r⁴, r² z, z²}`.  The C++ FESpace obtains all 6 physical
-  node positions through NGSolve's element transformation, so after
-  `mesh.Curve(2)` the edge nodes follow the curved geometry.  The stiffness
-  and sigma-mass BFIs use the same 6-node geometric map at quadrature points.
+- `order=1` triangle: 3 DOFs at vertices, basis linear in `(s = r², z)`.
+  s-isoparametric with an affine `(s, z)` map: the matrices are integrated
+  over the triangle that is straight in `(s, z)`, so the space is conforming
+  there and with Q1 quads; oblique `(r, z)` edges carry a geometric error of
+  relative size `h / r`.  It reproduces a uniform axial `B_z` field.  The
+  pure-Python reference keeps the FEMM `prob3big.cpp` P1 formula lineage for
+  comparison; do not describe the production path as a FEMM port.
+- `order=2` triangle: 6 DOFs at 3 vertices + 3 edge midnodes,
+  s-isoparametric: reference Lagrange basis on the quadratic Lagrange map to
+  `(s, z)` through the 6 nodes, which the C++ FESpace takes from NGSolve's
+  element transformation (after `mesh.Curve(2)` the edge nodes follow the
+  curved geometry).  Stiffness, sigma mass and point evaluation use the same
+  map; the space is conforming on oblique edges.
 
 This means P2 curved triangles are part of the production implementation.
 They are the recommended curved-boundary path for spheres, Kelvin half-discs,

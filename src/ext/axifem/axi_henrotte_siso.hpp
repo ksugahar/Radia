@@ -1,5 +1,5 @@
 // axi_henrotte_siso.hpp -- s-isoparametric geometry for the general Henrotte
-// elements (P2 triangle, Q2 curved quad).
+// elements (P1 and P2 triangles, Q2 curved quad).
 //
 // The flux function psi = 2 pi r A_phi must behave like s = r^2 at the axis so
 // that the 1/r stiffness stays finite.  The earlier general elements achieved
@@ -34,6 +34,25 @@ namespace axifem {
 namespace siso {
 
 using namespace ngfem;
+
+// P1 triangle on NGSolve's ET_TRIG reference: V0 at (1,0), V1 at (0,1), V2 at
+// (0,0).  No midnodes (EDGE[e][2] = -1): the (s, z) map is affine, so the basis
+// is linear in (s, z) and reproduces psi = s and psi = z exactly.  Its edges are
+// straight in (s, z); an oblique straight (r, z) edge is approximated by the
+// (s, z) chord, a geometric error of order h^2 shared by both neighbours.
+struct P1Tri {
+    static constexpr int N = 3;
+    static constexpr bool kTriangle = true;
+    static constexpr int NE = 3;
+    static constexpr int EDGE[3][3] = { {0, 1, -1}, {1, 2, -1}, {2, 0, -1} };
+    static void Eval(double xi, double eta, double n[3], double dx[3], double dy[3])
+    {
+        n[0] = xi; n[1] = eta; n[2] = 1.0 - xi - eta;
+        dx[0] = 1.0;  dy[0] = 0.0;
+        dx[1] = 0.0;  dy[1] = 1.0;
+        dx[2] = -1.0; dy[2] = -1.0;
+    }
+};
 
 // P2 triangle on NGSolve's ET_TRIG reference: V0 at (1,0), V1 at (0,1), V2 at
 // (0,0); local order [v0, v1, v2, m01, m12, m20].
@@ -124,6 +143,7 @@ public:
         bool moved = false;
         for (int e = 0; e < S::NE; ++e) {
             int a = S::EDGE[e][0], b = S::EDGE[e][1], m = S::EDGE[e][2];
+            if (m < 0) continue;   // no midnode (P1)
             bool on_a = s[a] <= axis_tol, on_b = s[b] <= axis_tol;
             if (on_a != on_b) {
                 s[m] = 0.5 * (s[a] + s[b]);
@@ -146,6 +166,20 @@ public:
         const double eps = 2.220446049250313e-16;
         s_tol = std::max(1e-12 * (smx - smin), 64.0 * eps * s_scale);
         z_tol = std::max(1e-12 * z_scale, 64.0 * eps * zabs);
+        // Fail loudly on a degenerate (s, z) element (e.g. three nodes on one
+        // r = const line): its map, and so its basis, does not exist.
+        double n[S::N], dx[S::N], dy[S::N];
+        const double c = S::kTriangle ? 1.0 / 3.0 : 0.5;
+        S::Eval(c, c, n, dx, dy);
+        double a = 0.0, b = 0.0, cz = 0.0, d = 0.0;
+        for (int k = 0; k < S::N; ++k) {
+            a += dx[k] * s[k]; b += dy[k] * s[k];
+            cz += dx[k] * z[k]; d += dy[k] * z[k];
+        }
+        const double ds = smx > smin ? smx - smin : s_scale;
+        if (!(std::fabs(a * d - b * cz) > 1e-14 * ds * z_scale))
+            throw Exception("H1Henrotte: degenerate (s, z) element map at r0="
+                            + std::to_string(r[0]) + " z0=" + std::to_string(z[0]));
     }
 
     // (r, z) Lagrange map through the sampled nodes and its Jacobian

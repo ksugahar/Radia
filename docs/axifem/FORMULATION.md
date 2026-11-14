@@ -307,8 +307,8 @@ elements:
   the axis-touching cases (1- or 2-vertex on axis).  The production C++
   path is not a line-for-line FEMM port: it is reached through
   `Mesh("model.vol")` / NGSolve and assembles the V-DOF stiffness lane
-  used by `H1Henrotte`, with regression gates for the uniform-`B_z`
-  identity and degenerate `(r²,z)` triangles.
+  used by `H1Henrotte`, with regression gates for the `(s, z)`-triangle
+  quadrature and degenerate `(s, z)` triangles (see the last bullet).
 - `AxiHenrotteFE_P2_Triangle` (6 DOFs/cell, 3 vertices plus 3 edge
   midnodes) is s-isoparametric: the element geometry is the quadratic
   Lagrange map from the reference triangle to `(s = r², z)` through the
@@ -326,9 +326,19 @@ elements:
   `ψ ~ s` at the axis.  Stiffness and sigma mass are integrated over the
   reference element through the `(s, z)` map
   (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`).
-- `AxiHenrotteFE_P1_Triangle` keeps the physical `{1, s, z}` basis and is
-  therefore not conforming on oblique edges (measured trace jump 0.03 for a
-  unit DOF on a two-triangle patch).
+- `AxiHenrotteFE_P1_Triangle` is s-isoparametric with an affine map to
+  `(s, z)`: `ψ` is linear in `(s, z)` (the `{1, s, z}` basis, which
+  reproduces `ψ = s` and the uniform `B_z` field) and its matrices are
+  integrated over the triangle whose edges are straight in `(s, z)`, through
+  the same map.  The space is conforming on that triangulation and on edges
+  shared with Q1 axis-aligned quads (`r = const` and `z = const` lines are
+  straight in both planes).  An edge oblique in `(r, z)` is replaced by its
+  `(s, z)` chord, a geometric error of relative size about `h / r`: point
+  evaluation through NGSolve's straight `(r, z)` mesh still shows a jump of
+  that size across oblique edges (0.03 for a unit DOF on a two-triangle patch
+  with `h ~ r`).  The former element integrated the same basis over the
+  `(r, z)` triangle, where it is not continuous across oblique edges; on the
+  fin reference mesh (`h / r ~ 3e-5`) the two give the same values to 1e-5.
 
 P1 triangles have lower per-DOF accuracy than Q2 quads
 (`disk_convergence` example shows ~5–6 % gap to BEM-Foster reference even

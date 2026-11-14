@@ -44,8 +44,10 @@ axis-aligned; opt into the 9-node curved Q2 quad with
 is genuinely skewed or curved.  The P2 triangle and the curved Q2 quad are
 s-isoparametric (reference Lagrange basis on a Lagrange map to `(s = r^2, z)`),
 so they are conforming on oblique edges, with each other and themselves.  The
-P1 triangle keeps the physical `{1, s, z}` basis and is not conforming on
-oblique edges; prefer order 2 for reference values.
+P1 triangle is s-isoparametric with an affine `(s, z)` map: conforming on the
+triangulation that is straight in `(s, z)` and with Q1 quads; an oblique
+`(r, z)` edge is replaced by its `(s, z)` chord (relative error about `h / r`).
+Prefer order 2 for reference values.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 
@@ -84,7 +86,7 @@ AXIFEM_SUPPORT_MATRIX = """\
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
 |--------------|-----------|------------------|------------|--------|
-| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM `prob3big.cpp` direct port |
+| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; s-isoparametric, affine `(s, z)` map |
 | Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; NGSolve element transformation supplies the curved mid-edge coordinates |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
@@ -264,10 +266,13 @@ Basis on each triangle:
 {1, s, z},  s = r²
 ```
 
-DOFs are the 3 vertices.  This is the FEMM `prob3big.cpp`
-`StaticAxisymmetric()` direct-port path and is useful for unstructured
-triangle meshes.  Axis-touching cases use the same special-case formulas as
-FEMM.
+DOFs are the 3 vertices.  The element is s-isoparametric with an affine map
+to `(s, z)`: stiffness and sigma mass are integrated over the triangle that is
+straight in `(s, z)` (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`),
+so the space is conforming there and with Q1 quads, and `ψ = s` (uniform
+`B_z`) is reproduced.  An edge oblique in `(r, z)` is replaced by its `(s, z)`
+chord (relative geometric error about `h / r`).  Axis vertices decouple through
+the `r_i` factor of the V-DOF basis.
 
 ## Q1 quad (4 DOFs / axis-aligned quad)
 

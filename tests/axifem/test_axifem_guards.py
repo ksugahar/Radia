@@ -48,9 +48,9 @@ def test_q2_curved_quad_accepts_skewed_geometry():
     _assemble_stiffness(_skew_quad_mesh(), order=2, curvedquad=True)
 
 
-def test_p1_triangle_rejects_singular_r2z_vandermonde():
+def test_p1_triangle_rejects_degenerate_s_z_map():
     axifem = pytest.importorskip("radia.axifem")
-    with pytest.raises(Exception, match="singular Vandermonde"):
+    with pytest.raises(Exception, match=r"degenerate \(s, z\) element map"):
         axifem.AxiHenrotteFE_P1_Triangle([1.0, 1.0, 1.0], [0.0, 1.0, 2.0])
 
 

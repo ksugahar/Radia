@@ -168,13 +168,16 @@ public:
 // ---------------------------------------------------------------------------
 // AxiHenrotteFE_P1_Triangle
 //   - 3 DOFs/element on a general triangle (r_i, z_i) in (r, z) plane
-//   - shape_i(r, z) = a_i + b_i*r^2 + c_i*z
+//   - s-isoparametric with an affine (s = r^2, z) map: psi_i is linear in
+//     (s, z), and the stiffness and sigma mass are integrated over the
+//     (s, z) triangle through the same map (axi_henrotte_siso.hpp).  The
+//     space is conforming on the (s, z) triangulation and on the edges shared
+//     with Q1 axis-aligned quads.
 // ---------------------------------------------------------------------------
 
 class AxiHenrotteFE_P1_Triangle : public AxiHenrotteBaseFE {
 public:
-    double r[3], z[3];
-    double alpha[3], beta[3], gamma_[3];
+    siso::Geometry<siso::P1Tri> geo;
 
     AxiHenrotteFE_P1_Triangle(const double rs[3], const double zs[3]);
 
