@@ -428,258 +428,52 @@ void AxiHenrotteFE_P1_Triangle::CalcDShape(
 }
 
 // ---------------------------------------------------------------------------
-// AxiHenrotteFE_P2_Triangle
+// AxiHenrotteFE_P2_Triangle / AxiHenrotteFE_Q2_Curved (s-isoparametric)
 // ---------------------------------------------------------------------------
 
 AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(
     const double rs[6], const double zs[6])
-  : AxiHenrotteBaseFE(6, 4)  // 6 DOFs, polynomial degree 4 (in r, via r^4)
+  : AxiHenrotteBaseFE(6, 4)  // 6 DOFs; integration degree hint
 {
-    for (int i = 0; i < 6; ++i) { r[i] = rs[i]; z[i] = zs[i]; }
-    // Build 6x6 Vandermonde V[i, j] = m_j(r_i, z_i) where monomials are
-    //   m = (1, s, z, s^2, s*z, z^2),  s = r^2.
-    // Then Vinv = V^{-1}, and psi_i(r, z) = sum_j Vinv[j, i] * m_j(r, z).
-    Mat<6,6> V;
-    for (int i = 0; i < 6; ++i) {
-        double s_i = r[i] * r[i];
-        V(i, 0) = 1.0;
-        V(i, 1) = s_i;
-        V(i, 2) = z[i];
-        V(i, 3) = s_i * s_i;
-        V(i, 4) = s_i * z[i];
-        V(i, 5) = z[i] * z[i];
-    }
-    Mat<6,6> Vinv_local;
-    CalcInverse(V, Vinv_local);
-    for (int i = 0; i < 6; ++i)
-        for (int j = 0; j < 6; ++j)
-            Vinv[i][j] = Vinv_local(i, j);
-}
-
-// Reference-triangle P2 Lagrange shape functions on NGSolve's ET_TRIG
-// reference triangle convention (verified 2026-05-12 via
-// validation_test/axifem/research/prototypes/test_ngsolve_ref_tri_vertices.py):
-//
-//   Local DOF 0 (= mesh vertex V0) at ref (1, 0)
-//   Local DOF 1 (= mesh vertex V1) at ref (0, 1)
-//   Local DOF 2 (= mesh vertex V2) at ref (0, 0)
-//   Local DOF 3 (= m01, midpoint V0-V1) at ref (0.5, 0.5)
-//   Local DOF 4 (= m12, midpoint V1-V2) at ref (0, 0.5)
-//   Local DOF 5 (= m20, midpoint V2-V0) at ref (0.5, 0)
-//
-// Area coords (NGSolve convention): lam_0 = xi, lam_1 = eta, lam_2 = 1-xi-eta.
-//   N_0 = lam_0 (2 lam_0 - 1) = xi (2 xi - 1)            -- at V0
-//   N_1 = lam_1 (2 lam_1 - 1) = eta (2 eta - 1)          -- at V1
-//   N_2 = lam_2 (2 lam_2 - 1) = (1-xi-eta)(1-2xi-2eta)   -- at V2
-//   N_3 = 4 lam_0 lam_1 = 4 xi eta                       -- at m01
-//   N_4 = 4 lam_1 lam_2 = 4 eta (1-xi-eta)               -- at m12
-//   N_5 = 4 lam_2 lam_0 = 4 (1-xi-eta) xi                -- at m20
-//
-// For a mesh that has been `.Curve(p>=2)`-d, the 6 nodes (r[k], z[k])
-// returned by the FESpace are the curved-geometry positions of the
-// corresponding NGSolve-reference nodes. The same shape functions then
-// act as the geometric map (r(xi, eta), z(xi, eta)) = sum_k N_k (r[k], z[k]).
-// For straight-edge meshes this reduces to the affine 3-vertex map.
-static inline void P2RefShape(double xi, double eta, double N[6])
-{
-    double l0 = xi;
-    double l1 = eta;
-    double l2 = 1.0 - xi - eta;
-    N[0] = l0 * (2.0 * l0 - 1.0);
-    N[1] = l1 * (2.0 * l1 - 1.0);
-    N[2] = l2 * (2.0 * l2 - 1.0);
-    N[3] = 4.0 * l0 * l1;
-    N[4] = 4.0 * l1 * l2;
-    N[5] = 4.0 * l2 * l0;
-}
-
-static inline void P2RefDShape(double xi, double eta,
-                                double dN_dxi[6], double dN_deta[6])
-{
-    // dN/dxi
-    dN_dxi[0]  = 4.0 * xi - 1.0;                       // d/dxi[xi(2xi-1)]
-    dN_dxi[1]  = 0.0;                                   // d/dxi[eta(2eta-1)]
-    dN_dxi[2]  = -3.0 + 4.0 * xi + 4.0 * eta;          // d/dxi[(1-xi-eta)(1-2xi-2eta)]
-    dN_dxi[3]  = 4.0 * eta;                             // d/dxi[4 xi eta]
-    dN_dxi[4]  = -4.0 * eta;                            // d/dxi[4 eta (1-xi-eta)]
-    dN_dxi[5]  = 4.0 - 8.0 * xi - 4.0 * eta;            // d/dxi[4 (1-xi-eta) xi]
-    // dN/deta
-    dN_deta[0] = 0.0;
-    dN_deta[1] = 4.0 * eta - 1.0;
-    dN_deta[2] = -3.0 + 4.0 * xi + 4.0 * eta;
-    dN_deta[3] = 4.0 * xi;
-    dN_deta[4] = 4.0 - 4.0 * xi - 8.0 * eta;
-    dN_deta[5] = -4.0 * xi;
-}
-
-// Map (xi, eta) -> (r, z) and its Jacobian using the 6-node Lagrange map.
-static inline void P2GeomMap(const double r[6], const double z[6],
-                              double xi, double eta,
-                              double & rp, double & zp,
-                              double & dr_dxi, double & dr_deta,
-                              double & dz_dxi, double & dz_deta)
-{
-    double N[6], dNxi[6], dNeta[6];
-    P2RefShape(xi, eta, N);
-    P2RefDShape(xi, eta, dNxi, dNeta);
-    rp = zp = 0.0;
-    dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
-    for (int k = 0; k < 6; ++k) {
-        rp      += N[k]    * r[k];
-        zp      += N[k]    * z[k];
-        dr_dxi  += dNxi[k] * r[k];
-        dr_deta += dNeta[k]* r[k];
-        dz_dxi  += dNxi[k] * z[k];
-        dz_deta += dNeta[k]* z[k];
-    }
+    geo.Init(rs, zs);
 }
 
 void AxiHenrotteFE_P2_Triangle::CalcShape(
     const IntegrationPoint & ip, BareSliceVector<> shape) const
 {
-    // 6-node quadratic Lagrange geometric map: (xi, eta) -> (r, z).
-    // For straight-edge meshes this reduces to the affine 3-vertex map.
-    double xi = ip(0);
-    double eta = ip(1);
-    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
-    P2GeomMap(r, z, xi, eta, rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta);
-    double sp = rp * rp;
-    // psi_i(rp, zp) = sum_j Vinv[j, i] * m_j with m = {1, s, z, s^2, sz, z^2}.
-    double m[6] = { 1.0, sp, zp, sp * sp, sp * zp, zp * zp };
-    for (int i = 0; i < 6; ++i) {
-        double v = 0.0;
-        for (int j = 0; j < 6; ++j) v += Vinv[j][i] * m[j];
-        shape(i) = v;
-    }
+    double v[6];
+    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
+    for (int i = 0; i < 6; ++i) shape(i) = v[i];
 }
 
 void AxiHenrotteFE_P2_Triangle::CalcDShape(
     const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
 {
-    double xi = ip(0);
-    double eta = ip(1);
-    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
-    P2GeomMap(r, z, xi, eta, rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta);
-    double sp = rp * rp;
-    // d m_j / d(r, z) at the physical point.
-    double dm_dr[6] = { 0.0, 2.0 * rp, 0.0, 4.0 * rp * sp, 2.0 * rp * zp, 0.0 };
-    double dm_dz[6] = { 0.0, 0.0, 1.0, 0.0, sp, 2.0 * zp };
-    for (int i = 0; i < 6; ++i) {
-        double dpsi_dr = 0.0, dpsi_dz = 0.0;
-        for (int j = 0; j < 6; ++j) {
-            dpsi_dr += Vinv[j][i] * dm_dr[j];
-            dpsi_dz += Vinv[j][i] * dm_dz[j];
-        }
-        // Chain rule: d psi / d(xi, eta) = (d(r, z)/d(xi, eta))^T * d psi/d(r, z).
-        dshape(i, 0) = dpsi_dr * dr_dxi + dpsi_dz * dz_dxi;
-        dshape(i, 1) = dpsi_dr * dr_deta + dpsi_dz * dz_deta;
-    }
+    double d[6][2];
+    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
+    for (int i = 0; i < 6; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
 }
-
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_Q2_Curved -- 9-node curved biquadratic Henrotte quad element.
-// ---------------------------------------------------------------------------
-
-namespace {
-// FEMM/our Q2 node order -> 1D-Lagrange index (0=L@0, 1=L@0.5, 2=L@1) in xi, eta.
-constexpr int Q2C_IX[9] = { 0, 2, 2, 0, 1, 2, 1, 0, 1 };
-constexpr int Q2C_IY[9] = { 0, 0, 2, 2, 0, 1, 2, 1, 1 };
-
-// Biquadratic Lagrange geometric map on the NGSolve quad ref [0,1]^2 through the
-// 9 physical nodes; returns the physical point and the 2x2 geometric Jacobian.
-inline void Q2CurvedGeomMap(const double rn[9], const double zn[9],
-                            double xi, double eta,
-                            double & rp, double & zp,
-                            double & dr_dxi, double & dr_deta,
-                            double & dz_dxi, double & dz_deta)
-{
-    const double Lx[3]  = { 2*xi*xi - 3*xi + 1, -4*xi*xi + 4*xi, 2*xi*xi - xi };
-    const double dLx[3] = { 4*xi - 3,           -8*xi + 4,        4*xi - 1 };
-    const double Ly[3]  = { 2*eta*eta - 3*eta + 1, -4*eta*eta + 4*eta, 2*eta*eta - eta };
-    const double dLy[3] = { 4*eta - 3,              -8*eta + 4,          4*eta - 1 };
-    rp = zp = dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
-    for (int k = 0; k < 9; ++k) {
-        double N   = Lx[Q2C_IX[k]]  * Ly[Q2C_IY[k]];
-        double dNx = dLx[Q2C_IX[k]] * Ly[Q2C_IY[k]];
-        double dNy = Lx[Q2C_IX[k]]  * dLy[Q2C_IY[k]];
-        rp += N * rn[k];      zp += N * zn[k];
-        dr_dxi += dNx * rn[k]; dr_deta += dNy * rn[k];
-        dz_dxi += dNx * zn[k]; dz_deta += dNy * zn[k];
-    }
-}
-
-// Even-r-power monomials (scaled) m_j and their physical-coord derivatives.
-inline void Q2CurvedMonomials(double sp, double zp, double m[9])
-{
-    m[0]=1.0; m[1]=sp; m[2]=sp*sp; m[3]=zp; m[4]=sp*zp;
-    m[5]=sp*sp*zp; m[6]=zp*zp; m[7]=sp*zp*zp; m[8]=sp*sp*zp*zp;
-}
-}  // namespace
 
 AxiHenrotteFE_Q2_Curved::AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9])
-  : AxiHenrotteBaseFE(9, 4)  // 9 DOFs, polynomial degree 4 (in r, via r^4)
+  : AxiHenrotteBaseFE(9, 4)  // 9 DOFs; integration degree hint
 {
-    double rmax = 0.0, zmin = zs[0], zmax = zs[0];
-    for (int i = 0; i < 9; ++i) {
-        rn[i] = rs[i]; zn[i] = zs[i];
-        double ar = rs[i] < 0 ? -rs[i] : rs[i];
-        if (ar > rmax) rmax = ar;
-        if (zs[i] < zmin) zmin = zs[i];
-        if (zs[i] > zmax) zmax = zs[i];
-    }
-    L_r = rmax > 1e-30 ? rmax : 1e-30;
-    z_c = 0.5 * (zmin + zmax);
-    L_z = (0.5 * (zmax - zmin)) > 1e-30 ? 0.5 * (zmax - zmin) : 1e-30;
-
-    Mat<9,9> V;
-    for (int i = 0; i < 9; ++i) {
-        double rpr = rn[i] / L_r, zpr = (zn[i] - z_c) / L_z, spr = rpr * rpr;
-        double m[9]; Q2CurvedMonomials(spr, zpr, m);
-        for (int j = 0; j < 9; ++j) V(i, j) = m[j];
-    }
-    Mat<9,9> Vi; CalcInverse(V, Vi);
-    // psi_i = sum_j coeffs[j][i] m_j ;  V * C = I  =>  C = V^{-1}, coeffs[j][i]=Vi(j,i)
-    for (int j = 0; j < 9; ++j)
-        for (int i = 0; i < 9; ++i)
-            coeffs[j][i] = Vi(j, i);
+    geo.Init(rs, zs);
 }
 
 void AxiHenrotteFE_Q2_Curved::CalcShape(
     const IntegrationPoint & ip, BareSliceVector<> shape) const
 {
-    double rp, zp, a, b, c, d;
-    Q2CurvedGeomMap(rn, zn, ip(0), ip(1), rp, zp, a, b, c, d);
-    double rpr = rp / L_r, zpr = (zp - z_c) / L_z, spr = rpr * rpr;
-    double m[9]; Q2CurvedMonomials(spr, zpr, m);
-    for (int i = 0; i < 9; ++i) {
-        double v = 0.0;
-        for (int j = 0; j < 9; ++j) v += coeffs[j][i] * m[j];
-        shape(i) = v;
-    }
+    double v[9];
+    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
+    for (int i = 0; i < 9; ++i) shape(i) = v[i];
 }
 
 void AxiHenrotteFE_Q2_Curved::CalcDShape(
     const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
 {
-    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
-    Q2CurvedGeomMap(rn, zn, ip(0), ip(1), rp, zp,
-                    dr_dxi, dr_deta, dz_dxi, dz_deta);
-    double rpr = rp / L_r, zpr = (zp - z_c) / L_z, spr = rpr * rpr;
-    // d m / d r', d m / d z'  (scaled), then chain to physical (/L_r, /L_z).
-    double dmr[9] = { 0.0, 2*rpr, 4*rpr*spr, 0.0, 2*rpr*zpr,
-                      4*rpr*spr*zpr, 0.0, 2*rpr*zpr*zpr, 4*rpr*spr*zpr*zpr };
-    double dmz[9] = { 0.0, 0.0, 0.0, 1.0, spr, spr*spr, 2*zpr, 2*spr*zpr, 2*spr*spr*zpr };
-    for (int i = 0; i < 9; ++i) {
-        double dpsi_dr = 0.0, dpsi_dz = 0.0;
-        for (int j = 0; j < 9; ++j) {
-            dpsi_dr += coeffs[j][i] * dmr[j];
-            dpsi_dz += coeffs[j][i] * dmz[j];
-        }
-        dpsi_dr /= L_r; dpsi_dz /= L_z;             // physical gradient
-        // Chain rule to reference coords (NGSolve applies J^{-1} for the physical).
-        dshape(i, 0) = dpsi_dr * dr_dxi + dpsi_dz * dz_dxi;   // d/dxi
-        dshape(i, 1) = dpsi_dr * dr_deta + dpsi_dz * dz_deta; // d/deta
-    }
+    double d[9][2];
+    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
+    for (int i = 0; i < 9; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
 }
 
 // ---------------------------------------------------------------------------

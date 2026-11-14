@@ -3,14 +3,14 @@ r"""Regression test for AxiHenrotteFE_Q2_Curved -- the 9-node curved biquadratic
 Henrotte quad element (Phase B6 C++ port of axifem_quad_q2_curved.py).
 
 Selected via H1Henrotte(..., order=2, curvedquad=True): order-2 QUADS sample 9
-curved node positions from the (Curve(2)-d) ElementTransformation and use the
-isoparametric element, so general / curved-boundary quads work where the
+node positions from the ElementTransformation and use the s-isoparametric
+element, so general / curved-boundary quads work where the
 axis-aligned closed-form Q2 (curvedquad=False, the default) is invalid.
 
 Gates (eddy-decay eigenvalue K v = lambda M v, V-DOF stiffness + sigma-mass):
-  1. STRAIGHT axis-aligned quads: curvedquad=True must reproduce the validated
-     axis-aligned closed form to quadrature precision (8x8 Gauss is exact for the
-     polynomial integrand).
+  1. STRAIGHT axis-aligned quads: curvedquad=True (s-isoparametric, r-midpoint
+     edge nodes) and the axis-aligned closed form (s-midpoint edge nodes) are
+     different spaces; their gap shrinks at high order toward a common limit.
   2. GENERAL (annular-sector, skewed) quads: curvedquad=True converges; the
      axis-aligned form is built for rectangles and is wrong / NaN there.
 
@@ -71,15 +71,21 @@ def _annulus(nrho, nphi, R1=1.0, R2=2.0, dphi=math.radians(30.0)):
     return MakeStructured2DMesh(quads=True, nx=nrho, ny=nphi, mapping=mp)
 
 
-def test_curved_matches_axis_aligned_on_straight_quads():
-    for nx in (4, 6, 8):
+def test_curved_and_axis_aligned_converge_together_on_straight_quads():
+    """Guards: the s-isoparametric curved Q2 and the axis-aligned closed form
+    are different discrete spaces (r- vs s-midpoint edge nodes), so they agree
+    only to discretization error; the gap must shrink at high order.
+    Assumes: both routes converge to the same eigenvalue."""
+    gaps = {}
+    for nx in (4, 8):
         m = _rect(nx, nx)
         la = _lam_min(m, False)   # axis-aligned closed form
-        lc = _lam_min(m, True)    # curved isoparametric
-        rel = abs(lc - la) / abs(la)
-        print(f"  straight nx={nx}: axis={la:.8f} curved={lc:.8f} rel={rel:.2e}")
-        assert rel < 1e-9, f"curved Q2 != axis-aligned on straight quad (rel {rel:.2e})"
-    print("[OK] Q2_Curved reproduces the axis-aligned closed form on straight quads")
+        lc = _lam_min(m, True)    # s-isoparametric curved quad
+        gaps[nx] = abs(lc - la) / abs(la)
+        print(f"  straight nx={nx}: axis={la:.8f} curved={lc:.8f} rel={gaps[nx]:.2e}")
+    assert gaps[8] < 1.0e-4, f"gap at nx=8 {gaps[8]:.2e}, expected < 1e-4"
+    assert gaps[8] < gaps[4] / 8.0, (
+        f"gap did not shrink: nx=4 {gaps[4]:.2e} -> nx=8 {gaps[8]:.2e}, expected < 1/8")
 
 
 def test_curved_converges_on_skewed_annular_quads():
@@ -109,11 +115,13 @@ def test_curve2_q2_geometry_survives_vol_roundtrip():
     assert mesh.GetCurveOrder() == 2
     assert loaded.GetCurveOrder() == 2
     value = _lam_min(loaded, True)
+    expected = _lam_min(mesh, True)
     assert np.isfinite(value)
-    assert abs(value - 14.27147488765551) < 1.0e-9
+    assert abs(value - expected) <= 1.0e-12 * abs(expected), (
+        f"after .vol roundtrip {value!r}, before {expected!r}")
 
 
 if __name__ == "__main__":
-    test_curved_matches_axis_aligned_on_straight_quads()
+    test_curved_and_axis_aligned_converge_together_on_straight_quads()
     test_curved_converges_on_skewed_annular_quads()
     print("\nAll AxiHenrotteFE_Q2_Curved tests passed.")

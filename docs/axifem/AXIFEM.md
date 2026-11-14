@@ -221,12 +221,13 @@ curved path.
 
 The true 9-node curved Q2 quad is now also shipped as
 `AxiHenrotteFE_Q2_Curved`, selected by `H1Henrotte(mesh, order=2,
-curvedquad=True)`.  It samples 9 curved node positions from the
-`mesh.Curve(2)` element transformation and uses a quadrature BFI over the
-biquadratic map.  Regression coverage lives in
-`tests/axifem/test_q2_curved.py`: the curved path reproduces the
-axis-aligned closed form on straight quads and converges on skewed annular
-quads.
+curvedquad=True)`.  It samples 9 node positions from the element
+transformation and, like the P2 triangle, is s-isoparametric: a biquadratic
+Lagrange map to `(s, z)` with the reference Lagrange basis, conforming on
+oblique edges (see FORMULATION.md section 8).  Regression coverage lives in
+`tests/axifem/test_q2_curved.py` (converges together with the axis-aligned
+closed form on straight quads, converges on skewed annular quads) and
+`tests/axifem/test_edge_trace_conformity.py` (shared-edge traces).
 
 ### Convention: Hessian-of-W
 

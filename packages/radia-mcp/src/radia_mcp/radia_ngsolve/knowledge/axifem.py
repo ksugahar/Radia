@@ -41,7 +41,11 @@ curved-mesh aware after `mesh.Curve(2)` and is the production choice for
 curved OCC/Kelvin boundaries.  The default Q2 quad path is straight and
 axis-aligned; opt into the 9-node curved Q2 quad with
 `H1Henrotte(mesh, order=2, curvedquad=True)` when the quadrilateral geometry
-is genuinely skewed or curved.
+is genuinely skewed or curved.  The P2 triangle and the curved Q2 quad are
+s-isoparametric (reference Lagrange basis on a Lagrange map to `(s = r^2, z)`),
+so they are conforming on oblique edges, with each other and themselves.  The
+P1 triangle keeps the physical `{1, s, z}` basis and is not conforming on
+oblique edges; prefer order 2 for reference values.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 

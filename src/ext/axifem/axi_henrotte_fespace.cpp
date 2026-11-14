@@ -92,10 +92,9 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
                         "(Q2 quad or P2 triangle) are supported.");
     order = axi_order;  // base-class field; 4 = poly-degree-in-r for Q2
 
-    // curved=True: order-2 QUADS sample 9 curved node positions from the mesh's
-    // (Curve(2)-d) ElementTransformation and use the AxiHenrotteFE_Q2_Curved
-    // isoparametric element -- follows curved boundaries to O(curve^2), the
-    // proper curved element for eddy-current / rounded-conductor problems.
+    // curved=True: order-2 QUADS sample 9 node positions from the mesh's
+    // ElementTransformation and use the s-isoparametric AxiHenrotteFE_Q2_Curved
+    // (conforming on oblique and curved edges, also next to P2 triangles).
     // Default False keeps the axis-aligned closed-form Q2 (and the heat path).
     curved_quad = flags.GetDefineFlag("curvedquad") ||
                   (flags.GetStringFlag("curvedquad", "") == string("True"));

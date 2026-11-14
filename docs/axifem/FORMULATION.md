@@ -309,14 +309,26 @@ elements:
   `Mesh("model.vol")` / NGSolve and assembles the V-DOF stiffness lane
   used by `H1Henrotte`, with regression gates for the uniform-`B_z`
   identity and degenerate `(r²,z)` triangles.
-- `AxiHenrotteFE_P2_Triangle` (6 DOFs/cell) uses the
-  `{1, r², z, r⁴, r² z, z²}` basis at 3 vertices plus 3 edge midnodes.
-  The FESpace reads all 6 node coordinates via NGSolve's element
-  transformation.  On a straight mesh this is the usual chord midpoint;
-  after `mesh.Curve(2)` it is the curved-geometry mid-edge coordinate.
-  The stiffness and sigma-mass BFIs use the same 6-node geometric map at
-  quadrature points, so P2 curved triangles are part of the production
-  implementation.
+- `AxiHenrotteFE_P2_Triangle` (6 DOFs/cell, 3 vertices plus 3 edge
+  midnodes) is s-isoparametric: the element geometry is the quadratic
+  Lagrange map from the reference triangle to `(s = r², z)` through the
+  nodes, and the basis is the reference Lagrange basis.  The trace on a
+  shared edge then depends only on that edge's three nodes, so the space is
+  conforming on oblique edges.  The former basis, physical monomials
+  `{1, s, z, s², s z, z²}` fitted at the nodes, was not: on an edge oblique
+  in `(r, z)`, `s` is quadratic in the edge parameter and the monomial trace
+  is quartic, which three edge DOFs cannot fix.  Node coordinates come from
+  NGSolve's element transformation (chord midpoint on a straight mesh, the
+  curved mid-edge point after `mesh.Curve(2)`); a straight edge is then
+  reproduced exactly because `s` is quadratic and `z` linear in the edge
+  parameter.  An edge with exactly one end on the axis takes its midnode at
+  the `s`-midpoint instead, which keeps the `(s, z)` map regular and
+  `ψ ~ s` at the axis.  Stiffness and sigma mass are integrated over the
+  reference element through the `(s, z)` map
+  (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`).
+- `AxiHenrotteFE_P1_Triangle` keeps the physical `{1, s, z}` basis and is
+  therefore not conforming on oblique edges (measured trace jump 0.03 for a
+  unit DOF on a two-triangle patch).
 
 P1 triangles have lower per-DOF accuracy than Q2 quads
 (`disk_convergence` example shows ~5–6 % gap to BEM-Foster reference even
@@ -334,13 +346,16 @@ workpieces.
 
 The true 9-node curved Q2 quad is available as an opt-in production path:
 `H1Henrotte(mesh, order=2, curvedquad=True)` selects
-`AxiHenrotteFE_Q2_Curved`.  This element consumes the 9 curved node
-positions from `mesh.Curve(2)` and uses a quadrature-over-biquadratic-map
-BFI for stiffness and sigma mass.  The Python prototype
-`validation_test/axifem/research/prototypes/axifem_quad_q2_curved.py` remains the
-derivation/reference, while `tests/axifem/test_q2_curved.py` locks the C++
-behavior: curved Q2 reproduces the axis-aligned closed form on straight
-quads and converges on skewed annular quads.
+`AxiHenrotteFE_Q2_Curved`.  This element consumes the 9 node positions from
+the element transformation and is s-isoparametric in the same way as the P2
+triangle (biquadratic Lagrange map to `(s, z)`, reference Lagrange basis, the
+same axis-edge midnode rule).  It is conforming with itself and with P2
+triangles on oblique edges; the former physical-monomial version was not and
+drifted under boundary-layer refinement.  `tests/axifem/test_q2_curved.py`
+checks that curved Q2 and the axis-aligned closed form (a different space,
+with `s`-midpoint edge nodes) converge together on straight quads and that
+curved Q2 converges on skewed annular quads;
+`tests/axifem/test_edge_trace_conformity.py` checks the shared-edge traces.
 
 ## 9. Boundary conditions
 

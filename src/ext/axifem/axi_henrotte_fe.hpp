@@ -14,6 +14,7 @@
 #define RADIA_AXIFEM_AXI_HENROTTE_FE_HPP
 
 #include <fem.hpp>
+#include "axi_henrotte_siso.hpp"
 
 namespace axifem {
 
@@ -186,30 +187,24 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// AxiHenrotteFE_P2_Triangle
-//   - 6 DOFs/element on a P2 triangle in (r, z) plane (3 vertex + 3 edge mid)
-//   - psi_i(r, z) = a_i + b_i*r^2 + c_i*z + d_i*r^4 + e_i*r^2*z + f_i*z^2
-//     (Lagrange-interpolatory at 6 nodes: psi_i(r_k, z_k) = delta_ik)
-//   - V-DOF basis: N_A_i(r, z) = r_i * psi_i(r, z) / r
-//
-//   Node order: [v0, v1, v2, m01, m12, m20] where v_i are vertices and
-//   m_ij is the midpoint of edge (v_i, v_j). This matches the standard
-//   NGSolve P2 layout (vertex DOFs first, then edge DOFs).
-//
-//   For axis vertices (r_i = 0), N_A_i = 0 trivially due to the r_i factor;
-//   the corresponding global DOF is auto-decoupled (zero row/column in K, M)
-//   and is naturally pinned to A_phi = 0 (axis regularity).
-//
-//   Phase B1c reference: w:/.../axifem/axifem_p2_triangle.py
+// AxiHenrotteFE_P2_Triangle / AxiHenrotteFE_Q2_Curved
+//   General (oblique or curved) order-2 Henrotte elements, s-isoparametric:
+//   the geometry is the reference Lagrange map to (s = r^2, z) through the
+//   element nodes and the basis is the reference Lagrange basis (see
+//   axi_henrotte_siso.hpp).  This keeps psi ~ s at the axis and is conforming on
+//   every shared edge, including oblique ones.
+//   - V-DOF basis: N_A_i(r, z) = r_i * psi_i(r, z) / r, so axis nodes (r_i = 0)
+//     decouple; the caller Dirichlets them (A_phi = 0 on the axis).
+//   - P2 node order: [v0, v1, v2, m01, m12, m20] on NGSolve's ET_TRIG reference.
+//   - Q2 node order: corners 0-3, edge mids 4 (bottom), 5 (right), 6 (top),
+//     7 (left), face centre 8 on NGSolve's ET_QUAD reference [0,1]^2.
+//   Nodes are sampled from the mesh element transformation at the reference
+//   node positions, so a straight edge has its midnode at the r-midpoint.
 // ---------------------------------------------------------------------------
 
 class AxiHenrotteFE_P2_Triangle : public AxiHenrotteBaseFE {
 public:
-    double r[6], z[6];
-    // psi_i(r, z) = sum_j Vinv[j, i] * m_j(r, z), where m = (1, s, z, s^2, s*z, z^2)
-    // and s = r^2. Vinv is the inverse of the 6x6 Vandermonde matrix on the
-    // 6 P2 nodes. Storing as Vinv[6][6] in row-major.
-    double Vinv[6][6];
+    siso::Geometry<siso::P2Tri> geo;
 
     AxiHenrotteFE_P2_Triangle(const double rs[6], const double zs[6]);
 
@@ -221,30 +216,9 @@ public:
                     BareSliceMatrix<> dshape) const override;
 };
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_Q2_Curved
-//   - 9-DOF CURVED biquadratic Henrotte quad on a GENERAL 9-node element in the
-//     physical (r, z) plane (the proper curved isoparametric element -- Phase B6
-//     port of examples/.../axifem/axifem_quad_q2_curved.py).  Unlike
-//     AxiHenrotteFE_Q2_AxisAligned (axis-aligned rectangle, closed-form matrices),
-//     this follows curved boundaries to O(curve^2): the FESpace samples the 9 node
-//     positions from the mesh's (curved) ElementTransformation, exactly as the P2
-//     triangle does for curved triangles.
-//   - psi_i(r, z) = sum_j coeffs[j][i] * m_j(r', z') with the even-r-power monomials
-//     m = {1, s, s^2, z, sz, s^2 z, z^2, sz^2, s^2 z^2}, s = (r/L_r)^2 (scaled for
-//     conditioning), z' = (z - z_c)/L_z; coeffs = Vandermonde^{-1} over the 9 nodes.
-//   - geometric map: biquadratic Lagrange on the NGSolve quad ref [0,1]^2 through
-//     the 9 nodes (corners 0-3, edge mids 4-7, face center 8), matching the
-//     AxiHenrotteFESpace Q2 node order (4=bottom,5=right,6=top,7=left,8=center).
-//   - axis-touching nodes (r_i = 0) get the r_i factor in the V-DOF matrices, so the
-//     caller MUST Dirichlet the axis-side DOFs (same contract as the other elements).
-// ---------------------------------------------------------------------------
-
 class AxiHenrotteFE_Q2_Curved : public AxiHenrotteBaseFE {
 public:
-    double rn[9], zn[9];        // physical node coords (FEMM/our Q2 node order)
-    double L_r, z_c, L_z;       // conditioning scales (s' = (r/L_r)^2, z' = (z-z_c)/L_z)
-    double coeffs[9][9];        // coeffs[j][i] = monomial-j coefficient of nodal basis i
+    siso::Geometry<siso::Q2Quad> geo;
 
     AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9]);
 
