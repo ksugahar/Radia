@@ -132,41 +132,34 @@ void AxiHenrotteFESpace::Update() {
 }
 
 void AxiHenrotteFESpace::UpdateCouplingDofArray() {
-    // Vertices/edges are shared between elements (INTERFACE); element face-center
-    // slots are LOCAL for quads (Q2 uses them) but UNUSED for triangles (P2 has
-    // no center DOF -> the reserved nv+ne+ei.Nr() slot would be a dead zero
-    // row/col that makes K/M singular).  Marking it UNUSED removes it from
-    // FreeDofs so the generalized eddy eigenvalue solve (and direct solves) see a
-    // full-rank system.
+    // A DOF is used only if a volume element of the current mesh level refers
+    // to it.  Vertices and edges are shared (INTERFACE); a Q2 face centre is
+    // element-local (LOCAL).  Everything else is UNUSED: the reserved
+    // nv+ne+ei.Nr() centre slot of a P2 triangle, and, after mesh.Refine(),
+    // the edges of the coarser levels, which NGSolve keeps numbered but no
+    // fine element touches.  An unused DOF left free is a zero row/column
+    // that makes K/M singular.
     ctofdof.SetSize(GetNDof());
-    ctofdof = INTERFACE_DOF;
-    if (axi_order == 2) {
-        int nv = ma->GetNV();
-        int ne = ma->GetNEdges();
-        for (auto i : Range(ma->GetNE(VOL))) {
-            DofId center = nv + ne + i;
-            if (ma->GetElement(ElementId(VOL, i)).GetType() == ET_TRIG)
-                ctofdof[center] = UNUSED_DOF;   // P2 triangle: no center DOF
-            else
-                ctofdof[center] = LOCAL_DOF;     // Q2 quad: element-local center
-        }
+    ctofdof = UNUSED_DOF;
+    const size_t shared = (axi_order == 1) ? ma->GetNV() : ma->GetNV() + ma->GetNEdges();
+    Array<DofId> dnums;
+    for (auto i : Range(ma->GetNE(VOL))) {
+        GetDofNrs(ElementId(VOL, i), dnums);
+        for (auto d : dnums)
+            ctofdof[d] = (size_t(d) < shared) ? INTERFACE_DOF : LOCAL_DOF;
     }
 }
 
 void AxiHenrotteFESpace::FinalizeUpdate() {
     FESpace::FinalizeUpdate();          // builds dirichlet_dofs, free_dofs, etc.
-    if (axi_order != 2) return;
-    UpdateCouplingDofArray();           // expose UNUSED trig-center coupling type
-    // The base built free_dofs before ctofdof existed, so drop the dead
-    // P2-triangle center slots (nv+ne+ei.Nr()) from the free-dof sets directly.
-    int nv = ma->GetNV();
-    int ne = ma->GetNEdges();
-    for (auto i : Range(ma->GetNE(VOL))) {
-        if (ma->GetElement(ElementId(VOL, i)).GetType() != ET_TRIG) continue;
-        DofId c = nv + ne + i;
-        if (free_dofs && c < free_dofs->Size()) free_dofs->Clear(c);
-        if (external_free_dofs && c < external_free_dofs->Size())
-            external_free_dofs->Clear(c);
+    UpdateCouplingDofArray();
+    // The base built free_dofs before ctofdof existed, so drop the unused
+    // DOFs from the free-dof sets directly.
+    for (auto d : Range(ctofdof.Size())) {
+        if (ctofdof[d] != UNUSED_DOF) continue;
+        if (free_dofs && d < free_dofs->Size()) free_dofs->Clear(d);
+        if (external_free_dofs && d < external_free_dofs->Size())
+            external_free_dofs->Clear(d);
     }
 }
 
