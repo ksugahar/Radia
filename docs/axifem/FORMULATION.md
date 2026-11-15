@@ -360,7 +360,9 @@ returning the undeformed basis and gradient.  `BoundaryFromVolumeCF` is
 NGSolve-owned: it evaluates the volume field on the undeformed volume map for
 every space (standard `H1` included), so combining it with a deformed
 boundary measure (`ds(deformation=...)`) is outside the supported contract;
-`H1Henrotte` returns the same values as `H1` there.  A comparison with the quadratic
+`H1Henrotte` returns the same values as `H1` there.  An NGSolve build that
+applies the `ds` deformation to the volume point makes the mesh-map check
+refuse instead.  A comparison with the quadratic
 interpolant at off-node points is kept as a supplementary geometry
 diagnostic only; a finite point set cannot detect every higher-degree mode.  Nodes within
 `1e-12` of the mesh extent from the axis are placed on it, and their DOFs

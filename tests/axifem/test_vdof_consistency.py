@@ -395,16 +395,23 @@ def test_integration_local_deformation_is_refused(kind, order):
 
 
 
-def test_boundary_from_volume_matches_ngsolve_h1_under_deformed_ds():
+def _bfv_transport_error(ref, ds):
+    """H1 BoundaryFromVolumeCF gradient of A = r against the transported 1/sqrt(1 + 0.4 X)."""
+    return ng.Integrate((ng.BoundaryFromVolumeCF(ng.grad(ref)[0]) - 1 / ng.sqrt(1 + 0.4 * ng.x)) ** 2 * ds, ref.space.mesh)
+
+
+def test_boundary_from_volume_under_deformed_ds_follows_ngsolve_h1():
     """BoundaryFromVolumeCF is NGSolve-owned; H1Henrotte adds no error of its own.
 
-    Guards: under ds(deformation=...) the wrapped Henrotte value and gradient
-    equal those of standard NGSolve H1 on the same mesh.  If NGSolve starts
-    passing the deformed volume map, RequireMeshMap refuses and this fails.
-    Assumes: NGSolve evaluates BoundaryFromVolumeCF on the undeformed volume
-    map for every space (measured for H1: the gradient of A = r stays 1 while
-    the transported field has 1/sqrt(1 + 0.4 X)); a deformed boundary measure
-    combined with it is outside the supported contract.
+    Guards: on the undeformed ds the wrapped Henrotte value and gradient equal
+    standard H1.  Under ds(deformation=...) the outcome depends on how the
+    installed NGSolve builds the volume point, detected on standard H1:
+    an NGSolve that keeps the undeformed volume map (H1 gradient of A = r stays
+    1) must give H1Henrotte == H1; an NGSolve that applies the deformation
+    (H1 returns the transported 1/sqrt(1 + 0.4 X)) must make every Henrotte
+    evaluator refuse through the mesh-map check.  Any other H1 result fails.
+    Assumes: X = x + 0.1 x^2 on the periodic off-axis strip; 1e-20 / 1e-3 are
+    the measured H1 transport errors (about 1e-28 and 0.25) of the two builds.
     """
     mesh = _periodic_off_axis_mesh()
     hen = ng.GridFunction(H1Henrotte(mesh, order=2))
@@ -413,14 +420,32 @@ def test_boundary_from_volume_matches_ngsolve_h1_under_deformed_ds():
     ref.Set(ng.x)
     disp = ng.GridFunction(ng.VectorH1(mesh, order=2))
     disp.Set(ng.CF((0.1 * ng.x ** 2, 0)))
+    evaluators = {
+        "value": lambda g: g,
+        "grad_r": lambda g: ng.grad(g)[0],
+        "grad_z": lambda g: ng.grad(g)[1],
+    }
+
+    def parity(ds):
+        for name, f in evaluators.items():
+            a, b = ng.BoundaryFromVolumeCF(f(hen)), ng.BoundaryFromVolumeCF(f(ref))
+            diff = ng.Integrate((a - b) ** 2 * ds, mesh)
+            norm = ng.Integrate(b ** 2 * ds, mesh)
+            assert diff <= 1e-24 * max(norm, 1.0), (name, diff, norm)
+
+    parity(ng.ds)
     ds = ng.ds(deformation=disp)
-    for f in (lambda g: g, lambda g: ng.grad(g)[0], lambda g: ng.grad(g)[1]):
-        a, b = ng.BoundaryFromVolumeCF(f(hen)), ng.BoundaryFromVolumeCF(f(ref))
-        diff = ng.Integrate((a - b) ** 2 * ds, mesh)
-        norm = ng.Integrate(b ** 2 * ds, mesh)
-        assert diff <= 1e-24 * max(norm, 1.0), (diff, norm)
-    exact = ng.Integrate((ng.BoundaryFromVolumeCF(ng.grad(ref)[0]) - 1 / ng.sqrt(1 + 0.4 * ng.x)) ** 2 * ds, mesh)
-    assert exact > 1e-3, exact  # NGSolve H1 itself reports the undeformed gradient
+    transport = _bfv_transport_error(ref, ds)
+    if transport > 1e-3:
+        parity(ds)
+    elif transport < 1e-20:
+        for name, f in evaluators.items():
+            with pytest.raises(Exception, match="not mapped by the mesh transformation"):
+                ng.Integrate(ng.BoundaryFromVolumeCF(f(hen)) * ds, mesh)
+                pytest.fail(f"{name}: H1Henrotte accepted the deformed volume map")
+    else:
+        pytest.fail(f"NGSolve H1 BoundaryFromVolumeCF under a deformed ds is neither undeformed "
+                    f"nor transported: transport error {transport!r}")
 
 
 FD_CASES = [

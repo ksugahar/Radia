@@ -67,7 +67,9 @@ axis, a folded `(s, z)` or target map, a mesh curved to order `p > 2`,
 a mesh deformation and an integration-local deformation
 (`dx(deformation=...)`, `ds(deformation=...)`) raise.  `BoundaryFromVolumeCF`
 under a deformed `ds` evaluates on the undeformed volume map for every NGSolve
-space, `H1` included; it is unsupported, and `H1Henrotte` matches `H1` there.  Every evaluator (volume value, gradient,
+space, `H1` included; it is unsupported, and `H1Henrotte` matches `H1` there.
+An NGSolve build that applies the `ds` deformation to the volume point makes
+the Henrotte evaluators refuse instead, like any integration-local deformation.  Every evaluator (volume value, gradient,
 boundary trace) and both native integrators use one `A_φ` basis
 `N_i = r_i ψ_i / r`; see FORMULATION.md § 6.
 
