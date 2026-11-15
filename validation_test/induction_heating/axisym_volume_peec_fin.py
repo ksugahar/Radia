@@ -9,7 +9,8 @@ A_phi ring FEM with an exact Dirichlet-to-Neumann exterior
 
 Under that axisymmetric drive the three-dimensional volume PEEC of the
 revolved solid has an azimuthally uniform current, so each meridian cell is
-one ring loop and the circuit is exact with ring partial elements:
+one ring loop and the circuit is exact with ring partial elements
+(native kernel ``radia.peec_axisym``, C++ ``rad_peec_axisym``):
 
 * P0 azimuthal current density on each meridian triangle ``k``;
 * ``R_k = 2 pi r_c / (sigma A_k)`` (r is linear on the triangle);
@@ -35,7 +36,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import platform
 import subprocess
 import sys
@@ -52,64 +52,18 @@ sys.path.insert(0, str(HERE))
 MU0 = 4e-7*math.pi
 ROOT_X_MM, TIP_X_MM = 1.6, 3.5
 
-# Dunavant rules (barycentric, weights sum to 1).
-_R1 = (np.array([[1/3, 1/3, 1/3]]), np.array([1.0]))
-_R3 = (np.array([[2/3, 1/6, 1/6], [1/6, 2/3, 1/6], [1/6, 1/6, 2/3]]), np.full(3, 1/3))
-_a, _b = 0.445948490915965, 0.091576213509771
-_R6 = (np.array([[1-2*_a, _a, _a], [_a, 1-2*_a, _a], [_a, _a, 1-2*_a],
-                 [1-2*_b, _b, _b], [_b, 1-2*_b, _b], [_b, _b, 1-2*_b]]),
-       np.array([0.223381589678011]*3 + [0.109951743655322]*3))
-_c, _d = 0.470142064105115, 0.101286507323456
-_R7 = (np.array([[1/3, 1/3, 1/3], [1-2*_c, _c, _c], [_c, 1-2*_c, _c], [_c, _c, 1-2*_c],
-                 [1-2*_d, _d, _d], [_d, 1-2*_d, _d], [_d, _d, 1-2*_d]]),
-       np.array([0.225] + [0.132394152788506]*3 + [0.125939180544827]*3))
-
-
-def filament_mutual(r1, z1, r2, z2):
-    """Mutual inductance of two coaxial circular filaments (Maxwell)."""
-    from scipy.special import ellipe, ellipkm1
-    s = (r1+r2)**2 + (z1-z2)**2
-    m1 = ((r1-r2)**2 + (z1-z2)**2)/s
-    m = 1.0 - m1
-    k = np.sqrt(m)
-    return MU0*np.sqrt(r1*r2)*((2/k - k)*ellipkm1(m1) - (2/k)*ellipe(m))
-
-
-def log_potential(x, tri):
-    """int_T ln|x-y| dA_y in closed form; x (..., q, 2) points, tri (..., 3, 2) triangles."""
-    x = np.asarray(x, dtype=float)
-    tri = np.asarray(tri, dtype=float)
-    out = np.zeros(x.shape[:-1])
-    for i in range(3):
-        p, q = tri[..., i, None, :], tri[..., (i+1) % 3, None, :]
-        e = q - p
-        length = np.linalg.norm(e, axis=-1)
-        u = e/length[..., None]
-        cross = (p[..., 0]-x[..., 0])*(q[..., 1]-x[..., 1]) - (p[..., 1]-x[..., 1])*(q[..., 0]-x[..., 0])
-        h = np.abs(cross)/length
-        t1 = np.sum((p - x)*u, axis=-1)
-        t2 = t1 + length
-        safe = np.where(h > 0, h, 1.0)
-
-        def F(t):
-            return (h/4)*(t*np.log(h*h + t*t) - 3*t + 2*h*np.arctan(t/safe))
-        out += np.where(h > 0, np.sign(cross)*(F(t2) - F(t1)), 0.0)
-    return out
-
-
 def section_mesh(radius_mm, boundary_h_mm, interior_h_mm, grading):
     """Meridian triangles of the tracked beak section, split at the region cuts."""
     from build123d import Plane, export_step
     from make_beak_fin_step import _beak_face
     from netgen.occ import Box, Glue, OCCGeometry, Pnt
     import ngsolve as ng
+    import tempfile
     face = _beak_face(Plane.XY, radial_offset=radius_mm)
-    step = HERE / f"_peec_section_{os.getpid()}.step"
-    export_step(face, str(step))
-    try:
+    with tempfile.TemporaryDirectory(prefix="peec_section_") as tmp:   # keep the checkout clean
+        step = Path(tmp) / "section.step"
+        export_step(face, str(step))
         section = OCCGeometry(str(step), dim=2).shape.Scale(Pnt(0, 0, 0), 1e-3)
-    finally:
-        step.unlink(missing_ok=True)
     cuts = [(radius_mm + ROOT_X_MM)*1e-3, (radius_mm + TIP_X_MM)*1e-3]
     big = 10.0
 
@@ -130,97 +84,28 @@ def section_mesh(radius_mm, boundary_h_mm, interior_h_mm, grading):
     return points, tris, region
 
 
-def assemble(points, tris, near_factor=3.0, moderate_factor=10.0, chunk=2048):
-    """Galerkin P0 ring partial inductance matrix (symmetric)."""
-    from scipy.spatial import cKDTree
-    V = points[tris]                                  # (n,3,2)
-    n = len(tris)
-    area = 0.5*np.abs((V[:, 1, 0]-V[:, 0, 0])*(V[:, 2, 1]-V[:, 0, 1])
-                      - (V[:, 2, 0]-V[:, 0, 0])*(V[:, 1, 1]-V[:, 0, 1]))
-    if np.any(area <= 0):
-        raise RuntimeError("degenerate meridian triangle")
-    c = V.mean(axis=1)
-    size = np.sqrt(2*area)
-    M = np.empty((n, n))
-    for s in range(0, n, chunk):          # centroid rule everywhere first
-        e = min(n, s+chunk)
-        M[s:e] = filament_mutual(c[s:e, None, 0], c[s:e, None, 1], c[None, :, 0], c[None, :, 1])
-    np.fill_diagonal(M, 0.0)
-    tree = cKDTree(c)
-
-    def pts(rule, idx):
-        bary, w = rule
-        return np.einsum("qj,njd->nqd", bary, V[idx]), w
-
-    def pair_list(factor):
-        """Pairs a < b with centroid distance below factor * (size_a + size_b)."""
-        found = tree.query_ball_point(c, r=factor*4*size)     # graded mesh: neighbour size <= 3x
-        a = np.repeat(np.arange(n), [len(f) for f in found])
-        b = np.concatenate([np.asarray(f, dtype=np.int64) for f in found])
-        keep = (a < b) & (np.linalg.norm(c[a] - c[b], axis=1) < factor*(size[a] + size[b]))
-        return np.stack([a[keep], b[keep]], axis=1)
-    moderate = pair_list(moderate_factor)
-    if len(moderate):
-        a, b = moderate[:, 0], moderate[:, 1]
-        xa, wa = pts(_R3, a)
-        xb, wb = pts(_R3, b)
-        val = filament_mutual(xa[:, :, None, 0], xa[:, :, None, 1], xb[:, None, :, 0], xb[:, None, :, 1])
-        val = np.einsum("pij,i,j->p", val, wa, wb)
-        M[a, b] = val
-        M[b, a] = val
-    near = pair_list(near_factor)
-    pairs = np.concatenate([np.stack([np.arange(n), np.arange(n)], axis=1), near])
-    xo, wo = _R7
-    xi, wi = _R6
-
-    def directed(t, s_, chunk=20000):
-        """Galerkin entry with target triangles t and source triangles s_, singular part in closed form."""
-        out = np.empty(len(t))
-        for k in range(0, len(t), chunk):
-            tt, ss = t[k:k+chunk], s_[k:k+chunk]
-            X = np.einsum("qj,pjd->pqd", xo, V[tt])
-            Y = np.einsum("qj,pjd->pqd", xi, V[ss])
-            r = X[..., 0]
-            logpart = MU0*r*((np.log(8*r) - 2.0)*area[ss, None] - log_potential(X, V[ss]))
-            dist = np.linalg.norm(X[:, :, None, :] - Y[:, None, :, :], axis=-1)
-            subtr = MU0*r[..., None]*(np.log(8*r[..., None]) - 2.0 - np.log(dist))
-            rem = filament_mutual(X[:, :, None, 0], X[:, :, None, 1], Y[:, None, :, 0], Y[:, None, :, 1]) - subtr
-            total = area[tt]*(logpart @ wo) + area[tt]*area[ss]*np.einsum("pij,i,j->p", rem, wo, wi)
-            out[k:k+chunk] = total/(area[tt]*area[ss])
-        return out
-    a, b = pairs[:, 0], pairs[:, 1]
-    val = 0.5*(directed(a, b) + directed(b, a))
-    M[a, b] = val
-    M[b, a] = val
-    return M, area, c
+def _peec_runtime():
+    """Identity of the native PEEC kernel that produced the candidate."""
+    from radia import peec_matrices
+    path = Path(peec_matrices.__file__)
+    return dict(peec_matrices=str(path), peec_matrices_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def solve_peec(points, tris, region, frequency, sigma, threads):
-    t0 = time.perf_counter()
-    M, area, c = assemble(points, tris)
-    t1 = time.perf_counter()
-    omega = 2*math.pi*frequency
-    R = 2*math.pi*c[:, 0]/(sigma*area)
-    Z = 1j*omega*M
-    Z[np.diag_indices_from(Z)] += R
-    rhs = np.ones(len(R), dtype=complex)
-    I = np.linalg.solve(Z, rhs)
-    t2 = time.perf_counter()
-    residual = float(np.linalg.norm(Z @ I - rhs)/np.linalg.norm(rhs))
-    if not residual <= 1e-6:
-        raise RuntimeError(f"true relative residual {residual:.3e} above 1e-6")
-    current = complex(I.sum())
-    impedance = 1.0/current
-    loss = 0.5*R*np.abs(I)**2/abs(current)**2         # per 1 A peak
-    regional = {name: float(loss[region == name].sum()) for name in ("body", "root", "tip")}
-    total = float(loss.sum())
-    return dict(cells=int(len(R)), R_ohm=float(impedance.real), L_H=float(impedance.imag/omega),
-                power_balance=abs(2*total - impedance.real)/impedance.real,
+    """The native axisymmetric volume PEEC (radia.peec_axisym) on one meridian mesh."""
+    import ngsolve as ng
+    from radia.peec_axisym import solve_axisym_ring_peec
+    ng.SetNumThreads(threads)
+    with ng.TaskManager():
+        out = solve_axisym_ring_peec(points, tris, frequency, sigma, region=region)
+    regional = out["region_loss_W_per_A2"]
+    total = float(out["cell_loss_W_per_A2"].sum())
+    return dict(cells=out["cells"], R_ohm=out["R_ohm"], L_H=out["L_H"], power_balance=out["power_balance"],
                 root_heat_W_per_A2=regional["root"], tip_heat_W_per_A2=regional["tip"],
-                beak_loss_fraction=(regional["root"]+regional["tip"])/total,
+                beak_loss_fraction=(regional["root"] + regional["tip"])/total,
                 tip_loss_fraction=regional["tip"]/total,
-                true_relative_residual=residual, assembly_s=t1-t0, solve_s=t2-t1,
-                min_cell_mm=float(np.sqrt(2*area.min())*1e3), threads=threads)
+                true_relative_residual=out["true_relative_residual"], assembly_s=out["assembly_s"],
+                solve_s=out["solve_s"], min_cell_mm=float(np.sqrt(2*out["area_m2"].min())*1e3), threads=threads)
 
 
 def _branch_ring_solver():
@@ -619,7 +504,7 @@ def main():
     report = dict(
         schema="radia.ih.axisym-volume-peec-fin.v1", generated_at_utc=datetime.now(timezone.utc).isoformat(),
         git_head=head, git_dirty=dirty, script_sha256=script_sha256(),
-        reference_runtime=provenance, platform_class=platform.system(),
+        reference_runtime=provenance, peec_runtime=_peec_runtime(), platform_class=platform.system(),
         radius_mm=args.radius_mm, frequency_hz=args.frequency_hz, sigma_S_per_m=args.sigma,
         skin_depth_mm=1e3/math.sqrt(math.pi*args.frequency_hz*MU0*args.sigma),
         cuts_mm=dict(root=[ROOT_X_MM, TIP_X_MM], tip=[TIP_X_MM, None]),
