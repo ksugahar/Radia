@@ -81,3 +81,20 @@ def test_volume_linear_form_uses_axifem_apply_trans_without_base_fallback(capfd)
     assert "base class apply trans" not in captured.out
     assert "base class apply trans" not in captured.err
     assert form.vec.Norm() > 0.0
+
+
+@pytest.mark.parametrize(
+    "quads, order, flags",
+    [(False, 1, {}), (False, 2, {}), (True, 1, {}), (True, 2, {"curvedquad": True})],
+)
+def test_straight_submicron_elements_far_from_axis_pass_the_map_checks(quads, order, flags):
+    """Guards: the sampled map checks scale with coordinate rounding, not only element size.
+
+    Assumes: 0.1 um straight elements at r = 0.2 m, as adaptive refinement of a ring section
+    produces; a size-only tolerance refused them as maps of degree > 2.
+    """
+    w = 4e-7
+    mesh = structured_rect_vol_mesh(
+        0.2, 0.2 + w, 0.0731, 0.0731 + w, quads=quads, nx=4, ny=4, stem="axifem_submicron"
+    )
+    _assemble_stiffness(mesh, order=order, **flags)

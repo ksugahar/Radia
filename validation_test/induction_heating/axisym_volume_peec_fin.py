@@ -281,24 +281,22 @@ def zz_indicator(res, order):
     return np.maximum(np.asarray(eta2, dtype=float), 0.0)
 
 
-def mark_conductor_and_nearby_air(mesh, eta2, theta):
-    """Doerfler marking on the conductor elements, plus every air element touching a marked one."""
+def mark_whole_mesh(mesh, eta2, theta):
+    """Doerfler marking over every element, conductor and air alike.
+
+    Conductor-only marking stalled order 1 at a biased value because the error left in the
+    unrefined air was never marked (user decision 2026-11-16: mark the whole mesh).
+    Returns the flags and the marked conductor and air counts.
+    """
     import ngsolve as ng
-    names = [el.mat for el in mesh.Elements(ng.VOL)]
-    verts = [[v.nr for v in el.vertices] for el in mesh.Elements(ng.VOL)]
-    cond = np.array([n == "conductor" for n in names])
-    idx = np.flatnonzero(cond)
-    if not len(idx) or eta2[idx].sum() <= 0:
-        raise RuntimeError("no conductor error to mark")
-    ranked = idx[np.argsort(eta2[idx])[::-1]]
-    keep = np.searchsorted(np.cumsum(eta2[ranked]), theta*eta2[idx].sum()) + 1
-    flags = np.zeros(len(names), dtype=bool)
+    cond = np.array([el.mat == "conductor" for el in mesh.Elements(ng.VOL)])
+    if eta2.sum() <= 0:
+        raise RuntimeError("no error to mark")
+    ranked = np.argsort(eta2)[::-1]
+    keep = np.searchsorted(np.cumsum(eta2[ranked]), theta*eta2.sum()) + 1
+    flags = np.zeros(len(eta2), dtype=bool)
     flags[ranked[:keep]] = True
-    touched = {v for i in ranked[:keep] for v in verts[i]}
-    for i in np.flatnonzero(~cond):
-        if any(v in touched for v in verts[i]):
-            flags[i] = True
-    return flags, int(keep), int(flags.sum() - keep)
+    return flags, int((flags & cond).sum()), int((flags & ~cond).sum())
 
 
 def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, air_mm, air_divisor,
@@ -333,7 +331,7 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
         if len(rows) >= max_levels:
             stop = "budget: level limit"
             break
-        flags, n_cond, n_air = mark_conductor_and_nearby_air(mesh, eta2, theta)
+        flags, n_cond, n_air = mark_whole_mesh(mesh, eta2, theta)
         row.update(marked_conductor=n_cond, marked_air=n_air)
         ne = mesh.ne
         for el in mesh.Elements(ng.VOL):
@@ -364,8 +362,8 @@ def main():
     parser.add_argument("--peec-interior-h-mm", type=float, default=0.5)
     parser.add_argument("--grading", type=float, default=0.25)
     # Adaptive reference (user decision 2026-11-16): each (order, exterior) sequence starts from a coarse
-    # mesh and refines the conductor elements carrying half of the ZZ indicator, plus the air elements
-    # touching them, until two successive checkpoints agree within one tenth of every limit, under a DOF,
+    # mesh and refines the elements (conductor and air) carrying half of the ZZ indicator,
+    # until two successive checkpoints agree within one tenth of every limit, under a DOF,
     # level and wall-clock budget.  A sequence that runs out of budget leaves the reference unresolved.
     parser.add_argument("--ref-order", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--ref-exterior-factor", type=float, nargs="+", default=[1.5, 3.0])
@@ -478,8 +476,8 @@ def main():
                                                          for s in sequences],
         reference_checks=checks, reference_spread_max=spread,
         reference_resolved_rule=("adaptive (user decision 2026-11-16): two orders and two exteriors, each an "
-                                 "adaptive sequence that refines the conductor elements holding the Doerfler "
-                                 "fraction of the ZZ grad A_phi indicator plus the air elements touching them, "
+                                 "adaptive sequence that refines the elements of the whole mesh (conductor and "
+                                 "air) holding the Doerfler fraction of the ZZ grad A_phi indicator, "
                                  "until two successive checkpoints (levels at least twice apart in DOFs) agree "
                                  "within one tenth of every limit, inside a DOF, "
                                  "level and wall-clock budget; then every quantity within one tenth of its limit for "

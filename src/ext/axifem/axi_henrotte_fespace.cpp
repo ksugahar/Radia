@@ -7,6 +7,7 @@
 #include <python_comp.hpp>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace axifem {
 
@@ -85,6 +86,15 @@ AxisAlignedQuadBounds RequireAxisAlignedQuad(const Vec<3> p[4], ElementId ei, in
     return b;
 }
 
+// Geometry comparison tolerance: relative to the element size, plus the
+// rounding of absolute coordinates.  A straight element of 0.1 um at
+// r = 0.2 m differs from its own interpolant by a few ulp of r, which is
+// above 1e-10 of its size.
+double MapTolerance(double size, double coord)
+{
+    return 1e-10 * size + 64.0 * std::numeric_limits<double>::epsilon() * coord;
+}
+
 // Closed-form quads use the four vertices only: refuse a curved (Curve > 1)
 // element instead of silently straightening it.
 void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh)
@@ -107,7 +117,8 @@ void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator 
             auto pt = eltrans(ip, lh).GetPoint();
             Vec<2> q = (1.0 - f) * c[k] + f * c[(k + 1) % 4];
             double len = L2Norm(c[(k + 1) % 4] - c[k]);
-            if (std::hypot(pt(0) - q(0), pt(1) - q(1)) > 1e-10 * len)
+            double coord = std::max(std::abs(pt(0)), std::abs(pt(1)));
+            if (std::hypot(pt(0) - q(0), pt(1) - q(1)) > MapTolerance(len, coord))
                 throw Exception("AxiHenrotteFESpace: curved quad at " + ToString(ei)
                                 + "; the axis-aligned quads are straight (use"
                                   " curvedquad=True for Curve(2) quads)");
@@ -145,6 +156,8 @@ void RequireQuadraticMap(const ngcomp::MeshAccess & ma, ElementId ei, Allocator 
     for (double v : geo.rg) { rmin = std::min(rmin, v); rmax = std::max(rmax, v); }
     for (double v : geo.zg) { zmin = std::min(zmin, v); zmax = std::max(zmax, v); }
     const double ext = std::max(rmax - rmin, zmax - zmin);
+    const double tol = MapTolerance(ext, std::max({ std::abs(rmin), std::abs(rmax),
+                                                   std::abs(zmin), std::abs(zmax) }));
     auto & eltrans = ma.GetTrafo(ei, lh);
     const int n = triangle ? 5 : 6;
     for (int k = 0; k < n; ++k) {
@@ -154,7 +167,7 @@ void RequireQuadraticMap(const ngcomp::MeshAccess & ma, ElementId ei, Allocator 
         auto pt = eltrans(ip, lh).GetPoint();
         double rp, zp, J[2][2];
         geo.MapRZ(x, y, rp, zp, J);
-        if (std::hypot(pt(0) - rp, pt(1) - zp) > 1e-10 * ext)
+        if (std::hypot(pt(0) - rp, pt(1) - zp) > tol)
             throw Exception("AxiHenrotteFESpace: element " + ToString(ei)
                             + " has a mesh map of degree > 2; H1Henrotte supports"
                               " Curve(1) and Curve(2) meshes");
