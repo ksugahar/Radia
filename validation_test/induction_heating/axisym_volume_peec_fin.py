@@ -243,12 +243,9 @@ def _branch_ring_solver():
         ring_solver=str(path.relative_to(ROOT)), ring_solver_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
-def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, modes, air_mm, air_divisor):
+def solve_level(mesh, ext_radius, ext_z, radius_mm, frequency, sigma, order, modes=30):
+    """One reference solve on ``mesh``; returns the report row and the ring result."""
     solve_axisym_ring, _ = _branch_ring_solver()
-    from aphi_beak_section_sweep import build_section_ring
-    mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=maxh, maxh_air_mm=air_mm,
-                                                exterior_factor=factor,
-                                                air_divisor=air_divisor)
     t0 = time.perf_counter()
     res = solve_axisym_ring(mesh, conductor="conductor", frequency_hz=frequency, sigma=sigma, order=order,
                             exterior_radius=ext_radius, exterior_center_z=ext_z, exterior_modes=modes)
@@ -257,12 +254,100 @@ def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, modes, air
     beak = res.loss_beyond((radius_mm + ROOT_X_MM)*1e-3)
     tip = res.loss_beyond((radius_mm + TIP_X_MM)*1e-3)
     scale = 0.5*res.resistance_ohm/total
-    return dict(maxh_mm=maxh, air_maxh_mm=air_mm, air_divisor=air_divisor, exterior_factor=factor, order=order, ndof=int(res.ndof), seconds=seconds,
-                R_ohm=res.resistance_ohm, L_H=res.inductance_H,
-                root_heat_W_per_A2=float((beak - tip)*scale), tip_heat_W_per_A2=float(tip*scale),
-                beak_loss_fraction=float(beak/total), tip_loss_fraction=float(tip/total),
-                terminal_vs_energy_R=float(abs(res.terminal_resistance_ohm - res.resistance_ohm)
-                                                   /res.resistance_ohm))
+    row = dict(order=order, ndof=int(res.ndof), elements=int(mesh.ne), seconds=seconds,
+               R_ohm=res.resistance_ohm, L_H=res.inductance_H,
+               root_heat_W_per_A2=float((beak - tip)*scale), tip_heat_W_per_A2=float(tip*scale),
+               beak_loss_fraction=float(beak/total), tip_loss_fraction=float(tip/total),
+               terminal_vs_energy_R=float(abs(res.terminal_resistance_ohm - res.resistance_ohm)
+                                          /res.resistance_ohm))
+    return row, res
+
+
+def zz_indicator(res, order):
+    """Per-element ZZ recovery indicator of grad A_phi in the revolved volume measure.
+
+    The conductor loss is |J|^2/(2 sigma) with J = sigma (1/(2 pi r) - j omega A_phi), so its
+    discretization error follows the error in A_phi, which is driven by the unresolved gradient.
+    The gradient is recovered by averaging into a continuous vector H1 space of the same order.
+    """
+    import ngsolve as ng
+    mesh = res.mesh
+    d = ng.grad(res.gf_a)
+    recovered = ng.GridFunction(ng.VectorH1(mesh, order=order, complex=True))
+    recovered.Set(d)
+    e = d - recovered
+    density = 2*math.pi*ng.x/MU0*(e[0]*ng.Conj(e[0]) + e[1]*ng.Conj(e[1])).real
+    eta2 = ng.Integrate(density, mesh, element_wise=True, order=2*order + 2)
+    return np.maximum(np.asarray(eta2, dtype=float), 0.0)
+
+
+def mark_conductor_and_nearby_air(mesh, eta2, theta):
+    """Doerfler marking on the conductor elements, plus every air element touching a marked one."""
+    import ngsolve as ng
+    names = [el.mat for el in mesh.Elements(ng.VOL)]
+    verts = [[v.nr for v in el.vertices] for el in mesh.Elements(ng.VOL)]
+    cond = np.array([n == "conductor" for n in names])
+    idx = np.flatnonzero(cond)
+    if not len(idx) or eta2[idx].sum() <= 0:
+        raise RuntimeError("no conductor error to mark")
+    ranked = idx[np.argsort(eta2[idx])[::-1]]
+    keep = np.searchsorted(np.cumsum(eta2[ranked]), theta*eta2[idx].sum()) + 1
+    flags = np.zeros(len(names), dtype=bool)
+    flags[ranked[:keep]] = True
+    touched = {v for i in ranked[:keep] for v in verts[i]}
+    for i in np.flatnonzero(~cond):
+        if any(v in touched for v in verts[i]):
+            flags[i] = True
+    return flags, int(keep), int(flags.sum() - keep)
+
+
+def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, air_mm, air_divisor,
+                      theta, tol, max_ndof, max_levels, deadline):
+    """Refine one (order, exterior) reference adaptively until two successive levels agree within tol."""
+    import ngsolve as ng
+    from aphi_beak_section_sweep import build_section_ring
+    mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=start_maxh, maxh_air_mm=air_mm,
+                                                exterior_factor=factor, air_divisor=air_divisor)
+    # A Doerfler step can touch a few percent of the elements, and two such neighbours agree trivially.
+    # Successive levels are therefore compared as checkpoints at least `growth` times apart in DOFs.
+    growth_min = 2.0
+    rows, checkpoints, stop = [], [], None
+    while stop is None:
+        row, res = solve_level(mesh, ext_radius, ext_z, radius_mm, frequency, sigma, order)
+        eta2 = zz_indicator(res, order)
+        del res
+        row.update(level=len(rows), exterior_factor=factor, indicator=float(math.sqrt(eta2.sum())))
+        is_check = not checkpoints or row["ndof"] >= growth_min*rows[checkpoints[-1]]["ndof"]
+        row["checkpoint"] = is_check
+        if is_check and checkpoints:
+            prev = rows[checkpoints[-1]]
+            row["change"] = {k: abs(quantities(row)[k] - quantities(prev)[k])/abs(quantities(row)[k])
+                             for k in tol}
+        rows.append(row)
+        print(json.dumps({"phase": "reference", **row}), flush=True)
+        if is_check:
+            checkpoints.append(len(rows) - 1)
+            if len(checkpoints) >= 2 and all(row["change"][k] <= tol[k] for k in tol):
+                stop = "converged"
+                break
+        if len(rows) >= max_levels:
+            stop = "budget: level limit"
+            break
+        flags, n_cond, n_air = mark_conductor_and_nearby_air(mesh, eta2, theta)
+        row.update(marked_conductor=n_cond, marked_air=n_air)
+        ne = mesh.ne
+        for el in mesh.Elements(ng.VOL):
+            mesh.SetRefinementFlag(el, bool(flags[el.nr]))
+        mesh.Refine()
+        growth = mesh.ne/ne
+        if row["ndof"]*growth > max_ndof:
+            stop = f"budget: next level ~{row['ndof']*growth:.3g} DOFs above {max_ndof:.3g}"
+        elif time.time() + 1.5*growth*row["seconds"] > deadline:
+            stop = "budget: deadline"
+    return dict(order=order, exterior_factor=factor, start_maxh_mm=start_maxh, air_maxh_mm=air_mm,
+                air_divisor=air_divisor, theta=theta, checkpoint_dof_growth=growth_min,
+                tolerance=tol, max_ndof=max_ndof,
+                max_levels=max_levels, converged=stop == "converged", stop=stop, levels=rows)
 
 
 def quantities(row):
@@ -278,16 +363,26 @@ def main():
     parser.add_argument("--peec-boundary-h-mm", type=float, nargs="+", default=[0.06, 0.04, 0.028])
     parser.add_argument("--peec-interior-h-mm", type=float, default=0.5)
     parser.add_argument("--grading", type=float, default=0.25)
-    # One conductor-mesh ladder and one far-air size per reference order: a linear-order reference
-    # needs a much finer air mesh than the quadratic one before its inductance converges.
-    parser.add_argument("--ref-maxh-mm", type=float, nargs="+", action="append",
-                        help="conductor ladder for the matching --ref-order entry (repeat per order)")
+    # Adaptive reference (user decision 2026-11-16): each (order, exterior) sequence starts from a coarse
+    # mesh and refines the conductor elements carrying half of the ZZ indicator, plus the air elements
+    # touching them, until two successive checkpoints agree within one tenth of every limit, under a DOF,
+    # level and wall-clock budget.  A sequence that runs out of budget leaves the reference unresolved.
+    parser.add_argument("--ref-order", type=int, nargs="+", default=[1, 2])
+    parser.add_argument("--ref-exterior-factor", type=float, nargs="+", default=[1.5, 3.0])
+    parser.add_argument("--ref-start-maxh-mm", type=float, nargs="+", default=None,
+                        help="starting conductor mesh size per --ref-order entry")
     parser.add_argument("--ref-air-mm", type=float, nargs="+", default=None,
                         help="far-air mesh size per --ref-order entry")
     parser.add_argument("--ref-air-divisor", type=float, nargs="+", default=None,
                         help="far air no finer than exterior radius / divisor, per --ref-order entry")
-    parser.add_argument("--ref-exterior-factor", type=float, nargs="+", default=[1.5, 3.0])
-    parser.add_argument("--ref-order", type=int, nargs="+", default=[1, 2])
+    parser.add_argument("--ref-theta", type=float, default=0.5, help="Doerfler fraction of the indicator")
+    parser.add_argument("--ref-max-ndof", type=float, default=6e6)
+    parser.add_argument("--ref-max-levels", type=int, default=16)
+    parser.add_argument("--ref-hours", type=float, default=2.0, help="wall-clock budget per sequence")
+    parser.add_argument("--ref-sequence", type=float, nargs=2, metavar=("ORDER", "FACTOR"),
+                        help="run only this adaptive sequence and write it to --output")
+    parser.add_argument("--ref-sequence-json", type=Path, nargs="+",
+                        help="use these finished sequences instead of running them")
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -296,42 +391,69 @@ def main():
     _, provenance = _branch_ring_solver()      # before any module puts the checkout's src first
     from fin_return_principle import PHYSICAL_TARGETS, physical_verdict
 
-    ladders = args.ref_maxh_mm or [[0.05, 0.035, 0.025]]*len(args.ref_order)
-    airs = args.ref_air_mm or [20.0]*len(args.ref_order)
-    divisors = args.ref_air_divisor or [20.0]*len(args.ref_order)
-    if (not (len(ladders) == len(airs) == len(divisors) == len(args.ref_order))
-            or any(len(l) < 2 for l in ladders)):
-        raise ValueError("one conductor ladder (>= 2 levels), air size and divisor per reference order")
-    reference = []
-    for order, ladder, air, divisor in zip(args.ref_order, ladders, airs, divisors):
-        for factor in args.ref_exterior_factor:
-            for maxh in ladder:
-                row = solve_reference(args.radius_mm, args.frequency_hz, args.sigma, maxh, factor, order, 30,
-                                      air, divisor)
-                reference.append(row)
-                print(json.dumps({"phase": "reference", **row}), flush=True)
+    n = len(args.ref_order)
+    starts = args.ref_start_maxh_mm or [0.05]*n
+    airs = args.ref_air_mm or [20.0]*n
+    divisors = args.ref_air_divisor or [20.0]*n
+    if not (len(starts) == len(airs) == len(divisors) == n):
+        raise ValueError("one starting mesh size, air size and divisor per reference order")
+    settings = {o: (s, a, d) for o, s, a, d in zip(args.ref_order, starts, airs, divisors)}
+    tol = {k: 0.1*PHYSICAL_TARGETS[k] for k in ("R", "partial_L", "root_heat", "tip_heat")}
+
+    def run(order, factor):
+        s, a, d = settings[order]
+        return adaptive_sequence(args.radius_mm, args.frequency_hz, args.sigma, order, factor, s, a, d,
+                                 args.ref_theta, tol, args.ref_max_ndof, args.ref_max_levels,
+                                 time.time() + 3600*args.ref_hours)
+
+    if args.ref_sequence:
+        order, factor = int(args.ref_sequence[0]), float(args.ref_sequence[1])
+        seq = run(order, factor)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        args.output.write_text(json.dumps(dict(
+            schema="radia.ih.axisym-ring-adaptive-sequence.v1", git_head=head,
+            script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            reference_runtime=provenance, radius_mm=args.radius_mm, frequency_hz=args.frequency_hz,
+            sigma_S_per_m=args.sigma, sequence=seq), indent=1) + "\n", encoding="utf-8")
+        print(json.dumps({"phase": "sequence", "order": order, "exterior_factor": factor,
+                          "converged": seq["converged"], "stop": seq["stop"]}), flush=True)
+        return
+    if args.ref_sequence_json:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        sequences = []
+        for p in args.ref_sequence_json:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if doc["git_head"] != head or doc["radius_mm"] != args.radius_mm \
+                    or doc["frequency_hz"] != args.frequency_hz or doc["sigma_S_per_m"] != args.sigma:
+                raise ValueError(f"{p} was run at {doc['git_head']} or on another operating point")
+            sequences.append(doc["sequence"])
+    else:
+        sequences = [run(o, f) for o in args.ref_order for f in args.ref_exterior_factor]
+    by = {(s["order"], s["exterior_factor"]): s for s in sequences}
+    want = {(o, f) for o in args.ref_order for f in args.ref_exterior_factor}
+    if set(by) != want:
+        raise ValueError(f"sequences {sorted(by)} do not cover orders x exteriors {sorted(want)}")
     top = max(args.ref_order)
     wide = max(args.ref_exterior_factor)
-    finest = {o: [r for r in reference if r["order"] == o and r["maxh_mm"] == min(l)]
-              for o, l in zip(args.ref_order, ladders)}
-    best = [r for r in finest[top] if r["exterior_factor"] == wide][0]
+    final = {key: [r for r in s["levels"] if r["checkpoint"]][-1] for key, s in by.items()}
+    best = final[(top, wide)]
     ref_q = quantities(best)
     rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
     checks = {}
-    for o, ladder in zip(args.ref_order, ladders):      # mesh: last two levels of every order and exterior
-        lv = sorted(set(ladder))
-        for factor in args.ref_exterior_factor:
-            pick = {r["maxh_mm"]: r for r in reference if r["order"] == o and r["exterior_factor"] == factor}
-            checks[f"mesh_o{o}_f{factor}"] = rel(pick[lv[1]], pick[lv[0]])
-    for r in finest[top]:                                # exterior, at the finest quadratic level
-        checks[f"exterior_f{r['exterior_factor']}"] = rel(r, best)
-    for o in args.ref_order:                             # order, at the finest level and widest exterior
-        r = [x for x in finest[o] if x["exterior_factor"] == wide][0]
-        checks[f"order_o{o}"] = rel(r, best)
+    for (o, f), s in sorted(by.items()):                # mesh: the last two adaptive checkpoints
+        lv = [r for r in s["levels"] if r["checkpoint"]]
+        checks[f"mesh_o{o}_f{f}"] = rel(lv[-1], lv[-2]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
+    for f in args.ref_exterior_factor:                   # exterior, at the highest order
+        checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
+    for o in args.ref_order:                             # order, at the widest exterior
+        checks[f"order_o{o}"] = rel(final[(o, wide)], best)
     spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
     swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
     consistent = best["terminal_vs_energy_R"] <= 1e-3
-    resolved = swept and consistent and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items())
+    converged = all(s["converged"] for s in sequences)
+    resolved = (swept and consistent and converged
+                and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items()))
+    reference = [dict(level, order=s["order"]) for s in sequences for level in s["levels"]]
 
     peec = []
     for h in args.peec_boundary_h_mm:
@@ -352,13 +474,20 @@ def main():
         skin_depth_mm=1e3/math.sqrt(math.pi*args.frequency_hz*MU0*args.sigma),
         cuts_mm=dict(root=[ROOT_X_MM, TIP_X_MM], tip=[TIP_X_MM, None]),
         normalization="per 1 A peak terminal current; loop-voltage port; exp(+j omega t)",
-        reference_levels=reference, reference_checks=checks, reference_spread_max=spread,
-        reference_resolved_rule=("two orders and two exteriors, each order on its own conductor ladder and far-air "
-                                 "size; every quantity within one tenth of its limit for (a) the last two mesh levels "
-                                 "of every order and exterior, (b) each exterior against the widest at the finest "
-                                 "highest order, (c) each order's finest against the highest order's finest; the "
-                                 "highest order's terminal Re(V/I) within 1e-3 of the dissipation resistance"),
-        reference_swept=swept, reference_loss_consistent=consistent,
+        reference_levels=reference, reference_sequences=[{k: v for k, v in s.items() if k != "levels"}
+                                                         for s in sequences],
+        reference_checks=checks, reference_spread_max=spread,
+        reference_resolved_rule=("adaptive (user decision 2026-11-16): two orders and two exteriors, each an "
+                                 "adaptive sequence that refines the conductor elements holding the Doerfler "
+                                 "fraction of the ZZ grad A_phi indicator plus the air elements touching them, "
+                                 "until two successive checkpoints (levels at least twice apart in DOFs) agree "
+                                 "within one tenth of every limit, inside a DOF, "
+                                 "level and wall-clock budget; then every quantity within one tenth of its limit for "
+                                 "(b) each exterior against the widest at the highest order, (c) each order's final "
+                                 "level against the highest order's at the widest exterior; the highest order's "
+                                 "terminal Re(V/I) within 1e-3 of the dissipation resistance; a sequence out of "
+                                 "budget leaves the reference unresolved"),
+        reference_swept=swept, reference_loss_consistent=consistent, reference_converged=converged,
         reference_resolved=resolved, peec_levels=peec,
         peec_change_last_two={k: abs(quantities(peec[-1])[k] - quantities(peec[-2])[k])/abs(quantities(peec[-1])[k])
                               for k in candidate} if len(peec) > 1 else None,
