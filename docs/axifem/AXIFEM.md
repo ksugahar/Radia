@@ -65,7 +65,9 @@ axis-aligned Q1/Q2 paths require straight rectangles.  A curved edge lying
 on the axis, a curved edge reaching `r <= 0` or turning back in `r` on the
 axis, a folded `(s, z)` or target map, a mesh curved to order `p > 2`,
 a mesh deformation and an integration-local deformation
-(`dx(deformation=...)`, `ds(deformation=...)`) raise.  Every evaluator (volume value, gradient,
+(`dx(deformation=...)`, `ds(deformation=...)`) raise.  `BoundaryFromVolumeCF`
+under a deformed `ds` evaluates on the undeformed volume map for every NGSolve
+space, `H1` included; it is unsupported, and `H1Henrotte` matches `H1` there.  Every evaluator (volume value, gradient,
 boundary trace) and both native integrators use one `A_φ` basis
 `N_i = r_i ψ_i / r`; see FORMULATION.md § 6.
 

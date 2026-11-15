@@ -394,6 +394,35 @@ def test_integration_local_deformation_is_refused(kind, order):
             pytest.fail(f"{kind}/{name} accepted dx(deformation=...)")
 
 
+
+def test_boundary_from_volume_matches_ngsolve_h1_under_deformed_ds():
+    """BoundaryFromVolumeCF is NGSolve-owned; H1Henrotte adds no error of its own.
+
+    Guards: under ds(deformation=...) the wrapped Henrotte value and gradient
+    equal those of standard NGSolve H1 on the same mesh.  If NGSolve starts
+    passing the deformed volume map, RequireMeshMap refuses and this fails.
+    Assumes: NGSolve evaluates BoundaryFromVolumeCF on the undeformed volume
+    map for every space (measured for H1: the gradient of A = r stays 1 while
+    the transported field has 1/sqrt(1 + 0.4 X)); a deformed boundary measure
+    combined with it is outside the supported contract.
+    """
+    mesh = _periodic_off_axis_mesh()
+    hen = ng.GridFunction(H1Henrotte(mesh, order=2))
+    ref = ng.GridFunction(ng.H1(mesh, order=2))
+    hen.Set(ng.x)
+    ref.Set(ng.x)
+    disp = ng.GridFunction(ng.VectorH1(mesh, order=2))
+    disp.Set(ng.CF((0.1 * ng.x ** 2, 0)))
+    ds = ng.ds(deformation=disp)
+    for f in (lambda g: g, lambda g: ng.grad(g)[0], lambda g: ng.grad(g)[1]):
+        a, b = ng.BoundaryFromVolumeCF(f(hen)), ng.BoundaryFromVolumeCF(f(ref))
+        diff = ng.Integrate((a - b) ** 2 * ds, mesh)
+        norm = ng.Integrate(b ** 2 * ds, mesh)
+        assert diff <= 1e-24 * max(norm, 1.0), (diff, norm)
+    exact = ng.Integrate((ng.BoundaryFromVolumeCF(ng.grad(ref)[0]) - 1 / ng.sqrt(1 + 0.4 * ng.x)) ** 2 * ds, mesh)
+    assert exact > 1e-3, exact  # NGSolve H1 itself reports the undeformed gradient
+
+
 FD_CASES = [
     ("p1_curved", 1, False),
     ("p2_curved", 2, False),

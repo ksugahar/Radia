@@ -156,6 +156,8 @@ exported.
   Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a mesh
   curved to order `p > 2` or carrying a deformation raises, and so does an
   integration-local `dx(deformation=...)` / `ds(deformation=...)`.
+  `BoundaryFromVolumeCF` with a deformed `ds` is unsupported: NGSolve evaluates
+  it on the undeformed volume map for every space, `H1` included.
 * **Q2 quad geometry:** the default production Q2 quad is straight and
   axis-aligned.  Use `curvedquad=True` for the production 9-node general Q2
   quadrature path on skewed straight quads.
