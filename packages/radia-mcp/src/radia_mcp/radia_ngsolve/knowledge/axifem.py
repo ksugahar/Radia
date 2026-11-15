@@ -154,7 +154,8 @@ exported.
 * **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
   quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.
   Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a mesh
-  curved to order `p > 2` or carrying a deformation raises.
+  curved to order `p > 2` or carrying a deformation raises, and so does an
+  integration-local `dx(deformation=...)` / `ds(deformation=...)`.
 * **Q2 quad geometry:** the default production Q2 quad is straight and
   axis-aligned.  Use `curvedquad=True` for the production 9-node general Q2
   quadrature path on skewed straight quads.
@@ -411,7 +412,9 @@ curved edge ending on the axis keeps the `s`-midpoint, is matched through
 mesh element (16-point Gauss rule per direction).  Refused: a curved edge
 lying on the axis, `r <= 0` inside a curved edge, `r^2` turning back along a
 curved axis edge, folded `(s, z)` or target maps, and a mesh curved to
-order `p > 2` or carrying a deformation (checked from the mesh metadata).  Checks:
+order `p > 2` or carrying a deformation (checked from the mesh metadata), and
+an integration-local deformation (each evaluator compares the integration
+point and Jacobian with the mesh transformation).  Checks:
 `tests/axifem/test_vdof_consistency.py` (matrices, trace, finite differences,
 axis limit), `tests/axifem/test_de_rham_identities.py` and
 `tests/axifem/test_p2_curved_magsta.py` (sphere volume and total flux).

@@ -194,9 +194,9 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     //   evaluator[VOL]: invoked when ProxyFunction is sampled with no derivative
     //   additional_evaluators.Set("grad", ...): exposes grad(u) syntax in Python
     //   flux_evaluator[VOL]: used by visualization / flux post-processing
-    evaluator[VOL]      = make_shared<AxiHenrotteDiffOpId>();
-    flux_evaluator[VOL] = make_shared<AxiHenrotteDiffOpGradient>();
-    additional_evaluators.Set("grad", make_shared<AxiHenrotteDiffOpGradient>());
+    evaluator[VOL]      = make_shared<AxiHenrotteDiffOpId>(ma);
+    flux_evaluator[VOL] = make_shared<AxiHenrotteDiffOpGradient>(ma);
+    additional_evaluators.Set("grad", make_shared<AxiHenrotteDiffOpGradient>(ma));
     // Boundary evaluator: needed for `LinearForm += q * v * ds(label)`
     // patterns used by axisymmetric heat / magnetic Neumann RHS.  The
     // basis polynomial restricted to a boundary edge of an axis-aligned
@@ -205,7 +205,7 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     // are linear functions of the edge parameter.
     // (2026-05-10: added to enable full migration of axisymmetric
     // solvers to Henrotte per the NGSolve-H1-not-for-axisym policy.)
-    evaluator[BND]      = make_shared<AxiHenrotteDiffOpIdBnd>();
+    evaluator[BND]      = make_shared<AxiHenrotteDiffOpIdBnd>(ma);
 }
 
 void AxiHenrotteFESpace::Update() {

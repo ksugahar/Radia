@@ -352,7 +352,11 @@ every quadrature point and node, and the target map must keep it at every
 quadrature point; a folded or degenerate map raises.  The element map must
 be the Curve(1)/Curve(2) mesh map: a mesh whose curve order exceeds two or
 that carries a deformation raises, checked from the mesh metadata at
-construction and at every element request.  A comparison with the quadratic
+construction and at every element request.  The element evaluates its own
+map, so every evaluator also requires that the integration point was mapped
+by the mesh transformation (point and Jacobian equal to round-off); an
+integration-local deformation (`dx(deformation=...)`) raises instead of
+returning the undeformed basis and gradient.  A comparison with the quadratic
 interpolant at off-node points is kept as a supplementary geometry
 diagnostic only; a finite point set cannot detect every higher-degree mode.  Nodes within
 `1e-12` of the mesh extent from the axis are placed on it, and their DOFs

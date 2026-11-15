@@ -327,6 +327,73 @@ def test_mesh_map_above_curve2_is_refused(factory, order, curvedquad):
         mesh.UnsetDeformation()
 
 
+
+def _periodic_off_axis_mesh():
+    geo = SplineGeometry()
+    a, b, c, d = [geo.AppendPoint(*p) for p in ((1, 0), (2, 0), (2, 1), (1, 1))]
+    low = geo.Append(["line", a, b])
+    geo.Append(["line", b, c])
+    geo.Append(["line", d, c], leftdomain=0, rightdomain=1, copy=low)
+    geo.Append(["line", d, a])
+    mesh = ng.Mesh(geo.GenerateMesh(maxh=0.5))
+    assert mesh.ngmesh.GetIdentifications()
+    mesh.Curve(2)
+    return mesh
+
+
+@pytest.mark.parametrize("kind", ["plain", "periodic", "compound"])
+@pytest.mark.parametrize("order", [1, 2], ids=["p1", "p2"])
+def test_integration_local_deformation_is_refused(kind, order):
+    """The basis is evaluated on the mesh map only, so dx(deformation=...) fails.
+
+    Guards: values, gradients, boundary traces and assembly on an
+    integration-local deformation raise instead of returning the undeformed
+    basis (A = r transported by X = r + 0.1 r^2 would report dA/dX = 1);
+    plain, genuinely periodic and compound spaces share the check.  A zero
+    deformation maps to the same points and stays admitted, equal to plain dx.
+    Assumes: the mesh transformation reproduces itself bitwise at the same
+    reference point.
+    """
+    mesh = _periodic_off_axis_mesh()
+    base = H1Henrotte(mesh, order=order)
+    fes = {"plain": lambda: base, "periodic": lambda: ng.Periodic(base),
+           "compound": lambda: ng.FESpace([base, ng.H1(mesh, order=2)])}[kind]()
+    gf = ng.GridFunction(fes)
+    a_phi = gf.components[0] if kind == "compound" else gf
+    a_phi.Set(ng.x)
+    disp = ng.GridFunction(ng.VectorH1(mesh, order=2))
+    zero = ng.GridFunction(ng.VectorH1(mesh, order=2))
+
+    plain = ng.Integrate(a_phi * ng.dx, mesh)
+    plain_grad = ng.Integrate(ng.grad(a_phi)[0] * ng.dx, mesh)
+    plain_bnd = ng.Integrate(a_phi * ng.ds, mesh)
+    assert ng.Integrate(a_phi * ng.dx(deformation=zero), mesh) == pytest.approx(plain, rel=1e-14)
+    assert ng.Integrate(ng.grad(a_phi)[0] * ng.dx(deformation=zero), mesh) ==         pytest.approx(plain_grad, rel=1e-14)
+    assert ng.Integrate(a_phi * ng.ds(deformation=zero), mesh) == pytest.approx(plain_bnd, rel=1e-14)
+    _, v0 = fes.TnT()
+    v0 = v0[0] if kind == "compound" else v0
+    lf_plain = ng.LinearForm(v0.Trace() * ng.ds).Assemble().vec.FV().NumPy().copy()
+    lf_zero = ng.LinearForm(v0.Trace() * ng.ds(deformation=zero)).Assemble().vec.FV().NumPy()
+    np.testing.assert_allclose(lf_zero, lf_plain, rtol=0, atol=1e-14 * np.abs(lf_plain).max())
+
+    disp.Set(ng.CF((0.1 * ng.x ** 2, 0)))
+    u, v = fes.TnT()
+    if kind == "compound":
+        u, v = u[0], v[0]
+    refused = {
+        "value": lambda: ng.Integrate(a_phi * ng.dx(deformation=disp), mesh),
+        "gradient": lambda: ng.Integrate(ng.grad(a_phi)[0] * ng.dx(deformation=disp), mesh),
+        "boundary": lambda: ng.Integrate(a_phi * ng.ds(deformation=disp), mesh),
+        "assembly": lambda: ng.BilinearForm(
+            ng.grad(u) * ng.grad(v) * ng.dx(deformation=disp), check_unused=False).Assemble(),
+        "linear_form": lambda: ng.LinearForm(v.Trace() * ng.ds(deformation=disp)).Assemble(),
+    }
+    for name, call in refused.items():
+        with pytest.raises(Exception, match="not mapped by the mesh transformation"):
+            call()
+            pytest.fail(f"{kind}/{name} accepted dx(deformation=...)")
+
+
 FD_CASES = [
     ("p1_curved", 1, False),
     ("p2_curved", 2, False),

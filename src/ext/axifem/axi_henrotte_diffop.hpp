@@ -14,22 +14,73 @@
 // s-isoparametric map is not NGSolve's), so no Jacobian of the mesh map is
 // applied here.  The complex overloads serve complex (time-harmonic)
 // GridFunctions: the basis is real, only the coefficients are complex.
+//
+// Because the element evaluates its own map, every entry point first requires
+// that the integration point was mapped by the mesh's own transformation
+// (RequireMeshMap).  An integration-local deformation (dx(deformation=gf))
+// maps the points and the measure but cannot change the element's basis, so
+// it is refused instead of returning the undeformed gradient.
 
 #ifndef RADIA_AXIFEM_AXI_HENROTTE_DIFFOP_HPP
 #define RADIA_AXIFEM_AXI_HENROTTE_DIFFOP_HPP
 
-#include <fem.hpp>
+#include <comp.hpp>
+#include <algorithm>
+#include <cmath>
 #include "axi_henrotte_fe.hpp"
 
 namespace axifem {
 
 using namespace ngfem;
 
+// Refuse an integration point whose transformation is not the mesh map: the
+// point and the Jacobian are compared with those of the mesh's own
+// transformation at the same reference point.  The mesh path computes both
+// with the same code, so they agree to round-off.
+inline void RequireMeshMap(const ngcomp::MeshAccess & ma,
+                           const BaseMappedIntegrationPoint & mip, LocalHeap & lh)
+{
+    const ElementTransformation & trafo = mip.GetTransformation();
+    if (!trafo.BelongsToMesh(&ma))
+        throw Exception("AxiHenrotte: the integration point belongs to another mesh");
+    HeapReset hr(lh);
+    const ElementTransformation & mesh_trafo = ma.GetTrafo(trafo.GetElementId(), lh);
+    if (&mesh_trafo == &trafo) return;
+    const BaseMappedIntegrationPoint & ref = mesh_trafo(mip.IP(), lh);
+    if (mip.DimSpace() != 2 || ref.DimSpace() != 2 || mip.DimElement() != ref.DimElement())
+        throw Exception("AxiHenrotte: the integration point is not on the 2D (r, z) mesh map");
+    double scale = 0.0, dj = 0.0, dx = 0.0;
+    auto compare = [&](const auto & a, const auto & b) {
+        const auto & J = a.GetJacobian();
+        const auto & Jr = b.GetJacobian();
+        for (int i = 0; i < J.Height(); ++i)
+            for (int j = 0; j < J.Width(); ++j) {
+                scale = std::max(scale, std::abs(Jr(i, j)));
+                dj = std::max(dj, std::abs(J(i, j) - Jr(i, j)));
+            }
+        for (int i = 0; i < 2; ++i)
+            dx = std::max(dx, std::abs(a.GetPoint()(i) - b.GetPoint()(i)));
+    };
+    if (mip.DimElement() == 2)
+        compare(static_cast<const MappedIntegrationPoint<2, 2> &>(mip),
+                static_cast<const MappedIntegrationPoint<2, 2> &>(ref));
+    else
+        compare(static_cast<const MappedIntegrationPoint<1, 2> &>(mip),
+                static_cast<const MappedIntegrationPoint<1, 2> &>(ref));
+    const double tol = 1e-12 * scale;
+    if (dx > tol || dj > tol)
+        throw Exception("AxiHenrotte: the integration point is not mapped by the mesh"
+                        " transformation (an integration-local deformation such as"
+                        " dx(deformation=...) is not supported); point offset "
+                        + ToString(dx) + ", Jacobian offset " + ToString(dj));
+}
+
 template <bool kBnd>
 class AxiHenrotteDiffOpValue : public DifferentialOperator {
 public:
-    AxiHenrotteDiffOpValue()
-        : DifferentialOperator(/*dim=*/1, /*blockdim=*/1, kBnd ? BND : VOL, /*difforder=*/0)
+    explicit AxiHenrotteDiffOpValue(shared_ptr<ngcomp::MeshAccess> ma)
+        : DifferentialOperator(/*dim=*/1, /*blockdim=*/1, kBnd ? BND : VOL, /*difforder=*/0),
+          ma_(std::move(ma))
     {
         SetDimensions(Array<int>{});   // scalar field, as standard H1
     }
@@ -57,22 +108,22 @@ public:
     }
 
     void CalcMatrix(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-                    BareSliceMatrix<double, ColMajor> mat, LocalHeap &) const override
-    { Fill(fel, mip, mat); }
+                    BareSliceMatrix<double, ColMajor> mat, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Fill(fel, mip, mat); }
 
     void CalcMatrix(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-                    BareSliceMatrix<Complex, ColMajor> mat, LocalHeap &) const override
-    { Fill(fel, mip, mat); }
+                    BareSliceMatrix<Complex, ColMajor> mat, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Fill(fel, mip, mat); }
 
     void ApplyTrans(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
                     FlatVector<double> flux, BareSliceVector<double> values,
-                    LocalHeap &) const override
-    { Trans(fel, mip, flux, values); }
+                    LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Trans(fel, mip, flux, values); }
 
     void ApplyTrans(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
                     FlatVector<Complex> flux, BareSliceVector<Complex> values,
-                    LocalHeap &) const override
-    { Trans(fel, mip, flux, values); }
+                    LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Trans(fel, mip, flux, values); }
 
     template <typename T>
     static void Forward(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
@@ -87,12 +138,12 @@ public:
     }
 
     void Apply(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-               BareSliceVector<double> x, FlatVector<double> flux, LocalHeap &) const override
-    { Forward(fel, mip, x, flux); }
+               BareSliceVector<double> x, FlatVector<double> flux, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Forward(fel, mip, x, flux); }
 
     void Apply(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-               BareSliceVector<Complex> x, FlatVector<Complex> flux, LocalHeap &) const override
-    { Forward(fel, mip, x, flux); }
+               BareSliceVector<Complex> x, FlatVector<Complex> flux, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Forward(fel, mip, x, flux); }
 
     // No SIMD evaluation: NGSolve falls back to the point-wise path on
     // ExceptionNOSIMD (the base class would print a warning first).
@@ -108,6 +159,9 @@ public:
     void AddTrans(const FiniteElement &, const SIMD_BaseMappedIntegrationRule &,
                   BareSliceMatrix<SIMD<Complex>>, BareSliceVector<Complex>) const override
     { throw ExceptionNOSIMD("AxiHenrotte: no SIMD evaluation"); }
+
+private:
+    shared_ptr<ngcomp::MeshAccess> ma_;
 };
 
 using AxiHenrotteDiffOpId = AxiHenrotteDiffOpValue<false>;
@@ -115,8 +169,9 @@ using AxiHenrotteDiffOpIdBnd = AxiHenrotteDiffOpValue<true>;
 
 class AxiHenrotteDiffOpGradient : public DifferentialOperator {
 public:
-    AxiHenrotteDiffOpGradient()
-        : DifferentialOperator(/*dim=*/2, /*blockdim=*/1, VOL, /*difforder=*/1) {}
+    explicit AxiHenrotteDiffOpGradient(shared_ptr<ngcomp::MeshAccess> ma)
+        : DifferentialOperator(/*dim=*/2, /*blockdim=*/1, VOL, /*difforder=*/1),
+          ma_(std::move(ma)) {}
 
     string Name() const override { return "AxiHenrotte:Gradient"; }
 
@@ -134,12 +189,12 @@ public:
     }
 
     void CalcMatrix(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-                    BareSliceMatrix<double, ColMajor> mat, LocalHeap &) const override
-    { Fill(fel, mip, mat); }
+                    BareSliceMatrix<double, ColMajor> mat, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Fill(fel, mip, mat); }
 
     void CalcMatrix(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-                    BareSliceMatrix<Complex, ColMajor> mat, LocalHeap &) const override
-    { Fill(fel, mip, mat); }
+                    BareSliceMatrix<Complex, ColMajor> mat, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Fill(fel, mip, mat); }
 
     template <typename T>
     static void Forward(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
@@ -154,12 +209,12 @@ public:
     }
 
     void Apply(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-               BareSliceVector<double> x, FlatVector<double> flux, LocalHeap &) const override
-    { Forward(fel, mip, x, flux); }
+               BareSliceVector<double> x, FlatVector<double> flux, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Forward(fel, mip, x, flux); }
 
     void Apply(const FiniteElement & fel, const BaseMappedIntegrationPoint & mip,
-               BareSliceVector<Complex> x, FlatVector<Complex> flux, LocalHeap &) const override
-    { Forward(fel, mip, x, flux); }
+               BareSliceVector<Complex> x, FlatVector<Complex> flux, LocalHeap & lh) const override
+    { RequireMeshMap(*ma_, mip, lh); Forward(fel, mip, x, flux); }
 
     // No SIMD evaluation: NGSolve falls back to the point-wise path on
     // ExceptionNOSIMD (the base class would print a warning first).
@@ -175,6 +230,9 @@ public:
     void AddTrans(const FiniteElement &, const SIMD_BaseMappedIntegrationRule &,
                   BareSliceMatrix<SIMD<Complex>>, BareSliceVector<Complex>) const override
     { throw ExceptionNOSIMD("AxiHenrotte: no SIMD evaluation"); }
+
+private:
+    shared_ptr<ngcomp::MeshAccess> ma_;
 };
 
 }  // namespace axifem
