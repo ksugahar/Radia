@@ -922,11 +922,10 @@ Do not reuse the electromagnetic space for temperature:
 
 For standard NGSolve H1, `order=2` selects **Q2 on quadrilateral meshes** and
 **P2 on triangular meshes**.  It is an approximation order, not a request for
-one fixed element topology.  `AxiHenrotteHeatStiffnessBFI` and
-`AxiHenrotteHeatMassBFI` are optional research infrastructure only.  Their Q2
-path is valid off axis; both fail fast on axis-touching Q2 because the
-electromagnetic FE has six active axis functions while the heat matrix needs
-nine scalar-temperature functions.
+one fixed element topology.  The Henrotte space carries the `A_phi` basis
+`N_i = r_i psi_i / r`; it has no temperature integrators, because a scalar
+temperature is not of that form (the former Henrotte heat BFIs were removed
+with the V-DOF convention unification).
 
 ## Axisymmetric thermal FE order: default 2 (near-axis cusp at order 1)
 
@@ -943,8 +942,7 @@ Field-report symptom map: "the axisym thermal result looks wrong near
 the axis" == this order-1 cusp.  Fix: keep the default order 2 (or pass
 `--fes-order 2`).  Do NOT switch the scalar solve to the Henrotte
 basis: the reference standard-H1 policy stands, order 2 already
-strongly suppresses the axis artifact.  The optional Henrotte heat BFIs now
-reject axis-touching Q2 explicitly instead of assembling inconsistent matrices.
+strongly suppresses the axis artifact.
 
 Two order>=2 implementation notes (both fixed 2026-09-03; they apply
 to `calc_heat.py` as well):
@@ -1542,9 +1540,8 @@ gfT.vec.data = mstar_inv * (m.mat * gfT.vec + dt * f.vec)
 ## 9. HIGH: Do Not Reuse the Henrotte A_phi Space for Temperature
 
 ```python
-# WRONG on an axis-touching Q2 mesh: electromagnetic axis-reduced basis
+# WRONG: the Henrotte space is the A_phi basis N_i = r_i psi_i / r
 fes_T = radia.axifem.H1Henrotte(mesh, order=2)
-a += radia.axifem.AxiHenrotteHeatStiffnessBFI(k)
 
 # CORRECT: standard scalar H1 with the cylindrical 2*pi*r measure
 fes_T = H1(mesh, order=2)  # Q2 on quads, P2 on triangles
@@ -1553,8 +1550,8 @@ a += k * grad(u) * grad(v) * 2*pi*x * dx
 m += rho_c * u * v * 2*pi*x * dx
 ```
 
-The legacy Henrotte heat BFIs fail fast on axis-touching Q2.  Do not catch the
-exception and fall back; select the standard H1 thermal formulation explicitly.
+The Henrotte space has no temperature integrators; select the standard H1
+thermal formulation explicitly.
 
 ## 10. MODERATE: Missing TaskManager for Parallel Assembly
 

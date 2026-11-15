@@ -1,14 +1,14 @@
-// axi_henrotte_fe.hpp — Henrotte/Meeker axisymmetric finite element.
+// axi_henrotte_fe.hpp — Henrotte/Meeker axisymmetric finite elements.
 //
-// Shape functions are linear in {1, r^2, z, ...} on physical (r, z) coordinates
-// (NOT on the reference element). The basis is determined by the physical
-// vertex positions of each element, which the FE stores at construction.
+// Every element of H1Henrotte exposes one field convention: nodal values of
+// A_phi with the V-DOF basis N_i = r_i psi_i / r (psi = 2 pi r A_phi), its
+// physical (r, z) gradient, and the same basis in the native stiffness and
+// sigma-mass integrators.  See axi_henrotte_siso.hpp for the geometry, the
+// shared edge midnode rule and the evaluation target.
 //
 // We follow the NGSolve i-tutorial Unit 9.1 ("MyElement") pattern: inherit
 // directly from FiniteElement (not BaseScalarFiniteElement) to avoid the
-// SIMD/parallel-evaluator pure-virtual obligations. Our shape and derivative
-// access goes through a custom AxiHenrotteBaseFE base class with its own
-// virtual interface.
+// SIMD/parallel-evaluator pure-virtual obligations.
 
 #ifndef RADIA_AXIFEM_AXI_HENROTTE_FE_HPP
 #define RADIA_AXIFEM_AXI_HENROTTE_FE_HPP
@@ -20,35 +20,20 @@ namespace axifem {
 
 using namespace ngfem;
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteBaseFE — minimal base for our custom shape-function family.
-//   - Subclass of ngfem::FiniteElement (not BaseScalarFiniteElement, to avoid
-//     the abstract SIMD evaluators).
-//   - Adds CalcShape / CalcDShape virtual interface for our DiffOps.
-// ---------------------------------------------------------------------------
-
 class AxiHenrotteBaseFE : public FiniteElement {
 public:
+    static constexpr int kMaxDof = 9;
     AxiHenrotteBaseFE(int ndof, int order) : FiniteElement(ndof, order) {}
 
-    /// Shape values at reference-element coords ip; returns ndof values.
-    /// Our implementation maps ref -> phys (r, z) and evaluates {1, r^2, z, ...}.
-    virtual void CalcShape(const IntegrationPoint & ip,
-                           BareSliceVector<> shape) const = 0;
-
-    /// Shape gradients w.r.t. reference coords, ndof x dim matrix.
-    /// (NGSolve geometry transformation handles the chain rule to physical.)
-    virtual void CalcDShape(const IntegrationPoint & ip,
-                            BareSliceMatrix<> dshape) const = 0;
+    /// V-DOF basis values n[i] = N_i and, if dn is not null, the physical
+    /// gradient dn[i] = (dN_i/dr, dN_i/dz) at the NGSolve reference point ip.
+    virtual void CalcVdof(const IntegrationPoint & ip, double * n,
+                          double (*dn)[2]) const = 0;
 };
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_Q1_AxisAligned
-//   - 4 DOFs/element on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]
-//   - shape_i(r, z) = a_i + b_i*r^2 + c_i*z + d_i*r^2*z
-//   - (a, b, c, d)_i fixed by shape_i(r_j, z_j) = delta_ij
-// ---------------------------------------------------------------------------
-
+// Q1 on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]: psi bilinear in
+// (s = r^2, z).  Local vertex order (r_a,z_a), (r_b,z_a), (r_b,z_b), (r_a,z_b)
+// (the FESpace refuses quads with another vertex order).
 class AxiHenrotteFE_Q1_AxisAligned : public AxiHenrotteBaseFE {
 public:
     double r_a, r_b, z_a, z_b;
@@ -56,155 +41,60 @@ public:
     AxiHenrotteFE_Q1_AxisAligned(double ra, double rb, double za, double zb);
 
     ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_Q2_AxisAligned
-//   - 9 DOFs/element on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]
-//   - shape monomials (in s = r^2, z):
-//       {1, s, s^2, z, s*z, s^2*z, z^2, s*z^2, s^2*z^2}
-//     (Lagrange-interpolatory at 9 nodes; s-midpoint convention).
-//
-//   Node order (matches JSON `node_order_general`):
+// Q2 on an axis-aligned rectangle: psi in {1, s, s^2} x {1, z, z^2}, Lagrange
+// at the s-midpoint nodes
 //      0: (sa, za)    1: (sb, za)    2: (sb, zb)    3: (sa, zb)    (corners)
 //      4: (sm, za)    5: (sb, zm)    6: (sm, zb)    7: (sa, zm)    (edge mid)
-//      8: (sm, zm)                                                  (face center)
-//     where sm = (sa+sb)/2 and zm = (za+zb)/2 — NOTE the s-midpoint
-//     convention: physical r at edge midpoints is sqrt(sm) = sqrt((ra^2+rb^2)/2),
-//     not (ra+rb)/2.
-//
-//   Axis-touching case (ra < EPS_AXIS):
-//     6 monomials {s, s^2, s*z, s^2*z, s*z^2, s^2*z^2} on 6 non-axis nodes.
-//     The 3 axis-side nodes (0, 3, 7) get zero shape functions and zero
-//     gradient; physically A_phi vanishes on the symmetry axis.
-//     Caller MUST Dirichlet the 3 axis-side global DOFs to zero.
-// ---------------------------------------------------------------------------
-
+//      8: (sm, zm)                                                  (centre)
+// with sm = (sa+sb)/2 (siso::EdgeMidnode: horizontal edges take the
+// s-midpoint).  Axis-touching (r_a on the axis): the 6 monomials
+// {s, s^2} x {1, z, z^2} on the 6 non-axis nodes; the axis nodes carry no basis.
 class AxiHenrotteFE_Q2_AxisAligned : public AxiHenrotteBaseFE {
 public:
     double r_a, r_b, z_a, z_b;
-    bool   is_axis;            // sa < EPS_AXIS triggers the 6-monomial axis basis
-    // Cached Vandermonde inverse (column j = coefficients of Lagrange basis L_j
-    // in the monomial basis). For interior elements: 9x9 dense. For axis: 6x6
-    // padded into the same 9x9 storage (rows/cols at axis-node indices are 0).
+    bool   is_axis;
+    // Column j = monomial coefficients of the Lagrange function of node j.
     double Vinv[9][9];
-    // Local-index mapping for axis case: which 6 of the 9 nodes are non-axis.
-    // For axis-touching: {1, 2, 4, 5, 6, 8}. For interior: identity {0..8}.
-    int    nz_idx[9];          // first n_nz entries are valid
+    int    nz_idx[9];          // first n_nz entries: nodes carrying a basis
     int    n_nz;               // 9 (interior) or 6 (axis)
 
     AxiHenrotteFE_Q2_AxisAligned(double ra, double rb, double za, double zb);
 
     ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_Edge_Q1 / _Q2
-//
-// 1-D restriction of the Q1 / Q2 axis-aligned-quad Henrotte basis to a
-// single edge (axis-aligned in (r, z)):
-//
-//   - Horizontal edge (z = const): basis values are Lagrange in s = r^2
-//     across the edge endpoints.
-//   - Vertical edge (r = const): basis values are Lagrange in z.
-//
-// This is needed for `LinearForm += q * v * ds(label)` patterns -- the
-// axisymmetric Neumann-BC RHS of heat / magnetic Henrotte solvers.
-//
-// Edge endpoint convention: (r0, z0) and (r1, z1) are the two segment
-// vertices in the order returned by `ma->GetElement(BND ei).Vertices()`.
-// The order does NOT need to match the parent quad's vertex numbering
-// because Lagrange basis values depend only on the edge endpoint
-// coordinates, not on the parent quad's other two corners.
-//
-// Q1 case: 2 DOFs (the two segment vertices).
-// Q2 case: 3 DOFs (vertex0, vertex1, edge midnode at the s-midpoint
-// (= NGSolve's segment edge index, listed after the vertices in
-// AxiHenrotteFESpace::GetDofNrs for BND elements)).
-// ---------------------------------------------------------------------------
-
-class AxiHenrotteFE_Edge_Q1 : public AxiHenrotteBaseFE {
+// Boundary trace on one segment (order 1: 2 DOFs, order 2: vertex0, vertex1,
+// edge midnode).  Used by `LinearForm += q * v * ds(label)` and the DtN trace.
+class AxiHenrotteFE_Edge : public AxiHenrotteBaseFE {
 public:
     double r0, z0, r1, z1;
 
-    AxiHenrotteFE_Edge_Q1(double ar0, double az0, double ar1, double az1)
-        : AxiHenrotteBaseFE(2, 1),
+    AxiHenrotteFE_Edge(int order, double ar0, double az0, double ar1, double az1)
+        : AxiHenrotteBaseFE(order == 1 ? 2 : 3, order),
           r0(ar0), z0(az0), r1(ar1), z1(az1) {}
 
     ELEMENT_TYPE ElementType() const override { return ET_SEGM; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
-class AxiHenrotteFE_Edge_Q2 : public AxiHenrotteBaseFE {
-public:
-    double r0, z0, r1, z1;
-
-    AxiHenrotteFE_Edge_Q2(double ar0, double az0, double ar1, double az1)
-        : AxiHenrotteBaseFE(3, 2),
-          r0(ar0), z0(az0), r1(ar1), z1(az1) {}
-
-    ELEMENT_TYPE ElementType() const override { return ET_SEGM; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
-};
-
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_P1_Triangle
-//   - 3 DOFs/element on a general triangle (r_i, z_i) in (r, z) plane
-//   - s-isoparametric with an affine (s = r^2, z) map: psi_i is linear in
-//     (s, z), and the stiffness and sigma mass are integrated over the
-//     (s, z) triangle through the same map (axi_henrotte_siso.hpp).  The
-//     space is conforming on the (s, z) triangulation and on the edges shared
-//     with Q1 axis-aligned quads.
-// ---------------------------------------------------------------------------
-
+// P1 triangle: linear reference basis on the quadratic (s, z) map.  Nodes
+// [v0, v1, v2, m01, m12, m20] are the mesh nodes; the DOFs are the vertices.
 class AxiHenrotteFE_P1_Triangle : public AxiHenrotteBaseFE {
 public:
-    siso::Geometry<siso::P1Tri> geo;
+    siso::Geometry<siso::P2Tri, siso::P1Tri> geo;
 
-    AxiHenrotteFE_P1_Triangle(const double rs[3], const double zs[3]);
+    AxiHenrotteFE_P1_Triangle(const double rs[6], const double zs[6]);
 
     ELEMENT_TYPE ElementType() const override { return ET_TRIG; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_P2_Triangle / AxiHenrotteFE_Q2_Curved
-//   General (oblique or curved) order-2 Henrotte elements, s-isoparametric:
-//   the geometry is the reference Lagrange map to (s = r^2, z) through the
-//   element nodes and the basis is the reference Lagrange basis (see
-//   axi_henrotte_siso.hpp).  This keeps psi ~ s at the axis and is conforming on
-//   every shared edge, including oblique ones.
-//   - V-DOF basis: N_A_i(r, z) = r_i * psi_i(r, z) / r, so axis nodes (r_i = 0)
-//     decouple; the caller Dirichlets them (A_phi = 0 on the axis).
-//   - P2 node order: [v0, v1, v2, m01, m12, m20] on NGSolve's ET_TRIG reference.
-//   - Q2 node order: corners 0-3, edge mids 4 (bottom), 5 (right), 6 (top),
-//     7 (left), face centre 8 on NGSolve's ET_QUAD reference [0,1]^2.
-//   Nodes are sampled from the mesh element transformation at the reference
-//   node positions, so a straight edge has its midnode at the r-midpoint.
-// ---------------------------------------------------------------------------
-
+// P2 triangle, node order [v0, v1, v2, m01, m12, m20] on NGSolve's ET_TRIG
+// reference.
 class AxiHenrotteFE_P2_Triangle : public AxiHenrotteBaseFE {
 public:
     siso::Geometry<siso::P2Tri> geo;
@@ -212,13 +102,11 @@ public:
     AxiHenrotteFE_P2_Triangle(const double rs[6], const double zs[6]);
 
     ELEMENT_TYPE ElementType() const override { return ET_TRIG; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
+// Q2 general straight quad (curvedquad=True), nodes: corners 0-3, edge mids
+// 4 (bottom), 5 (right), 6 (top), 7 (left), centre 8 on [0,1]^2.
 class AxiHenrotteFE_Q2_Curved : public AxiHenrotteBaseFE {
 public:
     siso::Geometry<siso::Q2Quad> geo;
@@ -226,11 +114,7 @@ public:
     AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9]);
 
     ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
+    void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;
 };
 
 }  // namespace axifem

@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
-r"""Shared-edge trace continuity of the general order-2 Henrotte elements.
+r"""Shared-edge trace continuity of the H1Henrotte elements.
 
-Guards: the P2 triangle and the curvedquad Q2 are conforming on edges that are
-oblique in (r, z), next to each other and to themselves.  For every global DOF a
-unit coefficient is evaluated just inside both elements along the shared edge,
-between the interpolation nodes.  A conforming space gives a jump of the order
-of the offset times the gradient; the former physical-(s, z)-monomial basis gave
-O(1) jumps on oblique edges (quad 0.5, triangle 0.02).
-Assumes: straight elements, so the (r, z) and (s, z) element maps share the edge.
+Guards: every element family is conforming on the edges it shares with itself
+and with the other families: oblique, horizontal (z = const), vertical and
+axis-connected edges, triangles next to quads, the closed-form axis-aligned
+quads next to the general elements.  For every global DOF a unit coefficient is
+evaluated on the shared edge itself, between the interpolation nodes, from
+each of the two elements through its own reference coordinates
+(``mesh.GetTrafo``).  No point location is involved, so both values come from
+different elements by construction; an offset-and-locate probe can put both
+points in one element and pass trivially.
+Assumes: straight elements; the physical point of each evaluation is checked
+against the edge.
 """
 import os
 import sys
@@ -23,21 +27,43 @@ from netgen.csg import Pnt
 from netgen.meshing import Element2D, FaceDescriptor, Mesh as NGMesh, MeshPoint
 from radia.axifem import H1Henrotte
 
-OFFSET = 1.0e-6
-JUMP_LIMIT = 1.0e-4     # offset 1e-6 times basis gradients of order 10
-
-CASES = {
-    "quad_quad_oblique": ([(1, 0), (2, 0), (2.5, 1), (1, 1), (3, 0), (3.5, 1)],
-                          [(0, 1, 2, 3), (1, 4, 5, 2)], (2.0, 0.0), (2.5, 1.0)),
-    "quad_trig_oblique": ([(1, 0), (2, 0), (2.5, 1), (1, 1), (3, 0)],
-                          [(0, 1, 2, 3), (1, 4, 2)], (2.0, 0.0), (2.5, 1.0)),
-    "trig_trig_oblique": ([(1, 0), (2, 0), (2.5, 1), (3, 0)],
-                          [(0, 1, 2), (1, 3, 2)], (2.0, 0.0), (2.5, 1.0)),
-    "quad_trig_aligned": ([(1, 0), (2, 0), (2, 1), (1, 1), (3, 0)],
-                          [(0, 1, 2, 3), (1, 4, 2)], (2.0, 0.0), (2.0, 1.0)),
-    "near_axis_oblique": ([(0.0, 0), (0.2, 0), (0.35, 1), (0.0, 1), (0.6, 0)],
-                          [(0, 1, 2, 3), (1, 4, 2)], (0.2, 0.0), (0.35, 1.0)),
+JUMP_LIMIT = 1.0e-10
+REF_VERTICES = {
+    ng.ET.TRIG: [(1.0, 0.0), (0.0, 1.0), (0.0, 0.0)],
+    ng.ET.QUAD: [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
 }
+
+# name: (points, elements, shared edge as two point indices)
+MESHES = {
+    "quad_quad_oblique": ([(1, 0), (2, 0), (2.5, 1), (1, 1), (3, 0), (3.5, 1)],
+                          [(0, 1, 2, 3), (1, 4, 5, 2)], (1, 2)),
+    "quad_trig_oblique": ([(1, 0), (2, 0), (2.5, 1), (1, 1), (3, 0)],
+                          [(0, 1, 2, 3), (1, 4, 2)], (1, 2)),
+    "trig_trig_oblique": ([(1, 0), (2, 0), (2.5, 1), (3, 0)],
+                          [(0, 1, 2), (1, 3, 2)], (1, 2)),
+    "quad_trig_vertical": ([(1, 0), (2, 0), (2, 1), (1, 1), (3, 0)],
+                           [(0, 1, 2, 3), (1, 4, 2)], (1, 2)),
+    "quad_trig_horizontal": ([(1, 0), (2, 0), (2, 1), (1, 1), (1.5, 2)],
+                             [(0, 1, 2, 3), (3, 2, 4)], (3, 2)),
+    "axis_quad_trig_oblique": ([(0.0, 0), (0.2, 0), (0.35, 1), (0.0, 1), (0.6, 0)],
+                               [(0, 1, 2, 3), (1, 4, 2)], (1, 2)),
+    "axis_connected_trig": ([(0.0, 0), (0.5, 0.3), (0.0, 1), (0.6, 1.2)],
+                            [(0, 1, 2), (2, 1, 3)], (1, 2)),
+    "axis_connected_trig_trig": ([(0.0, 0), (0.4, 0.5), (0.0, 1), (0.5, -0.4)],
+                                 [(0, 1, 2), (0, 3, 1)], (0, 1)),
+}
+
+CASES = [
+    # (mesh, order, curvedquad)
+    *[(m, 2, True) for m in MESHES],
+    ("quad_trig_vertical", 2, False),
+    ("quad_trig_horizontal", 2, False),
+    ("trig_trig_oblique", 1, False),
+    ("quad_trig_vertical", 1, False),
+    ("quad_trig_horizontal", 1, False),
+    ("axis_connected_trig", 1, False),
+    ("axis_connected_trig_trig", 1, False),
+]
 
 
 def _mesh(points, elements):
@@ -50,24 +76,42 @@ def _mesh(points, elements):
     return ng.Mesh(m)
 
 
-@pytest.mark.parametrize("name", sorted(CASES))
-def test_shared_edge_trace_is_continuous(name):
-    points, elements, a, b = CASES[name]
+def _edge_evaluators(mesh, a, b):
+    """For each element holding vertices a and b: (trafo, ref point of t)."""
+    out = []
+    for el in mesh.Elements(ng.VOL):
+        verts = [v.nr for v in el.vertices]
+        if a in verts and b in verts:
+            ra = np.array(REF_VERTICES[el.type][verts.index(a)])
+            rb = np.array(REF_VERTICES[el.type][verts.index(b)])
+            trafo = mesh.GetTrafo(ng.ElementId(ng.VOL, el.nr))
+            out.append(lambda t, tr=trafo, ra=ra, rb=rb: tr(*((1 - t) * ra + t * rb)))
+    assert len(out) == 2, f"edge ({a},{b}) is shared by {len(out)} elements"
+    return out
+
+
+@pytest.mark.parametrize("name,order,curvedquad", CASES,
+                         ids=[f"{m}-p{o}{'-curved' if c else ''}" for m, o, c in CASES])
+def test_shared_edge_trace_is_continuous(name, order, curvedquad):
+    points, elements, (a, b) = MESHES[name]
     mesh = _mesh(points, elements)
-    fes = H1Henrotte(mesh, order=2, curvedquad=True)
+    fes = H1Henrotte(mesh, order=order, curvedquad=curvedquad)
     gf = ng.GridFunction(fes)
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    t = b - a
-    n = np.array([t[1], -t[0]]) / np.linalg.norm(t)
+    left, right = _edge_evaluators(mesh, a, b)
+    pa, pb = np.asarray(points[a], float), np.asarray(points[b], float)
+    ts = np.linspace(0.03, 0.97, 21)
+    for t in ts:
+        for ev in (left, right):
+            p = np.array(ev(t).point[:2])
+            assert np.linalg.norm(p - (pa + t * (pb - pa))) < 1e-12, (name, t, p)
     worst = (0.0, None, None)
     for dof in range(fes.ndof):
         gf.vec[:] = 0.0
         gf.vec[dof] = 1.0
-        for s in np.linspace(0.02, 0.98, 25):
-            p = a + s * t
-            jump = abs(gf(mesh(*(p - OFFSET * n))) - gf(mesh(*(p + OFFSET * n))))
+        for t in ts:
+            jump = abs(gf(left(t)) - gf(right(t)))
             if jump > worst[0]:
-                worst = (jump, dof, float(s))
+                worst = (jump, dof, float(t))
     assert worst[0] < JUMP_LIMIT, (
-        f"{name}: trace jump {worst[0]:.3e} at DOF {worst[1]}, edge parameter "
-        f"{worst[2]}, expected < {JUMP_LIMIT:.0e}")
+        f"{name} order {order}: trace jump {worst[0]:.3e} at DOF {worst[1]}, edge "
+        f"parameter {worst[2]}, expected < {JUMP_LIMIT:.0e}")

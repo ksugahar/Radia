@@ -232,12 +232,11 @@ def test_python_ref_self_consistency_p1_triangle():
     assert np.allclose(Mz, Mz.T, atol=1e-15)
 
 
-def test_p2_triangle_curved_mesh_assembles():
-    """C++ order=2 triangle path assembles on a curved OCC mesh.
+def test_p2_triangle_mesh_assembles():
+    """C++ order=2 triangle path assembles on a straight (Curve(1)) mesh.
 
     This pins the public `radia.axifem` import surface and the production
-    P2-triangle/mesh.Curve(2) path.  Q2 curved quads are exercised separately
-    in test_q2_curved.py.
+    P2-triangle path.  Curved elements are refused (test_de_rham_identities).
     """
     axifem = pytest.importorskip("radia.axifem")
     from netgen.geom2d import SplineGeometry
@@ -247,7 +246,6 @@ def test_p2_triangle_curved_mesh_assembles():
                   bc="outer")
     geo.SetMaterial(1, "conductor")
     mesh = Mesh(geo.GenerateMesh(maxh=4.0e-4))
-    mesh.Curve(2)
 
     fes = axifem.H1Henrotte(mesh, order=2)
     assert fes.ndof > mesh.nv, "order=2 triangle path did not allocate edge DOFs"

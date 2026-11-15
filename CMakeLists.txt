@@ -912,8 +912,8 @@ target_include_directories(axifem PRIVATE
 # this, axifem.pyd is built against system pybind11 3.0.2 and
 # fails at import with `ImportError: generic_type: ... referenced unknown
 # base type "ngfem::FiniteElement"` when ngsolve 2606 uses bundled
-# 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 in
-# test_heat_henrotte_smoke.)
+# 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 by the axifem
+# import tests.)
 target_include_directories(axifem BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC} ${NGSOLVE_COMPAT_INC})
 
 target_compile_definitions(axifem PRIVATE

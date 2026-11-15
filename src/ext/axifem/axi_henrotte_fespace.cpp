@@ -60,15 +60,53 @@ AxisAlignedQuadBounds RequireAxisAlignedQuad(const Vec<3> p[4], ElementId ei, in
         has_ur = has_ur || (r_hi && z_hi);
     }
     axis_aligned = axis_aligned && has_ll && has_lr && has_ul && has_ur;
+    // The closed-form Q1/Q2 FEs map reference xi to r and eta to z and number
+    // their DOFs (r_a,z_a), (r_b,z_a), (r_b,z_b), (r_a,z_b): the mesh vertices
+    // must come in that order, or the basis would be attached to the wrong DOFs.
+    const bool ordered = axis_aligned
+        && Near(p[0](0), b.r_min, tol) && Near(p[0](1), b.z_min, tol)
+        && Near(p[1](0), b.r_max, tol) && Near(p[1](1), b.z_min, tol)
+        && Near(p[2](0), b.r_max, tol) && Near(p[2](1), b.z_max, tol)
+        && Near(p[3](0), b.r_min, tol) && Near(p[3](1), b.z_max, tol);
+    if (axis_aligned && !ordered)
+        throw Exception("AxiHenrotteFESpace: axis-aligned quad at " + ToString(ei)
+                        + " has vertex order other than (r_min,z_min), (r_max,z_min),"
+                        " (r_max,z_max), (r_min,z_max); the closed-form Q"
+                        + ToString(order) + " path requires it"
+                        + (order == 2 ? " (curvedquad=True accepts any order)" : ""));
     if (!axis_aligned) {
         string hint = (order == 2)
-            ? "use H1Henrotte(..., order=2, curvedquad=True) for skewed/curved quads"
+            ? "use H1Henrotte(..., order=2, curvedquad=True) for skewed straight quads"
             : "use structured axis-aligned quads or triangle elements";
         throw Exception("AxiHenrotteFESpace: non-axis-aligned quad at "
                         + ToString(ei) + " is not valid for the closed-form Q"
                         + ToString(order) + " path; " + hint);
     }
     return b;
+}
+
+// Closed-form quads use the four vertices only: refuse a curved (Curve > 1)
+// element instead of silently straightening it.
+void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh)
+{
+    auto & eltrans = ma.GetTrafo(ei, lh);
+    const double xs[4] = { 0.5, 1.0, 0.5, 0.0 }, ys[4] = { 0.0, 0.5, 1.0, 0.5 };
+    Vec<2> c[4];
+    const double cx[4] = { 0, 1, 1, 0 }, cy[4] = { 0, 0, 1, 1 };
+    for (int k = 0; k < 4; ++k) {
+        IntegrationPoint ip(cx[k], cy[k], 0.0);
+        auto pt = eltrans(ip, lh).GetPoint();
+        c[k] = Vec<2>(pt(0), pt(1));
+    }
+    for (int k = 0; k < 4; ++k) {
+        IntegrationPoint ip(xs[k], ys[k], 0.0);
+        auto pt = eltrans(ip, lh).GetPoint();
+        Vec<2> mid = 0.5 * (c[k] + c[(k + 1) % 4]);
+        double len = L2Norm(c[(k + 1) % 4] - c[k]);
+        if (std::hypot(pt(0) - mid(0), pt(1) - mid(1)) > 1e-10 * len)
+            throw Exception("AxiHenrotteFESpace: curved quad at " + ToString(ei)
+                            + "; only straight elements are supported (mesh.Curve(1))");
+    }
 }
 
 }  // namespace
@@ -94,8 +132,8 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
 
     // curved=True: order-2 QUADS sample 9 node positions from the mesh's
     // ElementTransformation and use the s-isoparametric AxiHenrotteFE_Q2_Curved
-    // (conforming on oblique and curved edges, also next to P2 triangles).
-    // Default False keeps the axis-aligned closed-form Q2 (and the heat path).
+    // (any straight quad; conforming on oblique edges, also next to P2
+    // triangles).  Default False keeps the axis-aligned closed-form Q2.
     curved_quad = flags.GetDefineFlag("curvedquad") ||
                   (flags.GetStringFlag("curvedquad", "") == string("True"));
 
@@ -172,17 +210,14 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     if (ei.VB() != VOL && ngel.GetType() == ET_SEGM && vertices.Size() == 2) {
         Vec<3> p0 = ma->GetPoint<3>(vertices[0]);
         Vec<3> p1 = ma->GetPoint<3>(vertices[1]);
-        if (axi_order == 1)
-            return *new (lh) AxiHenrotteFE_Edge_Q1(p0(0), p0(1), p1(0), p1(1));
-        else
-            return *new (lh) AxiHenrotteFE_Edge_Q2(p0(0), p0(1), p1(0), p1(1));
+        return *new (lh) AxiHenrotteFE_Edge(axi_order, p0(0), p0(1), p1(0), p1(1));
     }
 
     if (axi_order == 2) {
         if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
             if (curved_quad) {
-                // Sample the 9 node positions from the (possibly Curve(2)-d)
-                // element transformation, in our Q2 node order: 4 corners (v0-v3),
+                // Sample the 9 node positions from the element transformation
+                // (a curved element is refused by the FE), in our Q2 node order: 4 corners (v0-v3),
                 // then bottom/right/top/left edge midnodes, then the face center.
                 const double xi_refs[9]  = {0,1,1,0, 0.5,1,0.5,0, 0.5};
                 const double eta_refs[9] = {0,0,1,1, 0,0.5,1,0.5, 0.5};
@@ -199,6 +234,7 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             Vec<3> p[4];
             for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
             auto b = RequireAxisAlignedQuad(p, ei, 2);
+        RequireStraightQuad(*ma, ei, lh);
             double r_a = b.r_min, r_b = b.r_max;
             double z_a = b.z_min, z_b = b.z_max;
             return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
@@ -207,13 +243,8 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             // P2 triangle: 6 DOFs at 3 vertices + 3 edge midpoints.
             // Node order: [v0, v1, v2, m01, m12, m20].
             //
-            // Edge midpoint positions are obtained via the mesh's element
-            // transformation. For a straight-edge mesh this reduces to the
-            // geometric midpoint of the chord; for a mesh that has been
-            // `.Curve(p)`-d the transformation returns the curved-geometry
-            // position of the mid-edge node so that the P2 FE can follow
-            // curved boundaries (e.g. a sphere) exactly to the order of the
-            // curve.
+            // The nodes are sampled from the mesh element transformation, so
+            // a curved (Curve > 1) element is detected and refused by the FE.
             //
             // NGSolve's reference triangle (verified 2026-05-12 in
             // validation_test/axifem/research/prototypes/test_ngsolve_ref_tri_vertices.py):
@@ -245,16 +276,24 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
         Vec<3> p[4];
         for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
         auto b = RequireAxisAlignedQuad(p, ei, 1);
+        RequireStraightQuad(*ma, ei, lh);
         double r_a = b.r_min, r_b = b.r_max;
         double z_a = b.z_min, z_b = b.z_max;
         return *new (lh) AxiHenrotteFE_Q1_AxisAligned(r_a, r_b, z_a, z_b);
     }
     if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
-        double rs[3], zs[3];
-        for (int i = 0; i < 3; ++i) {
-            auto pt = ma->GetPoint<3>(vertices[i]);
-            rs[i] = pt(0);
-            zs[i] = pt(1);
+        // P1 basis on the quadratic (s, z) map: sample the 6 geometry nodes
+        // [v0, v1, v2, m01, m12, m20] from the element transformation.
+        const double xi_refs[6]  = { 1.0, 0.0, 0.0, 0.5, 0.0, 0.5 };
+        const double eta_refs[6] = { 0.0, 1.0, 0.0, 0.5, 0.5, 0.0 };
+        auto & eltrans = ma->GetTrafo(ei, lh);
+        double rs[6], zs[6];
+        for (int k = 0; k < 6; ++k) {
+            IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
+            auto & mip = eltrans(ip, lh);
+            auto pt = mip.GetPoint();
+            rs[k] = pt(0);
+            zs[k] = pt(1);
         }
         return *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
     }
@@ -443,7 +482,7 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
           "Construct an AxiHenrotteFESpace for the given mesh.\n"
           "  order=1 (default): Q1 quad / P1 triangle, vertex DOFs only.\n"
           "  order=2          : Q2 axis-aligned quad (9 DOFs) or P2 triangle\n"
-          "                     (6 DOFs; curved-mesh aware via mesh.Curve(2)).");
+          "                     (6 DOFs); straight elements only (mesh.Curve(1)).");
 }
 
 }  // namespace axifem

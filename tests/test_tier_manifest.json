@@ -613,7 +613,6 @@
         "tests/test_ih_operator_assembly.py",
         "tests/test_ih_operator_axisym.py",
         "tests/test_ih_fin_surface_boundary.py",
-        "tests/axifem/test_heat_henrotte_smoke.py",
         "tests/axifem/test_heat_field_extrema.py",
         "tests/test_ih_optimize_fail_loud.py",
         "tests/test_ih_thermal_exposure.py",

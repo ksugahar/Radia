@@ -22,86 +22,25 @@ AxiHenrotteFE_Q1_AxisAligned::AxiHenrotteFE_Q1_AxisAligned(
   : AxiHenrotteBaseFE(4, 2),  // 4 DOFs, polynomial degree 2 (in r)
     r_a(ra), r_b(rb), z_a(za), z_b(zb) {}
 
-void AxiHenrotteFE_Q1_AxisAligned::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
+void AxiHenrotteFE_Q1_AxisAligned::CalcVdof(const IntegrationPoint & ip, double * n,
+                                            double (*dn)[2]) const
 {
-    // Reference (xi, eta) in [0, 1]^2 -> physical (r, z) via linear mapping
-    double xi = ip(0);
-    double eta = ip(1);
-    double r = r_a + (r_b - r_a) * xi;
-    double z = z_a + (z_b - z_a) * eta;
-    double s = r * r;
-
-    // Solve Vandermonde-like 4x4 system: shape_i(r_j^2, z_j) = delta_ij
-    // for the 4 vertices (s_a, z_a), (s_b, z_a), (s_b, z_b), (s_a, z_b).
-    // shape_i = a_i + b_i*s + c_i*z + d_i*s*z
-    // For axis-aligned rectangle the coefficients factor:
-    //   shape_i = L_xi_i(s) * L_eta_i(z)
-    //  where L_xi_i are linear interp in s between [s_a, s_b],
-    //        L_eta_i are linear interp in z between [z_a, z_b].
-    double s_a = r_a * r_a;
-    double s_b = r_b * r_b;
-    double L_s0 = (s_b - s) / (s_b - s_a);   // 1 at s=s_a
-    double L_s1 = (s - s_a) / (s_b - s_a);   // 1 at s=s_b
-    double L_z0 = (z_b - z) / (z_b - z_a);   // 1 at z=z_a
-    double L_z1 = (z - z_a) / (z_b - z_a);   // 1 at z=z_b
-
-    // Vertex order (matches NGSolve ET_QUAD):
-    //   0: (s_a, z_a)
-    //   1: (s_b, z_a)
-    //   2: (s_b, z_b)
-    //   3: (s_a, z_b)
-    shape(0) = L_s0 * L_z0;
-    shape(1) = L_s1 * L_z0;
-    shape(2) = L_s1 * L_z1;
-    shape(3) = L_s0 * L_z1;
-}
-
-void AxiHenrotteFE_Q1_AxisAligned::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    // Derivatives w.r.t. reference (xi, eta).
-    // shape_i(r, z) with r = r_a + (r_b - r_a)*xi, z = z_a + (z_b - z_a)*eta.
-    // dr/dxi  = r_b - r_a;  dz/deta = z_b - z_a;  cross terms zero.
-    // d s/dxi = 2 r * (r_b - r_a).
-    // dshape/dxi = ds/dxi * d(shape)/ds
-    // dshape/deta = dz/deta * d(shape)/dz
-    //
-    // shape_i = L_s_i(s) * L_z_i(z) (factored), so:
-    //   d(shape_i)/ds   = (dL_s/ds)_i * L_z_i
-    //   d(shape_i)/dz   = L_s_i      * (dL_z/dz)_i
-
-    double xi = ip(0);
-    double eta = ip(1);
-    double r = r_a + (r_b - r_a) * xi;
-    double z = z_a + (z_b - z_a) * eta;
-    double s = r * r;
-
-    double s_a = r_a * r_a;
-    double s_b = r_b * r_b;
-    double inv_ds = 1.0 / (s_b - s_a);
-    double inv_dz = 1.0 / (z_b - z_a);
-
-    double L_s0 = (s_b - s) * inv_ds;
-    double L_s1 = (s - s_a) * inv_ds;
-    double dL_s0 = -inv_ds;
-    double dL_s1 =  inv_ds;
-    double L_z0 = (z_b - z) * inv_dz;
-    double L_z1 = (z - z_a) * inv_dz;
-    double dL_z0 = -inv_dz;
-    double dL_z1 =  inv_dz;
-
-    double ds_dxi = 2.0 * r * (r_b - r_a);
-    double dz_deta = z_b - z_a;
-
-    auto fill = [&](int idx, double dL_s, double L_s, double dL_z, double L_z) {
-        dshape(idx, 0) = ds_dxi * dL_s * L_z;            // d/dxi
-        dshape(idx, 1) = dz_deta * L_s * dL_z;           // d/deta
-    };
-    fill(0, dL_s0, L_s0, dL_z0, L_z0);
-    fill(1, dL_s1, L_s1, dL_z0, L_z0);
-    fill(2, dL_s1, L_s1, dL_z1, L_z1);
-    fill(3, dL_s0, L_s0, dL_z1, L_z1);
+    // Reference (xi, eta) in [0, 1]^2 -> physical (r, z); psi bilinear in (s, z).
+    const double r = r_a + (r_b - r_a) * ip(0);
+    const double z = z_a + (z_b - z_a) * ip(1);
+    const double s = r * r, sa = r_a * r_a, sb = r_b * r_b;
+    const double is = 1.0 / (sb - sa), iz = 1.0 / (z_b - z_a);
+    const double Ls[2] = { (sb - s) * is, (s - sa) * is }, dLs[2] = { -is, is };
+    const double Lz[2] = { (z_b - z) * iz, (z - z_a) * iz }, dLz[2] = { -iz, iz };
+    const int IS[4] = { 0, 1, 1, 0 }, IZ[4] = { 0, 0, 1, 1 };
+    const double r_n[4] = { r_a, r_b, r_b, r_a };
+    for (int j = 0; j < 4; ++j) {
+        const double psi = Ls[IS[j]] * Lz[IZ[j]];
+        const double ps = dLs[IS[j]] * Lz[IZ[j]], pz = Ls[IS[j]] * dLz[IZ[j]];
+        double d[2];
+        siso::VdofFromPsi(r_n[j], s, sb, psi, ps, pz, n[j], dn ? d : nullptr);
+        if (dn) { dn[j][0] = d[0]; dn[j][1] = d[1]; }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +48,6 @@ void AxiHenrotteFE_Q1_AxisAligned::CalcDShape(
 // ---------------------------------------------------------------------------
 
 namespace {
-
-constexpr double EPS_AXIS_FE = 1.0e-14;
 
 // In-place Gauss-Jordan inverse of a small dense N x N matrix stored as
 // double a[N][N]. Returns true on success, false on singular pivot. inv[][]
@@ -224,7 +161,7 @@ AxiHenrotteFE_Q2_AxisAligned::AxiHenrotteFE_Q2_AxisAligned(
     double ra, double rb, double za, double zb)
   : AxiHenrotteBaseFE(9, 4),  // 9 DOFs, polynomial degree 4 in r (s^2 = r^4)
     r_a(ra), r_b(rb), z_a(za), z_b(zb),
-    is_axis(ra < EPS_AXIS_FE)
+    is_axis(siso::OnAxisEdgeEnd(ra, ra, rb))
 {
     // Initialise Vinv to zero (axis nodes will stay zero in axis case).
     for (int i = 0; i < 9; ++i)
@@ -280,267 +217,131 @@ AxiHenrotteFE_Q2_AxisAligned::AxiHenrotteFE_Q2_AxisAligned(
     }
 }
 
-void AxiHenrotteFE_Q2_AxisAligned::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
+void AxiHenrotteFE_Q2_AxisAligned::CalcVdof(const IntegrationPoint & ip, double * n,
+                                            double (*dn)[2]) const
 {
     // Reference (xi, eta) in [0, 1]^2 -> physical (r, z) -> (s, z).
-    double xi = ip(0), eta = ip(1);
-    double r = r_a + (r_b - r_a) * xi;
-    double z = z_a + (z_b - z_a) * eta;
-    double s = r * r;
-
-    for (int j = 0; j < 9; ++j) shape(j) = 0.0;
-
+    const double r = r_a + (r_b - r_a) * ip(0);
+    const double z = z_a + (z_b - z_a) * ip(1);
+    const double s = r * r;
+    const double sa = r_a * r_a, sb = r_b * r_b, sm = 0.5 * (sa + sb);
+    const double r_n[9] = { r_a, r_b, r_b, r_a, std::sqrt(sm), r_b,
+                            std::sqrt(sm), r_a, std::sqrt(sm) };
+    double M[9], Ms[9], Mz[9];
     if (!is_axis) {
-        double M[9];
         Q2MonomialsGeneral(s, z, M);
-        // L_j(s, z) = sum_k Vinv[k, j] * M_k
-        for (int j = 0; j < 9; ++j) {
-            double v = 0.0;
-            for (int k = 0; k < 9; ++k) v += Vinv[k][j] * M[k];
-            shape(j) = v;
-        }
+        Q2MonomialsGeneralDs(s, z, Ms);
+        Q2MonomialsGeneralDz(s, z, Mz);
     } else {
-        double M[6];
         Q2MonomialsAxis(s, z, M);
-        for (int q = 0; q < 6; ++q) {
-            int j = nz_idx[q];          // global local-DOF index
-            double v = 0.0;
-            for (int k = 0; k < 6; ++k) v += Vinv[k][j] * M[k];
-            shape(j) = v;
+        Q2MonomialsAxisDs(s, z, Ms);
+        Q2MonomialsAxisDz(s, z, Mz);
+    }
+    for (int j = 0; j < 9; ++j) { n[j] = 0.0; if (dn) dn[j][0] = dn[j][1] = 0.0; }
+    for (int q = 0; q < n_nz; ++q) {
+        const int j = nz_idx[q];   // local DOF index
+        double psi = 0.0, ps = 0.0, pz = 0.0;
+        for (int k = 0; k < n_nz; ++k) {
+            psi += Vinv[k][j] * M[k];
+            ps  += Vinv[k][j] * Ms[k];
+            pz  += Vinv[k][j] * Mz[k];
         }
-        // Axis-side DOFs (0, 3, 7) stay at 0.
+        double d[2];
+        siso::VdofFromPsi(r_n[j], s, sb, psi, ps, pz, n[j], dn ? d : nullptr);
+        if (dn) { dn[j][0] = d[0]; dn[j][1] = d[1]; }
     }
 }
-
-void AxiHenrotteFE_Q2_AxisAligned::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    double xi = ip(0), eta = ip(1);
-    double r = r_a + (r_b - r_a) * xi;
-    double z = z_a + (z_b - z_a) * eta;
-    double s = r * r;
-    // ds/dxi  = 2 r * (r_b - r_a),   dz/deta = z_b - z_a
-    double ds_dxi  = 2.0 * r * (r_b - r_a);
-    double dz_deta = z_b - z_a;
-
-    for (int j = 0; j < 9; ++j) { dshape(j, 0) = 0.0; dshape(j, 1) = 0.0; }
-
-    if (!is_axis) {
-        double dM_ds[9], dM_dz[9];
-        Q2MonomialsGeneralDs(s, z, dM_ds);
-        Q2MonomialsGeneralDz(s, z, dM_dz);
-        for (int j = 0; j < 9; ++j) {
-            double dL_ds = 0.0, dL_dz = 0.0;
-            for (int k = 0; k < 9; ++k) {
-                dL_ds += Vinv[k][j] * dM_ds[k];
-                dL_dz += Vinv[k][j] * dM_dz[k];
-            }
-            dshape(j, 0) = ds_dxi  * dL_ds;
-            dshape(j, 1) = dz_deta * dL_dz;
-        }
-    } else {
-        double dM_ds[6], dM_dz[6];
-        Q2MonomialsAxisDs(s, z, dM_ds);
-        Q2MonomialsAxisDz(s, z, dM_dz);
-        for (int q = 0; q < 6; ++q) {
-            int j = nz_idx[q];
-            double dL_ds = 0.0, dL_dz = 0.0;
-            for (int k = 0; k < 6; ++k) {
-                dL_ds += Vinv[k][j] * dM_ds[k];
-                dL_dz += Vinv[k][j] * dM_dz[k];
-            }
-            dshape(j, 0) = ds_dxi  * dL_ds;
-            dshape(j, 1) = dz_deta * dL_dz;
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
-// AxiHenrotteFE_P1_Triangle
+// s-isoparametric elements (axi_henrotte_siso.hpp)
 // ---------------------------------------------------------------------------
 
-AxiHenrotteFE_P1_Triangle::AxiHenrotteFE_P1_Triangle(
-    const double rs[3], const double zs[3])
-  : AxiHenrotteBaseFE(3, 2)  // 3 DOFs, polynomial degree 2 (in r)
+AxiHenrotteFE_P1_Triangle::AxiHenrotteFE_P1_Triangle(const double rs[6], const double zs[6])
+  : AxiHenrotteBaseFE(3, 2)
 {
     geo.Init(rs, zs);
 }
 
-void AxiHenrotteFE_P1_Triangle::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
+void AxiHenrotteFE_P1_Triangle::CalcVdof(const IntegrationPoint & ip, double * n,
+                                         double (*dn)[2]) const
 {
-    double v[3];
-    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
-    for (int i = 0; i < 3; ++i) shape(i) = v[i];
+    geo.EvalVdof(ip(0), ip(1), n, dn);
 }
 
-void AxiHenrotteFE_P1_Triangle::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    double d[3][2];
-    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
-    for (int i = 0; i < 3; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
-}
-
-// ---------------------------------------------------------------------------
-// AxiHenrotteFE_P2_Triangle / AxiHenrotteFE_Q2_Curved (s-isoparametric)
-// ---------------------------------------------------------------------------
-
-AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(
-    const double rs[6], const double zs[6])
-  : AxiHenrotteBaseFE(6, 4)  // 6 DOFs; integration degree hint
+AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(const double rs[6], const double zs[6])
+  : AxiHenrotteBaseFE(6, 4)
 {
     geo.Init(rs, zs);
 }
 
-void AxiHenrotteFE_P2_Triangle::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
+void AxiHenrotteFE_P2_Triangle::CalcVdof(const IntegrationPoint & ip, double * n,
+                                         double (*dn)[2]) const
 {
-    double v[6];
-    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
-    for (int i = 0; i < 6; ++i) shape(i) = v[i];
-}
-
-void AxiHenrotteFE_P2_Triangle::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    double d[6][2];
-    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
-    for (int i = 0; i < 6; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
+    geo.EvalVdof(ip(0), ip(1), n, dn);
 }
 
 AxiHenrotteFE_Q2_Curved::AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9])
-  : AxiHenrotteBaseFE(9, 4)  // 9 DOFs; integration degree hint
+  : AxiHenrotteBaseFE(9, 4)
 {
     geo.Init(rs, zs);
 }
 
-void AxiHenrotteFE_Q2_Curved::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
+void AxiHenrotteFE_Q2_Curved::CalcVdof(const IntegrationPoint & ip, double * n,
+                                       double (*dn)[2]) const
 {
-    double v[9];
-    geo.AtNGSolveRef(ip(0), ip(1), v, nullptr);
-    for (int i = 0; i < 9; ++i) shape(i) = v[i];
-}
-
-void AxiHenrotteFE_Q2_Curved::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    double d[9][2];
-    geo.AtNGSolveRef(ip(0), ip(1), nullptr, d);
-    for (int i = 0; i < 9; ++i) { dshape(i, 0) = d[i][0]; dshape(i, 1) = d[i][1]; }
+    geo.EvalVdof(ip(0), ip(1), n, dn);
 }
 
 // ---------------------------------------------------------------------------
-// AxiHenrotteFE_Edge_Q1 / _Q2 -- 1D restriction of the parent quad's
-// Lagrange basis to a single edge.  Used for Neumann RHS integration
-// `LinearForm += q * v * ds(label)` in axisymmetric heat / magnetic
-// solvers.  Basis values depend only on the edge's two endpoint
-// coordinates (and the s-midpoint for Q2); no parent-quad info is
-// required because the off-edge corners' Lagrange factors evaluate
-// to 1 along the edge.
-//
-// CalcDShape is intentionally not implemented -- Neumann RHS does not
-// need grad(v).  Throws if called, to surface unintended use.
+// AxiHenrotteFE_Edge -- boundary trace of the V-DOF basis on one segment.
+// The edge's (s, z) map uses siso::EdgeMidnode, the rule of the volume
+// elements, and the edge parameter tau is matched to the segment point the way
+// the volume evaluation matches it: through s on an s-midpoint edge (horizontal
+// or ending on the axis: the evaluation radius is the mesh radius) and through
+// z on a mesh-midpoint edge (tau = t there).  So the trace equals the volume
+// value on both neighbours.  DOF order: vertex0, vertex1[, edge midnode].
 // ---------------------------------------------------------------------------
 
-namespace {
-
-// Evaluate Lagrange basis at the 2 endpoints of a 1D segment in u-space,
-// where u = s = r^2 (horizontal edge) or u = z (vertical edge).
-//   L_0(u) = (u_1 - u) / (u_1 - u_0)
-//   L_1(u) = (u - u_0) / (u_1 - u_0)
-inline void LagrangeQ1Edge(double u0, double u1, double u, double L[2])
+void AxiHenrotteFE_Edge::CalcVdof(const IntegrationPoint & ip, double * n,
+                                  double (*dn)[2]) const
 {
-    double denom = u1 - u0;
-    if (std::abs(denom) < 1e-300) { L[0] = L[1] = 0.0; return; }
-    L[0] = (u1 - u) / denom;
-    L[1] = (u  - u0) / denom;
-}
-
-// Q2 1D Lagrange: 3 nodes at u_0, u_1, u_m = (u_0 + u_1) / 2 (s-midpoint
-// or z-midpoint convention).  L_0(u_0) = 1, L_1(u_1) = 1, L_m(u_m) = 1.
-inline void LagrangeQ2Edge(double u0, double u1, double u, double L[3])
-{
-    double um = 0.5 * (u0 + u1);
-    double d01 = u0 - u1, d0m = u0 - um;
-    double d10 = u1 - u0, d1m = u1 - um;
-    double dm0 = um - u0, dm1 = um - u1;
-    if (std::abs(d01) < 1e-300 || std::abs(d0m) < 1e-300 ||
-        std::abs(d1m) < 1e-300) {
-        L[0] = L[1] = L[2] = 0.0;
-        return;
-    }
-    L[0] = (u - u1) * (u - um) / (d01 * d0m);  // L at u0
-    L[1] = (u - u0) * (u - um) / (d10 * d1m);  // L at u1
-    L[2] = (u - u0) * (u - u1) / (dm0 * dm1);  // L at um
-}
-
-}  // namespace
-
-void AxiHenrotteFE_Edge_Q1::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
-{
-    // Segment reference parameter t in [0, 1].  Map to physical (r, z)
-    // along the edge.
-    double t = ip(0);
-    double rp = (1.0 - t) * r0 + t * r1;
-    double zp = (1.0 - t) * z0 + t * z1;
-    bool horizontal = std::abs(z0 - z1) < 1e-12;
-    double L[2];
-    if (horizontal) {
-        // Edge varies in r; basis varies in s = r^2.
-        double s0 = r0 * r0;
-        double s1 = r1 * r1;
-        LagrangeQ1Edge(s0, s1, rp * rp, L);
+    if (dn)
+        throw Exception("AxiHenrotteFE_Edge: boundary gradient evaluation is not "
+                        "supported (the boundary trace has values only)");
+    // NGSolve's ET_SEGM reference has vertex 0 at x = 1 and vertex 1 at x = 0;
+    // t runs from vertex 0 (t = 0) to vertex 1 (t = 1).
+    const double t = 1.0 - ip(0);
+    const double rp = (1.0 - t) * r0 + t * r1;
+    const double s0 = r0 * r0, s1 = r1 * r1;
+    double sm, zm;
+    const siso::MidKind kind = siso::EdgeMidnode(r0, z0, r1, z1, 0.5 * (r0 + r1),
+                                                 0.5 * (z0 + z1), sm, zm);
+    // tau: s-matched on an s-midpoint edge (s is linear in tau there), else
+    // the segment parameter itself (z is linear in it).
+    const double tau = (kind != siso::MidKind::Mesh) ? (rp * rp - s0) / (s1 - s0) : t;
+    // Edge (s, z) map and its tau derivative (quadratic Lagrange at 0, 1, 1/2).
+    const double q0 = (1.0 - tau) * (1.0 - 2.0 * tau), q1 = tau * (2.0 * tau - 1.0);
+    const double qm = 4.0 * tau * (1.0 - tau);
+    const double s = q0 * s0 + q1 * s1 + qm * sm;
+    const double ds = (4.0 * tau - 3.0) * s0 + (4.0 * tau - 1.0) * s1 + (4.0 - 8.0 * tau) * sm;
+    double psi[3], dpsi[3], rn[3] = { r0, r1, std::sqrt(std::max(sm, 0.0)) };
+    if (GetNDof() == 2) {
+        psi[0] = 1.0 - tau; psi[1] = tau;
+        dpsi[0] = -1.0;     dpsi[1] = 1.0;
     } else {
-        // Edge varies in z (or oblique; we use z for axis-aligned grids).
-        LagrangeQ1Edge(z0, z1, zp, L);
+        psi[0] = q0; psi[1] = q1; psi[2] = qm;
+        dpsi[0] = 4.0 * tau - 3.0; dpsi[1] = 4.0 * tau - 1.0; dpsi[2] = 4.0 - 8.0 * tau;
     }
-    shape(0) = L[0];
-    shape(1) = L[1];
-}
-
-void AxiHenrotteFE_Edge_Q1::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    throw Exception("AxiHenrotteFE_Edge_Q1::CalcDShape not implemented "
-                    "(boundary gradient evaluation not supported; "
-                    "Neumann RHS only needs the value trace)");
-}
-
-void AxiHenrotteFE_Edge_Q2::CalcShape(
-    const IntegrationPoint & ip, BareSliceVector<> shape) const
-{
-    double t = ip(0);
-    double rp = (1.0 - t) * r0 + t * r1;
-    double zp = (1.0 - t) * z0 + t * z1;
-    bool horizontal = std::abs(z0 - z1) < 1e-12;
-    double L[3];
-    if (horizontal) {
-        double s0 = r0 * r0;
-        double s1 = r1 * r1;
-        LagrangeQ2Edge(s0, s1, rp * rp, L);
-    } else {
-        LagrangeQ2Edge(z0, z1, zp, L);
+    const double s_scale = std::max(std::max(s0, s1), 1e-300);
+    for (int k = 0; k < GetNDof(); ++k) {
+        // psi_s along the edge = (d psi / d tau) / (d s / d tau); only used at
+        // the axis, where d s / d tau != 0 because the edge ends on the axis.
+        const double ps = ds != 0.0 ? dpsi[k] / ds : 0.0;
+        siso::VdofFromPsi(rn[k], s, s_scale, psi[k], ps, 0.0, n[k], nullptr);
     }
-    // GetDofNrs orders: vertex0, vertex1, edge midnode (NV + edge index).
-    shape(0) = L[0];     // at vertex0
-    shape(1) = L[1];     // at vertex1
-    shape(2) = L[2];     // at edge midnode
-}
-
-void AxiHenrotteFE_Edge_Q2::CalcDShape(
-    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
-{
-    throw Exception("AxiHenrotteFE_Edge_Q2::CalcDShape not implemented "
-                    "(boundary gradient evaluation not supported; "
-                    "Neumann RHS only needs the value trace)");
 }
 
 // ---------------------------------------------------------------------------
-// Python bindings (Phase 2-A: just expose ctors for inspection)
+// Python bindings (constructors for inspection)
 // ---------------------------------------------------------------------------
 
 void ExportAxiHenrotteFE(pybind11::module & m) {
@@ -548,18 +349,17 @@ void ExportAxiHenrotteFE(pybind11::module & m) {
     py::class_<AxiHenrotteFE_Q1_AxisAligned, ngfem::FiniteElement,
                std::shared_ptr<AxiHenrotteFE_Q1_AxisAligned>>(
         m, "AxiHenrotteFE_Q1_AxisAligned",
-        "Q1 Henrotte FE on axis-aligned rectangle [r_a, r_b] x [z_a, z_b].\n"
-        "Shape functions: a + b r^2 + c z + d r^2 z.")
+        "Q1 Henrotte FE on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]:\n"
+        "psi bilinear in (s = r^2, z), basis N_i = r_i psi_i / r.")
         .def(py::init<double, double, double, double>(),
              py::arg("r_a"), py::arg("r_b"), py::arg("z_a"), py::arg("z_b"));
 
     py::class_<AxiHenrotteFE_Q2_AxisAligned, ngfem::FiniteElement,
                std::shared_ptr<AxiHenrotteFE_Q2_AxisAligned>>(
         m, "AxiHenrotteFE_Q2_AxisAligned",
-        "Q2 Henrotte FE on axis-aligned rectangle. 9 DOFs (4 vertices + 4 edge\n"
-        "midnodes + 1 face center) at s-midpoints (NOT physical r-midpoints).\n"
-        "Axis-touching elements (r_a < EPS_AXIS) auto-switch to a 6-monomial\n"
-        "restricted basis with zero shape functions on the axis-side nodes.")
+        "Q2 Henrotte FE on an axis-aligned rectangle: psi biquadratic in\n"
+        "(s = r^2, z) with s-midpoint nodes, basis N_i = r_i psi_i / r.\n"
+        "Axis-touching elements use the 6 non-axis nodes.")
         .def(py::init<double, double, double, double>(),
              py::arg("r_a"), py::arg("r_b"), py::arg("z_a"), py::arg("z_b"))
         .def_readonly("is_axis", &AxiHenrotteFE_Q2_AxisAligned::is_axis)
@@ -568,21 +368,22 @@ void ExportAxiHenrotteFE(pybind11::module & m) {
     py::class_<AxiHenrotteFE_P1_Triangle, ngfem::FiniteElement,
                std::shared_ptr<AxiHenrotteFE_P1_Triangle>>(
         m, "AxiHenrotteFE_P1_Triangle",
-        "P1 Henrotte FE on a triangle in (r, z).\n"
-        "Shape functions: a + b r^2 + c z.")
+        "P1 Henrotte FE on a straight triangle: linear reference basis on the\n"
+        "quadratic (s, z) map, basis N_i = r_i psi_i / r.")
         .def(py::init([](std::array<double, 3> rs, std::array<double, 3> zs) {
-                return std::make_shared<AxiHenrotteFE_P1_Triangle>(rs.data(), zs.data());
+                double r6[6] = { rs[0], rs[1], rs[2], 0.5 * (rs[0] + rs[1]),
+                                 0.5 * (rs[1] + rs[2]), 0.5 * (rs[2] + rs[0]) };
+                double z6[6] = { zs[0], zs[1], zs[2], 0.5 * (zs[0] + zs[1]),
+                                 0.5 * (zs[1] + zs[2]), 0.5 * (zs[2] + zs[0]) };
+                return std::make_shared<AxiHenrotteFE_P1_Triangle>(r6, z6);
             }),
              py::arg("rs"), py::arg("zs"));
 
     py::class_<AxiHenrotteFE_P2_Triangle, ngfem::FiniteElement,
                std::shared_ptr<AxiHenrotteFE_P2_Triangle>>(
         m, "AxiHenrotteFE_P2_Triangle",
-        "P2 Henrotte FE on a triangle in (r, z) — 6 DOFs (3 vertex + 3 edge mid).\n"
-        "Shape functions: {1, r^2, z, r^4, r^2 z, z^2} Lagrange interpolant.\n"
-        "Node order: [v0, v1, v2, m01, m12, m20]. FEMM Henrotte vector\n"
-        "convention: N_A_i = (r_i / r) psi_i. Axis vertices auto-decouple.\n"
-        "Phase B1c reference: w:/.../axifem/axifem_p2_triangle.py")
+        "P2 Henrotte FE on a straight triangle, nodes [v0, v1, v2, m01, m12,\n"
+        "m20]: quadratic reference basis on the (s, z) map, N_i = r_i psi_i / r.")
         .def(py::init([](std::array<double, 6> rs, std::array<double, 6> zs) {
                 return std::make_shared<AxiHenrotteFE_P2_Triangle>(rs.data(), zs.data());
             }),

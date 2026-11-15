@@ -267,9 +267,59 @@ T = \mathrm{diag}(2\pi\, r_{\text{node}}),
 $$
 
 so that the assembled global system is in `A_φ`-DOFs at each mesh
-vertex / edge midnode / face centre.  This conversion is done inside
-`AxiHenrotteFE_Q2_AxisAligned::CalcShape` and the BFI integrators, not
-by the user.
+vertex / edge midnode / face centre.  This conversion is done inside the
+finite elements and the BFI integrators, not by the user.
+
+### One field convention for every evaluator
+
+Every element exposes one basis, `AxiHenrotteBaseFE::CalcVdof`, and every
+consumer uses it: the native stiffness and sigma-mass integrators, the
+volume value (`u`, `GridFunction` evaluation, `Set`), the physical
+gradient (`grad(u)` = `(∂A_φ/∂r, ∂A_φ/∂z)`) and the boundary trace
+(`u.Trace()`).  The basis is the `A_φ` basis
+
+$$
+N_i(r, z) = \frac{r_i\, \psi_i(s, z)}{r}, \qquad s = r^2,
+$$
+
+where `ψ_i` is the element's Lagrange basis in `(s, z)` and `r_i` the
+radius of node `i`, so `N_i(node_j) = δ_ij` and the DOFs are nodal values
+of `A_φ`.  The stiffness and mass of § 6 are then exactly the symbolic
+forms
+
+$$
+K = \frac{2\pi}{\mu} \int \big(\partial_z u\, \partial_z v
+  + (\partial_r u + u/r)(\partial_r v + v/r)\big)\, r\, dr\, dz,
+\qquad
+M = 2\pi\sigma \int u\, v\, r\, dr\, dz,
+$$
+
+evaluated with the same `N_i`; `tests/axifem/test_vdof_consistency.py`
+assembles both sides on axis-aligned, general and oblique-edge meshes
+and requires agreement to `1e-6`.  Near the axis
+(`s <= 1e-8 s_scale`) the basis is evaluated in its limit form
+`N = r_i ψ_s r`, `∂N/∂r = r_i ψ_s`, so `A_φ` and `∂A_φ/∂r` stay finite
+and `A_φ = 0` on the axis.
+
+**Edge midnodes.**  One rule places every edge midnode, in the volume
+element and in the boundary trace: an edge that is horizontal
+(`z` constant) or has exactly one end on the axis takes its midnode at the
+`s`-midpoint `s = (s_a + s_b)/2`; every other edge takes the mesh
+midpoint.  The DOF of an axis-edge midnode is therefore `A_φ` at
+`r = sqrt((r_a² + r_b²)/2)`, not at the chord midpoint.  On an oblique
+axis edge the `z` of that node moves along the edge so that the node
+stays on the straight `(r, z)` edge.  The boundary trace
+(`AxiHenrotteFE_Edge`) evaluates `N_i` along the edge with the same rule,
+so the trace equals the volume value on the edge
+(`test_vdof_consistency.py`, `test_edge_trace_conformity.py`).
+
+**Admission.**  The s-isoparametric elements accept straight elements
+only (`mesh.Curve(1)`): every midnode must lie on its chord within
+`1e-10` of the edge length and the quad centre at the corner average.
+The `(s, z)` map must keep the mesh orientation at every quadrature
+point and node; a folded or degenerate map raises.  The axis-aligned
+closed-form quads additionally require the vertex order
+`(r_min, z_min), (r_max, z_min), (r_max, z_max), (r_min, z_max)`.
 
 ## 7. Axis-touching elements (`s_a = 0`)
 
@@ -296,7 +346,7 @@ internally toggle between the interior basis (4 / 9 DOFs) and the
 axis basis (2 / 6 DOFs) based on whether `s_a < ε`.  The dropped DOFs
 are treated as a Dirichlet zero in NGSolve's free-DOF bookkeeping.
 
-## 8. Triangle paths: P1, P2, and P2 curved
+## 8. Triangle paths: P1 and P2
 
 For unstructured triangle meshes, `axifem` provides both P1 and P2 triangle
 elements:
@@ -317,46 +367,44 @@ elements:
   conforming on oblique edges.  The former basis, physical monomials
   `{1, s, z, s², s z, z²}` fitted at the nodes, was not: on an edge oblique
   in `(r, z)`, `s` is quadratic in the edge parameter and the monomial trace
-  is quartic, which three edge DOFs cannot fix.  Node coordinates come from
-  NGSolve's element transformation (chord midpoint on a straight mesh, the
-  curved mid-edge point after `mesh.Curve(2)`); a straight edge is then
-  reproduced exactly because `s` is quadratic and `z` linear in the edge
-  parameter.  An edge with exactly one end on the axis takes its midnode at
-  the `s`-midpoint instead, which keeps the `(s, z)` map regular and
-  `ψ ~ s` at the axis.  Stiffness and sigma mass are integrated over the
+  is quartic, which three edge DOFs cannot fix.  Corner coordinates come
+  from NGSolve's element transformation and the midnodes follow the
+  edge-midnode rule of § 6 (mesh midpoint, or `s`-midpoint on horizontal
+  and axis edges); a straight edge is reproduced exactly because `s` is
+  quadratic and `z` linear in the edge parameter, and the `s`-midpoint on
+  axis edges keeps the `(s, z)` map regular and `ψ ~ s` at the axis.
+  Curved elements (`mesh.Curve(p)`, `p > 1`) are refused.  Stiffness and
+  sigma mass are integrated over the
   reference element through the `(s, z)` map
   (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`).
-- `AxiHenrotteFE_P1_Triangle` is s-isoparametric with an affine map to
-  `(s, z)`: `ψ` is linear in `(s, z)` (the `{1, s, z}` basis, which
-  reproduces `ψ = s` and the uniform `B_z` field) and its matrices are
-  integrated over the triangle whose edges are straight in `(s, z)`, through
-  the same map.  The space is conforming on that triangulation and on edges
-  shared with Q1 axis-aligned quads (`r = const` and `z = const` lines are
-  straight in both planes).  An edge oblique in `(r, z)` is replaced by its
-  `(s, z)` chord, a geometric error of relative size about `h / r`: point
-  evaluation through NGSolve's straight `(r, z)` mesh still shows a jump of
-  that size across oblique edges (0.03 for a unit DOF on a two-triangle patch
-  with `h ~ r`).  The former element integrated the same basis over the
-  `(r, z)` triangle, where it is not continuous across oblique edges; on the
-  fin reference mesh (`h / r ~ 3e-5`) the two give the same values to 1e-5.
+- `AxiHenrotteFE_P1_Triangle` uses the linear Lagrange basis on the same
+  quadratic `(s, z)` geometry as P2 (the six geometry nodes are sampled from
+  the element transformation and placed by the § 6 rule).  The `(s, z)`
+  triangle then follows the straight `(r, z)` triangle exactly, so the space
+  is conforming on oblique edges and its trace on an edge depends only on
+  that edge.  The price is that `ψ` is linear in the reference coordinates,
+  not in `s`: P1 reproduces `A_φ = 1/r` and `z/r` exactly but no longer the
+  uniform field `ψ = s`.  P1 stays out of the order-convergence gate until
+  it is requalified.
 
 P1 triangles have lower per-DOF accuracy than Q2 quads
 (`disk_convergence` example shows ~5–6 % gap to BEM-Foster reference even
-at very fine meshes).  P2 curved triangles are the preferred curved-boundary
-path for spheres, Kelvin half-discs, and OCC-generated regions; Q2 straight
+at very fine meshes).  P2 triangles serve unstructured regions (spheres,
+Kelvin half-discs, OCC-generated regions) on straight meshes; Q2 straight
 quads remain the preferred structured-mesh path for disks, cylinders, and
 rectangular workpieces.
 
-### Q2 curved quads are opt-in production C++
+### General (non-axis-aligned) Q2 quads are opt-in production C++
 
 The default `AxiHenrotteFE_Q2_AxisAligned` is still the straight,
 axis-aligned closed-form quad.  It constructs the element from the four
 corner coordinates and is the preferred path for structured rectangular
 workpieces.
 
-The true 9-node curved Q2 quad is available as an opt-in production path:
+The 9-node general Q2 quad is available as an opt-in production path:
 `H1Henrotte(mesh, order=2, curvedquad=True)` selects
-`AxiHenrotteFE_Q2_Curved`.  This element consumes the 9 node positions from
+`AxiHenrotteFE_Q2_Curved`.  This element accepts any straight quad
+(skewed, trapezoidal, any vertex order), consumes the corner positions from
 the element transformation and is s-isoparametric in the same way as the P2
 triangle (biquadratic Lagrange map to `(s, z)`, reference Lagrange basis, the
 same axis-edge midnode rule).  It is conforming with itself and with P2
@@ -403,168 +451,50 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
   and feeds them into any solver (direct, iterative, eigenvalue,
   Hiruma 3-term recurrence).
 
-## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+, OPTIONAL infrastructure)
+## 10b. Temperature uses standard H1
 
-> **Status (updated 2026-09-03)**: This section documents the Henrotte heat
-> BFIs as **optional** infrastructure.  The production heat solver
-> [`src/radia/panels/calc_heat_axisym.py`](../../src/radia/panels/calc_heat_axisym.py)
-> uses **standard NGSolve `H1` + `2 pi r` weighting** instead, matching
-> the FEMM 4.2 reference implementation
-> (`hsolv/prob1big.cpp` — standard P1 triangle with the `2 pi r`
-> Jacobian evaluated at the element centroid, no Henrotte basis).
->
-> The Henrotte heat BFIs documented below are kept in the codebase as
-> parity-conscious infrastructure for research / publication uses
-> (e.g. comparing convergence rates of Henrotte vs standard H1 on a
-> scalar problem).  See CLAUDE.md "Axisymmetric FE: Henrotte for
-> Magnetic, Standard H1 for Scalar" for the canonical scope.
+The Henrotte space is the `A_φ` basis `N_i = r_i ψ_i / r` and carries no
+temperature integrators: a scalar temperature is not of that form.
+Axisymmetric heat
+([`src/radia/panels/calc_heat_axisym.py`](../../src/radia/panels/calc_heat_axisym.py))
+uses standard NGSolve `H1(order=2)` with the `2 pi r` weight, matching the
+FEMM 4.2 heat solver.  Order 2 is the default because a piecewise-linear
+radial profile cannot represent `dT/dr = 0` at `r = 0`; in the committed 9x9
+uniform-flux cylinder validation it reduces the spurious radial axis slope
+from about 139 C/m to below 0.3 C/m.  The former Henrotte heat BFIs used the
+retired `ψ`-on-mesh basis and had no production consumer; they were removed
+when the field convention was unified.
 
-The Henrotte basis is the **mathematically natural function space
-for axisymmetric scalar fields** like temperature `T(r, z)`.  The
-reasoning is parity:
+## 10c. Boundary trace + Neumann RHS
 
-- Analytically extending an axisymmetric `T(r, z)` to `r < 0` gives
-  `T(-r, z) = T(r, z)` — `T` is **an even function in r**.
-- Even functions Taylor-expand only in even powers:
-  `T = c_0 + c_2 r^2 + c_4 r^4 + ...`
-- Standard P1 / P2 H1 basis on `(r, z)` includes `r`-linear and
-  higher odd-`r` modes that **cannot occur in any axisymmetric
-  distribution**.
-- The Henrotte basis spans only even-`r` polynomials by construction
-  (`{1, r², z}` for Q1, `{1, r², r⁴, z, r²z, r⁴z, ...}` for Q2),
-  exactly matching the admissible function space.
-
-**Why a custom Henrotte scalar space is not required in production**:
-the `2 pi r` Jacobian in the standard H1 weak form already supplies the
-correct axisymmetric measure, so the production solver remains on
-NGSolve's standard H1 space.  Polynomial order still matters near the
-axis: a piecewise-linear radial profile cannot reproduce nonconstant
-even quadratic behavior while also representing `dT/dr = 0` at
-`r = 0`.  Production axisymmetric heat therefore defaults to standard
-H1 order 2, while the 3D thermal solver remains order 1 by default.  In
-the committed 9x9 uniform-flux cylinder validation, order 2 reduces the
-spurious radial axis slope from about 139 C/m to below 0.3 C/m and keeps
-the axis and surface temperatures within 0.1 C of the independent
-Bessel-series reference.  This order choice does not require the
-optional Henrotte heat space below.
-
-The axisymmetric heat weak form (no eddy-current source for clarity):
-
-$$
-a_{\text{heat}}(T, v) = \int_\Omega k\,(\nabla T \cdot \nabla v)\,
-                          \cdot 2\pi r\, dr\, dz
-$$
-
-After the change of variable `s = r²` (and the Jacobian
-`2 pi r dr dz = pi ds dz` from § 5), this becomes
-
-$$
-a_{\text{heat}}(T, v) = \pi \int_\Omega k
-   \big[\, 4 s\, \partial_s T\, \partial_s v
-        + \partial_z T\, \partial_z v \,\big]\, ds\, dz.
-$$
-
-Note **no `1/s` factor** — heat is integrand-clean even on axis-
-touching elements.  This is the architectural difference from the
-magnetic stiffness (§ 6 has `1/(\mu_r s)` in the second term), and
-it means **the full 9-monomial Q2 basis is admissible on axis-
-touching elements** for heat (no axis basis reduction needed).  The shipping
-`H1Henrotte` space nevertheless exposes the electromagnetic six-function
-axis-reduced Q2 basis.  It is therefore not paired with the full 9x9 heat
-matrix on axis elements; both heat BFIs reject that combination explicitly.
-Use standard NGSolve `H1(order=2)` with the `2 pi r` weight for axis-touching
-heat meshes.
-
-The transient heat capacity term is similarly clean:
-
-$$
-m_{\text{heat}}(T, v) = \pi \int_\Omega \rho c_p \, T \, v \, ds\, dz.
-$$
-
-Both element matrices are derived in closed form and emitted as
-[`src/ext/axifem/q_heat_henrotte_generated.hpp`](../../src/ext/axifem/q_heat_henrotte_generated.hpp),
-and assembled by the C++ integrators
-
-- `radia.axifem.AxiHenrotteHeatStiffnessBFI(k_cf)` — `K_T`
-- `radia.axifem.AxiHenrotteHeatMassBFI(rho_c_cf)` — `M_T`
-
-DOF semantics are **nodal `T(vertex)`** directly — no
-`T = diag(2 pi r_node)` flux-function transformation (T has no axis
-boundary condition; standard nodal interpolation is correct).  Q2 use of
-these optional BFIs is limited to off-axis meshes.
-
-Smoke test:
-[`tests/axifem/test_heat_henrotte_smoke.py`](../../tests/axifem/test_heat_henrotte_smoke.py)
-asserts that the assembled `K_T` is symmetric with one zero mode
-(constant-T null space), `M_T` is SPD, both BFIs fail fast for the incompatible
-axis-touching Henrotte Q2 basis, and standard NGSolve H1 Q2 reproduces an
-axis-touching manufactured heat solution.
-
-P1/P2-triangle support in the optional Henrotte heat BFIs is intentionally
-deferred.  Production induction-heating workpiece thermal analyses use
-standard NGSolve H1, selecting Q2 or P2 from the mesh topology.
-
-## 10c. Boundary trace + Neumann RHS (radia 4.32.0+, OPTIONAL infrastructure)
-
-> **Status (2026-05-10)**: Like § 10b, this section documents
-> infrastructure shipped with the Henrotte FESpace that is **not
-> required** by the production heat path.  Standard NGSolve `H1`
-> already supports `LinearForm += q * v * 2 pi r * ds(label)` directly
-> without any custom BND DiffOp; the production
-> `calc_heat_axisym.py` uses that path.  The Henrotte BND machinery
-> below is needed only if you actually instantiate `H1Henrotte` for a
-> scalar problem (e.g. for a research convergence comparison).
-
-For axisymmetric Neumann BC patterns
-`LinearForm += q * v * weight * ds(label)` (heat flux, current sheet,
-etc.), the Henrotte FESpace ships an edge-trace evaluator `BND` of the
-shape function value.  Two implementation pieces:
-
-- **`AxiHenrotteFE_Edge_Q1` / `_Q2`** (1D segment FE for a single edge
-  of an axis-aligned quad).  CalcShape returns the values of the parent
-  quad's Lagrange basis restricted to the edge.  For a horizontal edge
-  (z = const), the trace is Lagrange in `s = r²`; for a vertical edge
-  (r = const), Lagrange in `z`.  The Q2 variant uses 3 shape functions
-  (two endpoint vertices + one edge midnode at the s- or z-midpoint).
-- **`AxiHenrotteDiffOpIdBnd`** (DiffOp with `vb = BND`) wired into
-  `evaluator[BND]` of the FESpace.  Calls the edge FE's CalcShape at
-  each boundary integration point and writes the trace values into
-  the assembly matrix row.
+For boundary terms `LinearForm += q * v.Trace() * weight * ds(label)`
+(current sheet, Neumann data, DtN couplings) the space provides the
+boundary evaluator `AxiHenrotteDiffOpIdBnd`, wired into `evaluator[BND]`,
+and the 1D element `AxiHenrotteFE_Edge(order, r0, z0, r1, z1)`.  The edge
+element evaluates the same `A_φ` basis `N_i` as the volume element on that
+edge: vertex DOFs at the edge ends and, at order 2, the midnode placed by
+the § 6 rule.  Its local parameter follows NGSolve's segment convention
+(`t = 1` at vertex 0).  `tests/axifem/test_vdof_consistency.py` checks that
+the trace equals the volume value on horizontal, vertical, oblique and axis
+edges.
 
 ### NGSolve Trace() requirement
 
-Standard NGSolve H1 `LinearForm += q * v * ds(label)` works without an
-explicit `.Trace()`.  The Henrotte FESpace currently requires the
-explicit form
-`LinearForm += q * v.Trace() * weight * ds(label)`
-because the proxy-function machinery does not auto-inject our custom
-BND DiffOp at the implicit-trace site.  Affects both LinearForm RHS
-(q-source, Robin convective term) and BilinearForm boundary terms
-like `h_conv * u.Trace() * v.Trace() * ds(label)`.
-
-This is a pragmatic limitation, not a design choice; if you hit
+The Henrotte FESpace requires the explicit form
+`LinearForm += q * v.Trace() * weight * ds(label)`, also in boundary
+bilinear terms such as `h * u.Trace() * v.Trace() * ds(label)`, because
+the proxy-function machinery does not auto-inject the custom BND DiffOp at
+the implicit-trace site.  The error
 `NgException: Testfunction does not support BND-forms, maybe a Trace()
-operator is missing`, add `.Trace()` to the test (and trial)
-function in the boundary-form expression.
+operator is missing` means the `.Trace()` is missing.
 
-### Mesh requirement: structured axis-aligned quads
+### Closed-form quads need structured axis-aligned meshes
 
-The Q1 / Q2 axis-aligned-quad Henrotte FE classes assume the parent
-quad's four corners share exactly two distinct r-values and two
-distinct z-values (= a rectangle in the (r, z) plane).  Netgen's
-`quad_dominated=True` mesher produces slightly skewed quads that
-violate this assumption and yield NaN in the closed-form element
-matrices.
-
-Use a **structured rectangular grid generator** (see
-[`validation_test/panels/fixtures/generate_heat_cylinder_axisym.py`](../../validation_test/panels/fixtures/generate_heat_cylinder_axisym.py)
-for the canonical pattern: hand-build with `netgen.meshing.MeshPoint
-+ Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1/P2
-triangle support exists for unstructured meshes on the magnetic side
-(`AxiHenrotteFE_P{1,2}_Triangle` + `AxiHenrotteStiffnessBFI`); the heat
-BFIs are quad-only as of radia 4.32.0.  Magnetic curved Q2 quads are
-available through `H1Henrotte(mesh, order=2, curvedquad=True)`, but the
-heat-specific BFIs remain for structured axis-aligned quads.
+The Q1 / Q2 closed-form quads accept only rectangles in `(r, z)` with the
+vertex order of § 6.  Netgen's `quad_dominated=True` mesher produces
+slightly skewed quads; use `curvedquad=True` for those, or a structured
+grid generator (see
+[`validation_test/panels/fixtures/generate_heat_cylinder_axisym.py`](../../validation_test/panels/fixtures/generate_heat_cylinder_axisym.py)).
 
 ## 11. Cross-validation
 

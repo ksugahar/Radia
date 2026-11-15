@@ -1,13 +1,17 @@
 """Discrete differential-identity checks for the axifem production space.
 
 axifem is not a full H1/HCurl/HDiv/L2 de Rham complex.  It is a Henrotte
-axisymmetric scalar-potential lane: the scalar unknown is A_phi/psi-like and
-``grad(u)`` is used to recover the meridian derivatives entering
+axisymmetric lane: the unknown u is A_phi with the V-DOF basis
+N_i = r_i psi_i / r, and ``grad(u)`` is the physical meridian gradient entering
 
     B_r = -d u / d z,      B_z = d u / d r + u / r.
 
-These tests keep that limited de Rham contract honest for the production
-P1/Q1/P2/Q2 and curved element paths.
+Guards: the fields whose flux function psi = r A_phi lies in every element's
+scalar space are reproduced exactly by interpolation, value, gradient and B:
+A = 1/r (psi = 1), A = z/r (psi = z) and, except for P1, A = r (psi = s, a
+uniform B_z = 2).  P1 is linear in the reference coordinates of the quadratic
+(s, z) map, so psi = s is not in its space (stated, not hidden).
+Assumes: straight off-axis elements; curved elements are refused.
 """
 
 import math
@@ -28,22 +32,24 @@ def _taskmanager():
         yield
 
 
-def _identity_cases():
+def _identity_cases(with_uniform_b=True):
     zero = 0 * x
-    one = 1 + zero
-    return [
-        ("one", one, zero, zero, zero, 1 / x),
-        ("r2", x * x, 2 * x, zero, zero, 3 * x),
-        ("z", y, zero, one, -one, y / x),
+    cases = [
+        ("inv_r", 1 / x, -1 / (x * x), zero, zero, zero),
+        ("z_over_r", y / x, -y / (x * x), 1 / x, -1 / x, zero),
     ]
+    if with_uniform_b:
+        cases.append(("r", x, 1 + zero, zero, zero, 2 + zero))
+    return cases
 
 
-def _assert_axisym_field_identities(mesh, order, *, curvedquad=False, tol=1e-18):
+def _assert_axisym_field_identities(mesh, order, *, curvedquad=False, tol=1e-18,
+                                    with_uniform_b=True):
     axifem = pytest.importorskip("radia.axifem")
     fes = axifem.H1Henrotte(mesh, order=order, curvedquad=curvedquad)
     gfu = GridFunction(fes)
 
-    for label, expr, du_dr, du_dz, br_exact, bz_exact in _identity_cases():
+    for label, expr, du_dr, du_dz, br_exact, bz_exact in _identity_cases(with_uniform_b):
         gfu.Set(expr)
         interp_err = Integrate((gfu - expr) * (gfu - expr), mesh)
         grad_err = Integrate(
@@ -89,21 +95,24 @@ def test_p1_p2_triangle_field_identities():
         mapping=lambda xi, eta: (0.6 + 1.1 * xi, -0.4 + 0.8 * eta),
         stem="axifem_identity_tri",
     )
-    _assert_axisym_field_identities(mesh, order=1)
+    _assert_axisym_field_identities(mesh, order=1, with_uniform_b=False)
     _assert_axisym_field_identities(mesh, order=2)
 
 
-def test_p2_curved_triangle_field_identities():
+@pytest.mark.parametrize("order", [1, 2])
+def test_curved_triangle_mesh_is_refused(order):
+    axifem = pytest.importorskip("radia.axifem")
     geo = SplineGeometry()
     geo.AddCircle((1.2, 0.0), 0.3, leftdomain=1, rightdomain=0, bc="outer")
     geo.SetMaterial(1, "conductor")
     mesh = Mesh(geo.GenerateMesh(maxh=0.15))
     mesh.Curve(2)
-    mesh = reload_via_vol(mesh, "axifem_identity_p2_curved")
-    _assert_axisym_field_identities(mesh, order=2, tol=1e-16)
+    gfu = GridFunction(axifem.H1Henrotte(mesh, order=order))
+    with pytest.raises(Exception, match="curved element"):
+        gfu.Set(1 / x)
 
 
-def test_q2_curved_quad_field_identities():
+def test_q2_general_quad_field_identities():
     def annulus(xi, eta):
         rho = 0.8 + 0.5 * xi
         phi = -0.3 + 0.6 * eta
@@ -135,9 +144,11 @@ def test_axis_aligned_boundary_value_trace_matches_analytic_edge_integrals():
 
     fes = axifem.H1Henrotte(mesh, order=1)
     gfu = GridFunction(fes)
-    gfu.Set(x * x + 2 * y)
+    gfu.Set(x + 2 * y / x)   # psi = s + 2 z is in the Q1 space
 
-    top = Integrate(gfu, mesh, definedon=mesh.Boundaries("top"))
-    right = Integrate(gfu, mesh, definedon=mesh.Boundaries("right"))
-    assert abs(top - 13.0 / 3.0) < 1e-12
-    assert abs(right - 5.0) < 1e-12
+    top = Integrate(gfu, mesh, definedon=mesh.Boundaries("top"), order=24)
+    right = Integrate(gfu, mesh, definedon=mesh.Boundaries("right"), order=24)
+    top_exact = 1.5 + 2.0 * math.log(2.0)   # INT_1^2 (r + 2 / r) dr at z = 1
+    right_exact = 2.5                        # INT_0^1 (2 + z) dz at r = 2
+    assert abs(top - top_exact) < 1e-12, (top, top_exact)
+    assert abs(right - right_exact) < 1e-12, (right, right_exact)
