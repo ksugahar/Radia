@@ -262,3 +262,52 @@ def test_missing_saved_sequence_is_refused(saved):
     write, load = saved
     with pytest.raises(ValueError, match="do not cover"):
         load(write()[:3])
+
+
+def test_checkpoint_on_the_deadline_with_a_late_final_sample_does_not_converge(fin, stand_in):
+    calls, clock = stand_in
+    probe = _run(fin, Clock())
+    last = probe["levels"][-1]["elapsed_s"]          # the converging checkpoint, sampled exactly at the deadline
+    seq = _run(fin, clock, budget_s=last)
+    assert seq["levels"][-1]["within_budget"] is True and seq["levels"][-1]["checkpoint"] is True
+    assert seq["elapsed_s"] > seq["budget_s"], (seq["elapsed_s"], seq["budget_s"])
+    assert (seq["converged"], seq["stop"]) == (False, "budget: deadline after the last checkpoint")
+    assert fin.certify_sequence(seq, {**_expected(seq), "budget_s": last}) != []
+
+
+def _main_with_live_sequences(fin, monkeypatch, tmp_path, edit):
+    base = _run(fin, Clock())
+    base["tolerance"] = {k: 0.1*0.05 for k in TOL}         # main(): one tenth of the 5 % limits
+    edit(base)
+    monkeypatch.setattr(fin, "_branch_ring_solver", lambda: (None, dict(PROVENANCE)))
+    monkeypatch.setattr(fin, "adaptive_sequence",
+                        lambda radius, f, s, order, factor, *a, **kw: {**copy.deepcopy(base), "order": order,
+                                                                        "exterior_factor": factor})
+    monkeypatch.setattr(fin, "git_state", lambda: ("head", False))
+    monkeypatch.setattr(fin, "_peec_runtime", lambda: {})
+    monkeypatch.setattr(fin, "section_mesh", lambda *a: (None, None, None))
+    v = _value(base["levels"][-1]["ndof"])
+    monkeypatch.setattr(fin, "solve_peec", lambda *a: dict(R_ohm=v, L_H=v, root_heat_W_per_A2=v,
+                                                           tip_heat_W_per_A2=v))
+    out = tmp_path/"report.json"
+    monkeypatch.setattr(sys, "argv", ["fin", "--ref-start-maxh-mm", "0.05", "0.05", "--ref-air-mm", "20", "20",
+                                      "--ref-air-divisor", "20", "20", "--ref-max-ndof", "1e9",
+                                      "--ref-max-levels", "40", "--ref-hours", str(1e6/3600),
+                                      "--peec-boundary-h-mm", "0.06", "--output", str(out)])
+    fin.main()
+    return json.loads(out.read_text(encoding="utf-8"))
+
+
+def test_live_sequences_are_certified_like_saved_ones(fin, stand_in, monkeypatch, tmp_path):
+    report = _main_with_live_sequences(fin, monkeypatch, tmp_path, lambda seq: None)
+    assert report["reference_converged"] is True, report["reference_certification"]
+    assert not any(report["reference_certification"].values())
+
+
+def test_live_sequence_over_budget_leaves_the_reference_unresolved(fin, stand_in, monkeypatch, tmp_path):
+    def over_budget(seq):
+        seq["elapsed_s"] = seq["budget_s"] + 1.0      # still claims converged=True
+    report = _main_with_live_sequences(fin, monkeypatch, tmp_path, over_budget)
+    assert (report["reference_converged"], report["reference_resolved"]) == (False, False)
+    assert all("above the budget" in " ".join(r) for r in report["reference_certification"].values()), \
+        report["reference_certification"]

@@ -257,10 +257,13 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
         for el in mesh.Elements(ng.VOL):
             mesh.SetRefinementFlag(el, bool(flags[el.nr]))
         mesh.Refine()
+    end = clock()                                   # one final sample for the record and the decision
+    if stop == "converged" and end > deadline:
+        stop = "budget: deadline after the last checkpoint"
     return dict(order=order, exterior_factor=factor, start_maxh_mm=start_maxh, air_maxh_mm=air_mm,
                 air_divisor=air_divisor, theta=theta, checkpoint_dof_growth=growth_min,
                 tolerance=tol, max_ndof=max_ndof, max_levels=max_levels, budget_s=budget_s,
-                elapsed_s=clock() - started, converged=stop == "converged", stop=stop, levels=rows)
+                elapsed_s=end - started, converged=stop == "converged", stop=stop, levels=rows)
 
 
 def relative_change(new, old, keys):
@@ -355,6 +358,14 @@ def git_state():
     return head, dirty
 
 
+def expected_settings(args, settings, order, tol):
+    """The settings a sequence of this order must carry, for saved and live sequences alike."""
+    s, a, d = settings[order]
+    return dict(start_maxh_mm=s, air_maxh_mm=a, air_divisor=d, theta=args.ref_theta,
+                checkpoint_dof_growth=2.0, tolerance=tol, max_ndof=args.ref_max_ndof,
+                max_levels=args.ref_max_levels, budget_s=3600*args.ref_hours)
+
+
 def load_sequences(paths, args, provenance, settings, tol):
     """Admit saved sequences only from this source, script and runtime, with the configured settings.
 
@@ -382,11 +393,7 @@ def load_sequences(paths, args, provenance, settings, tol):
             bad.append(f"(order, exterior) {key} given twice")
         else:
             seen.add(key)
-            s, a, d = settings[key[0]]
-            bad += certify_sequence(seq, dict(
-                start_maxh_mm=s, air_maxh_mm=a, air_divisor=d, theta=args.ref_theta,
-                checkpoint_dof_growth=2.0, tolerance=tol, max_ndof=args.ref_max_ndof,
-                max_levels=args.ref_max_levels, budget_s=3600*args.ref_hours))
+            bad += certify_sequence(seq, expected_settings(args, settings, key[0], tol))
         if bad:
             problems.append(f"{p}: " + "; ".join(bad))
         sequences.append(seq)
@@ -458,7 +465,9 @@ def main():
             reference_runtime=provenance, radius_mm=args.radius_mm, frequency_hz=args.frequency_hz,
             sigma_S_per_m=args.sigma, sequence=seq), indent=1) + "\n", encoding="utf-8")
         print(json.dumps({"phase": "sequence", "order": order, "exterior_factor": factor,
-                          "converged": seq["converged"], "stop": seq["stop"]}), flush=True)
+                          "converged": seq["converged"], "stop": seq["stop"],
+                          "certification": certify_sequence(seq, expected_settings(args, settings, order, tol))}),
+              flush=True)
         return
     if args.ref_sequence_json:
         sequences = load_sequences(args.ref_sequence_json, args, provenance, settings, tol)
@@ -486,7 +495,10 @@ def main():
     spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
     swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
     consistent = best["terminal_vs_energy_R"] <= 1e-3
-    converged = all(s["converged"] for s in sequences)
+    # Saved sequences were certified on load; live ones are certified here by the same rule.
+    certification = {f"o{s['order']}_f{s['exterior_factor']}":
+                     certify_sequence(s, expected_settings(args, settings, s["order"], tol)) for s in sequences}
+    converged = all(s["converged"] for s in sequences) and not any(certification.values())
     resolved = (swept and consistent and converged
                 and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items()))
     reference = [dict(level, order=s["order"]) for s in sequences for level in s["levels"]]
@@ -526,6 +538,7 @@ def main():
                                  "level against the highest order's at the widest exterior; the highest order's "
                                  "terminal Re(V/I) within 1e-3 of the dissipation resistance; a sequence out of "
                                  "budget leaves the reference unresolved"),
+        reference_certification=certification,
         reference_swept=swept, reference_loss_consistent=consistent, reference_converged=converged,
         reference_resolved=resolved, peec_levels=peec,
         peec_change_last_two={k: abs(quantities(peec[-1])[k] - quantities(peec[-2])[k])/abs(quantities(peec[-1])[k])
