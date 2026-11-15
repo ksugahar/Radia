@@ -9,19 +9,26 @@ The forks are not a development line. Each maintenance round:
 
 1. merges the latest upstream `master` into the fork's `master`, keeping the
    fork as close to upstream as possible;
-2. adds only bug fixes that Radia needs, as small labeled commits, and offers
-   general fixes upstream;
+2. adds only bug fixes that Radia needs, as small labeled commits; general
+   fixes may be offered upstream only after the user approves the exact text;
 3. builds the pybind11 wheels and the MEX SDK (CPU and GPU) and runs the
    fork checks;
-4. publishes them on the forks' GitHub Releases under a tag on `master`;
-5. moves Radia's metadata pin to that tag and rebuilds and revalidates Radia
-   against it.
+4. tags netgen and ngsolve with the same tag on `master` and publishes the
+   wheels and SDK on the forks' GitHub Releases;
+5. pins Radia's metadata to the exact published wheel versions of `ngsolve`
+   and `netgen-mesher` from that release (a PEP 440 version such as
+   `6.2.2608.post100.dev0+radia.1`, not the tag string), then rebuilds and
+   revalidates Radia against them.
 
 The fork has one long-lived branch, `master`. Radia's own binaries link the
 NGSolve C++ ABI, so every pin move rebuilds Radia; upstream changes are not
 assumed to be ABI compatible. The ngsolve fork's `external_dependencies/netgen`
-submodule points at the netgen fork. Users install the wheels with
-`pip --find-links` to the release page; PyPI carries no fork wheels.
+submodule points at the netgen fork commit with the same tag. Users install
+with `pip install --find-links <wheelhouse>`, where the wheelhouse is a page
+or directory that lists the actual wheel files of that release; an ordinary
+release page is not assumed to work as one. PyPI carries no fork wheels.
+Every Radia CI lane that installs NGSolve receives the same fork wheels and
+checks the installed distribution versions and native ABI.
 
 ## Supported lanes
 
