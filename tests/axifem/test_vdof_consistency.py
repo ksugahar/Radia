@@ -297,13 +297,34 @@ def test_axis_limit_of_the_basis(name, factory, order, curvedquad):
     (_curved_two_domain_mesh, 2, False),
     (_curved_quad_sector_mesh, 2, True),
 ], ids=["p1", "p2", "q2"])
-def test_curve3_mesh_is_refused(factory, order, curvedquad):
-    """A Curve(3) map would be replaced by its quadratic interpolant: refused."""
+def test_mesh_map_above_curve2_is_refused(factory, order, curvedquad):
+    """The element map must be the Curve(1)/Curve(2) mesh map, by mesh metadata.
+
+    Guards: the space refuses a mesh whose curve order exceeds 2 or that
+    carries a deformation, at construction and when the mesh changes after.
+    Assumes: the sampled off-node comparison is only a supplementary
+    diagnostic (a finite point set cannot detect every cubic mode).
+    """
     mesh = factory()
     mesh.Curve(3)
+    with pytest.raises(Exception, match="curved to order 3"):
+        H1Henrotte(mesh, order=order, curvedquad=curvedquad)
+
+    mesh = factory()
     gf = ng.GridFunction(H1Henrotte(mesh, order=order, curvedquad=curvedquad))
-    with pytest.raises(Exception, match="degree > 2"):
+    mesh.Curve(3)
+    with pytest.raises(Exception, match="curved to order 3"):
         gf.Set(ng.x)
+
+    mesh = factory()
+    gf = ng.GridFunction(H1Henrotte(mesh, order=order, curvedquad=curvedquad))
+    disp = ng.GridFunction(ng.VectorH1(mesh, order=1))
+    mesh.SetDeformation(disp)
+    try:
+        with pytest.raises(Exception, match="deformation is set"):
+            gf.Set(ng.x)
+    finally:
+        mesh.UnsetDeformation()
 
 
 FD_CASES = [

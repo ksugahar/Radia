@@ -63,8 +63,8 @@ for skewed, general or curved quads.  The triangle and general Q2 paths
 accept `Curve(2)` elements (FORMULATION.md § 6, curved edges); the
 axis-aligned Q1/Q2 paths require straight rectangles.  A curved edge lying
 on the axis, a curved edge reaching `r <= 0` or turning back in `r` on the
-axis, a folded `(s, z)` or target map and a `Curve(p)` map with `p > 2`
-raise.  Every evaluator (volume value, gradient,
+axis, a folded `(s, z)` or target map, a mesh curved to order `p > 2` and
+a mesh deformation raise.  Every evaluator (volume value, gradient,
 boundary trace) and both native integrators use one `A_φ` basis
 `N_i = r_i ψ_i / r`; see FORMULATION.md § 6.
 

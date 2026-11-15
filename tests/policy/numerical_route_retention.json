@@ -105,7 +105,7 @@
     {
       "path": "tests/axifem/test_heat_henrotte_smoke.py",
       "reason": "The native axisymmetric heat bilinear forms it exercised were removed with the V-DOF convention unification of the Henrotte space: they used the retired psi-on-mesh basis, had no production consumer, and would otherwise disagree with the unified A_phi basis. Axisymmetric heat runs through calc_heat_axisym with standard H1.",
-      "review": "Pending independent reciprocal review of the V-DOF convention child commit; the reviewer re-runs the shared precheck.",
+      "review": "User approved the removal of the unused heat integrators on 2026-11-15. Independent reciprocal review agreed that the base tree has no production consumer (definitions, research knowledge and their own tests only) and kept it a separate decision; the reviewer re-ran the shared precheck.",
       "consumer_evidence": "git grep finds no production caller of the removed heat integrators outside the deleted test; tests/axifem (95) and the axisymmetric consumer tests (80) pass on the rebuilt axifem module.",
       "oracle_preservation": "tests/axifem/test_heat_field_extrema.py and validation_test/axifem/test_heat_axisym_e2e.py keep the axisymmetric heat oracle on the standard H1 route."
     }

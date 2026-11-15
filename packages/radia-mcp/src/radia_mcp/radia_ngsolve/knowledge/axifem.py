@@ -152,8 +152,9 @@ exported.
 ## Constraints
 
 * **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
-  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.  All
-  elements must be straight; `mesh.Curve(p)` with `p > 1` raises.
+  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.
+  Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a mesh
+  curved to order `p > 2` or carrying a deformation raises.
 * **Q2 quad geometry:** the default production Q2 quad is straight and
   axis-aligned.  Use `curvedquad=True` for the production 9-node general Q2
   quadrature path on skewed straight quads.
@@ -409,8 +410,8 @@ curved edge ending on the axis keeps the `s`-midpoint, is matched through
 `s`, and shifts the target `z` instead.  These elements are integrated on the
 mesh element (16-point Gauss rule per direction).  Refused: a curved edge
 lying on the axis, `r <= 0` inside a curved edge, `r^2` turning back along a
-curved axis edge, folded `(s, z)` or target maps, and `Curve(p)` with
-`p > 2` (the map must equal its quadratic interpolant).  Checks:
+curved axis edge, folded `(s, z)` or target maps, and a mesh curved to
+order `p > 2` or carrying a deformation (checked from the mesh metadata).  Checks:
 `tests/axifem/test_vdof_consistency.py` (matrices, trace, finite differences,
 axis limit), `tests/axifem/test_de_rham_identities.py` and
 `tests/axifem/test_p2_curved_magsta.py` (sphere volume and total flux).
@@ -647,7 +648,7 @@ shape, info = add_kelvin_2d_axisym(
     maxh_kelvin=5e-3,
 )
 mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_kelvin))
-# Keep the mesh straight: H1Henrotte refuses mesh.Curve(p) with p > 1
+# H1Henrotte accepts straight or Curve(2) meshes; Curve(p > 2) raises
 
 # 3. FESpace: H1Henrotte + Periodic.  Dirichlet on both axes + GND vertex.
 fes = Periodic(H1Henrotte(

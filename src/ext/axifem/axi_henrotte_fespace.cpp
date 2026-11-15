@@ -116,9 +116,23 @@ void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator 
 
 // The element samples its nodes from the transformation and represents the
 // map by quadratic Lagrange interpolation (Curve(1) and Curve(2) meshes).  A
-// map of higher degree (Curve(p), p > 2) would be silently replaced by its
-// interpolant, so it is refused: the transformation must equal the
-// interpolant at off-node points.
+// map of higher degree would be silently replaced by its interpolant.  The
+// admission is the mesh metadata (RequireAdmissibleMesh: curve order <= 2, no
+// deformation), which bounds the map to the quadratic family.  This sampled
+// comparison is a supplementary geometry diagnostic only: a finite point set
+// cannot detect a higher-degree mode vanishing at every sample (for a Q3 quad
+// a bubble x(1-x)y(1-y)(a+bx+cy+dxy) can).
+void RequireAdmissibleMesh(ngcomp::MeshAccess & ma)  // curve-order getter is non-const
+{
+    if (ma.GetCurveOrder() > 2)
+        throw Exception("AxiHenrotteFESpace: the mesh is curved to order "
+                        + ToString(ma.GetCurveOrder())
+                        + "; H1Henrotte supports Curve(1) and Curve(2) meshes");
+    if (ma.GetDeformation())
+        throw Exception("AxiHenrotteFESpace: a mesh deformation is set; the"
+                        " element map must be the Curve(1)/Curve(2) mesh map");
+}
+
 template <class Geo>
 void RequireQuadraticMap(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh,
                          const Geo & geo, bool triangle)
@@ -196,6 +210,7 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
 
 void AxiHenrotteFESpace::Update() {
     FESpace::Update();
+    RequireAdmissibleMesh(*ma);
     {
         double rmax = 0.0, zmin = 0.0, zmax = 0.0;
         for (size_t v = 0; v < ma->GetNV(); ++v) {
@@ -262,6 +277,8 @@ void AxiHenrotteFESpace::FinalizeUpdate() {
 }
 
 FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
+    // the mesh may be curved or deformed after the space was built
+    RequireAdmissibleMesh(*ma);
     Ngs_Element ngel = ma->GetElement(ei);
     auto vertices = ngel.Vertices();
 
