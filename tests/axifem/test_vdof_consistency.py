@@ -32,6 +32,8 @@ if _SRC not in sys.path:
 import numpy as np
 import ngsolve as ng
 import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 from netgen.csg import Pnt
 from netgen.geom2d import SplineGeometry
 from netgen.meshing import Element2D, FaceDescriptor, Mesh as NGMesh, MeshPoint

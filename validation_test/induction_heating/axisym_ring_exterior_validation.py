@@ -38,19 +38,24 @@ MU0 = 4e-7 * math.pi
 SIGMA = 5.8e7
 
 
-def half_disk_mesh(conductor, exterior_radius, maxh_conductor, maxh_air,
-                   curve_order=3):
-    """Half disk about the axis holding one conductor ``("rect"|"circle", ...)``."""
+def half_disk_mesh(conductor, exterior_radius, maxh_conductor, maxh_air):
+    """Half disk about the axis holding one conductor ``("rect"|"circle", ...)``.
+
+    The mesh stays straight: the Henrotte space refuses curved elements.
+    """
     import ngsolve as ng
     from netgen.geom2d import SplineGeometry
 
     geo = SplineGeometry()
     big = exterior_radius
     p = [geo.AppendPoint(*q) for q in [(0, -big), (big, 0), (0, big)]]
+    # A straight mesh approximates the exterior circle by chords; R / 200
+    # keeps the chordal miss inside the DtN term's 1e-5 geometry tolerance.
+    arc_h = big / 200.0
     geo.Append(["spline3", p[0], geo.AppendPoint(big, -big), p[1]],
-               bc="outer", leftdomain=1, rightdomain=0)
+               bc="outer", leftdomain=1, rightdomain=0, maxh=arc_h)
     geo.Append(["spline3", p[1], geo.AppendPoint(big, big), p[2]],
-               bc="outer", leftdomain=1, rightdomain=0)
+               bc="outer", leftdomain=1, rightdomain=0, maxh=arc_h)
     geo.Append(["line", p[2], p[0]], bc="axis", leftdomain=1, rightdomain=0)
     kind, *args = conductor
     if kind == "rect":
@@ -64,9 +69,7 @@ def half_disk_mesh(conductor, exterior_radius, maxh_conductor, maxh_air,
     geo.SetMaterial(1, "air")
     geo.SetMaterial(2, "conductor")
     geo.SetDomainMaxH(2, maxh_conductor)
-    mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh_air))
-    mesh.Curve(curve_order)
-    return mesh
+    return ng.Mesh(geo.GenerateMesh(maxh=maxh_air))
 
 
 def filament_inductance(r0, r1, z0, z1, points):

@@ -20,6 +20,8 @@ if _SRC not in sys.path:
 import numpy as np
 import ngsolve as ng
 import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 from netgen.geom2d import SplineGeometry
 from radia.axifem import AxiHenrotteStiffnessBFI, H1Henrotte
 

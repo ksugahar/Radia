@@ -41,7 +41,7 @@ TIP_X_MM = 3.5
 
 
 def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
-                       exterior_factor, curve_order, air_divisor=20,
+                       exterior_factor, air_divisor=20,
                        skin_layers_mm=None):
     """The beak profile as the meridian of a ring at ``radius_mm``.
 
@@ -86,6 +86,10 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
     half = MoveTo(0.0, center_z - radius).Rectangle(radius, 2 * radius).Face()
     air = disk * half
     air.edges.name = "outer"
+    # The mesh is straight (the Henrotte space refuses curved elements), so
+    # the exterior arc is a chord polygon: R / 200 keeps its miss inside the
+    # DtN term's 1e-5 geometry tolerance.
+    air.edges.maxh = min(air_h, radius / 200.0)
     air.edges.Min(X).name = "axis"
     air.maxh = air_h
     outside = air - section
@@ -100,8 +104,6 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
             domain="conductor", disable_curving=False)]
     mesh = ng.Mesh(OCCGeometry(total, dim=2).GenerateMesh(
         maxh=air_h, boundary_layers=layers))
-    if curve_order > 1:
-        mesh.Curve(int(curve_order))
     return mesh, radius, center_z
 
 
@@ -196,7 +198,6 @@ def main():
                         default=[5_000.0, 15_000.0, 50_000.0, 150_000.0])
     parser.add_argument("--sigma", type=float, default=5.8e7)
     parser.add_argument("--order", type=int, default=2)
-    parser.add_argument("--curve-order", type=int, default=3)
     parser.add_argument("--maxh-conductor-mm", type=float, nargs="+",
                         default=[0.08, 0.05])
     parser.add_argument("--maxh-air-mm", type=float, default=20.0)
@@ -221,8 +222,7 @@ def main():
             for maxh in args.maxh_conductor_mm:
                 mesh, ext_radius, ext_z = build_section_ring(
                     radius_mm, maxh_conductor_mm=maxh,
-                    maxh_air_mm=args.maxh_air_mm, exterior_factor=factor,
-                    curve_order=args.curve_order)
+                    maxh_air_mm=args.maxh_air_mm, exterior_factor=factor)
                 for frequency in args.frequency_hz:
                     t0 = time.perf_counter()
                     res = solve_axisym_ring(

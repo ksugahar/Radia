@@ -243,11 +243,11 @@ def _branch_ring_solver():
         ring_solver=str(path.relative_to(ROOT)), ring_solver_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
-def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, curve_order, modes, air_mm, air_divisor):
+def solve_reference(radius_mm, frequency, sigma, maxh, factor, order, modes, air_mm, air_divisor):
     solve_axisym_ring, _ = _branch_ring_solver()
     from aphi_beak_section_sweep import build_section_ring
     mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=maxh, maxh_air_mm=air_mm,
-                                                exterior_factor=factor, curve_order=curve_order,
+                                                exterior_factor=factor,
                                                 air_divisor=air_divisor)
     t0 = time.perf_counter()
     res = solve_axisym_ring(mesh, conductor="conductor", frequency_hz=frequency, sigma=sigma, order=order,
@@ -306,7 +306,7 @@ def main():
     for order, ladder, air, divisor in zip(args.ref_order, ladders, airs, divisors):
         for factor in args.ref_exterior_factor:
             for maxh in ladder:
-                row = solve_reference(args.radius_mm, args.frequency_hz, args.sigma, maxh, factor, order, 3, 30,
+                row = solve_reference(args.radius_mm, args.frequency_hz, args.sigma, maxh, factor, order, 30,
                                       air, divisor)
                 reference.append(row)
                 print(json.dumps({"phase": "reference", **row}), flush=True)
@@ -371,4 +371,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import ngsolve as ng
+
+    with ng.TaskManager():
+        main()
