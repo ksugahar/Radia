@@ -175,22 +175,21 @@ def _check_exterior_arc(mesh, radius, center_z):
         raise ValueError("the mesh has no boundary named 'outer'")
     if "axis" not in names:
         raise ValueError("the mesh has no boundary named 'axis'")
+    from radia.axisym_measure import axi_meridian_line_integral as line
+
     outer = mesh.Boundaries("outer")
     order = 2 * max(int(mesh.GetCurveOrder()), 1) + 4
-    length = float(ng.Integrate(ng.CF(1.0), mesh, ng.BND, definedon=outer,
-                                order=order))
+    length = float(line(ng.CF(1.0), mesh, definedon=outer, order=order))
     rho = ng.sqrt(ng.x * ng.x + (ng.y - center_z) * (ng.y - center_z))
-    miss = float(ng.Integrate((rho - radius) ** 2, mesh, ng.BND,
-                              definedon=outer, order=order))
+    miss = float(line((rho - radius) ** 2, mesh, definedon=outer,
+                      order=order))
     rms = (max(miss, 0.0) / max(length, 1e-300)) ** 0.5 / radius
     cover = length / (np.pi * radius) - 1.0
     # The axis must be the whole segment between the poles: its length is
     # 2R, it lies on r = 0, and its extreme points are the poles.
     axis = mesh.Boundaries("axis")
-    axis_length = float(ng.Integrate(ng.CF(1.0), mesh, ng.BND,
-                                     definedon=axis, order=order))
-    axis_off = float(ng.Integrate(ng.x * ng.x, mesh, ng.BND,
-                                  definedon=axis, order=order))
+    axis_length = float(line(ng.CF(1.0), mesh, definedon=axis, order=order))
+    axis_off = float(line(ng.x * ng.x, mesh, definedon=axis, order=order))
     ends = np.array([mesh[v].point for el in mesh.Elements(ng.BND)
                      if el.mat == "axis" for v in el.vertices], dtype=float)
     axis_cover = axis_length / (2.0 * radius) - 1.0

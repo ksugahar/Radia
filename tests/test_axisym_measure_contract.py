@@ -31,7 +31,7 @@ GOVERNED = (
     ROOT / "validation_test/induction_heating/aphi_beak_section_sweep.py",
 )
 SANCTIONED = {"axi_volume_integral", "axi_section_integral",
-              "axi_volume_beyond"}
+              "axi_meridian_line_integral", "axi_volume_beyond"}
 
 
 def _integrate_calls(path):

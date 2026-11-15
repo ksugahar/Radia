@@ -59,6 +59,18 @@ def axi_section_integral(cf, mesh, *, definedon=None, order=10):
     return ng.Integrate(cf, mesh, definedon=definedon, order=order)
 
 
+def axi_meridian_line_integral(cf, mesh, *, definedon=None, order=10):
+    """Integrate ``cf`` along meridian boundary curves: ``int cf dl``.
+
+    This is the measure for a property of the meridian *outline* itself -- the
+    length of a boundary curve or a geometric fit to it -- not of the revolved
+    surface (which would need ``2 pi r dl``).
+    """
+    import ngsolve as ng
+
+    return ng.Integrate(cf, mesh, ng.BND, definedon=definedon, order=order)
+
+
 def axi_volume_beyond(cf, mesh, r_m, *, definedon=None, order=10):
     """:func:`axi_volume_integral` restricted to radii beyond ``r_m``."""
     import ngsolve as ng
