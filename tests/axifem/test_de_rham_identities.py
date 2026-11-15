@@ -10,8 +10,12 @@ Guards: the fields whose flux function psi = r A_phi lies in every element's
 scalar space are reproduced exactly by interpolation, value, gradient and B:
 A = 1/r (psi = 1), A = z/r (psi = z) and, except for P1, A = r (psi = s, a
 uniform B_z = 2).  P1 is linear in the reference coordinates of the quadratic
-(s, z) map, so psi = s is not in its space (stated, not hidden).
-Assumes: straight off-axis elements; curved elements are refused.
+(s, z) map, so psi = s is not in its space (stated, not hidden).  On curved
+(Curve(2)) elements the target s is r^2 (1 - B) with the blended edge
+correction B, so psi = s is reproduced only up to B; psi = 1 stays exact, and
+psi = z too for P2 (P1 is linear in the reference coordinates of a curved map).
+Assumes: off-axis elements; curved axis edges are covered by
+test_vdof_consistency.py and test_p2_curved_magsta.py.
 """
 
 import math
@@ -45,11 +49,15 @@ def _identity_cases(with_uniform_b=True):
 
 def _assert_axisym_field_identities(mesh, order, *, curvedquad=False, tol=1e-18,
                                     with_uniform_b=True):
+    _assert_cases(mesh, order, _identity_cases(with_uniform_b), curvedquad=curvedquad, tol=tol)
+
+
+def _assert_cases(mesh, order, cases, *, curvedquad=False, tol=1e-18):
     axifem = pytest.importorskip("radia.axifem")
     fes = axifem.H1Henrotte(mesh, order=order, curvedquad=curvedquad)
     gfu = GridFunction(fes)
 
-    for label, expr, du_dr, du_dz, br_exact, bz_exact in _identity_cases(with_uniform_b):
+    for label, expr, du_dr, du_dz, br_exact, bz_exact in cases:
         gfu.Set(expr)
         interp_err = Integrate((gfu - expr) * (gfu - expr), mesh)
         grad_err = Integrate(
@@ -100,16 +108,18 @@ def test_p1_p2_triangle_field_identities():
 
 
 @pytest.mark.parametrize("order", [1, 2])
-def test_curved_triangle_mesh_is_refused(order):
-    axifem = pytest.importorskip("radia.axifem")
+def test_curved_triangle_field_identities(order):
     geo = SplineGeometry()
     geo.AddCircle((1.2, 0.0), 0.3, leftdomain=1, rightdomain=0, bc="outer")
     geo.SetMaterial(1, "conductor")
     mesh = Mesh(geo.GenerateMesh(maxh=0.15))
     mesh.Curve(2)
-    gfu = GridFunction(axifem.H1Henrotte(mesh, order=order))
-    with pytest.raises(Exception, match="curved element"):
-        gfu.Set(1 / x)
+    mesh = reload_via_vol(mesh, f"axifem_identity_p{order}_curved")
+    if order == 1:
+        cases = [c for c in _identity_cases(False) if c[0] == "inv_r"]
+        _assert_cases(mesh, order, cases, tol=1e-16)
+    else:
+        _assert_axisym_field_identities(mesh, order=order, tol=1e-16, with_uniform_b=False)
 
 
 def test_q2_general_quad_field_identities():

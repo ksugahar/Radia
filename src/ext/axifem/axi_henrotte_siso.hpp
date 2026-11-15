@@ -27,8 +27,15 @@
 //     occupies a slightly different region than the mesh element (an O(h)
 //     shape change confined to elements with an oblique edge ending on the
 //     axis).
-// Only straight mesh elements are admitted (Curve(1)); curved, degenerate or
-// folded (s, z) maps are refused.
+// Curved edges (Curve(2): midnode off the chord).  Off the axis they take the
+// mesh midpoint; along such an edge (r(t)^2, z(t)) is quartic in s while the
+// (s, z) edge is the quadratic s_q(t) through the same nodes, so the target s
+// is corrected by the blended edge ratio rho_e(t) = 1 - s_q(t) / r(t)^2.  A
+// curved edge with one end on the axis takes the s-midpoint like a straight
+// one; its (s, z) edge is the straight segment between the end nodes, matched
+// to the mesh edge through s (tau = (r(t)^2 - s_a) / (s_b - s_a)), and the
+// target z is corrected by the blended shift dz_e(t) = z_a + tau (z_b - z_a) -
+// z(t) (see Target below).  Degenerate or folded maps are refused.
 //
 // Point evaluation from NGSolve reference coordinates (EvalVdof): the target s
 // is the mesh r^2 (the evaluation radius is always the mesh radius, so A_phi ~ r
@@ -38,7 +45,10 @@
 // fraction u from the axis end; the boundary trace uses the same rule), which
 // lies (u - u^2) (z_off - z_axis) below in z; that shift times the edge's
 // midnode function (zero on every other edge and on the axis) is added to the
-// mesh z.  The (s, z) map is inverted at the target by Newton's method.  The
+// mesh z.  On curved edges the target s is r^2 (1 - sum_e B_e) with the
+// blended edge ratios B_e (zero on every other edge and at the vertices), so
+// the target point of a curved edge point at parameter t is the (s, z) edge
+// point at the same t.  The (s, z) map is inverted at the target by Newton's method.  The
 // basis on the mesh element is psi(Phi(r, z)) with this target map Phi; the
 // map is the same from both sides of every edge, so the space stays conforming
 // and the boundary trace equals the volume value.  The physical gradient is
@@ -147,6 +157,13 @@ inline bool HorizontalEdge(double ra, double za, double rb, double zb)
     return std::fabs(zb - za) <= 1e-12 * std::hypot(rb - ra, zb - za);
 }
 
+// A curved edge: its mesh midnode is off the chord.
+inline bool CurvedEdge(double ra, double za, double rb, double zb, double rm, double zm)
+{
+    return std::hypot(rm - 0.5 * (ra + rb), zm - 0.5 * (za + zb))
+           > 1e-10 * std::hypot(rb - ra, zb - za);
+}
+
 enum class MidKind { Mesh, SMidHorizontal, SMidAxis };
 
 // Edge midnode rule (see the file comment).  rm, zm: mesh midpoint.
@@ -178,6 +195,14 @@ inline void VdofFromPsi(double ri, double s, double s_scale, double psi,
         return;
     }
     const double r = std::sqrt(std::max(s, 0.0));
+    if (s <= 1e-24 * s_scale) {
+        // on the axis within the snap tolerance of the space (r <= 1e-12 of
+        // the element): A = 0, dA/dz = 0; mesh maps of curved elements put
+        // their axis points at |r| ~ 1e-16 rather than exactly 0
+        n = 0.0;
+        if (dn) { dn[0] = ri * ps; dn[1] = 0.0; }
+        return;
+    }
     if (s <= 1e-8 * s_scale) {
         n = ri * ps * r;
         if (dn) { dn[0] = ri * ps; dn[1] = r > 0.0 ? ri * pz / r : 0.0; }
@@ -208,36 +233,59 @@ public:
     double s[G::N], z[G::N];     // (s, z) map nodes after the edge midnode rule
     double target_dz[G::N];      // z correction of oblique axis edges (per midnode)
     bool has_target_dz = false;
+    bool curved[G::NE] = {};     // curved (Curve > 1) edges off the axis
+    bool curved_axis[G::NE] = {};  // curved edges with one end on the axis
+    bool has_curved = false;
     double r[B::N];              // DOF node radii
     double s_scale, z_scale;     // max s; z extent of the element
     double s_tol, z_tol;         // Newton residual tolerances
 
     void Init(const double * rs, const double * zs)
     {
+        // (nodes within round-off of the axis arrive at r = 0: the space snaps
+        // them with one mesh-wide tolerance, AxiHenrotteFESpace::SnapAxis)
         double rmax = 0.0, zmin = zs[0], zmax = zs[0];
         for (int k = 0; k < G::N; ++k) {
             rg[k] = rs[k]; zg[k] = zs[k];
-            s[k] = rs[k] * rs[k]; z[k] = zs[k]; target_dz[k] = 0.0;
-            rmax = std::max(rmax, std::fabs(rs[k]));
+            s[k] = rg[k] * rg[k]; z[k] = zs[k]; target_dz[k] = 0.0;
+            rmax = std::max(rmax, std::fabs(rg[k]));
             zmin = std::min(zmin, zs[k]); zmax = std::max(zmax, zs[k]);
         }
         s_scale = rmax > 0.0 ? rmax * rmax : 1.0;
         z_scale = zmax > zmin ? zmax - zmin : 1.0;
-        // Straight elements only: every mesh midnode is the chord midpoint and
-        // the quad centre is the corner average.  A curved (Curve > 1) element
-        // would make the (s, z) map and the mesh map disagree in the interior.
-        auto require_straight = [&](double rm, double zm, double ra, double za,
-                                    double rb, double zb) {
-            const double len = std::hypot(rb - ra, zb - za);
-            if (std::hypot(rm - 0.5 * (ra + rb), zm - 0.5 * (za + zb)) > 1e-10 * len)
-                throw Exception("H1Henrotte: curved element at r0=" + std::to_string(rg[0])
-                                + " z0=" + std::to_string(zg[0])
-                                + "; only straight elements are supported (mesh.Curve(1))");
-        };
         bool moved = false;
         for (int e = 0; e < G::NE; ++e) {
             const int a = G::EDGE[e][0], b = G::EDGE[e][1], m = G::EDGE[e][2];
-            require_straight(rg[m], zg[m], rg[a], zg[a], rg[b], zg[b]);
+            if (CurvedEdge(rg[a], zg[a], rg[b], zg[b], rg[m], zg[m])) {
+                const bool on_a = OnAxisEdgeEnd(rg[a], rg[a], rg[b]);
+                const bool on_b = OnAxisEdgeEnd(rg[b], rg[a], rg[b]);
+                if (on_a && on_b)
+                    throw Exception("H1Henrotte: curved edge on the axis at r0="
+                                    + std::to_string(rg[0]) + " z0=" + std::to_string(zg[0]));
+                // r > 0 inside the edge, r^2 monotone when one end is on the axis
+                double prev = -1.0;
+                for (int i = 0; i <= 64; ++i) {
+                    const double ri = EdgeQuad(i / 64.0, rg[a], rg[b], rg[m]);
+                    const double si = on_b ? EdgeQuad(1.0 - i / 64.0, rg[a], rg[b], rg[m]) : ri;
+                    if ((i > 0 && i < 64 && !(ri > 0.0))
+                        || ((on_a || on_b) && i > 0 && !(si * si > prev)))
+                        throw Exception("H1Henrotte: curved edge reaches r <= 0 or turns back"
+                                        " in r at r0=" + std::to_string(rg[0])
+                                        + " z0=" + std::to_string(zg[0]));
+                    prev = si * si;
+                }
+                has_curved = true;
+                if (on_a || on_b) {
+                    // s-midpoint, straight (s, z) edge; target z blended (Target)
+                    curved_axis[e] = true;
+                    s[m] = 0.5 * (s[a] + s[b]);
+                    z[m] = 0.5 * (zg[a] + zg[b]);
+                    moved = true;
+                } else {
+                    curved[e] = true;   // mesh midpoint; target s blended (Target)
+                }
+                continue;
+            }
             double sm, zm;
             const MidKind kind = EdgeMidnode(rg[a], zg[a], rg[b], zg[b], rg[m], zg[m], sm, zm);
             if (kind == MidKind::Mesh) continue;
@@ -254,8 +302,12 @@ public:
             moved = true;
         }
         if (G::N == 9) {
-            require_straight(rg[8], zg[8], 0.5 * (rg[0] + rg[1]), 0.5 * (zg[0] + zg[1]),
-                             0.5 * (rg[2] + rg[3]), 0.5 * (zg[2] + zg[3]));
+            if (!has_curved
+                && CurvedEdge(0.5 * (rg[0] + rg[1]), 0.5 * (zg[0] + zg[1]),
+                              0.5 * (rg[2] + rg[3]), 0.5 * (zg[2] + zg[3]), rg[8], zg[8]))
+                throw Exception("H1Henrotte: quad centre off the corner average at r0="
+                                + std::to_string(rg[0]) + " z0=" + std::to_string(zg[0])
+                                + " with straight edges");
             if (moved)   // keep the centre consistent with the edges (bilinear blend)
                 s[8] = 0.5 * (s[4] + s[5] + s[6] + s[7]) - 0.25 * (s[0] + s[1] + s[2] + s[3]);
         }
@@ -294,7 +346,128 @@ public:
             G::NodeRef(k, xi, eta);
             check(xi, eta);
         }
+        // Curved elements: the target map (r, z) -> (s_t, z_t) must keep the
+        // orientation; det d(s_t, z_t)/d(r, z) / (2 r) > 0 at every quadrature point.
+        if (has_curved)
+            Quadrature([&](double xi, double eta, double) {
+                TargetPoint tp;
+                Target(xi, eta, tp);
+                const double d = tp.sr * tp.zz - tp.sz * tp.zr;
+                if (!(d > 1e-6))
+                    throw Exception("H1Henrotte: curved element too strongly curved for the"
+                                    " (s, z) target map at r0=" + std::to_string(rg[0])
+                                    + " z0=" + std::to_string(zg[0]));
+            });
     }
+
+    // Quadratic Lagrange along an edge at parameter t (nodes t = 0, 1, 1/2).
+    static double EdgeQuad(double t, double fa, double fb, double fm)
+    {
+        return (1.0 - t) * (1.0 - 2.0 * t) * fa + t * (2.0 * t - 1.0) * fb
+               + 4.0 * t * (1.0 - t) * fm;
+    }
+    static double EdgeQuadD(double t, double fa, double fb, double fm)
+    {
+        return (4.0 * t - 3.0) * fa + (4.0 * t - 1.0) * fb + (4.0 - 8.0 * t) * fm;
+    }
+
+    // Target point of the basis at a reference point.  s_t = r^2 (1 - Bsum),
+    // Bsum = sum over curved edges e of w_e rho_e(t_e), rho_e(t) = 1 - s_q(t) /
+    // r_e(t)^2 (zero at the edge's nodes), with the edge parameter t_e and a
+    // blend weight w_e that is 1 on edge e and 0 on the other edges (triangle:
+    // w = (l_a + l_b)^2, t = l_b / (l_a + l_b); quad: w = 1 - distance from the
+    // edge, t along it).  z_t = z + sum_k n_k dz_k.  Stored derivatives stay
+    // finite at the axis: sr = s_t,r / (2 r) = (1 - Bsum) - r Bsum_r / 2,
+    // sz = s_t,z, zr = z_t,r / (2 r) (0 at r = 0), zz = z_t,z.
+    struct TargetPoint {
+        double r, z, st, zt;
+        double sr, sz, zr, zz;
+        double det;    // |det d(r, z) / d(ref)|
+    };
+    void Target(double xi, double eta, TargetPoint & tp) const
+    {
+        double rp, zp, J[2][2];
+        MapRZ(xi, eta, rp, zp, J);
+        const double dj = J[0][0] * J[1][1] - J[0][1] * J[1][0];
+        auto phys = [&](double fx, double fy, double & fr, double & fz) {
+            fr = ( fx * J[1][1] - fy * J[1][0]) / dj;
+            fz = (-fx * J[0][1] + fy * J[0][0]) / dj;
+        };
+        double zt = zp, txi = J[1][0], teta = J[1][1];   // z_t and d z_t / d(ref)
+        if (has_target_dz) {
+            double n[G::N], dx[G::N], dy[G::N];
+            G::Eval(xi, eta, n, dx, dy);
+            for (int k = 0; k < G::N; ++k) {
+                zt += n[k] * target_dz[k];
+                txi += dx[k] * target_dz[k];
+                teta += dy[k] * target_dz[k];
+            }
+        }
+        double bs = 0.0, bx = 0.0, by = 0.0;
+        if (has_curved) {
+            for (int e = 0; e < G::NE; ++e) {
+                if (!curved[e] && !curved_axis[e]) continue;
+                const int a = G::EDGE[e][0], b = G::EDGE[e][1], m = G::EDGE[e][2];
+                double t, tx, ty, w, wx, wy;
+                if (G::kTriangle) {
+                    double l[3], lx[3], ly[3];
+                    P1Tri::Eval(xi, eta, l, lx, ly);
+                    const double S = l[a] + l[b];
+                    if (S <= 1e-14) continue;    // opposite vertex: w rho -> 0
+                    const double Sx = lx[a] + lx[b], Sy = ly[a] + ly[b];
+                    t = l[b] / S;
+                    tx = (lx[b] * S - l[b] * Sx) / (S * S);
+                    ty = (ly[b] * S - l[b] * Sy) / (S * S);
+                    w = S * S; wx = 2.0 * S * Sx; wy = 2.0 * S * Sy;
+                } else {
+                    double ax, ay, ex, ey;
+                    G::NodeRef(a, ax, ay); G::NodeRef(b, ex, ey);
+                    const double dxe = ex - ax, dye = ey - ay;     // unit edge direction
+                    const double nx = -dye, ny = dxe;
+                    const double sg = ((0.5 - ax) * nx + (0.5 - ay) * ny) > 0.0 ? 1.0 : -1.0;
+                    t = (xi - ax) * dxe + (eta - ay) * dye; tx = dxe; ty = dye;
+                    w = 1.0 - sg * ((xi - ax) * nx + (eta - ay) * ny);
+                    wx = -sg * nx; wy = -sg * ny;
+                }
+                const double re = EdgeQuad(t, rg[a], rg[b], rg[m]);
+                const double red = EdgeQuadD(t, rg[a], rg[b], rg[m]);
+                if (curved_axis[e]) {
+                    // dz_e(t) = z_a + tau (z_b - z_a) - z(t), tau = (r^2 - s_a)/(s_b - s_a)
+                    const double tau = (re * re - s[a]) / (s[b] - s[a]);
+                    const double taud = 2.0 * re * red / (s[b] - s[a]);
+                    const double dz = zg[a] + tau * (zg[b] - zg[a]) - EdgeQuad(t, zg[a], zg[b], zg[m]);
+                    const double dzd = taud * (zg[b] - zg[a]) - EdgeQuadD(t, zg[a], zg[b], zg[m]);
+                    zt += w * dz;
+                    txi += wx * dz + w * dzd * tx;
+                    teta += wy * dz + w * dzd * ty;
+                    continue;
+                }
+                const double sq = EdgeQuad(t, s[a], s[b], s[m]);
+                const double sqd = EdgeQuadD(t, s[a], s[b], s[m]);
+                const double rho = 1.0 - sq / (re * re);
+                const double rhod = -sqd / (re * re) + 2.0 * sq * red / (re * re * re);
+                bs += w * rho;
+                bx += wx * rho + w * rhod * tx;
+                by += wy * rho + w * rhod * ty;
+            }
+        }
+        double gr, gz, br = 0.0, bz = 0.0;
+        phys(txi, teta, gr, gz);
+        if (has_curved) phys(bx, by, br, bz);
+        tp.r = rp; tp.z = zp; tp.det = std::fabs(dj);
+        tp.st = rp * rp * (1.0 - bs);
+        tp.zt = zt;
+        tp.sr = (1.0 - bs) - 0.5 * rp * br;
+        tp.sz = -rp * rp * bz;
+        // on the axis (within the snap band of VdofFromPsi) psi_zt -> 0 like s,
+        // so psi_zt dz_t/ds -> 0
+        tp.zr = rp * rp > 1e-24 * s_scale ? gr / (2.0 * rp) : 0.0;
+        tp.zz = gz;
+    }
+
+    // Elements whose target map is not (r^2, z) are integrated on the mesh
+    // element through EvalVdof.
+    bool PhysicalTarget() const { return has_target_dz || has_curved; }
 
     double DetAt(double xi, double eta) const
     {
@@ -351,6 +524,15 @@ public:
     void Locate(double st, double zt, double & xi, double & eta) const
     {
         const double xi0 = xi, eta0 = eta;
+        // At least one Newton step: near the axis the reference distance from
+        // the axis edge is O(s) on the (s, z) map but O(r) at the mesh starting
+        // point, whose residual O(r s_scale^0.5) falls below s_tol there; accepting it
+        // would leave an O(1) error in psi_zt dz_t/ds = psi_zt dz_t/dr / (2r).
+        // After one step the error is O(r^2), so that term errs by O(r).
+        // Once within tolerance one more step is taken: the residual of a
+        // quadratically converging step is far below s_tol, and psi_z / r near
+        // the axis would otherwise carry the location error s_tol / r.
+        bool polished = false;
         for (int it = 0; it < 60; ++it) {
             double n[G::N], dx[G::N], dy[G::N];
             G::Eval(xi, eta, n, dx, dy);
@@ -361,8 +543,10 @@ public:
                 c += dx[k] * z[k]; d += dy[k] * z[k];
             }
             const double fs = sp - st, fz = zp - zt;
-            if (std::fabs(fs) <= s_tol && std::fabs(fz) <= z_tol)
-                return;
+            if (it > 0 && std::fabs(fs) <= s_tol && std::fabs(fz) <= z_tol) {
+                if (polished) return;
+                polished = true;
+            }
             const double det = a * d - b * c;
             if (!(std::fabs(det) > 0.0)) break;
             xi  -= ( d * fs - b * fz) / det;
@@ -386,35 +570,22 @@ public:
     void EvalVdof(double xi, double eta, double * nv, double (*dnv)[2],
                   double * rz = nullptr, double * mesh_det = nullptr) const
     {
-        double rp, zp, J[2][2];
-        MapRZ(xi, eta, rp, zp, J);
-        double zt = zp, gr = 0.0, gz = 1.0;      // dz_t/dr, dz_t/dz
-        if (has_target_dz) {
-            double n[G::N], dx[G::N], dy[G::N];
-            G::Eval(xi, eta, n, dx, dy);
-            double txi = J[1][0], teta = J[1][1];   // d z_t / d(ref)
-            for (int k = 0; k < G::N; ++k) {
-                zt += n[k] * target_dz[k];
-                txi += dx[k] * target_dz[k];
-                teta += dy[k] * target_dz[k];
-            }
-            // (gr, gz) = (txi, teta) J^{-1}
-            const double dj = J[0][0] * J[1][1] - J[0][1] * J[1][0];
-            gr = ( txi * J[1][1] - teta * J[1][0]) / dj;
-            gz = (-txi * J[0][1] + teta * J[0][0]) / dj;
-        }
-        if (rz) { rz[0] = rp; rz[1] = zp; }
-        if (mesh_det) *mesh_det = std::fabs(J[0][0] * J[1][1] - J[0][1] * J[1][0]);
+        TargetPoint tp;
+        Target(xi, eta, tp);
+        const double rp = tp.r;
+        if (rz) { rz[0] = tp.r; rz[1] = tp.z; }
+        if (mesh_det) *mesh_det = tp.det;
         double u = xi, v = eta;
-        Locate(rp * rp, zt, u, v);
+        Locate(tp.st, tp.zt, u, v);
         PointData<B> pd;
         AtRef(u, v, pd);
         for (int k = 0; k < B::N; ++k) {
             double dn[2];
-            // psi_r / (2 r) and the physical psi_z; the target radius is exact
-            // (pd.s carries the Newton tolerance, which dominates s near the axis)
-            const double ps = pd.gs[k] + (rp > 0.0 ? pd.gz[k] * gr / (2.0 * rp) : 0.0);
-            const double pz = pd.gz[k] * gz;
+            // psi_r / (2 r) and the physical psi_z through the target map; the
+            // evaluation radius is the mesh radius (pd.s carries the Newton
+            // tolerance, which dominates s near the axis)
+            const double ps = pd.gs[k] * tp.sr + pd.gz[k] * tp.zr;
+            const double pz = pd.gs[k] * tp.sz + pd.gz[k] * tp.zz;
             VdofFromPsi(r[k], rp * rp, s_scale, pd.n[k], ps, pz, nv[k],
                         dnv ? dn : nullptr);
             if (dnv) { dnv[k][0] = dn[0]; dnv[k][1] = dn[1]; }
@@ -422,31 +593,51 @@ public:
     }
 
     // Physical quadrature on the mesh element through EvalVdof, used where the
-    // target map is not (r^2, z) (elements with an oblique axis edge):
+    // target map is not (r^2, z) (an oblique axis edge or curved edges):
     // body(n, dn, r, w) with w including |det| of the mesh map.
     template <typename F>
     void PhysicalQuadrature(F && body) const
     {
-        Quadrature([&](double xi, double eta, double w) {
+        // The target map makes the integrand non-polynomial in the reference
+        // coordinates (the s-matched z shift, the blended edge ratio): the
+        // 16-point rule (8 points leave ~1e-6 relative).
+        auto at = [&](double xi, double eta, double w) {
             double n[B::N], dn[B::N][2], rz[2], det;
             EvalVdof(xi, eta, n, dn, rz, &det);
             body(n, dn, rz[0], w * det);
-        });
+        };
+        Quadrature<16>(at);
     }
 
     // Reference quadrature: body(xi, eta, w).
-    template <typename F>
+    template <int NG = 8, typename F>
     static void Quadrature(F && body)
     {
-        static constexpr int NG = 8;
-        static constexpr double x[NG] = {
+        static_assert(NG == 8 || NG == 16, "Gauss rule with 8 or 16 points");
+        static constexpr double x8[8] = {
             0.01985507175123188, 0.10166676129318664, 0.23723379504183551,
             0.40828267875217508, 0.59171732124782492, 0.76276620495816449,
             0.89833323870681336, 0.98014492824876812 };
-        static constexpr double w[NG] = {
+        static constexpr double w8[8] = {
             0.05061426814518813, 0.11119051722668724, 0.15685332293894364,
             0.18134189168918100, 0.18134189168918100, 0.15685332293894364,
             0.11119051722668724, 0.05061426814518813 };
+        static constexpr double x16[16] = {
+            0.005299532504175031, 0.0277124884633837, 0.06718439880608412,
+            0.1222977958224985, 0.19106187779867811, 0.2709916111713863,
+            0.35919822461037054, 0.4524937450811813, 0.5475062549188188,
+            0.6408017753896295, 0.7290083888286136, 0.8089381222013219,
+            0.8777022041775016, 0.9328156011939159, 0.9722875115366163,
+            0.994700467495825 };
+        static constexpr double w16[16] = {
+            0.013576229705877088, 0.031126761969323728, 0.0475792558412463,
+            0.062314485627767036, 0.07479799440828835, 0.08457825969750132,
+            0.09130170752246182, 0.09472530522753432, 0.09472530522753432,
+            0.09130170752246182, 0.08457825969750132, 0.07479799440828835,
+            0.062314485627767036, 0.0475792558412463, 0.031126761969323728,
+            0.013576229705877088 };
+        const double * x = NG == 8 ? x8 : x16;
+        const double * w = NG == 8 ? w8 : w16;
         for (int i = 0; i < NG; ++i)
             for (int j = 0; j < NG; ++j) {
                 if (G::kTriangle)   // Duffy collapse, weights sum to 1/2
@@ -465,7 +656,7 @@ public:
     void Stiffness(double mu, FlatMatrix<double> elmat) const
     {
         const double two_pi = 6.283185307179586476925;
-        if (has_target_dz) {
+        if (PhysicalTarget()) {
             double K[B::N][B::N] = {};
             PhysicalQuadrature([&](const double * n, const double (*dn)[2], double rp, double w) {
                 double cr[B::N];
@@ -499,7 +690,7 @@ public:
     //      = 2 pi sigma r_i r_j INT psi_i psi_j / (2 s) ds dz
     void SigmaMass(double sigma, FlatMatrix<double> elmat) const
     {
-        if (has_target_dz) {
+        if (PhysicalTarget()) {
             double M[B::N][B::N] = {};
             PhysicalQuadrature([&](const double * n, const double (*)[2], double rp, double w) {
                 for (int i = 0; i < B::N; ++i)

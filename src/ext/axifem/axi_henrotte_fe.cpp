@@ -310,11 +310,23 @@ void AxiHenrotteFE_Edge::CalcVdof(const IntegrationPoint & ip, double * n,
     // NGSolve's ET_SEGM reference has vertex 0 at x = 1 and vertex 1 at x = 0;
     // t runs from vertex 0 (t = 0) to vertex 1 (t = 1).
     const double t = 1.0 - ip(0);
-    const double rp = (1.0 - t) * r0 + t * r1;
+    // Mesh radius along the segment (quadratic through the midpoint: exact for
+    // straight and Curve(2) segments).
+    const double rp = (1.0 - t) * (1.0 - 2.0 * t) * r0 + t * (2.0 * t - 1.0) * r1
+                      + 4.0 * t * (1.0 - t) * rm;
     const double s0 = r0 * r0, s1 = r1 * r1;
-    double sm, zm;
-    const siso::MidKind kind = siso::EdgeMidnode(r0, z0, r1, z1, 0.5 * (r0 + r1),
-                                                 0.5 * (z0 + z1), sm, zm);
+    double sm, zmid;
+    siso::MidKind kind;
+    if (siso::CurvedEdge(r0, z0, r1, z1, rm, zm)
+        && !siso::OnAxisEdgeEnd(r0, r0, r1) && !siso::OnAxisEdgeEnd(r1, r0, r1)) {
+        // the rule of the volume elements: a curved edge off the axis takes the
+        // mesh midpoint, and the volume target of its point at t is the (s, z)
+        // edge point at t; one ending on the axis is s-matched (below)
+        kind = siso::MidKind::Mesh;
+        sm = rm * rm;
+    } else {
+        kind = siso::EdgeMidnode(r0, z0, r1, z1, rm, zm, sm, zmid);
+    }
     // tau: s-matched on an s-midpoint edge (s is linear in tau there), else
     // the segment parameter itself (z is linear in it).
     const double tau = (kind != siso::MidKind::Mesh) ? (rp * rp - s0) / (s1 - s0) : t;
@@ -336,7 +348,9 @@ void AxiHenrotteFE_Edge::CalcVdof(const IntegrationPoint & ip, double * n,
         // psi_s along the edge = (d psi / d tau) / (d s / d tau); only used at
         // the axis, where d s / d tau != 0 because the edge ends on the axis.
         const double ps = ds != 0.0 ? dpsi[k] / ds : 0.0;
-        siso::VdofFromPsi(rn[k], s, s_scale, psi[k], ps, 0.0, n[k], nullptr);
+        // evaluation radius = mesh radius, as in the volume (equal to s on
+        // straight segments)
+        siso::VdofFromPsi(rn[k], rp * rp, s_scale, psi[k], ps, 0.0, n[k], nullptr);
     }
 }
 

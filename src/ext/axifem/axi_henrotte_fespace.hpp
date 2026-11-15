@@ -38,6 +38,13 @@ public:
     }
 
     void Update() override;
+    // Mesh generators place axis nodes at |r| ~ 1e-15 of the mesh extent.
+    // Every coordinate handed to an element is snapped to r = 0 within
+    // axis_tol (1e-12 of the mesh extent), the same tolerance everywhere, so
+    // the axis nodes of all elements and boundary traces agree.  Their basis
+    // is identically zero (N_i = r_i psi_i / r), so their DOFs are UNUSED.
+    double axis_tol = 0.0;
+    double SnapAxis(double r) const { return std::fabs(r) <= axis_tol ? 0.0 : r; }
     // Marks every DOF that no volume element of the current level uses as
     // UNUSED: the reserved centre slot of a P2 triangle and, after
     // mesh.Refine(), the coarse-level edges.  Left free, each is a zero

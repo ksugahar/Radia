@@ -72,10 +72,12 @@ public:
 class AxiHenrotteFE_Edge : public AxiHenrotteBaseFE {
 public:
     double r0, z0, r1, z1;
+    double rm, zm;     // segment midpoint from the element transformation
 
-    AxiHenrotteFE_Edge(int order, double ar0, double az0, double ar1, double az1)
+    AxiHenrotteFE_Edge(int order, double ar0, double az0, double ar1, double az1,
+                       double arm, double azm)
         : AxiHenrotteBaseFE(order == 1 ? 2 : 3, order),
-          r0(ar0), z0(az0), r1(ar1), z1(az1) {}
+          r0(ar0), z0(az0), r1(ar1), z1(az1), rm(arm), zm(azm) {}
 
     ELEMENT_TYPE ElementType() const override { return ET_SEGM; }
     void CalcVdof(const IntegrationPoint & ip, double * n, double (*dn)[2]) const override;

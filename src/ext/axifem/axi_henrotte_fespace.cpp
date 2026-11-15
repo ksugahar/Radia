@@ -158,6 +158,16 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
 
 void AxiHenrotteFESpace::Update() {
     FESpace::Update();
+    {
+        double rmax = 0.0, zmin = 0.0, zmax = 0.0;
+        for (size_t v = 0; v < ma->GetNV(); ++v) {
+            Vec<3> p = ma->GetPoint<3>(v);
+            if (v == 0) { zmin = zmax = p(1); }
+            rmax = std::max(rmax, std::fabs(p(0)));
+            zmin = std::min(zmin, p(1)); zmax = std::max(zmax, p(1));
+        }
+        axis_tol = 1e-12 * std::max(rmax, zmax - zmin);
+    }
     if (axi_order == 1) {
         SetNDof(ma->GetNV());
     } else {
@@ -186,6 +196,18 @@ void AxiHenrotteFESpace::UpdateCouplingDofArray() {
         for (auto d : dnums)
             ctofdof[d] = (size_t(d) < shared) ? INTERFACE_DOF : LOCAL_DOF;
     }
+    // Axis nodes carry no basis: a vertex on the axis, and the midnode of an
+    // edge with both ends on it.
+    const size_t nv = ma->GetNV();
+    for (size_t v = 0; v < nv; ++v)
+        if (SnapAxis(ma->GetPoint<3>(v)(0)) == 0.0) ctofdof[v] = UNUSED_DOF;
+    if (axi_order == 2)
+        for (size_t e = 0; e < ma->GetNEdges(); ++e) {
+            auto pn = ma->GetEdgePNums(e);
+            if (SnapAxis(ma->GetPoint<3>(pn[0])(0)) == 0.0
+                && SnapAxis(ma->GetPoint<3>(pn[1])(0)) == 0.0)
+                ctofdof[nv + e] = UNUSED_DOF;
+        }
 }
 
 void AxiHenrotteFESpace::FinalizeUpdate() {
@@ -210,14 +232,19 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     if (ei.VB() != VOL && ngel.GetType() == ET_SEGM && vertices.Size() == 2) {
         Vec<3> p0 = ma->GetPoint<3>(vertices[0]);
         Vec<3> p1 = ma->GetPoint<3>(vertices[1]);
-        return *new (lh) AxiHenrotteFE_Edge(axi_order, p0(0), p0(1), p1(0), p1(1));
+        // midpoint from the transformation (curved segments after Curve(2))
+        IntegrationPoint ipm(0.5, 0.0, 0.0);
+        auto pm = ma->GetTrafo(ei, lh)(ipm, lh).GetPoint();
+        return *new (lh) AxiHenrotteFE_Edge(axi_order, SnapAxis(p0(0)), p0(1),
+                                            SnapAxis(p1(0)), p1(1),
+                                            SnapAxis(pm(0)), pm(1));
     }
 
     if (axi_order == 2) {
         if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
             if (curved_quad) {
                 // Sample the 9 node positions from the element transformation
-                // (a curved element is refused by the FE), in our Q2 node order: 4 corners (v0-v3),
+                // (curved edges follow the mesh), in our Q2 node order: 4 corners (v0-v3),
                 // then bottom/right/top/left edge midnodes, then the face center.
                 const double xi_refs[9]  = {0,1,1,0, 0.5,1,0.5,0, 0.5};
                 const double eta_refs[9] = {0,0,1,1, 0,0.5,1,0.5, 0.5};
@@ -227,12 +254,15 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                     IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
                     auto & mip = eltrans(ip, lh);
                     auto pt = mip.GetPoint();
-                    rs[k] = pt(0); zs[k] = pt(1);
+                    rs[k] = SnapAxis(pt(0)); zs[k] = pt(1);
                 }
                 return *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
             }
             Vec<3> p[4];
-            for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+            for (int i = 0; i < 4; ++i) {
+                p[i] = ma->GetPoint<3>(vertices[i]);
+                p[i](0) = SnapAxis(p[i](0));
+            }
             auto b = RequireAxisAlignedQuad(p, ei, 2);
         RequireStraightQuad(*ma, ei, lh);
             double r_a = b.r_min, r_b = b.r_max;
@@ -244,7 +274,7 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             // Node order: [v0, v1, v2, m01, m12, m20].
             //
             // The nodes are sampled from the mesh element transformation, so
-            // a curved (Curve > 1) element is detected and refused by the FE.
+            // curved (Curve(2)) edges follow the mesh.
             //
             // NGSolve's reference triangle (verified 2026-05-12 in
             // validation_test/axifem/research/prototypes/test_ngsolve_ref_tri_vertices.py):
@@ -263,7 +293,7 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                 IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
                 auto & mip = eltrans(ip, lh);
                 auto pt = mip.GetPoint();
-                rs[k] = pt(0);
+                rs[k] = SnapAxis(pt(0));
                 zs[k] = pt(1);
             }
             return *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
@@ -274,7 +304,10 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     // axi_order == 1 path
     if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
         Vec<3> p[4];
-        for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+        for (int i = 0; i < 4; ++i) {
+            p[i] = ma->GetPoint<3>(vertices[i]);
+            p[i](0) = SnapAxis(p[i](0));
+        }
         auto b = RequireAxisAlignedQuad(p, ei, 1);
         RequireStraightQuad(*ma, ei, lh);
         double r_a = b.r_min, r_b = b.r_max;
@@ -292,7 +325,7 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
             auto & mip = eltrans(ip, lh);
             auto pt = mip.GetPoint();
-            rs[k] = pt(0);
+            rs[k] = SnapAxis(pt(0));
             zs[k] = pt(1);
         }
         return *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
@@ -482,7 +515,7 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
           "Construct an AxiHenrotteFESpace for the given mesh.\n"
           "  order=1 (default): Q1 quad / P1 triangle, vertex DOFs only.\n"
           "  order=2          : Q2 axis-aligned quad (9 DOFs) or P2 triangle\n"
-          "                     (6 DOFs); straight elements only (mesh.Curve(1)).");
+          "                     (6 DOFs); straight or Curve(2) elements, curved edges off the axis.");
 }
 
 }  // namespace axifem
