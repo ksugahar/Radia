@@ -38,10 +38,14 @@
 // fraction u from the axis end; the boundary trace uses the same rule), which
 // lies (u - u^2) (z_off - z_axis) below in z; that shift times the edge's
 // midnode function (zero on every other edge and on the axis) is added to the
-// mesh z.  The (s, z) map is inverted at the target by Newton's method.  For
-// every element without an oblique axis edge the target is the mesh point
-// itself: values and gradients are those of the discrete field at the
-// physical point.
+// mesh z.  The (s, z) map is inverted at the target by Newton's method.  The
+// basis on the mesh element is psi(Phi(r, z)) with this target map Phi; the
+// map is the same from both sides of every edge, so the space stays conforming
+// and the boundary trace equals the volume value.  The physical gradient is
+// taken through Phi (chain rule), so it is the derivative of the value, and an
+// element whose Phi is not (r^2, z) assembles its stiffness and mass by
+// quadrature on the mesh element through the same evaluator.  Elsewhere Phi =
+// (r^2, z) and the (s, z) quadrature is the same integral.
 
 #ifndef RADIA_AXIFEM_AXI_HENROTTE_SISO_HPP
 #define RADIA_AXIFEM_AXI_HENROTTE_SISO_HPP
@@ -373,28 +377,61 @@ public:
 
     // V-DOF basis N_i and its physical (r, z) gradient at an NGSolve reference
     // point (see the file comment for the evaluation target).
-    void EvalVdof(double xi, double eta, double * nv, double (*dnv)[2]) const
+    //
+    // The basis on the mesh element is psi_i(Phi(r, z)) with the target map
+    // Phi(r, z) = (r^2, z_t), z_t = z + sum_k n_k dz_k; its physical gradient is
+    // taken through Phi (chain rule), so it is the derivative of the value:
+    //   psi_r = 2 r psi_s + psi_zt dz_t/dr,   psi_z = psi_zt dz_t/dz.
+    // Optionally returns the mesh point and |det d(r,z)/d(ref)|.
+    void EvalVdof(double xi, double eta, double * nv, double (*dnv)[2],
+                  double * rz = nullptr, double * mesh_det = nullptr) const
     {
         double rp, zp, J[2][2];
         MapRZ(xi, eta, rp, zp, J);
-        double zt = zp;
+        double zt = zp, gr = 0.0, gz = 1.0;      // dz_t/dr, dz_t/dz
         if (has_target_dz) {
             double n[G::N], dx[G::N], dy[G::N];
             G::Eval(xi, eta, n, dx, dy);
-            for (int k = 0; k < G::N; ++k) zt += n[k] * target_dz[k];
+            double txi = J[1][0], teta = J[1][1];   // d z_t / d(ref)
+            for (int k = 0; k < G::N; ++k) {
+                zt += n[k] * target_dz[k];
+                txi += dx[k] * target_dz[k];
+                teta += dy[k] * target_dz[k];
+            }
+            // (gr, gz) = (txi, teta) J^{-1}
+            const double dj = J[0][0] * J[1][1] - J[0][1] * J[1][0];
+            gr = ( txi * J[1][1] - teta * J[1][0]) / dj;
+            gz = (-txi * J[0][1] + teta * J[0][0]) / dj;
         }
+        if (rz) { rz[0] = rp; rz[1] = zp; }
+        if (mesh_det) *mesh_det = std::fabs(J[0][0] * J[1][1] - J[0][1] * J[1][0]);
         double u = xi, v = eta;
         Locate(rp * rp, zt, u, v);
         PointData<B> pd;
         AtRef(u, v, pd);
         for (int k = 0; k < B::N; ++k) {
             double dn[2];
-            // the target radius is exact; pd.s carries the Newton tolerance,
-            // which dominates s itself near the axis
-            VdofFromPsi(r[k], rp * rp, s_scale, pd.n[k], pd.gs[k], pd.gz[k], nv[k],
+            // psi_r / (2 r) and the physical psi_z; the target radius is exact
+            // (pd.s carries the Newton tolerance, which dominates s near the axis)
+            const double ps = pd.gs[k] + (rp > 0.0 ? pd.gz[k] * gr / (2.0 * rp) : 0.0);
+            const double pz = pd.gz[k] * gz;
+            VdofFromPsi(r[k], rp * rp, s_scale, pd.n[k], ps, pz, nv[k],
                         dnv ? dn : nullptr);
             if (dnv) { dnv[k][0] = dn[0]; dnv[k][1] = dn[1]; }
         }
+    }
+
+    // Physical quadrature on the mesh element through EvalVdof, used where the
+    // target map is not (r^2, z) (elements with an oblique axis edge):
+    // body(n, dn, r, w) with w including |det| of the mesh map.
+    template <typename F>
+    void PhysicalQuadrature(F && body) const
+    {
+        Quadrature([&](double xi, double eta, double w) {
+            double n[B::N], dn[B::N][2], rz[2], det;
+            EvalVdof(xi, eta, n, dn, rz, &det);
+            body(n, dn, rz[0], w * det);
+        });
     }
 
     // Reference quadrature: body(xi, eta, w).
@@ -421,8 +458,27 @@ public:
 
     // K_ij = (2 pi / mu) INT grad N_i . grad N_j r dr dz with N_i = r_i psi_i / r
     //      = (2 pi / mu) r_i r_j INT (2 psi_i,s psi_j,s + psi_i,z psi_j,z / (2 s)) ds dz
+    //
+    // Where the target map is (r^2, z) both forms are the same integral; an
+    // element with an oblique axis edge is integrated in (r, z) through EvalVdof
+    // instead, so the matrix is the form of the evaluated basis.
     void Stiffness(double mu, FlatMatrix<double> elmat) const
     {
+        const double two_pi = 6.283185307179586476925;
+        if (has_target_dz) {
+            double K[B::N][B::N] = {};
+            PhysicalQuadrature([&](const double * n, const double (*dn)[2], double rp, double w) {
+                double cr[B::N];
+                for (int i = 0; i < B::N; ++i) cr[i] = dn[i][0] + n[i] / rp;
+                for (int i = 0; i < B::N; ++i)
+                    for (int j = 0; j < B::N; ++j)
+                        K[i][j] += w * rp * (dn[i][1] * dn[j][1] + cr[i] * cr[j]);
+            });
+            for (int i = 0; i < B::N; ++i)
+                for (int j = 0; j < B::N; ++j)
+                    elmat(i, j) = two_pi / mu * 0.5 * (K[i][j] + K[j][i]);
+            return;
+        }
         double K[B::N][B::N] = {};
         Quadrature([&](double xi, double eta, double w) {
             PointData<B> pd;
@@ -434,7 +490,6 @@ public:
                     K[i][j] += f * (2.0 * pd.gs[i] * pd.gs[j]
                                     + pd.gz[i] * pd.gz[j] / (2.0 * pd.s));
         });
-        const double two_pi = 6.283185307179586476925;
         for (int i = 0; i < B::N; ++i)
             for (int j = 0; j < B::N; ++j)
                 elmat(i, j) = two_pi / mu * r[i] * r[j] * 0.5 * (K[i][j] + K[j][i]);
@@ -444,6 +499,19 @@ public:
     //      = 2 pi sigma r_i r_j INT psi_i psi_j / (2 s) ds dz
     void SigmaMass(double sigma, FlatMatrix<double> elmat) const
     {
+        if (has_target_dz) {
+            double M[B::N][B::N] = {};
+            PhysicalQuadrature([&](const double * n, const double (*)[2], double rp, double w) {
+                for (int i = 0; i < B::N; ++i)
+                    for (int j = 0; j < B::N; ++j)
+                        M[i][j] += w * rp * n[i] * n[j];
+            });
+            const double two_pi_sigma = 6.283185307179586476925 * sigma;
+            for (int i = 0; i < B::N; ++i)
+                for (int j = 0; j < B::N; ++j)
+                    elmat(i, j) = two_pi_sigma * 0.5 * (M[i][j] + M[j][i]);
+            return;
+        }
         double M[B::N][B::N] = {};
         Quadrature([&](double xi, double eta, double w) {
             PointData<B> pd;

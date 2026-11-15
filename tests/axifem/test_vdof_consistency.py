@@ -16,10 +16,12 @@ Guards:
     vertical, oblique and axis-connected boundary edges.
   * The axis limit of the basis: A_phi -> 0 linearly in r, dA/dr finite and
     continuous, dA/dz -> 0, no NaN at r = 0.
-Assumes: straight elements.  Elements with an oblique edge ending on the axis
-occupy the (s, z) region of their element map, not the mesh triangle, so they
-are excluded from the symbolic-form equality (they are covered by the trace
-tests).
+  * The evaluated gradient is the derivative of the evaluated value: ``grad``
+    equals central finite differences of the value at interior points, also on
+    elements with an oblique edge ending on the axis, whose target map shifts z
+    (the counterexample triangle (0,0), (1,0), (1,1) gave (-1/3, 5/3) for the
+    true (0, 1) before the chain rule through that shift).
+Assumes: straight elements.
 """
 import math
 import os
@@ -90,6 +92,12 @@ MATRIX_CASES = {
     "q1_axis": (lambda: _rect_quad_mesh(0.0), 1, False),
     "q2aa_axis": (lambda: _rect_quad_mesh(0.0), 2, False),
     "q2_general_axis": (lambda: _rect_quad_mesh(0.0), 2, True),
+    # oblique edges ending on the axis (target map with a z shift)
+    "p1_oblique_axis_triangle": (lambda: _mesh([(0, 0), (1, 0), (1, 1)], [(0, 1, 2)]), 1, False),
+    "p2_oblique_axis_triangle": (lambda: _mesh([(0, 0), (1, 0), (1, 1)], [(0, 1, 2)]), 2, False),
+    "p1_axis_triangles": (lambda: _boundary_mesh_triangles(), 1, False),
+    "p2_axis_triangles": (lambda: _boundary_mesh_triangles(), 2, False),
+    "q2_general_skew_axis": (lambda: _skew_quad_mesh(0.0), 2, True),
 }
 
 
@@ -222,3 +230,48 @@ def test_axis_limit_of_the_basis(name, factory, order, curvedquad):
                 f"{name}: dA/dr = {g[0]:.9e} at r = {r:g}, axis value {g0[0]:.9e}")
             assert abs(g[1]) <= 1e-1 * scale * (r / 1e-3) + 1e-12 * scale, (
                 f"{name}: dA/dz = {g[1]:.3e} at r = {r:g}, expected -> 0")
+
+
+FD_CASES = [
+    ("p1_oblique_axis_triangle", 1, False),
+    ("p2_oblique_axis_triangle", 2, False),
+    ("p1_axis_triangles", 1, False),
+    ("p2_axis_triangles", 2, False),
+    ("q2_general_skew_axis", 2, True),
+    ("p2_off_axis", 2, False),
+]
+FD_RTOL = 1.0e-6
+
+
+@pytest.mark.parametrize("name,order,curvedquad", FD_CASES, ids=[c[0] for c in FD_CASES])
+def test_gradient_is_the_derivative_of_the_value(name, order, curvedquad):
+    """ng.grad equals central differences of the value, every DOF, interior points."""
+    mesh = MATRIX_CASES[name][0]()
+    fes = H1Henrotte(mesh, order=order, curvedquad=curvedquad)
+    gf = ng.GridFunction(fes)
+    probes = []
+    for el in mesh.Elements(ng.VOL):
+        pts = np.array([mesh[v].point for v in el.vertices])
+        c = pts.mean(axis=0)
+        for w in (0.0, 0.5):           # centroid, and halfway to the first vertex
+            probes.append(c + w * (pts[0] - c))
+    worst = 0.0
+    for dof in range(fes.ndof):
+        if not fes.FreeDofs()[dof] and fes.CouplingType(dof) == ng.COUPLING_TYPE.UNUSED_DOF:
+            continue
+        gf.vec[:] = 0.0
+        gf.vec[dof] = 1.0
+        grad = ng.grad(gf)
+        for r, z in probes:
+            h = 1e-6 * max(1.0, abs(r))
+            val = lambda a, b: gf(mesh(a, b))
+            fd = np.array([(val(r + h, z) - val(r - h, z)) / (2 * h),
+                           (val(r, z + h) - val(r, z - h)) / (2 * h)])
+            g = np.array(grad(mesh(r, z)))
+            scale = max(1.0, float(np.linalg.norm(fd)))
+            err = float(np.linalg.norm(g - fd)) / scale
+            worst = max(worst, err)
+            assert err <= FD_RTOL, (
+                f"{name} dof {dof} at ({r:.4f}, {z:.4f}): grad {g.tolist()} vs "
+                f"finite difference {fd.tolist()} (relative {err:.2e}, expected <= {FD_RTOL:.0e})")
+    assert worst <= FD_RTOL

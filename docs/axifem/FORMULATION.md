@@ -308,7 +308,16 @@ element and in the boundary trace: an edge that is horizontal
 midpoint.  The DOF of an axis-edge midnode is therefore `A_φ` at
 `r = sqrt((r_a² + r_b²)/2)`, not at the chord midpoint.  On an oblique
 axis edge the `z` of that node moves along the edge so that the node
-stays on the straight `(r, z)` edge.  The boundary trace
+stays on the straight `(r, z)` edge.  An element with such an edge
+evaluates `ψ` at the target point `(r², z_t)`, where `z_t` is `z` plus the
+same edge-wise shift that moves those nodes; the shift is shared by both
+neighbours of every edge, so the space stays conforming.  The gradient
+goes through that map: with `g = ∇z_t`,
+`∂ψ/∂r = ψ_s 2r + ψ_z g_r` and `∂ψ/∂z = ψ_z g_z`, and `K`, `M` of these
+elements are integrated by quadrature on the mesh element through the
+same evaluator, so the value, the gradient and the matrices describe one
+field (`test_vdof_consistency.py` checks the gradient against central
+finite differences of the value).  The boundary trace
 (`AxiHenrotteFE_Edge`) evaluates `N_i` along the edge with the same rule,
 so the trace equals the volume value on the edge
 (`test_vdof_consistency.py`, `test_edge_trace_conformity.py`).
