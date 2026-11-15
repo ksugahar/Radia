@@ -602,6 +602,7 @@ pybind11_add_module(peec_matrices
 	${PEEC_MATRICES_API_SOURCE}
 	${CORE_DIR}/rad_peec_matrices.cpp
 	${CORE_DIR}/rad_peec_volume.cpp
+	${CORE_DIR}/rad_peec_axisym.cpp
 )
 
 # Add include directories
@@ -945,6 +946,6 @@ message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
 
 # Equation editing and document output belong to the independent EqnEdit64 product.
 
-# Preserve finite-volume Gaussian tail cancellation checks under optimized builds.
-set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp PROPERTIES
+# Preserve finite-volume Gaussian tail and axisymmetric near-field subtraction cancellation under optimized builds.
+set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp ${CORE_DIR}/rad_peec_axisym.cpp PROPERTIES
     COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>;$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-fast-math>")

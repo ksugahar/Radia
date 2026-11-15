@@ -14,6 +14,8 @@
 #include <pybind11/complex.h>
 
 #include "rad_peec_matrices.h"
+#include "rad_peec_axisym.h"
+#include "rad_parallel.h"
 
 namespace py = pybind11;
 
@@ -1629,5 +1631,99 @@ Example:
 
           Returns:
               Tuple (L, R, P, M_LS)
+          )doc");
+
+    // ------------------------------------------------------------------
+    // Axisymmetric volume PEEC of a revolved section (rad_peec_axisym.h)
+    // ------------------------------------------------------------------
+    m.def("axisym_ring_inductance",
+          [](py::array_t<double, py::array::c_style | py::array::forcecast> points,
+             py::array_t<int, py::array::c_style | py::array::forcecast> triangles,
+             double near_factor, double moderate_factor) {
+              if (points.ndim() != 2 || points.shape(1) != 2)
+                  throw std::invalid_argument("points must have shape (n, 2)");
+              if (triangles.ndim() != 2 || triangles.shape(1) != 3)
+                  throw std::invalid_argument("triangles must have shape (m, 3)");
+              peec_axisym::RingSection sec;
+              sec.points = points.data();
+              sec.n_points = static_cast<std::size_t>(points.shape(0));
+              sec.triangles = triangles.data();
+              sec.n_tri = static_cast<std::size_t>(triangles.shape(0));
+              peec_axisym::RingInductance L;
+              {
+                  py::gil_scoped_release release;
+                  L = peec_axisym::AssembleRingInductance(sec, near_factor, moderate_factor);
+              }
+              const auto n = static_cast<py::ssize_t>(L.n);
+              py::array_t<double> M({n, n});
+              std::copy(L.M.begin(), L.M.end(), M.mutable_data());
+              py::array_t<double> area(n);
+              std::copy(L.area.begin(), L.area.end(), area.mutable_data());
+              py::array_t<double> centroid({n, static_cast<py::ssize_t>(2)});
+              std::copy(L.centroid.begin(), L.centroid.end(), centroid.mutable_data());
+              return py::make_tuple(M, area, centroid);
+          },
+          py::arg("points"), py::arg("triangles"), py::arg("near_factor") = 3.0,
+          py::arg("moderate_factor") = 10.0,
+          R"doc(
+          Galerkin P0 ring partial inductance of meridian triangles.
+
+          Args:
+              points: (n, 2) meridian points (r, z) [m], r > 0
+              triangles: (m, 3) zero-based point indices
+              near_factor, moderate_factor: pair classes by centroid distance
+                  relative to the sum of sizes sqrt(2 A)
+
+          Returns:
+              (M, area, centroid): M (m, m) symmetric [H], area (m,) [m^2],
+              centroid (m, 2) [m].  Rows run in parallel under a caller-owned
+              ngsolve.TaskManager.
+          )doc");
+
+    m.def("axisym_ring_loop_solve",
+          [](py::array_t<double, py::array::c_style | py::array::forcecast> M,
+             py::array_t<double, py::array::c_style | py::array::forcecast> area,
+             py::array_t<double, py::array::c_style | py::array::forcecast> centroid,
+             double frequency_hz, double sigma) {
+              if (M.ndim() != 2 || M.shape(0) != M.shape(1))
+                  throw std::invalid_argument("M must be square");
+              const auto n = static_cast<std::size_t>(M.shape(0));
+              if (area.ndim() != 1 || static_cast<std::size_t>(area.shape(0)) != n
+                  || centroid.ndim() != 2 || static_cast<std::size_t>(centroid.shape(0)) != n
+                  || centroid.shape(1) != 2)
+                  throw std::invalid_argument("area (m,) and centroid (m, 2) must match M");
+              peec_axisym::RingInductance L;
+              L.n = n;
+              L.M.assign(M.data(), M.data() + n * n);
+              L.area.assign(area.data(), area.data() + n);
+              L.centroid.assign(centroid.data(), centroid.data() + 2 * n);
+              peec_axisym::RingSolution sol;
+              {
+                  py::gil_scoped_release release;
+                  SuspendTaskManager suspended_workers;   // LAPACK owns the threads of the dense solve
+                  sol = peec_axisym::SolveLoopVoltage(L, frequency_hz, sigma);
+              }
+              const auto sn = static_cast<py::ssize_t>(n);
+              py::array_t<std::complex<double>> current(sn);
+              std::copy(sol.current.begin(), sol.current.end(), current.mutable_data());
+              py::array_t<double> resistance(sn), loss(sn);
+              std::copy(sol.resistance.begin(), sol.resistance.end(), resistance.mutable_data());
+              std::copy(sol.cell_loss.begin(), sol.cell_loss.end(), loss.mutable_data());
+              py::dict out;
+              out["impedance"] = sol.impedance;
+              out["current"] = current;
+              out["resistance"] = resistance;
+              out["cell_loss"] = loss;
+              out["true_relative_residual"] = sol.true_relative_residual;
+              return out;
+          },
+          py::arg("M"), py::arg("area"), py::arg("centroid"), py::arg("frequency_hz"), py::arg("sigma"),
+          R"doc(
+          Loop-voltage solve (R + j omega M) I = 1 of the ring circuit.
+
+          Returns a dict: impedance (V/I_total), current (ring currents at
+          V = 1), resistance R_k = 2 pi r_k / (sigma A_k), cell_loss (time-average
+          loss per 1 A peak terminal current) and true_relative_residual
+          (raises above 1e-6).
           )doc");
 }
