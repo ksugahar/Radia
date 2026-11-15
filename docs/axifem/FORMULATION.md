@@ -299,7 +299,12 @@ assembles both sides on axis-aligned, general and oblique-edge meshes
 and requires agreement to `1e-6`.  Near the axis
 (`s <= 1e-8 s_scale`) the basis is evaluated in its limit form
 `N = r_i ψ_s r`, `∂N/∂r = r_i ψ_s`, so `A_φ` and `∂A_φ/∂r` stay finite
-and `A_φ = 0` on the axis.
+and `A_φ = 0` on the axis.  Within `r <= 1e-12` of the element radius
+(the round-off band of mesh generators' axis nodes) `A_φ = 0` and
+`∂A_φ/∂z = 0`.  The `(s, z)` map is inverted by Newton's method with at
+least one step and one step past the tolerance: near the axis the mesh
+reference point sits `O(r)` from the axis edge while the `(s, z)` point sits
+`O(r^2)`, and `ψ_z ∂z_t/∂r / (2r)` would carry that difference.
 
 **Edge midnodes.**  One rule places every edge midnode, in the volume
 element and in the boundary trace: an edge that is horizontal
@@ -322,11 +327,31 @@ finite differences of the value).  The boundary trace
 so the trace equals the volume value on the edge
 (`test_vdof_consistency.py`, `test_edge_trace_conformity.py`).
 
-**Admission.**  The s-isoparametric elements accept straight elements
-only (`mesh.Curve(1)`): every midnode must lie on its chord within
-`1e-10` of the edge length and the quad centre at the corner average.
-The `(s, z)` map must keep the mesh orientation at every quadrature
-point and node; a folded or degenerate map raises.  The axis-aligned
+**Curved edges.**  An edge whose mesh midnode lies off its chord by more
+than `1e-10` of the edge length (`mesh.Curve(2)`) is curved.  Off the axis
+it takes the mesh midpoint, and along it `(r(t)^2, z(t))` is quartic in `s`
+while the `(s, z)` edge is the quadratic `s_q(t)` through the same nodes; the
+target `s` is therefore `r^2 (1 - sum_e w_e rho_e(t_e))` with the edge ratio
+`rho_e(t) = 1 - s_q(t) / r_e(t)^2` (zero at the edge's nodes) and a blend
+weight `w_e` that is 1 on edge `e` and 0 on the other edges (triangle:
+`w = (lambda_a + lambda_b)^2`, `t = lambda_b / (lambda_a + lambda_b)`; quad:
+`w = 1 -` distance from the edge in reference coordinates).  A curved edge
+point at `t` thus maps to the `(s, z)` edge point at `t` from both
+neighbours and from the boundary trace.  A curved edge with one end on the
+axis keeps the `s`-midpoint and a straight `(s, z)` edge matched through `s`
+(`tau = (r(t)^2 - s_a) / (s_b - s_a)`); the target `z` takes the blended
+shift `dz_e = z_a + tau (z_b - z_a) - z(t)`.  The gradient goes through the
+chain rule of the target map.
+
+**Admission.**  Midnodes of straight edges lie on the chord within `1e-10`
+of the edge length and, with straight edges, the quad centre at the corner
+average.  A curved edge with both ends on the axis, a curved edge reaching
+`r <= 0` inside it, and a curved axis edge along which `r^2` is not
+monotone are refused.  The `(s, z)` map must keep the mesh orientation at
+every quadrature point and node, and the target map must keep it at every
+quadrature point; a folded or degenerate map raises.  Nodes within
+`1e-12` of the mesh extent from the axis are placed on it, and their DOFs
+(the basis vanishes there) are unused.  The axis-aligned
 closed-form quads additionally require the vertex order
 `(r_min, z_min), (r_max, z_min), (r_max, z_max), (r_min, z_max)`.
 
@@ -382,8 +407,9 @@ elements:
   and axis edges); a straight edge is reproduced exactly because `s` is
   quadratic and `z` linear in the edge parameter, and the `s`-midpoint on
   axis edges keeps the `(s, z)` map regular and `ψ ~ s` at the axis.
-  Curved elements (`mesh.Curve(p)`, `p > 1`) are refused.  Stiffness and
-  sigma mass are integrated over the
+  Elements with curved edges or an oblique axis edge are integrated on the
+  mesh element through the evaluated basis with a 16-point Gauss rule per
+  direction; the others' stiffness and sigma mass are integrated over the
   reference element through the `(s, z)` map
   (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`).
 - `AxiHenrotteFE_P1_Triangle` uses the linear Lagrange basis on the same

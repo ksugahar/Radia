@@ -41,26 +41,29 @@ outputs present the checked evidence stored under
 record captures the `radia` runtime version, execution date, pytest output,
 and an evidence matrix for the paths shipped when it was executed (P1, Q1,
 P2, Q2, P2 curved, Q2 curved).  That record predates the V-DOF convention
-unification: curved elements are now refused and P1 is out of the order gate,
-so the notebook is stale until it is re-executed.
+unification and the curved-edge target map that replaced the earlier curved
+elements, and P1 is out of the order gate, so the notebook is stale until it
+is re-executed.
 
 ### Implementation support matrix
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
 |--------------|-----------|------------------|------------|--------|
-| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; linear basis on the quadratic `(s, z)` map; out of the order gate until requalified |
-| Triangle P2 | `order=2` | straight triangle | 3 vertex + 3 edge | shipping; s-isoparametric, edge midnodes by the shared midnode rule |
+| Triangle P1 | `order=1` | straight or `Curve(2)` triangle | 3 vertex | shipping; linear basis on the quadratic `(s, z)` map; out of the order gate until requalified |
+| Triangle P2 | `order=2` | straight or `Curve(2)` triangle | 3 vertex + 3 edge | shipping; s-isoparametric, edge midnodes by the shared midnode rule |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
-| Quad Q2 general | `order=2, curvedquad=True` | any straight quad (skewed, trapezoidal, any vertex order) | 9 | shipping opt-in; s-isoparametric with quadrature BFI |
+| Quad Q2 general | `order=2, curvedquad=True` | any straight or `Curve(2)` quad (skewed, trapezoidal, any vertex order) | 9 | shipping opt-in; s-isoparametric with quadrature BFI |
 
 `H1Henrotte(mesh, order=2)` dispatches by element type: triangles get the
 P2 path, quads the closed-form axis-aligned Q2 path, which refuses a quad
 that is not a rectangle in `(r, z)` with vertex order `(r_min, z_min),
 (r_max, z_min), (r_max, z_max), (r_min, z_max)`.  Pass `curvedquad=True`
-for skewed or otherwise general straight quads.  All paths require a
-straight mesh (`mesh.Curve(1)`); a curved element (`Curve(p)`, `p > 1`) or a
-folded `(s, z)` map raises.  Every evaluator (volume value, gradient,
+for skewed, general or curved quads.  The triangle and general Q2 paths
+accept `Curve(2)` elements (FORMULATION.md § 6, curved edges); the
+axis-aligned Q1/Q2 paths require straight rectangles.  A curved edge lying
+on the axis, a curved edge reaching `r <= 0` or turning back in `r` on the
+axis, and a folded `(s, z)` or target map raise.  Every evaluator (volume value, gradient,
 boundary trace) and both native integrators use one `A_φ` basis
 `N_i = r_i ψ_i / r`; see FORMULATION.md § 6.
 

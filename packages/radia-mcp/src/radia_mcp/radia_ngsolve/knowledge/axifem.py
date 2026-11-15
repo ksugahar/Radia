@@ -6,8 +6,8 @@ radia-core axifem knowledge base for the Radia + NGSolve MCP server.
 NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
 with DOFs and every evaluator in `A_φ`: the basis is `N_i = r_i ψ_i / r`.
 It ships P1/P2 triangles, Q1/Q2 axis-aligned quads and opt-in general
-straight Q2 quads via `H1Henrotte(mesh, order=2, curvedquad=True)`, all on
-straight meshes (`mesh.Curve(1)`). On the Cu-disk eddy-current
+Q2 quads via `H1Henrotte(mesh, order=2, curvedquad=True)`; triangles and
+general quads accept `mesh.Curve(2)`. On the Cu-disk eddy-current
 benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
 DOFs than NGSolve `H1 order=3`.
 
@@ -44,8 +44,9 @@ Lagrange basis on a Lagrange map to `(s = r^2, z)`), so they are conforming on
 oblique edges, with each other and themselves.  The P1 triangle uses the
 linear Lagrange basis on the same quadratic `(s, z)` map: conforming on
 oblique edges, but it no longer reproduces the uniform field `ψ = s` and is
-out of the order gate until requalified.  Curved elements (`Curve(p)`,
-`p > 1`) and folded `(s, z)` maps are refused.
+out of the order gate until requalified.  Curved (`Curve(2)`) edges use a
+target map that sends a curved edge point to the same `(s, z)` edge point
+from both sides; folded `(s, z)` or target maps are refused.
 
 Every evaluator -- volume value, physical gradient, boundary trace -- and both
 native integrators use the one `A_φ` basis `N_i = r_i ψ_i / r` (nodal `A_φ`
@@ -103,10 +104,11 @@ type.  `H1Henrotte(mesh, order=2)` returns P2 triangles or Q2 quads by mesh
 element type.
 
 Important boundary:
-All paths require straight elements; `mesh.Curve(p)` with `p > 1` raises.
-The closed-form quads also require a rectangle in `(r, z)` with vertex order
+Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a curved edge
+lying on the axis raises.  The closed-form quads require a straight rectangle
+in `(r, z)` with vertex order
 `(r_min, z_min), (r_max, z_min), (r_max, z_max), (r_min, z_max)`; pass
-`curvedquad=True` for any other straight quad.
+`curvedquad=True` for any other quad.
 
 This matrix describes the electromagnetic `A_phi` space.  Axisymmetric heat
 uses standard `ngsolve.H1(mesh, order=2)` with the `2*pi*r` weak-form weight:
@@ -310,7 +312,8 @@ DOFs are 3 vertices + 3 edge midnodes.  The production C++ FESpace takes the
 corners from NGSolve's element transformation and places the midnodes by the
 shared rule (`s`-midpoint on horizontal and axis edges, mesh midpoint
 otherwise).  The stiffness, sigma-mass, value, gradient and trace evaluators
-all use the same 6-node `(s, z)` map.  Curved elements are refused.
+all use the same 6-node `(s, z)` map; curved edges add the target map of
+`curved_geometry`.
 
 ## Q2 quad (9 DOFs / straight axis-aligned quad)
 
@@ -394,18 +397,22 @@ biquadratic map.
 AXIFEM_CURVED_GEOMETRY = """\
 # Curved-geometry support
 
-## Curved elements are refused
+## Curved (`Curve(2)`) elements
 
-Every Henrotte element requires straight elements: `mesh.Curve(1)`, every
-midnode on its chord within `1e-10` of the edge length, the quad centre at the
-corner average.  A curved element (`mesh.Curve(p)`, `p > 1`) raises
-`... curved element ...; only straight elements are supported`, and an
-`(s, z)` map that folds or degenerates raises as well.  Curved support was
-removed with the V-DOF convention unification: a curved `(r, z)` edge has no
-single `(s, z)` image shared by the two neighbours under the midnode rule, so
-it could not be both conforming and consistent with the boundary trace.
-Model curved boundaries (spheres, Kelvin half-discs, OCC regions) with
-straight P2 triangles and enough boundary refinement.
+P1/P2 triangles and `curvedquad=True` Q2 quads accept `mesh.Curve(2)`.  A
+curved `(r, z)` edge off the axis keeps its mesh midpoint; the target `s` of
+the basis is `r^2 (1 - sum_e w_e rho_e)` with the edge ratio
+`rho_e = 1 - s_q / r_e^2` blended from each curved edge, so a point of a
+curved edge maps to the same `(s, z)` edge point from both neighbours and
+from the boundary trace (conforming, trace equal to the volume value).  A
+curved edge ending on the axis keeps the `s`-midpoint, is matched through
+`s`, and shifts the target `z` instead.  These elements are integrated on the
+mesh element (16-point Gauss rule per direction).  Refused: a curved edge
+lying on the axis, `r <= 0` inside a curved edge, `r^2` turning back along a
+curved axis edge, and folded `(s, z)` or target maps.  Checks:
+`tests/axifem/test_vdof_consistency.py` (matrices, trace, finite differences,
+axis limit), `tests/axifem/test_de_rham_identities.py` and
+`tests/axifem/test_p2_curved_magsta.py` (sphere volume and total flux).
 
 ## Production default: straight quads
 
@@ -506,8 +513,8 @@ intended canonical use:
   | axifem p=2 + Kelvin     | 738.47     | -0.001 %     |
   | + Curve(2) (historical) | 738.69     | +0.028 %     |
 
-  The `Curve(2)` row was recorded before curved elements were refused; the
-  current space raises on `Curve(p)` with `p > 1`.
+  The `Curve(2)` row was recorded with the earlier curved elements and has
+  not been re-measured with the current curved-edge target map.
 
   This is the canonical configuration for sphere/disk/cuboid axisym
   eddy-current decay-time validation -- see `kelvin` topic for the full
@@ -678,7 +685,8 @@ axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
 axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %  (historical)
 ```
 
-The `Curve(2)` line predates the refusal of curved elements.
+The `Curve(2)` line was recorded with the earlier curved elements and has
+not been re-measured with the current curved-edge target map.
 
 Test: `validation_test/axifem/research/prototypes/test_p2_kelvin_sphere.py`.
 
@@ -713,10 +721,12 @@ overload, but the centroid path already hits machine precision on the
 sphere benchmark, so this is low priority.
 
 ### Curved boundaries
-The space refuses curved elements.  The earlier measurement (straight
-0.001 % vs `Curve(2)` 0.028 % on the finer sphere mesh) already showed that
-straight P2 triangles at typical resolution are the better choice; refine the
-boundary rather than curving it.
+`Curve(2)` triangles are accepted (see `curved_geometry`).  The earlier
+measurement (straight 0.001 % vs `Curve(2)` 0.028 % on the finer sphere mesh,
+recorded with the earlier curved elements) found straight P2 triangles at that
+resolution as accurate; the restored curved P2 sphere test shows the curved
+geometry cutting the total-flux error from -4.13 % to -0.12 % on a coarse
+mesh.
 
 A general **Q2 quad** element (biquadratic s-isoparametric map of a straight
 quad) is production C++ behind the explicit `curvedquad=True` flag.  Keep the
