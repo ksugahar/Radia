@@ -238,8 +238,11 @@ def _branch_ring_solver():
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         spec.loader.exec_module(module)
+    from radia import axifem
+    axifem_path = Path(axifem.__file__)
     return sys.modules[name].solve_axisym_ring, dict(
         natives=str(Path(radia.__file__).parent), version=radia.__version__,
+        axifem=str(axifem_path), axifem_sha256=hashlib.sha256(axifem_path.read_bytes()).hexdigest(),
         ring_solver=str(path.relative_to(ROOT)), ring_solver_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
@@ -299,11 +302,24 @@ def mark_whole_mesh(mesh, eta2, theta):
     return flags, int((flags & cond).sum()), int((flags & ~cond).sum())
 
 
+def level_ndof(mesh, order):
+    """DOFs of the reference space on ``mesh``, known before the solve."""
+    from radia.axifem import H1Henrotte
+    return int(H1Henrotte(mesh, order=order, complex=True, dirichlet="axis").ndof)
+
+
 def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, air_mm, air_divisor,
-                      theta, tol, max_ndof, max_levels, deadline):
-    """Refine one (order, exterior) reference adaptively until two successive levels agree within tol."""
+                      theta, tol, max_ndof, max_levels, budget_s, clock=time.time):
+    """Refine one (order, exterior) reference adaptively until two successive levels agree within tol.
+
+    The budget is checked on actual quantities: the deadline before every solve, the DOF count of
+    the next level before it is solved, and the deadline again before a checkpoint may be accepted.
+    A level that finishes past the deadline is kept in the record but cannot converge the sequence.
+    """
     import ngsolve as ng
     from aphi_beak_section_sweep import build_section_ring
+    started = clock()
+    deadline = started + budget_s
     mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=start_maxh, maxh_air_mm=air_mm,
                                                 exterior_factor=factor, air_divisor=air_divisor)
     # A Doerfler step can touch a few percent of the elements, and two such neighbours agree trivially.
@@ -311,18 +327,30 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
     growth_min = 2.0
     rows, checkpoints, stop = [], [], None
     while stop is None:
+        if clock() >= deadline:
+            stop = "budget: deadline"
+            break
+        ndof = level_ndof(mesh, order)
+        if ndof > max_ndof:
+            stop = f"budget: next level {ndof} DOFs above {max_ndof:.6g}"
+            break
         row, res = solve_level(mesh, ext_radius, ext_z, radius_mm, frequency, sigma, order)
+        if row["ndof"] != ndof:
+            raise RuntimeError(f"solved {row['ndof']} DOFs, admitted {ndof}")
         eta2 = zz_indicator(res, order)
         del res
-        row.update(level=len(rows), exterior_factor=factor, indicator=float(math.sqrt(eta2.sum())))
-        is_check = not checkpoints or row["ndof"] >= growth_min*rows[checkpoints[-1]]["ndof"]
+        in_budget = clock() <= deadline
+        row.update(level=len(rows), exterior_factor=factor, indicator=float(math.sqrt(eta2.sum())),
+                   elapsed_s=clock() - started, within_budget=in_budget)
+        is_check = in_budget and (not checkpoints or row["ndof"] >= growth_min*rows[checkpoints[-1]]["ndof"])
         row["checkpoint"] = is_check
         if is_check and checkpoints:
-            prev = rows[checkpoints[-1]]
-            row["change"] = {k: abs(quantities(row)[k] - quantities(prev)[k])/abs(quantities(row)[k])
-                             for k in tol}
+            row["change"] = relative_change(row, rows[checkpoints[-1]], tol)
         rows.append(row)
         print(json.dumps({"phase": "reference", **row}), flush=True)
+        if not in_budget:
+            stop = "budget: deadline"
+            break
         if is_check:
             checkpoints.append(len(rows) - 1)
             if len(checkpoints) >= 2 and all(row["change"][k] <= tol[k] for k in tol):
@@ -333,24 +361,113 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
             break
         flags, n_cond, n_air = mark_whole_mesh(mesh, eta2, theta)
         row.update(marked_conductor=n_cond, marked_air=n_air)
-        ne = mesh.ne
         for el in mesh.Elements(ng.VOL):
             mesh.SetRefinementFlag(el, bool(flags[el.nr]))
         mesh.Refine()
-        growth = mesh.ne/ne
-        if row["ndof"]*growth > max_ndof:
-            stop = f"budget: next level ~{row['ndof']*growth:.3g} DOFs above {max_ndof:.3g}"
-        elif time.time() + 1.5*growth*row["seconds"] > deadline:
-            stop = "budget: deadline"
     return dict(order=order, exterior_factor=factor, start_maxh_mm=start_maxh, air_maxh_mm=air_mm,
                 air_divisor=air_divisor, theta=theta, checkpoint_dof_growth=growth_min,
-                tolerance=tol, max_ndof=max_ndof,
-                max_levels=max_levels, converged=stop == "converged", stop=stop, levels=rows)
+                tolerance=tol, max_ndof=max_ndof, max_levels=max_levels, budget_s=budget_s,
+                elapsed_s=clock() - started, converged=stop == "converged", stop=stop, levels=rows)
+
+
+def relative_change(new, old, keys):
+    """Change of each quantity between two levels, relative to the newer (finer) level."""
+    return {k: abs(quantities(new)[k] - quantities(old)[k])/abs(quantities(new)[k]) for k in keys}
+
+
+def certify_sequence(seq, expected):
+    """Re-derive convergence of a recorded sequence from its levels and the expected settings.
+
+    Returns the reasons the sequence does not qualify (empty when it does).
+    """
+    bad = []
+    for key, want in expected.items():
+        if seq.get(key) != want:
+            bad.append(f"{key} {seq.get(key)!r} != {want!r}")
+    levels = seq.get("levels") or []
+    tol = expected["tolerance"]
+    if seq.get("stop") != "converged" or seq.get("converged") is not True:
+        bad.append(f"stop {seq.get('stop')!r}")
+    if [r.get("level") for r in levels] != list(range(len(levels))):
+        bad.append("levels are not numbered 0..n-1")
+    if len(levels) > expected["max_levels"]:
+        bad.append(f"{len(levels)} levels above {expected['max_levels']}")
+    for r in levels:
+        if r["ndof"] > expected["max_ndof"]:
+            bad.append(f"level {r.get('level')} has {r['ndof']} DOFs above {expected['max_ndof']:.6g}")
+        if r.get("elapsed_s", math.inf) > expected["budget_s"] or r.get("within_budget") is not True:
+            bad.append(f"level {r.get('level')} past the wall-clock budget")
+    cps = [r for r in levels if r.get("checkpoint")]
+    for a, b in zip(cps, cps[1:]):
+        if b["ndof"] < expected["checkpoint_dof_growth"]*a["ndof"]:
+            bad.append(f"checkpoints {a.get('level')}->{b.get('level')} less than "
+                       f"{expected['checkpoint_dof_growth']}x apart in DOFs")
+    if len(cps) < 2:
+        bad.append("fewer than two checkpoints")
+    else:
+        change = relative_change(cps[-1], cps[-2], tol)
+        if not all(change[k] <= tol[k] for k in tol):
+            bad.append(f"last checkpoints differ by {change}")
+        if levels[-1] is not cps[-1]:
+            bad.append("the sequence does not end on its converged checkpoint")
+    return bad
 
 
 def quantities(row):
     return dict(R=row["R_ohm"], partial_L=row["L_H"], root_heat=row["root_heat_W_per_A2"],
                 tip_heat=row["tip_heat_W_per_A2"])
+
+
+SEQUENCE_SCHEMA = "radia.ih.axisym-ring-adaptive-sequence.v1"
+
+
+def git_state():
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True,
+                                text=True).stdout.strip())
+    return head, dirty
+
+
+def load_sequences(paths, args, provenance, settings, tol):
+    """Admit saved sequences only from this source, script and runtime, with the configured settings.
+
+    Every configured (order, exterior) must appear exactly once, and each sequence's convergence is
+    re-derived from its levels (certify_sequence).  Any failure raises, naming every reason.
+    """
+    head, _ = git_state()
+    script = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    want = {(o, f) for o in args.ref_order for f in args.ref_exterior_factor}
+    seen, sequences, problems = set(), [], []
+    for p in paths:
+        doc = json.loads(Path(p).read_text(encoding="utf-8"))
+        bad = []
+        for key, value in (("schema", SEQUENCE_SCHEMA), ("git_head", head), ("git_dirty", False),
+                           ("script_sha256", script), ("reference_runtime", provenance),
+                           ("radius_mm", args.radius_mm), ("frequency_hz", args.frequency_hz),
+                           ("sigma_S_per_m", args.sigma)):
+            if doc.get(key) != value:
+                bad.append(f"{key} {doc.get(key)!r} != {value!r}")
+        seq = doc.get("sequence") or {}
+        key = (seq.get("order"), seq.get("exterior_factor"))
+        if key not in want:
+            bad.append(f"(order, exterior) {key} not configured")
+        elif key in seen:
+            bad.append(f"(order, exterior) {key} given twice")
+        else:
+            seen.add(key)
+            s, a, d = settings[key[0]]
+            bad += certify_sequence(seq, dict(
+                start_maxh_mm=s, air_maxh_mm=a, air_divisor=d, theta=args.ref_theta,
+                checkpoint_dof_growth=2.0, tolerance=tol, max_ndof=args.ref_max_ndof,
+                max_levels=args.ref_max_levels, budget_s=3600*args.ref_hours))
+        if bad:
+            problems.append(f"{p}: " + "; ".join(bad))
+        sequences.append(seq)
+    if seen != want and not problems:
+        problems.append(f"sequences {sorted(seen)} do not cover orders x exteriors {sorted(want)}")
+    if problems:
+        raise ValueError("saved sequences refused:\n" + "\n".join(problems))
+    return sequences
 
 
 def main():
@@ -402,14 +519,14 @@ def main():
         s, a, d = settings[order]
         return adaptive_sequence(args.radius_mm, args.frequency_hz, args.sigma, order, factor, s, a, d,
                                  args.ref_theta, tol, args.ref_max_ndof, args.ref_max_levels,
-                                 time.time() + 3600*args.ref_hours)
+                                 3600*args.ref_hours)
 
     if args.ref_sequence:
         order, factor = int(args.ref_sequence[0]), float(args.ref_sequence[1])
         seq = run(order, factor)
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        head, dirty = git_state()
         args.output.write_text(json.dumps(dict(
-            schema="radia.ih.axisym-ring-adaptive-sequence.v1", git_head=head,
+            schema=SEQUENCE_SCHEMA, git_head=head, git_dirty=dirty,
             script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             reference_runtime=provenance, radius_mm=args.radius_mm, frequency_hz=args.frequency_hz,
             sigma_S_per_m=args.sigma, sequence=seq), indent=1) + "\n", encoding="utf-8")
@@ -417,14 +534,7 @@ def main():
                           "converged": seq["converged"], "stop": seq["stop"]}), flush=True)
         return
     if args.ref_sequence_json:
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        sequences = []
-        for p in args.ref_sequence_json:
-            doc = json.loads(p.read_text(encoding="utf-8"))
-            if doc["git_head"] != head or doc["radius_mm"] != args.radius_mm \
-                    or doc["frequency_hz"] != args.frequency_hz or doc["sigma_S_per_m"] != args.sigma:
-                raise ValueError(f"{p} was run at {doc['git_head']} or on another operating point")
-            sequences.append(doc["sequence"])
+        sequences = load_sequences(args.ref_sequence_json, args, provenance, settings, tol)
     else:
         sequences = [run(o, f) for o in args.ref_order for f in args.ref_exterior_factor]
     by = {(s["order"], s["exterior_factor"]): s for s in sequences}
@@ -440,7 +550,8 @@ def main():
     checks = {}
     for (o, f), s in sorted(by.items()):                # mesh: the last two adaptive checkpoints
         lv = [r for r in s["levels"] if r["checkpoint"]]
-        checks[f"mesh_o{o}_f{f}"] = rel(lv[-1], lv[-2]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
+        # relative to the finer level, as in the stopping test
+        checks[f"mesh_o{o}_f{f}"] = rel(lv[-2], lv[-1]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
     for f in args.ref_exterior_factor:                   # exterior, at the highest order
         checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
     for o in args.ref_order:                             # order, at the widest exterior
@@ -462,8 +573,7 @@ def main():
         print(json.dumps({"phase": "peec", **row}), flush=True)
     candidate = quantities(peec[-1])
     verdict = physical_verdict(candidate, ref_q, reference_resolved=resolved)
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True).stdout.strip())
+    head, dirty = git_state()
     report = dict(
         schema="radia.ih.axisym-volume-peec-fin.v1", generated_at_utc=datetime.now(timezone.utc).isoformat(),
         git_head=head, git_dirty=dirty, script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -472,6 +582,10 @@ def main():
         skin_depth_mm=1e3/math.sqrt(math.pi*args.frequency_hz*MU0*args.sigma),
         cuts_mm=dict(root=[ROOT_X_MM, TIP_X_MM], tip=[TIP_X_MM, None]),
         normalization="per 1 A peak terminal current; loop-voltage port; exp(+j omega t)",
+        reference_settings=dict(theta=args.ref_theta, tolerance=tol, max_ndof=args.ref_max_ndof,
+                                max_levels=args.ref_max_levels, budget_s=3600*args.ref_hours,
+                                per_order={str(o): dict(start_maxh_mm=v[0], air_maxh_mm=v[1], air_divisor=v[2])
+                                           for o, v in settings.items()}),
         reference_levels=reference, reference_sequences=[{k: v for k, v in s.items() if k != "levels"}
                                                          for s in sequences],
         reference_checks=checks, reference_spread_max=spread,
