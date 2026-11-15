@@ -47,8 +47,9 @@ The libraries are exported by name, so the consumer supplies MATLAB's
 `extern/lib` directory, as `mex` does. The imported `ngsolve` target carries
 the `MKL_ILP64` definition, and consumers must compile with it. A consumer that
 drops it fails to link the tested C++ wrappers, whose mangled names encode the
-integer width; a direct call to an unmangled LAPACK routine with a 32-bit
-prototype would still link and fail only at run time.
+integer width. A direct call to an unmangled LAPACK routine with a 32-bit
+prototype can link despite the ABI mismatch and may produce silent wrong
+results or memory corruption.
 
 ## Evidence
 
