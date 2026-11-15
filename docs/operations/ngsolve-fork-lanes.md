@@ -1,8 +1,27 @@
 # NGSolve fork lanes
 
-User decision, 2026-11-16. The Netgen/NGSolve forks are validation lanes for
-Radia's GPU and MATLAB work, not Radia source. They follow upstream NGSolve
-and carry small, reviewable fixes.
+User decision, 2026-11-16. Radia depends on the Sugahara forks of Netgen and
+NGSolve (`ksugahar/netgen`, `ksugahar/ngsolve`), not on the official wheels.
+
+## Maintenance model
+
+The forks are not a development line. Each maintenance round:
+
+1. merges the latest upstream `master` into the fork's `master`, keeping the
+   fork as close to upstream as possible;
+2. adds only bug fixes that Radia needs, as small labeled commits, and offers
+   general fixes upstream;
+3. builds the pybind11 wheels and the MEX SDK (CPU and GPU) and runs the
+   fork checks;
+4. publishes them on the forks' GitHub Releases under a tag on `master`;
+5. moves Radia's metadata pin to that tag and rebuilds and revalidates Radia
+   against it.
+
+The fork has one long-lived branch, `master`. Radia's own binaries link the
+NGSolve C++ ABI, so every pin move rebuilds Radia; upstream changes are not
+assumed to be ABI compatible. The ngsolve fork's `external_dependencies/netgen`
+submodule points at the netgen fork. Users install the wheels with
+`pip --find-links` to the release page; PyPI carries no fork wheels.
 
 ## Supported lanes
 
