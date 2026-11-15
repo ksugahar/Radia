@@ -309,7 +309,7 @@ def level_ndof(mesh, order):
 
 
 def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, air_mm, air_divisor,
-                      theta, tol, max_ndof, max_levels, budget_s, clock=time.time):
+                      theta, tol, max_ndof, max_levels, budget_s, clock=time.monotonic):
     """Refine one (order, exterior) reference adaptively until two successive levels agree within tol.
 
     The budget is checked on actual quantities: the deadline before every solve, the DOF count of
@@ -318,6 +318,10 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
     """
     import ngsolve as ng
     from aphi_beak_section_sweep import build_section_ring
+    if not (isinstance(max_levels, int) and not isinstance(max_levels, bool) and max_levels >= 1):
+        raise ValueError(f"max_levels must be a positive integer, got {max_levels!r}")
+    if not (math.isfinite(max_ndof) and max_ndof > 0 and math.isfinite(budget_s) and budget_s > 0):
+        raise ValueError(f"budget must be positive and finite, got max_ndof={max_ndof!r} budget_s={budget_s!r}")
     started = clock()
     deadline = started + budget_s
     mesh, ext_radius, ext_z = build_section_ring(radius_mm, maxh_conductor_mm=start_maxh, maxh_air_mm=air_mm,
@@ -334,14 +338,18 @@ def adaptive_sequence(radius_mm, frequency, sigma, order, factor, start_maxh, ai
         if ndof > max_ndof:
             stop = f"budget: next level {ndof} DOFs above {max_ndof:.6g}"
             break
+        if clock() >= deadline:                     # counting the DOFs may itself take the budget
+            stop = "budget: deadline"
+            break
         row, res = solve_level(mesh, ext_radius, ext_z, radius_mm, frequency, sigma, order)
         if row["ndof"] != ndof:
             raise RuntimeError(f"solved {row['ndof']} DOFs, admitted {ndof}")
         eta2 = zz_indicator(res, order)
         del res
-        in_budget = clock() <= deadline
+        now = clock()                               # one sample for the record and the decision
+        in_budget = now <= deadline
         row.update(level=len(rows), exterior_factor=factor, indicator=float(math.sqrt(eta2.sum())),
-                   elapsed_s=clock() - started, within_budget=in_budget)
+                   elapsed_s=now - started, within_budget=in_budget)
         is_check = in_budget and (not checkpoints or row["ndof"] >= growth_min*rows[checkpoints[-1]]["ndof"])
         row["checkpoint"] = is_check
         if is_check and checkpoints:
@@ -384,7 +392,36 @@ def certify_sequence(seq, expected):
     for key, want in expected.items():
         if seq.get(key) != want:
             bad.append(f"{key} {seq.get(key)!r} != {want!r}")
-    levels = seq.get("levels") or []
+    levels = seq.get("levels")
+    if not isinstance(levels, list) or not levels:
+        return bad + ["no recorded levels"]
+    # Structure first: an unordered NaN or a non-integer would slip through every comparison below.
+    is_count = lambda v: isinstance(v, int) and not isinstance(v, bool)
+    is_time = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0
+    structural = []
+    for i, r in enumerate(levels):
+        if not (is_count(r.get("ndof")) and r["ndof"] > 0):
+            structural.append(f"level {i} ndof {r.get('ndof')!r} is not a positive integer")
+        if not is_count(r.get("level")):
+            structural.append(f"level {i} number {r.get('level')!r} is not an integer")
+        if not is_time(r.get("elapsed_s")):
+            structural.append(f"level {i} elapsed_s {r.get('elapsed_s')!r} is not finite and nonnegative")
+        q = {k: r.get(v) for k, v in (("R", "R_ohm"), ("partial_L", "L_H"), ("root_heat", "root_heat_W_per_A2"),
+                                       ("tip_heat", "tip_heat_W_per_A2"))}
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v != 0
+                   for v in q.values()):
+            structural.append(f"level {i} quantities {q} are not finite and nonzero")
+    if not is_time(seq.get("elapsed_s")):
+        structural.append(f"sequence elapsed_s {seq.get('elapsed_s')!r} is not finite and nonnegative")
+    if structural:
+        return bad + structural
+    times = [r["elapsed_s"] for r in levels]
+    if any(b < a for a, b in zip(times, times[1:])):
+        bad.append(f"level elapsed times {times} decrease")
+    if seq["elapsed_s"] < times[-1]:
+        bad.append(f"sequence elapsed_s {seq['elapsed_s']} before its last level {times[-1]}")
+    if seq["elapsed_s"] > expected["budget_s"]:
+        bad.append(f"sequence elapsed_s {seq['elapsed_s']} above the budget {expected['budget_s']}")
     tol = expected["tolerance"]
     if seq.get("stop") != "converged" or seq.get("converged") is not True:
         bad.append(f"stop {seq.get('stop')!r}")
@@ -395,7 +432,7 @@ def certify_sequence(seq, expected):
     for r in levels:
         if r["ndof"] > expected["max_ndof"]:
             bad.append(f"level {r.get('level')} has {r['ndof']} DOFs above {expected['max_ndof']:.6g}")
-        if r.get("elapsed_s", math.inf) > expected["budget_s"] or r.get("within_budget") is not True:
+        if r["elapsed_s"] > expected["budget_s"] or r.get("within_budget") is not True:
             bad.append(f"level {r.get('level')} past the wall-clock budget")
     cps = [r for r in levels if r.get("checkpoint")]
     for a, b in zip(cps, cps[1:]):
@@ -421,6 +458,11 @@ def quantities(row):
 SEQUENCE_SCHEMA = "radia.ih.axisym-ring-adaptive-sequence.v1"
 
 
+def script_sha256():
+    """Hash of this script with normalized line endings, so CRLF and LF checkouts agree."""
+    return hashlib.sha256(Path(__file__).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def git_state():
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True,
@@ -435,7 +477,7 @@ def load_sequences(paths, args, provenance, settings, tol):
     re-derived from its levels (certify_sequence).  Any failure raises, naming every reason.
     """
     head, _ = git_state()
-    script = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    script = script_sha256()
     want = {(o, f) for o in args.ref_order for f in args.ref_exterior_factor}
     seen, sequences, problems = set(), [], []
     for p in paths:
@@ -527,7 +569,7 @@ def main():
         head, dirty = git_state()
         args.output.write_text(json.dumps(dict(
             schema=SEQUENCE_SCHEMA, git_head=head, git_dirty=dirty,
-            script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            script_sha256=script_sha256(),
             reference_runtime=provenance, radius_mm=args.radius_mm, frequency_hz=args.frequency_hz,
             sigma_S_per_m=args.sigma, sequence=seq), indent=1) + "\n", encoding="utf-8")
         print(json.dumps({"phase": "sequence", "order": order, "exterior_factor": factor,
@@ -576,7 +618,7 @@ def main():
     head, dirty = git_state()
     report = dict(
         schema="radia.ih.axisym-volume-peec-fin.v1", generated_at_utc=datetime.now(timezone.utc).isoformat(),
-        git_head=head, git_dirty=dirty, script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        git_head=head, git_dirty=dirty, script_sha256=script_sha256(),
         reference_runtime=provenance, platform_class=platform.system(),
         radius_mm=args.radius_mm, frequency_hz=args.frequency_hz, sigma_S_per_m=args.sigma,
         skin_depth_mm=1e3/math.sqrt(math.pi*args.frequency_hz*MU0*args.sigma),

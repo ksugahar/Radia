@@ -10,7 +10,6 @@ Assumes: a deterministic stand-in solver whose quantities converge as the DOFs d
 from __future__ import annotations
 
 import copy
-import hashlib
 import importlib.util
 import json
 import sys
@@ -118,6 +117,26 @@ def test_initially_expired_deadline_solves_nothing(fin, stand_in):
     assert (calls["solves"], seq["stop"], seq["converged"]) == (0, "budget: deadline", False)
 
 
+def test_deadline_passed_while_counting_dofs_solves_nothing(fin, stand_in, monkeypatch):
+    calls, clock = stand_in
+
+    def slow_count(mesh, order):
+        clock.t += 20.0                              # counting takes longer than the budget
+        return mesh.ndof
+
+    monkeypatch.setattr(fin, "level_ndof", slow_count)
+    seq = _run(fin, clock, budget_s=10.0)
+    assert (calls["solves"], seq["stop"], seq["converged"]) == (0, "budget: deadline", False)
+
+
+@pytest.mark.parametrize("cap", [0, -1, True, 1.5])
+def test_nonpositive_or_non_integer_level_cap_is_refused_before_any_solve(fin, stand_in, cap):
+    calls, clock = stand_in
+    with pytest.raises(ValueError, match="max_levels"):
+        _run(fin, clock, max_levels=cap)
+    assert calls["solves"] == 0
+
+
 def test_dof_overflow_is_refused_before_the_solve(fin, stand_in):
     calls, clock = stand_in
     seq = _run(fin, clock, max_ndof=10)
@@ -169,7 +188,7 @@ def saved(fin, stand_in, monkeypatch, tmp_path):
             seq = copy.deepcopy(base)
             seq.update(order=o, exterior_factor=f)
             docs[(o, f)] = dict(schema=fin.SEQUENCE_SCHEMA, git_head="head", git_dirty=False,
-                                script_sha256=hashlib.sha256(SCRIPT.read_bytes()).hexdigest(),
+                                script_sha256=fin.script_sha256(),
                                 reference_runtime=dict(PROVENANCE), radius_mm=200.0, frequency_hz=150e3,
                                 sigma_S_per_m=5.8e7, sequence=seq)
 
@@ -212,6 +231,19 @@ def test_valid_saved_sequences_are_admitted(saved):
     ("late_level", lambda d: d["sequence"]["levels"][-1].update(within_budget=False), "wall-clock"),
     ("not_converged", lambda d: d["sequence"].update(stop="budget: deadline", converged=False), "stop"),
     ("claimed_change", lambda d: d["sequence"]["levels"][-1].update(R_ohm=2.0), "last checkpoints differ"),
+    ("sequence_over_budget", lambda d: d["sequence"].update(elapsed_s=1e6 + 1), "above the budget"),
+    ("sequence_before_last", lambda d: d["sequence"].update(elapsed_s=0.0), "before its last level"),
+    ("sequence_elapsed_nan", lambda d: d["sequence"].update(elapsed_s=float("nan")), "sequence elapsed_s"),
+    ("level_elapsed_nan", lambda d: d["sequence"]["levels"][-1].update(elapsed_s=float("nan")), "elapsed_s"),
+    ("level_elapsed_negative", lambda d: d["sequence"]["levels"][0].update(elapsed_s=-1.0), "elapsed_s"),
+    ("level_elapsed_decreasing", lambda d: d["sequence"]["levels"][1].update(elapsed_s=0.0), "decrease"),
+    ("ndof_nan", lambda d: d["sequence"]["levels"][-1].update(ndof=float("nan")), "not a positive integer"),
+    ("ndof_float", lambda d: d["sequence"]["levels"][-1].update(ndof=1000.5), "not a positive integer"),
+    ("ndof_bool", lambda d: d["sequence"]["levels"][0].update(ndof=True), "not a positive integer"),
+    ("ndof_zero", lambda d: d["sequence"]["levels"][0].update(ndof=0), "not a positive integer"),
+    ("level_number_bool", lambda d: d["sequence"]["levels"][1].update(level=True), "not an integer"),
+    ("quantity_nan", lambda d: d["sequence"]["levels"][-1].update(tip_heat_W_per_A2=float("nan")), "quantities"),
+    ("no_levels", lambda d: d["sequence"].update(levels=[]), "no recorded levels"),
 ])
 def test_invalid_saved_sequence_is_refused(saved, name, mutate, reason):
     write, load = saved
