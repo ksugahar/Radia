@@ -64,14 +64,17 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
 
     # Reuse the fixture's own profile so the section is the tracked one.
     face = _beak_face(Plane.XY, radial_offset=radius_mm)
-    step = Path(ROOT / "validation_test" / "induction_heating"
-                / "_section_tmp.step")
+    import tempfile
+
     from build123d import export_step
 
-    export_step(face, str(step))
-    section = OCCGeometry(str(step), dim=2).shape.Scale(
-        __import__("netgen.occ", fromlist=["Pnt"]).Pnt(0, 0, 0), 1e-3)
-    step.unlink(missing_ok=True)
+    # A private directory per call: concurrent jobs must not share (and
+    # delete) one STEP file, and the checkout must stay clean during a run.
+    with tempfile.TemporaryDirectory(prefix="beak_section_") as tmp:
+        step = Path(tmp) / "section.step"
+        export_step(face, str(step))
+        section = OCCGeometry(str(step), dim=2).shape.Scale(
+            __import__("netgen.occ", fromlist=["Pnt"]).Pnt(0, 0, 0), 1e-3)
 
     section.faces.name = "conductor"
     section.edges.name = "skin"
