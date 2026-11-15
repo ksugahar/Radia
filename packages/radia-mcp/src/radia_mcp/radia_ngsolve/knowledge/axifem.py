@@ -409,7 +409,8 @@ curved edge ending on the axis keeps the `s`-midpoint, is matched through
 `s`, and shifts the target `z` instead.  These elements are integrated on the
 mesh element (16-point Gauss rule per direction).  Refused: a curved edge
 lying on the axis, `r <= 0` inside a curved edge, `r^2` turning back along a
-curved axis edge, and folded `(s, z)` or target maps.  Checks:
+curved axis edge, folded `(s, z)` or target maps, and `Curve(p)` with
+`p > 2` (the map must equal its quadratic interpolant).  Checks:
 `tests/axifem/test_vdof_consistency.py` (matrices, trace, finite differences,
 axis limit), `tests/axifem/test_de_rham_identities.py` and
 `tests/axifem/test_p2_curved_magsta.py` (sphere volume and total flux).

@@ -292,6 +292,20 @@ def test_axis_limit_of_the_basis(name, factory, order, curvedquad):
                 f"{name}: dA/dz = {g[1]:.3e} at r = {r:g}, expected -> 0")
 
 
+@pytest.mark.parametrize("factory,order,curvedquad", [
+    (_curved_two_domain_mesh, 1, False),
+    (_curved_two_domain_mesh, 2, False),
+    (_curved_quad_sector_mesh, 2, True),
+], ids=["p1", "p2", "q2"])
+def test_curve3_mesh_is_refused(factory, order, curvedquad):
+    """A Curve(3) map would be replaced by its quadratic interpolant: refused."""
+    mesh = factory()
+    mesh.Curve(3)
+    gf = ng.GridFunction(H1Henrotte(mesh, order=order, curvedquad=curvedquad))
+    with pytest.raises(Exception, match="degree > 2"):
+        gf.Set(ng.x)
+
+
 FD_CASES = [
     ("p1_curved", 1, False),
     ("p2_curved", 2, False),

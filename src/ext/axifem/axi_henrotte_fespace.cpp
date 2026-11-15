@@ -90,7 +90,6 @@ AxisAlignedQuadBounds RequireAxisAlignedQuad(const Vec<3> p[4], ElementId ei, in
 void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh)
 {
     auto & eltrans = ma.GetTrafo(ei, lh);
-    const double xs[4] = { 0.5, 1.0, 0.5, 0.0 }, ys[4] = { 0.0, 0.5, 1.0, 0.5 };
     Vec<2> c[4];
     const double cx[4] = { 0, 1, 1, 0 }, cy[4] = { 0, 0, 1, 1 };
     for (int k = 0; k < 4; ++k) {
@@ -98,14 +97,53 @@ void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator 
         auto pt = eltrans(ip, lh).GetPoint();
         c[k] = Vec<2>(pt(0), pt(1));
     }
-    for (int k = 0; k < 4; ++k) {
-        IntegrationPoint ip(xs[k], ys[k], 0.0);
+    // edge midpoints and quarter points (a symmetric cubic edge keeps its
+    // midpoint on the chord)
+    for (int k = 0; k < 4; ++k)
+        for (double f : { 0.25, 0.5 }) {
+            const double x = cx[k] + f * (cx[(k + 1) % 4] - cx[k]);
+            const double y = cy[k] + f * (cy[(k + 1) % 4] - cy[k]);
+            IntegrationPoint ip(x, y, 0.0);
+            auto pt = eltrans(ip, lh).GetPoint();
+            Vec<2> q = (1.0 - f) * c[k] + f * c[(k + 1) % 4];
+            double len = L2Norm(c[(k + 1) % 4] - c[k]);
+            if (std::hypot(pt(0) - q(0), pt(1) - q(1)) > 1e-10 * len)
+                throw Exception("AxiHenrotteFESpace: curved quad at " + ToString(ei)
+                                + "; the axis-aligned quads are straight (use"
+                                  " curvedquad=True for Curve(2) quads)");
+        }
+}
+
+// The element samples its nodes from the transformation and represents the
+// map by quadratic Lagrange interpolation (Curve(1) and Curve(2) meshes).  A
+// map of higher degree (Curve(p), p > 2) would be silently replaced by its
+// interpolant, so it is refused: the transformation must equal the
+// interpolant at off-node points.
+template <class Geo>
+void RequireQuadraticMap(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh,
+                         const Geo & geo, bool triangle)
+{
+    static const double tri[5][2] = { {0.25, 0.0}, {0.75, 0.25}, {0.0, 0.75},
+                                      {0.2, 0.3}, {0.15, 0.6} };
+    static const double quad[6][2] = { {0.25, 0.0}, {1.0, 0.25}, {0.75, 1.0},
+                                       {0.0, 0.75}, {0.3, 0.6}, {0.8, 0.15} };
+    double rmin = geo.rg[0], rmax = geo.rg[0], zmin = geo.zg[0], zmax = geo.zg[0];
+    for (double v : geo.rg) { rmin = std::min(rmin, v); rmax = std::max(rmax, v); }
+    for (double v : geo.zg) { zmin = std::min(zmin, v); zmax = std::max(zmax, v); }
+    const double ext = std::max(rmax - rmin, zmax - zmin);
+    auto & eltrans = ma.GetTrafo(ei, lh);
+    const int n = triangle ? 5 : 6;
+    for (int k = 0; k < n; ++k) {
+        const double x = triangle ? tri[k][0] : quad[k][0];
+        const double y = triangle ? tri[k][1] : quad[k][1];
+        IntegrationPoint ip(x, y, 0.0);
         auto pt = eltrans(ip, lh).GetPoint();
-        Vec<2> mid = 0.5 * (c[k] + c[(k + 1) % 4]);
-        double len = L2Norm(c[(k + 1) % 4] - c[k]);
-        if (std::hypot(pt(0) - mid(0), pt(1) - mid(1)) > 1e-10 * len)
-            throw Exception("AxiHenrotteFESpace: curved quad at " + ToString(ei)
-                            + "; only straight elements are supported (mesh.Curve(1))");
+        double rp, zp, J[2][2];
+        geo.MapRZ(x, y, rp, zp, J);
+        if (std::hypot(pt(0) - rp, pt(1) - zp) > 1e-10 * ext)
+            throw Exception("AxiHenrotteFESpace: element " + ToString(ei)
+                            + " has a mesh map of degree > 2; H1Henrotte supports"
+                              " Curve(1) and Curve(2) meshes");
     }
 }
 
@@ -256,7 +294,9 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                     auto pt = mip.GetPoint();
                     rs[k] = SnapAxis(pt(0)); zs[k] = pt(1);
                 }
-                return *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
+                auto & fe = *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
+                RequireQuadraticMap(*ma, ei, lh, fe.geo, false);
+                return fe;
             }
             Vec<3> p[4];
             for (int i = 0; i < 4; ++i) {
@@ -296,7 +336,9 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                 rs[k] = SnapAxis(pt(0));
                 zs[k] = pt(1);
             }
-            return *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
+            auto & fe = *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
+            RequireQuadraticMap(*ma, ei, lh, fe.geo, true);
+            return fe;
         }
         throw Exception("AxiHenrotteFESpace order=2: element " + ToString(ei) +
                         " is neither a quad (Q2) nor a triangle (P2).");
@@ -328,7 +370,9 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             rs[k] = SnapAxis(pt(0));
             zs[k] = pt(1);
         }
-        return *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
+        auto & fe = *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
+        RequireQuadraticMap(*ma, ei, lh, fe.geo, true);
+        return fe;
     }
     throw Exception("AxiHenrotteFESpace: unsupported element type for "
                     + ToString(ei) + " (only triangles and quads in 2D)");
