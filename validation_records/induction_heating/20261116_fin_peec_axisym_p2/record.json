@@ -5,11 +5,11 @@
  "question": "Does the axisymmetric volume PEEC of the beak fin converge to the adaptive P2 axisymmetric FE reference?",
  "outcome": "pass",
  "source": {
-  "repo_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+  "repo_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
   "dirty": false,
   "native_sha256": {
    "peec_matrices": "dc5952fd119841ace49f0bc6dbdb3a755de6e17c7f151fd3dca374a557c62cad",
-   "axifem": "f2267c0ef1238f20de9dcaa6f29ea8140c34e3395183c46ffd112b8e675cc775"
+   "axifem": "43a34814d8df2775543c06871ba5c8405a10735478a41c494d433efdb210258e"
   },
   "wheel_sha256": null,
   "source_only": false,
@@ -21,13 +21,26 @@
   "src/core/rad_peec_axisym.h",
   "src/lib/rad_peec_matrices_api.cpp",
   "src/radia/eddy_axisym_ring.py",
+  "src/radia/axisym_measure.py",
+  "src/ext/axifem/axi_henrotte_diffop.hpp",
+  "src/ext/axifem/axi_henrotte_fe.cpp",
+  "src/ext/axifem/axi_henrotte_fe.hpp",
+  "src/ext/axifem/axi_henrotte_fespace.cpp",
+  "src/ext/axifem/axi_henrotte_fespace.hpp",
+  "src/ext/axifem/axi_henrotte_integrators.cpp",
+  "src/ext/axifem/axi_henrotte_integrators.hpp",
+  "src/ext/axifem/axi_henrotte_numeric.cpp",
+  "src/ext/axifem/axi_henrotte_numeric.hpp",
+  "src/ext/axifem/axi_henrotte_siso.hpp",
+  "src/ext/axifem/axifem.cpp",
+  "src/ext/axifem/q2_henrotte_generated.hpp",
   "validation_test/induction_heating/axisym_volume_peec_fin.py",
   "validation_test/induction_heating/fin_return_principle.py",
   "validation_test/induction_heating/make_beak_fin_step.py"
  ],
  "entry": {
   "script": "entry.py",
-  "script_sha256": "e5cb684f23967c1dea0904927ed1806798bd4f9988a808f838f8bd38f87cd455",
+  "script_sha256": "d9251cff2bd718b3623ddcfd027c174d0917976d9a7b6efc068209db4a450cd1",
   "command": [
    "python",
    "entry.py",
@@ -45,23 +58,23 @@
  },
  "result": {
   "path": "adoption-result.json",
-  "sha256": "440cb3e8ce787d70d18e31db1c974fb0c030dca7f37bcbc78644d1cd4823a6d2"
+  "sha256": "45028ebbabe8c23ab05c5a4938fe1d977307c7bde96096db6343dfd567ba99cc"
  },
  "key_values": {
   "finest_R_error": {
-   "value": 0.0007295019963242666,
+   "value": 0.0007295019964935756,
    "unit": "1"
   },
   "finest_partial_L_error": {
-   "value": 2.4621878385033824e-05,
+   "value": 2.4621878473407577e-05,
    "unit": "1"
   },
   "finest_root_heat_error": {
-   "value": 0.0008347515634491431,
+   "value": 0.0008347515636395464,
    "unit": "1"
   },
   "finest_tip_heat_error": {
-   "value": 0.002140988792173504,
+   "value": 0.002140988793009835,
    "unit": "1"
   },
   "reference_ndof": {
@@ -74,7 +87,7 @@
   "minimum_rate": 1.0
  },
  "timing_s": {
-  "coarsest_peec": 3.385354999998526
+  "coarsest_peec": 4.211191999995208
  },
  "status": "current",
  "stale_reason": null,
@@ -96,7 +109,20 @@
  "covered_sha256": {
   "src/core/rad_peec_axisym.cpp": "8ccef9c8d5724fb447852871e835f301f88426c5c22fdea8b1466673d57a8bc0",
   "src/core/rad_peec_axisym.h": "6ef950dad1356b0ca1e0ae4c44806d293f0e1dc146bfd7dd6e4d15c1d460575e",
+  "src/ext/axifem/axi_henrotte_diffop.hpp": "64b0aebf13f5d91f83a885a77e67f9e319267c607b44b10163efe0e026ba4a4c",
+  "src/ext/axifem/axi_henrotte_fe.cpp": "fb3c21c3d145767aefc44f42b580857b9f1e7e9b9632c83633b4b289babb9f01",
+  "src/ext/axifem/axi_henrotte_fe.hpp": "3f73016c7ab606fc99234a55370cd2bdd9c4392eef786f29364cda3c0445589c",
+  "src/ext/axifem/axi_henrotte_fespace.cpp": "eb021586f31297eb73cb87dc4e872c0202071012f001e59afb3db0ffb5b8ccd8",
+  "src/ext/axifem/axi_henrotte_fespace.hpp": "d082b6d6b65f03924dbf89179fec838d6ddfe73fcc1e77a350b505fd9e21e793",
+  "src/ext/axifem/axi_henrotte_integrators.cpp": "b6d31443ee7c223676ca4f3a516fa092ca076e834c7c09f78278b64b31a63f75",
+  "src/ext/axifem/axi_henrotte_integrators.hpp": "db34714f0f793cb3e0919052971bc45839f7b702321c4a822e18b7c99d3aa317",
+  "src/ext/axifem/axi_henrotte_numeric.cpp": "d5b13cb59f990e29555468a4274a4579caf3b5e954e1c1fedb435780db578e5e",
+  "src/ext/axifem/axi_henrotte_numeric.hpp": "5cccb92bcd56a132ed5873ca11f7af6d0837226be1685ad1e62c55a7ccf1c817",
+  "src/ext/axifem/axi_henrotte_siso.hpp": "a98477c6f4a2075dc86b02a226dfaa95d9e1fd2e34c8fb5896d9c0711de416f8",
+  "src/ext/axifem/axifem.cpp": "f13568db02d8af6041d23c62c3ed1efce8007370fb358aaa77b2d5b8b93b6ebb",
+  "src/ext/axifem/q2_henrotte_generated.hpp": "826d89a040e8ab61b6f02d465f951bb7f33550591b80de2e8e633a2376dd06ef",
   "src/lib/rad_peec_matrices_api.cpp": "474fe548ee0f05fbef328c9cbe08b0619c3b3b837f2da3e00f291732afbcd22a",
+  "src/radia/axisym_measure.py": "630357e34953af181eba446634f59a10c21f3ac44ea254123803073170ae5190",
   "src/radia/eddy_axisym_ring.py": "5400731b1f5a6f286a54957b3604a377188799255f87aa70ff1b6f6b9b06a0dc",
   "src/radia/peec_axisym.py": "de874a4ab7d85d84cc26eb340f52c52e731c65294e2f8ae92783ea247c3bb635",
   "validation_test/induction_heating/axisym_volume_peec_fin.py": "c9491792c5518b8adf292a45e031e1f1f7abfa58ed49ae1fb4845f1438477b74",
@@ -328,8 +354,8 @@
    "scope_sha256": "4d959a706be8878098da5af3c25cb98351eeb3a69017c183c8c64b4ed1f2569e"
   },
   "result": {
-   "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
-   "artifact_sha256": "440cb3e8ce787d70d18e31db1c974fb0c030dca7f37bcbc78644d1cd4823a6d2",
+   "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+   "artifact_sha256": "45028ebbabe8c23ab05c5a4938fe1d977307c7bde96096db6343dfd567ba99cc",
    "verdict": "PASS",
    "levels": [
     {
@@ -338,11 +364,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.06
      },
-     "error": 0.004912315618000096,
+     "error": 0.004912315618168739,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 3.385354999998526
+     "runtime_s": 4.211191999995208
     },
     {
      "id": "partial_L-h0.06",
@@ -350,11 +376,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.06
      },
-     "error": 8.178298926853067e-05,
+     "error": 8.178298935712647e-05,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 3.385354999998526
+     "runtime_s": 4.211191999995208
     },
     {
      "id": "root_heat-h0.06",
@@ -362,11 +388,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.06
      },
-     "error": 0.004565480815839629,
+     "error": 0.004565480816029255,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 3.385354999998526
+     "runtime_s": 4.211191999995208
     },
     {
      "id": "tip_heat-h0.06",
@@ -374,11 +400,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.06
      },
-     "error": 0.0076035634399311824,
+     "error": 0.0076035634407629615,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 3.385354999998526
+     "runtime_s": 4.211191999995208
     },
     {
      "id": "R-h0.04",
@@ -386,11 +412,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.04
      },
-     "error": 0.0020786931971326084,
+     "error": 0.0020786931973016953,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 6.518916599998192
+     "runtime_s": 8.321316099994874
     },
     {
      "id": "partial_L-h0.04",
@@ -398,11 +424,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.04
      },
-     "error": 4.4315172313069695e-05,
+     "error": 4.431517240144345e-05,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 6.518916599998192
+     "runtime_s": 8.321316099994874
     },
     {
      "id": "root_heat-h0.04",
@@ -410,11 +436,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.04
      },
-     "error": 0.002351052511339824,
+     "error": 0.002351052511529894,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 6.518916599998192
+     "runtime_s": 8.321316099994874
     },
     {
      "id": "tip_heat-h0.04",
@@ -422,11 +448,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.04
      },
-     "error": 0.0035555408773380037,
+     "error": 0.0035555408781731135,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 6.518916599998192
+     "runtime_s": 8.321316099994874
     },
     {
      "id": "R-h0.028",
@@ -434,11 +460,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.028
      },
-     "error": 0.0007295019963242666,
+     "error": 0.0007295019964935756,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 14.864479900003062
+     "runtime_s": 18.824236100001144
     },
     {
      "id": "partial_L-h0.028",
@@ -446,11 +472,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.028
      },
-     "error": 2.4621878385033824e-05,
+     "error": 2.4621878473407577e-05,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 14.864479900003062
+     "runtime_s": 18.824236100001144
     },
     {
      "id": "root_heat-h0.028",
@@ -458,11 +484,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.028
      },
-     "error": 0.0008347515634491431,
+     "error": 0.0008347515636395464,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 14.864479900003062
+     "runtime_s": 18.824236100001144
     },
     {
      "id": "tip_heat-h0.028",
@@ -470,11 +496,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.028
      },
-     "error": 0.002140988792173504,
+     "error": 0.002140988793009835,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 14.864479900003062
+     "runtime_s": 18.824236100001144
     }
    ]
   },

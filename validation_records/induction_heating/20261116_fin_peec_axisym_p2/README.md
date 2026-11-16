@@ -37,9 +37,17 @@ The observed rates are about 1.4 to 2.9. The finest errors are 0.073 % in R,
 
 - `entry.py` derives `adoption-result.json` from the saved verdict JSON and the
   hashes of the three meridian meshes. It solves nothing, and the checker never
-  executes it.
+  executes it. It fails closed: a physical FAIL, a dirty source, an open
+  reference flag or certification item, or an order 2, exterior 3 sequence whose
+  final level is not a converged checkpoint writes nothing.
+  `tests/test_ih_fin_adoption_entry.py` drives these cases on a synthetic verdict.
 - The original verdict and the four reference-sequence JSON files are kept in
   private storage. `adoption-result.json` records the verdict's hash.
+- The verdict ran at the recorded source with an `axifem` binary built from that
+  source; `covered_paths` include the native Henrotte sources in `src/ext/axifem`.
+  An earlier run (r07) had loaded an older `axifem` build; this run (r08)
+  reproduces its reference values within a relative 1e-12 and its PEEC values
+  bitwise.
 - `mesh_sha256` is the sha256 of each mesh in the encoding of the tests fixture.
   The 0.06 mm mesh is `tests/fixtures/ih_fin/beak_section_r200_h060_mesh.json`.
 
