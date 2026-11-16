@@ -467,6 +467,18 @@
     ],
     "tests/test_peec_axisym.py": [
       "tests/test_peec_axisym.py"
+    ],
+    "src/radia/peec_tet.py": [
+      "tests/test_peec_tet.py"
+    ],
+    "src/core/rad_peec_tet.cpp": [
+      "tests/test_peec_tet.py"
+    ],
+    "src/core/rad_peec_tet.h": [
+      "tests/test_peec_tet.py"
+    ],
+    "tests/test_peec_tet.py": [
+      "tests/test_peec_tet.py"
     ]
   },
   "profiles": {
@@ -640,7 +652,8 @@
         "tests/test_volume_peec_contract.py",
         "tests/test_volume_peec_native_contract.py",
         "tests/test_volume_fin_contract.py",
-        "tests/test_peec_axisym.py"
+        "tests/test_peec_axisym.py",
+        "tests/test_peec_tet.py"
       ]
     },
     "sparsesolv": {
