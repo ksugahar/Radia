@@ -13,25 +13,25 @@
   "quantities": {
     "R_ohm": {
       "expected": 0.007875277717660762,
-      "rtol": 1e-09,
+      "rtol": 1e-06,
       "atol": 0,
       "unit": "ohm"
     },
     "L_H": {
       "expected": 1.0687134636031998e-06,
-      "rtol": 1e-09,
+      "rtol": 1e-06,
       "atol": 0,
       "unit": "H"
     },
     "root_heat_W_per_A2": {
       "expected": 0.00020593566850054808,
-      "rtol": 1e-09,
+      "rtol": 1e-06,
       "atol": 0,
       "unit": "W/A^2"
     },
     "tip_heat_W_per_A2": {
       "expected": 0.0007926213762018563,
-      "rtol": 1e-09,
+      "rtol": 1e-06,
       "atol": 0,
       "unit": "W/A^2"
     }

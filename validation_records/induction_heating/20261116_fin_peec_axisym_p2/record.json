@@ -324,7 +324,7 @@
    "approved_on": "2026-11-16",
    "approval_ref": "APPROVAL-20261116-FIN-PEEC-P2-01",
    "criterion_sha256": "567c6d32c5822427e6ed4106f797baaab128e1c7130cb70843c1f2fc3248ecba",
-   "rationale_sha256": "0d82eda4edd43b2c87cc006a0b73506fb311a34f54032cf558a912ffa2814402",
+   "rationale_sha256": "f7f982a222f084f1872df3bf8c585aef88b0c99645a8b6d723dd7838946ded2f",
    "scope_sha256": "4d959a706be8878098da5af3c25cb98351eeb3a69017c183c8c64b4ed1f2569e"
   },
   "result": {
@@ -527,14 +527,14 @@
     {
      "id": "h060-protection",
      "kind": "coverage",
-     "statement": "tests/test_ih_fin_peec_axisym_surrogate.py runs the production entry on the stored 0.06 mm mesh against its output at the recorded source; inductance x(1+1e-6) and conductivity x(1+1e-6) mutations both fail it.",
+     "statement": "tests/test_ih_fin_peec_axisym_surrogate.py runs the production entry on the stored 0.06 mm mesh against its output at the recorded source with the user-approved rtol 1e-6; inductance x(1+1e-5) and conductivity x(1+1e-5) mutations both fail it, x(1+1e-6) mutations survive.",
      "evidence_refs": [
       "artifact:result"
      ],
      "invalidated_by": [
       "guard-or-mutation-change"
      ],
-     "recheck": "Review coverage and mutation sensitivity after any baseline or fixture change; the lock tolerance (rtol 1e-9, atol 0) is user-owned."
+     "recheck": "Review coverage and mutation sensitivity after any baseline or fixture change; the lock tolerance (rtol 1e-6, atol 0, APPROVAL-20261116-FIN-PEEC-SURROGATE-TOL-01) is user-owned."
     }
    ],
    "depends_on": [

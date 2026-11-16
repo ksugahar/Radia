@@ -9,6 +9,8 @@ script's ``section_mesh``; meshing is not exercised here.  150 kHz copper,
 radius 200 mm, 1 A terminal current.  The baseline checks historical output of
 the production entry, not accuracy against the P2 reference; changed kernels
 need reviewed regeneration, not tolerance relaxation.  Runtime is metadata.
+APPROVAL-20261116-FIN-PEEC-SURROGATE-TOL-01 sets rtol=1e-6 and atol=0; relative
+perturbations of 1e-5 in the inductance or conductivity fail it, 1e-6 survive.
 """
 from __future__ import annotations
 

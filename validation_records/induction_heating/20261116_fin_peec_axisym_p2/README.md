@@ -46,14 +46,16 @@ The observed rates are about 1.4 to 2.9. The finest errors are 0.073 % in R,
 ## Surrogate test
 
 `tests/test_ih_fin_peec_axisym_surrogate.py` locks the output of the 0.06 mm
-level at the recorded source, with rtol 1e-9 and atol 0. That tolerance is
-proposed and needs the user's approval. Two temporary production mutations
-were tried and then restored:
+level at the recorded source, with rtol 1e-6 and atol 0. The user approved that
+tolerance on 2026-11-16 (APPROVAL-20261116-FIN-PEEC-SURROGATE-TOL-01). Two
+temporary production mutations were tried at two sizes and then restored:
 
-- scaling the ring inductance by (1 + 1e-6);
-- scaling the conductivity by (1 + 1e-6).
+- scaling the ring inductance by (1 + eps);
+- scaling the conductivity by (1 + eps).
 
-The test failed on both and passed on the restored source.
+With eps = 1e-5 the test fails on both (R moves 4.8e-6 and 5.2e-6, against
+an allowed 1e-6). With eps = 1e-6 both survive (R moves about 5e-7); this gap
+follows from the tolerance and stays disclosed. The restored source passes.
 
 ## Review
 
