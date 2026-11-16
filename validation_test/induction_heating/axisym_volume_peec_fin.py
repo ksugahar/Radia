@@ -404,6 +404,51 @@ def load_sequences(paths, args, provenance, settings, tol):
     return sequences
 
 
+def resolve_reference(sequences, orders, exteriors, expected_of, targets):
+    """Certify every sequence and resolve the reference from the final checkpoints.
+
+    The reference is the final checkpoint of the highest order at the widest exterior. Its checks compare the last two
+    checkpoints of every sequence (mesh), every exterior at the highest order and every order at the widest exterior,
+    each relative to the finer or reference level; the reference is resolved when every sequence is certified, both
+    orders and exteriors are swept, the terminal Re(V/I) agrees with the dissipation within 1e-3 and every check is
+    within one tenth of its target. Saved verdicts are re-derived by the same function.
+    """
+    by = {(s["order"], s["exterior_factor"]): s for s in sequences}
+    want = {(o, f) for o in orders for f in exteriors}
+    if set(by) != want or len(by) != len(sequences):
+        raise ValueError(f"sequences {sorted(by)} do not cover orders x exteriors {sorted(want)} once each")
+    top, wide = max(orders), max(exteriors)
+    certification = {f"o{s['order']}_f{s['exterior_factor']}": certify_sequence(s, expected_of(s["order"]))
+                     for s in sequences}
+    converged = all(s["converged"] for s in sequences) and not any(certification.values())
+    swept = len(set(orders)) >= 2 and len(set(exteriors)) >= 2
+    # A sequence stopped by its budget before any checkpoint leaves no reference to compare with.
+    missing = sorted(f"o{o}_f{f}" for (o, f), s in by.items() if not any(r["checkpoint"] for r in s["levels"]))
+    out = dict(certification=certification, converged=converged, swept=swept, missing=missing, reference=None,
+               reference_level=None, checks=None, spread=None, consistent=False, resolved=False)
+    if missing:
+        return out
+    final = {key: [r for r in s["levels"] if r["checkpoint"]][-1] for key, s in by.items()}
+    best = final[(top, wide)]
+    ref_q = quantities(best)
+    rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
+    checks = {}
+    for (o, f), s in sorted(by.items()):            # mesh: the last two adaptive checkpoints
+        lv = [r for r in s["levels"] if r["checkpoint"]]
+        # relative to the finer level, as in the stopping test
+        checks[f"mesh_o{o}_f{f}"] = rel(lv[-2], lv[-1]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
+    for f in exteriors:                              # exterior, at the highest order
+        checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
+    for o in orders:                                 # order, at the widest exterior
+        checks[f"order_o{o}"] = rel(final[(o, wide)], best)
+    spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
+    consistent = best["terminal_vs_energy_R"] <= 1e-3
+    resolved = swept and consistent and converged and all(v <= 0.1*targets[k] for k, v in spread.items())
+    out.update(reference=ref_q, reference_level=best, checks=checks, spread=spread, consistent=consistent,
+               resolved=resolved)
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--radius-mm", type=float, default=200.0)
@@ -473,40 +518,11 @@ def main():
         sequences = load_sequences(args.ref_sequence_json, args, provenance, settings, tol)
     else:
         sequences = [run(o, f) for o in args.ref_order for f in args.ref_exterior_factor]
-    by = {(s["order"], s["exterior_factor"]): s for s in sequences}
-    want = {(o, f) for o in args.ref_order for f in args.ref_exterior_factor}
-    if set(by) != want:
-        raise ValueError(f"sequences {sorted(by)} do not cover orders x exteriors {sorted(want)}")
-    top = max(args.ref_order)
-    wide = max(args.ref_exterior_factor)
-    # Saved sequences were certified on load; live ones are certified here by the same rule.
-    certification = {f"o{s['order']}_f{s['exterior_factor']}":
-                     certify_sequence(s, expected_settings(args, settings, s["order"], tol)) for s in sequences}
-    converged = all(s["converged"] for s in sequences) and not any(certification.values())
-    swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
-    # A sequence stopped by its budget before any checkpoint leaves no reference to compare with.
-    missing = sorted(f"o{o}_f{f}" for (o, f), s in by.items() if not any(r["checkpoint"] for r in s["levels"]))
-    if missing:
-        ref_q = checks = spread = None
-        consistent = resolved = False
-    else:
-        final = {key: [r for r in s["levels"] if r["checkpoint"]][-1] for key, s in by.items()}
-        best = final[(top, wide)]
-        ref_q = quantities(best)
-        rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
-        checks = {}
-        for (o, f), s in sorted(by.items()):            # mesh: the last two adaptive checkpoints
-            lv = [r for r in s["levels"] if r["checkpoint"]]
-            # relative to the finer level, as in the stopping test
-            checks[f"mesh_o{o}_f{f}"] = rel(lv[-2], lv[-1]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
-        for f in args.ref_exterior_factor:               # exterior, at the highest order
-            checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
-        for o in args.ref_order:                         # order, at the widest exterior
-            checks[f"order_o{o}"] = rel(final[(o, wide)], best)
-        spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
-        consistent = best["terminal_vs_energy_R"] <= 1e-3
-        resolved = (swept and consistent and converged
-                    and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items()))
+    res = resolve_reference(sequences, args.ref_order, args.ref_exterior_factor,
+                            lambda order: expected_settings(args, settings, order, tol), PHYSICAL_TARGETS)
+    certification, converged, swept, missing = res["certification"], res["converged"], res["swept"], res["missing"]
+    ref_q, checks, spread = res["reference"], res["checks"], res["spread"]
+    consistent, resolved = res["consistent"], res["resolved"]
     reference = [dict(level, order=s["order"]) for s in sequences for level in s["levels"]]
 
     peec = []
