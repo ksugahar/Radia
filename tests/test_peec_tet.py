@@ -1,12 +1,14 @@
 """Native tetrahedral volume PEEC kernel (rad_peec_tet via radia.peec_tet).
 
 Guards: the closed-form tetrahedron potentials of ``peec_matrices.tet_potential`` against a
-high-order collapsed Gauss rule and Poisson's equation; the partial inductance and dense
+high-order collapsed Gauss rule and Poisson's equation, and their continuity across an edge;
+invariance of the element inductance under translation and vertex relabeling; the partial inductance and dense
 circuit of ``tet_inductance`` / ``tet_kkt_solve`` on a coarse revolved copper ring against the
 exact DC resistance of a rectangular ring and the axisymmetric ring kernel; symmetry and
 positive definiteness of L; the HACApK operator ``TetPEECHMatrix`` and the preconditioned GMRES
-circuit (``operator="hmatrix"``) against that dense route on a ring with low-rank blocks; loud
-refusal of invalid input.
+circuit (``operator="hmatrix"``) against that dense route on a ring with low-rank blocks; the
+recovered face basis against NGSolve unit-DOF fields; loud refusal of invalid input (degenerate or
+curved elements, several bodies, nonpositive conductivity).
 Assumes: Netgen meshes the OCC ring; the axisymmetric kernel is the independently validated route.
 """
 
@@ -69,6 +71,39 @@ def test_potential_is_finite_on_vertices_and_edges():
         assert np.isfinite(p0) and np.all(np.isfinite(p1)), (x, p0, p1)
 
 
+@pytest.mark.parametrize("side", [1.0, -1.0])
+def test_potential_is_continuous_across_an_edge(side):
+    mid = 0.5*(TET[0] + TET[3])
+    e = (TET[3] - TET[0])/np.linalg.norm(TET[3] - TET[0])
+    off = np.cross(e, [0.0, 0.0, 1.0])
+    off = side*off/np.linalg.norm(off)
+    q0, q1 = pm.tet_potential(mid, TET)
+    for eps in (1e-12, 1e-11, 1e-10, 1e-9, 1e-8):
+        p0, p1 = pm.tet_potential(mid + eps*off, TET)
+        assert np.isfinite(p0) and np.all(np.isfinite(p1)), (eps, p0, p1)
+        assert abs(p0 - q0) < 1e-6*abs(q0) and np.abs(np.array(p1) - q1).max() < 1e-6*np.abs(q1).max(), (eps, p0, q0)
+
+
+def single_tet_inductance(verts, perm=(0, 1, 2, 3)):
+    """Inductance of the four face currents of one tetrahedron, faces labeled by the original vertex."""
+    v = np.asarray(verts)[list(perm)]
+    vol = abs(np.linalg.det(v[1:] - v[0]))/6
+    coef = np.full((1, 4), 1/(6*vol))
+    dof = np.array([list(perm)], dtype=np.int32)               # the face opposite original vertex perm[k]
+    return pm.tet_inductance(v*1.0, np.array([[0, 1, 2, 3]], dtype=np.int32), coef, dof, 4)
+
+
+def test_element_inductance_is_invariant_under_translation_and_relabeling():
+    small = TET*1e-3
+    ref = single_tet_inductance(small)
+    for shift in (1e3, 1e4):
+        moved = single_tet_inductance(small + shift)
+        assert np.linalg.norm(moved - ref) < 1e-8*np.linalg.norm(ref), (shift, moved, ref)
+    for perm in ((1, 0, 2, 3), (3, 2, 1, 0), (2, 3, 0, 1)):
+        relabeled = single_tet_inductance(small, perm)
+        assert np.linalg.norm(relabeled - ref) < 1e-12*np.linalg.norm(ref), (perm, relabeled, ref)
+
+
 def ring_mesh(maxh):
     from netgen.occ import X, Y, Z, Axes, Axis, Glue, OCCGeometry, WorkPlane
     face = WorkPlane(Axes((R0 - A/2, 0, -A/2), n=-Y, h=X)).Rectangle(A, A).Face()
@@ -125,6 +160,22 @@ def test_inductance_is_symmetric_positive_definite(coarse_ring):
     assert np.linalg.eigvalsh(L).min() > 0, np.linalg.eigvalsh(L).min()
 
 
+def test_face_basis_reproduces_ngsolve_unit_dof_fields(coarse_ring):
+    mesh, _ = coarse_ring
+    fes = ng.HDiv(mesh, order=0, RT=True)
+    pts, tets, order, coef = _face_basis(mesh, fes)
+    gf = ng.GridFunction(fes)
+    lam = np.array([0.1, 0.2, 0.3, 0.4])
+    for d in (0, 7, fes.ndof//2, fes.ndof - 1):
+        gf.vec[:] = 0.0
+        gf.vec[d] = 1.0
+        for e, k in zip(*np.nonzero(order == d)):
+            x = lam @ pts[tets[e]]
+            w = np.asarray(gf(mesh(*x))).ravel()
+            expect = coef[e, k]*(x - pts[tets[e, k]])
+            assert np.abs(w - expect).max() <= 1e-10*np.abs(expect).max(), (d, e, k, w, expect)
+
+
 @pytest.fixture(scope="module")
 def fine_ring():
     return ring_mesh(1e-3)
@@ -174,3 +225,16 @@ def test_invalid_input_is_refused():
         solve_tet_peec(ring_mesh(4e-3), SIGMA, 100.0, "missing")
     with pytest.raises(ValueError, match="operator must be"):
         solve_tet_peec(ring_mesh(4e-3), SIGMA, 100.0, "cut", operator="sparse")
+    for bad in (-SIGMA, 0.0, float("nan"), ng.IfPos(ng.x - R0, -SIGMA, SIGMA)):
+        with pytest.raises(ValueError, match="sigma must be"):
+            solve_tet_peec(ring_mesh(4e-3), bad, 100.0, "cut")
+    curved = ring_mesh(4e-3)
+    curved.Curve(2)
+    with pytest.raises(ValueError, match="curved"):
+        solve_tet_peec(curved, SIGMA, 100.0, "cut")
+    from netgen.occ import Box, Glue, OCCGeometry, X
+    a, b = Box((0, 0, 0), (1e-3, 1e-3, 1e-3)), Box((3e-3, 0, 0), (4e-3, 1e-3, 1e-3))
+    a.faces.Min(X).name = "cut"
+    two = ng.Mesh(OCCGeometry(Glue([a, b])).GenerateMesh(maxh=5e-4))
+    with pytest.raises(ValueError, match="face-connected bodies"):
+        solve_tet_peec(two, SIGMA, 100.0, "cut")

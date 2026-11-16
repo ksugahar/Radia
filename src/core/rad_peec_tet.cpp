@@ -65,9 +65,11 @@ void FaceIntegrals(const V3& x, const V3& a, const V3& b, const V3& c, const V3&
         const double R02 = t * t + h * h;
         if (std::fabs(t) <= 1e-12 * len)
             continue;                                   // x on the edge line: every term carries t
-        // ln((R+ + l+)/(R- + l-)), mirrored where both ends lie on the negative side
-        const double Li = (lp + lm >= 0.0) ? std::log((Rp + lp) / (Rm + lm))
-                                            : std::log((Rm - lm) / (Rp - lp));
+        // ln((R+ + l+)/(R- + l-)); where l < 0, R + l = R0^2/(R - l) avoids the cancellation
+        // for points close to the edge line (R0^2 = t^2 + h^2 > 0 here).
+        const double up = lp >= 0.0 ? Rp + lp : R02 / (Rp - lp);
+        const double um = lm >= 0.0 ? Rm + lm : R02 / (Rm - lm);
+        const double Li = std::log(up / um);
         sum_tl += t * Li;
         sum_beta += std::atan(t * lp / (R02 + ah * Rp)) - std::atan(t * lm / (R02 + ah * Rm));
         sum_te += t * 0.5 * (lp * Rp - lm * Rm + R02 * Li);
@@ -77,8 +79,8 @@ void FaceIntegrals(const V3& x, const V3& a, const V3& b, const V3& c, const V3&
 }
 
 struct Tet {
-    V3 v[4];
-    V3 centroid;
+    V3 v[4];                      // vertices relative to the centroid (local frame)
+    V3 centroid;                  // global centroid
     double volume = 0.0;
     double radius = 0.0;          // bounding radius about the centroid
     V3 n[4];                      // outward unit normal of the face opposite vertex k
@@ -87,13 +89,16 @@ struct Tet {
 
 Tet MakeTet(const double* P, const int* idx, std::size_t e) {
     Tet T;
+    V3 g[4];
     for (int k = 0; k < 4; ++k)
-        T.v[k] = {P[3 * idx[k]], P[3 * idx[k] + 1], P[3 * idx[k] + 2]};
-    T.centroid = mul(0.25, add(add(T.v[0], T.v[1]), add(T.v[2], T.v[3])));
+        g[k] = {P[3 * idx[k]], P[3 * idx[k] + 1], P[3 * idx[k] + 2]};
+    T.centroid = mul(0.25, add(add(g[0], g[1]), add(g[2], g[3])));
+    for (int k = 0; k < 4; ++k)
+        T.v[k] = sub(g[k], T.centroid);
     T.volume = std::fabs(dot(sub(T.v[1], T.v[0]), cross(sub(T.v[2], T.v[0]), sub(T.v[3], T.v[0])))) / 6.0;
     double scale = 0.0;
     for (int k = 0; k < 4; ++k) {
-        T.radius = std::max(T.radius, norm(sub(T.v[k], T.centroid)));
+        T.radius = std::max(T.radius, norm(T.v[k]));
         for (int j = 0; j < 4; ++j)
             scale = std::max(scale, norm(sub(T.v[k], T.v[j])));
     }
@@ -116,6 +121,7 @@ Tet MakeTet(const double* P, const int* idx, std::size_t e) {
     return T;
 }
 
+// x and the returned p1 = int (y - c)/R dy in the local frame of T (relative to its centroid c).
 void Potential(const V3& x, const Tet& T, double& p0, V3& p1) {
     p0 = 0.0;
     V3 flux = {0.0, 0.0, 0.0};
@@ -151,17 +157,22 @@ void GaussLegendre01(int n, std::vector<double>& t, std::vector<double>& w) {
     }
 }
 
+// Collapsed rule in the local frame; the apex and edge order follow the lexicographic order of
+// the vertex coordinates, so a relabeled element gets the same points.
 Rule MakeRule(const Tet& T, int n) {
     std::vector<double> t, w;
     GaussLegendre01(n, t, w);
     Rule r;
-    const V3 e1 = sub(T.v[1], T.v[0]), e2 = sub(T.v[2], T.v[0]), e3 = sub(T.v[3], T.v[0]);
+    int o[4] = {0, 1, 2, 3};
+    std::sort(o, o + 4, [&](int a, int b) { return T.v[a] < T.v[b]; });
+    const V3& v0 = T.v[o[0]];
+    const V3 e1 = sub(T.v[o[1]], v0), e2 = sub(T.v[o[2]], v0), e3 = sub(T.v[o[3]], v0);
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
             for (int k = 0; k < n; ++k) {
                 const double u = t[i], v = t[j], s = t[k];
                 const double a = u, b = v * (1 - u), c = s * (1 - u) * (1 - v);
-                r.x.push_back(add(T.v[0], add(mul(a, e1), add(mul(b, e2), mul(c, e3)))));
+                r.x.push_back(add(v0, add(mul(a, e1), add(mul(b, e2), mul(c, e3)))));
                 r.w.push_back(w[i] * w[j] * w[k] * (1 - u) * (1 - u) * (1 - v) * 6.0 * T.volume);
             }
     return r;
@@ -177,17 +188,19 @@ void TetPotential(const double x[3], const double v[4][3], double& p0, double p1
     const int idx[4] = {0, 1, 2, 3};
     const Tet T = MakeTet(P, idx, 0);
     V3 q;
-    Potential({x[0], x[1], x[2]}, T, p0, q);
+    Potential(sub({x[0], x[1], x[2]}, T.centroid), T, p0, q);
     for (int j = 0; j < 3; ++j)
-        p1[j] = q[j];
+        p1[j] = q[j] + p0 * T.centroid[j];
 }
 
 namespace {
 
-// Directed moments of the pair (A outer, B inner), classified by centroid distance.
+// Directed moments of the pair (A outer, B inner), classified by centroid distance; x is taken
+// relative to the centroid of A and y to that of B, so no moment carries the global position.
 void DirectedMoments(const Tet& A, const Rule& nearA, const Rule& modA, const Tet& B, const Rule& modB,
                      double near_factor, double moderate_factor, PairMoments& M) {
-    const double d = norm(sub(A.centroid, B.centroid));
+    const V3 dab = sub(A.centroid, B.centroid);
+    const double d = norm(dab);
     const double s = A.radius + B.radius;
     double S0 = 0.0, Sxp = 0.0;
     V3 Sx = {0, 0, 0}, Sp = {0, 0, 0};
@@ -201,7 +214,7 @@ void DirectedMoments(const Tet& A, const Rule& nearA, const Rule& modA, const Te
         for (std::size_t q = 0; q < nearA.x.size(); ++q) {
             double p0;
             V3 p1;
-            Potential(nearA.x[q], B, p0, p1);
+            Potential(add(dab, nearA.x[q]), B, p0, p1);
             accumulate(nearA.x[q], nearA.w[q], p0, p1);
         }
     } else if (d < moderate_factor * s) {
@@ -209,7 +222,7 @@ void DirectedMoments(const Tet& A, const Rule& nearA, const Rule& modA, const Te
             double p0 = 0.0;
             V3 p1 = {0, 0, 0};
             for (std::size_t j = 0; j < modB.x.size(); ++j) {
-                const double g = modB.w[j] / norm(sub(modA.x[q], modB.x[j]));
+                const double g = modB.w[j] / norm(sub(add(dab, modA.x[q]), modB.x[j]));
                 p0 += g;
                 p1 = add(p1, mul(g, modB.x[j]));
             }
@@ -217,7 +230,7 @@ void DirectedMoments(const Tet& A, const Rule& nearA, const Rule& modA, const Te
         }
     } else {
         const double g = B.volume / d;
-        accumulate(A.centroid, A.volume, g, mul(g, B.centroid));
+        accumulate({0.0, 0.0, 0.0}, A.volume, g, {0.0, 0.0, 0.0});
     }
     M.S0 = S0;
     M.Sxp = Sxp;
@@ -442,7 +455,7 @@ void InductanceKernel::Support(int i, double center[3], double& radius) const {
         throw std::out_of_range("peec_tet::InductanceKernel::Support: DOF out of range");
     const auto& o = I.owners[i];
     const Tet& A = I.T[o[0].tet];
-    V3 c = {0, 0, 0};
+    V3 c = {0, 0, 0};                                  // face centroid, local frame of A
     for (int j = 0; j < 4; ++j)
         if (j != o[0].k)
             c = add(c, mul(1.0 / 3.0, A.v[j]));
@@ -450,11 +463,12 @@ void InductanceKernel::Support(int i, double center[3], double& radius) const {
     for (const auto& a : o) {
         if (a.tet < 0)
             continue;
+        const V3 shift = sub(I.T[a.tet].centroid, A.centroid);
         for (int j = 0; j < 4; ++j)
-            radius = std::max(radius, norm(sub(I.T[a.tet].v[j], c)));
+            radius = std::max(radius, norm(sub(add(shift, I.T[a.tet].v[j]), c)));
     }
     for (int j = 0; j < 3; ++j)
-        center[j] = c[j];
+        center[j] = A.centroid[j] + c[j];
 }
 
 KKTSolution SolveKKT(std::size_t n_dof, const std::vector<double>& L, const Triplets& R, std::size_t n_con,

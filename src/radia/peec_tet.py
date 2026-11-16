@@ -29,6 +29,8 @@ from .peec_matrices import tet_inductance, tet_kkt_solve
 def _face_basis(mesh, fes):
     """Per (tetrahedron, local face k): global DOF and c in w = c (x - v_k), from NGSolve's basis."""
     import ngsolve as ng
+    if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
+        raise ValueError("peec_tet: curved or deformed meshes are not supported (flat tetrahedra only)")
     els = list(mesh.Elements(ng.VOL))
     if any(el.type != ng.ET.TET for el in els):
         raise ValueError("peec_tet: every volume element must be a tetrahedron")
@@ -68,11 +70,24 @@ def _face_basis(mesh, fes):
     M = np.concatenate([np.transpose(V, (0, 2, 1)), np.ones((len(els), 1, 4))], axis=1)   # (m, 4, 4)
     a = np.linalg.solve(M, np.concatenate([-b, A[:, None]], axis=1)[..., None])[..., 0]
     pred = A[:, None]*X[:, 2] + b
-    scale = np.abs(W).max()
-    if np.abs(pred - W[:, 2]).max() > 1e-9*scale:
+    scale = np.abs(W).max(axis=(1, 2))                         # per element
+    if np.any(np.abs(pred - W[:, 2]).max(axis=1) > 1e-9*scale):
         raise ValueError("peec_tet: the face basis is not affine on some element (curved geometry?)")
     coef = a / r[order]
     return pts, tets, order, coef
+
+
+def _check_one_body(order, interior, ne):
+    """Refuse meshes whose tetrahedra do not form one face-connected body (one cell is grounded)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    e, _ = np.nonzero(np.isin(order, interior))
+    d = order[np.isin(order, interior)]
+    pairs = np.argsort(d, kind="stable")
+    a, b = e[pairs][0::2], e[pairs][1::2]                       # each interior face joins two cells
+    n_comp, _ = connected_components(coo_matrix((np.ones(len(a)), (a, b)), shape=(ne, ne)), directed=False)
+    if n_comp != 1:
+        raise ValueError(f"peec_tet: the conductor mesh has {n_comp} face-connected bodies; one is supported")
 
 
 def _schur_inverse(mesh, s_full):
@@ -153,8 +168,10 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
     """Impedance and losses of a conductor driven by a loop voltage across the internal surface ``cut``.
 
     Args:
-        mesh: NGSolve mesh of the conductor only (flat tetrahedra, one connected body).
-        sigma: conductivity [S/m], number or NGSolve CoefficientFunction.
+        mesh: NGSolve mesh of the conductor only (flat, undeformed tetrahedra forming one face-connected
+            body; checked).
+        sigma: conductivity [S/m], number or real scalar CoefficientFunction; it must be finite and
+            positive at the resistance quadrature points (checked).
         frequency_hz: drive frequency [Hz] (> 0), or a sequence of them sharing one assembled L.
         cut: boundary name of the internal surface carrying the voltage gap.
         region: optional dict name -> volume region regex; losses are integrated per entry.
@@ -167,8 +184,8 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
 
     Returns:
         dict (a list of dicts for a sequence of frequencies) with frequency_hz, R_ohm, L_H, impedance_ohm,
-        power_balance, region_loss_W_per_A2, total_loss_W_per_A2, true_relative_residual, unknowns, tets, assembly_s, solve_s, operator, iterations and, for the
-        hmatrix route, the H-matrix statistics.
+        power_balance, region_loss_W_per_A2, total_loss_W_per_A2, true_relative_residual, unknowns, tets,
+        assembly_s, solve_s, operator, iterations and, for the hmatrix route, the H-matrix statistics.
     """
     import ngsolve as ng
     freqs = np.atleast_1d(np.asarray(frequency_hz, dtype=float))
@@ -176,7 +193,14 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
         raise ValueError("frequency_hz must be positive (a number or a sequence)")
     if cut not in mesh.GetBoundaries():
         raise ValueError(f"cut surface {cut!r} not among the mesh boundaries")
+    ir = ng.IntegrationRule(ng.ET.TET, 2)                       # exact for the affine face currents
     sig = ng.CoefficientFunction(sigma)
+    if sig.dim != 1 or sig.is_complex:
+        raise ValueError("sigma must be a real scalar conductivity")
+    sig_q = np.asarray(sig(mesh.MapToAllElements(ir, ng.VOL))).ravel()
+    if not (np.all(np.isfinite(sig_q)) and np.all(sig_q > 0)):
+        raise ValueError(f"sigma must be finite and positive at the resistance quadrature points "
+                         f"(min {np.min(sig_q):.6g})")
     fes = ng.HDiv(mesh, order=0, RT=True)
     pts, tets, order, coef = _face_basis(mesh, fes)
     counts = np.bincount(order.ravel(), minlength=fes.ndof)
@@ -184,6 +208,7 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
     compact = -np.ones(fes.ndof, dtype=np.int64)
     compact[interior] = np.arange(len(interior))
     face_dof = compact[order].astype(np.int32)
+    _check_one_body(order, interior, mesh.ne)
     if operator not in ("dense", "hmatrix"):
         raise ValueError(f"operator must be 'dense' or 'hmatrix', not {operator!r}")
     n, N = len(interior), len(interior) + mesh.ne - 1
@@ -203,7 +228,7 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
     l2 = ng.L2(mesh, order=0)
     q = l2.TestFunction()
     Rf = ng.BilinearForm(fes)
-    Rf += (1/sig)*u*v*ng.dx
+    Rf += (1/sig)*u*v*ng.dx(intrules={ng.ET.TET: ir})
     Rf.Assemble()
     Df = ng.BilinearForm(trialspace=fes, testspace=l2)
     Df += ng.div(u)*q*ng.dx
