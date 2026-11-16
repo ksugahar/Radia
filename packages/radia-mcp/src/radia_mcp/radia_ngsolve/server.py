@@ -703,7 +703,7 @@ def taskmanager(topic: str = "overview") -> str:
             "usage"             - `with TaskManager():` pattern, when to wrap
             "set_num_threads"   - `SetNumThreads()` + `--nthreads` CLI convention
             "mkl_interaction"   - TaskManager vs MKL thread pool nesting
-                                  (alias: "mkl", "pardiso")
+                                  (alias: "mkl")
             "cpp_kernels"       - `ngcore::ParallelFor` in custom C++ TUs
                                   (alias: "cpp", "parallel_for")
             "audit_radia_ih"    - 2026-05-27 IH panel solver audit

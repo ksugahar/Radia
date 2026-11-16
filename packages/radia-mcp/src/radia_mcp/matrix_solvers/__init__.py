@@ -1,7 +1,7 @@
 """radia_mcp.matrix_solvers: sparse linear solver theory + decision layer.
 
 Covers:
-- Direct sparse solvers (LU / PARDISO / MUMPS / SuperLU)
+- Direct sparse solvers (SparseCholesky / LU / MUMPS / SuperLU)
 - Krylov subspace methods (CG / BiCGSTAB / GMRES / COCG / COCR / IDR(s))
 - Preconditioners (Jacobi/SOR / IC/MIC/ILU / AMG / AMS Hiptmair-Xu)
 - EM-specific (tree-cotree gauge / Biro-Preis A-V / shifted prec for air+conductor)
