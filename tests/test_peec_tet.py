@@ -107,7 +107,10 @@ def test_element_inductance_is_invariant_under_translation_and_relabeling():
 def ring_mesh(maxh):
     from netgen.occ import X, Y, Z, Axes, Axis, Glue, OCCGeometry, WorkPlane
     face = WorkPlane(Axes((R0 - A/2, 0, -A/2), n=-Y, h=X)).Rectangle(A, A).Face()
-    shape = Glue([face.Revolve(Axis((0, 0, 0), Z), 180), face.Revolve(Axis((0, 0, 0), Z), -180)])
+    halves = [face.Revolve(Axis((0, 0, 0), Z), 180), face.Revolve(Axis((0, 0, 0), Z), -180)]
+    halves[0].mat("upper")
+    halves[1].mat("lower")
+    shape = Glue(halves)
     for f in shape.faces:
         c = f.center
         f.name = ("cut" if c.x > 0 else "joint") if abs(c.y) < 1e-9 else "surface"
@@ -208,6 +211,19 @@ def test_hmatrix_circuit_matches_the_dense_route(fine_ring):
         assert dz < 1e-7, (c["frequency_hz"], c["impedance_ohm"], d["impedance_ohm"])
         assert c["power_balance"] < 1e-8, c
     assert dense[1]["R_ohm"] > 1.02*dense[0]["R_ohm"], (dense[0]["R_ohm"], dense[1]["R_ohm"])   # skin effect
+
+
+def test_variable_conductivity_losses_close_on_the_discrete_resistance(coarse_ring):
+    mesh, _ = coarse_ring
+    sigma = SIGMA*(1.2 + ng.sin(9000*ng.x))                     # positive, varies inside the elements
+    with ng.TaskManager():
+        out = solve_tet_peec(mesh, sigma, 17.5e3, "cut", region={"upper": "upper", "lower": "lower"})
+    reg = out["region_loss_W_per_A2"]
+    assert out["power_balance"] < 1e-10, out                    # 2*loss = Re Z on the admitted quadrature
+    assert abs(reg["upper"] + reg["lower"] - out["total_loss_W_per_A2"]) < 1e-12*out["total_loss_W_per_A2"], reg
+    assert min(reg.values()) > 0.2*out["total_loss_W_per_A2"], reg
+    with pytest.raises(ValueError, match="matches no volume material"):
+        solve_tet_peec(mesh, SIGMA, 100.0, "cut", region={"tip": "tip"})
 
 
 def test_invalid_input_is_refused():

@@ -19,6 +19,7 @@ Normalization: per 1 A peak terminal current, ``exp(+j omega t)``.
 
 from __future__ import annotations
 
+import re
 import time
 
 import numpy as np
@@ -247,13 +248,13 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense"
     results = []
     for f_hz in freqs:
         results.append(_solve_frequency(
-            mesh, fes, sig, interior, n, g, operator, L if operator == "dense" else H, r_row, r_col,
+            mesh, fes, sig, ir, interior, n, g, operator, L if operator == "dense" else H, r_row, r_col,
             np.asarray(rv)[keep], d_row, d_col, dv[dkeep], float(f_hz), region, max_dense_gib, rtol, max_iter,
             restart, t1 - t0))
     return results if np.ndim(frequency_hz) else results[0]
 
 
-def _solve_frequency(mesh, fes, sig, interior, n, g, operator, Lop, r_row, r_col, r_val, d_row, d_col, d_val,
+def _solve_frequency(mesh, fes, sig, ir, interior, n, g, operator, Lop, r_row, r_col, r_val, d_row, d_col, d_val,
                      frequency_hz, region, max_dense_gib, rtol, max_iter, restart, assembly_s):
     import ngsolve as ng
     t1 = time.perf_counter()
@@ -275,10 +276,22 @@ def _solve_frequency(mesh, fes, sig, interior, n, g, operator, Lop, r_row, r_col
     gr, gi = ng.GridFunction(fes), ng.GridFunction(fes)
     gr.vec.FV().NumPy()[:] = full.real
     gi.vec.FV().NumPy()[:] = full.imag
-    dens = 0.5*(gr*gr + gi*gi)/sig
-    total_loss = ng.Integrate(dens, mesh)
-    regional = None if region is None else {
-        k: ng.Integrate(dens*mesh.MaterialCF({rx: 1.0}, default=0.0), mesh) for k, rx in region.items()}
+    # element losses with the resistance quadrature, so that 2*loss = u^H R u = Re Z holds discretely
+    l2 = ng.L2(mesh, order=0)
+    lf = ng.LinearForm(l2)
+    lf += 0.5*(gr*gr + gi*gi)/sig*l2.TestFunction()*ng.dx(intrules={ng.ET.TET: ir})
+    lf.Assemble()
+    element_loss = lf.vec.FV().NumPy().copy()                   # the order-0 L2 shape function is 1
+    total_loss = float(element_loss.sum())
+    regional = None
+    if region is not None:
+        mats = [el.mat for el in mesh.Elements(ng.VOL)]
+        regional = {}
+        for k, rx in region.items():
+            sel = np.array([re.fullmatch(rx, m) is not None for m in mats])
+            if not sel.any():
+                raise ValueError(f"region {k!r}: pattern {rx!r} matches no volume material of {sorted(set(mats))}")
+            regional[k] = float(element_loss[sel].sum())
     return dict(frequency_hz=frequency_hz, R_ohm=z.real, L_H=z.imag/omega, impedance_ohm=z,
                 power_balance=abs(2*total_loss - z.real)/z.real, total_loss_W_per_A2=total_loss,
                 region_loss_W_per_A2=regional, true_relative_residual=residual,
