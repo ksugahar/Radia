@@ -1,0 +1,247 @@
+{
+ "schema": "radia.ih.fin-peec-axisym-p2-adoption.v1",
+ "adoption_result": {
+  "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+  "verdict": "PASS",
+  "levels": [
+   {
+    "id": "R-h0.06",
+    "parameters": {
+     "quantity_index": 1,
+     "boundary_h_mm": 0.06
+    },
+    "error": 0.004912315618000096,
+    "relative_residual": 1.245035698661038e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+    "runtime_s": 3.385354999998526
+   },
+   {
+    "id": "partial_L-h0.06",
+    "parameters": {
+     "quantity_index": 2,
+     "boundary_h_mm": 0.06
+    },
+    "error": 8.178298926853067e-05,
+    "relative_residual": 1.245035698661038e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+    "runtime_s": 3.385354999998526
+   },
+   {
+    "id": "root_heat-h0.06",
+    "parameters": {
+     "quantity_index": 3,
+     "boundary_h_mm": 0.06
+    },
+    "error": 0.004565480815839629,
+    "relative_residual": 1.245035698661038e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+    "runtime_s": 3.385354999998526
+   },
+   {
+    "id": "tip_heat-h0.06",
+    "parameters": {
+     "quantity_index": 4,
+     "boundary_h_mm": 0.06
+    },
+    "error": 0.0076035634399311824,
+    "relative_residual": 1.245035698661038e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+    "runtime_s": 3.385354999998526
+   },
+   {
+    "id": "R-h0.04",
+    "parameters": {
+     "quantity_index": 1,
+     "boundary_h_mm": 0.04
+    },
+    "error": 0.0020786931971326084,
+    "relative_residual": 1.656913939373904e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+    "runtime_s": 6.518916599998192
+   },
+   {
+    "id": "partial_L-h0.04",
+    "parameters": {
+     "quantity_index": 2,
+     "boundary_h_mm": 0.04
+    },
+    "error": 4.4315172313069695e-05,
+    "relative_residual": 1.656913939373904e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+    "runtime_s": 6.518916599998192
+   },
+   {
+    "id": "root_heat-h0.04",
+    "parameters": {
+     "quantity_index": 3,
+     "boundary_h_mm": 0.04
+    },
+    "error": 0.002351052511339824,
+    "relative_residual": 1.656913939373904e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+    "runtime_s": 6.518916599998192
+   },
+   {
+    "id": "tip_heat-h0.04",
+    "parameters": {
+     "quantity_index": 4,
+     "boundary_h_mm": 0.04
+    },
+    "error": 0.0035555408773380037,
+    "relative_residual": 1.656913939373904e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+    "runtime_s": 6.518916599998192
+   },
+   {
+    "id": "R-h0.028",
+    "parameters": {
+     "quantity_index": 1,
+     "boundary_h_mm": 0.028
+    },
+    "error": 0.0007295019963242666,
+    "relative_residual": 2.1200897343253616e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+    "runtime_s": 14.864479900003062
+   },
+   {
+    "id": "partial_L-h0.028",
+    "parameters": {
+     "quantity_index": 2,
+     "boundary_h_mm": 0.028
+    },
+    "error": 2.4621878385033824e-05,
+    "relative_residual": 2.1200897343253616e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+    "runtime_s": 14.864479900003062
+   },
+   {
+    "id": "root_heat-h0.028",
+    "parameters": {
+     "quantity_index": 3,
+     "boundary_h_mm": 0.028
+    },
+    "error": 0.0008347515634491431,
+    "relative_residual": 2.1200897343253616e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+    "runtime_s": 14.864479900003062
+   },
+   {
+    "id": "tip_heat-h0.028",
+    "parameters": {
+     "quantity_index": 4,
+     "boundary_h_mm": 0.028
+    },
+    "error": 0.002140988792173504,
+    "relative_residual": 2.1200897343253616e-15,
+    "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+    "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+    "runtime_s": 14.864479900003062
+   }
+  ]
+ },
+ "original_verdict_sha256": "01ca3950670587242bf6a72aeeb33e04ebb2b59d9e9a3f0386a582199e48a364",
+ "verdict_schema": "radia.ih.axisym-volume-peec-fin.v1",
+ "script_sha256": "c9491792c5518b8adf292a45e031e1f1f7abfa58ed49ae1fb4845f1438477b74",
+ "peec_matrices_sha256": "dc5952fd119841ace49f0bc6dbdb3a755de6e17c7f151fd3dca374a557c62cad",
+ "axifem_sha256": "f2267c0ef1238f20de9dcaa6f29ea8140c34e3395183c46ffd112b8e675cc775",
+ "conditions": {
+  "radius_mm": 200.0,
+  "frequency_hz": 150000.0,
+  "sigma_S_per_m": 58000000.0,
+  "skin_depth_mm": 0.1706320094702169,
+  "cuts_mm": {
+   "root": [
+    1.6,
+    3.5
+   ],
+   "tip": [
+    3.5,
+    null
+   ]
+  },
+  "normalization": "per 1 A peak terminal current; loop-voltage port; exp(+j omega t)"
+ },
+ "reference": {
+  "order": 2,
+  "exterior_factor": 3.0,
+  "ndof": 194275,
+  "level": 7,
+  "R_ohm": 0.00791415454262376,
+  "L_H": 1.0686260681689345e-06,
+  "root_heat_W_per_A2": 0.0002068801759751401,
+  "tip_heat_W_per_A2": 0.0007986942989732105
+ },
+ "reference_spread_max": {
+  "R": 0.003128587892907208,
+  "partial_L": 0.0002959069461403646,
+  "root_heat": 0.0031316591199329765,
+  "tip_heat": 0.002015503482383127
+ },
+ "reference_resolved": true,
+ "reference_certification": {
+  "o1_f1.5": [],
+  "o1_f3.0": [],
+  "o2_f1.5": [],
+  "o2_f3.0": []
+ },
+ "peec_levels": [
+  {
+   "boundary_h_mm": 0.06,
+   "cells": 2726,
+   "R_ohm": 0.007875277717660762,
+   "L_H": 1.0687134636031998e-06,
+   "root_heat_W_per_A2": 0.00020593566850054808,
+   "tip_heat_W_per_A2": 0.0007926213762018563
+  },
+  {
+   "boundary_h_mm": 0.04,
+   "cells": 4271,
+   "R_ohm": 0.007897703443414951,
+   "L_H": 1.0686734245172836e-06,
+   "root_heat_W_per_A2": 0.00020639378981786733,
+   "tip_heat_W_per_A2": 0.0007958545087447145
+  },
+  {
+   "boundary_h_mm": 0.028,
+   "cells": 6847,
+   "R_ohm": 0.007908381151085697,
+   "L_H": 1.068652379750024e-06,
+   "root_heat_W_per_A2": 0.00020670748242479823,
+   "tip_heat_W_per_A2": 0.000796984303430736
+  }
+ ],
+ "physical_verdict": {
+  "status": "PASS",
+  "within_raw_limits": true,
+  "differences": {
+   "R": {
+    "relative": 0.0007295019963242888,
+    "limit": 0.05
+   },
+   "partial_L": {
+    "relative": 2.4621878384931882e-05,
+    "limit": 0.05
+   },
+   "root_heat": {
+    "relative": 0.0008347515634491496,
+    "limit": 0.05
+   },
+   "tip_heat": {
+    "relative": 0.002140988792173534,
+    "limit": 0.05
+   }
+  }
+ },
+ "not_claimed": "an axisymmetric drive only; the three-dimensional Cartesian partial elements of radia.volume_peec and any non-axisymmetric port are not exercised; root/tip mapping onto the 1.6/3.5 mm cuts is a proposal"
+}

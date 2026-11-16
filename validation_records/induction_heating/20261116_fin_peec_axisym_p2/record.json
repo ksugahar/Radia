@@ -1,0 +1,566 @@
+{
+ "schema": "radia.validation-record.v3",
+ "id": "induction_heating/20261116_fin_peec_axisym_p2",
+ "kind": "acceptance",
+ "question": "Does the axisymmetric volume PEEC of the beak fin converge to the adaptive P2 axisymmetric FE reference?",
+ "outcome": "pass",
+ "source": {
+  "repo_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+  "dirty": false,
+  "native_sha256": {
+   "peec_matrices": "dc5952fd119841ace49f0bc6dbdb3a755de6e17c7f151fd3dca374a557c62cad",
+   "axifem": "f2267c0ef1238f20de9dcaa6f29ea8140c34e3395183c46ffd112b8e675cc775"
+  },
+  "wheel_sha256": null,
+  "source_only": false,
+  "provenance": "exact"
+ },
+ "covered_paths": [
+  "src/radia/peec_axisym.py",
+  "src/core/rad_peec_axisym.cpp",
+  "src/core/rad_peec_axisym.h",
+  "src/lib/rad_peec_matrices_api.cpp",
+  "src/radia/eddy_axisym_ring.py",
+  "validation_test/induction_heating/axisym_volume_peec_fin.py",
+  "validation_test/induction_heating/fin_return_principle.py",
+  "validation_test/induction_heating/make_beak_fin_step.py"
+ ],
+ "entry": {
+  "script": "entry.py",
+  "script_sha256": "e5cb684f23967c1dea0904927ed1806798bd4f9988a808f838f8bd38f87cd455",
+  "command": [
+   "python",
+   "entry.py",
+   "verdict.json",
+   "mesh_hashes.json",
+   "adoption-result.json"
+  ]
+ },
+ "environment": {
+  "host_role": "build",
+  "os": "Windows",
+  "python": "3.12",
+  "ngsolve": "6.2.2608",
+  "threads": 8
+ },
+ "result": {
+  "path": "adoption-result.json",
+  "sha256": "440cb3e8ce787d70d18e31db1c974fb0c030dca7f37bcbc78644d1cd4823a6d2"
+ },
+ "key_values": {
+  "finest_R_error": {
+   "value": 0.0007295019963242666,
+   "unit": "1"
+  },
+  "finest_partial_L_error": {
+   "value": 2.4621878385033824e-05,
+   "unit": "1"
+  },
+  "finest_root_heat_error": {
+   "value": 0.0008347515634491431,
+   "unit": "1"
+  },
+  "finest_tip_heat_error": {
+   "value": 0.002140988792173504,
+   "unit": "1"
+  },
+  "reference_ndof": {
+   "value": 194275,
+   "unit": "1"
+  }
+ },
+ "limits": {
+  "finest_error": 0.05,
+  "minimum_rate": 1.0
+ },
+ "timing_s": {
+  "coarsest_peec": 3.385354999998526
+ },
+ "status": "current",
+ "stale_reason": null,
+ "superseded_by": null,
+ "private": false,
+ "milestone": "Fin physical verdict: axisymmetric volume PEEC against the adaptive P2 reference",
+ "claim": "Along boundary h 0.06, 0.04, 0.028 mm the PEEC errors in R, partial L, root and tip heat decrease strictly with log-ratio rate at least 1 and the finest error is at most 0.05.",
+ "date": "2026-11-16",
+ "radia_version": "5.4.2",
+ "conditions": {
+  "problem": "Beak fin, radius 200 mm, copper 5.8e7 S/m, 150 kHz, 1 A peak terminal current, exp(+j omega t)",
+  "mesh": "Netgen meridian triangles, boundary h 0.06/0.04/0.028 mm, interior 0.5 mm, grading 0.25",
+  "hardware": "CPU double precision, 8 threads"
+ },
+ "comparison": {
+  "reference": "Adaptive P2 axisymmetric A_phi FE (order 2, exterior factor 3, 194275 DOFs)",
+  "independence": "Differential FE route with an open exterior; no shared kernel or circuit solve"
+ },
+ "covered_sha256": {
+  "src/core/rad_peec_axisym.cpp": "8ccef9c8d5724fb447852871e835f301f88426c5c22fdea8b1466673d57a8bc0",
+  "src/core/rad_peec_axisym.h": "6ef950dad1356b0ca1e0ae4c44806d293f0e1dc146bfd7dd6e4d15c1d460575e",
+  "src/lib/rad_peec_matrices_api.cpp": "474fe548ee0f05fbef328c9cbe08b0619c3b3b837f2da3e00f291732afbcd22a",
+  "src/radia/eddy_axisym_ring.py": "5400731b1f5a6f286a54957b3604a377188799255f87aa70ff1b6f6b9b06a0dc",
+  "src/radia/peec_axisym.py": "de874a4ab7d85d84cc26eb340f52c52e731c65294e2f8ae92783ea247c3bb635",
+  "validation_test/induction_heating/axisym_volume_peec_fin.py": "c9491792c5518b8adf292a45e031e1f1f7abfa58ed49ae1fb4845f1438477b74",
+  "validation_test/induction_heating/fin_return_principle.py": "1e417d3b8927c290c3e1ce5ad4a7b66a59b637a95aea378800fc936f6b60a271",
+  "validation_test/induction_heating/make_beak_fin_step.py": "c54fda497a6f23374e03bf70ecaf190ce34f278460058215eb6c84480131c6dd"
+ },
+ "category": "adoption",
+ "supersedes": [],
+ "adoption": {
+  "feature": "radia.peec_axisym.solve_axisym_ring_peec:beak-fin-axisymmetric-drive",
+  "criterion": {
+   "reference": {
+    "kind": "independent-route",
+    "citation": "Adaptive axisymmetric A_phi finite elements (orders 1 and 2, exterior factors 1.5 and 3, ZZ indicator, Doerfler theta 0.5) run by validation_test/induction_heating/axisym_volume_peec_fin.py; the final level of order 2 at exterior factor 3 is the reference",
+    "independence": "A differential formulation with an open exterior on its own adaptive mesh; it shares no integral kernel, partial inductance or circuit solve with the PEEC route",
+    "shared_components": [
+     "beak section geometry (make_beak_fin_step._beak_face)",
+     "Netgen meshing",
+     "frequency, conductivity, radius and root/tip cut definitions"
+    ]
+   },
+   "quantity": {
+    "name": "relative error of the fin terminal and regional quantities",
+    "definition": "abs(Q_PEEC/Q_ref - 1) for Q in {R = Re(V/I), partial L = Im(V/I)/omega, root heat, tip heat}, per 1 A peak terminal current",
+    "unit": "1"
+   },
+   "variables": {
+    "quantity_index": "1 = R, 2 = partial L, 3 = root heat (1.6 to 3.5 mm), 4 = tip heat (beyond 3.5 mm); held fixed within a series",
+    "boundary_h_mm": "Netgen edge size on the section boundary in mm; interior 0.5 mm and grading 0.25 fixed"
+   },
+   "levels": [
+    {
+     "id": "R-h0.06",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.06
+     }
+    },
+    {
+     "id": "partial_L-h0.06",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.06
+     }
+    },
+    {
+     "id": "root_heat-h0.06",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.06
+     }
+    },
+    {
+     "id": "tip_heat-h0.06",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.06
+     }
+    },
+    {
+     "id": "R-h0.04",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.04
+     }
+    },
+    {
+     "id": "partial_L-h0.04",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.04
+     }
+    },
+    {
+     "id": "root_heat-h0.04",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.04
+     }
+    },
+    {
+     "id": "tip_heat-h0.04",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.04
+     }
+    },
+    {
+     "id": "R-h0.028",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.028
+     }
+    },
+    {
+     "id": "partial_L-h0.028",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.028
+     }
+    },
+    {
+     "id": "root_heat-h0.028",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.028
+     }
+    },
+    {
+     "id": "tip_heat-h0.028",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.028
+     }
+    }
+   ],
+   "series": [
+    {
+     "id": "R-boundary-h",
+     "level_ids": [
+      "R-h0.06",
+      "R-h0.04",
+      "R-h0.028"
+     ],
+     "axis": "boundary_h_mm",
+     "direction": "decreasing",
+     "rate_model": "log-ratio",
+     "minimum_rate": 1.0,
+     "monotonicity": "strict-decrease",
+     "finest_threshold": {
+      "operator": "le",
+      "value": 0.05
+     },
+     "expected_theory": {
+      "model": "Piecewise-constant ring currents on graded meridian triangles; first order in the boundary cell size is the user-approved lower bound (minimum rate 1)",
+      "norm": "relative error of a scalar functional (equivalent R, partial L, root or tip heat per A^2) against the final adaptive P2 reference level; not an energy norm",
+      "source": "Adaptive P2 axisymmetric A_phi reference resolved by validation_test/induction_heating/axisym_volume_peec_fin.py",
+      "assumptions": "Fixed section, radius, sigma, frequency and drive; only the boundary edge size of the meridian mesh changes (interior 0.5 mm, grading 0.25); reference spread below one tenth of the 5 percent limit",
+      "limitations": "Axisymmetric drive at 150 kHz only, skin depth about 0.17 mm; no 3D tetrahedral route, non-axisymmetric port, temperature dependence or other geometry is claimed"
+     }
+    },
+    {
+     "id": "partial_L-boundary-h",
+     "level_ids": [
+      "partial_L-h0.06",
+      "partial_L-h0.04",
+      "partial_L-h0.028"
+     ],
+     "axis": "boundary_h_mm",
+     "direction": "decreasing",
+     "rate_model": "log-ratio",
+     "minimum_rate": 1.0,
+     "monotonicity": "strict-decrease",
+     "finest_threshold": {
+      "operator": "le",
+      "value": 0.05
+     },
+     "expected_theory": {
+      "model": "Piecewise-constant ring currents on graded meridian triangles; first order in the boundary cell size is the user-approved lower bound (minimum rate 1)",
+      "norm": "relative error of a scalar functional (equivalent R, partial L, root or tip heat per A^2) against the final adaptive P2 reference level; not an energy norm",
+      "source": "Adaptive P2 axisymmetric A_phi reference resolved by validation_test/induction_heating/axisym_volume_peec_fin.py",
+      "assumptions": "Fixed section, radius, sigma, frequency and drive; only the boundary edge size of the meridian mesh changes (interior 0.5 mm, grading 0.25); reference spread below one tenth of the 5 percent limit",
+      "limitations": "Axisymmetric drive at 150 kHz only, skin depth about 0.17 mm; no 3D tetrahedral route, non-axisymmetric port, temperature dependence or other geometry is claimed"
+     }
+    },
+    {
+     "id": "root_heat-boundary-h",
+     "level_ids": [
+      "root_heat-h0.06",
+      "root_heat-h0.04",
+      "root_heat-h0.028"
+     ],
+     "axis": "boundary_h_mm",
+     "direction": "decreasing",
+     "rate_model": "log-ratio",
+     "minimum_rate": 1.0,
+     "monotonicity": "strict-decrease",
+     "finest_threshold": {
+      "operator": "le",
+      "value": 0.05
+     },
+     "expected_theory": {
+      "model": "Piecewise-constant ring currents on graded meridian triangles; first order in the boundary cell size is the user-approved lower bound (minimum rate 1)",
+      "norm": "relative error of a scalar functional (equivalent R, partial L, root or tip heat per A^2) against the final adaptive P2 reference level; not an energy norm",
+      "source": "Adaptive P2 axisymmetric A_phi reference resolved by validation_test/induction_heating/axisym_volume_peec_fin.py",
+      "assumptions": "Fixed section, radius, sigma, frequency and drive; only the boundary edge size of the meridian mesh changes (interior 0.5 mm, grading 0.25); reference spread below one tenth of the 5 percent limit",
+      "limitations": "Axisymmetric drive at 150 kHz only, skin depth about 0.17 mm; no 3D tetrahedral route, non-axisymmetric port, temperature dependence or other geometry is claimed"
+     }
+    },
+    {
+     "id": "tip_heat-boundary-h",
+     "level_ids": [
+      "tip_heat-h0.06",
+      "tip_heat-h0.04",
+      "tip_heat-h0.028"
+     ],
+     "axis": "boundary_h_mm",
+     "direction": "decreasing",
+     "rate_model": "log-ratio",
+     "minimum_rate": 1.0,
+     "monotonicity": "strict-decrease",
+     "finest_threshold": {
+      "operator": "le",
+      "value": 0.05
+     },
+     "expected_theory": {
+      "model": "Piecewise-constant ring currents on graded meridian triangles; first order in the boundary cell size is the user-approved lower bound (minimum rate 1)",
+      "norm": "relative error of a scalar functional (equivalent R, partial L, root or tip heat per A^2) against the final adaptive P2 reference level; not an energy norm",
+      "source": "Adaptive P2 axisymmetric A_phi reference resolved by validation_test/induction_heating/axisym_volume_peec_fin.py",
+      "assumptions": "Fixed section, radius, sigma, frequency and drive; only the boundary edge size of the meridian mesh changes (interior 0.5 mm, grading 0.25); reference spread below one tenth of the 5 percent limit",
+      "limitations": "Axisymmetric drive at 150 kHz only, skin depth about 0.17 mm; no 3D tetrahedral route, non-axisymmetric port, temperature dependence or other geometry is claimed"
+     }
+    }
+   ],
+   "failure_definition": "FAIL if any quantity's errors are not strictly decreasing over boundary h 0.06, 0.04, 0.028 mm, any adjacent log-ratio rate is below 1, any finest error exceeds 0.05, or any true relative residual exceeds 1e-6. An unresolved reference blocks adoption; a zero error is UNRESOLVED, never a rate.",
+   "saturation_policy": "blocks-pass",
+   "residual_threshold": 1e-06,
+   "threshold_verification": {
+    "mode": "reviewer",
+    "review_ref": "APPROVAL-20261116-FIN-PEEC-P2-01-INDEPENDENT-REVIEW"
+   }
+  },
+  "approval": {
+   "approved_by": "user",
+   "approved_on": "2026-11-16",
+   "approval_ref": "APPROVAL-20261116-FIN-PEEC-P2-01",
+   "criterion_sha256": "567c6d32c5822427e6ed4106f797baaab128e1c7130cb70843c1f2fc3248ecba",
+   "rationale_sha256": "0d82eda4edd43b2c87cc006a0b73506fb311a34f54032cf558a912ffa2814402",
+   "scope_sha256": "4d959a706be8878098da5af3c25cb98351eeb3a69017c183c8c64b4ed1f2569e"
+  },
+  "result": {
+   "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+   "artifact_sha256": "440cb3e8ce787d70d18e31db1c974fb0c030dca7f37bcbc78644d1cd4823a6d2",
+   "verdict": "PASS",
+   "levels": [
+    {
+     "id": "R-h0.06",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.06
+     },
+     "error": 0.004912315618000096,
+     "relative_residual": 1.245035698661038e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+     "runtime_s": 3.385354999998526
+    },
+    {
+     "id": "partial_L-h0.06",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.06
+     },
+     "error": 8.178298926853067e-05,
+     "relative_residual": 1.245035698661038e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+     "runtime_s": 3.385354999998526
+    },
+    {
+     "id": "root_heat-h0.06",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.06
+     },
+     "error": 0.004565480815839629,
+     "relative_residual": 1.245035698661038e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+     "runtime_s": 3.385354999998526
+    },
+    {
+     "id": "tip_heat-h0.06",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.06
+     },
+     "error": 0.0076035634399311824,
+     "relative_residual": 1.245035698661038e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
+     "runtime_s": 3.385354999998526
+    },
+    {
+     "id": "R-h0.04",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.04
+     },
+     "error": 0.0020786931971326084,
+     "relative_residual": 1.656913939373904e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+     "runtime_s": 6.518916599998192
+    },
+    {
+     "id": "partial_L-h0.04",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.04
+     },
+     "error": 4.4315172313069695e-05,
+     "relative_residual": 1.656913939373904e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+     "runtime_s": 6.518916599998192
+    },
+    {
+     "id": "root_heat-h0.04",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.04
+     },
+     "error": 0.002351052511339824,
+     "relative_residual": 1.656913939373904e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+     "runtime_s": 6.518916599998192
+    },
+    {
+     "id": "tip_heat-h0.04",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.04
+     },
+     "error": 0.0035555408773380037,
+     "relative_residual": 1.656913939373904e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
+     "runtime_s": 6.518916599998192
+    },
+    {
+     "id": "R-h0.028",
+     "parameters": {
+      "quantity_index": 1,
+      "boundary_h_mm": 0.028
+     },
+     "error": 0.0007295019963242666,
+     "relative_residual": 2.1200897343253616e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+     "runtime_s": 14.864479900003062
+    },
+    {
+     "id": "partial_L-h0.028",
+     "parameters": {
+      "quantity_index": 2,
+      "boundary_h_mm": 0.028
+     },
+     "error": 2.4621878385033824e-05,
+     "relative_residual": 2.1200897343253616e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+     "runtime_s": 14.864479900003062
+    },
+    {
+     "id": "root_heat-h0.028",
+     "parameters": {
+      "quantity_index": 3,
+      "boundary_h_mm": 0.028
+     },
+     "error": 0.0008347515634491431,
+     "relative_residual": 2.1200897343253616e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+     "runtime_s": 14.864479900003062
+    },
+    {
+     "id": "tip_heat-h0.028",
+     "parameters": {
+      "quantity_index": 4,
+      "boundary_h_mm": 0.028
+     },
+     "error": 0.002140988792173504,
+     "relative_residual": 2.1200897343253616e-15,
+     "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+     "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
+     "runtime_s": 14.864479900003062
+    }
+   ]
+  },
+  "protected_by": [
+   "tests/test_ih_fin_peec_axisym_surrogate.py"
+  ],
+  "rationale": {
+   "inference": "The axisymmetric volume PEEC converges to the resolved adaptive P2 reference on the beak fin for R, partial L, root and tip heat. This is a scoped adoption of the fin physical verdict, not a release qualification.",
+   "scope": "Beak fin section at radius 200 mm, copper 5.8e7 S/m, 150 kHz, 1 A peak terminal current, axisymmetric drive.",
+   "assumptions": [
+    {
+     "id": "reference-resolved",
+     "kind": "reference-verification",
+     "statement": "Both orders and both exteriors converged inside budget and agree within one tenth of every limit (maximum spread R 0.31 %, L 0.03 %, root 0.31 %, tip 0.20 %).",
+     "evidence_refs": [
+      "artifact:result",
+      "review:APPROVAL-20261116-FIN-PEEC-P2-01-INDEPENDENT-REVIEW"
+     ],
+     "invalidated_by": [
+      "reference-change"
+     ],
+     "recheck": "Rerun the four reference sequences after any change of the reference solver, section or settings."
+    },
+    {
+     "id": "boundary-h-series",
+     "kind": "assumes",
+     "statement": "Only the boundary edge size changes along each series; the P2 reference and the minimum rate 1 are user decisions of 2026-11-16.",
+     "evidence_refs": [
+      "artifact:result",
+      "approval:APPROVAL-20261116-FIN-PEEC-P2-01"
+     ],
+     "invalidated_by": [
+      "scope-or-mesh-change"
+     ],
+     "recheck": "Reconsider on changed grading, interior size, frequency, geometry or refinement policy."
+    },
+    {
+     "id": "route-independence",
+     "kind": "independence",
+     "statement": "The reference is a differential FE route; the production PEEC route is not its own oracle.",
+     "evidence_refs": [
+      "artifact:entry",
+      "artifact:result"
+     ],
+     "invalidated_by": [
+      "provenance-or-oracle-change"
+     ],
+     "recheck": "Check source, native and mesh identities before re-certification."
+    },
+    {
+     "id": "h060-protection",
+     "kind": "coverage",
+     "statement": "tests/test_ih_fin_peec_axisym_surrogate.py runs the production entry on the stored 0.06 mm mesh against its output at the recorded source; inductance x(1+1e-6) and conductivity x(1+1e-6) mutations both fail it.",
+     "evidence_refs": [
+      "artifact:result"
+     ],
+     "invalidated_by": [
+      "guard-or-mutation-change"
+     ],
+     "recheck": "Review coverage and mutation sensitivity after any baseline or fixture change; the lock tolerance (rtol 1e-9, atol 0) is user-owned."
+    }
+   ],
+   "depends_on": [
+    "reference-resolved",
+    "boundary-h-series",
+    "route-independence",
+    "h060-protection"
+   ],
+   "break_conditions": [
+    {
+     "id": "reference-change",
+     "condition": "reference solver, section, cuts or reference settings change"
+    },
+    {
+     "id": "scope-or-mesh-change",
+     "condition": "meshing parameters, frequency, material or drive change"
+    },
+    {
+     "id": "provenance-or-oracle-change",
+     "condition": "source, native or mesh identity mismatch"
+    },
+    {
+     "id": "guard-or-mutation-change",
+     "condition": "surrogate fixture, baseline or tolerance change"
+    }
+   ]
+  }
+ }
+}

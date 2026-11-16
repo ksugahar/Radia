@@ -1,0 +1,39 @@
+{
+  "schema": "radia.regression-lock.v1",
+  "source_sha": "76fb6b3a2b383daac0e14686fcd9286c7591499a",
+  "conditions": {
+    "section": "beak fin meridian, radius 200 mm, boundary h 0.06 mm, interior 0.5 mm, grading 0.25",
+    "mesh_fixture": "tests/fixtures/ih_fin/beak_section_r200_h060_mesh.json",
+    "frequency_Hz": 150000.0,
+    "sigma_S_per_m": 58000000.0,
+    "drive": "1 A peak terminal current, loop-voltage port, exp(+j omega t)",
+    "production_entry_point": "radia.peec_axisym.solve_axisym_ring_peec"
+  },
+  "runtime_s": 9.455779899995832,
+  "quantities": {
+    "R_ohm": {
+      "expected": 0.007875277717660762,
+      "rtol": 1e-09,
+      "atol": 0,
+      "unit": "ohm"
+    },
+    "L_H": {
+      "expected": 1.0687134636031998e-06,
+      "rtol": 1e-09,
+      "atol": 0,
+      "unit": "H"
+    },
+    "root_heat_W_per_A2": {
+      "expected": 0.00020593566850054808,
+      "rtol": 1e-09,
+      "atol": 0,
+      "unit": "W/A^2"
+    },
+    "tip_heat_W_per_A2": {
+      "expected": 0.0007926213762018563,
+      "rtol": 1e-09,
+      "atol": 0,
+      "unit": "W/A^2"
+    }
+  }
+}
