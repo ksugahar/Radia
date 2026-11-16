@@ -14,6 +14,9 @@
 #include <pybind11/complex.h>
 
 #include "rad_peec_matrices.h"
+#include "rad_peec_axisym.h"
+#include "rad_peec_tet.h"
+#include "rad_parallel.h"
 
 namespace py = pybind11;
 
@@ -1629,5 +1632,195 @@ Example:
 
           Returns:
               Tuple (L, R, P, M_LS)
+          )doc");
+
+    // ------------------------------------------------------------------
+    // Axisymmetric volume PEEC of a revolved section (rad_peec_axisym.h)
+    // ------------------------------------------------------------------
+    m.def("axisym_ring_inductance",
+          [](py::array_t<double, py::array::c_style | py::array::forcecast> points,
+             py::array_t<int, py::array::c_style | py::array::forcecast> triangles,
+             double near_factor, double moderate_factor) {
+              if (points.ndim() != 2 || points.shape(1) != 2)
+                  throw std::invalid_argument("points must have shape (n, 2)");
+              if (triangles.ndim() != 2 || triangles.shape(1) != 3)
+                  throw std::invalid_argument("triangles must have shape (m, 3)");
+              peec_axisym::RingSection sec;
+              sec.points = points.data();
+              sec.n_points = static_cast<std::size_t>(points.shape(0));
+              sec.triangles = triangles.data();
+              sec.n_tri = static_cast<std::size_t>(triangles.shape(0));
+              peec_axisym::RingInductance L;
+              {
+                  py::gil_scoped_release release;
+                  L = peec_axisym::AssembleRingInductance(sec, near_factor, moderate_factor);
+              }
+              const auto n = static_cast<py::ssize_t>(L.n);
+              py::array_t<double> M({n, n});
+              std::copy(L.M.begin(), L.M.end(), M.mutable_data());
+              py::array_t<double> area(n);
+              std::copy(L.area.begin(), L.area.end(), area.mutable_data());
+              py::array_t<double> centroid({n, static_cast<py::ssize_t>(2)});
+              std::copy(L.centroid.begin(), L.centroid.end(), centroid.mutable_data());
+              return py::make_tuple(M, area, centroid);
+          },
+          py::arg("points"), py::arg("triangles"), py::arg("near_factor") = 3.0,
+          py::arg("moderate_factor") = 10.0,
+          R"doc(
+          Galerkin P0 ring partial inductance of meridian triangles.
+
+          Args:
+              points: (n, 2) meridian points (r, z) [m], r > 0
+              triangles: (m, 3) zero-based point indices
+              near_factor, moderate_factor: pair classes by centroid distance
+                  relative to the sum of sizes sqrt(2 A)
+
+          Returns:
+              (M, area, centroid): M (m, m) symmetric [H], area (m,) [m^2],
+              centroid (m, 2) [m].  Rows run in parallel under a caller-owned
+              ngsolve.TaskManager.
+          )doc");
+
+    m.def("axisym_ring_loop_solve",
+          [](py::array_t<double, py::array::c_style | py::array::forcecast> M,
+             py::array_t<double, py::array::c_style | py::array::forcecast> area,
+             py::array_t<double, py::array::c_style | py::array::forcecast> centroid,
+             double frequency_hz, double sigma) {
+              if (M.ndim() != 2 || M.shape(0) != M.shape(1))
+                  throw std::invalid_argument("M must be square");
+              const auto n = static_cast<std::size_t>(M.shape(0));
+              if (area.ndim() != 1 || static_cast<std::size_t>(area.shape(0)) != n
+                  || centroid.ndim() != 2 || static_cast<std::size_t>(centroid.shape(0)) != n
+                  || centroid.shape(1) != 2)
+                  throw std::invalid_argument("area (m,) and centroid (m, 2) must match M");
+              peec_axisym::RingInductance L;
+              L.n = n;
+              L.M.assign(M.data(), M.data() + n * n);
+              L.area.assign(area.data(), area.data() + n);
+              L.centroid.assign(centroid.data(), centroid.data() + 2 * n);
+              peec_axisym::RingSolution sol;
+              {
+                  py::gil_scoped_release release;
+                  SuspendTaskManager suspended_workers;   // LAPACK owns the threads of the dense solve
+                  sol = peec_axisym::SolveLoopVoltage(L, frequency_hz, sigma);
+              }
+              const auto sn = static_cast<py::ssize_t>(n);
+              py::array_t<std::complex<double>> current(sn);
+              std::copy(sol.current.begin(), sol.current.end(), current.mutable_data());
+              py::array_t<double> resistance(sn), loss(sn);
+              std::copy(sol.resistance.begin(), sol.resistance.end(), resistance.mutable_data());
+              std::copy(sol.cell_loss.begin(), sol.cell_loss.end(), loss.mutable_data());
+              py::dict out;
+              out["impedance"] = sol.impedance;
+              out["current"] = current;
+              out["resistance"] = resistance;
+              out["cell_loss"] = loss;
+              out["true_relative_residual"] = sol.true_relative_residual;
+              return out;
+          },
+          py::arg("M"), py::arg("area"), py::arg("centroid"), py::arg("frequency_hz"), py::arg("sigma"),
+          R"doc(
+          Loop-voltage solve (R + j omega M) I = 1 of the ring circuit.
+
+          Returns a dict: impedance (V/I_total), current (ring currents at
+          V = 1), resistance R_k = 2 pi r_k / (sigma A_k), cell_loss (time-average
+          loss per 1 A peak terminal current) and true_relative_residual
+          (raises above 1e-6).
+          )doc");
+
+    // ------------------------------------------------------------------
+    // Tetrahedral volume PEEC (rad_peec_tet.h)
+    // ------------------------------------------------------------------
+    using DArr = py::array_t<double, py::array::c_style | py::array::forcecast>;
+    using IArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+    m.def("tet_potential",
+          [](DArr x, DArr verts) {
+              if (x.size() != 3 || verts.ndim() != 2 || verts.shape(0) != 4 || verts.shape(1) != 3)
+                  throw std::invalid_argument("x must have 3 entries and verts shape (4, 3)");
+              double v[4][3];
+              for (int k = 0; k < 4; ++k)
+                  for (int j = 0; j < 3; ++j)
+                      v[k][j] = verts.at(k, j);
+              double p0, p1[3];
+              peec_tet::TetPotential(x.data(), v, p0, p1);
+              return py::make_tuple(p0, py::make_tuple(p1[0], p1[1], p1[2]));
+          },
+          py::arg("x"), py::arg("verts"),
+          "Closed-form int 1/|x-y| dy and int y/|x-y| dy over one tetrahedron.");
+
+    m.def("tet_inductance",
+          [](DArr points, IArr tets, DArr face_coef, IArr face_dof, std::size_t n_dof,
+             double near_factor, double moderate_factor, int near_order) {
+              if (points.ndim() != 2 || points.shape(1) != 3)
+                  throw std::invalid_argument("points must have shape (n, 3)");
+              if (tets.ndim() != 2 || tets.shape(1) != 4)
+                  throw std::invalid_argument("tets must have shape (m, 4)");
+              if (face_coef.ndim() != 2 || face_coef.shape(0) != tets.shape(0) || face_coef.shape(1) != 4
+                  || face_dof.ndim() != 2 || face_dof.shape(0) != tets.shape(0) || face_dof.shape(1) != 4)
+                  throw std::invalid_argument("face_coef and face_dof must have shape (m, 4)");
+              peec_tet::TetMesh mesh;
+              mesh.points = points.data();
+              mesh.n_points = static_cast<std::size_t>(points.shape(0));
+              mesh.tets = tets.data();
+              mesh.n_tet = static_cast<std::size_t>(tets.shape(0));
+              mesh.face_coef = face_coef.data();
+              mesh.face_dof = face_dof.data();
+              mesh.n_dof = n_dof;
+              std::vector<double> L;
+              {
+                  py::gil_scoped_release release;
+                  L = peec_tet::AssembleInductance(mesh, near_factor, moderate_factor, near_order);
+              }
+              const auto n = static_cast<py::ssize_t>(n_dof);
+              py::array_t<double> out({n, n});
+              std::copy(L.begin(), L.end(), out.mutable_data());
+              return out;
+          },
+          py::arg("points"), py::arg("tets"), py::arg("face_coef"), py::arg("face_dof"), py::arg("n_dof"),
+          py::arg("near_factor") = 3.0, py::arg("moderate_factor") = 10.0, py::arg("near_order") = 3,
+          R"doc(
+          Galerkin partial inductance [H] of lowest-order face currents on flat
+          tetrahedra, w = c (x - v_opp) for the face opposite local vertex k.
+          face_coef and face_dof come from the finite-element space (-1: not an
+          unknown).  Rows run in parallel under a caller-owned ngsolve.TaskManager.
+          )doc");
+
+    m.def("tet_kkt_solve",
+          [](DArr L, IArr r_row, IArr r_col, DArr r_val, std::size_t n_con, IArr d_row, IArr d_col,
+             DArr d_val, py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> b,
+             double omega, double max_gib) {
+              if (L.ndim() != 2 || L.shape(0) != L.shape(1))
+                  throw std::invalid_argument("L must be square");
+              const auto nd = static_cast<std::size_t>(L.shape(0));
+              std::vector<double> Lv(L.data(), L.data() + nd * nd);
+              peec_tet::Triplets R, D;
+              R.row.assign(r_row.data(), r_row.data() + r_row.size());
+              R.col.assign(r_col.data(), r_col.data() + r_col.size());
+              R.value.assign(r_val.data(), r_val.data() + r_val.size());
+              D.row.assign(d_row.data(), d_row.data() + d_row.size());
+              D.col.assign(d_col.data(), d_col.data() + d_col.size());
+              D.value.assign(d_val.data(), d_val.data() + d_val.size());
+              std::vector<std::complex<double>> bv(b.data(), b.data() + b.size());
+              peec_tet::KKTSolution sol;
+              {
+                  py::gil_scoped_release release;
+                  SuspendTaskManager suspended_workers;   // LAPACK owns the threads of the dense solve
+                  sol = peec_tet::SolveKKT(nd, Lv, R, n_con, D, bv, omega, max_gib * 1073741824.0);
+              }
+              py::array_t<std::complex<double>> current(static_cast<py::ssize_t>(sol.current.size()));
+              std::copy(sol.current.begin(), sol.current.end(), current.mutable_data());
+              py::array_t<std::complex<double>> potential(static_cast<py::ssize_t>(sol.potential.size()));
+              std::copy(sol.potential.begin(), sol.potential.end(), potential.mutable_data());
+              py::dict out;
+              out["current"] = current;
+              out["potential"] = potential;
+              out["true_relative_residual"] = sol.true_relative_residual;
+              return out;
+          },
+          py::arg("L"), py::arg("r_row"), py::arg("r_col"), py::arg("r_val"), py::arg("n_con"),
+          py::arg("d_row"), py::arg("d_col"), py::arg("d_val"), py::arg("b"), py::arg("omega"), py::arg("max_gib"),
+          R"doc(
+          Dense solve of [R + j omega L, D^T; D, 0] [I; phi] = [b; 0] (R and D as
+          triplets); raises when the true relative residual exceeds 1e-6.
           )doc");
 }

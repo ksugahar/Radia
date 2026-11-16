@@ -48,9 +48,9 @@ def test_q2_curved_quad_accepts_skewed_geometry():
     _assemble_stiffness(_skew_quad_mesh(), order=2, curvedquad=True)
 
 
-def test_p1_triangle_rejects_singular_r2z_vandermonde():
+def test_p1_triangle_rejects_degenerate_s_z_map():
     axifem = pytest.importorskip("radia.axifem")
-    with pytest.raises(Exception, match="singular Vandermonde"):
+    with pytest.raises(Exception, match=r"degenerate \(s, z\) element map"):
         axifem.AxiHenrotteFE_P1_Triangle([1.0, 1.0, 1.0], [0.0, 1.0, 2.0])
 
 
@@ -81,3 +81,20 @@ def test_volume_linear_form_uses_axifem_apply_trans_without_base_fallback(capfd)
     assert "base class apply trans" not in captured.out
     assert "base class apply trans" not in captured.err
     assert form.vec.Norm() > 0.0
+
+
+@pytest.mark.parametrize(
+    "quads, order, flags",
+    [(False, 1, {}), (False, 2, {}), (True, 1, {}), (True, 2, {"curvedquad": True})],
+)
+def test_straight_submicron_elements_far_from_axis_pass_the_map_checks(quads, order, flags):
+    """Guards: the sampled map checks scale with coordinate rounding, not only element size.
+
+    Assumes: 0.1 um straight elements at r = 0.2 m, as adaptive refinement of a ring section
+    produces; a size-only tolerance refused them as maps of degree > 2.
+    """
+    w = 4e-7
+    mesh = structured_rect_vol_mesh(
+        0.2, 0.2 + w, 0.0731, 0.0731 + w, quads=quads, nx=4, ny=4, stem="axifem_submicron"
+    )
+    _assemble_stiffness(mesh, order=order, **flags)

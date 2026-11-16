@@ -711,6 +711,73 @@ the error is a corner effect decaying as `sqrt(delta)`, and it is repaired to
 `+0.6%` by patching both ends (previous section).  Data:
 `results/beak_sibc_validity_map_20260922.json`.
 
+### Correction: the ring solver drove the wrong unknown (2026-11-11)
+
+The 2026-09-22 axisymmetric sections above rest on a defect found while
+building gate 4.  The `axifem` unknown is `A_phi` itself, and both of its
+operators carry the revolved measure `2 pi r dr dz`; this was established
+by assembling them against explicit forms and by comparing the solved field
+with the elliptic-integral vector potential of a filament sum.
+`radia.eddy_axisym_ring` treated the unknown as `psi = 2 pi r A_phi`, drove
+it with the sigma-mass applied to a constant -- a uniform `E_phi`, which no
+loop voltage produces -- and rebuilt the current from an expression that
+belongs to a different problem.  The error scales as the section width over
+the ring radius, so it vanished exactly where the September sweep looked
+converged, and its sign is opposite to the real curvature effect: the
+statement above that doubling the radius from 200 to 400 mm "moves the beak
+share by `0.14%`" is wrong, it moves it by `7%`.
+
+Fixed in the solver: the drive is `V int sigma N dr dz`, the current is
+`sigma (V / (2 pi r) - j omega A)`, and the `psi = 0` box is replaced by an
+exact Dirichlet-to-Neumann exterior on a half disk about the axis, applied
+by Woodbury on one factorisation; it refuses a boundary that is not the
+stated semicircle and a mode cut that leaves energy in its last mode
+(gate 4 below).  `axisym_ring_exterior_validation.py`
+(`results/axisym_ring_exterior_validation_20261111.json`) checks it against
+references that share none of its code: the direct-current inductance of a
+40-60 mm rectangular ring agrees with a filament quadrature to `4.2e-4`
+over a sixfold range of exterior radius, and a revolved 1 mm round wire at
+`R0 = 0.3 m` reproduces the exact Bessel resistance to `1.5e-4` at 100 kHz.
+
+The beak section, 150 kHz, `results/beak_section_axisym_sweep_20261111.json`
+(exterior factor 1.5, `maxh = 0.08 mm`; factor 3 and `0.05 mm` move every
+entry by at most `0.15%`):
+
+| R0 | beak loss | tip loss | beak vs planar control |
+|---|---|---|---|
+| 200 mm | 0.25418 | 0.20194 | -14.3% |
+| 400 mm | 0.27255 | 0.21692 | -8.1% |
+| 1600 mm | 0.28920 | 0.23045 | -2.5% |
+| 6400 mm | 0.29447 | 0.23490 | -0.73% |
+| 25600 mm | 0.29604 | 0.23613 | -0.21% |
+| `1/R0` extrapolation | 0.29656 | 0.23654 | **-0.03%** |
+
+So the ring carries a genuine curvature effect of order the section over the
+radius -- the loop voltage's `1 / r` field crowds the current toward the
+inside of the ring, away from the beak -- and with it removed the
+axisymmetric route and the planar control, two interior-resolved routes with
+independent open boundaries, agree on the straight section to `0.03%` on
+the beak share and `0.01%` on the tip share.  The planar control's numbers
+and the surface-impedance verdict of gate 3 are unaffected: they never used
+this solver.  The September box sweep's `+0.56%` at `R0 = 6400 mm` was
+mostly the box, as stated; what it called the remaining curvature was the
+defect.
+
+For the fin adjudication this changes what the ring is.  It is not a biased
+stand-in for a straight fin: the revolved fin is a geometry of its own, and
+a three-dimensional route meshing that same revolved solid sees the same
+curvature.  The axisymmetric solve is the reference for a three-dimensional
+solve of the revolved fin under a matched excitation: magnetoquasistatic,
+the conductor continuous across the port section except for the impressed
+potential jump `V`, `J . n = 0` on the outer surface, no displacement
+current, and a single-valued azimuthal current.  Under those conditions
+`phi = V theta / (2 pi)` satisfies the conductor's continuity equation and
+boundary condition, because an azimuthal `A` has no normal component on a
+surface of revolution, so the drive is the axisymmetric loop voltage.  A
+three-dimensional port that imposes anything else -- a finite gap, a
+terminal on part of the section, a capacitive gap -- is not covered by this
+argument and needs its own check.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -765,7 +832,11 @@ the error is a corner effect decaying as `sqrt(delta)`, and it is repaired to
    is three-dimensional and in the Omega/H1 convention, so this needs a
    Kelvin-weighted `axifem` integrator for `psi = 2 pi r A_phi`. Until it
    exists, the planar control is the reference and the axisymmetric route is
-   reported with its truncation measured.
+   reported with its truncation measured. **Done (2026-11-11)**: an exact
+   DtN exterior on a half disk, not a Kelvin layer, and the unknown is
+   `A_phi`, not `psi`; see the correction above. The route agrees with the
+   planar control to `0.03%` in the straight limit and is the reference for
+   the revolved fin.
 5. Extend the workpiece weak and strong coupling APIs to accept per-branch
    currents and per-branch induced EMFs. The present K-by-K bundle reduction
    and one-current-per-filament field projection cannot represent transverse

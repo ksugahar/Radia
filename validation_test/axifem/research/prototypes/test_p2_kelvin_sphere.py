@@ -122,16 +122,14 @@ def to_csr(mat, n):
     ).toarray()
 
 
-def run_one(maxh, maxh_kelvin, curve_order=0):
+def run_one(maxh, maxh_kelvin):
     ngsglobals.msg_level = 0
 
     interior = build_interior_half_disk(maxh_cond=maxh)
     shape, info = add_kelvin_2d_axisym(
         interior, R=R_K, z_offset=5 * R_K, maxh_kelvin=maxh_kelvin)
     geo = OCCGeometry(shape, dim=2)
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh_kelvin))
-    if curve_order >= 2:
-        mesh.Curve(curve_order)
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh_kelvin))   # straight: H1Henrotte refuses curved
 
     materials = mesh.GetMaterials()
     print(f"  Materials: {materials}, boundaries: {mesh.GetBoundaries()}")
@@ -215,15 +213,13 @@ def main():
         (0.5e-3, 2.0e-3),
     ]
     for maxh_c, maxh_k in levels:
-        for cv in [0, 2]:
-            tag = f"Curve({cv})"
-            print(f"\nmaxh_cond={maxh_c:.1e}  maxh_kelvin={maxh_k:.1e}  {tag}")
-            try:
-                ne, ndof, tau, gap = run_one(maxh_c, maxh_k, curve_order=cv)
-                print(f"  ne={ne}  ndof={ndof}  tau_1={tau*1e6:.4f} us  "
-                      f"gap={gap:+.3f}%")
-            except Exception as e:
-                print(f"  FAIL: {type(e).__name__}: {e}")
+        print(f"\nmaxh_cond={maxh_c:.1e}  maxh_kelvin={maxh_k:.1e}")
+        try:
+            ne, ndof, tau, gap = run_one(maxh_c, maxh_k)
+            print(f"  ne={ne}  ndof={ndof}  tau_1={tau*1e6:.4f} us  "
+                  f"gap={gap:+.3f}%")
+        except Exception as e:
+            print(f"  FAIL: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

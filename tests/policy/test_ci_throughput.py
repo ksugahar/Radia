@@ -152,8 +152,9 @@ def assert_retained_routes(ledger, current):
                                   'stale_retirement', 'baseline_shrink'])
 def test_route_retention_allows_growth_but_requires_reviewed_retirement(change):
     ledger = json.loads((ROOT / 'tests/policy/numerical_route_retention.json').read_text())
-    current = set(ledger['baseline_paths'])
-    path = ledger['baseline_paths'][0]
+    already = {r['path'] for r in ledger['retirements']}
+    current = set(ledger['baseline_paths']) - already
+    path = next(p for p in ledger['baseline_paths'] if p not in already)
     record = dict(path=path, reason='Synthetic retirement', review='Synthetic independent review',
                   consumer_evidence='Synthetic consumer audit', oracle_preservation='Synthetic preserved oracle')
     if change == 'addition':

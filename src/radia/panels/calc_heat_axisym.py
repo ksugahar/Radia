@@ -405,10 +405,8 @@ def solve_heat_axisym(wp_vol,
     #     Meeker uses standard P1 triangle for FEMM's heat solver and
     #     ships production accuracy.
     #
-    # The `radia.axifem.AxiHenrotteHeat{Stiffness,Mass}BFI`
-    # classes (added in radia 4.31.0) remain available as optional
-    # parity-conscious infrastructure; they are not used here because
-    # the FEMM convention says we don't need them for scalar T.
+    # The Henrotte space is the A_phi basis N_i = r_i psi_i / r and has
+    # no temperature integrators: scalar T uses standard H1 here.
     #
     # Default order is 2 (2026-09-03 near-axis study): P1/Q1 cannot
     # represent the even-parity dT/dr = 0 at the r = 0 axis -- the

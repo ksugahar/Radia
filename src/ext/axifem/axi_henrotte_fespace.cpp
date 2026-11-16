@@ -7,6 +7,7 @@
 #include <python_comp.hpp>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace axifem {
 
@@ -60,15 +61,117 @@ AxisAlignedQuadBounds RequireAxisAlignedQuad(const Vec<3> p[4], ElementId ei, in
         has_ur = has_ur || (r_hi && z_hi);
     }
     axis_aligned = axis_aligned && has_ll && has_lr && has_ul && has_ur;
+    // The closed-form Q1/Q2 FEs map reference xi to r and eta to z and number
+    // their DOFs (r_a,z_a), (r_b,z_a), (r_b,z_b), (r_a,z_b): the mesh vertices
+    // must come in that order, or the basis would be attached to the wrong DOFs.
+    const bool ordered = axis_aligned
+        && Near(p[0](0), b.r_min, tol) && Near(p[0](1), b.z_min, tol)
+        && Near(p[1](0), b.r_max, tol) && Near(p[1](1), b.z_min, tol)
+        && Near(p[2](0), b.r_max, tol) && Near(p[2](1), b.z_max, tol)
+        && Near(p[3](0), b.r_min, tol) && Near(p[3](1), b.z_max, tol);
+    if (axis_aligned && !ordered)
+        throw Exception("AxiHenrotteFESpace: axis-aligned quad at " + ToString(ei)
+                        + " has vertex order other than (r_min,z_min), (r_max,z_min),"
+                        " (r_max,z_max), (r_min,z_max); the closed-form Q"
+                        + ToString(order) + " path requires it"
+                        + (order == 2 ? " (curvedquad=True accepts any order)" : ""));
     if (!axis_aligned) {
         string hint = (order == 2)
-            ? "use H1Henrotte(..., order=2, curvedquad=True) for skewed/curved quads"
+            ? "use H1Henrotte(..., order=2, curvedquad=True) for skewed straight quads"
             : "use structured axis-aligned quads or triangle elements";
         throw Exception("AxiHenrotteFESpace: non-axis-aligned quad at "
                         + ToString(ei) + " is not valid for the closed-form Q"
                         + ToString(order) + " path; " + hint);
     }
     return b;
+}
+
+// Geometry comparison tolerance: relative to the element size, plus the
+// rounding of absolute coordinates.  A straight element of 0.1 um at
+// r = 0.2 m differs from its own interpolant by a few ulp of r, which is
+// above 1e-10 of its size.
+double MapTolerance(double size, double coord)
+{
+    return 1e-10 * size + 64.0 * std::numeric_limits<double>::epsilon() * coord;
+}
+
+// Closed-form quads use the four vertices only: refuse a curved (Curve > 1)
+// element instead of silently straightening it.
+void RequireStraightQuad(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh)
+{
+    auto & eltrans = ma.GetTrafo(ei, lh);
+    Vec<2> c[4];
+    const double cx[4] = { 0, 1, 1, 0 }, cy[4] = { 0, 0, 1, 1 };
+    for (int k = 0; k < 4; ++k) {
+        IntegrationPoint ip(cx[k], cy[k], 0.0);
+        auto pt = eltrans(ip, lh).GetPoint();
+        c[k] = Vec<2>(pt(0), pt(1));
+    }
+    // edge midpoints and quarter points (a symmetric cubic edge keeps its
+    // midpoint on the chord)
+    for (int k = 0; k < 4; ++k)
+        for (double f : { 0.25, 0.5 }) {
+            const double x = cx[k] + f * (cx[(k + 1) % 4] - cx[k]);
+            const double y = cy[k] + f * (cy[(k + 1) % 4] - cy[k]);
+            IntegrationPoint ip(x, y, 0.0);
+            auto pt = eltrans(ip, lh).GetPoint();
+            Vec<2> q = (1.0 - f) * c[k] + f * c[(k + 1) % 4];
+            double len = L2Norm(c[(k + 1) % 4] - c[k]);
+            double coord = std::max(std::abs(pt(0)), std::abs(pt(1)));
+            if (std::hypot(pt(0) - q(0), pt(1) - q(1)) > MapTolerance(len, coord))
+                throw Exception("AxiHenrotteFESpace: curved quad at " + ToString(ei)
+                                + "; the axis-aligned quads are straight (use"
+                                  " curvedquad=True for Curve(2) quads)");
+        }
+}
+
+// The element samples its nodes from the transformation and represents the
+// map by quadratic Lagrange interpolation (Curve(1) and Curve(2) meshes).  A
+// map of higher degree would be silently replaced by its interpolant.  The
+// admission is the mesh metadata (RequireAdmissibleMesh: curve order <= 2, no
+// deformation), which bounds the map to the quadratic family.  This sampled
+// comparison is a supplementary geometry diagnostic only: a finite point set
+// cannot detect a higher-degree mode vanishing at every sample (for a Q3 quad
+// a bubble x(1-x)y(1-y)(a+bx+cy+dxy) can).
+void RequireAdmissibleMesh(ngcomp::MeshAccess & ma)  // curve-order getter is non-const
+{
+    if (ma.GetCurveOrder() > 2)
+        throw Exception("AxiHenrotteFESpace: the mesh is curved to order "
+                        + ToString(ma.GetCurveOrder())
+                        + "; H1Henrotte supports Curve(1) and Curve(2) meshes");
+    if (ma.GetDeformation())
+        throw Exception("AxiHenrotteFESpace: a mesh deformation is set; the"
+                        " element map must be the Curve(1)/Curve(2) mesh map");
+}
+
+template <class Geo>
+void RequireQuadraticMap(const ngcomp::MeshAccess & ma, ElementId ei, Allocator & lh,
+                         const Geo & geo, bool triangle)
+{
+    static const double tri[5][2] = { {0.25, 0.0}, {0.75, 0.25}, {0.0, 0.75},
+                                      {0.2, 0.3}, {0.15, 0.6} };
+    static const double quad[6][2] = { {0.25, 0.0}, {1.0, 0.25}, {0.75, 1.0},
+                                       {0.0, 0.75}, {0.3, 0.6}, {0.8, 0.15} };
+    double rmin = geo.rg[0], rmax = geo.rg[0], zmin = geo.zg[0], zmax = geo.zg[0];
+    for (double v : geo.rg) { rmin = std::min(rmin, v); rmax = std::max(rmax, v); }
+    for (double v : geo.zg) { zmin = std::min(zmin, v); zmax = std::max(zmax, v); }
+    const double ext = std::max(rmax - rmin, zmax - zmin);
+    const double tol = MapTolerance(ext, std::max({ std::abs(rmin), std::abs(rmax),
+                                                   std::abs(zmin), std::abs(zmax) }));
+    auto & eltrans = ma.GetTrafo(ei, lh);
+    const int n = triangle ? 5 : 6;
+    for (int k = 0; k < n; ++k) {
+        const double x = triangle ? tri[k][0] : quad[k][0];
+        const double y = triangle ? tri[k][1] : quad[k][1];
+        IntegrationPoint ip(x, y, 0.0);
+        auto pt = eltrans(ip, lh).GetPoint();
+        double rp, zp, J[2][2];
+        geo.MapRZ(x, y, rp, zp, J);
+        if (std::hypot(pt(0) - rp, pt(1) - zp) > tol)
+            throw Exception("AxiHenrotteFESpace: element " + ToString(ei)
+                            + " has a mesh map of degree > 2; H1Henrotte supports"
+                              " Curve(1) and Curve(2) meshes");
+    }
 }
 
 }  // namespace
@@ -92,11 +195,10 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
                         "(Q2 quad or P2 triangle) are supported.");
     order = axi_order;  // base-class field; 4 = poly-degree-in-r for Q2
 
-    // curved=True: order-2 QUADS sample 9 curved node positions from the mesh's
-    // (Curve(2)-d) ElementTransformation and use the AxiHenrotteFE_Q2_Curved
-    // isoparametric element -- follows curved boundaries to O(curve^2), the
-    // proper curved element for eddy-current / rounded-conductor problems.
-    // Default False keeps the axis-aligned closed-form Q2 (and the heat path).
+    // curved=True: order-2 QUADS sample 9 node positions from the mesh's
+    // ElementTransformation and use the s-isoparametric AxiHenrotteFE_Q2_Curved
+    // (any straight quad; conforming on oblique edges, also next to P2
+    // triangles).  Default False keeps the axis-aligned closed-form Q2.
     curved_quad = flags.GetDefineFlag("curvedquad") ||
                   (flags.GetStringFlag("curvedquad", "") == string("True"));
 
@@ -105,9 +207,9 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     //   evaluator[VOL]: invoked when ProxyFunction is sampled with no derivative
     //   additional_evaluators.Set("grad", ...): exposes grad(u) syntax in Python
     //   flux_evaluator[VOL]: used by visualization / flux post-processing
-    evaluator[VOL]      = make_shared<AxiHenrotteDiffOpId>();
-    flux_evaluator[VOL] = make_shared<AxiHenrotteDiffOpGradient>();
-    additional_evaluators.Set("grad", make_shared<AxiHenrotteDiffOpGradient>());
+    evaluator[VOL]      = make_shared<AxiHenrotteDiffOpId>(ma);
+    flux_evaluator[VOL] = make_shared<AxiHenrotteDiffOpGradient>(ma);
+    additional_evaluators.Set("grad", make_shared<AxiHenrotteDiffOpGradient>(ma));
     // Boundary evaluator: needed for `LinearForm += q * v * ds(label)`
     // patterns used by axisymmetric heat / magnetic Neumann RHS.  The
     // basis polynomial restricted to a boundary edge of an axis-aligned
@@ -116,11 +218,22 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     // are linear functions of the edge parameter.
     // (2026-05-10: added to enable full migration of axisymmetric
     // solvers to Henrotte per the NGSolve-H1-not-for-axisym policy.)
-    evaluator[BND]      = make_shared<AxiHenrotteDiffOpIdBnd>();
+    evaluator[BND]      = make_shared<AxiHenrotteDiffOpIdBnd>(ma);
 }
 
 void AxiHenrotteFESpace::Update() {
     FESpace::Update();
+    RequireAdmissibleMesh(*ma);
+    {
+        double rmax = 0.0, zmin = 0.0, zmax = 0.0;
+        for (size_t v = 0; v < ma->GetNV(); ++v) {
+            Vec<3> p = ma->GetPoint<3>(v);
+            if (v == 0) { zmin = zmax = p(1); }
+            rmax = std::max(rmax, std::fabs(p(0)));
+            zmin = std::min(zmin, p(1)); zmax = std::max(zmax, p(1));
+        }
+        axis_tol = 1e-12 * std::max(rmax, zmax - zmin);
+    }
     if (axi_order == 1) {
         SetNDof(ma->GetNV());
     } else {
@@ -133,45 +246,52 @@ void AxiHenrotteFESpace::Update() {
 }
 
 void AxiHenrotteFESpace::UpdateCouplingDofArray() {
-    // Vertices/edges are shared between elements (INTERFACE); element face-center
-    // slots are LOCAL for quads (Q2 uses them) but UNUSED for triangles (P2 has
-    // no center DOF -> the reserved nv+ne+ei.Nr() slot would be a dead zero
-    // row/col that makes K/M singular).  Marking it UNUSED removes it from
-    // FreeDofs so the generalized eddy eigenvalue solve (and direct solves) see a
-    // full-rank system.
+    // A DOF is used only if a volume element of the current mesh level refers
+    // to it.  Vertices and edges are shared (INTERFACE); a Q2 face centre is
+    // element-local (LOCAL).  Everything else is UNUSED: the reserved
+    // nv+ne+ei.Nr() centre slot of a P2 triangle, and, after mesh.Refine(),
+    // the edges of the coarser levels, which NGSolve keeps numbered but no
+    // fine element touches.  An unused DOF left free is a zero row/column
+    // that makes K/M singular.
     ctofdof.SetSize(GetNDof());
-    ctofdof = INTERFACE_DOF;
-    if (axi_order == 2) {
-        int nv = ma->GetNV();
-        int ne = ma->GetNEdges();
-        for (auto i : Range(ma->GetNE(VOL))) {
-            DofId center = nv + ne + i;
-            if (ma->GetElement(ElementId(VOL, i)).GetType() == ET_TRIG)
-                ctofdof[center] = UNUSED_DOF;   // P2 triangle: no center DOF
-            else
-                ctofdof[center] = LOCAL_DOF;     // Q2 quad: element-local center
-        }
+    ctofdof = UNUSED_DOF;
+    const size_t shared = (axi_order == 1) ? ma->GetNV() : ma->GetNV() + ma->GetNEdges();
+    Array<DofId> dnums;
+    for (auto i : Range(ma->GetNE(VOL))) {
+        GetDofNrs(ElementId(VOL, i), dnums);
+        for (auto d : dnums)
+            ctofdof[d] = (size_t(d) < shared) ? INTERFACE_DOF : LOCAL_DOF;
     }
+    // Axis nodes carry no basis: a vertex on the axis, and the midnode of an
+    // edge with both ends on it.
+    const size_t nv = ma->GetNV();
+    for (size_t v = 0; v < nv; ++v)
+        if (SnapAxis(ma->GetPoint<3>(v)(0)) == 0.0) ctofdof[v] = UNUSED_DOF;
+    if (axi_order == 2)
+        for (size_t e = 0; e < ma->GetNEdges(); ++e) {
+            auto pn = ma->GetEdgePNums(e);
+            if (SnapAxis(ma->GetPoint<3>(pn[0])(0)) == 0.0
+                && SnapAxis(ma->GetPoint<3>(pn[1])(0)) == 0.0)
+                ctofdof[nv + e] = UNUSED_DOF;
+        }
 }
 
 void AxiHenrotteFESpace::FinalizeUpdate() {
     FESpace::FinalizeUpdate();          // builds dirichlet_dofs, free_dofs, etc.
-    if (axi_order != 2) return;
-    UpdateCouplingDofArray();           // expose UNUSED trig-center coupling type
-    // The base built free_dofs before ctofdof existed, so drop the dead
-    // P2-triangle center slots (nv+ne+ei.Nr()) from the free-dof sets directly.
-    int nv = ma->GetNV();
-    int ne = ma->GetNEdges();
-    for (auto i : Range(ma->GetNE(VOL))) {
-        if (ma->GetElement(ElementId(VOL, i)).GetType() != ET_TRIG) continue;
-        DofId c = nv + ne + i;
-        if (free_dofs && c < free_dofs->Size()) free_dofs->Clear(c);
-        if (external_free_dofs && c < external_free_dofs->Size())
-            external_free_dofs->Clear(c);
+    UpdateCouplingDofArray();
+    // The base built free_dofs before ctofdof existed, so drop the unused
+    // DOFs from the free-dof sets directly.
+    for (auto d : Range(ctofdof.Size())) {
+        if (ctofdof[d] != UNUSED_DOF) continue;
+        if (free_dofs && d < free_dofs->Size()) free_dofs->Clear(d);
+        if (external_free_dofs && d < external_free_dofs->Size())
+            external_free_dofs->Clear(d);
     }
 }
 
 FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
+    // the mesh may be curved or deformed after the space was built
+    RequireAdmissibleMesh(*ma);
     Ngs_Element ngel = ma->GetElement(ei);
     auto vertices = ngel.Vertices();
 
@@ -180,17 +300,19 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     if (ei.VB() != VOL && ngel.GetType() == ET_SEGM && vertices.Size() == 2) {
         Vec<3> p0 = ma->GetPoint<3>(vertices[0]);
         Vec<3> p1 = ma->GetPoint<3>(vertices[1]);
-        if (axi_order == 1)
-            return *new (lh) AxiHenrotteFE_Edge_Q1(p0(0), p0(1), p1(0), p1(1));
-        else
-            return *new (lh) AxiHenrotteFE_Edge_Q2(p0(0), p0(1), p1(0), p1(1));
+        // midpoint from the transformation (curved segments after Curve(2))
+        IntegrationPoint ipm(0.5, 0.0, 0.0);
+        auto pm = ma->GetTrafo(ei, lh)(ipm, lh).GetPoint();
+        return *new (lh) AxiHenrotteFE_Edge(axi_order, SnapAxis(p0(0)), p0(1),
+                                            SnapAxis(p1(0)), p1(1),
+                                            SnapAxis(pm(0)), pm(1));
     }
 
     if (axi_order == 2) {
         if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
             if (curved_quad) {
-                // Sample the 9 node positions from the (possibly Curve(2)-d)
-                // element transformation, in our Q2 node order: 4 corners (v0-v3),
+                // Sample the 9 node positions from the element transformation
+                // (curved edges follow the mesh), in our Q2 node order: 4 corners (v0-v3),
                 // then bottom/right/top/left edge midnodes, then the face center.
                 const double xi_refs[9]  = {0,1,1,0, 0.5,1,0.5,0, 0.5};
                 const double eta_refs[9] = {0,0,1,1, 0,0.5,1,0.5, 0.5};
@@ -200,13 +322,19 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                     IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
                     auto & mip = eltrans(ip, lh);
                     auto pt = mip.GetPoint();
-                    rs[k] = pt(0); zs[k] = pt(1);
+                    rs[k] = SnapAxis(pt(0)); zs[k] = pt(1);
                 }
-                return *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
+                auto & fe = *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
+                RequireQuadraticMap(*ma, ei, lh, fe.geo, false);
+                return fe;
             }
             Vec<3> p[4];
-            for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+            for (int i = 0; i < 4; ++i) {
+                p[i] = ma->GetPoint<3>(vertices[i]);
+                p[i](0) = SnapAxis(p[i](0));
+            }
             auto b = RequireAxisAlignedQuad(p, ei, 2);
+        RequireStraightQuad(*ma, ei, lh);
             double r_a = b.r_min, r_b = b.r_max;
             double z_a = b.z_min, z_b = b.z_max;
             return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
@@ -215,13 +343,8 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             // P2 triangle: 6 DOFs at 3 vertices + 3 edge midpoints.
             // Node order: [v0, v1, v2, m01, m12, m20].
             //
-            // Edge midpoint positions are obtained via the mesh's element
-            // transformation. For a straight-edge mesh this reduces to the
-            // geometric midpoint of the chord; for a mesh that has been
-            // `.Curve(p)`-d the transformation returns the curved-geometry
-            // position of the mid-edge node so that the P2 FE can follow
-            // curved boundaries (e.g. a sphere) exactly to the order of the
-            // curve.
+            // The nodes are sampled from the mesh element transformation, so
+            // curved (Curve(2)) edges follow the mesh.
             //
             // NGSolve's reference triangle (verified 2026-05-12 in
             // validation_test/axifem/research/prototypes/test_ngsolve_ref_tri_vertices.py):
@@ -240,10 +363,12 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
                 IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
                 auto & mip = eltrans(ip, lh);
                 auto pt = mip.GetPoint();
-                rs[k] = pt(0);
+                rs[k] = SnapAxis(pt(0));
                 zs[k] = pt(1);
             }
-            return *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
+            auto & fe = *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
+            RequireQuadraticMap(*ma, ei, lh, fe.geo, true);
+            return fe;
         }
         throw Exception("AxiHenrotteFESpace order=2: element " + ToString(ei) +
                         " is neither a quad (Q2) nor a triangle (P2).");
@@ -251,20 +376,33 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     // axi_order == 1 path
     if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
         Vec<3> p[4];
-        for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+        for (int i = 0; i < 4; ++i) {
+            p[i] = ma->GetPoint<3>(vertices[i]);
+            p[i](0) = SnapAxis(p[i](0));
+        }
         auto b = RequireAxisAlignedQuad(p, ei, 1);
+        RequireStraightQuad(*ma, ei, lh);
         double r_a = b.r_min, r_b = b.r_max;
         double z_a = b.z_min, z_b = b.z_max;
         return *new (lh) AxiHenrotteFE_Q1_AxisAligned(r_a, r_b, z_a, z_b);
     }
     if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
-        double rs[3], zs[3];
-        for (int i = 0; i < 3; ++i) {
-            auto pt = ma->GetPoint<3>(vertices[i]);
-            rs[i] = pt(0);
-            zs[i] = pt(1);
+        // P1 basis on the quadratic (s, z) map: sample the 6 geometry nodes
+        // [v0, v1, v2, m01, m12, m20] from the element transformation.
+        const double xi_refs[6]  = { 1.0, 0.0, 0.0, 0.5, 0.0, 0.5 };
+        const double eta_refs[6] = { 0.0, 1.0, 0.0, 0.5, 0.5, 0.0 };
+        auto & eltrans = ma->GetTrafo(ei, lh);
+        double rs[6], zs[6];
+        for (int k = 0; k < 6; ++k) {
+            IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
+            auto & mip = eltrans(ip, lh);
+            auto pt = mip.GetPoint();
+            rs[k] = SnapAxis(pt(0));
+            zs[k] = pt(1);
         }
-        return *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
+        auto & fe = *new (lh) AxiHenrotteFE_P1_Triangle(rs, zs);
+        RequireQuadraticMap(*ma, ei, lh, fe.geo, true);
+        return fe;
     }
     throw Exception("AxiHenrotteFESpace: unsupported element type for "
                     + ToString(ei) + " (only triangles and quads in 2D)");
@@ -451,7 +589,7 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
           "Construct an AxiHenrotteFESpace for the given mesh.\n"
           "  order=1 (default): Q1 quad / P1 triangle, vertex DOFs only.\n"
           "  order=2          : Q2 axis-aligned quad (9 DOFs) or P2 triangle\n"
-          "                     (6 DOFs; curved-mesh aware via mesh.Curve(2)).");
+          "                     (6 DOFs); straight or Curve(2) elements, curved edges off the axis.");
 }
 
 }  // namespace axifem

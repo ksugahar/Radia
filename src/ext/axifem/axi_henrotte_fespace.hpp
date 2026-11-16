@@ -38,15 +38,21 @@ public:
     }
 
     void Update() override;
-    // order=2 reserves a face-center DOF per VOL element (nv+ne+ei.Nr()), but
-    // P2 TRIANGLES never use theirs -> a dead (zero row/col) DOF that leaves the
-    // assembled K/M rank-deficient (breaks the eddy generalized eigenvalue solve
-    // and any iterative solve).  Mark those trig-center slots UNUSED so they drop
-    // out of FreeDofs; quad centers stay LOCAL (Q2 uses them).
+    // Mesh generators place axis nodes at |r| ~ 1e-15 of the mesh extent.
+    // Every coordinate handed to an element is snapped to r = 0 within
+    // axis_tol (1e-12 of the mesh extent), the same tolerance everywhere, so
+    // the axis nodes of all elements and boundary traces agree.  Their basis
+    // is identically zero (N_i = r_i psi_i / r), so their DOFs are UNUSED.
+    double axis_tol = 0.0;
+    double SnapAxis(double r) const { return std::fabs(r) <= axis_tol ? 0.0 : r; }
+    // Marks every DOF that no volume element of the current level uses as
+    // UNUSED: the reserved centre slot of a P2 triangle and, after
+    // mesh.Refine(), the coarse-level edges.  Left free, each is a zero
+    // row/column that makes K/M singular.
     void UpdateCouplingDofArray() override;
     // The base FinalizeUpdate builds free_dofs BEFORE any ctofdof is set and does
     // not invoke UpdateCouplingDofArray, so we override it to (a) populate ctofdof
-    // and (b) directly drop the dead P2-triangle center slots from free_dofs.
+    // and (b) drop the UNUSED DOFs from free_dofs.
     void FinalizeUpdate() override;
     FiniteElement & GetFE(ElementId ei, Allocator & lh) const override;
     void GetDofNrs(ElementId ei, Array<DofId> & dnums) const override;

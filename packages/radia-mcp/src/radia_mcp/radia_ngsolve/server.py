@@ -1305,16 +1305,16 @@ def axifem_documentation(topic: str = "all") -> str:
 
     Canonical API: ``FESpace("axihenrotte", mesh, order=k)`` or
     ``H1Henrotte(mesh, order=k)``.  order=1 dispatches to P1 triangles
-    or Q1 quads; order=2 dispatches to P2 triangles or Q2 quads.  P2
-    triangles are curved-mesh aware after ``mesh.Curve(2)``.  Curved Q2
-    quads are production opt-in via ``H1Henrotte(mesh, order=2,
-    curvedquad=True)``.
+    or Q1 quads; order=2 dispatches to P2 triangles or Q2 quads.  Elements
+    must be straight (``mesh.Curve(1)``); general straight Q2 quads are
+    production opt-in via ``H1Henrotte(mesh, order=2, curvedquad=True)``.
+    DOFs and every evaluator are in ``A_phi``.
 
     Args:
         topic: Documentation section. Options:
             "all"             - all sections concatenated
             "overview"        - what it is and why NGSolve doesn't already have it
-            "support_matrix"  - exact P1/P2/P2 curved/Q1/Q2/Q2 curved status
+            "support_matrix"  - exact P1/P2/Q1/Q2/general-Q2 status
             "api"             - FESpace("axihenrotte", mesh, order=k) usage
             "hodge_geometry"  - differential-geometry/Hodge view of Henrotte
                                 axisymmetric reduction

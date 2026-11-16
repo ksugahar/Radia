@@ -4,10 +4,10 @@ radia-core axifem knowledge base for the Radia + NGSolve MCP server.
 `radia.axifem` in radia-core is an NGSolve add-on (registered FESpace
 `axihenrotte`) that adds a Henrotte axisymmetric finite-element family which
 NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
-representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). It ships
-P1/P2 triangles, Q1/Q2 axis-aligned quads, curved P2 triangles via
-`mesh.Curve(2)`, and opt-in curved Q2 quads via
-`H1Henrotte(mesh, order=2, curvedquad=True)`. On the Cu-disk eddy-current
+with DOFs and every evaluator in `A_φ`: the basis is `N_i = r_i ψ_i / r`.
+It ships P1/P2 triangles, Q1/Q2 axis-aligned quads and opt-in general
+Q2 quads via `H1Henrotte(mesh, order=2, curvedquad=True)`; triangles and
+general quads accept `mesh.Curve(2)`. On the Cu-disk eddy-current
 benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
 DOFs than NGSolve `H1 order=3`.
 
@@ -36,12 +36,24 @@ AXIFEM_OVERVIEW = """\
 | `p=2` Q-element | 9 (4 vertex + 4 edge + 1 face) | 223.69 µs (0.27 %, ~6× fewer DOFs than `p=1` for higher accuracy) |
 | `p=3` Q-element | dropped — raw-monomial Vandermonde cond ≈ 10³⁰ exceeds double precision; would require shifted-Legendre basis to ship safely. Not on the roadmap. |
 
-The same FESpace also supports P1/P2 triangles.  The P2 triangle path is
-curved-mesh aware after `mesh.Curve(2)` and is the production choice for
-curved OCC/Kelvin boundaries.  The default Q2 quad path is straight and
-axis-aligned; opt into the 9-node curved Q2 quad with
-`H1Henrotte(mesh, order=2, curvedquad=True)` when the quadrilateral geometry
-is genuinely skewed or curved.
+The same FESpace also supports P1/P2 triangles.  The default Q2 quad path is
+the closed-form axis-aligned rectangle; opt into the 9-node general Q2 quad
+with `H1Henrotte(mesh, order=2, curvedquad=True)` for skewed straight quads.
+The P2 triangle and the general Q2 quad are s-isoparametric (reference
+Lagrange basis on a Lagrange map to `(s = r^2, z)`), so they are conforming on
+oblique edges, with each other and themselves.  The P1 triangle uses the
+linear Lagrange basis on the same quadratic `(s, z)` map: conforming on
+oblique edges, but it no longer reproduces the uniform field `ψ = s` and is
+out of the order gate until requalified.  Curved (`Curve(2)`) edges use a
+target map that sends a curved edge point to the same `(s, z)` edge point
+from both sides; folded `(s, z)` or target maps are refused.
+
+Every evaluator -- volume value, physical gradient, boundary trace -- and both
+native integrators use the one `A_φ` basis `N_i = r_i ψ_i / r` (nodal `A_φ`
+DOFs).  Edge midnodes follow one rule: `s`-midpoint on horizontal edges and on
+edges with exactly one end on the axis, mesh midpoint otherwise; the DOF of an
+axis-edge midnode is `A_φ` at `r = sqrt((r_a² + r_b²)/2)`.
+Prefer order 2 for reference values.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 
@@ -80,11 +92,11 @@ AXIFEM_SUPPORT_MATRIX = """\
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
 |--------------|-----------|------------------|------------|--------|
-| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM `prob3big.cpp` direct port |
-| Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; NGSolve element transformation supplies the curved mid-edge coordinates |
+| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; linear basis on the quadratic `(s, z)` map; out of the order gate until requalified |
+| Triangle P2 | `order=2` | straight triangle | 3 vertex + 3 edge | shipping; s-isoparametric, shared midnode rule |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
-| Quad Q2 curved | `order=2, curvedquad=True` | true 9-node biquadratic curved quad | 9 | shipping opt-in; curved `ElementTransformation` + quadrature BFI |
+| Quad Q2 general | `order=2, curvedquad=True` | any straight quad (skewed, any vertex order) | 9 | shipping opt-in; `AxiHenrotteFE_Q2_Curved`, s-isoparametric + quadrature BFI |
 
 Dispatch rule:
 `H1Henrotte(mesh, order=1)` returns P1 triangles or Q1 quads by mesh element
@@ -92,17 +104,16 @@ type.  `H1Henrotte(mesh, order=2)` returns P2 triangles or Q2 quads by mesh
 element type.
 
 Important boundary:
-Calling `mesh.Curve(2)` on a triangular OCC mesh is supported by the P2
-triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the
-default straight axis-aligned Q2 path unless the caller also passes
-`curvedquad=True`.
+Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a curved edge
+lying on the axis raises.  The closed-form quads require a straight rectangle
+in `(r, z)` with vertex order
+`(r_min, z_min), (r_max, z_min), (r_max, z_max), (r_min, z_max)`; pass
+`curvedquad=True` for any other quad.
 
 This matrix describes the electromagnetic `A_phi` space.  Axisymmetric heat
 uses standard `ngsolve.H1(mesh, order=2)` with the `2*pi*r` weak-form weight:
 Q2 on quadrilateral meshes, P2 on triangular meshes.  Do not reuse
-`H1Henrotte` for the production temperature field.  The optional Henrotte heat
-BFIs support Q1 and off-axis Q2 research comparisons and fail fast for
-axis-touching Q2.
+`H1Henrotte` for the temperature field; it has no temperature integrators.
 """
 
 AXIFEM_API = """\
@@ -141,11 +152,17 @@ exported.
 ## Constraints
 
 * **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
-  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.  P2
-  triangles are curved-mesh aware after `mesh.Curve(2)`.
+  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.
+  Triangles and `curvedquad=True` quads accept `mesh.Curve(2)`; a mesh
+  curved to order `p > 2` or carrying a deformation raises, and so does an
+  integration-local `dx(deformation=...)` / `ds(deformation=...)`.
+  `BoundaryFromVolumeCF` with a deformed `ds` is unsupported: NGSolve evaluates
+  it on the undeformed volume map for every space, `H1` included.  An NGSolve
+  build that applies the `ds` deformation to the volume point makes the
+  Henrotte evaluators refuse instead.
 * **Q2 quad geometry:** the default production Q2 quad is straight and
-  axis-aligned.  Use `curvedquad=True` for the production 9-node curved Q2
-  quadrature path on curved or skewed quadrilateral maps.
+  axis-aligned.  Use `curvedquad=True` for the production 9-node general Q2
+  quadrature path on skewed straight quads.
 * **Dirichlet:** users MUST set `dirichlet="axis|..."` for any axis-touching
   geometry. The axis-restricted basis already produces zero rows / columns
   on the axis-side DOFs, so without an explicit Dirichlet flag the global
@@ -155,9 +172,7 @@ exported.
   marks all three.
 * **Thermal scope:** reserve this space and its magnetic BFIs for `A_phi`.
   Production temperature uses standard `ngsolve.H1(order=2)` plus the
-  `2*pi*r` weight.  The optional `AxiHenrotteHeatStiffnessBFI` and
-  `AxiHenrotteHeatMassBFI` reject axis-touching Q2 rather than mixing the
-  magnetic six-function FE with a full nine-function heat matrix.
+  `2*pi*r` weight; the space has no temperature integrators.
 """
 
 AXIFEM_HODGE_GEOMETRY = """\
@@ -237,8 +252,8 @@ AXIFEM_TASKMANAGER = """\
 * The closed-form BFIs are `const` element integrators; per-call scratch lives
   in `LocalHeap`, and quadrature tables are immutable.
 
-This covers the shipping paths: P1/P2 triangles, curved P2 triangles,
-Q1/Q2 straight axis-aligned quads, and opt-in curved Q2 quads.
+This covers the shipping paths: P1/P2 triangles, Q1/Q2 straight
+axis-aligned quads, and opt-in general Q2 quads.
 The regression gate is `tests/axifem/test_taskmanager_race.py`, which assembles
 both the order-1 V-DOF custom-BFI path and the order-2 symbolic DiffOp/GetFE
 path at `SetNumThreads(1)` and `SetNumThreads(4)` and compares a deterministic
@@ -260,10 +275,13 @@ Basis on each triangle:
 {1, s, z},  s = r²
 ```
 
-DOFs are the 3 vertices.  This is the FEMM `prob3big.cpp`
-`StaticAxisymmetric()` direct-port path and is useful for unstructured
-triangle meshes.  Axis-touching cases use the same special-case formulas as
-FEMM.
+DOFs are the 3 vertices.  The element is s-isoparametric with an affine map
+to `(s, z)`: stiffness and sigma mass are integrated over the triangle that is
+straight in `(s, z)` (`∫ ∇ψ·∇ψ / r dr dz = ∫ (2 ψ_s² + ψ_z² / (2 s)) ds dz`),
+so the space is conforming there and with Q1 quads, and `ψ = s` (uniform
+`B_z`) is reproduced.  An edge oblique in `(r, z)` is replaced by its `(s, z)`
+chord (relative geometric error about `h / r`).  Axis vertices decouple through
+the `r_i` factor of the V-DOF basis.
 
 ## Q1 quad (4 DOFs / axis-aligned quad)
 
@@ -296,14 +314,12 @@ Basis on each triangle:
 {1, s, z, s², s·z, z²},  s = r²
 ```
 
-DOFs are 3 vertices + 3 edge midnodes.  The production C++ FESpace obtains all
-6 physical node coordinates through NGSolve's element transformation:
-
-* straight mesh: edge nodes are chord midpoints;
-* after `mesh.Curve(2)`: edge nodes follow the curved geometry.
-
-The stiffness and sigma-mass BFIs use the same 6-node geometric map at each
-Duffy-Gauss quadrature point, so **P2 curved triangles are shipped**.
+DOFs are 3 vertices + 3 edge midnodes.  The production C++ FESpace takes the
+corners from NGSolve's element transformation and places the midnodes by the
+shared rule (`s`-midpoint on horizontal and axis edges, mesh midpoint
+otherwise).  The stiffness, sigma-mass, value, gradient and trace evaluators
+all use the same 6-node `(s, z)` map; curved edges add the target map of
+`curved_geometry`.
 
 ## Q2 quad (9 DOFs / straight axis-aligned quad)
 
@@ -387,38 +403,46 @@ biquadratic map.
 AXIFEM_CURVED_GEOMETRY = """\
 # Curved-geometry support
 
-## Production
+## Curved (`Curve(2)`) elements
 
-**P2 triangles are curved-mesh aware.**  When the user calls `mesh.Curve(2)` on
-an OCC/Netgen triangular mesh, NGSolve's element transformation returns the
-curved mid-edge coordinates. `AxiHenrotteFESpace::GetFE` samples those 6 node
-positions and constructs `AxiHenrotteFE_P2_Triangle`; the magnetic BFIs then
-integrate over the same 6-node map.
-
-Use this for:
-* spheres and spheroids in 2D axisymmetric cross-section,
-* z-offset Kelvin half-discs,
-* any OCC-generated curved boundary where a triangular mesh is natural.
+P1/P2 triangles and `curvedquad=True` Q2 quads accept `mesh.Curve(2)`.  A
+curved `(r, z)` edge off the axis keeps its mesh midpoint; the target `s` of
+the basis is `r^2 (1 - sum_e w_e rho_e)` with the edge ratio
+`rho_e = 1 - s_q / r_e^2` blended from each curved edge, so a point of a
+curved edge maps to the same `(s, z)` edge point from both neighbours and
+from the boundary trace (conforming, trace equal to the volume value).  A
+curved edge ending on the axis keeps the `s`-midpoint, is matched through
+`s`, and shifts the target `z` instead.  These elements are integrated on the
+mesh element (16-point Gauss rule per direction).  Refused: a curved edge
+lying on the axis, `r <= 0` inside a curved edge, `r^2` turning back along a
+curved axis edge, folded `(s, z)` or target maps, and a mesh curved to
+order `p > 2` or carrying a deformation (checked from the mesh metadata), and
+an integration-local deformation (each evaluator compares the integration
+point and Jacobian with the mesh transformation).  Checks:
+`tests/axifem/test_vdof_consistency.py` (matrices, trace, finite differences,
+axis limit), `tests/axifem/test_de_rham_identities.py` and
+`tests/axifem/test_p2_curved_magsta.py` (sphere volume and total flux).
 
 ## Production default: straight quads
 
 **Q1/Q2 quads are axis-aligned straight rectangles.**  They are the fast
 closed-form path for structured disks, cylinders, and rectangular workpieces.
-The Q2 edge midnodes use the `s`-midpoint convention:
+The Q2 edge midnodes use the `s`-midpoint convention on horizontal edges and
+on edges with one end on the axis:
 
 ```
 s_m = (s_a + s_b) / 2
 r_m = sqrt((r_a^2 + r_b^2) / 2)
 ```
 
-## Production opt-in: curved Q2 quads
+## Production opt-in: general Q2 quads
 
-**Curved Q2 quads are production C++ behind an explicit flag.**
+**General Q2 quads are production C++ behind an explicit flag.**
 `H1Henrotte(mesh, order=2, curvedquad=True)` dispatches to
-`AxiHenrotteFE_Q2_Curved`, using 9 curved node positions from
-`mesh.Curve(2)` and a quadrature BFI.  Use this for annular-sector or mapped
-quad studies.  Without `curvedquad=True`, quads intentionally keep the
-straight closed-form path for backward-compatible disk/cylinder benchmarks.
+`AxiHenrotteFE_Q2_Curved`, s-isoparametric on any straight quad (skewed,
+trapezoidal, any vertex order), with a quadrature BFI.  Use this for
+annular-sector or mapped quad studies.  Without `curvedquad=True`, quads keep
+the closed-form path, which refuses anything but an ordered rectangle.
 """
 
 AXIFEM_VS_STANDARD_H1 = """\
@@ -429,7 +453,7 @@ Beyond the obvious "the basis is in `r²`":
 | Property | NGSolve `H1(mesh, order=2)` | `axihenrotte p=2` |
 |---|---|---|
 | Polynomial variable | `(r, z)` | `(s = r², z)` ⇒ degree 4 in `r` |
-| Represented field | `A_φ` directly | `ψ = 2π r A_φ` (flux function); `A_φ` recovered via `/(2π r)` |
+| Represented field | `A_φ` directly | `A_φ` DOFs and evaluators, basis `N_i = r_i ψ_i / r` built from a Lagrange `ψ_i` in `(s, z)` |
 | Axis (`r = 0`) behaviour | `A_φ(0) ≠ 0` in general — must be Dirichlet'd explicitly. The `1/r` weight in axisymmetric integrals spoils Gauss-quadrature convergence near the axis (FEMM tradition reports 5–10 % loss). | `ψ` carries an `s = r²` factor in the axis-restricted basis, so `A_φ = ψ/(2π r) → 0` automatically as `r → 0`. No `1/r`-weighted Gauss quadrature; integrals are closed form. |
 | Field formula | `B_z = (1/r) ∂(r A_φ)/∂r` (contains `1/r`) | `B_z = (1/π) ∂ψ/∂s` — pure derivative, no singularity |
 | Element-matrix integration | NGSolve Gauss quadrature with `1/r` weight | Closed-form (Mathematica-derived per-monomial integrals, machine precision) |
@@ -496,7 +520,10 @@ intended canonical use:
   |-------------------------|------------|--------------|
   | Stoll analytical        | 738.48     | --           |
   | axifem p=2 + Kelvin     | 738.47     | -0.001 %     |
-  | + Curve(2)              | 738.69     | +0.028 %     |
+  | + Curve(2) (historical) | 738.69     | +0.028 %     |
+
+  The `Curve(2)` row was recorded with the earlier curved elements and has
+  not been re-measured with the current curved-edge target map.
 
   This is the canonical configuration for sphere/disk/cuboid axisym
   eddy-current decay-time validation -- see `kelvin` topic for the full
@@ -628,7 +655,7 @@ shape, info = add_kelvin_2d_axisym(
     maxh_kelvin=5e-3,
 )
 mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_kelvin))
-# Optional: mesh.Curve(2)  -- see "Curve(2) trade-off" below
+# H1Henrotte accepts straight or Curve(2) meshes; Curve(p > 2) raises
 
 # 3. FESpace: H1Henrotte + Periodic.  Dirichlet on both axes + GND vertex.
 fes = Periodic(H1Henrotte(
@@ -664,8 +691,11 @@ with TaskManager():
 ```
 Stoll analytical                       τ₁ = 738.48 µs   (ref)
 axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
-axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
+axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %  (historical)
 ```
+
+The `Curve(2)` line was recorded with the earlier curved elements and has
+not been re-measured with the current curved-edge target map.
 
 Test: `validation_test/axifem/research/prototypes/test_p2_kelvin_sphere.py`.
 
@@ -699,22 +729,18 @@ field. The Phase B3.2 follow-up would be a per-quadpt `mu` integrator
 overload, but the centroid path already hits machine precision on the
 sphere benchmark, so this is low priority.
 
-### `Curve(2)` trade-off
-NGSolve `mesh.Curve(2)` on a triangular spherical conductor boundary engages
-the shipped **P2 triangle curved** path.  It improves geometric accuracy 30×
-on coarse meshes (gap 0.867 % → 0.028 % on a typical mesh), but on a *finer*
-mesh `Curve(2)` can slightly *increase* the gap (0.001 % straight → 0.028 %
-curved) because the biquadratic Lagrange geometric map in `(r, z)` does not
-match the Henrotte basis's even-power-of-r structure exactly. Use `Curve(0)`
-(= straight edges, default) for sphere/disk benchmarks at typical mesh
-resolution; reserve `Curve(2)` for coarse-mesh production runs where the
-geometric error dominates the FE-basis error.
+### Curved boundaries
+`Curve(2)` triangles are accepted (see `curved_geometry`).  The earlier
+measurement (straight 0.001 % vs `Curve(2)` 0.028 % on the finer sphere mesh,
+recorded with the earlier curved elements) found straight P2 triangles at that
+resolution as accurate; the restored curved P2 sphere test shows the curved
+geometry cutting the total-flux error from -4.13 % to -0.12 % on a coarse
+mesh.
 
-A true **curved Q2 quad** element (basis space still in even powers of r, but
-on a biquadratic isoparametric mapping) is production C++ behind the explicit
-`curvedquad=True` flag.  Keep the default straight axis-aligned Q2 path for
-structured disk/cylinder benchmarks; use the curved path for annular-sector
-or mapped-quad studies.
+A general **Q2 quad** element (biquadratic s-isoparametric map of a straight
+quad) is production C++ behind the explicit `curvedquad=True` flag.  Keep the
+default straight axis-aligned Q2 path for structured disk/cylinder
+benchmarks; use the general path for skewed or mapped straight quads.
 
 ### Geometry pre-requisites for `add_kelvin_2d_axisym`
 Before calling the helper, the user-built interior must have:
@@ -882,12 +908,12 @@ def get_axifem_documentation(topic: str = "all") -> str:
       "taskmanager"     - NGSolve-native parallel execution contract
       "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
       "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
-      "curved_geometry" - P2 curved triangle and opt-in Q2 curved quad support
+      "curved_geometry" - straight-element admission and opt-in general Q2 quads
       "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
       "validation"      - Cross-validation references and Hessian-of-W convention
       "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
                           sphere -0.001 % vs Stoll, with gotchas: mu vs nu factor,
-                          element-centroid mu sampling, Curve(2) trade-off)
+                          element-centroid mu sampling, curved-boundary note)
       "magnet"          - Permanent-magnet source term (axisym magnetization edge-loop):
                           weak-form RHS, magnetized-sphere validation, axis-BC gotcha
       "file_layout"     - Where to find each piece (C++, Mathematica, tests)

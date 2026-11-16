@@ -39,27 +39,39 @@ The executed proof artifact is
 outputs present the checked evidence stored under
 [`validation_test/axifem`](../../validation_test/axifem/). The validation
 record captures the `radia` runtime version, execution date, pytest output,
-and an evidence matrix for all six shipping paths: P1, Q1, P2, Q2, P2 curved,
-and Q2 curved.
+and an evidence matrix for the paths shipped when it was executed (P1, Q1,
+P2, Q2, P2 curved, Q2 curved).  That record predates the V-DOF convention
+unification and the curved-edge target map that replaced the earlier curved
+elements, and P1 is out of the order gate, so the notebook is stale until it
+is re-executed.
 
 ### Implementation support matrix
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
 |--------------|-----------|------------------|------------|--------|
-| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM/Henrotte-derived P1 reference plus production V-DOF stiffness |
-| Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; uses NGSolve's element transformation to read curved mid-edge coordinates |
+| Triangle P1 | `order=1` | straight or `Curve(2)` triangle | 3 vertex | shipping; linear basis on the quadratic `(s, z)` map; out of the order gate until requalified |
+| Triangle P2 | `order=2` | straight or `Curve(2)` triangle | 3 vertex + 3 edge | shipping; s-isoparametric, edge midnodes by the shared midnode rule |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
-| Quad Q2 curved | `order=2, curvedquad=True` | true 9-node biquadratic curved quad | 9 | shipping opt-in; uses the curved `ElementTransformation` and quadrature BFI |
+| Quad Q2 general | `order=2, curvedquad=True` | any straight or `Curve(2)` quad (skewed, trapezoidal, any vertex order) | 9 | shipping opt-in; s-isoparametric with quadrature BFI |
 
 `H1Henrotte(mesh, order=2)` dispatches by element type: triangles get the
-P2 curved-aware path, while quads get the straight axis-aligned Q2 path.
-Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the straight
-axis-aligned Q2 path by default for backward-compatible disk/cylinder
-benchmarks.  Pass `curvedquad=True` when the quad geometry is genuinely
-curved or skewed.  Use P2 triangles for OCC/Kelvin curved boundaries when
-triangulation is simpler, structured straight Q2 quads for rectangular
-workpieces, and Q2 curved quads for annular-sector or mapped-quad studies.
+P2 path, quads the closed-form axis-aligned Q2 path, which refuses a quad
+that is not a rectangle in `(r, z)` with vertex order `(r_min, z_min),
+(r_max, z_min), (r_max, z_max), (r_min, z_max)`.  Pass `curvedquad=True`
+for skewed, general or curved quads.  The triangle and general Q2 paths
+accept `Curve(2)` elements (FORMULATION.md § 6, curved edges); the
+axis-aligned Q1/Q2 paths require straight rectangles.  A curved edge lying
+on the axis, a curved edge reaching `r <= 0` or turning back in `r` on the
+axis, a folded `(s, z)` or target map, a mesh curved to order `p > 2`,
+a mesh deformation and an integration-local deformation
+(`dx(deformation=...)`, `ds(deformation=...)`) raise.  `BoundaryFromVolumeCF`
+under a deformed `ds` evaluates on the undeformed volume map for every NGSolve
+space, `H1` included; it is unsupported, and `H1Henrotte` matches `H1` there.
+An NGSolve build that applies the `ds` deformation to the volume point makes
+the Henrotte evaluators refuse instead, like any integration-local deformation.  Every evaluator (volume value, gradient,
+boundary trace) and both native integrators use one `A_φ` basis
+`N_i = r_i ψ_i / r`; see FORMULATION.md § 6.
 
 This support matrix is for the electromagnetic `A_phi` formulation.  The
 production axisymmetric heat solver uses standard NGSolve `H1(order=2)` with
@@ -150,25 +162,23 @@ the value of the axisymmetric-specific basis.
 
 ## Basis details
 
-### Triangle paths: P1, P2, and P2 curved
+### Triangle paths: P1 and P2
 
 Triangles are the general-shape path.
 
-- `order=1` triangle: 3 DOFs at vertices, with basis
-  `{1, r², z}`.  The pure-Python reference keeps the FEMM `prob3big.cpp`
-  P1 formula lineage for comparison, while production C++ uses the
-  NGSolve `.vol` mesh route and the V-DOF stiffness lane that reproduces
-  a uniform axial `B_z` field.  Do not describe the production path as a
-  line-for-line FEMM port.
-- `order=2` triangle: 6 DOFs at 3 vertices + 3 edge midnodes, with basis
-  `{1, r², z, r⁴, r² z, z²}`.  The C++ FESpace obtains all 6 physical
-  node positions through NGSolve's element transformation, so after
-  `mesh.Curve(2)` the edge nodes follow the curved geometry.  The stiffness
-  and sigma-mass BFIs use the same 6-node geometric map at quadrature points.
-
-This means P2 curved triangles are part of the production implementation.
-They are the recommended curved-boundary path for spheres, Kelvin half-discs,
-and OCC-generated axisymmetric regions.
+- `order=1` triangle: 3 DOFs at vertices, linear Lagrange basis on the
+  quadratic `(s, z)` map of the straight `(r, z)` triangle, so the space is
+  conforming on oblique edges.  It reproduces `A_φ = 1/r` and `z/r` but not
+  the uniform axial field (`ψ = s`), and stays out of the order gate until it
+  is requalified.  The pure-Python reference keeps the FEMM `prob3big.cpp` P1 formula lineage for
+  comparison; do not describe the production path as a FEMM port.
+- `order=2` triangle: 6 DOFs at 3 vertices + 3 edge midnodes,
+  s-isoparametric: reference Lagrange basis on the quadratic Lagrange map to
+  `(s, z)` through the 6 nodes; corners come from NGSolve's element
+  transformation and midnodes from the shared midnode rule.  Stiffness,
+  sigma mass, point evaluation and boundary traces use the same map; the
+  space is conforming on oblique edges.  P2 is the unstructured path for
+  spheres, Kelvin half-discs and OCC-generated regions, on straight meshes.
 
 ### `p=1` Q-element (4 DOFs)
 
@@ -212,21 +222,22 @@ with `K_phi` provided in *closed form* by the Mathematica derivation
 (`validation_test/axifem/research/prototypes/derive_quad_q2_henrotte.wls`
 → `q2_henrotte_generated.hpp`).
 
-### Q2 curved quad status
+### General Q2 quad status
 
 The default production Q2 quad remains the straight, axis-aligned closed-form
 element.  `AxiHenrotteFESpace::GetFE` reads the four corner coordinates and
 constructs `AxiHenrotteFE_Q2_AxisAligned` unless the caller opts into the
-curved path.
+general path.
 
-The true 9-node curved Q2 quad is now also shipped as
+The 9-node general Q2 quad is shipped as
 `AxiHenrotteFE_Q2_Curved`, selected by `H1Henrotte(mesh, order=2,
-curvedquad=True)`.  It samples 9 curved node positions from the
-`mesh.Curve(2)` element transformation and uses a quadrature BFI over the
-biquadratic map.  Regression coverage lives in
-`tests/axifem/test_q2_curved.py`: the curved path reproduces the
-axis-aligned closed form on straight quads and converges on skewed annular
-quads.
+curvedquad=True)`.  It accepts any straight quad and, like the P2 triangle,
+is s-isoparametric: a biquadratic
+Lagrange map to `(s, z)` with the reference Lagrange basis, conforming on
+oblique edges (see FORMULATION.md section 8).  Regression coverage lives in
+`tests/axifem/test_q2_curved.py` (converges together with the axis-aligned
+closed form on straight quads, converges on skewed annular quads) and
+`tests/axifem/test_edge_trace_conformity.py` (shared-edge traces).
 
 ### Convention: Hessian-of-W
 
@@ -272,11 +283,12 @@ src/radia/axifem.pyd              # build output (Build.ps1 + top-level CMake)
 tests/axifem/                            # public test surface
   conftest.py                             # adds _reference_python/ to sys.path
   test_element_matrices.py                # P1 triangle symmetry + axis cases
-  test_python_reference_consistency.py    # Q1 quad C++ vs Python ref + P2 curved smoke
+  test_python_reference_consistency.py    # Q1 quad C++ vs Python ref + P2 smoke
   test_q1_vdof.py                         # Q1 V-DOF uniform-field gate
   test_p2_axis_eddy.py                    # P2 triangle full-rank eddy gate
-  test_p2_curved_magsta.py                # P2 curved geometry + total-flux gate
-  test_q2_curved.py                       # Q2 curved straight equivalence + skewed convergence
+  test_q2_curved.py                       # general Q2 straight equivalence + skewed convergence
+  test_vdof_consistency.py                # native K/M = symbolic forms, trace = volume, axis limits
+  test_edge_trace_conformity.py           # shared-edge traces on oblique edges and permutations
   test_taskmanager_race.py                # 1-vs-4 thread race-free assembly gate
   test_docs_notebook_evidence.py          # result-bearing docs artifact guard
   _reference_python/                      # pure-Python prototype (test fixture)
@@ -287,7 +299,7 @@ tests/axifem/                            # public test surface
 
 docs/axifem/
   README.ipynb                            # notebook index
-  AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
+  AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed element proof (stale: predates the V-DOF unification)
 
 validation_test/axifem/                  # validation-class research checks
   axifem_element_evidence.json             # checked evidence consumed by the docs notebook

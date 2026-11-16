@@ -16,17 +16,22 @@ MOMENT, which sets the entire external field).  The volume-AVERAGE is avg = N/D.
 
   * Volume D:    straight chords UNDER-integrate the disk by ~-3.9% at h=0.4;
                  Curve(2) recovers it to -0.025% (machine-precision circle, ~150x).
-  * Total flux N (~ total moment): straight -5.07%, Curve(2) -1.07% at h=0.4 --
-                 curving cuts the error ~5x, because N keeps the volume error.
-  * Average N/D: straight -1.22%, Curve(2) -1.05% -- the -3.9% volume error CANCELS
-                 in the ratio (avg_err ~= N_err - D_err), so the average looks almost
-                 unchanged.  That ~0.18% is NOT a sign curving is impotent; it is the
+  * Total flux N (~ total moment): straight -4.13%, Curve(2) -0.12% at h=0.4 --
+                 curving cuts the error ~35x, because N keeps the volume error.
+  * Average N/D: straight -0.24%, Curve(2) -0.09% -- the -3.9% volume error CANCELS
+                 in the ratio (avg_err ~= N_err - D_err), so the average moves little.
+                 That ~0.14% is NOT a sign curving is impotent; it is the
                  demagnetizing factor N=1/3 being variationally stationary at the
                  sphere (first-order faceting cancels in the average).  The average is
                  simply the WRONG observable -- evaluate the volume/moment instead.
 
 The default quadrature already integrates the curved 1/r form adequately (a
 bonus_intorder 0->12 sweep moves N by <0.01%), so the gain is geometry-limited.
+
+Guards: Curve(2) node sampling and the curved-edge target map of the P2
+Henrotte element on a mesh whose arcs end on the axis.
+Assumes: the analytic interior field of a linear magnetized sphere,
+B_z = 2 mu0 mur Hc / (mur + 2), uniform inside.
 
 Requires the rebuilt axifem extension (Build.ps1 -AxiFemOnly); loads src/radia and
 the radia-mcp package source.
@@ -107,9 +112,9 @@ def test_curved_p2_geometry_engages():
 
 def test_curved_p2_total_flux_tracks_volume():
     """Evaluate the VOLUME, not the average.  The total axial flux N = INT r B_z dr dz
-    (~ total magnetic moment) keeps the volume error, so curving cuts its error ~5x
-    (straight -5.07%, Curve(2) -1.07% at h=0.4).  The volume-AVERAGE N/D cancels the
-    volume error and barely moves (~0.18%) -- asserted here only as the CONTRAST that
+    (~ total magnetic moment) keeps the volume error, so curving cuts its error ~35x
+    (straight -4.13%, Curve(2) -0.12% at h=0.4).  The volume-AVERAGE N/D cancels the
+    volume error and barely moves (~0.14%) -- asserted here only as the CONTRAST that
     exposes the mechanism (avg_err ~= N_err - D_err), not as a curving failure."""
     Ds, Ns, avg_s = _vol_flux_avg(_build(H_COARSE))
     mesh_c = _build(H_COARSE); mesh_c.Curve(2)

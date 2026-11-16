@@ -339,6 +339,8 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
 	${CORE_DIR}/rad_peec_volume.cpp           # Finite-volume Green integral
 	${CORE_DIR}/rad_hacapk_peec.cpp           # HACApK PEEC adapter (Ruehli filament kernel)
+	${CORE_DIR}/rad_peec_tet.cpp               # Tetrahedral volume PEEC kernel (face currents)
+	${CORE_DIR}/rad_hacapk_peec_tet.cpp       # HACApK tetrahedral volume PEEC inductance
 	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 	${CORE_DIR}/rad_hdiv_vim.cpp              # Symmetric HDiv-type VIM demag operator (N = B^T G B)
 	${CORE_DIR}/rad_hdiv_hysteresis.cpp       # Energy-based B-input vector Stop material
@@ -602,6 +604,8 @@ pybind11_add_module(peec_matrices
 	${PEEC_MATRICES_API_SOURCE}
 	${CORE_DIR}/rad_peec_matrices.cpp
 	${CORE_DIR}/rad_peec_volume.cpp
+	${CORE_DIR}/rad_peec_axisym.cpp
+	${CORE_DIR}/rad_peec_tet.cpp
 )
 
 # Add include directories
@@ -912,8 +916,8 @@ target_include_directories(axifem PRIVATE
 # this, axifem.pyd is built against system pybind11 3.0.2 and
 # fails at import with `ImportError: generic_type: ... referenced unknown
 # base type "ngfem::FiniteElement"` when ngsolve 2606 uses bundled
-# 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 in
-# test_heat_henrotte_smoke.)
+# 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 by the axifem
+# import tests.)
 target_include_directories(axifem BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC} ${NGSOLVE_COMPAT_INC})
 
 target_compile_definitions(axifem PRIVATE
@@ -945,6 +949,6 @@ message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
 
 # Equation editing and document output belong to the independent EqnEdit64 product.
 
-# Preserve finite-volume Gaussian tail cancellation checks under optimized builds.
-set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp PROPERTIES
+# Preserve finite-volume Gaussian tail and axisymmetric near-field subtraction cancellation under optimized builds.
+set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp ${CORE_DIR}/rad_peec_axisym.cpp ${CORE_DIR}/rad_peec_tet.cpp PROPERTIES
     COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>;$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-fast-math>")
