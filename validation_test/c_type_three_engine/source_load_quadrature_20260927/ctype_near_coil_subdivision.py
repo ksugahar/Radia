@@ -98,7 +98,7 @@ def main():
     parser.add_argument("--whole-order", type=int, default=20)
     parser.add_argument("--near-ratio", type=float, default=1.0)
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--inverse", default="pardiso")
+    parser.add_argument("--inverse", default="sparsecholesky")
     args = parser.parse_args()
     global _LOG
     _LOG = args.output.with_suffix(".log")

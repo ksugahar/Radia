@@ -1491,8 +1491,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     representative before they provide such a single-valued trace.
 
     The formulation has an interface Lagrange multiplier and is symmetric
-    indefinite. Its legacy direct default remains a migration task until
-    a validated SparseCholesky-based saddle solve is available. The
+    indefinite. It is solved directly with SparseCholesky and a checked true
+    residual; there is no other direct backend. The
     returned field is continuous in the physical tangential/normal sense but
     not represented as one global H1 GridFunction.
 
