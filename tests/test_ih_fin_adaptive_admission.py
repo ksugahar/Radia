@@ -278,6 +278,7 @@ def test_checkpoint_on_the_deadline_with_a_late_final_sample_does_not_converge(f
 def _main_with_live_sequences(fin, monkeypatch, tmp_path, edit):
     base = _run(fin, Clock())
     base["tolerance"] = {k: 0.1*0.05 for k in TOL}         # main(): one tenth of the 5 % limits
+    v = _value(base["levels"][-1]["ndof"])
     edit(base)
     monkeypatch.setattr(fin, "_branch_ring_solver", lambda: (None, dict(PROVENANCE)))
     monkeypatch.setattr(fin, "adaptive_sequence",
@@ -286,7 +287,6 @@ def _main_with_live_sequences(fin, monkeypatch, tmp_path, edit):
     monkeypatch.setattr(fin, "git_state", lambda: ("head", False))
     monkeypatch.setattr(fin, "_peec_runtime", lambda: {})
     monkeypatch.setattr(fin, "section_mesh", lambda *a: (None, None, None))
-    v = _value(base["levels"][-1]["ndof"])
     monkeypatch.setattr(fin, "solve_peec", lambda *a: dict(R_ohm=v, L_H=v, root_heat_W_per_A2=v,
                                                            tip_heat_W_per_A2=v))
     out = tmp_path/"report.json"
@@ -311,3 +311,12 @@ def test_live_sequence_over_budget_leaves_the_reference_unresolved(fin, stand_in
     assert (report["reference_converged"], report["reference_resolved"]) == (False, False)
     assert all("above the budget" in " ".join(r) for r in report["reference_certification"].values()), \
         report["reference_certification"]
+
+
+def test_live_sequence_without_a_checkpoint_records_an_unresolved_verdict(fin, stand_in, monkeypatch, tmp_path):
+    def no_levels(seq):
+        seq.update(levels=[], converged=False, stop="budget: next level 1000 DOFs above 1")
+    report = _main_with_live_sequences(fin, monkeypatch, tmp_path, no_levels)
+    assert (report["reference_converged"], report["reference_resolved"]) == (False, False)
+    assert report["verdict"]["status"].startswith("NOT_ADOPTED"), report["verdict"]
+    assert report["reference_sequences_without_checkpoint"] == ["o1_f1.5", "o1_f3.0", "o2_f1.5", "o2_f3.0"]

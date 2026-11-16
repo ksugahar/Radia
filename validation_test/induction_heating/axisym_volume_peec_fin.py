@@ -479,28 +479,34 @@ def main():
         raise ValueError(f"sequences {sorted(by)} do not cover orders x exteriors {sorted(want)}")
     top = max(args.ref_order)
     wide = max(args.ref_exterior_factor)
-    final = {key: [r for r in s["levels"] if r["checkpoint"]][-1] for key, s in by.items()}
-    best = final[(top, wide)]
-    ref_q = quantities(best)
-    rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
-    checks = {}
-    for (o, f), s in sorted(by.items()):                # mesh: the last two adaptive checkpoints
-        lv = [r for r in s["levels"] if r["checkpoint"]]
-        # relative to the finer level, as in the stopping test
-        checks[f"mesh_o{o}_f{f}"] = rel(lv[-2], lv[-1]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
-    for f in args.ref_exterior_factor:                   # exterior, at the highest order
-        checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
-    for o in args.ref_order:                             # order, at the widest exterior
-        checks[f"order_o{o}"] = rel(final[(o, wide)], best)
-    spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
-    swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
-    consistent = best["terminal_vs_energy_R"] <= 1e-3
     # Saved sequences were certified on load; live ones are certified here by the same rule.
     certification = {f"o{s['order']}_f{s['exterior_factor']}":
                      certify_sequence(s, expected_settings(args, settings, s["order"], tol)) for s in sequences}
     converged = all(s["converged"] for s in sequences) and not any(certification.values())
-    resolved = (swept and consistent and converged
-                and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items()))
+    swept = len(set(args.ref_order)) >= 2 and len(set(args.ref_exterior_factor)) >= 2
+    # A sequence stopped by its budget before any checkpoint leaves no reference to compare with.
+    missing = sorted(f"o{o}_f{f}" for (o, f), s in by.items() if not any(r["checkpoint"] for r in s["levels"]))
+    if missing:
+        ref_q = checks = spread = None
+        consistent = resolved = False
+    else:
+        final = {key: [r for r in s["levels"] if r["checkpoint"]][-1] for key, s in by.items()}
+        best = final[(top, wide)]
+        ref_q = quantities(best)
+        rel = lambda a, b: {k: abs(quantities(a)[k] - quantities(b)[k])/abs(quantities(b)[k]) for k in ref_q}
+        checks = {}
+        for (o, f), s in sorted(by.items()):            # mesh: the last two adaptive checkpoints
+            lv = [r for r in s["levels"] if r["checkpoint"]]
+            # relative to the finer level, as in the stopping test
+            checks[f"mesh_o{o}_f{f}"] = rel(lv[-2], lv[-1]) if len(lv) >= 2 else {k: math.inf for k in ref_q}
+        for f in args.ref_exterior_factor:               # exterior, at the highest order
+            checks[f"exterior_f{f}"] = rel(final[(top, f)], best)
+        for o in args.ref_order:                         # order, at the widest exterior
+            checks[f"order_o{o}"] = rel(final[(o, wide)], best)
+        spread = {k: max(c[k] for c in checks.values()) for k in ref_q}
+        consistent = best["terminal_vs_energy_R"] <= 1e-3
+        resolved = (swept and consistent and converged
+                    and all(v <= 0.1*PHYSICAL_TARGETS[k] for k, v in spread.items()))
     reference = [dict(level, order=s["order"]) for s in sequences for level in s["levels"]]
 
     peec = []
@@ -511,7 +517,11 @@ def main():
         peec.append(row)
         print(json.dumps({"phase": "peec", **row}), flush=True)
     candidate = quantities(peec[-1])
-    verdict = physical_verdict(candidate, ref_q, reference_resolved=resolved)
+    if missing:
+        verdict = dict(status="NOT_ADOPTED: reference sequences without a checkpoint", within_raw_limits=None,
+                       differences=None, sequences_without_checkpoint=missing)
+    else:
+        verdict = physical_verdict(candidate, ref_q, reference_resolved=resolved)
     head, dirty = git_state()
     report = dict(
         schema="radia.ih.axisym-volume-peec-fin.v1", generated_at_utc=datetime.now(timezone.utc).isoformat(),
@@ -538,7 +548,7 @@ def main():
                                  "level against the highest order's at the widest exterior; the highest order's "
                                  "terminal Re(V/I) within 1e-3 of the dissipation resistance; a sequence out of "
                                  "budget leaves the reference unresolved"),
-        reference_certification=certification,
+        reference_certification=certification, reference_sequences_without_checkpoint=missing,
         reference_swept=swept, reference_loss_consistent=consistent, reference_converged=converged,
         reference_resolved=resolved, peec_levels=peec,
         peec_change_last_two={k: abs(quantities(peec[-1])[k] - quantities(peec[-2])[k])/abs(quantities(peec[-1])[k])
