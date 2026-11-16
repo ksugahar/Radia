@@ -18,6 +18,7 @@
 
 #include <complex>
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace radia {
@@ -38,6 +39,32 @@ struct TetMesh {
 // d < moderate_factor (s_a + s_b): 2^3 x 2^3 product rule; otherwise centroids.
 std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor = 3.0,
                                        double moderate_factor = 10.0, int near_order = 3);
+
+// Moments of one directed element pair (outer A, inner B):
+// S0 = int_A int_B 1/R, Sx = int int x/R, Sp = int int y/R, Sxp = int int x.y/R.
+struct PairMoments {
+    double S0 = 0.0, Sxp = 0.0;
+    double Sx[3] = {0.0, 0.0, 0.0}, Sp[3] = {0.0, 0.0, 0.0};
+};
+
+// Entry-wise access to the inductance of AssembleInductance (same pair classes and rules, both
+// directed rules averaged) for compressed operators.  Copies the mesh; const access is thread-safe.
+class InductanceKernel {
+public:
+    InductanceKernel(const TetMesh& mesh, double near_factor = 3.0, double moderate_factor = 10.0,
+                     int near_order = 3);
+    ~InductanceKernel();
+    InductanceKernel(const InductanceKernel&) = delete;
+    InductanceKernel& operator=(const InductanceKernel&) = delete;
+    std::size_t n_dof() const;
+    double Entry(int i, int j) const;   // L_ij [H]
+    // Centroid of DOF i's face and the radius of its support (the owning tetrahedra) about it.
+    void Support(int i, double center[3], double& radius) const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 // Closed-form potentials of a uniform unit density on one tetrahedron at x:
 //   p0 = int 1/|x - y| dy,  p1 = int y/|x - y| dy.

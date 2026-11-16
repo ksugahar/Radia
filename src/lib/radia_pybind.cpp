@@ -52,6 +52,7 @@
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
+#include "rad_hacapk_peec_tet.h"  // HACApK tetrahedral volume PEEC inductance
 
 // HACApK PCA cluster strategy setter/getter (C symbols).
 // Forward-declared at file scope so the lambdas in PYBIND11_MODULE can call them.
@@ -6904,6 +6905,126 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def("GetStats", &PyHACApKPEECManager::GetStats,
              "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
              "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
+
+    // ========================================================================
+    // HACApK tetrahedral volume PEEC inductance (rad_hacapk_peec_tet)
+    // ========================================================================
+    class PyTetPEECHMatrix {
+    public:
+        using ArrD = py::array_t<double, py::array::c_style | py::array::forcecast>;
+        using ArrI = py::array_t<int, py::array::c_style | py::array::forcecast>;
+
+        PyTetPEECHMatrix(ArrD points, ArrI tets, ArrD face_coef, ArrI face_dof, std::size_t n_dof,
+                         double near_factor, double moderate_factor, int near_order, double aca_eps,
+                         int leaf_size, double eta, int max_rank)
+        {
+            if (points.ndim() != 2 || points.shape(1) != 3)
+                throw std::invalid_argument("points must have shape (n, 3)");
+            if (tets.ndim() != 2 || tets.shape(1) != 4)
+                throw std::invalid_argument("tets must have shape (m, 4)");
+            if (face_coef.ndim() != 2 || face_coef.shape(0) != tets.shape(0) || face_coef.shape(1) != 4
+                || face_dof.ndim() != 2 || face_dof.shape(0) != tets.shape(0) || face_dof.shape(1) != 4)
+                throw std::invalid_argument("face_coef and face_dof must have the shape of tets");
+            radia::peec_tet::TetMesh mesh;
+            mesh.points = points.data();
+            mesh.n_points = static_cast<std::size_t>(points.shape(0));
+            mesh.tets = tets.data();
+            mesh.n_tet = static_cast<std::size_t>(tets.shape(0));
+            mesh.face_coef = face_coef.data();
+            mesh.face_dof = face_dof.data();
+            mesh.n_dof = n_dof;
+            RadHACApKParams p = RadHACApKTetPEECDefaultParams();
+            p.aca_eps = aca_eps;
+            p.leaf_size = leaf_size;
+            p.eta = eta;
+            p.max_rank = max_rank;
+            bool ok = false;
+            {
+                py::gil_scoped_release release;
+                auto kernel = std::make_unique<radia::peec_tet::InductanceKernel>(
+                    mesh, near_factor, moderate_factor, near_order);
+                manager_ = std::make_unique<RadHACApKTetPEEC>(std::move(kernel));
+                ok = manager_->BuildHMatrix(p);
+            }
+            if (!ok)
+                throw std::runtime_error("TetPEECHMatrix: HACApK build failed");
+        }
+
+        // y = L x for a complex (or real) vector of length n_dof.
+        py::array_t<std::complex<double>> MatVec(
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> x) {
+            const int n = manager_->GetNDOF();
+            if (x.ndim() != 1 || x.shape(0) != n)
+                throw std::invalid_argument("x must have length n_dof");
+            const std::complex<double>* xp = x.data();
+            std::vector<double> xs(2 * static_cast<std::size_t>(n)), ys;
+            for (int i = 0; i < n; ++i) {
+                xs[i] = xp[i].real();
+                xs[n + i] = xp[i].imag();
+            }
+            {
+                py::gil_scoped_release release;
+                manager_->Apply(xs, 2, ys);
+            }
+            py::array_t<std::complex<double>> y(n);
+            std::complex<double>* yp = y.mutable_data();
+            for (int i = 0; i < n; ++i)
+                yp[i] = std::complex<double>(ys[i], ys[n + i]);
+            return y;
+        }
+
+        double Entry(int i, int j) const { return manager_->Kernel().Entry(i, j); }
+
+        py::array_t<double> Diagonal() const {
+            const int n = manager_->GetNDOF();
+            py::array_t<double> d(n);
+            double* dp = d.mutable_data();
+            for (int i = 0; i < n; ++i)
+                dp[i] = manager_->Kernel().Entry(i, i);
+            return d;
+        }
+
+        int NDOF() const { return manager_->GetNDOF(); }
+
+        py::dict Stats() const {
+            const auto& s = manager_->GetStats();
+            py::dict d;
+            d["n_dof"] = s.n_dof;
+            d["n_leaves"] = s.n_leaves;
+            d["n_lowrank"] = s.n_lowrank;
+            d["n_dense"] = s.n_dense;
+            d["max_rank"] = s.max_rank;
+            d["compression"] = s.compression;
+            d["build_time"] = s.build_time;
+            d["memory_mb"] = s.memory_mb;
+            d["dense_memory_mb"] = s.dense_memory_mb;
+            d["t_fill"] = s.t_fill;
+            return d;
+        }
+
+    private:
+        std::unique_ptr<RadHACApKTetPEEC> manager_;
+    };
+
+    py::class_<PyTetPEECHMatrix>(m, "TetPEECHMatrix",
+        R"pbdoc(
+            HACApK H-matrix of the tetrahedral volume PEEC partial inductance.
+
+            Same kernel and pair classes as peec_matrices.tet_inductance (lowest-order face
+            currents w = c (x - v_opp)); entries are compressed with ACA+ and applied with the
+            exactly symmetric H-matrix product.  Used by radia.peec_tet.
+        )pbdoc")
+        .def(py::init<PyTetPEECHMatrix::ArrD, PyTetPEECHMatrix::ArrI, PyTetPEECHMatrix::ArrD,
+                      PyTetPEECHMatrix::ArrI, std::size_t, double, double, int, double, int, double, int>(),
+             py::arg("points"), py::arg("tets"), py::arg("face_coef"), py::arg("face_dof"), py::arg("n_dof"),
+             py::arg("near_factor") = 3.0, py::arg("moderate_factor") = 10.0, py::arg("near_order") = 3,
+             py::arg("aca_eps") = 1e-8, py::arg("leaf_size") = 64, py::arg("eta") = 2.0,
+             py::arg("max_rank") = 400)
+        .def("matvec", &PyTetPEECHMatrix::MatVec, py::arg("x"), "Complex y = L x [H A].")
+        .def("entry", &PyTetPEECHMatrix::Entry, py::arg("i"), py::arg("j"), "Exact kernel entry L_ij [H].")
+        .def("diagonal", &PyTetPEECHMatrix::Diagonal, "Exact diagonal of L [H].")
+        .def_property_readonly("n_dof", &PyTetPEECHMatrix::NDOF)
+        .def("stats", &PyTetPEECHMatrix::Stats, "H-matrix statistics (ranks, leaves, memory, build time).");
 
     // ========================================================================
     // HACApK scalar BEM adapter (Phase 1.4 of in-tree SIBC HACApK pipeline)

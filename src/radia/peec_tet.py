@@ -5,7 +5,12 @@ scaling of every face current, the resistance ``int u.v/sigma``, the discrete
 divergence against cell constants and the drive.  The native kernel
 (``peec_matrices.tet_inductance``, C++ ``rad_peec_tet``) assembles the Galerkin
 partial inductance and ``peec_matrices.tet_kkt_solve`` solves the dense
-circuit ``[R + j omega L, D^T; D, 0] [I; phi] = [b; 0]``.
+circuit ``[R + j omega L, D^T; D, 0] [I; phi] = [b; 0]``.  With
+``operator="hmatrix"`` the same inductance is compressed by HACApK
+(``radia._radia_pybind.TetPEECHMatrix``) and the circuit is solved by GMRES,
+right-preconditioned by the exact constraint preconditioner of
+``Z0 = diag(R) + j omega diag(L)``, whose cell Schur complement is factored by
+NGSolve's sparsecholesky.
 
 A loop drive applies the voltage across a named internal cut surface; faces on
 the conductor's outer surface carry no current.  Flat tetrahedra only.
@@ -70,26 +75,105 @@ def _face_basis(mesh, fes):
     return pts, tets, order, coef
 
 
-def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, near_factor=3.0, moderate_factor=10.0,
-                   near_order=3, max_dense_gib=16.0):
+def _schur_inverse(mesh, s_full):
+    """sparsecholesky of the cell matrix ``s_full`` (scipy, ne x ne, cell 0 grounded) in NGSolve storage."""
+    import ngsolve as ng
+    l2 = ng.L2(mesh, order=0, dgjumps=True, complex=True)
+    u, v = l2.TnT()
+    bf = ng.BilinearForm(l2, symmetric=False)
+    bf += u*v*ng.dx
+    bf += (u - u.Other())*(v - v.Other())*ng.dx(skeleton=True)     # pattern: cells sharing a face
+    bf.Assemble()
+    r, c, _ = bf.mat.COO()
+    r, c = np.asarray(r), np.asarray(c)
+    vals = np.asarray(s_full[r, c]).ravel()
+    if not np.isclose(np.abs(vals).sum(), abs(s_full).sum(), rtol=1e-12, atol=0.0):
+        raise RuntimeError("peec_tet: the Schur complement leaves the face-neighbour pattern")
+    bf.mat.AsVector().FV().NumPy()[:] = vals
+    free = ng.BitArray(mesh.ne)
+    free.Set()
+    free.Clear(0)
+    inv = bf.mat.Inverse(free, inverse="sparsecholesky")
+    work_in, work_out = bf.mat.CreateColVector(), bf.mat.CreateColVector()
+
+    def solve(t):
+        work_in.FV().NumPy()[0] = 0.0
+        work_in.FV().NumPy()[1:] = t
+        work_out.data = inv*work_in
+        return work_out.FV().NumPy()[1:].copy()
+    return solve
+
+
+def _solve_kkt_hmatrix(mesh, H, n, m, rr, rc, rv, dr, dc, dv, g, omega, rtol, max_iter, restart):
+    """GMRES on [R + j omega L, D^T; D, 0], right-preconditioned by the exact constraint preconditioner of
+    Z0 = diag(R) + j omega diag(L)."""
+    import scipy.sparse as sp
+    from scipy.sparse.linalg import LinearOperator, gmres
+    Rs = sp.csr_matrix((rv, (rr, rc)), shape=(n, n))
+    Ds = sp.csr_matrix((dv, (dr, dc)), shape=(m, n))
+    DsT = Ds.T.tocsr()
+    z0 = Rs.diagonal() + 1j*omega*np.asarray(H.diagonal())
+    if not np.all(z0.real > 0):
+        raise RuntimeError("peec_tet: nonpositive resistance diagonal")
+    S = (Ds @ sp.diags(1.0/z0) @ DsT).tocoo()
+    s_full = sp.csr_matrix((np.concatenate([S.data, [1.0]]),
+                            (np.concatenate([S.row + 1, [0]]), np.concatenate([S.col + 1, [0]]))),
+                           shape=(m + 1, m + 1))
+    schur = _schur_inverse(mesh, s_full)
+
+    def apply_A(x):
+        u, p = x[:n], x[n:]
+        return np.concatenate([Rs @ u + 1j*omega*np.asarray(H.matvec(u)) + DsT @ p, Ds @ u])
+
+    def apply_P(y):
+        f, q = y[:n], y[n:]
+        p = schur(Ds @ (f/z0) - q)
+        return np.concatenate([(f - DsT @ p)/z0, p])
+
+    N = n + m
+    b = np.concatenate([g.astype(complex), np.zeros(m, dtype=complex)])
+    count = [0]
+
+    def cb(_):
+        count[0] += 1
+    AP = LinearOperator((N, N), matvec=lambda y: apply_A(apply_P(y)), dtype=complex)
+    y, info = gmres(AP, b, rtol=rtol, atol=0.0, restart=restart, maxiter=max_iter, callback=cb,
+                    callback_type="pr_norm")
+    x = apply_P(y)
+    res = np.linalg.norm(b - apply_A(x))/np.linalg.norm(b)
+    if info != 0 or not res <= 1e-6:
+        raise RuntimeError(f"peec_tet: GMRES did not converge (info={info}, true relative residual {res:.3e}, "
+                           f"{count[0]} iterations)")
+    return x[:n], float(res), count[0]
+
+
+def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, operator="dense", near_factor=3.0,
+                   moderate_factor=10.0, near_order=3, max_dense_gib=16.0, aca_eps=1e-8, leaf_size=64, eta=2.0,
+                   max_rank=400, rtol=1e-9, max_iter=50, restart=200):
     """Impedance and losses of a conductor driven by a loop voltage across the internal surface ``cut``.
 
     Args:
         mesh: NGSolve mesh of the conductor only (flat tetrahedra, one connected body).
         sigma: conductivity [S/m], number or NGSolve CoefficientFunction.
-        frequency_hz: drive frequency [Hz] (> 0).
+        frequency_hz: drive frequency [Hz] (> 0), or a sequence of them sharing one assembled L.
         cut: boundary name of the internal surface carrying the voltage gap.
         region: optional dict name -> volume region regex; losses are integrated per entry.
+        operator: ``"dense"`` (dense L, LU) or ``"hmatrix"`` (HACApK L, preconditioned GMRES).
         max_dense_gib: memory budget of the dense route (L, the circuit and its factor); larger
             problems raise before assembly.
+        aca_eps, leaf_size, eta, max_rank: HACApK parameters of the hmatrix route.
+        rtol, max_iter, restart: GMRES tolerance, restart cycles and restart length (hmatrix route);
+            the true relative residual of the circuit must reach 1e-6.
 
     Returns:
-        dict with R_ohm, L_H, impedance_ohm, power_balance, region_loss_W_per_A2, total_loss_W_per_A2,
-        true_relative_residual, unknowns, tets, assembly_s, solve_s.
+        dict (a list of dicts for a sequence of frequencies) with frequency_hz, R_ohm, L_H, impedance_ohm,
+        power_balance, region_loss_W_per_A2, total_loss_W_per_A2, true_relative_residual, unknowns, tets, assembly_s, solve_s, operator, iterations and, for the
+        hmatrix route, the H-matrix statistics.
     """
     import ngsolve as ng
-    if not frequency_hz > 0:
-        raise ValueError("frequency_hz must be positive")
+    freqs = np.atleast_1d(np.asarray(frequency_hz, dtype=float))
+    if freqs.ndim != 1 or freqs.size == 0 or not np.all(freqs > 0):
+        raise ValueError("frequency_hz must be positive (a number or a sequence)")
     if cut not in mesh.GetBoundaries():
         raise ValueError(f"cut surface {cut!r} not among the mesh boundaries")
     sig = ng.CoefficientFunction(sigma)
@@ -100,13 +184,20 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, near_factor=3.0,
     compact = -np.ones(fes.ndof, dtype=np.int64)
     compact[interior] = np.arange(len(interior))
     face_dof = compact[order].astype(np.int32)
+    if operator not in ("dense", "hmatrix"):
+        raise ValueError(f"operator must be 'dense' or 'hmatrix', not {operator!r}")
     n, N = len(interior), len(interior) + mesh.ne - 1
     need = (2*8.0*n*n + 2*16.0*N*N)/2**30                      # L twice (native + array), circuit and factor
-    if not need <= max_dense_gib:
+    if operator == "dense" and not need <= max_dense_gib:
         raise MemoryError(f"peec_tet: dense route needs {need:.1f} GiB for {n} face unknowns, above "
-                          f"max_dense_gib={max_dense_gib}; a compressed operator is required")
+                          f"max_dense_gib={max_dense_gib}; use operator='hmatrix'")
     t0 = time.perf_counter()
-    L = tet_inductance(pts, tets, coef, face_dof, len(interior), near_factor, moderate_factor, near_order)
+    if operator == "dense":
+        L = tet_inductance(pts, tets, coef, face_dof, n, near_factor, moderate_factor, near_order)
+    else:
+        from ._radia_pybind import TetPEECHMatrix
+        H = TetPEECHMatrix(pts, tets, coef, face_dof, n, near_factor, moderate_factor, near_order,
+                           aca_eps, leaf_size, eta, max_rank)
     t1 = time.perf_counter()
     u, v = fes.TnT()
     l2 = ng.L2(mesh, order=0)
@@ -126,13 +217,32 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, near_factor=3.0,
     dr, dc, dv = Df.mat.COO()
     dr, dc, dv = np.asarray(dr), np.asarray(dc), np.asarray(dv)
     dkeep = (compact[dc] >= 0) & (dr != 0)                     # ground cell 0
-    sol = tet_kkt_solve(L, compact[np.asarray(rr)][keep].astype(np.int32),
-                        compact[np.asarray(rc)][keep].astype(np.int32), np.asarray(rv)[keep],
-                        mesh.ne - 1, (dr[dkeep] - 1).astype(np.int32),
-                        compact[dc[dkeep]].astype(np.int32), dv[dkeep], g.astype(complex),
-                        2*np.pi*frequency_hz, float(max_dense_gib))
+    r_row, r_col = compact[np.asarray(rr)][keep].astype(np.int32), compact[np.asarray(rc)][keep].astype(np.int32)
+    d_row, d_col = (dr[dkeep] - 1).astype(np.int32), compact[dc[dkeep]].astype(np.int32)
+    results = []
+    for f_hz in freqs:
+        results.append(_solve_frequency(
+            mesh, fes, sig, interior, n, g, operator, L if operator == "dense" else H, r_row, r_col,
+            np.asarray(rv)[keep], d_row, d_col, dv[dkeep], float(f_hz), region, max_dense_gib, rtol, max_iter,
+            restart, t1 - t0))
+    return results if np.ndim(frequency_hz) else results[0]
+
+
+def _solve_frequency(mesh, fes, sig, interior, n, g, operator, Lop, r_row, r_col, r_val, d_row, d_col, d_val,
+                     frequency_hz, region, max_dense_gib, rtol, max_iter, restart, assembly_s):
+    import ngsolve as ng
+    t1 = time.perf_counter()
+    omega = 2*np.pi*frequency_hz
+    extra = {}
+    if operator == "dense":
+        sol = tet_kkt_solve(Lop, r_row, r_col, r_val, mesh.ne - 1, d_row, d_col, d_val,
+                            g.astype(complex), omega, float(max_dense_gib))
+        current, residual, iterations = np.asarray(sol["current"]), float(sol["true_relative_residual"]), 0
+    else:
+        current, residual, iterations = _solve_kkt_hmatrix(
+            mesh, Lop, n, mesh.ne - 1, r_row, r_col, r_val, d_row, d_col, d_val, g, omega, rtol, max_iter, restart)
+        extra["hmatrix"] = dict(Lop.stats())
     t2 = time.perf_counter()
-    current = np.asarray(sol["current"])
     total = complex(g @ current)                                # terminal current at V = 1
     z = 1.0/total
     full = np.zeros(fes.ndof, dtype=complex)
@@ -144,8 +254,8 @@ def solve_tet_peec(mesh, sigma, frequency_hz, cut, region=None, near_factor=3.0,
     total_loss = ng.Integrate(dens, mesh)
     regional = None if region is None else {
         k: ng.Integrate(dens*mesh.MaterialCF({rx: 1.0}, default=0.0), mesh) for k, rx in region.items()}
-    omega = 2*np.pi*frequency_hz
-    return dict(R_ohm=z.real, L_H=z.imag/omega, impedance_ohm=z,
+    return dict(frequency_hz=frequency_hz, R_ohm=z.real, L_H=z.imag/omega, impedance_ohm=z,
                 power_balance=abs(2*total_loss - z.real)/z.real, total_loss_W_per_A2=total_loss,
-                region_loss_W_per_A2=regional, true_relative_residual=float(sol["true_relative_residual"]),
-                unknowns=int(len(interior)), tets=int(mesh.ne), assembly_s=t1 - t0, solve_s=t2 - t1)
+                region_loss_W_per_A2=regional, true_relative_residual=residual,
+                unknowns=int(n), tets=int(mesh.ne), assembly_s=assembly_s, solve_s=t2 - t1,
+                operator=operator, iterations=int(iterations), **extra)

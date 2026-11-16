@@ -4,7 +4,9 @@ Guards: the closed-form tetrahedron potentials of ``peec_matrices.tet_potential`
 high-order collapsed Gauss rule and Poisson's equation; the partial inductance and dense
 circuit of ``tet_inductance`` / ``tet_kkt_solve`` on a coarse revolved copper ring against the
 exact DC resistance of a rectangular ring and the axisymmetric ring kernel; symmetry and
-positive definiteness of L; loud refusal of invalid input.
+positive definiteness of L; the HACApK operator ``TetPEECHMatrix`` and the preconditioned GMRES
+circuit (``operator="hmatrix"``) against that dense route on a ring with low-rank blocks; loud
+refusal of invalid input.
 Assumes: Netgen meshes the OCC ring; the axisymmetric kernel is the independently validated route.
 """
 
@@ -20,8 +22,12 @@ ng = pytest.importorskip("ngsolve")
 if not hasattr(pm, "tet_inductance"):
     pytest.fail("radia.peec_matrices lacks tet_inductance: rebuild the native module")
 
+import radia._radia_pybind as rp  # noqa: E402
 from radia.peec_axisym import solve_axisym_ring_peec  # noqa: E402
-from radia.peec_tet import solve_tet_peec  # noqa: E402
+from radia.peec_tet import _face_basis, solve_tet_peec  # noqa: E402
+
+if not hasattr(rp, "TetPEECHMatrix"):
+    pytest.fail("radia._radia_pybind lacks TetPEECHMatrix: rebuild the native module")
 
 TET = np.array([[0., 0, 0], [1.3, 0.1, 0], [0.2, 1.1, 0.1], [0.3, 0.4, 0.9]])
 VOL = abs(np.linalg.det(TET[1:] - TET[0]))/6
@@ -101,18 +107,56 @@ def test_coarse_ring_inductance_matches_the_axisymmetric_kernel(coarse_ring):
     assert abs(out["L_H"]/ref["L_H"] - 1) < 5e-3, (out["L_H"], ref["L_H"])
 
 
-def test_inductance_is_symmetric_positive_definite(coarse_ring):
-    from radia.peec_tet import _face_basis
-    mesh, _ = coarse_ring
+def interior_basis(mesh):
     fes = ng.HDiv(mesh, order=0, RT=True)
     pts, tets, order, coef = _face_basis(mesh, fes)
     counts = np.bincount(order.ravel(), minlength=fes.ndof)
     interior = np.flatnonzero(counts == 2)
     compact = -np.ones(fes.ndof, dtype=np.int64)
     compact[interior] = np.arange(len(interior))
-    L = pm.tet_inductance(pts, tets, coef, compact[order].astype(np.int32), len(interior))
+    return pts, tets, coef, compact[order].astype(np.int32), len(interior)
+
+
+def test_inductance_is_symmetric_positive_definite(coarse_ring):
+    mesh, _ = coarse_ring
+    pts, tets, coef, dof, n = interior_basis(mesh)
+    L = pm.tet_inductance(pts, tets, coef, dof, n)
     assert np.array_equal(L, L.T)
     assert np.linalg.eigvalsh(L).min() > 0, np.linalg.eigvalsh(L).min()
+
+
+@pytest.fixture(scope="module")
+def fine_ring():
+    return ring_mesh(1e-3)
+
+
+def test_hmatrix_inductance_matches_the_dense_route(fine_ring):
+    pts, tets, coef, dof, n = interior_basis(fine_ring)
+    with ng.TaskManager():
+        L = pm.tet_inductance(pts, tets, coef, dof, n)
+        H = rp.TetPEECHMatrix(pts, tets, coef, dof, n)
+    stats = H.stats()
+    assert stats["n_lowrank"] > 0, stats                      # the ACA path is exercised
+    rng = np.random.default_rng(3)
+    x = rng.normal(size=n) + 1j*rng.normal(size=n)
+    err = np.linalg.norm(np.asarray(H.matvec(x)) - L @ x)/np.linalg.norm(L @ x)
+    assert err < 1e-7, (err, stats)
+    for i, j in rng.integers(0, n, size=(50, 2)):
+        assert abs(H.entry(int(i), int(j)) - L[i, j]) <= 1e-13*L[i, i], (i, j, H.entry(int(i), int(j)), L[i, j])
+    assert np.allclose(np.asarray(H.diagonal()), np.diag(L), rtol=1e-13, atol=0.0)
+
+
+def test_hmatrix_circuit_matches_the_dense_route(fine_ring):
+    with ng.TaskManager():
+        dense = solve_tet_peec(fine_ring, SIGMA, [100.0, 17.5e3], "cut")
+        comp = solve_tet_peec(fine_ring, SIGMA, [100.0, 17.5e3], "cut", operator="hmatrix")
+    for d, c in zip(dense, comp):
+        assert c["frequency_hz"] == d["frequency_hz"] and c["assembly_s"] == comp[0]["assembly_s"], (c, d)
+        assert c["iterations"] > 0 and c["true_relative_residual"] <= 1e-6, c
+        dz = abs(c["impedance_ohm"]/d["impedance_ohm"] - 1)
+        assert dz < 1e-7, (c["frequency_hz"], c["impedance_ohm"], d["impedance_ohm"])
+        assert c["power_balance"] < 1e-8, c
+    assert dense[1]["R_ohm"] > 1.02*dense[0]["R_ohm"], (dense[0]["R_ohm"], dense[1]["R_ohm"])   # skin effect
 
 
 def test_invalid_input_is_refused():
@@ -128,3 +172,5 @@ def test_invalid_input_is_refused():
         pm.tet_inductance(TET, tets, coef, np.array([[0, 1, 2, 9]], dtype=np.int32), 4)
     with pytest.raises(ValueError, match="cut surface"):
         solve_tet_peec(ring_mesh(4e-3), SIGMA, 100.0, "missing")
+    with pytest.raises(ValueError, match="operator must be"):
+        solve_tet_peec(ring_mesh(4e-3), SIGMA, 100.0, "cut", operator="sparse")

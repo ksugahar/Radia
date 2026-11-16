@@ -3,10 +3,13 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 #include "rad_host_parallel.h"
 
@@ -179,8 +182,59 @@ void TetPotential(const double x[3], const double v[4][3], double& p0, double p1
         p1[j] = q[j];
 }
 
-std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor, double moderate_factor,
-                                       int near_order) {
+namespace {
+
+// Directed moments of the pair (A outer, B inner), classified by centroid distance.
+void DirectedMoments(const Tet& A, const Rule& nearA, const Rule& modA, const Tet& B, const Rule& modB,
+                     double near_factor, double moderate_factor, PairMoments& M) {
+    const double d = norm(sub(A.centroid, B.centroid));
+    const double s = A.radius + B.radius;
+    double S0 = 0.0, Sxp = 0.0;
+    V3 Sx = {0, 0, 0}, Sp = {0, 0, 0};
+    auto accumulate = [&](const V3& x, double w, double p0, const V3& p1) {
+        S0 += w * p0;
+        Sx = add(Sx, mul(w * p0, x));
+        Sp = add(Sp, mul(w, p1));
+        Sxp += w * dot(x, p1);
+    };
+    if (d < near_factor * s) {
+        for (std::size_t q = 0; q < nearA.x.size(); ++q) {
+            double p0;
+            V3 p1;
+            Potential(nearA.x[q], B, p0, p1);
+            accumulate(nearA.x[q], nearA.w[q], p0, p1);
+        }
+    } else if (d < moderate_factor * s) {
+        for (std::size_t q = 0; q < modA.x.size(); ++q) {
+            double p0 = 0.0;
+            V3 p1 = {0, 0, 0};
+            for (std::size_t j = 0; j < modB.x.size(); ++j) {
+                const double g = modB.w[j] / norm(sub(modA.x[q], modB.x[j]));
+                p0 += g;
+                p1 = add(p1, mul(g, modB.x[j]));
+            }
+            accumulate(modA.x[q], modA.w[q], p0, p1);
+        }
+    } else {
+        const double g = B.volume / d;
+        accumulate(A.centroid, A.volume, g, mul(g, B.centroid));
+    }
+    M.S0 = S0;
+    M.Sxp = Sxp;
+    for (int c = 0; c < 3; ++c) {
+        M.Sx[c] = Sx[c];
+        M.Sp[c] = Sp[c];
+    }
+}
+
+// Value of the directed pair for the bases (x - va) on A and (y - vb) on B.
+inline double PairValue(const PairMoments& M, const V3& va, const V3& vb) {
+    const V3 Sx = {M.Sx[0], M.Sx[1], M.Sx[2]}, Sp = {M.Sp[0], M.Sp[1], M.Sp[2]};
+    return M.Sxp - dot(va, Sp) - dot(vb, Sx) + dot(va, vb) * M.S0;
+}
+
+// Validates the mesh and its DOF table and builds the tetrahedra.
+std::vector<Tet> CheckedTets(const TetMesh& mesh, double near_factor, double moderate_factor, int near_order) {
     const std::size_t nt = mesh.n_tet, nd = mesh.n_dof;
     if (!mesh.points || !mesh.tets || !mesh.face_coef || !mesh.face_dof || nt == 0 || nd == 0)
         throw std::invalid_argument("peec_tet: empty mesh or DOF table");
@@ -212,6 +266,17 @@ std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor, 
         if (seen[d] < 1 || seen[d] > 2)
             throw std::invalid_argument("peec_tet: DOF " + std::to_string(d) + " belongs to "
                                         + std::to_string(seen[d]) + " tetrahedra");
+    return T;
+}
+
+std::atomic<std::uint64_t> g_kernel_id{0};
+
+}  // namespace
+
+std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor, double moderate_factor,
+                                       int near_order) {
+    const std::size_t nt = mesh.n_tet, nd = mesh.n_dof;
+    const std::vector<Tet> T = CheckedTets(mesh, near_factor, moderate_factor, near_order);
     // Colors: tetrahedra of one color share no DOF, so their rows of L are written by one worker.
     std::vector<std::vector<std::size_t>> by_dof(nd);
     for (std::size_t e = 0; e < nt; ++e)
@@ -252,54 +317,19 @@ std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor, 
             const Tet& A = T[e];
             for (std::size_t f = 0; f < nt; ++f) {
                 const Tet& B = T[f];
-                const double d = norm(sub(A.centroid, B.centroid));
-                const double s = A.radius + B.radius;
-                double S0 = 0.0, Sxp = 0.0;
-                V3 Sx = {0, 0, 0}, Sp = {0, 0, 0};
-                auto accumulate = [&](const V3& x, double w, double p0, const V3& p1) {
-                    S0 += w * p0;
-                    Sx = add(Sx, mul(w * p0, x));
-                    Sp = add(Sp, mul(w, p1));
-                    Sxp += w * dot(x, p1);
-                };
-                if (d < near_factor * s) {
-                    const Rule& ro = near[e];
-                    for (std::size_t q = 0; q < ro.x.size(); ++q) {
-                        double p0;
-                        V3 p1;
-                        Potential(ro.x[q], B, p0, p1);
-                        accumulate(ro.x[q], ro.w[q], p0, p1);
-                    }
-                } else if (d < moderate_factor * s) {
-                    const Rule& ro = mod[e];
-                    const Rule& ri = mod[f];
-                    for (std::size_t q = 0; q < ro.x.size(); ++q) {
-                        double p0 = 0.0;
-                        V3 p1 = {0, 0, 0};
-                        for (std::size_t j = 0; j < ri.x.size(); ++j) {
-                            const double g = ri.w[j] / norm(sub(ro.x[q], ri.x[j]));
-                            p0 += g;
-                            p1 = add(p1, mul(g, ri.x[j]));
-                        }
-                        accumulate(ro.x[q], ro.w[q], p0, p1);
-                    }
-                } else {
-                    const double g = B.volume / d;
-                    accumulate(A.centroid, A.volume, g, mul(g, B.centroid));
-                }
+                PairMoments M;
+                DirectedMoments(A, near[e], mod[e], B, mod[f], near_factor, moderate_factor, M);
                 for (int k = 0; k < 4; ++k) {
                     const int di = mesh.face_dof[4 * e + k];
                     if (di < 0)
                         continue;
-                    const V3& va = A.v[k];
                     for (int kk = 0; kk < 4; ++kk) {
                         const int dj = mesh.face_dof[4 * f + kk];
                         if (dj < 0)
                             continue;
-                        const V3& vb = B.v[kk];
-                        const double val = Sxp - dot(va, Sp) - dot(vb, Sx) + dot(va, vb) * S0;
                         L[static_cast<std::size_t>(di) * nd + dj] += kMu0Over4Pi * mesh.face_coef[4 * e + k]
-                                                                       * mesh.face_coef[4 * f + kk] * val;
+                                                                       * mesh.face_coef[4 * f + kk]
+                                                                       * PairValue(M, A.v[k], B.v[kk]);
                     }
                 }
             }
@@ -311,6 +341,120 @@ std::vector<double> AssembleInductance(const TetMesh& mesh, double near_factor, 
             L[i * nd + j] = L[j * nd + i] = v;
         }
     return L;
+}
+
+struct InductanceKernel::Impl {
+    struct Owner { int tet = -1, k = -1; double c = 0.0; };
+    std::vector<Tet> T;
+    std::vector<Rule> near, mod;
+    std::vector<std::array<Owner, 2>> owners;
+    double near_factor = 3.0, moderate_factor = 10.0;
+    std::uint64_t id = 0;
+
+    bool IsQuadrature(int e, int f) const {
+        return norm(sub(T[e].centroid, T[f].centroid)) < moderate_factor * (T[e].radius + T[f].radius);
+    }
+    // Near and moderate pairs dominate the cost and recur in up to 16 entries, so a bounded
+    // per-thread cache keeps them; a cached value is bitwise the directly computed one.
+    PairMoments Moments(int e, int f) const {
+        PairMoments M;
+        if (!IsQuadrature(e, f)) {
+            DirectedMoments(T[e], near[e], mod[e], T[f], mod[f], near_factor, moderate_factor, M);
+            return M;
+        }
+        struct Cache {
+            std::uint64_t id = 0;
+            std::unordered_map<std::uint64_t, PairMoments> map;
+        };
+        thread_local Cache cache;
+        if (cache.id != id || cache.map.size() >= (std::size_t(1) << 20)) {
+            cache.map.clear();
+            cache.id = id;
+        }
+        const std::uint64_t key = static_cast<std::uint64_t>(e) * T.size() + static_cast<std::uint64_t>(f);
+        const auto it = cache.map.find(key);
+        if (it != cache.map.end())
+            return it->second;
+        DirectedMoments(T[e], near[e], mod[e], T[f], mod[f], near_factor, moderate_factor, M);
+        cache.map.emplace(key, M);
+        return M;
+    }
+};
+
+InductanceKernel::InductanceKernel(const TetMesh& mesh, double near_factor, double moderate_factor,
+                                   int near_order)
+    : impl_(new Impl) {
+    Impl& I = *impl_;
+    I.T = CheckedTets(mesh, near_factor, moderate_factor, near_order);
+    I.near_factor = near_factor;
+    I.moderate_factor = moderate_factor;
+    I.id = ++g_kernel_id;
+    const std::size_t nt = mesh.n_tet;
+    I.near.resize(nt);
+    I.mod.resize(nt);
+    for (std::size_t e = 0; e < nt; ++e) {
+        I.near[e] = MakeRule(I.T[e], near_order);
+        I.mod[e] = MakeRule(I.T[e], 2);
+    }
+    I.owners.assign(mesh.n_dof, {});
+    for (std::size_t e = 0; e < nt; ++e)
+        for (int k = 0; k < 4; ++k) {
+            const int d = mesh.face_dof[4 * e + k];
+            if (d < 0)
+                continue;
+            auto& o = I.owners[d];
+            Impl::Owner& slot = o[0].tet < 0 ? o[0] : o[1];
+            slot.tet = static_cast<int>(e);
+            slot.k = k;
+            slot.c = mesh.face_coef[4 * e + k];
+        }
+}
+
+InductanceKernel::~InductanceKernel() = default;
+
+std::size_t InductanceKernel::n_dof() const { return impl_->owners.size(); }
+
+double InductanceKernel::Entry(int i, int j) const {
+    const Impl& I = *impl_;
+    if (i < 0 || j < 0 || static_cast<std::size_t>(i) >= I.owners.size()
+        || static_cast<std::size_t>(j) >= I.owners.size())
+        throw std::out_of_range("peec_tet::InductanceKernel::Entry: DOF out of range");
+    double sum = 0.0;
+    for (const auto& a : I.owners[i]) {
+        if (a.tet < 0)
+            continue;
+        for (const auto& b : I.owners[j]) {
+            if (b.tet < 0)
+                continue;
+            const V3& va = I.T[a.tet].v[a.k];
+            const V3& vb = I.T[b.tet].v[b.k];
+            const double forward = PairValue(I.Moments(a.tet, b.tet), va, vb);
+            const double backward = PairValue(I.Moments(b.tet, a.tet), vb, va);
+            sum += a.c * b.c * 0.5 * (forward + backward);
+        }
+    }
+    return kMu0Over4Pi * sum;
+}
+
+void InductanceKernel::Support(int i, double center[3], double& radius) const {
+    const Impl& I = *impl_;
+    if (i < 0 || static_cast<std::size_t>(i) >= I.owners.size())
+        throw std::out_of_range("peec_tet::InductanceKernel::Support: DOF out of range");
+    const auto& o = I.owners[i];
+    const Tet& A = I.T[o[0].tet];
+    V3 c = {0, 0, 0};
+    for (int j = 0; j < 4; ++j)
+        if (j != o[0].k)
+            c = add(c, mul(1.0 / 3.0, A.v[j]));
+    radius = 0.0;
+    for (const auto& a : o) {
+        if (a.tet < 0)
+            continue;
+        for (int j = 0; j < 4; ++j)
+            radius = std::max(radius, norm(sub(I.T[a.tet].v[j], c)));
+    }
+    for (int j = 0; j < 3; ++j)
+        center[j] = c[j];
 }
 
 KKTSolution SolveKKT(std::size_t n_dof, const std::vector<double>& L, const Triplets& R, std::size_t n_con,
