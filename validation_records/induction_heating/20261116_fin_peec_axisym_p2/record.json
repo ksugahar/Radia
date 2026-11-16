@@ -5,7 +5,7 @@
  "question": "Does the axisymmetric volume PEEC of the beak fin converge to the adaptive P2 axisymmetric FE reference?",
  "outcome": "pass",
  "source": {
-  "repo_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+  "repo_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
   "dirty": false,
   "native_sha256": {
    "peec_matrices": "dc5952fd119841ace49f0bc6dbdb3a755de6e17c7f151fd3dca374a557c62cad",
@@ -40,7 +40,7 @@
  ],
  "entry": {
   "script": "entry.py",
-  "script_sha256": "d9251cff2bd718b3623ddcfd027c174d0917976d9a7b6efc068209db4a450cd1",
+  "script_sha256": "c25d266c3e3040e18ca32f09bc58ced7dbcfa22190cbda7113a7152f3fc15609",
   "command": [
    "python",
    "entry.py",
@@ -58,23 +58,23 @@
  },
  "result": {
   "path": "adoption-result.json",
-  "sha256": "45028ebbabe8c23ab05c5a4938fe1d977307c7bde96096db6343dfd567ba99cc"
+  "sha256": "1dec01d928e8978479db9fb3e43237228068a76559c81103c13405bb60a44538"
  },
  "key_values": {
   "finest_R_error": {
-   "value": 0.0007295019964935756,
+   "value": 0.0007295019963937666,
    "unit": "1"
   },
   "finest_partial_L_error": {
-   "value": 2.4621878473407577e-05,
+   "value": 2.4621878588426682e-05,
    "unit": "1"
   },
   "finest_root_heat_error": {
-   "value": 0.0008347515636395464,
+   "value": 0.000834751563607572,
    "unit": "1"
   },
   "finest_tip_heat_error": {
-   "value": 0.002140988793009835,
+   "value": 0.002140988792876386,
    "unit": "1"
   },
   "reference_ndof": {
@@ -87,7 +87,7 @@
   "minimum_rate": 1.0
  },
  "timing_s": {
-  "coarsest_peec": 4.211191999995208
+  "coarsest_peec": 4.336123300003237
  },
  "status": "current",
  "stale_reason": null,
@@ -125,7 +125,7 @@
   "src/radia/axisym_measure.py": "630357e34953af181eba446634f59a10c21f3ac44ea254123803073170ae5190",
   "src/radia/eddy_axisym_ring.py": "5400731b1f5a6f286a54957b3604a377188799255f87aa70ff1b6f6b9b06a0dc",
   "src/radia/peec_axisym.py": "de874a4ab7d85d84cc26eb340f52c52e731c65294e2f8ae92783ea247c3bb635",
-  "validation_test/induction_heating/axisym_volume_peec_fin.py": "c9491792c5518b8adf292a45e031e1f1f7abfa58ed49ae1fb4845f1438477b74",
+  "validation_test/induction_heating/axisym_volume_peec_fin.py": "d0dd76a854b5464e23825a04f4a39835a1c47d9823d70b27ac7b0dedb3634ae7",
   "validation_test/induction_heating/fin_return_principle.py": "1e417d3b8927c290c3e1ce5ad4a7b66a59b637a95aea378800fc936f6b60a271",
   "validation_test/induction_heating/make_beak_fin_step.py": "c54fda497a6f23374e03bf70ecaf190ce34f278460058215eb6c84480131c6dd"
  },
@@ -354,8 +354,8 @@
    "scope_sha256": "4d959a706be8878098da5af3c25cb98351eeb3a69017c183c8c64b4ed1f2569e"
   },
   "result": {
-   "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
-   "artifact_sha256": "45028ebbabe8c23ab05c5a4938fe1d977307c7bde96096db6343dfd567ba99cc",
+   "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
+   "artifact_sha256": "1dec01d928e8978479db9fb3e43237228068a76559c81103c13405bb60a44538",
    "verdict": "PASS",
    "levels": [
     {
@@ -364,11 +364,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.06
      },
-     "error": 0.004912315618168739,
+     "error": 0.004912315618069263,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 4.211191999995208
+     "runtime_s": 4.336123300003237
     },
     {
      "id": "partial_L-h0.06",
@@ -376,11 +376,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.06
      },
-     "error": 8.178298935712647e-05,
+     "error": 8.178298947214557e-05,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 4.211191999995208
+     "runtime_s": 4.336123300003237
     },
     {
      "id": "root_heat-h0.06",
@@ -388,11 +388,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.06
      },
-     "error": 0.004565480816029255,
+     "error": 0.0045654808159975024,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 4.211191999995208
+     "runtime_s": 4.336123300003237
     },
     {
      "id": "tip_heat-h0.06",
@@ -400,11 +400,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.06
      },
-     "error": 0.0076035634407629615,
+     "error": 0.00760356344063029,
      "relative_residual": 1.245035698661038e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "6ce26a91036b62b0a03486f949b392a3148e48e0cf162f4557e93e369eba9e3f",
-     "runtime_s": 4.211191999995208
+     "runtime_s": 4.336123300003237
     },
     {
      "id": "R-h0.04",
@@ -412,11 +412,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.04
      },
-     "error": 0.0020786931973016953,
+     "error": 0.0020786931972019973,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 8.321316099994874
+     "runtime_s": 8.423792000001413
     },
     {
      "id": "partial_L-h0.04",
@@ -424,11 +424,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.04
      },
-     "error": 4.431517240144345e-05,
+     "error": 4.431517251646255e-05,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 8.321316099994874
+     "runtime_s": 8.423792000001413
     },
     {
      "id": "root_heat-h0.04",
@@ -436,11 +436,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.04
      },
-     "error": 0.002351052511529894,
+     "error": 0.0023510525114980307,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 8.321316099994874
+     "runtime_s": 8.423792000001413
     },
     {
      "id": "tip_heat-h0.04",
@@ -448,11 +448,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.04
      },
-     "error": 0.0035555408781731135,
+     "error": 0.0035555408780398867,
      "relative_residual": 1.656913939373904e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "59ad6e2a7da1b9b4d934320acd5fed51e3d2f3aefb5a748ebd28f0f0b0705102",
-     "runtime_s": 8.321316099994874
+     "runtime_s": 8.423792000001413
     },
     {
      "id": "R-h0.028",
@@ -460,11 +460,11 @@
       "quantity_index": 1,
       "boundary_h_mm": 0.028
      },
-     "error": 0.0007295019964935756,
+     "error": 0.0007295019963937666,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 18.824236100001144
+     "runtime_s": 19.17937759999768
     },
     {
      "id": "partial_L-h0.028",
@@ -472,11 +472,11 @@
       "quantity_index": 2,
       "boundary_h_mm": 0.028
      },
-     "error": 2.4621878473407577e-05,
+     "error": 2.4621878588426682e-05,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 18.824236100001144
+     "runtime_s": 19.17937759999768
     },
     {
      "id": "root_heat-h0.028",
@@ -484,11 +484,11 @@
       "quantity_index": 3,
       "boundary_h_mm": 0.028
      },
-     "error": 0.0008347515636395464,
+     "error": 0.000834751563607572,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 18.824236100001144
+     "runtime_s": 19.17937759999768
     },
     {
      "id": "tip_heat-h0.028",
@@ -496,11 +496,11 @@
       "quantity_index": 4,
       "boundary_h_mm": 0.028
      },
-     "error": 0.002140988793009835,
+     "error": 0.002140988792876386,
      "relative_residual": 2.1200897343253616e-15,
-     "source_sha": "ce503b8244490a30216cba520478dcccf0b1b2b5",
+     "source_sha": "c09fce9d941c6b04c803284be7f3555f096832c7",
      "mesh_sha256": "d4fa5dcb071bdf317e0e1e70f0dfc41a8c5aa9a1f0d133b662cd901928ffee79",
-     "runtime_s": 18.824236100001144
+     "runtime_s": 19.17937759999768
     }
    ]
   },
