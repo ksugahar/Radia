@@ -21,8 +21,8 @@ tool adds a dedicated SF overview + topic map over that knowledge.
 
 Usage:
     Open Radia Library > Applications > Stream Function in Simulink.
-    mcp-server-radia-streamfunction              # Start MCP server (stdio)
-    mcp-server-radia-streamfunction --selftest   # Run self-test
+    streamfunction              # Start MCP server (stdio)
+    streamfunction --selftest   # Run self-test
 """
 
 import sys
@@ -32,7 +32,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .streamfunction_knowledge import get_streamfunction_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-radia-streamfunction")
+mcp = FastMCP("streamfunction")
 
 
 # ============================================================
@@ -124,19 +124,19 @@ def new_sf_coil_design(target: str = "uniform Bz") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-radia-streamfunction',
+    server_name='streamfunction', tool_name='radia_streamfunction_status',
     description='Stream-function coil design: (ACA+)+TSVD least-norm, FE-direct '
                 'psi, regularisation / folded-Tikhonov Pareto front, '
                 'single-stroke chain, sheet-metal levers',
     subpackage='radia_mcp.streamfunction',
-    related_servers=["radia-ngsolve", "bayesian-opt", "nmr-mri",
+    related_servers=["radia-ngsolve", "bayesian-opt",
                      "electromagnet", "peec"],
     optional_deps=["radia", "ngsolve"],
 )
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-radia-streamfunction',
+    server_name='streamfunction',
     topics=TOPICS,
 )
 

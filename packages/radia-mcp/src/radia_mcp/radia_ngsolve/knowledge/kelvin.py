@@ -168,7 +168,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
    The Kelvin inversion is **orientation-reversing** (`det J < 0`).  In
    premetric electromagnetism the field quantities split by orientation
    type (see the `differential_forms_maxwell('twisted')` topic on
-   mcp-server-radia-differential-forms):
+   radia-differential-forms):
 
    - **straight** (inner-oriented) forms: `a` (1-form), `b` (2-form)
    - **twisted** (outer-oriented / density) forms: `h` (1-form),
@@ -3368,7 +3368,7 @@ oriented) forms -- `h`, `j`, `d`, `rho` -- pick up the extra `sgn(det J) = -1`
 that straight forms (`a`, `b`) do not.  `H_s` is twisted, hence the minus in
 `-(rho'/R)^2`.  Energy is orientation-blind (two flips cancel), which is why
 `nu' = (rho'/R)^2 nu_0` carries no sign.  See
-`differential_forms_maxwell('twisted')` on mcp-server-radia-differential-forms.
+`differential_forms_maxwell('twisted')` on radia-differential-forms.
 
 ## Known limitation of ScalarPotentialSolver
 

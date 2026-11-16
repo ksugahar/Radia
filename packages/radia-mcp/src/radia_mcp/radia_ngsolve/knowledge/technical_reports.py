@@ -451,7 +451,7 @@ Use the detailed topic tool named below after reading the report-level gate.
 |---|---|
 | Kelvin open boundary and periodic matching | ``kelvin_transformation`` and ``kelvin_identify_post_hoc`` |
 | FEM/BEM and open-boundary comparison | ``ngsolve_usage`` and ``fem_bem_schur`` |
-| Model reduction, expansion points, MOR | ``mor_systematic`` and ``mor_bibliography`` |
+| Model reduction, expansion points, MOR | ``mor_systematic`` |
 | Hysteresis, FORC, play, field separation | ``magnetic_materials_hysteresis`` and the hysteresis-ID topics |
 | HDiv/VIM and NGSolve-native spaces | ``hdiv_vim`` and ``ngsolve_usage`` |
 | Force error and independent checks | ``force_validation`` |

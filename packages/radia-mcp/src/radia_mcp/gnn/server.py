@@ -5,8 +5,8 @@ Graph Neural Networks for PDE / EM problems, distilled from
 public-safe curated corpus
 
 Usage:
-    mcp-server-gnn              # Start MCP server
-    mcp-server-gnn --selftest   # Self-test
+    gnn              # Start MCP server
+    gnn --selftest   # Self-test
 """
 
 import sys
@@ -16,7 +16,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_gnn_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-gnn")
+mcp = FastMCP("gnn")
 
 
 @mcp.tool()
@@ -38,7 +38,7 @@ def gnn(topic: str = "all") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-gnn',
+    server_name='gnn',
     description='Graph Neural Networks for PDE/EM. Physics-Embedded GNN, E(n)-GNN / NequIP / MACE',
     subpackage='radia_mcp.gnn',
     related_servers=["pinn", "fem"],
@@ -48,7 +48,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-gnn',
+    server_name='gnn',
     topics=TOPICS,
 )
 

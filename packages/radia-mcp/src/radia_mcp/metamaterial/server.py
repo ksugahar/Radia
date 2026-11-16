@@ -18,8 +18,8 @@ Cross-references:
 - `radia_mcp.radia_ngsolve` -- periodic FES, BEM, analytical formulas
 
 Usage:
-    mcp-server-metamaterial              # stdio
-    mcp-server-metamaterial --selftest   # self-test
+    metamaterial              # stdio
+    metamaterial --selftest   # self-test
 """
 
 import sys
@@ -30,7 +30,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
 
 
-mcp = FastMCP("mcp-server-metamaterial")
+mcp = FastMCP("metamaterial")
 
 
 @mcp.tool()
@@ -60,16 +60,9 @@ def metamaterial(topic: str = "overview") -> str:
     return get_knowledge(topic)
 
 
-@mcp.tool()
-def metamaterial_bibliography(query: str = "") -> str:
-    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
-    from radia_mcp.literature_index.index_tools import lit_search
-    return lit_search(query)
-
-
 register_status_tool(
     mcp,
-    server_name='mcp-server-metamaterial',
+    server_name='metamaterial',
     description=(
         'Metamaterials: DNG/LH, SRR, CRLH, effective medium, '
         'magneto-optical, transformation optics (Kelvin link), '
@@ -81,7 +74,7 @@ register_status_tool(
         "electromagnet",        # Kelvin transform
         "peec",                 # CRLH as PEEC ladder
         "ih",                   # ESIM surface impedance
-        "radia_ngsolve",        # periodic FES + BEM
+        "radia-ngsolve",        # periodic FES + BEM
         "pcb",                  # WPT-side ladder networks
         "litz-transmission",    # adjacent TL topic
     ],
@@ -89,7 +82,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-metamaterial',
+    server_name='metamaterial',
     topics=TOPICS,
 )
 

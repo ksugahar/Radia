@@ -6,8 +6,8 @@ and surrogate models for CAE — distilled from 57 lab files in
 public-safe curated corpus
 
 Usage:
-    mcp-server-bayesian-opt              # Start MCP server (stdio)
-    mcp-server-bayesian-opt --selftest   # Self-test
+    bayesian-opt              # Start MCP server (stdio)
+    bayesian-opt --selftest   # Self-test
 """
 
 import sys
@@ -17,7 +17,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_bayesian_opt_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-bayesian-opt")
+mcp = FastMCP("bayesian-opt")
 
 
 @mcp.tool()
@@ -52,7 +52,7 @@ def bayesian_opt(topic: str = "all") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-bayesian-opt',
+    server_name='bayesian-opt',
     description='BO + GP regression + FMQA + surrogate models (57 lab files; ARD kernel, PI-GP, multi-fidelity)',
     subpackage='radia_mcp.bayesian_opt',
     related_servers=["evolutionary", "pinn", "topology-optimization"],
@@ -62,7 +62,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-bayesian-opt',
+    server_name='bayesian-opt',
     topics=TOPICS,
 )
 

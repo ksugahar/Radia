@@ -10,8 +10,8 @@ Distilled from:
 - public-safe curated corpus   (Liu Xinyao thesis)
 
 Usage:
-    mcp-server-motor              # Start MCP server (stdio transport)
-    mcp-server-motor --selftest   # Run self-test
+    motor              # Start MCP server (stdio transport)
+    motor --selftest   # Run self-test
 """
 
 import asyncio
@@ -94,7 +94,7 @@ class _WorkerFailed(RuntimeError):
     """An owned solver worker crashed or exited non-zero (not an input error)."""
 
 
-mcp = FastMCP("mcp-server-motor")
+mcp = FastMCP("motor")
 _validation = CoarseToolRegistry(mcp, namespace="motor")
 
 
@@ -662,13 +662,6 @@ def motor_hollaus_genealogy(view: str = "by_topic") -> str:
             "all"       - All four views
     """
     return get_hollaus_genealogy(view)
-
-
-@mcp.tool()
-def motor_bibliography(query: str = "") -> str:
-    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
-    from radia_mcp.literature_index.index_tools import lit_search
-    return lit_search(query)
 
 
 @mcp.tool()
@@ -1559,7 +1552,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-motor',
+    server_name='motor',
     description='Motor analysis: ONELAB transient, Hollaus effective material (lamination), Wakao autoencoder topology, Kaimori-Mifune Darwin TD',
     subpackage='radia_mcp.motor',
     related_servers=["electromagnet", "force", "topology-optimization", "magnetic-materials"],
@@ -1568,7 +1561,7 @@ register_status_tool(
 
 apply_tool_contract(
     mcp,
-    server_name="mcp-server-motor",
+    server_name="motor",
     version=__version__,
 )
 

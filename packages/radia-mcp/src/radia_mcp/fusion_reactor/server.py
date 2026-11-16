@@ -10,15 +10,15 @@ Cross-references:
 - `radia_mcp.fem.potential_formulations.h_formulation` — HCurl H for SC
 
 Usage:
-    mcp-server-fusion-reactor              # stdio
-    mcp-server-fusion-reactor --selftest   # self-test
+    fusion-reactor              # stdio
+    fusion-reactor --selftest   # self-test
 """
 import sys
 from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
 
-mcp = FastMCP("mcp-server-fusion-reactor")
+mcp = FastMCP("fusion-reactor")
 
 
 @mcp.tool()
@@ -38,7 +38,7 @@ def fusion_reactor(topic: str = "overview") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-fusion-reactor',
+    server_name='fusion-reactor',
     description='Fusion reactor magnets: tokamak ITER + stellarator LHD/W7-X/heliotron lineage',
     subpackage='radia_mcp.fusion_reactor',
     related_servers=["accelerator", "electromagnet"],
@@ -46,7 +46,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-fusion-reactor',
+    server_name='fusion-reactor',
     topics=TOPICS,
 )
 

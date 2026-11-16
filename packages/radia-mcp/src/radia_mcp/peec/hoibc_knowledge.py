@@ -715,7 +715,7 @@ debugging.
 After Mathematica verification, the production NGSolve code lives in:
 - `src/radia/panels/calc_fem_kelvin.py::_solve_hoibc_cascade` (planned)
 
-Reference MCP: `mcp-server-mathematica` for actual symbolic computation
+Reference MCP: `radia-mcp-mathematica` for actual symbolic computation
 from a Cubit panel session.
 """
 

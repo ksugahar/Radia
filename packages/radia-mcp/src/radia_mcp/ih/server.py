@@ -10,8 +10,8 @@ Provides tools for:
 - IH simulation workflow (EM -> thermal)
 
 Usage:
-    mcp-server-ih              # Start MCP server (stdio transport)
-    mcp-server-ih --selftest   # Run self-test
+    ih              # Start MCP server (stdio transport)
+    ih --selftest   # Run self-test
 
 Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General knowledge lives in
@@ -34,7 +34,7 @@ evaluate_team36_json = lazy_callable(".team36_gate", "evaluate_team36_json", __p
 team36_contract = lazy_callable(".team36_gate", "team36_contract", __package__)
 from radia_mcp.common import register_status_tool
 
-mcp = FastMCP("mcp-server-ih")
+mcp = FastMCP("ih")
 
 
 # ============================================================
@@ -204,13 +204,13 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
 
 register_status_tool(
     mcp,
-    server_name="mcp-server-ih",
+    server_name="ih",
     description=("Induction heating: SIBC + ESIM + Karl iteration "
                   "+ workpiece coupling. Production calc scripts: "
                   "calc_inductance.py / calc_fem_kelvin.py / calc_fem_coilmesh.py."),
     subpackage="radia_mcp.ih",
-    related_servers=["radia-peec", "radia-magnetic-materials",
-                      "radia-radia-ngsolve", "radia-litz-transmission"],
+    related_servers=["peec", "magnetic-materials",
+                      "radia-ngsolve", "litz-transmission"],
     optional_deps=["radia", "ngsolve"],
 )
 

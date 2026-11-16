@@ -13,7 +13,7 @@ from .knowledge import get_accelerator_documentation, TOPICS
 from radia_mcp.common.lazy_call import lazy_callable
 build_magnetic_trajectory_pair_gate = lazy_callable(".magnetic_trajectory_gate", "magnetic_trajectory_pair_gate", __package__)
 
-mcp = FastMCP("mcp-server-accelerator")
+mcp = FastMCP("accelerator")
 _validation = CoarseToolRegistry(mcp, namespace="accelerator")
 
 
@@ -51,7 +51,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-accelerator',
+    server_name='accelerator',
     description='Accelerator physics: beam optics, dipole/quad/sext magnets, undulator/wiggler',
     subpackage='radia_mcp.accelerator',
     related_servers=["electromagnet", "fusion-reactor"],
@@ -61,7 +61,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-accelerator',
+    server_name='accelerator',
     topics=TOPICS,
 )
 

@@ -131,5 +131,5 @@ recompute the same with Mathematica and compare:
 Run any of these as a sanity check before reporting numbers in a paper
 or showing to a grant reviewer.
 
-Reference MCP: call `mcp-server-mathematica` for the Wolfram Language
+Reference MCP: call `radia-mcp-mathematica` for the Wolfram Language
 runtime to actually execute these recipes from a Cubit panel session.

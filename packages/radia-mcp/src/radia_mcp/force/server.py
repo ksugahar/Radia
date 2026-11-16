@@ -1,8 +1,8 @@
 """MCP Server: radia_mcp.force — shared electromagnetic-force layer.
 
 Usage:
-    mcp-server-force
-    mcp-server-force --selftest
+    force
+    force --selftest
 
 The server imports without Radia, NumPy, or NGSolve.  Numerical sample
 integration lazily loads ``radia.force`` when one of the calculation tools is
@@ -33,7 +33,7 @@ from .knowledge import (
     get_force_validation,
 )
 
-mcp = FastMCP("mcp-server-force")
+mcp = FastMCP("force")
 _validation = CoarseToolRegistry(mcp, namespace="force")
 
 
@@ -733,7 +733,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name="mcp-server-force",
+    server_name="force",
     description=(
         "Shared electromagnetic-force and torque method selection, "
         "solver-independent sample integration, and validation guidance"
@@ -746,7 +746,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name="mcp-server-force",
+    server_name="force",
     topics=TOPICS,
 )
 

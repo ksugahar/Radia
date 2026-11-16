@@ -266,4 +266,4 @@ robust "conformal << circular", locked at >15 % reduction.)
 - C. Zhu et al., "New method to design stellarator coils without the winding
   surface", *Nucl. Fusion* **58**, 016008 (2018) -- FOCUS.
 
-MCP: `streamfunction("fusion")` (radia-streamfunction server).
+MCP: `streamfunction("fusion")` (radia-mcp-optimize, coil profile).

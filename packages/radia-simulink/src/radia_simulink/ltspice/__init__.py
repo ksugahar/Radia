@@ -17,10 +17,9 @@ Public API
 - summarize_measure_log(log_text) -> dict
 - summarize_stepped_measure_log(log_text) -> dict
 
-CLI / MCP server
-----------------
+CLI
+---
 - radia-ltspice                    (conversion and inspection CLI)
-- mcp-server-radia-ltspice         (FastMCP stdio server)
 """
 from __future__ import annotations
 

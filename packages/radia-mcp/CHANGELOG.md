@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Move the document tools out of radia-mcp into a separate repository: the
+  pdf, doc-convert, md2html, document-meta, research-project, paper-writing,
+  grant-writing, poster, bibliography, chart2d, literature-index, figure and
+  presentation modules, the `document-ops` and `radia-publication` packs and
+  their extras are deleted without aliases.
+- Adopt the `<product>-mcp` naming rule. One console script, `radia-mcp
+  serve <key>`, replaces every `mcp-server-*` command; old names and aliases
+  are deleted. Method packs: `radia-mcp-analysis`, `radia-mcp-optimize`
+  (search, topology incl. metamaterial, stream-function coil design incl.
+  NMR/MRI and fusion), `radia-mcp-learning`. Application packs:
+  `radia-mcp-ih`, `-maglev`, `-electromagnet`, `-motor`, `-pcb`, `-acoustic`,
+  `-rna` (RNA/MEC with magnetic materials). Tools: `radia-mcp-meta`,
+  `radia-mcp-mathematica`, `matlab-mcp-lab`, `gmsh-mcp`, `build123d-mcp`.
+  Pack members are domains without their own command. Remove the LTspice
+  server, the NDT domain, the retired panel-review server and the former
+  combined MATLAB/FEM-BEM import namespace.
+
 - Make Gmsh documentation, examples and solver-boundary lint post-processing
   only: use Gmsh 5 / MSH 4.2 results, native view tools and checked Netgen/Cubit
   solver meshes. Remove obsolete remediation tools and mesh-import recipes.

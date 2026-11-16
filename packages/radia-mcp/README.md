@@ -2,18 +2,16 @@
 
 Cubit MCP is independently distributed with `cubit-mesh-export`, under
 `cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
-and launch `mcp-server-cubit` for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD
+and launch the cubit-mesh-export Cubit MCP server for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD
 workflows may call the Cubit package; Cubit itself requires neither Radia package.
 The former `cae-mcp-core` foundation is retired: it is not a dependency or
 shared runtime. radia-mcp owns `radia_mcp.common`/`radia_mcp._shared`, while
 cubit-mesh-export owns its independent runtime support.
 
-Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
+Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the `radia-mcp-optimize` pack (`search` profile).
 
 For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
-They combine related domains with startup-selected profiles while preserving old
-commands. `paper-writing` now includes grant and poster tools as well as slides
-and figures; genre-specific scoring remains separate.
+They combine related domains with startup-selected profiles.
 
 For standard client settings, safe editable updates and behavioral acceptance,
 see the [maintenance procedure](docs/maintenance.md) and
@@ -81,8 +79,8 @@ competing procedural manual. Start with the selected capability pack's
 
 Public `docs/**/*.ipynb` notebooks remain rich technical discovery artifacts:
 equations, derivations, verified literature citations, executable Python, saved
-results, and applicable WebGUI scenes. Their citation keys resolve against the
-canonical `references.bib`; MCP, not the notebook, owns current operating steps.
+results, and applicable WebGUI scenes. MCP, not the notebook, owns current
+operating steps.
 
 Radia is MCP-native. LLM agents invoke the Python solver and workflow
 implementations through these MCP contracts; Python is not maintained as a
@@ -222,7 +220,7 @@ pip install --upgrade optuna optuna-mcp
 
 The ownership rule is strict: the official `optuna/optuna-mcp` live
 `tools/list` owns every shared Study/Trial/query/visualization/Dashboard
-operation it exposes. `mcp-server-radia-matlab` supports only the MATLAB
+operation it exposes. `matlab-mcp-lab` supports only the MATLAB
 differences through `matlab_optuna_mcp_route`: table/MAT persistence,
 `OptimizationSession` lifecycle/checkpoint/selection, Simulink controls and
 telemetry, MATLAB parallel execution, the required
@@ -285,7 +283,7 @@ Public-safe quality records live in
 
 ## ★ Discovery — start here
 
-Before calling any specific server, ask **`mcp-server-radia-meta`** which
+Before calling any specific server, ask **`radia-mcp-meta`** which
 server has the knowledge you need. It is the authoritative cross-server
 catalog of the current radia-mcp servers and answers "which tool covers
 concept X?" without trial-and-error.
@@ -336,45 +334,35 @@ shown below for reference; everything else is discoverable via meta.
 
 | Server | Entry point | Access | Highlights |
 |---|---|---|---|
-| **★ meta** | `mcp-server-radia-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
-| **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in the lab literature corpus (ChromaDB + semantic search) |
-| **build123d** | `mcp-server-build123d` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
-| **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, references + examples |
-| **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
-| **differential-forms** | `mcp-server-differential-forms` | direct | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
-| **mathematica** | `mcp-server-mathematica` | direct | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
+| **★ meta** | `radia-mcp-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
+| **build123d** | `build123d-mcp` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
+| **GMSH** | `gmsh-mcp` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, references + examples |
+| **Force** | `force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
+| **differential-forms** | `differential-forms` | direct | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
+| **mathematica** | `radia-mcp-mathematica` | direct | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
-### Mathematica result to an editable equation
+### Mathematica result as TeX
 
 `mathematica_export_equation(expression, action="tex")` evaluates the Wolfram
-expression once and returns the resulting `input_form` and EqnEdit64-ready
-`tex`. Each call uses a fresh kernel; include required definitions in the
-expression rather than referring to variables in an open notebook.
-
-- `action="save", output_path=".../result.tex"`: save UTF-8 TeX to open in EqnEdit64.
-- `action="copy", target="office"`: copy editable Office math through the
-  existing native clipboard adapter. Requires EqnEdit64 on the same host.
-- `action="render", output_path=".../result.png"`: render a preview; PNG/EMF
-  are images, not editable equations.
+expression once and returns the resulting `input_form` and `tex`. Each call
+uses a fresh kernel; include required definitions in the expression rather
+than referring to variables in an open notebook. `action="save",
+output_path=".../result.tex"` also writes the TeX as UTF-8.
 
 For example, `{{1/2,Sqrt[x]},{D[Sin[x],x],Integrate[x,{x,0,1}]}}` exports a
 two-by-two matrix containing the evaluated derivative and integral. Centered
 TeXForm arrays are converted to equivalent matrix syntax, with `wolfram_tex`
-retaining the original. Other array alignments fail explicitly. Calculation
-failure does not invoke the editor; editor failure retains the generated TeX.
-
-MCP execution belongs on 100 or validation host. A remote clipboard is local to the host
-running EqnEdit64; transfer the `.tex` file to the intended editing host when
-needed. Optional `executable` selects the native backend explicitly.
+retaining the original. Other array alignments fail explicitly. A failed
+calculation writes no file.
 
 ### Radia-coupled (`pip install radia-mcp[radia]`)
 
-| Server | Entry point | Highlights |
+| Server | Catalog key | Highlights |
 |---|---|---|
-| **radia-ngsolve** | `mcp-server-radia-ngsolve` | NGSolve FEM/BEM, Whitney elements via H1/HCurl/HDiv, PEEC inductance, **closed-form formulas** (Wakao-Igarashi Part 1-9, cuboid average B, Bessel impedance, etc.) |
-| **ih** | `mcp-server-ih` | Induction heating workflow: workpiece SIBC, ESIM nonlinear cell problem, Karl iteration, screening physics |
-| **peec** | `mcp-server-peec` | PEEC: Loop-Star, FastHenry, PyPEECBuilder, Bessel/Dowell/ESIM SIBC, PRIMA model-order reduction, SPICE extraction |
-| **electromagnet** | `mcp-server-electromagnet` | Accelerator magnets: magnetic rigidity and beam-optics handoff, normal/ramped/superconducting design, field measurement, curated textbook guide, CoilBuilder, Hantila, hysteresis, IMA, and multipoles |
+| **radia-ngsolve** | `radia-ngsolve` | NGSolve FEM/BEM, Whitney elements via H1/HCurl/HDiv, PEEC inductance, **closed-form formulas** (Wakao-Igarashi Part 1-9, cuboid average B, Bessel impedance, etc.) |
+| **ih** | `ih` | Induction heating workflow: workpiece SIBC, ESIM nonlinear cell problem, Karl iteration, screening physics |
+| **peec** | `peec` | PEEC: Loop-Star, FastHenry, PyPEECBuilder, Bessel/Dowell/ESIM SIBC, PRIMA model-order reduction, SPICE extraction |
+| **electromagnet** | `electromagnet` | Accelerator magnets: magnetic rigidity and beam-optics handoff, normal/ramped/superconducting design, field measurement, curated textbook guide, CoilBuilder, Hantila, hysteresis, IMA, and multipoles |
 
 ---
 
@@ -386,14 +374,13 @@ Continue, …):
 ```json
 {
   "mcpServers": {
-    "radia-meta":          {"command": "mcp-server-radia-meta"},
-    "literature-index":    {"command": "mcp-server-literature-index"},
-    "build123d":           {"command": "mcp-server-build123d"},
-    "gmsh":                {"command": "mcp-server-gmsh"},
-    "force":               {"command": "mcp-server-force"},
-    "differential-forms":  {"command": "mcp-server-differential-forms"},
-    "mathematica":         {"command": "mcp-server-mathematica"},
-    "radia-matlab":        {"command": "mcp-server-radia-matlab"},
+    "radia-mcp-meta":        {"command": "radia-mcp", "args": ["serve", "radia-mcp-meta"]},
+    "radia-mcp-analysis":    {"command": "radia-mcp", "args": ["serve", "radia-mcp-analysis"]},
+    "radia-mcp-maglev":      {"command": "radia-mcp", "args": ["serve", "radia-mcp-maglev"]},
+    "build123d-mcp":         {"command": "radia-mcp", "args": ["serve", "build123d-mcp"]},
+    "gmsh-mcp":              {"command": "radia-mcp", "args": ["serve", "gmsh-mcp"]},
+    "radia-mcp-mathematica": {"command": "radia-mcp", "args": ["serve", "radia-mcp-mathematica"]},
+    "matlab-mcp-lab":        {"command": "radia-mcp", "args": ["serve", "matlab-mcp-lab"]},
     "optuna": {
       "command": "optuna-mcp",
       "args": ["--storage", "sqlite:///private-runtime-path"]
@@ -407,8 +394,8 @@ oracle tests must instead create a unique database in the per-run temporary
 directory and delete it after the local stdio server exits.
 
 Register only the workflows you need — once you have
-**meta**, `radia_mcp_get(name)` returns the entry point for any of the
-cataloged servers and you can register them on demand. The full list of
+**radia-mcp-meta**, `radia_mcp_get(name)` returns the `radia-mcp serve <key>`
+command for any served key and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 
@@ -418,7 +405,7 @@ and a licensed Coreform Cubit (not provided by `radia-mcp`):
 ```json
 {
   "mcpServers": {
-    "cubit": {
+    "cubit-mcp": {
       "command": "python",
       "args": ["-m", "cubit_mesh_export.mcp.server"]
     }

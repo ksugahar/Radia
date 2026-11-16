@@ -65,7 +65,7 @@ Reproduces from `radia >= 4.67.0` via `calc_inductance.py
 
 ### MCP access
 
-The MCP server `mcp-server-ih` exposes this knowledge via the
+The `radia-mcp-ih` pack exposes this knowledge via the
 `ih_esim(topic="...")` tool.  Topics include `overview`, `bh_file`,
 `inductance_cli`, `fem_kelvin_cli`, `fem_coilmesh_cli`, `per_element`,
 `convergence`, `json_output`, `troubleshooting`,

@@ -14,8 +14,8 @@ first.
   ```
   packages/radia-mcp/
     src/radia_mcp/
-      build123d/      — mcp-server-build123d
-      gmsh/           — mcp-server-gmsh
+      build123d/      — build123d-mcp
+      gmsh/           — gmsh-mcp
     pyproject.toml    — entry points + extras
     CHANGELOG.md      — append a release entry
   ```

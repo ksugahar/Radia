@@ -26,7 +26,11 @@ def _probe_module():
 
 def test_wheel_probe_runs_every_catalog_server_and_selftest(monkeypatch):
     probe = _probe_module()
-    monkeypatch.setattr(probe, "CATALOG", {"second": {}, "first": {}})
+    monkeypatch.setattr(probe, "CATALOG", {
+        "second": {"entry_point": "radia-mcp serve second"},
+        "first": {"entry_point": "radia-mcp serve first"},
+        "domain": {"kind": "domain"},
+    })
     calls = []
 
     def fake_probe(name, **kwargs):
@@ -80,15 +84,24 @@ def test_wheel_selftest_uses_isolated_launcher_and_propagates_failure(monkeypatc
         probe.run_selftest("meta", 10, installed_wheel=True)
 
 
-def _write_wheel(path: Path, names: set[str]) -> None:
+def _write_wheel(path: Path, names: set[str], scripts=None) -> None:
+    scripts = MODULE.CONSOLE_SCRIPTS if scripts is None else scripts
     with zipfile.ZipFile(path, "w") as archive:
         for name in names:
             archive.writestr(name, "fixture")
+        archive.writestr(
+            "radia_mcp-test.dist-info/entry_points.txt",
+            "[console_scripts]\n" + "".join(f"{s} = x:main\n" for s in sorted(scripts)),
+        )
+
+
+def _complete() -> set[str]:
+    return set(MODULE.REQUIRED_ASSETS) | set(MODULE.served_server_modules())
 
 
 def test_wheel_runtime_assets_are_complete(tmp_path):
     wheel = tmp_path / "radia_mcp-test.whl"
-    _write_wheel(wheel, set(MODULE.REQUIRED_ASSETS))
+    _write_wheel(wheel, _complete())
 
     result = MODULE.verify_wheel_contents(wheel)
 
@@ -98,14 +111,14 @@ def test_wheel_runtime_assets_are_complete(tmp_path):
 
 def test_wheel_runtime_asset_omission_fails(tmp_path):
     wheel = tmp_path / "radia_mcp-test.whl"
-    required = set(MODULE.REQUIRED_ASSETS)
-    required.remove("radia_mcp/paper_writing/skill.md")
+    required = _complete()
+    required.remove("radia_mcp/matlab/skill.md")
     _write_wheel(wheel, required)
 
     result = MODULE.verify_wheel_contents(wheel)
 
     assert not result["ok"]
-    assert result["missing"] == ["radia_mcp/paper_writing/skill.md"]
+    assert result["missing"] == ["radia_mcp/matlab/skill.md"]
 
 
 @pytest.mark.parametrize("member", [
@@ -116,25 +129,41 @@ def test_wheel_runtime_asset_omission_fails(tmp_path):
 ])
 def test_wheel_rejects_stale_build_output_from_other_owners(tmp_path, member):
     wheel = tmp_path / "candidate.whl"
-    _write_wheel(wheel, set(MODULE.REQUIRED_ASSETS) | {member})
+    _write_wheel(wheel, _complete() | {member})
     result = MODULE.verify_wheel_contents(wheel)
     assert not result["ok"]
     assert result["unwanted"] == [member]
 
 
-def test_wheel_rejects_retired_cubit_entrypoint(tmp_path):
+@pytest.mark.parametrize("extra", ["mcp-server-cubit", "mcp-server-radia-meta"])
+def test_wheel_rejects_any_retired_server_script(tmp_path, extra):
     wheel = tmp_path / "candidate.whl"
-    _write_wheel(wheel, set(MODULE.REQUIRED_ASSETS))
-    with zipfile.ZipFile(wheel, "a") as archive:
-        archive.writestr("radia_mcp-test.dist-info/entry_points.txt",
-                        "[console_scripts]\nmcp-server-cubit = old.server:main\n")
+    _write_wheel(wheel, _complete(), scripts=MODULE.CONSOLE_SCRIPTS | {extra})
     result = MODULE.verify_wheel_contents(wheel)
     assert not result["ok"]
-    assert result["retired_entries"] == ["mcp-server-cubit"]
+    assert result["retired_entries"] == [extra]
+
+
+def test_wheel_requires_the_single_launcher(tmp_path):
+    wheel = tmp_path / "candidate.whl"
+    _write_wheel(wheel, _complete(), scripts=MODULE.CONSOLE_SCRIPTS - {"radia-mcp"})
+    result = MODULE.verify_wheel_contents(wheel)
+    assert not result["ok"]
+    assert result["missing_scripts"] == ["radia-mcp"]
+
+
+def test_wheel_requires_every_served_server_module(tmp_path):
+    wheel = tmp_path / "candidate.whl"
+    names = _complete()
+    names.remove("radia_mcp/radia_ih/server.py")
+    _write_wheel(wheel, names)
+    result = MODULE.verify_wheel_contents(wheel)
+    assert not result["ok"]
+    assert result["missing"] == ["radia_mcp/radia_ih/server.py"]
 
 
 def test_every_tracked_runtime_asset_is_covered_by_package_data():
     # A tracked template, script or data file outside package-data is left out
-    # of the wheel without error; the poster templates were.
+    # of the wheel without error.
     assert MODULE.unpackaged_source_assets() == []
-    assert "radia_mcp/poster/templates/poster_a1_portrait.tex" in MODULE.REQUIRED_ASSETS
+    assert "radia_mcp/acoustic_fembem/skill.md" in MODULE.REQUIRED_ASSETS

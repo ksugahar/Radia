@@ -49,10 +49,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from radia_mcp.figure import (
-    apply_lab_style, lab_savefig, check_min_font,
-)
-
 # Data Persistence Policy: default to the committed dense-sweep case,
 # not a transient C:/temp snapshot.
 DEFAULT_JSON = Path(__file__).parent / "sweep_data_dense" / "I100_f50k_per_panel.json"
@@ -131,7 +127,7 @@ def main():
               f"{Rs.min()*1e3:.1f}-{Rs.max()*1e3:.1f} mOhm "
               f"(min/mean {Rs.min()/Rs.mean():.2f}x)")
 
-        figsize = apply_lab_style(target="paper_double_column", aspect=0.30)
+        figsize = (18.2 / 2.54, 18.2 * 0.30 / 2.54)
         fig, axes = plt.subplots(1, 3, figsize=figsize,
                                   constrained_layout=True)
         panels = [
@@ -151,13 +147,8 @@ def main():
             ax.text(0.5, -0.32, tag, transform=ax.transAxes,
                     ha="center", va="top")
         axes[0].set_ylabel(r"$z$ (mm)")
-        # Full-paper embed is figure* at 0.85\textwidth (scale ~0.85).
-        fig.canvas.draw()
-        bad = check_min_font(fig, min_pt=9.0, embed_scale=0.85)
-        print("min-font (figure*, 0.85 textwidth):",
-              "CLEAN" if not bad else
-              [(b["kind"], b["visible_pt"]) for b in bad])
-        lab_savefig(fig, str(OUT_PNG.with_suffix("")))
+        for ext in (".pdf", ".png"):
+            fig.savefig(str(OUT_PNG.with_suffix("")) + ext, dpi=300)
         print(f"Saved {OUT_PNG}")
 
 

@@ -1,6 +1,5 @@
 import copy
 
-from radia_mcp.ltspice.server import monte_carlo_tolerance_family_gate as mcp_gate
 from radia_simulink.ltspice.monte_carlo_gate import monte_carlo_tolerance_family_gate
 
 
@@ -34,7 +33,6 @@ def test_accepts_uniform_tolerance_root_n_family():
     result = monte_carlo_tolerance_family_gate(good_summary())
     assert result["status"] == "ok"
     assert result["checks"]["relative_sigmas_match_uniform_theory"] is True
-    assert mcp_gate(good_summary())["status"] == "ok"
 
 
 def test_rejects_missing_multi_part_variance_reduction():

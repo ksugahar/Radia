@@ -34,8 +34,6 @@ import numpy as np
 
 from _validation_output import validation_json_for_basename
 
-from radia_mcp.figure import lab_figure, save_lab_figure
-
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 from demo_sf_to_peec_gx import loop_corners, _loop_Hz, make_dsv
@@ -212,7 +210,8 @@ def main():
 
     import matplotlib
     matplotlib.use("Agg")
-    fig, ax = lab_figure(embed_width_cm=8.0)
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(8.0 / 2.54, 8.0 * 0.62 / 2.54))
     ax.plot([p[0] * 100 for p in flat_front], [p[1] for p in flat_front],
             "o-", color="#c0392b", label="flat cylinder (baseline)")
     ax.plot([p[0] * 100 for p in opt_front], [p[1] for p in opt_front],
@@ -223,7 +222,9 @@ def main():
     ax.set_ylabel("peak surface current density max|grad psi|")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
-    save_lab_figure(fig, args.out, embed_width_cm=8.0)
+    fig.tight_layout(pad=0.3)
+    for ext in (".pdf", ".png"):
+        fig.savefig(args.out + ext, dpi=300)
     print(f"\nsaved {json_path} / {args.out}.png", flush=True)
 
 

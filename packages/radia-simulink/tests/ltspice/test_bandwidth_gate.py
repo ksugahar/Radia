@@ -2,7 +2,6 @@ import copy
 import math
 
 from radia_simulink.ltspice.bandwidth_gate import measure_bandwidth_crossing_gate
-from radia_mcp.ltspice.server import measure_bandwidth_crossing_gate as mcp_gate
 
 
 def good():
@@ -35,7 +34,6 @@ def test_accepts_two_sided_bandwidth_replay():
     result = measure_bandwidth_crossing_gate(good())
     assert result["status"] == "ok"
     assert result["checks"]["peak_lies_between_crossings"] is True
-    assert mcp_gate(good())["status"] == "ok"
 
 
 def test_rejects_stale_measure_crossings_and_bandwidth():

@@ -55,7 +55,7 @@ IH_ESIM = """
 The ESIM (Effective Surface Impedance Method) general technique — 1D cell
 problem mathematics, Karl iteration, `radia.esim_cell_problem` module API
 — now lives in `radia_mcp.radia_ngsolve.esim_knowledge` (callable as
-`mcp-server-radia-ngsolve.esim(topic)`).  This topic only documents the
+`radia-ngsolve.esim(topic)`).  This topic only documents the
 **IH-specific** application of ESIM (workpiece SIBC for steel/ferrite under
 an induction coil).
 
@@ -214,7 +214,7 @@ _BEM_DEPRECATED_MSG = """
 # BEM knowledge has moved
 
 BEM (Scalar BIE, EFIE, coupled BEM-SIBC) documentation is owned by
-`mcp-server-radia-ngsolve` topic `ngsbem_inductance` rather than duplicated
+`radia-ngsolve` topic `ngsbem_inductance` rather than duplicated
 here. BEM remains a selectable IH solver family where its validated contract
 applies.
 
@@ -251,5 +251,5 @@ def get_ih_sibc_documentation(topic="all"):
         return (
             f"Unknown topic: '{topic}'. "
             f"Available: all, {', '.join(production_topics.keys())}. "
-            f"BEM topics moved to mcp-server-radia-ngsolve (ngsbem_inductance)."
+            f"BEM topics moved to radia-ngsolve (ngsbem_inductance)."
         )

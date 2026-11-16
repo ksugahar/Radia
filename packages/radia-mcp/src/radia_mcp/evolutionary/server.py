@@ -5,8 +5,8 @@ GA / DE / PSO / CMA-ES / Immune algorithm / NSGA-II/III knowledge,
 distilled from public-safe curated corpus
 
 Usage:
-    mcp-server-evolutionary              # Start MCP server
-    mcp-server-evolutionary --selftest   # Self-test
+    evolutionary              # Start MCP server
+    evolutionary --selftest   # Self-test
 """
 
 import sys
@@ -16,7 +16,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_evolutionary_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-evolutionary")
+mcp = FastMCP("evolutionary")
 
 
 @mcp.tool()
@@ -42,7 +42,7 @@ def evolutionary(topic: str = "all") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-evolutionary',
+    server_name='evolutionary',
     description='GA / DE / PSO / CMA-ES / Immune / NSGA-II for EM',
     subpackage='radia_mcp.evolutionary',
     related_servers=["bayesian-opt", "topology-optimization"],
@@ -52,7 +52,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-evolutionary',
+    server_name='evolutionary',
     topics=TOPICS,
 )
 

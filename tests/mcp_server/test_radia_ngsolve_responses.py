@@ -1,4 +1,4 @@
-"""Response regression tests for mcp-server-radia-ngsolve knowledge tools.
+"""Response regression tests for radia-ngsolve domain knowledge tools.
 
 These tests assert that the canonical knowledge-serving functions
 (``get_*_documentation``) return non-empty strings containing topic-

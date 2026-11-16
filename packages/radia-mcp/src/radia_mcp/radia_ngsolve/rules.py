@@ -843,7 +843,7 @@ def check_efie_sibc_use_scalar_bie(filepath: str, lines: List[str]) -> List[Dict
 
 
 # ============================================================
-# Radia C++ API rules (from mcp-server-radia)
+# Radia C++ API rules (from radia)
 # ============================================================
 
 

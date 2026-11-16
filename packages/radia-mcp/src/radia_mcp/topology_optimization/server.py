@@ -10,8 +10,8 @@ Knowledge layer (theory) — pairs with `radia_mcp.radia_ngsolve`
 derivation).
 
 Usage:
-    mcp-server-topology-optimization              # Start MCP server
-    mcp-server-topology-optimization --selftest   # Self-test
+    topology-optimization              # Start MCP server
+    topology-optimization --selftest   # Self-test
 
 Distilled from:
   - Gangl-Langer-Laurain-Meftahi-Sturm 2015 (IPM motor)
@@ -33,7 +33,7 @@ from radia_mcp.common.lazy_call import lazy_callable
 build_simplex_stationarity_audit_gate = lazy_callable(".simplex_stationarity_gate", "simplex_stationarity_audit_gate", __package__)
 build_nonlinear_lsq_multistart_gate = lazy_callable(".nonlinear_lsq_multistart_gate", "nonlinear_lsq_multistart_gate", __package__)
 
-mcp = FastMCP("mcp-server-topology-optimization")
+mcp = FastMCP("topology-optimization")
 _validation = CoarseToolRegistry(mcp, namespace="topology_optimization")
 
 
@@ -142,7 +142,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-topology-optimization',
+    server_name='topology-optimization',
     description='Topology optimization: SIMP, level set, ON/OFF, MMA, Wakao autoencoder+LS SynRM',
     subpackage='radia_mcp.topology_optimization',
     related_servers=["motor", "bayesian-opt", "evolutionary"],

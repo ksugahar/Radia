@@ -112,7 +112,7 @@ def test_unproven_tree_never_reuses(change):
 
 @pytest.mark.parametrize('lane', receipt.LANES)
 def test_unrelated_package_never_selects_heavy_lane(lane):
-    for path in ('packages/radia-mcp/src/radia_mcp/presentation/tools.py', 'docs/guide.md'):
+    for path in ('packages/radia-mcp/src/radia_mcp/meta/server.py', 'docs/guide.md'):
         assert not impact.lane_required(lane, {path}, None, impact.manifest())[0]
 
 

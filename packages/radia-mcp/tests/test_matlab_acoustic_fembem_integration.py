@@ -179,14 +179,6 @@ def test_generic_matlab_namespace_has_no_fembem_domain_by_default():
     assert contract["education_solver_owner"] == "radia_mcp.acoustic_fembem"
 
 
-def test_old_combined_namespace_is_compatibility_only():
-    from radia_mcp.matlab_acoustic_fembem import (
-        matlab_acoustic_fembem_extension_contract as legacy_contract,
-    )
-
-    assert legacy_contract() == acoustic_fembem_extension_contract()
-
-
 def test_separate_matlab_and_acoustic_fembem_servers_register_expected_tools():
     import asyncio
 

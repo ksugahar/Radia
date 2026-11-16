@@ -6817,7 +6817,6 @@ force_validation("method_map")              -> force/torque method selection
 force_validation("cross_validation")        -> stored neutral regression cases
 fem_bem_schur("api")                        -> exact-open-boundary Schur recipe
 ngsolve_usage("readable_fem")               -> P1 tri/tet educational primitives
-panel_review("cubit_boundary")              -> checked .vol and Simulink boundary
 radia_mcp_golden_gate()                     -> public MCP fleet quality gate
 ```
 
@@ -6828,10 +6827,10 @@ knowledge topic.
 ## Optuna boundary
 
 The old in-package Optuna MCP path is retired.  There must be no
-`radia_mcp.optuna` package, no `mcp-server-optuna` console script, and no Optuna
+`radia_mcp.optuna` package, no `optuna` console script, and no Optuna
 runtime dependency in radia-mcp. Every shared operation present in the
 official external `optuna/optuna-mcp` live `tools/list` belongs to that server.
-`mcp-server-radia-matlab` may support only the differences of the standalone
+`matlab-mcp-lab` may support only the differences of the standalone
 MATLAB distribution: table/MAT persistence, Simulink monitoring and failure
 telemetry, MATLAB parallel execution, `optuna_mex`, and Radia CAE artifacts.
 radia-mcp may also keep CAE objective helpers, analytic gates, and example

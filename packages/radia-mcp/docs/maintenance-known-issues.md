@@ -158,7 +158,7 @@ sidecars; a separate-process test verifies exclusion and release after failure.
 Ten new cases cover aux nesting/order/wildcards, malformed/missing/cyclic input,
 conflicting styles, compiled decisions, mid-run aux change and writer exclusion.
 The fifteen-file lane passes 1205 tests; isolated registration reports 16 tools.
-See [the finalization contract](operations/bibliography-finalization.md).
+The finalization contract moved out of radia-mcp with the document tools.
 
 Remaining boundaries are deliberate: callers own preexisting aux freshness,
 unsupported author expressions need metadata resolution, and nonparticipating

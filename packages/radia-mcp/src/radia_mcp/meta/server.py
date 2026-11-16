@@ -6,8 +6,8 @@ ecosystem. Use this server as the FIRST stop when you don't know
 which other server to call.
 
 Usage:
-    mcp-server-radia-meta              # stdio
-    mcp-server-radia-meta --selftest   # self-test
+    radia-mcp-meta              # stdio
+    radia-mcp-meta --selftest   # self-test
 """
 
 import copy
@@ -25,7 +25,7 @@ from radia_mcp.common.mcp_contract import validate_solver_artifact_identity
 from . import bug_patterns, catalog, operations
 from .knowledge.tests_design import get_tests_design_guide
 
-mcp = FastMCP("mcp-server-radia-meta")
+mcp = FastMCP("radia-mcp-meta")
 
 _HEALTH_CACHE: dict | None = None
 _HEALTH_CACHE_AT = 0.0
@@ -81,7 +81,7 @@ def radia_mcp_overview(full: bool = False) -> dict:
             "Call radia_mcp_get(name) for one complete catalog entry, or "
             "<server>_status() for live introspection + dependency probe. "
             "External packages "
-            "(optuna-mcp / elf / mcp-server-document) ship from their own "
+            "(optuna-mcp / elf) ship from their own "
             "repos — see entries in `external_packages` for install paths.",
     }
 
@@ -90,12 +90,13 @@ def radia_mcp_overview(full: bool = False) -> dict:
 def radia_mcp_naming_conventions() -> dict:
     """Return the canonical naming contract used by every bundled MCP server."""
     return {
-        "product": "radia-mcp.<server-id>",
+        "client_key": "<product>-mcp[-<pack>] (hyphens only), equal to the catalog key",
         "python": "radia_mcp.<python_module>",
-        "command": "mcp-server-<server-id>",
-        "catalog_key": "<server-id>",
-        "tool_prefix": "<server_id>_ (underscores)",
-        "compatibility": "Retain compatible aliases where supported, not a blanket promise for every retired tool. Cubit GUI-only tools such as cubit_show were removed by the headless policy; use current tools/list and headless journal workflows instead.",
+        "command": "radia-mcp serve <catalog-key>",
+        "catalog_key": "<catalog-key>",
+        "domains": "pack members have no command of their own; serve their pack",
+        "tool_prefix": "<domain>_ (underscores)",
+        "compatibility": "No aliases: retired names are deleted, not redirected. Cubit GUI-only tools such as cubit_show were removed by the headless policy; use current tools/list and headless journal workflows instead.",
         "servers": catalog.list_all(),
     }
 
@@ -243,11 +244,15 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
     bad_entrypoints = []
     for entry in servers:
         name = entry["name"]
-        for key in ("subpackage", "entry_point", "description", "primary_tools", "tags"):
+        served = entry.get("kind") != "domain"
+        required = ("subpackage", "description", "primary_tools", "tags")
+        for key in (*required, "entry_point") if served else required:
             if key not in entry or entry[key] in ("", [], None):
                 missing_required.append(f"{name}.{key}")
+        if not served:
+            continue
         entry_point = entry.get("entry_point", "")
-        if not str(entry_point).startswith("mcp-server-"):
+        if entry_point != f"radia-mcp serve {name}":
             bad_entrypoints.append(f"{name}: {entry_point}")
         expected_selftest = f"{entry_point} --selftest"
         if entry.get("selftest_command") != expected_selftest:
@@ -256,19 +261,19 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
     add(
         "catalog_required_fields",
         not missing_required,
-        "Every cataloged server declares subpackage, entry point, description, tools, and tags.",
+        "Every catalog entry declares subpackage, description, tools and tags; served keys also declare their command.",
         {"missing": missing_required[:10], "n_missing": len(missing_required)},
     )
     add(
         "entrypoint_naming",
         not bad_entrypoints,
-        "Every public radia-mcp server uses the mcp-server-* console-script convention.",
+        "Every served key runs as `radia-mcp serve <key>`.",
         {"bad": bad_entrypoints[:10], "n_bad": len(bad_entrypoints)},
     )
     add(
         "selftest_command_coverage",
         not missing_selftest,
-        "Every catalog entry exposes a lightweight --selftest command.",
+        "Every served key exposes a lightweight --selftest command.",
         {"bad": missing_selftest[:10], "n_bad": len(missing_selftest)},
     )
 
@@ -298,7 +303,7 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
         name: info.get("entry_point", "")
         for name, info in catalog.EXTERNAL_PACKAGES.items()
     }
-    radia_matlab = catalog.CATALOG.get("radia-matlab", {})
+    radia_matlab = catalog.CATALOG.get("matlab-mcp-lab", {})
     radia_matlab_tools = set(radia_matlab.get("primary_tools", []))
     optuna_mcp_related = set(
         catalog.EXTERNAL_PACKAGES.get("optuna-mcp", {}).get("related", [])
@@ -309,7 +314,7 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
             "optuna" not in catalog_names
             and "optuna-mcp" in external_names
             and "matlab_optuna_mcp_route" in radia_matlab_tools
-            and "radia-matlab" in optuna_mcp_related
+            and "matlab-mcp-lab" in optuna_mcp_related
         ),
         "Shared Optuna operation stays upstream; radia-mcp exposes only the MATLAB difference route.",
         {
@@ -318,21 +323,17 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
             "optuna_entry_point": external_entrypoints.get("optuna-mcp"),
             "matlab_difference_tool": "matlab_optuna_mcp_route",
             "upstream_links_radia_matlab_difference": (
-                "radia-matlab" in optuna_mcp_related
+                "matlab-mcp-lab" in optuna_mcp_related
             ),
         },
     )
 
     if check_path:
-        missing_cli = [
-            entry["entry_point"]
-            for entry in servers
-            if shutil.which(entry["entry_point"]) is None
-        ]
+        missing_cli = [] if shutil.which("radia-mcp") else ["radia-mcp"]
         add(
             "entrypoints_on_path",
             not missing_cli,
-            "All cataloged console scripts are visible on PATH in this environment.",
+            "The radia-mcp console script is visible on PATH in this environment.",
             {"missing": missing_cli[:10], "n_missing": len(missing_cli)},
         )
     else:
@@ -437,11 +438,11 @@ def bug_patterns_stats() -> dict:
 
 register_status_tool(
     mcp,
-    server_name="mcp-server-radia-meta",
+    server_name="radia-mcp-meta", tool_name='radia_meta_status',
     description="Cross-server catalog of all radia_mcp.* servers "
                 "(★ recommended first call when picking a tool)",
     subpackage="radia_mcp.meta",
-    related_servers=["literature-index"],
+    related_servers=[],
     optional_deps=[],
 )
 

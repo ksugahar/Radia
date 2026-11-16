@@ -4,8 +4,8 @@ Data Assimilation MCP Server (radia_mcp.data_assimilation)
 Kalman / EnKF / 4D-Var for EM state estimation + sensor fusion.
 
 Usage:
-    mcp-server-data-assimilation              # Start MCP server
-    mcp-server-data-assimilation --selftest   # Self-test
+    data-assimilation              # Start MCP server
+    data-assimilation --selftest   # Self-test
 """
 
 import sys
@@ -15,7 +15,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_data_assimilation_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-data-assimilation")
+mcp = FastMCP("data-assimilation")
 
 
 @mcp.tool()
@@ -37,7 +37,7 @@ def data_assimilation(topic: str = "all") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-data-assimilation',
+    server_name='data-assimilation',
     description='Kalman / EnKF / 4D-Var for EM state estimation + sensor fusion',
     subpackage='radia_mcp.data_assimilation',
     related_servers=["mor", "fusion-reactor"],
@@ -47,7 +47,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-data-assimilation',
+    server_name='data-assimilation',
     topics=TOPICS,
 )
 

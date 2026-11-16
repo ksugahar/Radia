@@ -94,7 +94,7 @@ def test_transient_heat_passes_real_mcp_stdio_and_owned_worker(tmp_path: Path) -
         asyncio.wait_for(_probe_stdio(_transient_request(tmp_path)), timeout=45)
     )
 
-    assert result["server_name"] == "mcp-server-fem"
+    assert result["server_name"] == "fem"
     assert result["listed"] is True
     assert result["is_error"] is False
     payload = result["payload"]

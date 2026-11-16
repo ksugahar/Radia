@@ -8,16 +8,15 @@ Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
 - ngsolve.bem (BEM operators, inductance extraction)
 - radia.sparsesolv_ngsolve (Compact AMS/COCR/ICCG preconditioners)
 - Kelvin transformation for open boundary FEM
-- md2html converter documentation
 
 App-specific knowledge is in separate servers:
-- mcp-server-ih: Induction heating (SIBC, ESIM, Karl iteration)
+- ih: Induction heating (SIBC, ESIM, Karl iteration)
 - mcp-server-cubit: external Cubit scripting/mesh export from cubit-mesh-export
-- mcp-server-gmsh: GMSH post-processing
+- gmsh-mcp: GMSH post-processing
 
 Usage:
-    mcp-server-radia-ngsolve              # Start MCP server (stdio transport)
-    mcp-server-radia-ngsolve --selftest   # Run self-test
+    radia-ngsolve              # Start MCP server (stdio transport)
+    radia-ngsolve --selftest   # Run self-test
 """
 
 import os
@@ -189,7 +188,6 @@ _hartmann_profile_gate = lazy_callable(".hartmann_profile_gate", "hartmann_profi
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
-from .knowledge.md2html import get_md2html_documentation
 from .knowledge.ngsolve import get_ngsolve_documentation
 from .knowledge.sparsesolv import get_sparsesolv_documentation
 from .knowledge.kelvin import get_kelvin_documentation
@@ -222,9 +220,9 @@ from ..acoustic_fembem import (
     acoustic_fembem_server_config as _matlab_acoustic_fembem_server_config,
 )
 from .gmsh_post_spec import get_gmsh_post_spec
-# NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
+# NOTE: induction_heating_knowledge is in ih (not here)
 
-mcp = FastMCP("mcp-server-radia-ngsolve")
+mcp = FastMCP("radia-ngsolve")
 
 from radia_mcp.mesh_viewer.mcp import register_mesh_viewer_tool
 register_mesh_viewer_tool(mcp)
@@ -835,7 +833,7 @@ def esim(topic: str = "all") -> str:
     This tool documents the GENERAL technique (cell problem mathematics,
     Karl iteration, module API) without coupling to any specific
     application.  For application-specific use of ESIM (induction heating
-    workpieces with steel BH curves), see `mcp-server-ih.ih_sibc(topic="esim")`.
+    workpieces with steel BH curves), see `ih.ih_sibc(topic="esim")`.
 
     Args:
         topic: Documentation topic. Options:
@@ -1392,12 +1390,6 @@ def radia_usage(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def md2html_usage() -> str:
-    """Get md2html converter documentation (MathJax, reference links, styled HTML)."""
-    return get_md2html_documentation()
-
-
-@mcp.tool()
 def analytical_formulas(topic: str = "all") -> str:
     """
     Get documentation for radia.analytical_formulas (closed-form reference layer).
@@ -1814,7 +1806,7 @@ def ngsolve_eddy_current(geometry: str) -> str:
     """Set up an NGSolve eddy current / induction heating simulation."""
     return (
         f"Set up an NGSolve eddy current simulation for: {geometry}\n\n"
-        "Use the mcp-server-ih ih_sibc tool for SIBC method selection.\n"
+        "Use the ih ih_sibc tool for SIBC method selection.\n"
         "Key points:\n"
         "1. A-Phi formulation: HCurl(complex=True) * H1(complex=True)\n"
         "2. P_total: use BEM (ScalarBIESIBCSolver), not FEM BND integral\n"
@@ -4686,7 +4678,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-radia-ngsolve',
+    server_name='radia-ngsolve',
     description='Radia + NGSolve: Kelvin / sparsesolv / PEEC / analytical formulas / lint',
     subpackage='radia_mcp.radia_ngsolve',
     related_servers=["fem", "bem", "force", "matrix-solvers"],
@@ -4695,13 +4687,13 @@ register_status_tool(
 
 apply_tool_contract(
     mcp,
-    server_name="mcp-server-radia-ngsolve",
+    server_name="radia-ngsolve",
     version=__version__,
 )
 
 
 def main():
-    """Entry point for mcp-server-ngsolve console script."""
+    """Entry point for ngsolve console script."""
     if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()

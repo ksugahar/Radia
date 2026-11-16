@@ -434,3 +434,16 @@ reproduced on the merged base before the change; the closure grows from 74 to
 imports, the source-only guard and the profile budget are unchanged. The
 `audit_digest` seal is
 `8426c0d457c73593aca30ae3c66003dc1e61edcbaf02c8f79e0355aafdd2873f`.
+
+## Document tools removed from radia-mcp
+
+The document tools moved out of `radia-mcp`. Two light-closure files changed
+only by deletion: `tools/policy_lint.py` drops allowlist entries for the
+removed bibliography, presentation, paper, poster, grant and chroma files, and
+`tests/test_public_runtime_privacy.py` drops the citation-exception test for
+the removed bibliography file. No import, command, requirement, runner label,
+denied import, source-only guard or profile budget changed; the closure stays
+at 81 files. The prior seal
+`22c8e5758d8f96b543aa9a57ff3e68f712fac366d76ff09ec9d620dcec4e32c4` was
+reproduced on the base before the change. The `audit_digest` seal is
+`24f72eb7fb659e9e18cbcb6f47c8137fd190f1532f686e333bf01f6761d55d8f`.

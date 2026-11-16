@@ -40,8 +40,8 @@ def test_mesh_status_tools_expose_selftest_and_audit_commands():
 
     gmsh = gmsh_server.mcp._tool_manager._tools["gmsh_status"].fn()
 
-    assert gmsh["selftest_command"] == "mcp-server-gmsh --selftest"
-    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-repo"
+    assert gmsh["selftest_command"] == "radia-mcp serve gmsh-mcp --selftest"
+    assert gmsh["audit_command"] == "radia-mcp serve gmsh-mcp --selftest --audit-repo"
     assert "gmsh_status" in gmsh["tools"]
 
 

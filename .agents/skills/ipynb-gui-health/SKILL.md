@@ -11,7 +11,7 @@ is the public example, reproduction, and field-inspection layer only.
 ## Gates
 
 ```powershell
-python -m pytest packages/radia-mcp/tests/test_document_meta_notebook_audit.py -q
+python -m pytest tests/test_docs_notebook_contract.py -q
 ```
 
 Verify that:

@@ -1,1 +1,0 @@
-"""radia-electrical capability pack."""

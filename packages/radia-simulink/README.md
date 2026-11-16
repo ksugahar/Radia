@@ -224,10 +224,9 @@ and timing evidence is recorded in that validation; it does not certify
 A100 scaling or the exact artifact of a future release.
 
 Python circuit converters use `radia-ltspice`; install `radia-simulink[ltspice]`
-for the optional schemdraw route. MCP entry points, including
-`mcp-server-radia-ltspice`, belong to `radia-mcp` and load the GPU distribution
-only when circuit execution is requested. No circuit import alias is left in
-the CPU Radia distribution.
+for the optional schemdraw route. The LTspice MCP server is maintained outside
+this repository; radia-mcp ships none. No circuit import alias is left in the
+CPU Radia distribution.
 
 The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API.
 

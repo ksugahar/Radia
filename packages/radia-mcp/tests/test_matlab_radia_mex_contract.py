@@ -52,7 +52,7 @@ def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_loc
     assert shared["owner"] == "optuna/optuna-mcp"
     assert "live MCP tools/list" in shared["authority"]
     assert shared["verified_snapshot"]["sampler_seed_exposed"] is False
-    assert matlab["owner"] == "radia-mcp/radia-matlab"
+    assert matlab["owner"] == "radia-mcp/matlab-mcp-lab"
     assert matlab["distribution"] == "radia-optuna"
     assert "matlab_optuna_health" in matlab["tools"]
     assert "matlab_optuna_oracle_plan" in matlab["tools"]

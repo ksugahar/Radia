@@ -39,12 +39,11 @@ At least two levels are needed for a rate; any stronger level-count requirement
 belongs in the user-approved criterion. A p-then-h sequence uses separate series
 with shared endpoints, not a rate fitted across simultaneously changing axes.
 
-Analytic references require a `bib_key` in the single canonical bibliography,
-`packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib` (the same
-source as `bibliography_canonical_path`). That entry must carry a DOI or a
+Analytic references require a `bib_key` in the validation-record reference
+list, `validation_records/references.bib`. That entry must carry a DOI or a
 checksum-valid ISBN-13 with a 978/979 prefix; a URL alone is insufficient.
 Do not invent identifiers or relabel a textbook as another reference kind.
-The checker reuses the existing stdlib BibTeX parser without importing MCP.
+The checker uses the stdlib BibTeX parser in `tools/validation_bibparse.py`.
 The hash-checked `symbolic_verification` artifact remains mandatory
 (`path`, `sha256`, relative to the record). An independent route requires
 an `independence` rationale and `shared_components`, even when the list is empty.

@@ -8,8 +8,8 @@ and fresh-process checks do not establish what existing clients have loaded.
 
 ## Standard client configuration
 
-The maintained baseline is `radia-meta`, `radia-build123d`,
-`radia-gmsh`, `radia-analysis`, `radia-motion`, and `radia-publication`.
+The maintained baseline is `radia-mcp-meta`, `build123d-mcp`,
+`gmsh-mcp`, `radia-mcp-analysis`, and `radia-mcp-maglev`.
 Additional servers are retained. Gmsh is for post-processing, not solver meshing.
 Cubit MCP is owned by `cubit-mesh-export`, not this baseline. Its owner installs
 and configures `python -s -m cubit_mesh_export.mcp.server`. Existing external
@@ -47,7 +47,7 @@ its second successful invocation.
 
 Standard launchers call `python -s -m radia_mcp.maintenance serve <catalog-key>`.
 The catalog restricts module selection. Arguments following the key go to the
-server, e.g. `serve radia-motion --profile ih`. The launcher calls `main()`
+server, e.g. `serve radia-mcp-analysis --profile field`. The launcher calls `main()`
 directly, including servers without a module execution guard. It does not print
 diagnostic JSON on the MCP stdout stream. SDK/server lifecycle owns shutdown;
 maintenance never kills unrelated MATLAB, Python, or client processes.
@@ -121,10 +121,10 @@ wheel tests remain isolated and retain independent acceptance gates.
 Run existing tests, not duplicated maintenance versions. From the package root:
 
 ```powershell
-python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py --junitxml=private-runtime-path
+python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py --junitxml=private-runtime-path
 ```
 
-Install maintenance/document extras as appropriate. A missing-dependency skip
+Install maintenance extras as appropriate. A missing-dependency skip
 is **not** evidence for that feature. Check JUnit counts. Cubit MCP tests and
 licensed meshing acceptance belong to cubit-mesh-export, not this lane. For changed
 Gmsh execution, run `tests/test_gmsh_post_guards.py` with the Gmsh extra. Real

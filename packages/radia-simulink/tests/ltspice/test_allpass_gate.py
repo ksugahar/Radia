@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 
 from radia_simulink.ltspice.allpass_gate import second_order_allpass_gate
-from radia_mcp.ltspice.server import second_order_allpass_phase_group_delay_gate as mcp_gate
 
 
 def _summary() -> dict:
@@ -32,7 +31,6 @@ def test_accepts_complex_allpass_phase_and_group_delay() -> None:
     result = second_order_allpass_gate(_summary())
     assert result["status"] == "ok"
     assert all(result["checks"].values())
-    assert mcp_gate(_summary())["status"] == "ok"
 
 
 def test_rejects_flat_magnitude_only_false_allpass() -> None:

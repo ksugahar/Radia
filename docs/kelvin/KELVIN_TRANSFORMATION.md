@@ -110,7 +110,7 @@ why the material modulation `nu' = (rho'/R)^2 nu_0` (§2.4) carries **no**
 sign at all, while the field rules do.
 
 Cross-reference: `differential_forms_maxwell('twisted')` on
-mcp-server-radia-differential-forms (Bossavit / Kameari diagram).
+radia-mcp-analysis (domain differential-forms) (Bossavit / Kameari diagram).
 
 ### 2.4 Material Modulation
 

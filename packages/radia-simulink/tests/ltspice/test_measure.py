@@ -10,7 +10,7 @@ from radia_simulink.ltspice.measure import (
     summarize_measure_log,
     summarize_stepped_measure_log,
 )
-from radia_mcp.ltspice.server import balanced_learning_profile
+from radia_simulink.ltspice.learning_quality import build_balanced_learning_profile as balanced_learning_profile
 
 
 def test_balanced_learning_profile_has_ten_unique_controlled_stages():

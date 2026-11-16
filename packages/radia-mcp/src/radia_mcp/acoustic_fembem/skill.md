@@ -27,7 +27,7 @@ MATLAB boundary belongs to `radia_mcp.matlab`.
 
 Radia owns the custom-tool extension contract. Locate and inspect it with:
 
-- `acoustic_fembem_extension_contract` from `mcp-server-acoustic-fembem`;
+- `acoustic_fembem_extension_contract` from `acoustic-fembem`;
 - `radia-acoustic-fembem-mcp-config --contract-only` from a shell.
 
 Generate official-server arguments with

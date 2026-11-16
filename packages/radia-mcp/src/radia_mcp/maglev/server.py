@@ -22,8 +22,8 @@ Cross-references:
 - `radia_mcp.motor` — analogous rotary motor knowledge
 
 Usage:
-    mcp-server-maglev              # stdio
-    mcp-server-maglev --selftest   # self-test
+    maglev              # stdio
+    maglev --selftest   # self-test
 """
 import json
 import sys
@@ -37,7 +37,7 @@ from radia_mcp.common.lazy_call import lazy_callable
 _rotating_conductor_periodic_settling_gate = lazy_callable(".periodic_settling_gate", "rotating_conductor_periodic_settling_gate", __package__)
 _team28_cycle_averaged_motion_gate = lazy_callable(".team28_dynamic_gate", "team28_cycle_averaged_motion_gate", __package__)
 
-mcp = FastMCP("mcp-server-maglev")
+mcp = FastMCP("maglev")
 _validation = CoarseToolRegistry(mcp, namespace="maglev")
 
 
@@ -189,7 +189,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-maglev',
+    server_name='maglev',
     description='Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research line: Radia IEM<->FEM weak coupling + Krylov/Foster reduced models for control-coupled maglev (Yano, CAE-AI).',
     subpackage='radia_mcp.maglev',
     related_servers=["force", "mor", "motor", "ih"],
@@ -198,7 +198,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-maglev',
+    server_name='maglev',
     topics=TOPICS,
 )
 

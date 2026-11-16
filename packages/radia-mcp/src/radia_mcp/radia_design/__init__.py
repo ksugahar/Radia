@@ -1,1 +1,0 @@
-"""radia-design capability pack."""

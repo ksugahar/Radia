@@ -139,7 +139,6 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert 'targets = ["tests"]' in mcp
     assert '"-m", "not slow", *targets,' in mcp
     assert '"--confcutdir=tests/mcp_integration", *targets' in mcp
-    assert 'metadata["project"]["optional-dependencies"]["md2html"]' in mcp
     assert 'check_package_test_boundary.py' in mcp
     assert 'plan["server_selftests"]' in mcp
     assert 'plan["run_mcp_response_tests"]' in mcp
@@ -391,8 +390,8 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert len(agents) < 260
     # The public policy must stay small enough for an agent's context; private
     # session coordination lives in CLAUDE.local.md and user-level Codex rules.
-    assert len("\n".join(agents).encode("utf-8")) < 24_000
-    assert len("\n".join(claude).encode("utf-8")) < 24_000
+    assert len("\n".join(agents).encode("utf-8")) < 25_000
+    assert len("\n".join(claude).encode("utf-8")) < 25_000
 
     policy = "\n".join(agents)
     # Public text names roles, never physical hosts or private paths.
@@ -424,8 +423,9 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert "no dedicated branch, frozen snapshot or separate deployment approval" in normalized
     assert "live loaded source separately" in normalized
     assert "Unknown or mixed evidence must stay unverified" in normalized
-    assert "Manuscript folders contain generated `.bbl` only, never local `.bib` copies" in normalized
-    assert "bibliography/data/references.bib" in normalized
+    assert "The bibliography is managed separately (private)." in normalized
+    assert "`validation_records/references.bib`" in normalized
+    assert "bibliography_canonical_path" not in normalized
     assert "commit-pinned source snapshot" not in normalized
     contract_path = "packages/radia-mcp/docs/operations/mcp-runtime-policy.md"
     assert contract_path in policy

@@ -380,13 +380,8 @@ def _plot(args, thetas, Rloc, f_mag, p_ana, sweep, d_min, wterms, wnfp,
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import demo_regcoil_fusion as base
-    try:
-        from radia_mcp.figure import apply_lab_style, save_lab_figure
-    except Exception as e:
-        print(f"(plot skipped: radia-mcp figure unavailable: {e})")
-        return
     plt.rcParams["pdf.fonttype"] = 42
-    w_in, h_in = apply_lab_style(embed_width_cm=16.0, aspect=0.78)
+    w_in, h_in = 16.0 / 2.54, 16.0 * 0.78 / 2.54
     fig = plt.figure(figsize=(w_in, h_in))
 
     # (a) coil stress vs poloidal angle: |f| (points) vs B^2/2mu0 (line)
@@ -446,10 +441,11 @@ def _plot(args, thetas, Rloc, f_mag, p_ana, sweep, d_min, wterms, wnfp,
 
     fig.subplots_adjust(left=0.085, right=0.97, top=0.96, bottom=0.09,
                         hspace=0.32, wspace=0.30)
-    info = save_lab_figure(fig, os.path.join(args.out_dir,
-                                             "demo_regcoil_fusion_advanced"),
-                           embed_width_cm=16.0, tighten=False)
-    print(f"Plot    -> {', '.join(info['wrote'])}")
+    stem = os.path.join(args.out_dir, "demo_regcoil_fusion_advanced")
+    wrote = [stem + ext for ext in (".pdf", ".png")]
+    for path in wrote:
+        fig.savefig(path, dpi=300)
+    print(f"Plot    -> {', '.join(wrote)}")
 
 
 if __name__ == "__main__":

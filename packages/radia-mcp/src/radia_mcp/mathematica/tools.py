@@ -264,7 +264,7 @@ def mathematica_evaluate(code: str, timeout: int = 60) -> dict:
     # INHERITS the stdout/stderr write handles; if that kernel lingers (it does in the
     # console-less, job-object MCP-server launch context -- though NOT from an interactive
     # shell, which is why a bare `subprocess.run(..., capture_output=True)` works when tested by
-    # hand but hangs inside mcp-server-mathematica), the pipe never reaches EOF and
+    # hand but hangs inside radia-mcp-mathematica), the pipe never reaches EOF and
     # `subprocess.run`'s internal communicate() BLOCKS until `timeout` even though wolframscript
     # itself already exited and printed the answer.  Writing to files means we wait only for the
     # wolframscript PROCESS to exit (prompt) and then read the files; a lingering grandchild

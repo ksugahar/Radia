@@ -1707,7 +1707,7 @@ def test_constitutive_response_gate_passes_real_stdio_protocol():
     server_name, tools, result, point_result, sweep_result = asyncio.run(
         asyncio.wait_for(_probe_constitutive_gate_stdio(), timeout=45)
     )
-    assert server_name == "mcp-server-radia-ngsolve"
+    assert server_name == "radia-ngsolve"
     assert "radia_ngsolve_validation_run" in tools
     assert result["status"] == "ok"
     assert point_result["status"] == "ok"

@@ -81,13 +81,13 @@ directory; interactive WebGUI scenes support the feature explanation.
 
 ### References in Notebooks
 
-The parent bibliography is
-[`references.bib`](../packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib).
-Notebook literature references must come from a `.bbl` generated from that
-parent through `bibliography_make_bbl`, not from a manuscript-local `.bib` or
-a separately maintained reference list. Keep the generated `.bbl` beside the
-notebook and make its references readable in the saved notebook. A notebook
-without literature citations does not need a dummy bibliography.
+The parent bibliography and the `.bbl` generator live in the separate
+document-tools repository, not in radia-mcp. Notebook literature references
+must come from a `.bbl` generated from that parent, not from a
+manuscript-local `.bib` or a separately maintained reference list. Keep the
+generated `.bbl` beside the notebook and make its references readable in the
+saved notebook. A notebook without literature citations does not need a dummy
+bibliography.
 
 Correct citation metadata and keys in the parent, then regenerate the `.bbl`
 and its notebook presentation together. Do not hand-edit generated entries.

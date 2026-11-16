@@ -565,7 +565,7 @@ The numbers and mechanisms above are produced by the `radia-mcp` code; query the
 MCP knowledge tool for the live recipe.
 
 - **MCP tool:** `dtn_coarse_mesh(topic="overview" | "numerics" | "api" | "applications" | "p_method" | "formulation" | "datasheet")`
-  (server `mcp-server-radia-ngsolve`). Companion: `fem_bem_schur(...)`,
+  (pack `radia-mcp-analysis`, domain `radia-ngsolve`). Companion: `fem_bem_schur(...)`,
   `kelvin_transformation(...)` — including `topic="mesh_control"`, the
   consolidated "where to spend elements" guide (the Γ-conforming mesh
   constraint + the six measured pillars above: exterior-volume-free,

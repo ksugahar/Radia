@@ -35,8 +35,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.special import iv as bessel_iv
 
-from radia_mcp.figure import apply_lab_style, lab_savefig
-
 # Add radia src to path so this works without `pip install`
 HERE = Path(__file__).parent.resolve()
 SRC = HERE.parent.parent / "src" / "radia"
@@ -106,7 +104,7 @@ def main():
     # IH headline operating range markers (paper Fig. 1 orange band)
     H_t_min, H_t_max = 32.0, 2991.0
 
-    figsize = apply_lab_style(target="paper_single_column", aspect=0.65)
+    figsize = (8.89 / 2.54, 8.89 * 0.65 / 2.54)
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     ax.loglog(H_sweep, Z_abs * 1e3, "-", color="C3", linewidth=1.8,
               label=r"cell solver $|Z_s|$")
@@ -120,7 +118,8 @@ def main():
     ax.set_ylabel(r"$|Z_s|$ (m$\Omega$)")
     ax.legend(loc="lower left", frameon=False)
     ax.grid(which="both", linestyle=":", alpha=0.5)
-    lab_savefig(fig, str(OUT_PNG.with_suffix("")))
+    for ext in (".pdf", ".png"):
+        fig.savefig(str(OUT_PNG.with_suffix("")) + ext, dpi=300)
     print(f"Saved {OUT_PNG}")
 
     data = {

@@ -8,8 +8,8 @@ Provides tools for:
 - STEP/BREP export for Netgen and Cubit pipelines
 
 Usage:
-    mcp-server-build123d              # Start MCP server (stdio transport)
-    mcp-server-build123d --selftest   # Run self-test
+    build123d-mcp              # Start MCP server (stdio transport)
+    build123d-mcp --selftest   # Run self-test
 """
 
 import sys
@@ -121,7 +121,7 @@ Always inspect tool outputs before acting on them; on repeated failure
 ask the user rather than looping.
 """
 
-mcp = FastMCP("mcp-server-build123d", instructions=_SERVER_INSTRUCTIONS)
+mcp = FastMCP("build123d-mcp", instructions=_SERVER_INSTRUCTIONS)
 _validation = CoarseToolRegistry(mcp, namespace="build123d")
 
 # ---------------------------------------------------------------------------
@@ -4870,10 +4870,10 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-build123d',
+    server_name='build123d-mcp', tool_name='build123d_status',
     description='build123d STEP authoring (CAD-as-code) + Cubit interop',
     subpackage='radia_mcp.build123d',
-    related_servers=["cubit", "interop"],
+    related_servers=["cubit"],
     optional_deps=["build123d"],
 )
 

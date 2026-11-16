@@ -85,7 +85,7 @@ def official_foundation(monkeypatch, tmp_path):
 
 def test_official_server_discovers_current_executable_name(official_foundation):
     _, root = official_foundation
-    for name in ("matlab-mcp-server.exe", "matlab-mcp-server-windows-x64.exe"):
+    for name in ("matlab-mcp-server.exe", "matlab-windows-x64.exe"):
         (root / "bin" / name).touch()
     assert Path(matlab_official_server_config()["command"]).name == "matlab-mcp-server.exe"
 

@@ -3,7 +3,6 @@ import copy
 import pytest
 
 from radia_simulink.ltspice.bipolar_rail_gate import bipolar_rail_power_quality_gate
-from radia_mcp.ltspice.server import bipolar_rail_power_quality_gate as mcp_gate
 
 
 def good_summary():
@@ -27,7 +26,6 @@ def test_accepts_balanced_bipolar_rail_power_quality():
     assert result["status"] == "ok"
     assert result["checks"]["bipolar_polarity_is_signed"] is True
     assert result["metrics"]["rail_imbalance_relative"] < 1.0e-7
-    assert mcp_gate(good_summary())["status"] == "ok"
 
 
 def test_rejects_solver_complete_but_unregulated_variant():

@@ -10,8 +10,8 @@ Cross-references:
 - `radia_mcp.pcb.coil_compensation` — Litz wire in WPT coils
 
 Usage:
-    mcp-server-litz-transmission              # stdio
-    mcp-server-litz-transmission --selftest   # self-test
+    litz-transmission              # stdio
+    litz-transmission --selftest   # self-test
 """
 import sys
 from mcp.server.fastmcp import FastMCP
@@ -21,7 +21,7 @@ from .knowledge import get_knowledge, TOPICS
 from radia_mcp.common.lazy_call import lazy_callable
 _proximity_pair_gate = lazy_callable(".proximity_pair_gate", "litz_proximity_approximation_pair_gate", __package__)
 
-mcp = FastMCP("mcp-server-litz-transmission")
+mcp = FastMCP("litz-transmission")
 _validation = CoarseToolRegistry(mcp, namespace="litz_transmission")
 
 
@@ -53,7 +53,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-litz-transmission',
+    server_name='litz-transmission',
     description='Litz wire AC loss (Dowell, homogenization, magnetic-plated wire) + multiconductor transmission line theory',
     subpackage='radia_mcp.litz_transmission',
     related_servers=["peec", "ih", "pcb"],
@@ -62,7 +62,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-litz-transmission',
+    server_name='litz-transmission',
     topics=TOPICS,
 )
 

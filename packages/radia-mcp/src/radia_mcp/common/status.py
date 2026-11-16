@@ -25,13 +25,13 @@ Usage in a server's server.py:
     from mcp.server.fastmcp import FastMCP
     from radia_mcp.common.status import register_status_tool
 
-    mcp = FastMCP("mcp-server-bayesian-opt")
+    mcp = FastMCP("bayesian-opt")
 
     # ... register your @mcp.tool() decorators here ...
 
     register_status_tool(
         mcp,
-        server_name="mcp-server-bayesian-opt",
+        server_name="bayesian-opt",
         description="Bayesian optimization for EM engineering",
         subpackage="radia_mcp.bayesian_opt",
         related_servers=["topology-optimization", "evolutionary"],
@@ -73,6 +73,14 @@ def _probe_dep(module_name: str) -> dict:
     return {"installed": True, "version": version}
 
 
+def _selftest_command(server_name: str, subpackage: str) -> str:
+    """Served keys run through `radia-mcp serve`; pack domains run their module."""
+    from radia_mcp.meta.catalog import CATALOG
+    if "entry_point" in CATALOG.get(server_name, {}):
+        return f"radia-mcp serve {server_name} --selftest"
+    return f"python -m {subpackage}.server --selftest"
+
+
 def build_status_payload(
     server_name: str,
     description: str,
@@ -92,7 +100,7 @@ def build_status_payload(
         "server": server_name,
         "subpackage": subpackage,
         "description": description,
-        "selftest_command": f"{server_name} --selftest",
+        "selftest_command": _selftest_command(server_name, subpackage),
         "python_version": (f"{sys.version_info.major}."
                             f"{sys.version_info.minor}."
                             f"{sys.version_info.micro}"),
@@ -230,7 +238,7 @@ def register_status_tool(
 
     Args:
         mcp: FastMCP instance (already created in the server module)
-        server_name: e.g. "mcp-server-bayesian-opt"
+        server_name: e.g. "bayesian-opt"
         description: one-line "what am I for"
         subpackage: e.g. "radia_mcp.bayesian_opt"
         related_servers: list of MCP server short names that pair well
@@ -239,11 +247,10 @@ def register_status_tool(
         audit_command: optional heavier repo-wide validation/audit command,
                        separate from the lightweight `--selftest` health check.
         tool_name: override the auto-generated tool name (default:
-                    derives from server_name by stripping "mcp-server-"
-                    and appending "_status")
+                    server_name with "-" replaced by "_", plus "_status")
     """
     if tool_name is None:
-        short = server_name.removeprefix("mcp-server-").replace("-", "_")
+        short = server_name.replace("-", "_")
         tool_name = f"{short}_status"
 
     @mcp.tool(name=tool_name)
@@ -301,7 +308,7 @@ def register_status_tool(
         server_name=server_name,
         version=str(distribution.get("version", "unknown")),
     )
-    short = server_name.removeprefix("mcp-server-").replace("-", "_")
+    short = server_name.replace("-", "_")
     install_call_log(
         mcp,
         f"{short}_tool_calls.jsonl",

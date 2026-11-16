@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 
 from radia_simulink.ltspice.complex_zero_gate import second_order_complex_zero_gate
-from radia_mcp.ltspice.server import second_order_complex_zero_transfer_gate
 
 
 def _summary() -> dict:
@@ -55,7 +54,6 @@ def test_accepts_complex_zero_transfer_roots_asymptotes_and_replay() -> None:
     result = second_order_complex_zero_gate(_summary())
     assert result["status"] == "ok"
     assert all(result["checks"].values())
-    assert second_order_complex_zero_transfer_gate(_summary())["status"] == "ok"
 
 
 def test_rejects_real_axis_zero_claim_and_wrong_high_frequency_gain() -> None:

@@ -1,5 +1,4 @@
-"""Stream-function (SF) coil-design knowledge for the radia-streamfunction MCP
-server.
+"""Stream-function (SF) coil-design knowledge for the streamfunction MCP domain.
 
 The detailed, self-contained knowledge lives in THIS server's own
 ``radia_mcp.streamfunction.knowledge.aca_tsvd`` (overview / method / api /
@@ -17,7 +16,7 @@ from .knowledge.aca_tsvd import get_aca_tsvd_knowledge
 
 SF_OVERVIEW = r"""
 ================================================================
-Stream-Function (SF) Coil Design -- radia-streamfunction
+Stream-Function (SF) Coil Design -- radia-mcp-optimize (coil)
 ================================================================
 
 The SF method designs a surface coil that produces a TARGET field over a

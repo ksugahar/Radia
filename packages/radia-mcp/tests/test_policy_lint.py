@@ -61,7 +61,7 @@ def test_clean_open_servers_pass(tmp_path):
 def test_denied_wrapper_in_scripts_fails(tmp_path):
     _make_repo(tmp_path, {
         "mcp-server-cubit": "cubit_mesh_export.mcp.server:main",
-        "mcp-server-comsol-converter": "radia_mcp.comsol_converter.server:main",
+        "comsol-converter": "radia_mcp.comsol_converter.server:main",
     })
     assert _run(tmp_path) == 1   # wired public + shipped in wheel -> ERROR
 
@@ -78,7 +78,7 @@ def test_denied_excluded_and_unwired_warns_only(tmp_path):
 
 def test_commercial_named_module_in_public_sub_warns(tmp_path):
     # a module NAMED for a commercial tool in a public sub -> review warning
-    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+    _make_repo(tmp_path, {"motor": "radia_mcp.motor.server:main"},
                token_files={"motor/comsol_bridge.py": "# bridge\n"})
     assert _run(tmp_path) == 0
     assert _run(tmp_path, strict=True) == 1
@@ -88,7 +88,7 @@ def test_benchmark_mention_not_flagged(tmp_path):
     # a plain mention of .mph / JMAG-Designer in a normally-named module is OK
     # for BOTH guards (structure + provenance): no tool-attributed number, no
     # "vs <tool>", no internal path -- just a bare format mention.
-    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+    _make_repo(tmp_path, {"motor": "radia_mcp.motor.server:main"},
                token_files={"motor/notes.py": "# supports the .mph and JMAG-Designer formats\n"})
     assert _run(tmp_path) == 0
     assert _run(tmp_path, strict=True) == 0   # mention alone is not a violation
@@ -96,7 +96,7 @@ def test_benchmark_mention_not_flagged(tmp_path):
 
 def test_optuna_server_must_stay_external(tmp_path):
     _make_repo(tmp_path, {
-        "mcp-server-optuna": "radia_mcp.optuna.server:main",
+        "optuna": "radia_mcp.optuna.server:main",
     })
     assert _run(tmp_path) == 1
 
@@ -109,7 +109,7 @@ def test_optuna_dependency_must_stay_external(tmp_path):
 
 
 def test_optuna_import_must_stay_external(tmp_path):
-    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+    _make_repo(tmp_path, {"motor": "radia_mcp.motor.server:main"},
                token_files={
                    "motor/objective.py": "import optuna\n",
                    "motor/dashboard.py": "from optuna_dashboard import run_server\n",
@@ -118,7 +118,7 @@ def test_optuna_import_must_stay_external(tmp_path):
 
 
 def test_optuna_import_scan_accepts_utf8_bom_python_files(tmp_path):
-    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+    _make_repo(tmp_path, {"motor": "radia_mcp.motor.server:main"},
                token_files={"motor/bom_ok.py": "\ufeff# UTF-8 BOM is allowed\nx = 1\n"})
     assert _run(tmp_path) == 0
 
@@ -126,7 +126,7 @@ def test_optuna_import_scan_accepts_utf8_bom_python_files(tmp_path):
 def test_optuna_matlab_difference_support_is_allowed(tmp_path):
     _make_repo(
         tmp_path,
-        {"mcp-server-radia-matlab": "radia_mcp.matlab.server:main"},
+        {"matlab-mcp-lab": "radia_mcp.matlab.server:main"},
         token_files={
             "packages/radia-simulink/matlab/optuna_boundary.py": (
                 "def matlab_optuna_mcp_route():\n"

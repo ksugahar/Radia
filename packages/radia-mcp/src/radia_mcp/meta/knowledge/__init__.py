@@ -1,1 +1,1 @@
-"""Operational guides owned by radia-meta."""
+"""Operational guides owned by radia-mcp-meta."""

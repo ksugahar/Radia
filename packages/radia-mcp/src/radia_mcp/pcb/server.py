@@ -19,8 +19,8 @@ Cross-references:
 - `radia_mcp.motor` — bearingless motor design
 
 Usage:
-    mcp-server-pcb              # stdio
-    mcp-server-pcb --selftest   # self-test
+    pcb              # stdio
+    pcb --selftest   # self-test
 """
 
 import sys
@@ -36,7 +36,7 @@ from .applications_knowledge import get_applications_knowledge
 from .alternatives_knowledge import get_alternatives_knowledge
 
 
-mcp = FastMCP("mcp-server-pcb")
+mcp = FastMCP("pcb")
 
 
 @mcp.tool()
@@ -219,7 +219,7 @@ def design_pcb_system(scenario: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-pcb',
+    server_name='pcb',
     description='Wireless Power Transfer: coil + compensation (SS/LCC/LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / robot / bearingless...',
     subpackage='radia_mcp.pcb',
     related_servers=["peec", "litz-transmission", "maglev"],
@@ -227,7 +227,7 @@ register_status_tool(
 
 
 def main():
-    """Entry point for mcp-server-pcb."""
+    """Entry point for pcb."""
     if "--selftest" in sys.argv:
         print("wpt MCP server self-test:")
         print(f"  overview: {len(get_overview_knowledge('all'))} chars")

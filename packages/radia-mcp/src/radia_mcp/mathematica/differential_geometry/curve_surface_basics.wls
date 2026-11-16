@@ -18,7 +18,7 @@
     [4] surface Laplace-Beltrami as div_Gamma grad_Gamma.
 
   These are the foundations used by hodograph.wls, surface_derham.wls,
-  dtn_geometry.wls, and the radia-streamfunction surface-current path.
+  dtn_geometry.wls, and the radia-mcp-optimize streamfunction surface-current path.
 *)
 
 ClearAll["Global`*"];

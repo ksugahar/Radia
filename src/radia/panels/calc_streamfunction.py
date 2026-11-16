@@ -2473,8 +2473,8 @@ def _steps_plot(loops, chain, dist_chain, diam, out_path, target_cf=""):
     single-stroke wire, (c) the sheet-metal (bankin-ho) distorted wire, (d) the
     wire WITH conductor thickness + distortion.
 
-    Lab figure convention (applied inline -- the shipped panel calc cannot
-    import radia_mcp.figure): NO in-figure title / suptitle; panels carry small
+    Lab figure convention (applied inline with plain matplotlib): NO
+    in-figure title / suptitle; panels carry small
     (a)-(d) CORNER LABELS (not titles, so the _check_no_in_figure_title gate
     passes), TrueType fonts, English text; the full stage descriptions are
     returned in ``stages`` for the panel / docs caption."""

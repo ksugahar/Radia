@@ -66,11 +66,9 @@ def _status_payload(result: Any) -> dict[str, Any]:
 
 async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[str, Any]:
     info = CATALOG[short_name]
-    entry_point = str(info["entry_point"])
     subpackage = str(info["subpackage"])
     conventional_status_name = (
-        entry_point.removeprefix("mcp-server-").replace("-", "_")
-        + "_status"
+        subpackage.removeprefix("radia_mcp.") + "_status"
     )
     environment = os.environ.copy()
     environment["RADIA_MCP_CALL_LOG"] = "0"
@@ -148,7 +146,7 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
                     f"{short_name}: second status tools/call failed"
                 )
             payload_again = _status_payload(called_again)
-            if short_name == "meta":
+            if short_name == "radia-mcp-meta":
                 gate_name = "radia_mcp_validate_solver_artifact"
                 if gate_name not in by_name:
                     raise AssertionError(f"{short_name}: artifact gate missing")
@@ -224,6 +222,11 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
             f"{short_name}: server version {initialized.serverInfo.version} "
             f"does not match distribution {distribution_version}"
         )
+    if initialized.serverInfo.name != short_name:
+        raise AssertionError(
+            f"{short_name}: serverInfo.name {initialized.serverInfo.name!r} "
+            f"differs from its catalog key"
+        )
     return {
         "server": short_name,
         "server_name": initialized.serverInfo.name,
@@ -255,6 +258,8 @@ def probe_server(short_name: str, timeout: float = 60.0, *, installed_wheel: boo
     """Synchronously probe one catalog server through stdio."""
     if short_name not in CATALOG:
         raise KeyError(f"unknown server {short_name!r}")
+    if "entry_point" not in CATALOG[short_name]:
+        raise KeyError(f"{short_name!r} is a composed domain, not a launchable server")
     return asyncio.run(asyncio.wait_for(_probe_server(short_name, installed_wheel), timeout))
 
 
@@ -309,7 +314,8 @@ def main(argv: list[str] | None = None) -> int:
         if not _is_below(radia_mcp.__file__, args.expect_module_root):
             raise AssertionError("probe itself imported radia_mcp outside the installed wheel root")
 
-    selected = sorted(CATALOG) if args.all else [args.server]
+    selected = (sorted(k for k, v in CATALOG.items() if v.get("entry_point"))
+                if args.all else [args.server])
     results = []
     for name in selected:
         result = probe_server(name, timeout=args.timeout, installed_wheel=args.installed_wheel)

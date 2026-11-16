@@ -16,9 +16,6 @@ each sized for its LaTeX embed so every glyph clears 9 pt on the page
         ``\\begin{figure*}`` of the full paper, embedded at
         0.85\\textwidth (~15.5 cm) where both panels stay >= 9 pt.
 
-Each render self-verifies with check_min_font (no glyph below 9 pt at
-the embed scale) and, where a legend exists, check_legend_overlap.
-
 Usage:
   python validation_test/ih_esim_benchmark/plot_sweep_heatmap.py [SWEEP_DIR]
 """
@@ -33,19 +30,12 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.cm import ScalarMappable
-from radia_mcp.figure import (
-    apply_lab_style, lab_savefig, check_legend_overlap, check_min_font,
-)
-
 HERE = Path(__file__).resolve().parent
 # Data Persistence Policy: read the committed sweep data next to this
 # script by default, not a transient C:/temp dir.
 DEFAULT_DIR = HERE / "sweep_data_dense"
 
-MIN_PT = 9.0
-# Binding embed scale = LaTeX \includegraphics width / figure render width.
-# (The digest's combined 2-panel figure is produced by plot_digest_figure.py.)
-SCALE_FULL = 0.85     # 0.85\textwidth (15.5 cm) of an 18.2 cm render.
+# The digest's combined 2-panel figure is produced by plot_digest_figure.py.
 
 
 def load_grid(res_path):
@@ -127,27 +117,9 @@ def _draw_curves(ax, fig, currents, freqs, P_scalar, P_per, *, tick_pt):
     ax.grid(linestyle=":", alpha=0.5)
 
 
-def _report(tag, fig, embed_scale, ax_with_legend=None):
-    fig.canvas.draw()
-    if ax_with_legend is not None:
-        ov = check_legend_overlap(ax_with_legend)
-        print(f"  [{tag}] legend overlap:",
-              "CLEAN" if not ov else
-              [(o["label"], f"{o['fraction']*100:.0f}%") for o in ov])
-    bad = check_min_font(fig, min_pt=MIN_PT, embed_scale=embed_scale)
-    if bad:
-        print(f"  [{tag}] !! FONT < {MIN_PT} pt at embed_scale={embed_scale}:")
-        for b in bad:
-            print(f"      {b['kind']:7s} {b['text']!r}: "
-                  f"render {b['render_pt']} -> visible {b['visible_pt']} pt")
-    else:
-        print(f"  [{tag}] min-font: all text >= {MIN_PT} pt at "
-              f"embed_scale={embed_scale} (CLEAN)")
-
-
 def render_full(out_stem, currents, freqs, P_scalar, P_per, gap_pct):
     """Two-panel (a) heatmap + (b) P_wp curves for the full paper."""
-    figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
+    figsize = (18.2 / 2.54, 18.2 * 0.40 / 2.54)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize,
                                    constrained_layout=True)
     tick_pt = plt.rcParams["ytick.labelsize"]
@@ -156,8 +128,8 @@ def render_full(out_stem, currents, freqs, P_scalar, P_per, gap_pct):
     ax1.text(0.5, -0.32, "(a)", transform=ax1.transAxes, ha="center", va="top")
     _draw_curves(ax2, fig, currents, freqs, P_scalar, P_per, tick_pt=tick_pt)
     ax2.text(0.5, -0.32, "(b)", transform=ax2.transAxes, ha="center", va="top")
-    _report("full 2-panel", fig, SCALE_FULL, ax_with_legend=ax2)
-    lab_savefig(fig, out_stem)
+    for ext in (".pdf", ".png"):
+        fig.savefig(str(out_stem) + ext, dpi=300)
     plt.close(fig)
 
 

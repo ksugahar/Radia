@@ -232,14 +232,14 @@ def _official_server_command() -> str:
         / ".matlab"
         / "agentic-toolkits"
         / "bin"
-        / "matlab-mcp-server-windows-x64.exe"
+        / "matlab-windows-x64.exe"
     )
     if toolkit_candidate.is_file():
         return str(toolkit_candidate)
 
     candidates = [
         "matlab-mcp-server",
-        "matlab-mcp-server-windows-x64.exe",
+        "matlab-windows-x64.exe",
         "matlab-mcp-core-server",
         "matlab-mcp-core-server-win64.exe",
     ]

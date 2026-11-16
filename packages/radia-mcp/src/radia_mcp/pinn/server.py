@@ -10,7 +10,7 @@ from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_pinn_documentation, TOPICS
 
-mcp = FastMCP("mcp-server-pinn")
+mcp = FastMCP("pinn")
 
 
 @mcp.tool()
@@ -32,7 +32,7 @@ def pinn(topic: str = "all") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-pinn',
+    server_name='pinn',
     description='Physics-Informed Neural Networks + Gaussian Processes for EM',
     subpackage='radia_mcp.pinn',
     related_servers=["gnn", "bayesian-opt", "fem"],
@@ -42,7 +42,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-pinn',
+    server_name='pinn',
     topics=TOPICS,
 )
 

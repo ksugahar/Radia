@@ -1,27 +1,8 @@
 """Declarative, startup-selected MCP capability packs."""
 
 PACKS = {
-    "radia-design": {
-        "description": "Optimization, surrogate models and data assimilation",
-        "profiles": {
-            "optimization": ("optimization", "topology_optimization", "bayesian_opt", "evolutionary"),
-            "learning": ("gnn", "pinn", "data_assimilation"),
-        },
-    },
-    "radia-electrical": {
-        "description": "PEEC, wireless power and conductor losses",
-        "profiles": {"all": ("peec", "pcb", "litz_transmission")},
-    },
-    "radia-motion": {
-        "description": "Motor, MagLev, electromagnet, accelerator and rotating IH workflows",
-        "profiles": {
-            "motor": ("motor", "electromagnet", "magnetic_materials"),
-            "maglev": ("maglev", "electromagnet", "force"),
-            "ih": ("ih", "force", "mor"),
-            "accelerator": ("accelerator", "electromagnet"),
-        },
-    },
-    "radia-analysis": {
+    "radia-mcp-analysis": {
+        "subpackage": "radia_mcp.radia_analysis",
         "description": "Field formulations, numerical methods and independent verification",
         "profiles": {
             "field": ("radia_ngsolve", "fem", "bem"),
@@ -29,27 +10,70 @@ PACKS = {
             "theory": ("matrix_solvers", "differential_forms", "mor"),
         },
     },
-    "radia-acoustic-workflows": {
+    "radia-mcp-learning": {
+        "subpackage": "radia_mcp.radia_learning",
+        "description": "Surrogate models, physics-informed learning and data assimilation",
+        "profiles": {
+            "all": ("gnn", "pinn", "data_assimilation"),
+        },
+    },
+    "radia-mcp-optimize": {
+        "subpackage": "radia_mcp.radia_optimize",
+        "description": "Optimization: solver-neutral diagnostics, Bayesian/evolutionary search, topology and shape optimization, metamaterial design and stream-function coil design",
+        "profiles": {
+            "search": ("optimization", "bayesian_opt", "evolutionary"),
+            "topology": ("topology_optimization", "metamaterial"),
+            "coil": ("streamfunction", "fusion_reactor"),
+        },
+    },
+    "radia-mcp-ih": {
+        "subpackage": "radia_mcp.radia_ih",
+        "description": "Induction heating: SIBC, ESIM, Karl iteration and screening physics",
+        "profiles": {
+            "all": ("ih", "force", "mor"),
+        },
+    },
+    "radia-mcp-maglev": {
+        "subpackage": "radia_mcp.radia_maglev",
+        "description": "Magnetic levitation and motion: guidance, propulsion and force workflows",
+        "profiles": {
+            "all": ("maglev", "electromagnet", "force"),
+        },
+    },
+    "radia-mcp-electromagnet": {
+        "subpackage": "radia_mcp.radia_electromagnet",
+        "description": "Electromagnets and accelerator magnets",
+        "profiles": {
+            "all": ("electromagnet", "accelerator", "magnetic_materials"),
+        },
+    },
+    "radia-mcp-motor": {
+        "subpackage": "radia_mcp.radia_motor",
+        "description": "Electric machines: motor design, circuit coupling and materials",
+        "profiles": {
+            "all": ("motor", "electromagnet", "magnetic_materials"),
+        },
+    },
+    "radia-mcp-pcb": {
+        "subpackage": "radia_mcp.radia_pcb",
+        "description": "PCB coils, wireless power, PEEC and conductor losses",
+        "profiles": {
+            "all": ("pcb", "peec", "litz_transmission"),
+        },
+    },
+    "radia-mcp-acoustic": {
+        "subpackage": "radia_mcp.radia_acoustic_workflows",
         "description": "Production and educational acoustic routes with explicit ownership",
         "profiles": {
             "production": ("radia_acoustic",),
             "education": ("acoustic_fembem",),
         },
     },
-    "document-ops": {
-        "description": "Document inspection, conversion and project checks",
+    "radia-mcp-rna": {
+        "subpackage": "radia_mcp.radia_rna",
+        "description": "Reluctance network analysis / magnetic equivalent circuits and hysteresis modeling",
         "profiles": {
-            "inspect": ("pdf",),
-            "convert": ("doc_convert", "md2html"),
-            "project": ("document_meta", "research_project"),
-        },
-    },
-    "radia-publication": {
-        "description": "Paper, slide, poster, figure and bibliography workflows",
-        "profiles": {
-            "paper": ("paper_writing", "bibliography", "document_meta"),
-            "poster": ("paper_writing", "chart2d", "bibliography"),
-            "figures": ("chart2d",),
+            "all": ("rna_mec", "magnetic_materials"),
         },
     },
 }

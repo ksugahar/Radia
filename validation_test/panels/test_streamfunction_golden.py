@@ -349,11 +349,10 @@ def test_streamfunction_biplanar(biplanar_vols):
 
 
 def test_streamfunction_figures_no_in_figure_title():
-    """Lab figure convention (radia_mcp.figure): NO in-figure title on ANY
-    figure -- the caption carries it.  The shipped panel calc cannot import the
-    radia_mcp save-time gate, and the docs-local demo helpers that DON'T use
-    save_lab_figure have no runtime gate either, so lock the whole SF figure
-    suite statically: the shipped calc AND every docs/stream_function demo
+    """Lab figure convention: NO in-figure title on ANY figure -- the caption
+    carries it.  The figures are plain matplotlib with no save-time gate, so
+    lock the whole SF figure suite statically: the shipped calc AND every
+    docs/stream_function demo
     helper use no ax.set_title / fig.suptitle (panels are identified by (a)-(d)
     corner text via ax.text / ax.text2D).  Fast (source scan; no NGSolve)."""
     import glob
@@ -367,7 +366,7 @@ def test_streamfunction_figures_no_in_figure_title():
             bad.append(os.path.basename(path))
     assert not bad, (
         "in-figure title (ax.set_title / fig.suptitle) -- move it to the "
-        "caption (lab rule, radia_mcp.figure); offenders: " + ", ".join(bad))
+        "caption (lab rule); offenders: " + ", ".join(bad))
 
 
 def test_streamfunction_ih_resonance(sample_vols):

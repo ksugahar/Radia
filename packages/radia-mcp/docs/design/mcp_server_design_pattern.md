@@ -62,7 +62,7 @@ solver or create an artifact.
 
 | Public MCP pattern | `radia-mcp` equivalent |
 |---|---|
-| One boring entry point | `[project.scripts] mcp-server-*` entries in `pyproject.toml` |
+| One boring entry point | `radia-mcp serve <catalog-key>` (single `[project.scripts]` command) |
 | Public tool definition layer | `<domain>/server.py` or explicit tool registration module |
 | Internal adapters | `<domain>` helpers for CAD, mesh, solver, file, or notebook boundaries |
 | Domain services | Importable helper modules and curated knowledge cards |

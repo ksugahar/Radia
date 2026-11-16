@@ -14,9 +14,9 @@ In the Radia project, GMSH is used for VISUALIZATION ONLY,
 not mesh generation. Mesh generation uses Netgen or Cubit.
 
 Usage:
-    mcp-server-gmsh              # Start MCP server (stdio transport)
-    mcp-server-gmsh --selftest   # Run self-test
-    mcp-server-gmsh --selftest --audit-repo
+    gmsh-mcp              # Start MCP server (stdio transport)
+    gmsh-mcp --selftest   # Run self-test
+    gmsh-mcp --selftest --audit-repo
                                   # Run self-test plus durable repo-lane audit
 """
 
@@ -118,7 +118,7 @@ _RULE_REMEDIATIONS = {
 }
 
 # Create MCP server
-mcp = FastMCP("gmsh-lint")
+mcp = FastMCP("gmsh-mcp")
 _validation = CoarseToolRegistry(mcp, namespace="gmsh")
 
 # Resolve relative paths against current working directory
@@ -2270,7 +2270,7 @@ def _is_closed_stdout_error(exc: BaseException) -> bool:
 
 
 def main():
-    """Entry point for mcp-server-gmsh console script."""
+    """Entry point for gmsh-mcp console script."""
     if '--selftest' in sys.argv[1:]:
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
@@ -2670,14 +2670,14 @@ def gmsh_lic(path: str, png_out: str | None = None,
 # covers every Gmsh operation above (including the late visualization tools).
 register_status_tool(
     mcp,
-    server_name='mcp-server-gmsh',
+    server_name='gmsh-mcp', tool_name='gmsh_status',
     description='GMSH MSH v4.2 inspect/validate + ParaView-parity post '
                 'verbs (derive/threshold/mirror/resample/CSV) + '
                 'post-display launch artifacts + visualization policy lint',
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
-    audit_command="mcp-server-gmsh --selftest --audit-repo",
+    audit_command="radia-mcp serve gmsh-mcp --selftest --audit-repo",
 )
 
 

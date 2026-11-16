@@ -10,8 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-BIB = (ROOT / "packages/radia-mcp/src/radia_mcp/bibliography/data"
-       / "references.bib")
+BIB = ROOT / "validation_records" / "references.bib"
 
 # The total/reduced scalar potential, and its nonlinear 3-D treatment.
 KEYS = {

@@ -21,8 +21,8 @@ electromagnetism:
 - Bibliography of source PDFs
 
 Usage:
-    mcp-server-differential-forms              # Start MCP server (stdio)
-    mcp-server-differential-forms --selftest   # Run self-test
+    differential-forms              # Start MCP server (stdio)
+    differential-forms --selftest   # Run self-test
 
 This server is read-only: tools return documentation or diagnostic JSON and
 never write project data.  No solver, no symbolic computation.  Companion knowledge:
@@ -56,7 +56,7 @@ from ..force.knowledge import (
     get_force_recipe,
 )
 
-mcp = FastMCP("mcp-server-differential-forms")
+mcp = FastMCP("differential-forms")
 _validation = CoarseToolRegistry(mcp, namespace="differential_forms")
 
 
@@ -566,10 +566,10 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-differential-forms',
+    server_name='differential-forms',
     description='Visual differential geometry / exterior calculus for EM: Cartan, de Rham, cohomology, EM forces theory',
     subpackage='radia_mcp.differential_forms',
-    related_servers=["fem", "force", "mathematica"],
+    related_servers=["fem", "force", "radia-mcp-mathematica"],
 )
 
 

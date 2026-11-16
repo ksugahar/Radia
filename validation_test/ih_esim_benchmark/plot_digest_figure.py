@@ -4,8 +4,7 @@
 Rendered wide (paper_double_column) and embedded IN-COLUMN at
 0.92\\columnwidth of the 1-page digest.  Panel (a) is made
 narrower (width_ratios) to leave room for (b).  NOTE: an in-column
-2-panel is scaled down by LaTeX, so on-page fonts are ~font_pt x 0.44;
-check_min_font reports the actual visible size.
+2-panel is scaled down by LaTeX, so on-page fonts are ~font_pt x 0.44.
 
 Inputs (committed; Data Persistence Policy) -- the figure draws ONLY
 from these committed files: no .vol mesh, no NGSolve, no ESIM re-solve.
@@ -27,10 +26,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from scipy.interpolate import griddata
 
-from radia_mcp.figure import (
-    apply_lab_style, lab_savefig, check_min_font,
-)
-
 HERE = Path(__file__).resolve().parent
 SWEEP_DENSE = HERE / "sweep_data_dense"
 VOL = (HERE.parent / "esim_spatial" / "inputs"
@@ -45,8 +40,6 @@ SIDE_FIELD = SWEEP_DENSE / "I100_f50k_side_field.json"
 # (500 A, 10 kHz, -49.8 %, ESIM converged).
 SIDE_FIELD_ZS = SWEEP_DENSE / "I500_f10k_Zs_side_field.json"
 OUT = HERE / "sweep_heatmap_digest"
-MIN_PT = 9.0
-EMBED_SCALE = 0.46   # \columnwidth (~8.4 cm) of an 18.2 cm render.
 
 
 def load_gap(res_path):
@@ -201,7 +194,7 @@ def main():
     # -- no mesh, no re-solve.
     th, zs, field, _ = load_side_field_zs()
 
-    figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
+    figsize = (18.2 / 2.54, 18.2 * 0.40 / 2.54)
     # Render with inflated fonts so that, after the ~0.44 in-column
     # downscale (0.92\columnwidth of an 18.2 cm render), every glyph
     # still lands >= 9 pt on the page (21 x 0.44 ~= 9.2 pt).  The heatmap
@@ -268,15 +261,8 @@ def main():
     cb2.ax.tick_params(labelsize=tick_pt)
     ax2.text(0.5, -0.30, "(b)", transform=ax2.transAxes, ha="center", va="top")
 
-    fig.canvas.draw()
-    bad = check_min_font(fig, min_pt=MIN_PT, embed_scale=EMBED_SCALE)
-    if bad:
-        vis = min(b["visible_pt"] for b in bad)
-        print(f"min-font: {len(bad)} glyph(s) < {MIN_PT} pt at "
-              f"embed_scale={EMBED_SCALE}; smallest visible = {vis} pt")
-    else:
-        print(f"min-font: all text >= {MIN_PT} pt at embed_scale={EMBED_SCALE}")
-    lab_savefig(fig, str(OUT))
+    for ext in (".pdf", ".png"):
+        fig.savefig(str(OUT) + ext, dpi=300)
     print(f"Saved {OUT.with_suffix('.png')}")
 
 

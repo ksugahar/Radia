@@ -40,7 +40,7 @@ class CapabilityServer:
         self.resources = {}
         self.registration_provenance = _runtime_provenance("radia_mcp.capability_packs")
         self.server = Server(
-            f"mcp-server-{pack}",
+            pack,
             version=__version__,
             instructions=(
                 f"{PACKS[pack]['description']}. Active profile: {profile}. "
@@ -56,7 +56,7 @@ class CapabilityServer:
         self.server.list_resources()(self.list_resources)
         self.server.read_resource()(self.read_resource)
         self._mcp_server = self.server
-        _install_client_info_capture(self, f"mcp-server-{pack}", __version__)
+        _install_client_info_capture(self, pack, __version__)
 
     async def initialize(self):
         """Load selected domains, rejecting any ambiguous public ownership."""
@@ -91,7 +91,7 @@ class CapabilityServer:
         definitions = {name: entry for name, (entry, _, _) in self.tools.items()}
         definitions["capability_pack_status"] = self.status_tool()
         payload = build_status_payload(
-            f"mcp-server-{self.pack}", PACKS[self.pack]["description"],
+            self.pack, PACKS[self.pack]["description"],
             "radia_mcp.capability_packs", mcp_tools=list(definitions),
             runtime_contract=audit_tool_definitions(definitions),
             runtime_provenance=provenance,

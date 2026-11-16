@@ -5,8 +5,8 @@ iron loss, silicon steel database, permanent magnets,
 demagnetization factor, Radia implementation status.
 
 Usage:
-    mcp-server-magnetic-materials              # stdio
-    mcp-server-magnetic-materials --selftest   # self-test
+    magnetic-materials              # stdio
+    magnetic-materials --selftest   # self-test
 """
 
 import sys
@@ -25,7 +25,7 @@ from radia_mcp.common.lazy_call import lazy_callable
 _periodic_hysteresis_loss_energy_gate = lazy_callable(".periodic_hysteresis_loss_gate", "periodic_hysteresis_loss_energy_gate", __package__)
 
 
-mcp = FastMCP("mcp-server-magnetic-materials")
+mcp = FastMCP("magnetic-materials")
 _validation = CoarseToolRegistry(mcp, namespace="magnetic_materials")
 
 
@@ -362,7 +362,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-magnetic-materials',
+    server_name='magnetic-materials',
     description='Magnetic materials: hysteresis (Play/Energy lab core), iron loss (Bertotti/Steinmetz/iGSE), JIS silicon steel, PM datasheets, Osborn...',
     subpackage='radia_mcp.magnetic_materials',
     related_servers=["ih", "motor", "electromagnet"],
@@ -370,7 +370,7 @@ register_status_tool(
 
 
 def main():
-    """Entry point for mcp-server-magnetic-materials."""
+    """Entry point for magnetic-materials."""
     if "--selftest" in sys.argv:
         print("magnetic_materials MCP server self-test:")
         print(f"  hysteresis: {len(get_hysteresis_models_knowledge('all'))} chars")

@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import math
 
-from radia_mcp.ltspice.server import balanced_three_phase_delta_load_gate
 from radia_simulink.ltspice.three_phase_delta_gate import (
     balanced_three_phase_delta_rl_gate,
 )
@@ -92,7 +91,6 @@ def test_accepts_balanced_delta_sequence_currents_and_power() -> None:
     result = balanced_three_phase_delta_rl_gate(_summary())
     assert result["status"] == "ok"
     assert all(result["checks"].values())
-    assert balanced_three_phase_delta_load_gate(_summary())["status"] == "ok"
 
 
 def test_rejects_unbalanced_branch_current_and_power_ripple() -> None:

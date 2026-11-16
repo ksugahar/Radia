@@ -139,7 +139,7 @@ they limit what this bibliography migration can responsibly claim.
 
 ## Reproduction and acceptance
 
-Use the [notebook finalization procedure](../../packages/radia-mcp/docs/operations/bibliography-finalization.md#notebook-references)
+Use the notebook finalization procedure of the separate document-tools repository
 to generate from `metadata.radia.bibliography.keys` through the existing
 `bibliography_make_bbl` tool and render the bbl with installed TeX4ht.
 No separate MCP tool, parser, notebook-local `.bib`, or JSON sidecar was added.

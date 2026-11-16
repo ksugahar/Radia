@@ -69,13 +69,6 @@ def test_bare_private_scratch_and_user_roots_are_identifying():
         assert lint.public_runtime_identity_hits("result.json", __import__("json").dumps({"note": value}))
 
 
-def test_citation_exception_is_exact_and_does_not_hide_other_fields():
-    path = "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
-    citation = "@misc{hibino2026aca,\n author = {Hibino, Yoshihiko and Other, Author},\n title = {Example},\n year = {2026}\n}"
-    assert not lint.public_runtime_identity_hits(path, citation)
-    assert lint.public_runtime_identity_hits(path, citation.replace("Example", "192.168.254.254"))
-    assert lint.public_runtime_identity_hits(path, citation.replace("hibino2026aca", "other-key"))
-
 def test_numbered_host_name_rejected():
     assert lint.public_runtime_identity_hits("result.txt", "100\u53f7\u6a5f")
 

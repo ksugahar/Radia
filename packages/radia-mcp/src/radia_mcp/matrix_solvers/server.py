@@ -12,8 +12,8 @@ lab stack (CompactAMS, COCR, etc.), see the `sparsesolv` tool in
 `radia_mcp.radia_ngsolve`.
 
 Usage:
-    mcp-server-matrix-solvers              # stdio
-    mcp-server-matrix-solvers --selftest   # self-test
+    matrix-solvers              # stdio
+    matrix-solvers --selftest   # self-test
 """
 
 import sys
@@ -28,7 +28,7 @@ from .preconditioners_knowledge import get_preconditioners_knowledge
 from .em_specific_knowledge import get_em_specific_knowledge
 
 
-mcp = FastMCP("mcp-server-matrix-solvers")
+mcp = FastMCP("matrix-solvers")
 
 
 @mcp.tool()
@@ -221,7 +221,7 @@ def pick_a_solver(problem_class: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-matrix-solvers',
+    server_name='matrix-solvers',
     description='Sparse solver theory + decision tree: Krylov (CG/BiCGSTAB/GMRES/COCG/COCR/IDR), preconditioners (AMG, Hiptmair-Xu AMS), Biro-Preis A-V,...',
     subpackage='radia_mcp.matrix_solvers',
     related_servers=["radia-ngsolve", "fem"],
@@ -229,7 +229,7 @@ register_status_tool(
 
 
 def main():
-    """Entry point for mcp-server-matrix-solvers."""
+    """Entry point for matrix-solvers."""
     if "--selftest" in sys.argv:
         print("matrix_solvers MCP server self-test:")
         print(f"  overview: {len(get_overview_knowledge('all'))} chars")

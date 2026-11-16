@@ -73,8 +73,8 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
         ),
     }
     matlab = {
-        "owner": "radia-mcp/radia-matlab",
-        "server": "mcp-server-radia-matlab",
+        "owner": "radia-mcp/matlab-mcp-lab",
+        "server": "matlab-mcp-lab",
         "distribution": "radia-optuna",
         "execution_owner": "MathWorks official MATLAB MCP Server",
         "tools": [

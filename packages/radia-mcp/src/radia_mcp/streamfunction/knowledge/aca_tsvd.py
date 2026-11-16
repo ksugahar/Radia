@@ -17,7 +17,7 @@ Maintained demo sources live under docs/stream_function; validation runners
 live under validation_test/stream_function. Tests: tests/test_stream_function.py.
 
 The MCP server exposes this via ``streamfunction(topic=...)`` on the
-radia-streamfunction server (moved from radia-ngsolve aca_tsvd in 2026-06).
+streamfunction domain (radia-mcp-optimize coil profile) (moved from radia-ngsolve aca_tsvd in 2026-06).
 Topics: overview,
 method, api, kernel_agnostic, performance, cmaes, validation, literature
 (stream function method theory + Turner/Peeren/Abe-DUCAS lineage), workflow

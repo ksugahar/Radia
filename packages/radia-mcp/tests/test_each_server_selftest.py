@@ -1,8 +1,8 @@
 """Per-server --selftest harness for radia-mcp.
 
 Complements `test_meta_health.py` (which import-tests every subpackage):
-this test boots each `mcp-server-<x>` script as a subprocess with the
-`--selftest` flag and verifies it exits 0 within a short budget.
+this test boots each served key (`radia-mcp serve <key>`) and each pack
+domain module as a subprocess with the `--selftest` flag and verifies it exits 0 within a short budget.
 
 Why subprocess rather than direct import + call:
 - catches breakage in the *entry-point wiring* (broken
@@ -22,10 +22,7 @@ case (radia-ngsolve PDF index warm-up ~12s, mathematica wolframscript
 probe ~5s) and well below CI total budget.
 
 Skip behavior:
-- If `mcp-server-<x>` is not on PATH (entry point not installed in the
-  active env), the test reports SKIP with a clear hint rather than
-  FAIL. This is the right behavior for a developer who has not run
-  `pip install -e .` since adding the server.
+- If `radia-mcp` is not on PATH, served keys SKIP with a hint.
 """
 
 from __future__ import annotations
@@ -43,47 +40,35 @@ pytestmark = pytest.mark.slow
 from radia_mcp.meta import catalog
 
 
-# Map catalog short-name -> CLI script name.  Most are 1:1, but one
-# gets the 'radia-' prefix from the CLI script (see catalog alias logic):
-#   catalog 'meta' -> CLI 'mcp-server-radia-meta'
-_CLI_NAME_OVERRIDES = {
-    "meta": "mcp-server-radia-meta",
-}
-
-# Servers that genuinely take longer to selftest (PDF index warm-up,
-# external tool probe, etc.).  Default per-server budget is 60s.
+# Served keys run through the single `radia-mcp serve <key>` command; pack
+# member domains have no command of their own and run their module selftest.
 _SLOW_SERVERS = {
-    "radia-ngsolve": 120,        # PDF index + radia knowledge load
-    "literature-index": 120,     # chromadb optional probe
-    "mathematica": 90,           # wolframscript probe
+    "radia-ngsolve": 120,           # PDF index + radia knowledge load
+    "radia-mcp-mathematica": 90,    # wolframscript probe
 }
 
-
-def _cli_for(name: str) -> str:
-    """Resolve catalog short-name to CLI script name."""
-    return _CLI_NAME_OVERRIDES.get(name, f"mcp-server-{name}")
-
-
-# Build the parametrize list once at collection time.  pytest will
-# generate one test_<name> per server so failures are individually
-# addressable.
 SERVERS = sorted(catalog.CATALOG.keys())
+
+
+def _command_for(name: str) -> tuple[str, list[str]]:
+    info = catalog.CATALOG[name]
+    if "entry_point" in info:
+        exe = shutil.which("radia-mcp")
+        if exe is None:
+            pytest.skip("radia-mcp not on PATH; run `pip install -e .`")
+        return "radia-mcp serve " + name, [exe, "serve", name, "--selftest"]
+    module = info["subpackage"] + ".server"
+    return module, [sys.executable, "-m", module, "--selftest"]
 
 
 @pytest.mark.parametrize("name", SERVERS)
 def test_server_selftest(name: str) -> None:
-    """`mcp-server-<name> --selftest` exits 0 within budget."""
-    cli = _cli_for(name)
-    exe = shutil.which(cli)
-    if exe is None:
-        pytest.skip(
-            f"{cli} not on PATH — run `pip install -e .` to wire entry "
-            f"points (this is a developer-environment skip, not a bug)."
-        )
+    """Every served key and pack domain passes --selftest within budget."""
+    cli, argv = _command_for(name)
     timeout = _SLOW_SERVERS.get(name, 60)
     try:
         result = subprocess.run(
-            [exe, "--selftest"],
+            argv,
             capture_output=True,
             # IMPORTANT: do NOT pass text=True on Windows — the default
             # locale codec is cp932 in Japanese environments and many
@@ -114,7 +99,7 @@ def test_server_selftest(name: str) -> None:
             f"  stderr (last 800 chars):\n{stderr[-800:]}"
         )
     # Sanity: selftest scripts should print "PASSED" near the end as the
-    # uniform convention across the suite (panel_review, motor, etc.).
+    # uniform convention across the suite (motor, etc.).
     # Not a hard requirement — some servers (gmsh, cubit, radia-ngsolve)
     # emit different success banners — so this is a soft signal only,
     # printed (not warned) to keep pytest -W error clean.
@@ -144,24 +129,4 @@ def test_selftest_harness_covers_full_catalog() -> None:
     assert not missing, (
         f"{len(missing)} cataloged servers not in selftest harness: "
         f"{sorted(missing)}"
-    )
-
-
-def test_at_least_30_servers_runnable() -> None:
-    """Floor check: most servers' CLI entry points must be wired.
-
-    Run AFTER the parametrized tests collect SKIP results.  If fewer
-    than 30 of the cataloged servers have their CLI on PATH, the editable
-    install almost certainly drifted (e.g. to the CI runner clone) —
-    see CLAUDE.md "Distribution Test Policy" 2026-05-19 note.
-
-    The threshold (30) is intentionally below the actual count so
-    this passes even if 2-3 brand-new servers are still being landed.
-    """
-    runnable = sum(1 for n in SERVERS if shutil.which(_cli_for(n)) is not None)
-    assert runnable >= 30, (
-        f"Only {runnable}/{len(SERVERS)} CLI scripts on PATH.  Probable "
-        f"editable-install drift.  Fix with:\n"
-        f"  pip install -e repo:/packages/radia-mcp "
-        f"--no-deps --no-cache-dir"
     )

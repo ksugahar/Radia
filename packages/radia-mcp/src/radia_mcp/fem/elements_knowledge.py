@@ -173,7 +173,7 @@ with the mesh.
 ## Lab use
 
 - Not yet production. Reference layer only.
-- Could complement `radia_mcp.ndt` (eddy current crack inspection)
+- Could complement eddy-current crack inspection (TEAM NDT problems)
 
 ## References (this folder)
 

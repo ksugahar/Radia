@@ -35,8 +35,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from radia_mcp.figure import apply_lab_style, lab_savefig
-
 
 def main():
     if len(sys.argv) < 2:
@@ -88,7 +86,7 @@ def main():
     # gets the full figure width.  A 3-column layout at 16 pt fonts
     # leaves no horizontal room for legends; a stacked layout solves
     # the legend-overlap problem cleanly.
-    figsize = apply_lab_style(target="paper_single_column", aspect=1.25)
+    figsize = (8.89 / 2.54, 8.89 * 1.25 / 2.54)
     fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True,
                               constrained_layout=True)
 
@@ -136,7 +134,8 @@ def main():
     ax.text(-0.18, 0.5, "(c)", transform=ax.transAxes,
             ha="right", va="center")
 
-    lab_savefig(fig, str(out_png.with_suffix("")))
+    for ext in (".pdf", ".png"):
+        fig.savefig(str(out_png.with_suffix("")) + ext, dpi=300)
     print(f"Saved {out_png}")
 
 

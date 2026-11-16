@@ -690,13 +690,13 @@ wolframscript -file ../basis_functions/cohomology.wls
 
 ## Run through MCP
 
-Use the sibling `mcp-server-mathematica` bridge:
+Use the sibling `radia-mcp-mathematica` bridge:
 
 ```python
 mathematica_evaluate(code=<contents of the .wls file>, timeout=120)
 ```
 
-Use this `mcp-server-differential-forms` tool for the map:
+Use this `differential-forms` tool for the map:
 
 - `differential_forms_mathematica_recipes("weakform_hodge")`
 - `differential_forms_mathematica_recipes("curve_surface")`

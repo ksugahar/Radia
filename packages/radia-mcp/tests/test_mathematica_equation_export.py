@@ -3,7 +3,6 @@ import json
 import pytest
 
 from radia_mcp.mathematica import tools
-from radia_mcp.presentation import _equation_cli
 
 
 @pytest.fixture
@@ -43,8 +42,10 @@ def test_save_creates_editor_input(evaluation, tmp_path):
     [
         {"action": "unknown"},
         {"action": "save"},
-        {"action": "render", "output_path": "bad.pdf"},
-        {"action": "copy", "target": "unknown"},
+        {"action": "save", "output_path": "bad.pdf"},
+        {"action": "copy"},
+        {"action": "render", "output_path": "eq.png"},
+        {"output_path": "eq.tex"},
         {"timeout": float("nan")},
         {"timeout": True},
     ],
@@ -59,45 +60,16 @@ def test_bad_input_does_not_start_kernel(evaluation, arguments):
     "stdout",
     ['{"ok":false}', '"not an equation"', '{"ok":true,"tex":"","input_form":"x"}', "invalid JSON"],
 )
-def test_failed_evaluation_never_copies(monkeypatch, stdout):
+def test_failed_evaluation_never_writes(monkeypatch, tmp_path, stdout):
     monkeypatch.setattr(
         tools,
         "mathematica_evaluate",
         lambda *a, **k: {"exit_code": 0, "timed_out": False, "result": stdout},
     )
-    monkeypatch.setattr(
-        _equation_cli,
-        "presentation_copy_equation",
-        lambda *a, **k: pytest.fail("editor called after failed evaluation"),
-    )
-    result = tools.mathematica_export_equation("x", action="copy")
+    output = tmp_path / "eq.tex"
+    result = tools.mathematica_export_equation("x", action="save", output_path=str(output))
     assert not result["ok"] and result["stage"] == "evaluation"
-
-
-def test_clipboard_uses_calculated_result(evaluation, monkeypatch):
-    calls = []
-
-    def copy(tex, **kwargs):
-        calls.append((tex, kwargs))
-        return {"ok": True}
-
-    monkeypatch.setattr(_equation_cli, "presentation_copy_equation", copy)
-    result = tools.mathematica_export_equation("1/2", action="copy")
-    assert result["ok"]
-    assert calls == [(r"\frac{1}{2}", {"target": "office", "executable": None})]
-
-
-def test_editor_failure_keeps_tex(evaluation, monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        _equation_cli,
-        "presentation_render_equation",
-        lambda *a, **k: {"ok": False, "error": "unsupported notation"},
-    )
-    result = tools.mathematica_export_equation(
-        "1/2", action="render", output_path=str(tmp_path / "eq.png")
-    )
-    assert not result["ok"] and result["stage"] == "editor"
-    assert result["tex"] == r"\frac{1}{2}"
+    assert not output.exists()
 
 
 def test_new_tool_registered_without_kernel(monkeypatch):

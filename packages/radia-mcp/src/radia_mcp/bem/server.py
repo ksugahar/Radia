@@ -13,8 +13,8 @@ This is the **theory/genealogy** layer.  For concrete code usage:
 - HACApK: `radia_mcp.matrix_solvers` (preconditioners_ams)
 
 Usage:
-    mcp-server-bem               # stdio
-    mcp-server-bem --selftest    # self-test
+    bem               # stdio
+    bem --selftest    # self-test
 """
 
 import sys
@@ -30,7 +30,7 @@ from .h_matrix_knowledge import get_h_matrix_knowledge
 from .fem_bem_hybrid_knowledge import get_fem_bem_hybrid_knowledge
 
 
-mcp = FastMCP("mcp-server-bem")
+mcp = FastMCP("bem")
 
 
 @mcp.tool()
@@ -215,7 +215,7 @@ def pick_a_bem_method(problem_class: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-bem',
+    server_name='bem',
     description='MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, HACApK, FEM-BEM',
     subpackage='radia_mcp.bem',
     related_servers=["radia-ngsolve", "peec"],
@@ -223,7 +223,7 @@ register_status_tool(
 
 
 def main():
-    """Entry point for mcp-server-bem."""
+    """Entry point for bem."""
     if "--selftest" in sys.argv:
         print("bem MCP server self-test:")
         print(f"  overview: {len(get_overview_knowledge('all'))} chars")

@@ -21,7 +21,6 @@ TESTS = (
     "test_ci_selection.py",
     "test_matlab_radia_mex_contract.py",
     "test_mcp_sdk_dependency_contract.py",
-    "test_md2html.py",
     "test_radiation_pressure.py",
     "test_surface_triangle_maxwell_force.py",
     "test_time_harmonic_maxwell_stress.py",

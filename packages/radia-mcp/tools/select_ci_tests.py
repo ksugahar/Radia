@@ -64,10 +64,23 @@ def _catalog() -> dict[str, dict]:
     return namespace["CATALOG"]
 
 
+def _launchable(catalog: dict[str, dict]) -> set[str]:
+    """Catalog keys that `radia-mcp serve <key>` can start."""
+    return {short for short, info in catalog.items() if info.get("entry_point")}
+
+
 def _family_to_server(catalog: dict[str, dict]) -> dict[str, str]:
     return {
         str(info["subpackage"]).removeprefix("radia_mcp."): short
         for short, info in catalog.items()
+        if info.get("entry_point")
+    }
+
+
+def _packs_containing(catalog: dict[str, dict], family: str) -> set[str]:
+    return {
+        short for short, info in catalog.items()
+        if info.get("kind") == "capability-pack" and family in info.get("members", [])
     }
 
 
@@ -264,7 +277,7 @@ def build_plan(
             "mode": "full",
             "changed_files": changed,
             "package_tests": ["tests"],
-            "server_selftests": sorted(catalog),
+            "server_selftests": sorted(_launchable(catalog)),
             "run_mcp_response_tests": True,
             "integration_tests": ["tests/mcp_integration"],
         }
@@ -272,6 +285,7 @@ def build_plan(
     sources = _test_sources()
     selected = {path for path in ALWAYS_TESTS if _test_file(path) in sources}
     servers: set[str] = set()
+    launchable = _launchable(catalog)
     family_servers = _family_to_server(catalog)
 
     for path in changed:
@@ -306,15 +320,17 @@ def build_plan(
         relative = path.removeprefix(SOURCE_PREFIX)
         parts = tuple(part for part in relative.split("/") if part)
         if len(parts) < 2:
-            servers.update(catalog)
+            servers.update(launchable)
             continue
 
         family = parts[0]
-        # Internal composed domains need the owning pack's selftest even when
-        # they intentionally have no standalone catalog/console entry.
-        if family not in family_servers:
-            servers.update(name for name, info in catalog.items()
-                           if family in info.get("members", []))
+        # A composed domain has no server of its own: every pack that
+        # contains it must pass its selftest.  The shared pack runtime
+        # affects every pack.
+        servers.update(_packs_containing(catalog, family))
+        if family == "capability_packs":
+            servers.update(short for short in launchable
+                           if catalog[short].get("kind") == "capability-pack")
         module_parts = parts[1:]
         if module_parts and module_parts[-1].endswith(".py"):
             module_parts = (*module_parts[:-1], module_parts[-1][:-3])
@@ -325,7 +341,7 @@ def build_plan(
             or stem == "hot_reload"
         )
         if family == "common" or is_hot_reload_contract:
-            servers.update(catalog)
+            servers.update(launchable)
             if is_hot_reload_contract:
                 selected.add("tests/test_hot_reload.py")
         elif family in family_servers:
@@ -394,7 +410,7 @@ def _integration_tests(changed: list[str]) -> list[str]:
         "packages/radia-simulink/matlab/+radia/+acoustic/",
         "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
         "src/lib/radia_pybind.cpp", "src/radia/panels/calc_fem_kelvin.py",
-        ".agents/skills/md2html/md2html.py", ".github/workflows/radia-mcp-matrix.yml",
+         ".github/workflows/radia-mcp-matrix.yml",
         "packages/radia-mcp/tools/select_ci_tests.py",
         "packages/radia-mcp/tools/check_package_test_boundary.py",
         "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py",

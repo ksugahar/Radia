@@ -266,17 +266,18 @@ def gate_radia_mcp_matrix():
 
     catalog = _load_meta_catalog()
     for short in plan["server_selftests"]:
-        info = catalog[short]
+        if "entry_point" not in catalog[short]:
+            return False, f"{short}: selected for selftest but not launchable"
         command = (
             "import sys; sys.path.insert(0, r'%s'); "
-            "from %s.server import main; "
-            "sys.argv = [%r, '--selftest']; main()"
-            % (os.path.join(MCP, "src"), info["subpackage"], info["entry_point"])
+            "from radia_mcp.maintenance import main; "
+            "sys.exit(main(['serve', %r, '--selftest']))"
+            % (os.path.join(MCP, "src"), short)
         )
         try:
             rc, server_out = _sh(
                 [sys.executable, "-c", command],
-                timeout=120 if short == "radia-ngsolve" else 60,
+                timeout=120 if short == "radia-mcp-analysis" else 60,
             )
         except subprocess.TimeoutExpired:
             return False, f"{short} selftest timed out"

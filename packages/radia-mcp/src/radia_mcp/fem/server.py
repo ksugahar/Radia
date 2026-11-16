@@ -16,8 +16,8 @@ This is the **theory/genealogy** layer.  For code usage:
 - BEM/MoM: see `radia_mcp.bem`
 
 Usage:
-    mcp-server-fem              # stdio
-    mcp-server-fem --selftest   # self-test
+    fem              # stdio
+    fem --selftest   # self-test
 """
 
 import asyncio
@@ -64,7 +64,7 @@ from .legacy_signature_migration import (
 from .axifem_signature_execution import validate_axifem_signature_execution
 
 
-mcp = FastMCP("mcp-server-fem")
+mcp = FastMCP("fem")
 _validation = CoarseToolRegistry(mcp, namespace="fem")
 
 
@@ -867,7 +867,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-fem',
+    server_name='fem',
     description='FEM formulations theory layer (A-Omega / T-Omega / H / Reduced / Darwin, edge / HO / XFEM / IGA / DG, gauging + Kelvin, MSFEM, Schur...',
     subpackage='radia_mcp.fem',
     related_servers=["radia-ngsolve", "bem", "differential-forms"],
@@ -875,13 +875,13 @@ register_status_tool(
 
 apply_tool_contract(
     mcp,
-    server_name="mcp-server-fem",
+    server_name="fem",
     version=__version__,
 )
 
 
 def main():
-    """Entry point for mcp-server-fem."""
+    """Entry point for fem."""
     if "--selftest" in sys.argv:
         print("fem MCP server self-test:")
         print(f"  overview: {len(get_overview_knowledge('all'))} chars")

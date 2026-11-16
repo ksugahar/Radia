@@ -1,4 +1,4 @@
-"""Analytical formulas knowledge (mcp-server-radia-ngsolve, public tool).
+"""Analytical formulas knowledge (radia-ngsolve, public tool).
 
 Closed-form analytical expressions in :mod:`radia.analytical_formulas`,
 sourced from the IEE Japan review

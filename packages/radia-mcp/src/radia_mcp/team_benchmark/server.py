@@ -22,8 +22,8 @@ Use cases:
 - "How does Hollaus MSFEM compare on problem 24?" → eddy current
 
 Usage:
-    mcp-server-team-benchmark              # stdio
-    mcp-server-team-benchmark --selftest   # self-test
+    team-benchmark              # stdio
+    team-benchmark --selftest   # self-test
 """
 
 import sys
@@ -39,7 +39,7 @@ from .ndt_inverse_knowledge import get_ndt_inverse_knowledge
 from .special_knowledge import get_special_knowledge
 
 
-mcp = FastMCP("mcp-server-team-benchmark")
+mcp = FastMCP("team-benchmark")
 
 
 @mcp.tool()
@@ -192,7 +192,6 @@ def find_validation_problem(feature: str) -> str:
             "Eddy current NDT solver:\n"
             "→ team_ndt_inverse('ndt_problems')\n"
             "Problem 8 (coil above crack), Problem 15 (slot), Problem 27 (deep flaws).\n"
-            "Cross-reference: radia_mcp.ndt.eddy_current_NDT\n"
         ),
         "topology_optimization": (
             "Topology / shape optimization:\n"
@@ -220,7 +219,7 @@ def find_validation_problem(feature: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-team-benchmark',
+    server_name='team-benchmark',
     description='TEAM Workshop benchmark problems reference layer (30 problems × physics class). ★ Lab core: 13, 20, 23, 32, 33b',
     subpackage='radia_mcp.team_benchmark',
     related_servers=["fem", "bem", "motor"],
@@ -228,7 +227,7 @@ register_status_tool(
 
 
 def main():
-    """Entry point for mcp-server-team-benchmark."""
+    """Entry point for team-benchmark."""
     if "--selftest" in sys.argv:
         print("team_benchmark MCP server self-test:")
         print(f"  catalog: {len(get_catalog_knowledge('all'))} chars")

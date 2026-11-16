@@ -1,8 +1,8 @@
 """Shared utilities across radia-mcp servers.
 
 The package exports a convenient flat API, but resolves each symbol lazily.
-Almost every MCP server imports one status helper; eagerly importing the RAG,
-PDF, and asynchronous execution helpers at that point made every server pay
+Almost every MCP server imports one status helper; eagerly importing the
+asynchronous execution helpers at that point made every server pay
 for unrelated infrastructure during cold start.
 """
 
@@ -23,23 +23,10 @@ _LAZY_ATTRS = {
     "CoarseToolRegistry": (".tool_group", "CoarseToolRegistry"),
     "selected_tool_profile": (".tool_group", "selected_tool_profile"),
     "lazy_callable": (".lazy_call", "lazy_callable"),
-    "ChromaRetriever": (".chroma_retriever", "ChromaRetriever"),
-    "extract_pdf_chunks": (".chroma_retriever", "extract_pdf_chunks"),
-    "detect_filename_language": (
-        ".chroma_retriever",
-        "detect_filename_language",
-    ),
-    "find_chapters": (".chroma_retriever", "find_chapters"),
-    "CHAPTER_PATTERNS": (".chroma_retriever", "CHAPTER_PATTERNS"),
-    "DEFAULT_EMBEDDING_MODEL": (
-        ".chroma_retriever",
-        "DEFAULT_EMBEDDING_MODEL",
-    ),
 }
 
 _LAZY_MODULES = {
     "async_runner",
-    "chroma_retriever",
     "examples",
     "failure_log",
     "learning_quality",
@@ -84,11 +71,4 @@ __all__ = [
     "CoarseToolRegistry",
     "selected_tool_profile",
     "lazy_callable",
-    # ChromaDB RAG helpers (multilingual support added 2026-05-25)
-    "ChromaRetriever",
-    "extract_pdf_chunks",
-    "detect_filename_language",
-    "find_chapters",
-    "CHAPTER_PATTERNS",
-    "DEFAULT_EMBEDDING_MODEL",
 ]

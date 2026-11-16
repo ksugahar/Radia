@@ -141,7 +141,7 @@ def test_docs_dont_create_an_unneeded_light_environment():
 
 @pytest.mark.parametrize("path,lane", [
     ("src/radia/bh_law.py", "radia"),
-    ("packages/radia-mcp/src/radia_mcp/bibliography/metadata.py", "mcp"),
+    ("packages/radia-mcp/src/radia_mcp/meta/catalog.py", "mcp"),
     ("tests/mcp_integration/test_netgen_vol_frozen_regression.py", "mcp"),
 ])
 def test_real_distribution_inputs_select_their_source_checks(path, lane):

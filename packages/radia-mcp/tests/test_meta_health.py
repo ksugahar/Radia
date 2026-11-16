@@ -54,7 +54,7 @@ def test_status_optional_dep_probe_avoids_runtime_import(monkeypatch):
 
     monkeypatch.setattr(status_mod.importlib, "import_module", _boom)
     payload = status_mod.build_status_payload(
-        server_name="mcp-server-test",
+        server_name="test",
         description="test",
         subpackage="radia_mcp.test",
         optional_deps=["json"],
@@ -176,7 +176,7 @@ def test_readme_mcp_entrypoints_are_cataloged_or_external():
     pkg_root = Path(__file__).resolve().parents[1]
     readme = (pkg_root / "README.md").read_text(encoding="utf-8")
     mentioned = set(re.findall(r"\bmcp-server-[a-z0-9-]+\b", readme))
-    allowed = {info["entry_point"] for info in catalog.CATALOG.values()}
+    allowed = set()
     allowed.update(
         str(info.get("entry_point", ""))
         for info in catalog.EXTERNAL_PACKAGES.values()
@@ -195,20 +195,6 @@ def test_meta_by_tag_optimization_finds_at_least_4():
         f"only {result['n_matches']} optimization servers"
 
 
-def test_meta_related_to_chart2d_includes_paper_writing():
-    """Sanity: chart2d -> paper-writing cross-link (the canonical
-    "use case A naturally suggests use case B" pattern).
-    chart2d inherits the figure profile + gate stack, which as of
-    2026-07-18 is served by mcp-server-paper-writing (figure merged
-    in; the standalone figure server was retired).  This pins that
-    the merged figure tooling stays discoverable from chart2d.
-    """
-    from radia_mcp.meta.server import radia_mcp_related
-    result = radia_mcp_related("chart2d")
-    names = [r["name"] for r in result["related"]]
-    assert "paper-writing" in names, f"chart2d related: {names}"
-
-
 def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
     """Official optuna-mcp is external but should still be discoverable."""
     from radia_mcp.meta.server import radia_mcp_related
@@ -216,7 +202,7 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
     from_optuna = radia_mcp_related("optuna-mcp")
     from_optuna_names = [r["name"] for r in from_optuna["related"]]
     assert {"bayesian-opt", "evolutionary", "topology-optimization",
-            "radia-streamfunction"}.issubset(from_optuna_names)
+            "streamfunction"}.issubset(from_optuna_names)
 
     from_bayes = radia_mcp_related("bayesian-opt")
     optuna = [r for r in from_bayes["related"] if r["name"] == "optuna-mcp"]
@@ -224,7 +210,7 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
     assert optuna[0]["external"] is True
     assert optuna[0]["entry_point"] == "optuna-mcp"
 
-    from_matlab = radia_mcp_related("radia-matlab")
+    from_matlab = radia_mcp_related("matlab-mcp-lab")
     upstream = [
         row for row in from_matlab["related"] if row["name"] == "optuna-mcp"
     ]
@@ -244,14 +230,14 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     assert EXTERNAL_PACKAGES["cubit"]["pypi"] == "cubit-mesh-export"
     assert EXTERNAL_PACKAGES["cubit"]["subpackage"] == "cubit_mesh_export.mcp"
 
-    for name in ("cubit", "build123d", "gmsh"):
+    for name in ("build123d-mcp", "gmsh-mcp"):
         related = radia_mcp_related(name)
         names = [r["name"] for r in related["related"]]
         assert "radia-ngsolve" in names, f"{name} related: {names}"
 
     reverse = radia_mcp_related("radia-ngsolve")
     reverse_names = [r["name"] for r in reverse["related"]]
-    for name in ("cubit", "build123d", "gmsh"):
+    for name in ("build123d-mcp", "gmsh-mcp"):
         assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
 
 
@@ -263,12 +249,15 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
     by_name = {entry["name"]: entry for entry in overview["servers"]}
 
     for name, entry in by_name.items():
+        if entry.get("kind") == "domain":
+            assert "selftest_command" not in entry, name
+            continue
         assert entry["selftest_command"] == f"{entry['entry_point']} --selftest", name
 
     cubit = radia_mcp_get("cubit")
-    gmsh = radia_mcp_get("mcp-server-gmsh")
+    gmsh = radia_mcp_get("gmsh-mcp")
     assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
-    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-repo"
+    assert gmsh["audit_command"] == "radia-mcp serve gmsh-mcp --selftest --audit-repo"
     assert "audit_command" not in radia_mcp_get("radia-ngsolve")
 
 

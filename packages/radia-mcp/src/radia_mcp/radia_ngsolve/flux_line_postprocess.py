@@ -1,5 +1,9 @@
 """FEM post-processing plot recipes (Sugahara Lab).
 
+FEM post-processing is an analysis responsibility, so this module stays in
+radia-mcp when the document tools moved out (2026-11-16).  It uses plain
+matplotlib axes passed in by the caller and has no figure-style dependency.
+
 Promoted on 2026-05-26 from a lab flux-line MATLAB workflow (2020-01).
 The originals were a small MATLAB pipeline that drove an axisymmetric FE
 field-probe (``getb`` / ``geta``-style) via ``ode45`` to trace a
@@ -8,9 +12,8 @@ overlay the trajectory on the FEM mesh, and inspect the field along a
 sample line with element-boundary tick marks.
 
 Three plot recipes are exposed here in matplotlib form, plus one
-trajectory-integration helper, all lab-style-conforming (Times New
-Roman, 10 pt body text, units in parentheses).  They are designed to
-be composed with ``paper_figure`` / ``paper_figure_8cm``:
+trajectory-integration helper.  Each plot recipe draws on a matplotlib
+``Axes`` supplied by the caller (units in parentheses):
 
   - ``plot_flux_line_trajectory(ax, traj_x, traj_y, mesh_*, source_xy)``
       Overlays the FEM mesh wireframe (blue thin lines) with the black
@@ -523,7 +526,8 @@ validation runtime FLUX-LINE TRACING + VISUALIZATION RECIPE (2020-01-06, Sugahar
 Promoted from a lab flux-line MATLAB workflow — MATLAB driving an
 axisymmetric FE field-probe to trace flux lines through a 2D magnet and
 inspect the field along sample lines / along the trajectory.  All three
-plot recipes are now reproducible in matplotlib via radia_mcp.figure:
+plot recipes are reproducible in matplotlib via
+radia_mcp.radia_ngsolve.flux_line_postprocess:
 
   trace_flux_line(B_func, x0, s_span, ...)
   plot_flux_line_trajectory(ax, traj_x, traj_y, mesh_*, source_xy)
@@ -609,12 +613,12 @@ UNITS GOTCHAS:
     unit length along the symmetry axis.
 
 EXAMPLE: trace a flux line through a Radia/NGSolve magnet, plot all 3
-diagnostic figures using paper_figure_8cm(panels=2):
+diagnostic figures on two matplotlib panels:
 
     import radia as rad
     import numpy as np
-    from radia_mcp.figure import (
-        paper_figure_8cm, emit_paper_figure,
+    import matplotlib.pyplot as plt
+    from radia_mcp.radia_ngsolve.flux_line_postprocess import (
         trace_flux_line,
         plot_flux_line_trajectory,
         plot_field_vs_arclength,
@@ -633,18 +637,17 @@ diagnostic figures using paper_figure_8cm(panels=2):
     Bx = [rad.Fld(magnet, 'b', [x, y, 0.0])[0] for x, y in xy]
     By = [rad.Fld(magnet, 'b', [x, y, 0.0])[1] for x, y in xy]
 
-    # Two panels at the 8 cm column: left = trajectory, right = s vs B
-    fig, axes = paper_figure_8cm(panels=2, sharey=False)
+    # Two panels: left = trajectory, right = s vs B
+    fig, axes = plt.subplots(1, 2, figsize=(8 / 2.54, 4 / 2.54))
 
-    plot_flux_line_trajectory(axes[0, 0], xy[:, 0], xy[:, 1],
+    plot_flux_line_trajectory(axes[0], xy[:, 0], xy[:, 1],
                               source_xy=(0.0, 0.0))
-    axes[0, 0].set_xlabel(r'$x$ (m)')
-    axes[0, 0].set_ylabel(r'$y$ (m)')
+    axes[0].set_xlabel(r'$x$ (m)')
+    axes[0].set_ylabel(r'$y$ (m)')
 
-    plot_field_vs_arclength(axes[0, 1], s, Bx, By, Az=Az)
+    plot_field_vs_arclength(axes[1], s, Bx, By, Az=Az)
 
-    emit_paper_figure(fig, 'flux_line_diagnostic',
-                       'ieee_single_column')
+    fig.savefig('flux_line_diagnostic.png', dpi=300)
 """
 
 

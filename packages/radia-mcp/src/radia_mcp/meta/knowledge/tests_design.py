@@ -224,8 +224,9 @@ independent reference type/source (analytic solution, independent route,
 measurement or benchmark), sensitive quantity and units, exact comparison
 operator/threshold, scale/conditions and failure definition. A previous output
 from the same solver is a regression oracle, not an independent adoption oracle.
-For an analytic reference, use a bib_key from the single canonical bibliography
-(bibliography_canonical_path). Its entry needs a DOI or checksum-valid ISBN-13;
+For an analytic reference, use a bib_key from validation_records/references.bib,
+the bibliography that adopted records cite (the former bibliography MCP tools
+are retired from radia-mcp). Its entry needs a DOI or checksum-valid ISBN-13;
 a URL alone is not sufficient. Keep the hashed symbolic_verification receipt.
 Do not invent a DOI for a textbook or relabel the reference to bypass this rule.
 Identifier checks do not verify the reference's mathematical adequacy.

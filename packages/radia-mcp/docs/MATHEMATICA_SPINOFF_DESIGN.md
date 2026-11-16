@@ -6,7 +6,7 @@ Owner: Sugahara lab.
 ## Question
 
 Should `radia_mcp.mathematica` move out of the radia-mcp wheel into
-its own PyPI package (`mcp-server-mathematica`)?
+its own PyPI package (`radia-mcp-mathematica`)?
 
 Raised in the 2026-05-24 thorough review: "`mathematica` is
 essentially Radia-unrelated. Same justification as why
@@ -28,7 +28,7 @@ nothing to do with Radia's C++ core or NGSolve integration."
 - Standalone — does NOT depend on radia, NGSolve, or any other lab
   code. Pure wolframscript bridge.
 
-## Pros of spinoff (`mcp-server-mathematica`)
+## Pros of spinoff (`radia-mcp-mathematica`)
 
 1. **Useful to non-Radia users**. Anyone with Mathematica + Claude
    Code would benefit. Independent PyPI = much broader audience than

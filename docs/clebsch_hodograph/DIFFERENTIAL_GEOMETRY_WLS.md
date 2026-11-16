@@ -5,7 +5,7 @@ differential-geometry commits.  The executable sources live in
 `packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/`;
 the MCP mirror is
 `differential_forms_mathematica_recipes(topic=...)` in
-`mcp-server-differential-forms`.
+the `radia-mcp-analysis` server (`theory` profile).
 
 The purpose is narrow: before a FEM implementation changes a Kelvin weight,
 hodograph chart, saturation linearization, or HOIBC boundary model, run the

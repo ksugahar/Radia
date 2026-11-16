@@ -40,9 +40,7 @@ Multi-layered plate with cracks at increasing depths. Tests:
 
 ## Lab usage
 
-★ Cross-link to `radia_mcp.ndt` (already implemented):
-- `eddy_current_NDT` topic in ndt subpackage
-- Used as benchmark for coil scan + signal processing
+Used as a benchmark for coil scans and signal processing.
 
 ## References
 
@@ -52,7 +50,6 @@ Multi-layered plate with cracks at increasing depths. Tests:
 
 ## Cross-reference
 
-- `radia_mcp.ndt.eddy_current_NDT` — production NDT solver
 - `radia_mcp.bem.surface_ie` — BEM for NDT (lighter than FEM)
 """
 

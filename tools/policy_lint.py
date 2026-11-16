@@ -60,10 +60,8 @@ BRAND_CITATION_ALLOW = (
     # formulation comes from
     "packages/radia-mcp/src/radia_mcp/accelerator/bibliography_index_knowledge.py",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/bibliography_index_knowledge.py",
-    "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib",
     # conference-positioning advice, where naming the incumbent tools is the
     # substance of the advice rather than a validation provenance claim
-    "packages/radia-mcp/src/radia_mcp/presentation/talk_feedback.py",
     # this file, which has to spell the brand out to forbid it
     "tools/policy_lint.py",
     "packages/radia-mcp/tools/policy_lint.py",
@@ -159,27 +157,11 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'packages/radia-simulink/matlab/+radia/+topopt/optimizeHexSheetTopology.m': 'Existing executable runtime scratch defaults; phase 2, unchanged in phase 1.',
     'packages/radia-mcp/pyproject.toml': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/bem/server.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/bibliography/plans/T14_canonical.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/document_meta/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/grant_writing/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/matlab/optuna_boundary.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/matlab/runtime.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/meta/bug_patterns.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/meta/catalog.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/_digest_lints.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/_tex_resolver.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/_undefined_variables.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/plans/T10.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/plans/T14.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/paper_writing/plans/T2.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/poster/_textutil.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/poster/plans/T14_qr_audit.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/poster/plans/T15_print_readiness_audit.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/poster/plans/T6_typography_lints.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/poster/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/presentation/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/tests/test_axifem_signature_execution.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
-    'packages/radia-mcp/tests/test_chroma_multilingual.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'packages/radia-mcp/tests/test_gmsh_knowledge.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'packages/radia-mcp/tests/test_install_deploy_current.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'packages/radia-mcp/tests/test_matlab_radia_mex_contract.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
@@ -388,16 +370,6 @@ def public_runtime_identity_hits(path, content):
     """Reject identifying metadata, including UNC roots, without TeX false hits."""
     if path in PUBLIC_RUNTIME_OPERATIONAL_ALLOW:
         return []
-    if path == "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib":
-        # Exact published citation keys; only the author-field name is masked.
-        # All other fields and entries retain host/path/IP checks.
-        citation_keys = ('article', 'cefc2026_hmatrix', 'compumag2025', 'HIBINO2018128', 'HIBINO2024', 'hibino2026aca', 'Ida2014')
-        def mask_author(match):
-            entry = match.group()
-            if match.group(1) in citation_keys:
-                return re.sub(r"(?im)^(\s*author\s*=.*)$", lambda line: re.sub(r"(?i)\bHibino\b", "PublishedAuthor", line.group()), entry)
-            return entry
-        content = re.sub(r"(?ms)^@\w+\{([^,]+),.*?(?=^@|\Z)", mask_author, content)
     texts = [content]
     structured = False
     if path.endswith((".json", ".ipynb")):
@@ -462,83 +434,7 @@ def _bare_mdx_notebook_lines(path):
             count += 1
     return count
 
-BARE_MDX_ALLOWED_CONTEXTS = {'packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib': [{'reason': 'Public academic '
-                                                                                  'cloud service '
-                                                                                  'keyword, '
-                                                                                  'fictional grant '
-                                                                                  'fixture, or '
-                                                                                  'verified '
-                                                                                  'bibliographic '
-                                                                                  'title.',
-                                                                        'sha256': '5bc200b589e209edf34c52a19febbcb70aa7d31112b42bd3cff4fcf5aef5bfaf'}],
- 'packages/radia-mcp/src/radia_mcp/grant_writing/skill.md': [{'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': '435209da82c988c461131e32fe13e53fb46fd1384c8da63041737164762650bf'}],
- 'packages/radia-mcp/src/radia_mcp/grant_writing/tools.py': [{'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': 'e5f7101646237f6a8609cc2c931c10a50539056a971edb6ec4a5666b604efa20'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': '522ac0cef71e45d794ba4cdc11411def55c3645e7da6c96da21595ab4724ae03'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': 'a3591beaea192ec32edd49c57a5bf1b970a046fa11ac584169490bbbcf8178a0'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': '9865fd4548fe4ff144610326e51726ef296cb58df07f4edb7970c50a7b4f2eed'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': 'a2ac794efa76fd97c031df56341eef4f57bee630dae40411c9d122801676e904'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': '2200b0baf3a67a6479e093663da635e0d3b663e32403829bb6054884219e4275'},
-                                                             {'reason': 'Public academic cloud '
-                                                                        'service keyword, '
-                                                                        'fictional grant fixture, '
-                                                                        'or verified bibliographic '
-                                                                        'title.',
-                                                              'sha256': 'b7e9071b1df8ca653df274580cbd20071feb8bf91a8267a29f65e34b144907a0'}],
- 'packages/radia-mcp/tests/test_grant_writing.py': [{'reason': 'Public academic cloud service '
-                                                               'keyword, fictional grant fixture, '
-                                                               'or verified bibliographic title.',
-                                                     'sha256': 'e2ea042b5784866ad6883ca1497bed8f27b07597525c45ed12c1a9310a9ecaa8'},
-                                                    {'reason': 'Public academic cloud service '
-                                                               'keyword, fictional grant fixture, '
-                                                               'or verified bibliographic title.',
-                                                     'sha256': '0033e8e7240705788311033bc1f5a010d0b9079dab5d7eb54b5bc5ccf49e17a1'},
-                                                    {'reason': 'Public academic cloud service '
-                                                               'keyword, fictional grant fixture, '
-                                                               'or verified bibliographic title.',
-                                                     'sha256': '1c573b0cf4e6461568fea2e9de86a66bea7156e30532619b82132d8c714e63c0'},
-                                                    {'reason': 'Public academic cloud service '
-                                                               'keyword, fictional grant fixture, '
-                                                               'or verified bibliographic title.',
-                                                     'sha256': '6f0b3feef20aaff84758e8032b96f3c038ff1c6fd3e913a2ebe4662bbdf28a25'},
-                                                    {'reason': 'Public academic cloud service '
-                                                               'keyword, fictional grant fixture, '
-                                                               'or verified bibliographic title.',
-                                                     'sha256': '8f3f1df6aa1da4727e357e97f6b81a6eb90f3acee6735bff6d9749321cc0cd62'}],
+BARE_MDX_ALLOWED_CONTEXTS = {
  'tools/policy_lint.py': [{'reason': 'Detection regex declaration must spell the forbidden token.',
                            'sha256': 'c75cbd21a1492d8132af31dd136dce35d66d5d5915548eac1b1dd4a4ad607681'},
                           {'reason': 'Detection regex declaration must spell the forbidden token.',

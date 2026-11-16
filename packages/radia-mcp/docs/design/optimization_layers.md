@@ -2,8 +2,8 @@
 
 `radia_mcp.optimization` owns solver-neutral guidance and diagnostics;
 `topology_optimization` owns electromagnetic shape/topology knowledge and
-PDE/adjoint-specific evidence. Both compose into the existing `radia-design`
-optimization profile. There is no extra server command or client configuration.
+PDE/adjoint-specific evidence. Both compose into the `radia-mcp-optimize`
+pack (`search` and `topology` profiles). There is no extra server command or client configuration.
 The learning-only profile is unchanged; PINN/assimilation-specific extensions
 remain future work.
 
@@ -209,7 +209,7 @@ are rejected. There is no automatic rho tuning or solver execution.
 Reference: [Boyd et al., Distributed Optimization and Statistical Learning via
 the Alternating Direction Method of Multipliers (2011), section 3.3](https://web.stanford.edu/~boyd/papers/admm_distr_stats.html).
 This specialization and its normalized-coordinate contract are explicit;
-the two tools compose into the existing radia-design optimization profile.
+the two tools compose into the radia-mcp-optimize `search` profile.
 
 ## Completed search and regression-gate ownership audit
 

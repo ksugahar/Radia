@@ -11,7 +11,7 @@ Kameari Part 1-9, cuboid average B, Bessel impedance).
 
 ```bash
 pip install radia-mcp                # standalone, no radia C++ ext needed
-mcp-server-radia-ngsolve             # stdio server
+radia-ngsolve             # stdio server
 ```
 
 ```
@@ -69,16 +69,16 @@ For pure documentation use, install with `pip install radia-mcp`
 
 ## Cross-references
 
-- `mcp-server-mathematica` — symbolic verification of analytical
+- `radia-mcp-mathematica` — symbolic verification of analytical
   formulas (paired killer-demo: derive Kelvin → verify in Mathematica)
-- `mcp-server-fem` — FEM-formulation theory layer (A-Ω, T-Ω, H,
+- `fem` — FEM-formulation theory layer (A-Ω, T-Ω, H,
   Reduced potential, Darwin, MSFEM)
-- `mcp-server-bem` — RWG, EFIE/MFIE, Loop-Star, Calderón, Radia
+- `bem` — RWG, EFIE/MFIE, Loop-Star, Calderón, Radia
   HDiv-VIM, HACApK, FEM-BEM hybrid
-- `mcp-server-matrix-solvers` — Krylov + preconditioner theory
-- `mcp-server-mor` — model-order reduction (PRIMA, POD, Foster modal form)
-- `mcp-server-peec` — PEEC filament/panel, FastHenry, HOIBC
-- `mcp-server-differential-forms` — k-form / de Rham math foundations
+- `matrix-solvers` — Krylov + preconditioner theory
+- `mor` — model-order reduction (PRIMA, POD, Foster modal form)
+- `peec` — PEEC filament/panel, FastHenry, HOIBC
+- `differential-forms` — k-form / de Rham math foundations
 
 ## Source
 

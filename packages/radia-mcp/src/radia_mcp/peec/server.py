@@ -12,8 +12,8 @@ Provides tools for:
 - ngsolve.bem integration notes
 
 Usage:
-    mcp-server-peec              # Start MCP server (stdio transport)
-    mcp-server-peec --selftest   # Run self-test
+    peec              # Start MCP server (stdio transport)
+    peec --selftest   # Run self-test
 
 Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General PEEC inductance formulae
@@ -32,7 +32,7 @@ from .peec_knowledge import get_peec_documentation
 from .carstensen_ac_copper_loss_knowledge import get_carstensen_knowledge
 from .hoibc_knowledge import get_hoibc_documentation
 
-mcp = FastMCP("mcp-server-peec")
+mcp = FastMCP("peec")
 
 
 # ============================================================
@@ -225,7 +225,7 @@ def new_peec_simulation(conductor_type: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-peec',
+    server_name='peec',
     description='PEEC filament/panel, FastHenry parser, HOIBC, Carstensen AC copper loss',
     subpackage='radia_mcp.peec',
     related_servers=["radia-ngsolve", "ih", "litz-transmission"],

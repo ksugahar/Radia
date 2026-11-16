@@ -100,7 +100,7 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
     assert CONTRACT.matches("docs/ltspice/README.md", "docs/**/*.md")
     with pytest.raises(ValueError, match="unowned"):
         CONTRACT.owner_rule(MANIFEST, "unclassified-root-file")
-    assert CONTRACT.owner_rule(MANIFEST, "packages/radia-mcp/src/radia_mcp/presentation/tools.py")["owners"] == ["radia-mcp"]
+    assert CONTRACT.owner_rule(MANIFEST, "packages/radia-mcp/src/radia_mcp/meta/server.py")["owners"] == ["radia-mcp"]
 
 
 # Foreign files the radia-mcp-matrix lane really reads, with the reader that
@@ -108,7 +108,6 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
 MCP_LANE_READS = {
     "src/radia/hdiv_gpu.py": ("packages/radia-mcp/src/radia_mcp/radia_ngsolve/hdiv_gpu.py", "from radia.hdiv_gpu import PreparedHDivNonlinear"),
     "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
-    ".agents/skills/md2html/md2html.py": ("tests/mcp_integration/test_md2html_legacy_cli.py", "md2html.py"),
     "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "makeCircuitFieldStateSpace"),
     "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "buildCircuitFieldStateSpaceModel"),
     "packages/radia-simulink/matlab/+radia/+acoustic/**": ("tests/mcp_integration/test_matlab_source_contract.py", "+acoustic"),
@@ -195,10 +194,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         helper, "tests/test_native_build_provenance.py",
         "tools/sparsesolv_ci_impact.py",
         "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json",
-        "packages/radia-mcp/src/radia_mcp/ltspice/**",
-        "packages/radia-mcp/src/radia_mcp/common/__init__.py",
-        "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-        "packages/radia-mcp/src/radia_mcp/common/status.py"} | {pattern for pattern in MCP_LANE_READS if pattern != "validation_test/optimization/benchmark_*"}
+        "packages/radia-mcp/src/radia_mcp/common/__init__.py"} | {pattern for pattern in MCP_LANE_READS if pattern != "validation_test/optimization/benchmark_*"}
     expected |= {
         "src/core/radia_mex_sparse_symmetry.h",
         "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
@@ -259,20 +255,10 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     adapter = (ROOT / "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
     assert "radia.panels" in adapter
     assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
-    # Integration evidence: radia-simulink LTspice tests cross-check the radia-mcp LTspice gates.
+    # radia-simulink LTspice tests no longer import radia-mcp; the LTspice MCP lives outside this repo.
     gpu_ltspice_tests = list((ROOT / "packages/radia-simulink/tests/ltspice").glob("test_*.py"))
-    assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
-    # The radia_mcp modules the LTspice server imports are part of that integration surface.
-    server = (ROOT / "packages/radia-mcp/src/radia_mcp/ltspice/server.py").read_text(encoding="utf-8")
-    imported = set(re.findall(r"^\s*from radia_mcp\.common(?:\.(\w+))? import", server, re.M))
-    modules = {"packages/radia-mcp/src/radia_mcp/common/__init__.py"} | {
-        f"packages/radia-mcp/src/radia_mcp/common/{name}.py" for name in imported if name}
-    if "" in imported:  # package-level names resolve lazily through common/__init__.py
-        modules.add("packages/radia-mcp/src/radia_mcp/common/status.py")
-    lane = MANIFEST["lanes"]["radia-simulink"]["events"]
-    for module in sorted(modules):
-        assert module in shared, module
-        assert all(CONTRACT.selected(module, lane[event]) for event in ("push", "pull_request")), module
+    assert gpu_ltspice_tests
+    assert not any("radia_mcp" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
     assert "ltspice_rc.cir" in (ROOT / "tests/matlab/test_ltspice_workflow.m").read_text(encoding="utf-8")
 
 
@@ -298,7 +284,7 @@ def test_solver_triggers_only_cpu_inputs_and_declared_consumers():
         for path in ("src/radia/__init__.py", "Build.ps1", "tests/test_wheel_package_policy.py", "tools/run_test_tier.py"):
             assert CONTRACT.selected(path, projection), path
         for path in ("packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
-                     "packages/radia-mcp/src/radia_mcp/presentation/tools.py", "README.md"):
+                      "README.md"):
             assert not CONTRACT.selected(path, projection), path
 
 

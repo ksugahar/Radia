@@ -1,7 +1,6 @@
 import copy
 
 from radia_simulink.ltspice.bipolar_efficiency_gate import bipolar_converter_efficiency_gate
-from radia_mcp.ltspice.server import bipolar_converter_efficiency_gate as mcp_gate
 
 
 def good_summary():
@@ -22,7 +21,6 @@ def test_accepts_signed_balanced_efficiency_measurements():
     assert result["status"] == "ok"
     assert result["checks"]["reported_efficiency_recomputes"] is True
     assert result["metrics"]["power_loss_w"] > 0.0
-    assert mcp_gate(good_summary())["status"] == "ok"
 
 
 def test_rejects_source_power_with_load_sign():

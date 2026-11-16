@@ -1,4 +1,3 @@
-from radia_mcp.ltspice.server import cockcroft_walton_stage_gate as mcp_gate
 from radia_simulink.ltspice.voltage_multiplier_gate import cockcroft_walton_stage_gate
 
 
@@ -20,7 +19,6 @@ def _args():
 def test_accepts_live_two_stage_multiplier_measurements():
     result = cockcroft_walton_stage_gate(**_args())
     assert result["status"] == "ok"
-    assert mcp_gate(**_args())["status"] == "ok"
 
 
 def test_rejects_unsettled_or_collapsed_second_stage():

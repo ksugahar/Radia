@@ -397,51 +397,14 @@
       ]
     },
     {
-      "pattern": "packages/radia-mcp/src/radia_mcp/ltspice/**",
-      "owners": [
-        "radia-mcp",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-simulink LTspice tests import radia_mcp.ltspice.server and cross-check its gates against the GPU implementation"
-      },
-      "selection": "all_owners"
-    },
-    {
       "pattern": "packages/radia-mcp/src/radia_mcp/common/__init__.py",
       "owners": [
         "radia-mcp",
-        "radia-simulink",
         "radia"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check; Imported by the required CPU solver numerical test closure."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-      "owners": [
-        "radia-mcp",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "packages/radia-mcp/src/radia_mcp/common/status.py",
-      "owners": [
-        "radia-mcp",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
+        "detail": "Imported by the required CPU solver numerical test closure."
       },
       "selection": "all_owners"
     },
@@ -675,12 +638,6 @@
     },
     {
       "pattern": "validation_test/radia_mcp/**",
-      "owners": [
-        "radia-mcp"
-      ]
-    },
-    {
-      "pattern": "validation_test/grant_writing/**",
       "owners": [
         "radia-mcp"
       ]
@@ -1503,18 +1460,6 @@
       "reason": {
         "kind": "integration",
         "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": ".agents/skills/md2html/md2html.py",
-      "owners": [
-        "repo",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "The legacy md2html skill CLI must match radia_mcp.md2html."
       },
       "selection": "all_owners"
     },
@@ -2963,10 +2908,6 @@
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
             "src/core/gpu/snapshot.hpp",
-            "packages/radia-mcp/src/radia_mcp/ltspice/**",
-            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
-            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
             "validation_test/radia_simulink/**/*.vol",
@@ -3103,10 +3044,6 @@
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
             "src/core/gpu/snapshot.hpp",
-            "packages/radia-mcp/src/radia_mcp/ltspice/**",
-            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
-            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
             "validation_test/radia_simulink/**/*.vol",
@@ -3299,7 +3236,6 @@
             "src/radia/panels/samples/**/*.msh",
             "src/lib/radia_pybind.cpp",
             "src/radia/panels/calc_fem_kelvin.py",
-            ".agents/skills/md2html/md2html.py",
             "AGENTS.md",
             "CLAUDE.md",
             "README.md",
@@ -3337,7 +3273,6 @@
             "src/radia/panels/samples/**/*.msh",
             "src/lib/radia_pybind.cpp",
             "src/radia/panels/calc_fem_kelvin.py",
-            ".agents/skills/md2html/md2html.py",
             "AGENTS.md",
             "CLAUDE.md",
             "README.md",

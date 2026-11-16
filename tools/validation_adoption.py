@@ -19,9 +19,8 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1)
 def _bib_parser():
-    """Reuse the canonical bibliography's stdlib parser without MCP imports."""
-    source = (Path(__file__).resolve().parents[1] /
-              "packages/radia-mcp/src/radia_mcp/bibliography/_bibparse.py")
+    """Load the stdlib BibTeX parser for the validation-record reference list."""
+    source = Path(__file__).resolve().parent / "validation_bibparse.py"
     spec = importlib.util.spec_from_file_location("validation_record_bibparse", source)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -33,7 +32,7 @@ def _analytic_reference(root, reference):
     """Resolve the single canonical key; URLs alone never establish identity."""
     _require("bib_key" in reference and "symbolic_verification" in reference,
              "analytic reference", sorted(reference), "canonical bib_key and hashed symbolic-verification record")
-    canonical = root / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    canonical = root / "validation_records/references.bib"
     entries = [entry for entry in _bib_parser()(canonical.read_text(encoding="utf-8")) if entry.key]
     keys = [entry.key for entry in entries]
     _require(len(keys) == len(set(keys)), "canonical bibliography keys", keys, "unique citation keys")

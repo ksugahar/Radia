@@ -21,9 +21,9 @@ def matlab_extension_contract():
 def _official_server_candidates():
     toolkit_bin = Path.home()/".matlab"/"agentic-toolkits"/"bin"
     candidates = [toolkit_bin/"matlab-mcp-server.exe",
-                  toolkit_bin/"matlab-mcp-server-windows-x64.exe"]
+                  toolkit_bin/"matlab-windows-x64.exe"]
     candidates += [Path(found) for name in (
-        "matlab-mcp-server", "matlab-mcp-server-windows-x64.exe",
+        "matlab-mcp-server", "matlab-windows-x64.exe",
         "matlab-mcp-core-server", "matlab-mcp-core-server-win64.exe",
     ) if (found := shutil.which(name))]
     return candidates
@@ -645,7 +645,7 @@ def matlab_optuna_simulink_contract():
             "electromagnetic_state_transient_included": False,
             "motional_emf_included": False,
             "damping_identified_from_measurement": False,
-            "artifact_gate": "mcp-server-maglev:team28_cycle_averaged_motion_gate",
+            "artifact_gate": "maglev:team28_cycle_averaged_motion_gate",
             "unsupported_claims": [
                 "full_electromagnetic_transient",
                 "carrier_resolved_electromagnetic_waveform",

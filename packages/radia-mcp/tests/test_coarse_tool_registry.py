@@ -44,11 +44,10 @@ def test_common_package_does_not_eagerly_import_optional_subsystems():
         env=env,
         timeout=60,
     )
-    assert "chroma_retriever" not in result.stdout
     assert "async_runner" not in result.stdout
 
 
-def test_small_server_status_import_does_not_preload_chroma():
+def test_small_server_status_import_does_not_preload_async_runner():
     package_src = Path(__file__).parents[1] / "src"
     env = dict(os.environ)
     env["PYTHONPATH"] = str(package_src)
@@ -67,7 +66,6 @@ def test_small_server_status_import_does_not_preload_chroma():
     )
     loaded = set(json.loads(result.stdout.splitlines()[-1]))
     assert "radia_mcp.common.status" in loaded
-    assert "radia_mcp.common.chroma_retriever" not in loaded
     assert "radia_mcp.common.async_runner" not in loaded
 
 
@@ -324,7 +322,7 @@ def test_status_reports_grouped_surface():
     registry.install()
     register_status_tool(
         mcp,
-        server_name="mcp-server-demo",
+        server_name="demo",
         description="Demo server",
         subpackage="radia_mcp.demo",
     )

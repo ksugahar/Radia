@@ -179,7 +179,7 @@ async def _probe_stdio(packet: dict) -> dict:
 def test_changed_tool_passes_real_stdio_protocol() -> None:
     result = asyncio.run(asyncio.wait_for(_probe_stdio(_packet()), timeout=45))
     assert result == {
-        "server_name": "mcp-server-fem",
+        "server_name": "fem",
         "listed": True,
         "is_error": False,
         "has_content": True,

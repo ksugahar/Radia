@@ -306,7 +306,7 @@ def mathematica_verification_guide(topic: str = "electromagnetics") -> dict:
                 "Stokes pairings, Whitney degrees of freedom, and weak-form integration by parts.",
                 "Energy-density top forms separately from integrated scalar energy.",
             ],
-            "companion_server": "mcp-server-differential-forms",
+            "companion_server": "differential-forms",
         },
         "paper": {
             "checks": [

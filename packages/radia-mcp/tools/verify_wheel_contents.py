@@ -29,6 +29,28 @@ def package_data_patterns(pyproject: pathlib.Path = PACKAGE_ROOT / "pyproject.to
     return patterns
 
 
+CONSOLE_SCRIPTS = frozenset({"radia-mcp", "radia-acoustic-fembem-mcp-config"})
+
+
+def served_server_modules() -> frozenset:
+    """server.py of every catalog key that `radia-mcp serve` can start."""
+    import runpy
+    import sys
+
+    sys.path.insert(0, str(PACKAGE_SOURCE.parent))
+    try:
+        catalog = runpy.run_path(
+            str(PACKAGE_SOURCE / "meta" / "catalog.py"),
+            run_name="radia_mcp.meta.catalog",
+        )["CATALOG"]
+    finally:
+        sys.path.pop(0)
+    return frozenset(
+        info["subpackage"].replace(".", "/") + "/server.py"
+        for info in catalog.values() if info.get("entry_point")
+    )
+
+
 def required_assets() -> frozenset:
     """Every source file that package-data promises to ship in the wheel."""
     found = set()
@@ -88,21 +110,26 @@ def verify_wheel_contents(wheel_path: str | pathlib.Path) -> dict:
                 if not PACKAGE_SOURCE.joinpath(*relative.parts).is_file():
                     unwanted.add(name)
         unwanted = sorted(unwanted)
-        retired_entries = []
+        scripts: set[str] = set()
         for name in names:
             if name.endswith(".dist-info/entry_points.txt"):
                 entries = configparser.ConfigParser(interpolation=None)
                 entries.read_string(archive.read(name).decode("utf-8"))
-                if entries.has_option("console_scripts", "mcp-server-cubit"):
-                    retired_entries.append("mcp-server-cubit")
-    missing = sorted(REQUIRED_ASSETS - names)
+                if entries.has_section("console_scripts"):
+                    scripts.update(entries.options("console_scripts"))
+    # Only the single launcher and the reviewed setup helper are scripts;
+    # every server starts through `radia-mcp serve <key>`.
+    retired_entries = sorted(scripts - CONSOLE_SCRIPTS)
+    missing_scripts = sorted(CONSOLE_SCRIPTS - scripts)
+    missing = sorted((REQUIRED_ASSETS | served_server_modules()) - names)
     return {
         "wheel": str(wheel),
         "required": sorted(REQUIRED_ASSETS),
         "missing": missing,
         "unwanted": unwanted,
         "retired_entries": retired_entries,
-        "ok": not (missing or unwanted or retired_entries),
+        "missing_scripts": missing_scripts,
+        "ok": not (missing or unwanted or retired_entries or missing_scripts),
     }
 
 

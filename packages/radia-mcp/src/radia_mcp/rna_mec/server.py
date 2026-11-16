@@ -9,15 +9,15 @@ Cross-references:
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` — Play model
 
 Usage:
-    mcp-server-rna-mec              # stdio
-    mcp-server-rna-mec --selftest   # self-test
+    rna-mec              # stdio
+    rna-mec --selftest   # self-test
 """
 import sys
 from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
 
-mcp = FastMCP("mcp-server-rna-mec")
+mcp = FastMCP("rna-mec")
 
 
 @mcp.tool()
@@ -46,7 +46,7 @@ def rna_mec(topic: str = "overview") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-rna-mec',
+    server_name='rna-mec',
     description='RNA / Magnetic Equivalent Circuit. ★ Lab specialty: Play-model hysteresis MEC',
     subpackage='radia_mcp.rna_mec',
     related_servers=["magnetic-materials", "mor", "ih"],
@@ -55,7 +55,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-rna-mec',
+    server_name='rna-mec',
     topics=TOPICS,
 )
 

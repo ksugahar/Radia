@@ -1,4 +1,4 @@
-"""PEEC-inductance knowledge (mcp-server-radia-ngsolve, public tool).
+"""PEEC-inductance knowledge (radia-ngsolve, public tool).
 
 Panel mode: PEEC inductance (coil only, STEP).  Computes L_coil / R_coil
 from a coil solid STEP file via filament-based Biot-Savart + loop-bundle

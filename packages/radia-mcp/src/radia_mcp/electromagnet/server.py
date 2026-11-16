@@ -14,8 +14,8 @@ Provides tools for:
   magnet engineering, measurement, and a curated textbook source guide
 
 Usage:
-    mcp-server-electromagnet              # Start MCP server (stdio transport)
-    mcp-server-electromagnet --selftest   # Run self-test
+    electromagnet              # Start MCP server (stdio transport)
+    electromagnet --selftest   # Run self-test
 
 Promoted from legacy private source tree to public
 radia-mcp on 2026-04-24 (single Radia monorepo).  General Kelvin
@@ -37,7 +37,7 @@ from .accelerator_fundamentals_knowledge import get_accelerator_source_guide
 from .coil_exchange import build_shared_pole_coil_exchange_json
 from .em_knowledge import TOPICS, get_electromagnet_documentation
 
-mcp = FastMCP("mcp-server-electromagnet")
+mcp = FastMCP("electromagnet")
 
 
 # ============================================================
@@ -285,7 +285,7 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-electromagnet',
+    server_name='electromagnet',
     description='Accelerator electromagnet: CoilBuilder, Hantila, Play/Energy hysteresis',
     subpackage='radia_mcp.electromagnet',
     related_servers=["motor", "accelerator", "magnetic-materials"],
@@ -295,7 +295,7 @@ register_status_tool(
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-electromagnet',
+    server_name='electromagnet',
     topics=TOPICS,
 )
 

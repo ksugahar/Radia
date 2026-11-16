@@ -1,5 +1,4 @@
 from radia_simulink.ltspice.hysteresis_gate import hysteretic_inductor_cycle_gate
-from radia_mcp.ltspice.server import hysteretic_inductor_cycle_gate as mcp_gate
 
 
 ROWS = [
@@ -37,8 +36,3 @@ def test_hysteretic_cycle_gate_rejects_open_loop_and_missing_nonlinearity():
     assert result["checks"]["hysteresis_energy_is_positive"] is False
     assert result["checks"]["flux_loop_closes_each_steady_cycle"] is False
     assert result["checks"]["voltage_contains_nonlinear_harmonics"] is False
-
-
-def test_hysteretic_cycle_mcp_dispatches_nested_rows():
-    result = mcp_gate(ROWS, 1.2, 0.0072, 0.04348)
-    assert result["status"] == "ok"

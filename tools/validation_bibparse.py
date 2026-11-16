@@ -1,4 +1,4 @@
-"""Minimal BibTeX parser / serializer for the bibliography sub-skill.
+"""Minimal BibTeX parser for the validation-record reference list.
 
 We deliberately don't depend on ``bibtexparser`` — its installation is
 heavyweight and its API churn has caused issues. The grammar handled

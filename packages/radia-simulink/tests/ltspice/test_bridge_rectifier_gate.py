@@ -1,7 +1,6 @@
 import copy
 
 from radia_simulink.ltspice.bridge_rectifier_gate import bridge_rectifier_gate
-from radia_mcp.ltspice.server import bridge_rectifier_gate as mcp_bridge_rectifier_gate
 
 
 def good_summary():
@@ -35,7 +34,6 @@ def test_accepts_frequency_pair_and_current_closure():
     result = bridge_rectifier_gate(good_summary())
     assert result["status"] == "ok"
     assert result["checks"]["ripple_frequency_is_twice_input"] is True
-    assert mcp_bridge_rectifier_gate(good_summary())["status"] == "ok"
 
 
 def test_rejects_half_wave_frequency_and_bad_current_sum():

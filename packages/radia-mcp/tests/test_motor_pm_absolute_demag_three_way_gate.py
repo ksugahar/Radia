@@ -119,7 +119,7 @@ async def _probe_stdio() -> dict[str, object]:
 def test_changed_tool_passes_real_stdio_protocol() -> None:
     result = asyncio.run(asyncio.wait_for(_probe_stdio(), timeout=45))
     assert result == {
-        "server_name": "mcp-server-motor",
+        "server_name": "motor",
         "listed": True,
         "is_error": False,
         "status": "attributed_pending",

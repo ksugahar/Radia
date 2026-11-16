@@ -40,7 +40,6 @@ on:
       - "src/radia/panels/samples/**/*.msh"
       - "src/lib/radia_pybind.cpp"
       - "src/radia/panels/calc_fem_kelvin.py"
-      - ".agents/skills/md2html/md2html.py"
       - "AGENTS.md"
       - "CLAUDE.md"
       - "README.md"
@@ -74,7 +73,6 @@ on:
       - "src/radia/panels/samples/**/*.msh"
       - "src/lib/radia_pybind.cpp"
       - "src/radia/panels/calc_fem_kelvin.py"
-      - ".agents/skills/md2html/md2html.py"
       - "AGENTS.md"
       - "CLAUDE.md"
       - "README.md"
@@ -330,20 +328,6 @@ jobs:
           fi
           cat radia-mcp-ci-selection.json
 
-      - name: Install PPTX dependency for affected presentation contracts
-        if: needs.scope.outputs.run_tests == 'true'
-        run: |
-          python - <<'PY'
-          import json, subprocess, sys
-          plan = json.load(open("radia-mcp-ci-selection.json", encoding="utf-8"))
-          if plan["package_tests"] == ["tests"] or any(
-              "presentation" in path for path in plan["package_tests"]
-          ):
-              subprocess.run([sys.executable, "-m", "pip", "install", "-e", "packages/radia-mcp[document]"], check=True)
-              import pptx
-              print("PPTX contracts enabled:", pptx.__version__)
-          PY
-
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
         if: needs.scope.outputs.run_tests == 'true'
         run: |
@@ -441,19 +425,19 @@ jobs:
           )
 
           slow_servers = {
-              "radia-ngsolve": 120,
-              "literature-index": 120,
-              "mathematica": 90,
+              "radia-mcp-analysis": 120,
+              "radia-mcp-mathematica": 90,
           }
           failed = []
           selected = plan["server_selftests"]
           for short in selected:
-              info = catalog.CATALOG[short]
-              cmd = [sys.executable, "-c",
-                     f"import sys; sys.path.insert(0, 'src'); "
-                     f"from {info['subpackage']}.server import main; "
-                     f"sys.argv = ['{info['entry_point']}', '--selftest']; "
-                     f"main()"]
+              if "entry_point" not in catalog.CATALOG[short]:
+                  failed.append((short, "selection", "not a launchable key"))
+                  continue
+              cmd = [sys.executable, "-s", "-c",
+                     "import sys; sys.path.insert(0, 'src'); "
+                     "from radia_mcp.maintenance import main; "
+                     f"sys.exit(main(['serve', {short!r}, '--selftest']))"]
               r = subprocess.run(
                   cmd,
                   capture_output=True,
@@ -532,10 +516,6 @@ jobs:
           plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
           targets = plan["integration_tests"]
           if targets:
-              import tomllib
-              metadata = tomllib.loads(Path("packages/radia-mcp/pyproject.toml").read_text(encoding="utf-8"))
-              dependencies = metadata["project"]["optional-dependencies"]["md2html"]
-              subprocess.run([sys.executable, "-m", "pip", "install", *dependencies], check=True)
               import runpy
               source = runpy.run_path("packages/radia-mcp/tools/integration_source.py")
               root = Path.cwd().resolve()

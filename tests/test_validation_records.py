@@ -268,8 +268,8 @@ def test_varying_geometry_inside_p_series_is_rejected(adoption_sample):
 def analytic_sample(adoption_sample):
     root, path, record = adoption_sample
     # Synthetic canonical entry, never a scientific approval or execution claim.
-    bibliography = root / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
-    bibliography.parent.mkdir(parents=True)
+    bibliography = root / "validation_records/references.bib"
+    bibliography.parent.mkdir(parents=True, exist_ok=True)
     bibliography.write_text('@article{SyntheticReference, doi={10.0000/synthetic-schema-fixture}}\n', encoding="utf-8")
     receipt = b'{"synthetic": true, "execution_claim": false}\n'
     (path.parent / "symbolic.json").write_bytes(receipt)

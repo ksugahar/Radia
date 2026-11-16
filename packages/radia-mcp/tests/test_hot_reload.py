@@ -232,7 +232,7 @@ async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
         # and actual stdio calls without repointing the developer's install.
         args=["-c", "from radia_mcp.common import status; "
               f"status._distribution_provenance=lambda *args: {{'editable': {editable!r}}}; "
-              "from radia_mcp.grant_writing.server import main; main()"],
+              "from radia_mcp.bayesian_opt.server import main; main()"],
         cwd=str(package_root),
         env=env,
     )
@@ -244,10 +244,10 @@ async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
         ) as session:
             initialized = await session.initialize()
             listed = await session.list_tools()
-            exposed = "grant_writing_reload_code" in {tool.name for tool in listed.tools}
+            exposed = "bayesian_opt_reload_code" in {tool.name for tool in listed.tools}
             if not exposed:
                 return {"exposed": False, "notifications": notifications}
-            called = await session.call_tool("grant_writing_reload_code", {})
+            called = await session.call_tool("bayesian_opt_reload_code", {})
             await asyncio.sleep(0.05)
             return {
                 "exposed": True,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from radia_mcp.ltspice.server import rc_thermal_noise_psd_gate as mcp_gate
 from radia_simulink.ltspice.noise_gate import rc_thermal_noise_psd_gate
 
 
@@ -47,7 +46,6 @@ def good_summary() -> dict:
 def test_noise_gate_accepts_density_rms_and_capacitance_pair():
     result = rc_thermal_noise_psd_gate(good_summary())
     assert result["status"] == "ok"
-    assert mcp_gate(good_summary())["status"] == "ok"
 
 
 def test_noise_gate_rejects_ordinary_integral_semantics():

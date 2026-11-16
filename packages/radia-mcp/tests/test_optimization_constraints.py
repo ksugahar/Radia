@@ -126,7 +126,7 @@ def test_box_rejects_malformed_or_general_constraints(changes):
 
 def test_composed_mcp_returns_diagnostic_status_and_errors():
     async def check():
-        pack = await CapabilityServer("radia-design", "optimization").initialize()
+        pack = await CapabilityServer("radia-mcp-optimize", "search").initialize()
         assert pack.status()["runtime_contract"]["complete"]
         for name, args in [("optimization_kkt_audit", kkt_args()),
                            ("optimization_projected_gradient_audit", box_args())]:

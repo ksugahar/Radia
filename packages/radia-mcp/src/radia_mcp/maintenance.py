@@ -17,19 +17,15 @@ from urllib.request import url2pathname
 
 from . import __version__
 
-BASELINE = {
-    "radia-meta": "meta",
-    "radia-build123d": "build123d",
-    "radia-gmsh": "gmsh",
-    "radia-analysis": "radia-analysis",
-    "radia-motion": "radia-motion",
-    "radia-publication": "radia-publication",
-}
+BASELINE = {key: key for key in (
+    "radia-mcp-meta", "build123d-mcp", "gmsh-mcp", "radia-mcp-analysis",
+    "radia-mcp-maglev",
+)}
 
 
 def server_module(key: str) -> str:
     from .meta.catalog import CATALOG
-    if key not in CATALOG:
+    if key not in CATALOG or "entry_point" not in CATALOG[key]:
         raise ValueError(f"Unknown catalog server: {key}")
     return CATALOG[key]["subpackage"] + ".server"
 

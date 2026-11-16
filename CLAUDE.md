@@ -23,6 +23,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Radia owns electromagnetic formulations, open-boundary operators, constitutive models, HDiv-MMM/VIM, PEEC, SIBC/ESIM, Kelvin/DtN, stream functions, application coupling and validated native kernels.
 - Cubit and build123d own CAD authoring; Netgen/NGSolve and Cubit own solver meshing; Gmsh is the post-processing target. Modeling APIs use neutral domain names: no reference commercial-solver brands in identifiers, docs, tests or commit messages, and no vendor API compatibility claims.
 - Build thin Python/MATLAB/MCP adapters around tested domain workflows; do not duplicate solver logic or expose every helper (contracts per `packages/radia-mcp/CONTRIBUTING.md`). Keep two genuinely independent analysis routes for important models when feasible.
+- Application workflows live in `radia-mcp` application packs; `radia` holds the general library and validated solvers. MCP workflows compute only through validated `radia` entries (no MCP-only numerics), stay importable as Python functions, and move a component into `radia` once it becomes general and needs validation.
 ### Numerical Rules
 - Radia/radia-mcp must not include implementations infringing CLN patents; preserve citations and independent methods, renaming is not removal, and select reduced order by measured operating-band error. Follow [CLN implementation policy](docs/CLN_POLICY.md).
 - Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (formerly Foster + SIBC), never "mixed Galerkin".
@@ -44,8 +45,8 @@ Python/MCP is the first-class AI interface. Operational workflows use MCP or hum
 - Verify the interpreter and actual import path after repointing. Report each client's live loaded source separately; reconnect as needed. Unknown or mixed evidence must stay unverified.
 - Keep solver release tests isolated from development. See [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
 
-### Canonical Bibliography
-The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`; resolve it with `bibliography_canonical_path` and correct verified entries there. Manuscript folders contain generated `.bbl` only, never local `.bib` copies: use `bibliography_make_bbl`, regenerate after changes and check citations.
+### Bibliography
+The bibliography is managed separately (private). Adopted validation records cite `validation_records/references.bib`.
 
 ### CPU / GPU Execution Policy (2026-10-11)
 - CPU numerical default: 1 thread for independent optimization runs; multithreading supported, explicit 8-physical-core large-solve profile. Log TaskManager/OpenMP/MKL limits. Builds separate. MEX CPU: no CUDA context; no CPU-only MEX build.

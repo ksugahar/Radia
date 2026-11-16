@@ -1,7 +1,6 @@
 import copy
 
 from radia_simulink.ltspice.bipolar_startup_gate import bipolar_supply_startup_gate
-from radia_mcp.ltspice.server import bipolar_supply_startup_gate as mcp_gate
 
 
 def good():
@@ -26,7 +25,6 @@ def test_accepts_ordered_bipolar_startup():
     result = bipolar_supply_startup_gate(good())
     assert result["status"] == "ok"
     assert result["checks"]["power_good_asserts_after_rail_t90"] is True
-    assert mcp_gate(good())["status"] == "ok"
 
 
 def test_rejects_wrong_negative_polarity_and_rail_imbalance():

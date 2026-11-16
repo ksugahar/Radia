@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 
 from radia_simulink.ltspice.distributed_line_gate import distributed_line_delay_loss_gate
-from radia_mcp.ltspice.server import distributed_line_delay_loss_gate as mcp_gate
 
 
 def _summary() -> dict:
@@ -48,7 +47,3 @@ def test_gate_rejects_milli_suffix_misinterpretation() -> None:
     result = distributed_line_delay_loss_gate(summary)
     assert result["status"] == "needs_attention"
     assert "spice_m_suffix_resistance_ratio_is_one_thousand" in result["issues"]
-
-
-def test_mcp_wrapper_reports_invalid_input() -> None:
-    assert mcp_gate({})["status"] == "invalid_input"

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from radia_mcp.ltspice.server import series_rlc_complex_impedance_gate as mcp_gate
 from radia_simulink.ltspice.series_rlc_gate import series_rlc_complex_impedance_gate
 
 
@@ -33,7 +32,6 @@ def test_accepts_full_complex_series_rlc_recovery_evidence():
     result = series_rlc_complex_impedance_gate(good_summary())
     assert result["status"] == "ok"
     assert result["checks"]["three_full_complex_traces_match"] is True
-    assert mcp_gate(good_summary())["status"] == "ok"
 
 
 def test_rejects_magnitude_only_or_unverified_conversion_semantics():

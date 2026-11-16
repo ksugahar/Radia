@@ -662,7 +662,7 @@ LAB_USAGE_NOTES = r"""
 ## Where Sommerfeld DOES appear in lab work (rare)
 
   * Antenna over earth in NDT setups (subsurface flaw detection):
-    `radia_mcp.ndt` references this when the source-receiver pair
+    Eddy-current NDT work references this when the source-receiver pair
     sits above a half-space conductor.
   * Underground HF / VLF transmission line over earth: a sibling of
     the lab's litz / transmission topic, see

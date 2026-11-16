@@ -5,8 +5,8 @@ A standalone FastMCP server exposing Wolfram Mathematica as MCP tools via
 the `wolframscript` command-line driver.
 
 Usage:
-    mcp-server-mathematica              # Start MCP server (stdio transport)
-    mcp-server-mathematica --selftest   # Run self-test (no Mathematica needed)
+    radia-mcp-mathematica              # Start MCP server (stdio transport)
+    radia-mcp-mathematica --selftest   # Run self-test (no Mathematica needed)
 
 Tools:
     mathematica_evaluate(code, timeout)   — low-level Wolfram eval bridge
@@ -14,7 +14,7 @@ Tools:
     mathematica_status()                   — diagnostic: is wolframscript OK?
     mathematica_simplify(expr, assumptions)
     mathematica_to_tex(expr)               — TeXForm for paper writing
-    mathematica_export_equation(expr)      — evaluated result to EqnEdit64/Office
+    mathematica_export_equation(expr)      — evaluated result as TeX (.tex file)
     mathematica_check_identity(lhs, rhs)   — verify LHS == RHS
     mathematica_check_identities(claims)   — batch named identities in one kernel
     mathematica_verification_guide(topic)  — choose checks and execution mode
@@ -40,7 +40,7 @@ from radia_mcp.common import register_status_tool
 
 from . import tools as _tools
 
-mcp = FastMCP("mcp-server-mathematica")
+mcp = FastMCP("radia-mcp-mathematica")
 
 
 # ============================================================
@@ -66,7 +66,7 @@ for _name in dir(_tools):
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-mathematica',
+    server_name='radia-mcp-mathematica',
     description='Mathematica recipes: vector calc, Kelvin transform, symbolic Maxwell, evaluation pipeline',
     subpackage='radia_mcp.mathematica',
     related_servers=["differential-forms", "radia-ngsolve"],

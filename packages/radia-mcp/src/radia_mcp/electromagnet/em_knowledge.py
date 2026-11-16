@@ -130,7 +130,7 @@ five Method choices. The non-IH notebook workbench is retired:
 The Clebsch hodograph mode is the block-facing, verified forward demo.  The
 broader accelerator pole-face inverse-design examples and saturation/end-pack
 studies live under `docs/clebsch_hodograph/`,
-`docs/clebsch_hodograph/demos/`, and the `mcp-server-accelerator`
+`docs/clebsch_hodograph/demos/`, and the `accelerator`
 `accelerator("two_plane_design")` / `accelerator("endpack_cobake")` topics.
 
 ## Typical Parameters
@@ -531,7 +531,7 @@ post.write("magnet_field.msh")
 
 ## For More Detail
 
-Use the `kelvin_transformation` tool from mcp-server-ngsolve for the full
+Use the `kelvin_transformation` tool from ngsolve for the full
 Kelvin transformation mathematics and implementation details.
 """
 
@@ -806,7 +806,7 @@ the magnetic-sphere-in-uniform-Hz BVP is fundamentally not
 1/8-symmetric: the source `H0 z_hat` reverses sign under the z=0
 mirror.  This is a property of the BVP, not a Cubit / NGSolve issue,
 and no formulation tweak can recover it.  See
-`mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+`radia-ngsolve` topic `kelvin_transformation` ->
 "Why 1/8 is unsupported for the sphere benchmark".
 
 ## C-yoke 1/8 reduction (shipped, golden-tested)

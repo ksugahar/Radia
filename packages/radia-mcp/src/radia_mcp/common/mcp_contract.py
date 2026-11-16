@@ -14,7 +14,7 @@ from typing import Any
 from radia_mcp.common.server_hardening import annotation_preset_name, infer_tool_annotations
 
 
-SCHEMA = "cae-ai-lab.mcp-server-contract.v3"
+SCHEMA = "cae-ai-lab.contract.v3"
 ARTIFACT_IDENTITY_SCHEMA = "cae-ai-lab.solver-artifact-identity.v1"
 CAPABILITY_MATURITY_LEVELS = (
     "knowledge_only",

@@ -15,7 +15,7 @@ from . import (
 )
 
 
-mcp = FastMCP("mcp-server-acoustic-fembem")
+mcp = FastMCP("acoustic-fembem")
 
 
 @mcp.tool()
@@ -49,7 +49,7 @@ def acoustic_fembem_server_config(
 
 register_status_tool(
     mcp,
-    server_name="mcp-server-acoustic-fembem",
+    server_name="acoustic-fembem",
     description="Readable MATLAB P1 FEM/BEM, CQ, and validation education solver",
     subpackage="radia_mcp.acoustic_fembem",
     related_servers=["radia-ngsolve", "bem", "fem"],

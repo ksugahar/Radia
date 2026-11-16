@@ -72,7 +72,7 @@ def test_independent_central_differences_and_wrong_gradient():
 
 def test_design_pack_owns_tools_without_changing_learning_profile():
     async def check():
-        pack = await CapabilityServer("radia-design", "optimization").initialize()
+        pack = await CapabilityServer("radia-mcp-optimize", "search").initialize()
         assert pack.status()["runtime_contract"]["complete"]
         assert pack.status()["owners"]["optimization_stopping_audit"] == "optimization"
         tool, source, _ = pack.tools["optimization_stopping_audit"]
@@ -83,6 +83,6 @@ def test_design_pack_owns_tools_without_changing_learning_profile():
             variable_scales=[1], objective_scale=1, problem_class="smooth_unconstrained"))
         assert result[1]["status"] == "stalled_nonstationary"
         assert result[1]["optimality_certified"] is False
-        learning = await CapabilityServer("radia-design", "learning").initialize()
+        learning = await CapabilityServer("radia-mcp-learning", "all").initialize()
         assert "optimization_stopping_audit" not in learning.tools
     asyncio.run(check())

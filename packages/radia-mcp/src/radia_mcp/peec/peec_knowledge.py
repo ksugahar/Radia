@@ -7,7 +7,7 @@ solver meshes are checked Cubit/Netgen .vol inputs. radia.peec_mesh_import
 converts already checked NGSolve surface objects or explicit nodes/faces;
 Gmsh MSH 4.2 is exclusively derived post-processing output.
 SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable companion to docs/peec/PEEC_SURFACE_IMPEDANCE.md: F(xi)/G(xi) skin+proximity ratios vs normalized thickness, copper-foil Z(f) sweep, Dowell coth (H=0 BC) vs ESIM tanh (dH/dz=0 BC) boundary comparison, round-wire Bessel vs rect Dowell, and CF truncation accuracy (verified; F/G match deep_bar_resistance_factor/reactance_factor to machine precision).
-PEEC knowledge base for the mcp-server-peec MCP server.
+PEEC knowledge base for the peec MCP server.
 
 Covers: Loop-Star PEEC architecture, node-segment topology, circuit extraction,
 multi-filament subdivision, SIBC surface impedance,

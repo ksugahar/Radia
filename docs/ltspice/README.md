@@ -254,72 +254,7 @@ repository.
 
 ## MCP server
 
-For AI agents (Claude Code, Cursor) that author or refactor SPICE:
-the MCP server lets the agent convert between formats AND lint its
-own generated netlists in the same conversation, without shelling out
-to a CLI.
-
-The MCP SDK ships with Radia. Add the server to your MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "ltspice": {
-      "command": "mcp-server-radia-ltspice"
-    }
-  }
-}
-```
-
-Exposes thirty-three tools:
-
-| Tool | Purpose |
-|---|---|
-| `netlist_to_schemdraw(netlist, name)` | SPICE → schemdraw Python script |
-| `schemdraw_to_netlist(script, title)` | schemdraw script → SPICE |
-| `netlist_to_asc(netlist, asy_search_dirs?)` | SPICE → LTspice `.asc` |
-| `asc_to_netlist(asc_text, use_ltspice?, asy_search_dirs?)` | LTspice `.asc` → SPICE (`use_ltspice` defaults to auto: LTspice if installed, else pure-Python) |
-| `check_circuit(text, fmt, asy_search_dirs?)` | Lint: round-trip drift (count, GND-pin, **topology**) + static netlist checks. Returns `{ok, info, warnings}`. |
-| `info_circuit(text, fmt, asy_search_dirs?)` | Summary: component counts, symbol kinds, `.subckt` blocks. |
-| `compare_topology(netlist_a, netlist_b)` | Node-rename-invariant connectivity diff of two netlists. Returns `{equivalent, ...}`. |
-| `balanced_learning_profile()` | Equal-capability public/source MCP learning contract and self-check. |
-| `parse_measure_log(log_text)` | Public-safe LTspice `.measure` log parser. It recovers linear `mag()` values from the AC dB wrapper and rejects scalar `ph()` evidence whose sign was lost. |
-| `parse_stepped_measure_log(log_text)` | Pairs stepped `Measurement` rows with concrete `.step` assignments and rejects incomplete tables. |
-| `sallen_key_filter_family_gate(rows)` | Gates multi-Q low-pass sweeps against the ideal two-pole response. |
-| `hysteretic_inductor_cycle_gate(cycle_rows, expected_current_peak_a, expected_copper_energy_j, voltage_thd)` | Gates settled hysteresis cycles by terminal/copper/flux-loop energy, closure, repeatability, and harmonic evidence. |
-| `half_wave_rectifier_gate(...)` | Gates capacitor-input half-wave DC, ripple, and load/diode current balance. |
-| `bridge_rectifier_gate(summary)` | Gates single-phase full-wave frequency doubling, diagonal-pair conduction, four-diode/load current balance, and output-node KCL. |
-| `cockcroft_walton_stage_gate(...)` | Gates loaded two-stage multiplier scaling, adjacent-window settling, ripple, load current, and real-power bounds. |
-| `boost_converter_steady_state_gate(...)` | Gates periodic boost ratio, passive power, inductor volt-second balance, and capacitor charge balance. |
-| `transient_psrr_gate(...)` | Gates transient input/output ripple attenuation against independent RAW replay and the PSRR definition. |
-| `measure_bandwidth_crossing_gate(summary)` | Replays two-sided rise/fall `-3 dB` bandwidth measures from sampled AC magnitude, using dB interpolation on each linear-frequency interval. |
-| `bipolar_supply_startup_gate(summary)` | Gates signed dual-rail startup by final regulation, rail balance, tail ripple, overshoot, 10-90% timing skew, and power-good ordering. |
-| `bipolar_converter_efficiency_gate(summary)` | Gates signed source power, positive dual-output power, passivity, output balance, and recomputation of reported late-window efficiency. |
-| `bipolar_rail_power_quality_gate(summary)` | Gates signed bipolar rails, target regulation, ripple, balance, passivity, and late-window efficiency closure. |
-| `monte_carlo_tolerance_family_gate(summary)` | Gates independent uniform component-tolerance statistics against the expected standard deviation and `1/sqrt(N)` averaging of equivalent resistors and symmetric dividers. |
-| `series_rlc_complex_impedance_gate(summary)` | Gates a current-driven series RLC using source orientation, three full-complex voltage traces, analytic resonance, minimum impedance, generated-netlist semantics, and converted/reference RAW equivalence. |
-| `rc_thermal_noise_psd_gate(summary)` | Gates RC thermal-noise density, finite-band RMS from squared-PSD integration, capacitance scaling, units, and noise-analysis-specific `INTEG` semantics. |
-| `distributed_line_delay_loss_gate(summary)` | Separates distributed-line `length*sqrt(LC)` first-arrival delay from series-resistance attenuation, catches the SPICE `m` = milli suffix, and requires observable replay. |
-| `second_order_allpass_phase_group_delay_gate(summary)` | Gates flat all-pass magnitude together with the full complex transfer, monotone phase winding, reciprocal-frequency phase symmetry, center group delay `4Q/omega0`, pole-zero mirroring, and replay. |
-| `second_order_complex_zero_transfer_gate(summary)` | Gates a two-pole/two-complex-zero transfer using root-recovered frequencies and Q, DC/high-frequency gain ratio, finite real-axis dip, full complex response, and replay. |
-| `balanced_three_phase_delta_load_gate(summary)` | Gates a balanced Y source feeding an equal delta-connected RL load using ABC sequence, sqrt(3) voltage/current identities, branch impedance, complex-power conservation, constant instantaneous three-phase power, and replay. |
-| `ideal_transformer_identity_gate(summary)` | Gates a two-winding ideal transformer using signed voltage/current ratios, reflected load, source-resistance KVL, complex and instantaneous power conservation, and replay. |
-| `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
-| `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
-| `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
-
-Typical agent loop: generate netlist → `check_circuit(..., 'cir')` →
-if `warnings` non-empty, fix and re-check → only ship when clean.
-
-`patentability_search_plan` is only a search-query and report-planning aid.
-It does not decide patentability and is not a legal opinion.
-
-`compare_topology` answers a different question — *"did my edit change
-the wiring?"*  It is invariant to node renaming and benign R/C/L pin
-swaps, so after changing a component value
-`compare_topology(before, after)` returns `equivalent: true`; if you
-accidentally moved a wire it returns `false`.  Use it to confirm an
-edit touched only what you intended.
+radia-mcp does not ship an LTspice MCP server.
 
 ## End-to-end workflow: AI-assisted circuit editing
 
@@ -348,7 +283,7 @@ looks like this:
 1. **Start in LTspice**: open or draw a schematic, save as `foo.asc`.
 
 2. **Hand to an AI agent**.  In Claude Code or Cursor with
-   `mcp-server-radia-ltspice` configured (`mcp-ltspice` also works), ask the agent to modify the circuit.
+   an LTspice-capable MCP server configured, ask the agent to modify the circuit.
    The agent calls:
 
    ```
