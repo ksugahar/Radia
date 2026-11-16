@@ -186,8 +186,12 @@ std::vector<Tri> BuildTriangles(const RingSection& sec)
                 throw std::invalid_argument("AssembleRingInductance: point " + std::to_string(idx)
                                             + " is not off the axis (r > 0, finite)");
         }
-        t.area = 0.5 * std::abs((t.v[1][0] - t.v[0][0]) * (t.v[2][1] - t.v[0][1])
-                                - (t.v[2][0] - t.v[0][0]) * (t.v[1][1] - t.v[0][1]));
+        const double signed_area = 0.5 * ((t.v[1][0] - t.v[0][0]) * (t.v[2][1] - t.v[0][1])
+                                          - (t.v[2][0] - t.v[0][0]) * (t.v[1][1] - t.v[0][1]));
+        if (signed_area < 0.0)                      // the log potential needs counterclockwise vertices
+            for (int d = 0; d < 2; ++d)
+                std::swap(t.v[1][d], t.v[2][d]);
+        t.area = std::abs(signed_area);
         if (!(t.area > 0.0))
             throw std::invalid_argument("AssembleRingInductance: degenerate meridian triangle "
                                         + std::to_string(k));
@@ -203,9 +207,19 @@ std::vector<Tri> BuildTriangles(const RingSection& sec)
 double FilamentMutual(double r1, double z1, double r2, double z2)
 {
     const double s = (r1 + r2) * (r1 + r2) + (z1 - z2) * (z1 - z2);
+    const double m = 4.0 * r1 * r2 / s;
     const double m1 = ((r1 - r2) * (r1 - r2) + (z1 - z2) * (z1 - z2)) / s;
-    const double m = 1.0 - m1;
     const double k = std::sqrt(m);
+    if (m < 0.5) {
+        // (2/k - k) K - (2/k) E = (pi/16) k^3 2F1(3/2, 3/2; 3; m): a positive series, free of the
+        // cancellation of the closed form at small m (far filaments).
+        double term = 1.0, sum = 1.0;
+        for (int n = 0; n < 200 && term > 1e-17 * sum; ++n) {
+            term *= (1.5 + n) * (1.5 + n) / ((3.0 + n) * (1.0 + n)) * m;
+            sum += term;
+        }
+        return kMu0 * std::sqrt(r1 * r2) * (kPi / 16.0) * m * k * sum;
+    }
     const double K = CarlsonRF(0.0, m1, 1.0);
     const double E = K - (m / 3.0) * CarlsonRD(0.0, m1, 1.0);
     return kMu0 * std::sqrt(r1 * r2) * ((2 / k - k) * K - (2 / k) * E);
@@ -258,6 +272,11 @@ RingSolution SolveLoopVoltage(const RingInductance& L, double frequency_hz, doub
     const std::size_t n = L.n;
     if (n == 0 || L.M.size() != n * n || L.area.size() != n || L.centroid.size() != 2 * n)
         throw std::invalid_argument("SolveLoopVoltage: inconsistent ring inductance");
+    for (std::size_t i = 0; i < n; ++i)              // the column-major solve below relies on M = M^T
+        for (std::size_t j = i + 1; j < n; ++j)
+            if (!(L.M[i * n + j] == L.M[j * n + i]))
+                throw std::invalid_argument("SolveLoopVoltage: M is not symmetric at ("
+                                            + std::to_string(i) + ", " + std::to_string(j) + ")");
     if (!(frequency_hz > 0.0) || !(sigma > 0.0))
         throw std::invalid_argument("SolveLoopVoltage: frequency and sigma must be positive");
     const double omega = 2 * kPi * frequency_hz;

@@ -100,3 +100,44 @@ def test_adapter_refuses_bad_shapes_and_labels():
         solve_axisym_ring_peec(pts, tris.astype(float), 1e3, 5.8e7)
     with pytest.raises(ValueError, match="region"):
         solve_axisym_ring_peec(pts, tris, 1e3, 5.8e7, region=["a"])
+
+
+def test_reversed_winding_gives_the_same_matrix():
+    pts, tris = square_section(0.2, 0.0, 1e-3, 3)
+    flipped = tris[:, [0, 2, 1]].copy()
+    mixed = tris.copy()
+    mixed[::2] = flipped[::2]
+    M, _, _ = pm.axisym_ring_inductance(pts, tris)
+    for other in (flipped, mixed):
+        Mo, _, _ = pm.axisym_ring_inductance(pts, other)
+        assert np.abs(Mo - M).max() <= 1e-15*np.abs(M).max(), np.abs(Mo - M).max()
+    assert np.all(np.diag(M) > 0)
+
+
+def test_far_mutual_is_the_coaxial_dipole_limit():
+    tri = np.array([[0.2, 0.0], [0.2001, 0.0], [0.2, 0.0001]])
+    for dz in (10.0, 1e3, 1e4):
+        M, _, c = pm.axisym_ring_inductance(np.vstack([tri, tri + [0, dz]]),
+                                            np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
+        r, d = c[0, 0], dz
+        dipole = MU0*math.pi*r**4/(2*d**3)*(1 - 3*(r/d)**2)   # equal coaxial loops, to second order
+        assert M[0, 1] > 0 and abs(M[0, 1]/dipole - 1) < 20*(r/d)**4 + 1e-12, (dz, M[0, 1], dipole)
+
+
+def test_series_and_closed_form_agree_at_the_switch():
+    # m = 4 r1 r2 / ((r1 + r2)^2 + dz^2) = 0.5 at dz = sqrt(4 r1 r2 / 0.5 - (r1 + r2)^2)
+    r = 0.2
+    dz0 = math.sqrt(8*r*r - 4*r*r)
+    vals = []
+    for dz in (dz0*(1 - 1e-9), dz0*(1 + 1e-9)):
+        tri = np.array([[r, 0.0], [r + 1e-7, 0.0], [r, 1e-7]])
+        M, _, _ = pm.axisym_ring_inductance(np.vstack([tri, tri + [0, dz]]),
+                                            np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
+        vals.append(M[0, 1])
+    assert abs(vals[0]/vals[1] - 1) < 1e-8, vals
+
+
+def test_loop_solve_refuses_a_nonsymmetric_matrix():
+    M = np.array([[2e-6, 1e-6], [0.0, 3e-6]])
+    with pytest.raises(ValueError, match="not symmetric"):
+        pm.axisym_ring_loop_solve(M, np.array([1e-6, 2e-6]), np.array([[0.2, 0], [0.21, 0]]), 150e3, 5.8e7)
