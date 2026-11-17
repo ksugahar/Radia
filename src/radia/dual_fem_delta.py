@@ -1,5 +1,6 @@
 """Complementary magnetostatic diagnostics for a uniform field at infinity."""
 
+from fractions import Fraction
 from hashlib import sha256
 from math import isfinite, pi, prod, sqrt
 from time import perf_counter
@@ -247,14 +248,24 @@ def _solve_ellipsoid(mesh, axes, direction, radius, offset, order, mu_r,
 
 
 def _checked_bounds(level, name):
-    """Return finite ``(q_lower, q_upper)`` with q_lower <= q_upper, else raise."""
+    """Return finite ``(q_lower, q_upper)`` with q_lower <= q_upper, else raise.
+
+    The order is checked on the exact input values before the binary64
+    conversion, so large integers that round to the same float cannot hide a
+    reversed pair.
+    """
     try:
-        lower, upper = float(level["q_lower"]), float(level["q_upper"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{name} needs numeric q_lower and q_upper") from None
+        raw_lower, raw_upper = level["q_lower"], level["q_upper"]
+        lower, upper = float(raw_lower), float(raw_upper)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise ValueError(f"{name} needs numeric, representable q_lower and q_upper") from None
     if not (isfinite(lower) and isfinite(upper)):
         raise ValueError(f"{name} needs finite bounds, got q_lower={lower}, q_upper={upper}")
-    if lower > upper:
+    try:
+        reversed_pair = Fraction(raw_lower) > Fraction(raw_upper)
+    except (TypeError, ValueError):
+        reversed_pair = lower > upper
+    if reversed_pair or lower > upper:
         raise ValueError(f"{name} needs q_lower <= q_upper, got q_lower={lower}, q_upper={upper}")
     return lower, upper
 
@@ -289,8 +300,8 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
         raise ValueError("Need at least two refinement levels")
     try:
         fraction = float(convergence_fraction)
-    except (TypeError, ValueError):
-        raise ValueError(f"convergence_fraction must be a number, got {convergence_fraction!r}") from None
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"convergence_fraction must be a representable number, got {convergence_fraction!r}") from None
     if not isfinite(fraction) or fraction < 0:
         raise ValueError(f"convergence_fraction must be finite and >= 0, got {fraction}")
     rows = [_checked_bounds(level, f"levels[{i}]") for i, level in enumerate(levels)]
@@ -336,8 +347,9 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
         if result["coarse"]["r"] is not None:
             derived["r"] = result["coarse"]["r"]
         _require_finite(**{f"coarse_{k}": v for k, v in derived.items()})
-    converged = bool(not nesting and max(abs(drift["lower"]), abs(drift["upper"]))
-                     <= fraction * scale)
+    budget = fraction * scale
+    _require_finite(convergence_budget=budget)
+    converged = bool(not nesting and max(abs(drift["lower"]), abs(drift["upper"])) <= budget)
     result["converged"] = converged
     if coarse is not None and not converged:
         result["coarse"]["provisional_closer"] = result["coarse"]["closer"]

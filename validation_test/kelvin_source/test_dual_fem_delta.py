@@ -133,3 +133,32 @@ def test_dual_bracket_reference_rejects_bad_fraction_and_unrepresentable_values(
     assert result["coarse"]["closer"] == "inconclusive", result["coarse"]
     assert result["coarse"]["provisional_closer"] == "two_to_one", result["coarse"]
     assert result["last_step_drift"] == {"lower": 9.9, "upper": -19.9}, result["last_step_drift"]
+
+
+def test_dual_bracket_reference_rejects_overflowing_and_lossy_inputs():
+    """Guards: integers too large for binary64 raise ValueError (not
+    OverflowError) in the fraction, the levels and the coarse level; a finite
+    convergence budget overflow raises; a reversed pair that rounds to equal
+    floats is still rejected.  Assumes: ordinary JSON integers reach the entry
+    through the MCP dictionary unchanged."""
+    from radia.dual_fem_delta import dual_bracket_reference
+
+    good = [{"q_lower": 9.9, "q_upper": 10.1}, {"q_lower": 9.9, "q_upper": 10.1}]
+    huge = 10 ** 400
+    with raises(ValueError, match="convergence_fraction"):
+        dual_bracket_reference(good, convergence_fraction=huge)
+    with raises(ValueError, match=r"levels\[0\]"):
+        dual_bracket_reference([{"q_lower": huge, "q_upper": huge}] + good[1:])
+    with raises(ValueError, match="coarse"):
+        dual_bracket_reference(good, coarse={"q_lower": huge, "q_upper": 8})
+    with raises(ValueError, match="convergence_budget"):
+        dual_bracket_reference(good, coarse={"q_lower": 0.0, "q_upper": 1e308},
+                               convergence_fraction=1e308)
+    lossy = {"q_lower": 2 ** 53 + 1, "q_upper": 2 ** 53}
+    assert float(lossy["q_lower"]) == float(lossy["q_upper"])
+    with raises(ValueError, match=r"levels\[0\].*q_lower <= q_upper"):
+        dual_bracket_reference([lossy, lossy])
+    with raises(ValueError, match="coarse.*q_lower <= q_upper"):
+        dual_bracket_reference(good, coarse=lossy)
+    ordered = dual_bracket_reference([{"q_lower": 2 ** 53, "q_upper": 2 ** 53 + 1}] * 2)
+    assert ordered["half_width"] == 0.0, ordered
