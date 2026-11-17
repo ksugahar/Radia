@@ -138,8 +138,9 @@ def test_dual_bracket_reference_rejects_bad_fraction_and_unrepresentable_values(
 def test_dual_bracket_reference_rejects_overflowing_and_lossy_inputs():
     """Guards: integers too large for binary64 raise ValueError (not
     OverflowError) in the fraction, the levels and the coarse level; a finite
-    convergence budget overflow raises; a reversed pair that rounds to equal
-    floats is still rejected.  Assumes: ordinary JSON integers reach the entry
+    convergence budget overflow raises; an endpoint whose value changes in the
+    binary64 conversion is rejected, ordered or not, so rounded endpoints cannot
+    produce a false convergence.  Assumes: ordinary JSON integers reach the entry
     through the MCP dictionary unchanged."""
     from radia.dual_fem_delta import dual_bracket_reference
 
@@ -154,11 +155,22 @@ def test_dual_bracket_reference_rejects_overflowing_and_lossy_inputs():
     with raises(ValueError, match="convergence_budget"):
         dual_bracket_reference(good, coarse={"q_lower": 0.0, "q_upper": 1e308},
                                convergence_fraction=1e308)
-    lossy = {"q_lower": 2 ** 53 + 1, "q_upper": 2 ** 53}
-    assert float(lossy["q_lower"]) == float(lossy["q_upper"])
-    with raises(ValueError, match=r"levels\[0\].*q_lower <= q_upper"):
-        dual_bracket_reference([lossy, lossy])
-    with raises(ValueError, match="coarse.*q_lower <= q_upper"):
-        dual_bracket_reference(good, coarse=lossy)
-    ordered = dual_bracket_reference([{"q_lower": 2 ** 53, "q_upper": 2 ** 53 + 1}] * 2)
-    assert ordered["half_width"] == 0.0, ordered
+    reversed_lossy = {"q_lower": 2 ** 53 + 1, "q_upper": 2 ** 53}
+    assert float(reversed_lossy["q_lower"]) == float(reversed_lossy["q_upper"])
+    with raises(ValueError, match=r"levels\[0\] q_lower.*binary64"):
+        dual_bracket_reference([reversed_lossy, reversed_lossy])
+    with raises(ValueError, match="coarse q_lower.*binary64"):
+        dual_bracket_reference(good, coarse=reversed_lossy)
+    # Ordered but lossy: rounding used to give upper drift 0 and converged=True
+    # although the exact upper drift is -1 and the exact widths differ.
+    wide = {"q_lower": 2 ** 53, "q_upper": 2 ** 53 + 1}
+    exact = {"q_lower": 2 ** 53, "q_upper": 2 ** 53}
+    with raises(ValueError, match=r"levels\[0\] q_upper.*binary64"):
+        dual_bracket_reference([wide, exact])
+    with raises(ValueError, match=r"levels\[0\] q_upper.*binary64"):
+        dual_bracket_reference([wide, wide])
+    with raises(ValueError, match="coarse q_upper.*binary64"):
+        dual_bracket_reference(good, coarse=wide)
+    # Exactly representable integers and ordinary floats keep working.
+    big = dual_bracket_reference([{"q_lower": 2 ** 53, "q_upper": 2 ** 53 + 2}] * 2)
+    assert big["half_width"] == 1.0 and big["converged"] is True, big

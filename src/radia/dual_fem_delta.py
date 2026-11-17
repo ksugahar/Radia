@@ -250,9 +250,10 @@ def _solve_ellipsoid(mesh, axes, direction, radius, offset, order, mu_r,
 def _checked_bounds(level, name):
     """Return finite ``(q_lower, q_upper)`` with q_lower <= q_upper, else raise.
 
-    The order is checked on the exact input values before the binary64
-    conversion, so large integers that round to the same float cannot hide a
-    reversed pair.
+    Each endpoint must keep its exact value in the binary64 conversion: a
+    value that rounds (for example an integer above 2**53) is rejected before
+    any width, nesting, drift or convergence arithmetic, so no comparison can
+    be decided on rounded values.
     """
     try:
         raw_lower, raw_upper = level["q_lower"], level["q_upper"]
@@ -261,13 +262,24 @@ def _checked_bounds(level, name):
         raise ValueError(f"{name} needs numeric, representable q_lower and q_upper") from None
     if not (isfinite(lower) and isfinite(upper)):
         raise ValueError(f"{name} needs finite bounds, got q_lower={lower}, q_upper={upper}")
-    try:
-        reversed_pair = Fraction(raw_lower) > Fraction(raw_upper)
-    except (TypeError, ValueError):
-        reversed_pair = lower > upper
-    if reversed_pair or lower > upper:
+    for key, raw, value in (("q_lower", raw_lower, lower), ("q_upper", raw_upper, upper)):
+        if _exact_value(raw) != Fraction(value):
+            raise ValueError(f"{name} {key}={raw!r} changes value in binary64 ({value!r})")
+    if lower > upper:
         raise ValueError(f"{name} needs q_lower <= q_upper, got q_lower={lower}, q_upper={upper}")
     return lower, upper
+
+
+def _exact_value(raw):
+    """Return the exact rational value of a numeric input, else raise ValueError."""
+    try:
+        return Fraction(raw)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return Fraction(*raw.as_integer_ratio())
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        raise ValueError(f"cannot check the exact value of {type(raw).__name__} bound") from None
 
 
 def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
