@@ -333,7 +333,7 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
     gfu = GridFunction(fes)
     with TaskManager():
         gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(),
-                                         inverse="pardiso") * f_lf.vec
+                                         inverse="sparsecholesky") * f_lf.vec
     t_solve = time.perf_counter() - t0
 
     # Current normalization for sigma_coil > 0 (conductive coil):

@@ -54,7 +54,7 @@ def test_fem_coilmesh_esim_converges_steel():
         "--mu-r", str(p["wp_mu_r"]),
         "--half-thickness", str(p["half_thickness_m"]),
         "--fes-order", str(p["fes_order"]),
-        "--solver", "pardiso",
+        "--solver", "sparsecholesky",
         "--sibc-bnd", "sibc", "--source-bnd", "source",
         "--sink-bnd", "sink", "--coil-mat", "coil",
         "--impedance-model", "esim",

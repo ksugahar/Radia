@@ -215,7 +215,7 @@ def solve_magnetostatic(mesh, mu_r_core=1.0, order=FEM_ORDER, verbose=True):
     gfA = GridFunction(fes)
     ndof = fes.ndof
     gfA.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                 inverse="pardiso") * f.vec
+                                 inverse="sparsecholesky") * f.vec
 
     # Time-averaged stored energy -> inductance
     B = curl(gfA)
@@ -276,7 +276,7 @@ def solve_eddy_current(mesh, freq, order=FEM_ORDER, verbose=True):
     # Solve with PARDISO (multi-threaded direct solver)
     gfA = GridFunction(fes)
     gfA.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                 inverse="pardiso") * f.vec
+                                 inverse="sparsecholesky") * f.vec
 
     # Time-averaged stored energy
     B = curl(gfA)

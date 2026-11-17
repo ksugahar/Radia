@@ -38,7 +38,7 @@ def _inv(mat, freedofs):
     try:
         return mat.Inverse(freedofs, inverse="umfpack")
     except Exception:
-        return mat.Inverse(freedofs, inverse="pardiso")
+        return mat.Inverse(freedofs, inverse="sparsecholesky")
 
 
 def age_solve():

@@ -206,7 +206,7 @@ def _solve_astar(mesh, p, omega, A_s=None):
         a.Assemble()
         f.Assemble()
         gf = GridFunction(fes)
-        gf.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gf.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     return _moment_z(mesh, -s * SIGMA * (A_s + gf))
 
@@ -238,7 +238,7 @@ def _solve_aphi(mesh, p, omega, A_s=None):
         a.Assemble()
         f.Assemble()
         gf = GridFunction(fes)
-        gf.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gf.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     gfA, gfW = gf.components
     return _moment_z(mesh, -s * SIGMA * (A_s + gfA + grad(gfW)))

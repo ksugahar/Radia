@@ -152,7 +152,7 @@ def run_fem_kelvin(freq, output_json):
            "--impedance", "esim",
            "--bh-file", str(BH),
            "--half-thickness", str(HALF_THICKNESS),
-           "--solver", "pardiso",
+           "--solver", "auto",
            "--output", str(output_json)]
     return _run(cmd, f"fem_kelvin @ {freq:.2e} Hz")
 
@@ -166,7 +166,7 @@ def run_fem_coilmesh(freq, output_json):
            "--sigma", str(SIGMA),
            "--mu-r", str(MU_R),
            "--half-thickness", str(HALF_THICKNESS),
-           "--solver", "pardiso",
+           "--solver", "sparsecholesky",
            "--impedance-model", "esim",
            "--bh-file", str(BH),
            "--esim-max-iter", "15",

@@ -216,7 +216,7 @@ def run_kelvin(maxh_wp, maxh_air, R_kelvin, fes_order=1):
     gfu = GridFunction(fes)
     with TaskManager():
         gfu.vec.data = a.mat.Inverse(
-            fes.FreeDofs(), inverse="pardiso") * f.vec
+            fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     # Line integral (filaments are in the physical inner domain)
     delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=6)

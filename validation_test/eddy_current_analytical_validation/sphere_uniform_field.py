@@ -235,7 +235,7 @@ def fem_solve(R, Z_s, B0, omega, formulation="scattered",
         gfu_scat = GridFunction(fes)
         with TaskManager():
             gfu_scat.vec.data = a_bf.mat.Inverse(
-                fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+                fes.FreeDofs(), inverse="sparsecholesky") * f_lf.vec
 
         A_total = A_inc + gfu_scat
 
@@ -266,7 +266,7 @@ def fem_solve(R, Z_s, B0, omega, formulation="scattered",
         gfu = GridFunction(fes)
         with TaskManager():
             gfu.vec.data = a_bf.mat.Inverse(
-                fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+                fes.FreeDofs(), inverse="sparsecholesky") * f_lf.vec
 
         A_total = gfu
 

@@ -41,7 +41,7 @@ def solve(*, bore=0.0, outer=.15, maxh=.006, boundary_h=.001,
     form.Assemble()
     load.Assemble()
     field = ng.GridFunction(fes)
-    field.vec.data = form.mat.Inverse(fes.FreeDofs(), inverse="pardiso")*load.vec
+    field.vec.data = form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")*load.vec
     pairing = np.dot(load.vec.FV().NumPy(), field.vec.FV().NumPy())
     reaction = -math.pi*omega*pairing.imag
     loss = math.pi*omega**2*zs.real/abs(zs)**2 * ng.Integrate(
