@@ -19,7 +19,8 @@ test_kelvin_exterior_source_routes.py; the 2/3 loss there applies to
 non-decaying backgrounds only.)
 
 Both lanes share one mesh, the verified_recipe elements (nograds=True ->
-Periodic, gauge reg on non-Kelvin materials, bonus_intorder=4 on curl-curl),
+Periodic, gauge reg on every region with the Kelvin-mapped weight in the
+exterior, bonus_intorder=4 on curl-curl),
 and a direct solver:
 
     A*    J = -s sigma (A_s + A_r)                      (A-method, no Phi)
@@ -161,6 +162,21 @@ def _material_cfs(mesh):
             mesh.MaterialCF(sg_d, default=0.0))
 
 
+def _add_gauge_mass(a, u, v, mesh):
+    """1e-6 NU_0 gauge mass on every region; the Kelvin domain carries the
+    Kelvin-mapped 1-form weight NU_0 (R_K/rho')^2, the image of the air term.
+    Without it the lowest-order exterior gradients are zero pivots."""
+    ox, oy, oz = OFFSET
+    rho2 = (x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2 + 1e-24
+    mats = list(mesh.GetMaterials())
+    non_kelvin = "|".join(m for m in mats if "kelvin" not in m.lower())
+    a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin)
+    for m in mats:
+        if "kelvin" in m.lower():
+            a += 1e-6 * NU_0 * (R_K * R_K) / rho2 * InnerProduct(u, v) * dx(
+                m, bonus_intorder=4)
+
+
 def _fes_verify(mesh, p):
     """The Verify-First trio: slaved DOF count + kelvin boundary ratio."""
     fb = HCurl(mesh, order=p, complex=True, nograds=True)
@@ -190,16 +206,13 @@ def _solve_astar(mesh, p, omega, A_s=None):
     s = 1j * omega
     if A_s is None:
         A_s = _uniform_A_s()
-    non_kelvin = "|".join(m for m in mesh.GetMaterials()
-                          if "kelvin" not in m.lower())
-
     fes = Periodic(HCurl(mesh, order=p, complex=True, nograds=True))
     u, v = fes.TnT()
     with TaskManager():
         a = BilinearForm(fes, symmetric=True)
         a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
         a += s * sg_cf * InnerProduct(u, v) * dx("conductor")
-        a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin)
+        _add_gauge_mass(a, u, v, mesh)
         f = LinearForm(fes)
         f += -s * sg_cf * InnerProduct(A_s, v) * dx("conductor",
                                                     bonus_intorder=2)
@@ -216,9 +229,6 @@ def _solve_aphi(mesh, p, omega, A_s=None):
     s = 1j * omega
     if A_s is None:
         A_s = _uniform_A_s()
-    non_kelvin = "|".join(m for m in mesh.GetMaterials()
-                          if "kelvin" not in m.lower())
-
     fesA = Periodic(HCurl(mesh, order=p, complex=True, nograds=True))
     fesV = H1(mesh, order=p, complex=True,
               definedon=mesh.Materials("conductor"))
@@ -229,7 +239,7 @@ def _solve_aphi(mesh, p, omega, A_s=None):
         a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
         a += s * sg_cf * InnerProduct(u + grad(w),
                                       v + grad(q)) * dx("conductor")
-        a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin)
+        _add_gauge_mass(a, u, v, mesh)
         # pin the additive constant of W = V/s in the conductor
         a += 1e-6 * SIGMA * w * q * dx("conductor")
         f = LinearForm(fes)

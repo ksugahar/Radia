@@ -64,6 +64,7 @@ def solve_3d_uniformJ(vol_file, mat, frequency=7000, I_total=1.0,
     # nu_cf: Kelvin weight, everything else nu_0
     kx, ky, kz = kelvin_center
     nu_dict = {}
+    kelvin_mass = {}  # Kelvin-mapped gauge mass weight NU_0 (a/rho')^2
     for m in materials:
         if 'kelvin' in m.lower():
             dx_k = x - kx
@@ -71,6 +72,7 @@ def solve_3d_uniformJ(vol_file, mat, frequency=7000, I_total=1.0,
             dz_k = z - kz
             rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
             nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
+            kelvin_mass[m] = NU_0 * a_kelvin ** 2 / rp_sq
         else:
             nu_dict[m] = NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
@@ -97,10 +99,12 @@ def solve_3d_uniformJ(vol_file, mat, frequency=7000, I_total=1.0,
 
     a_bf = BilinearForm(fes)
     a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
-    # Tiny mass term for gauge (same as scattered path)
+    # Tiny mass term for gauge on every region (Kelvin-mapped in the exterior)
     non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
     if non_kelvin_mats:
         a_bf += 1e-6 * NU_0 * u * v * dx('|'.join(non_kelvin_mats))
+    for m, w in kelvin_mass.items():
+        a_bf += 1e-6 * w * u * v * dx(m, bonus_intorder=4)
     a_bf += robin * u.Trace() * v.Trace() * ds('sibc')
 
     f_lf = LinearForm(fes)
