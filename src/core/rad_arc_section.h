@@ -59,30 +59,97 @@ inline Vec MomentSection(double phi, double r, double z, double ri, double ro, d
     throw std::runtime_error("Arc moment expansion did not converge");
 }
 
-// Integrate J e_phi x (x-x') / |x-x'|^3 analytically in radius and z.
-// With u=r'-r*cos(phi), v=z'-z, q=|r*sin(phi)|, the corner
-// primitives follow by integrating 1/sqrt(u*u+v*v+q*q).
+// Per unit azimuth, with u=r'-r*cos(phi), v=z'-z, q=|r*sin(phi)|,
+// d^2=u^2+v^2+q^2 and a=r*cos(phi), the section integrands are
+//   transverse T=-(u+a)*v/d^3 (times cos, sin)   axial X=(u+a)*u/d^3.
+// Corner primitives difference nearly equal values when the section is
+// thin compared with its distance, losing about eps*(distance/width)^2.
+// Each direction is therefore judged separately: a direction thinner than
+// 1/64 of the distance is integrated by 4-point Gauss (error about
+// 128^-8), the other direction in closed form with rationalised
+// differences. Everything is double on every platform.
+constexpr double ThinSectionRatio = 1./64.;
+
+namespace Detail {
+// 1/d(p2)-1/d(p1), d(p)^2=p^2+rest, without subtracting nearly equal terms.
+inline double DiffInv(double p1, double p2, double rest)
+{
+    const double d1=std::sqrt(p1*p1+rest), d2=std::sqrt(p2*p2+rest);
+    return (p1-p2)*(p1+p2)/(d1*d2*(d1+d2));
+}
+// [p/d(p)] from p1 to p2, divided by rest.
+inline double DiffRatioOver(double p1, double p2, double rest)
+{
+    const double d1=std::sqrt(p1*p1+rest), d2=std::sqrt(p2*p2+rest);
+    if(p1*p2>0) return (p2-p1)*(p2+p1)/((p2*d1+p1*d2)*d1*d2);
+    return (p2/d2-p1/d1)/rest;
+}
+// asinh(p2/rho)-asinh(p1/rho).
+inline double DiffAsinh(double p1, double p2, double rho)
+{
+    const double d1=std::hypot(p1,rho), d2=std::hypot(p2,rho);
+    if(p1>=0 && p2>=0) return std::log1p((p2-p1+d2-d1)/(p1+d1));
+    if(p1<=0 && p2<=0) return std::log1p((p2-p1+d1-d2)/(d2-p2));
+    return std::asinh(p2/rho)-std::asinh(p1/rho);
+}
+constexpr double GaussX[4]={-.8611363115940526,-.3399810435848563,
+                            .3399810435848563,.8611363115940526};
+constexpr double GaussW[4]={.3478548451374538,.6521451548625461,
+                            .6521451548625461,.3478548451374538};
+}
+
 inline Vec Section(double phi, double r, double z, double ri, double ro, double h)
 {
-    // Corner differences lose relative precision far from the section.
-    // Exact section moments avoid cancellation without section quadrature.
-    if(std::hypot(r,z)>32*std::max(ro,h))
-        return MomentSection(phi,r,z,ri,ro,h);
-    const long double c = std::cos(phi), s = std::sin(phi);
-    const long double a = r*c, q = std::abs(r*s);
-    const long double us[] = {ri-a, ro-a}, vs[] = {-h/2-z, h/2-z};
-    long double transverse = 0, axial = 0;
-    for (int i=0; i<2; ++i) for (int j=0; j<2; ++j) {
-        const long double u=us[i], v=vs[j];
-        const long double d=std::sqrt(u*u+v*v+q*q);
-        const long double uv=std::asinh(u/std::hypot(v,q));
-        const long double vu=std::asinh(v/std::hypot(u,q));
-        const int sign = (i==j) ? 1 : -1;
-        transverse += sign*(d + (a==0 ? 0 : a*uv));
-        axial += sign*((v==0 ? 0 : v*uv) - (a==0 ? 0 : a*vu)
-                       - (q==0 ? 0 : q*std::atan2(u*v,q*d)));
+    using namespace Detail;
+    const double c = std::cos(phi), s = std::sin(phi);
+    const double a = r*c, q = std::abs(r*s);
+    const double u1 = ri-a, u2 = ro-a, v1 = -h/2-z, v2 = h/2-z;
+    const double du = u1>0 ? u1 : (u2<0 ? -u2 : 0.);
+    const double dv = v1>0 ? v1 : (v2<0 ? -v2 : 0.);
+    const double limit2 = ThinSectionRatio*ThinSectionRatio*(q*q+du*du+dv*dv);
+    const bool thinU = (ro-ri)*(ro-ri) < limit2, thinV = h*h < limit2;
+    // Thin widths come from the section data, not from endpoint differences.
+    const double midU = (ri+ro)/2-a, halfU = (ro-ri)/2, midV = -z, halfV = h/2;
+    double transverse = 0, axial = 0;
+    if (thinU && thinV) {
+        for (int i=0; i<4; ++i) for (int j=0; j<4; ++j) {
+            const double u = midU+halfU*GaussX[i], v = midV+halfV*GaussX[j];
+            const double dd = u*u+v*v+q*q, w = GaussW[i]*GaussW[j]/(dd*std::sqrt(dd));
+            transverse -= w*(u+a)*v;
+            axial += w*(u+a)*u;
+        }
+        transverse *= halfU*halfV; axial *= halfU*halfV;
+    } else if (thinU) {
+        for (int i=0; i<4; ++i) {
+            const double u = midU+halfU*GaussX[i], rest = u*u+q*q;
+            transverse += GaussW[i]*(u+a)*DiffInv(v1,v2,rest);
+            axial += GaussW[i]*(u+a)*u*DiffRatioOver(v1,v2,rest);
+        }
+        transverse *= halfU; axial *= halfU;
+    } else if (thinV) {
+        for (int j=0; j<4; ++j) {
+            const double v = midV+halfV*GaussX[j], rest = v*v+q*q;
+            transverse += GaussW[j]*(-v)*(a*DiffRatioOver(u1,u2,rest)-DiffInv(u1,u2,rest));
+            axial += GaussW[j]*(DiffAsinh(u1,u2,std::sqrt(rest))
+                                -rest*DiffRatioOver(u1,u2,rest)-a*DiffInv(u1,u2,rest));
+        }
+        transverse *= halfV; axial *= halfV;
+    } else {
+        const double us[] = {u1, u2}, vs[] = {v1, v2};
+        const double hu[] = {std::hypot(u1,q), std::hypot(u2,q)};
+        const double hv[] = {std::hypot(v1,q), std::hypot(v2,q)};
+        for (int i=0; i<2; ++i) for (int j=0; j<2; ++j) {
+            const double u=us[i], v=vs[j];
+            const double d=std::sqrt(u*u+v*v+q*q);
+            const double uv=std::asinh(u/hv[j]);
+            const double vu=std::asinh(v/hu[i]);
+            const int sign = (i==j) ? 1 : -1;
+            transverse += sign*(d + (a==0 ? 0 : a*uv));
+            axial += sign*((v==0 ? 0 : v*uv) - (a==0 ? 0 : a*vu)
+                           - (q==0 ? 0 : q*std::atan2(u*v,q*d)));
+        }
     }
-    return {double(c*transverse), double(s*transverse), double(axial)};
+    return {c*transverse, s*transverse, axial};
 }
 
 template<class F> Vec Gauss4(const F& f, double lo, double hi)
