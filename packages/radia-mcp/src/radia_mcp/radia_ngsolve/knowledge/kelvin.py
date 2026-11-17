@@ -2757,6 +2757,16 @@ certainly missing one of the five elements below.
 
 ## Copy-paste skeleton
 
+Set these inputs from the model before running the skeleton:
+
+- `kelvin_center = (kx, ky, kz)` is the center of the meshed Kelvin sphere in
+  mesh coordinates, in metres.
+- `R_K` is the positive inversion radius in metres from the geometry used
+  to generate `model.vol`.
+- `freq` is the frequency in Hz, `p` is the HCurl order, and `sigma_cond`
+  is the conductor conductivity in S/m.
+
+
 ```python
 from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
                      GridFunction, CoefficientFunction, Integrate,
@@ -2766,18 +2776,31 @@ from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
 MU_0 = 4e-7 * 3.141592653589793
 NU_0 = 1.0 / MU_0
 
+# Inputs (SI units; set them for your model)
+freq = 50.0                        # Hz
+p = 2                              # FE order
+sigma_cond = 5.8e7                 # S/m, material "conductor_name"
+# Absolute centre of the meshed Kelvin (outer) sphere in mesh coordinates
+# and its inversion radius R_K in metres.  detect_kelvin_offset(mesh)
+# returns the inner-to-outer translation, not this centre: for a shifted
+# inner sphere add the inner centre, or read both values from the geometry.
+kelvin_center = (0.0, 0.0, 0.0)    # m
+R_K = 0.1                          # m
+
 mesh = Mesh("model.vol")
 omega = 2 * 3.141592653589793 * freq
 
 # 1. Material-dependent nu_cf with Kelvin modulation
 materials = mesh.GetMaterials()
 non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+kx, ky, kz = kelvin_center
+rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2
 nu_list = []
 sigma_list = []
 for m in materials:
     if "kelvin" in m.lower():
         # Sugahara 2022 canonical: nu' = (r'/R)^2 * nu_0
-        nu_list.append((x*x + y*y + z*z) / R_K**2 * NU_0)
+        nu_list.append(rp_sq / R_K**2 * NU_0)
         sigma_list.append(0.0)
     elif m == "conductor_name":
         nu_list.append(NU_0)
@@ -2801,7 +2824,8 @@ if non_kelvin_mats:
     a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
 for m in materials:  # Kelvin-mapped gauge weight NU_0 (R/r')^2
     if "kelvin" in m.lower():
-        a += 1e-6 * NU_0 * R_K**2 / (x*x + y*y + z*z + 1e-20) *             InnerProduct(u, v) * dx(m, bonus_intorder=4)
+        a += (1e-6 * NU_0 * R_K**2 / (rp_sq + 1e-20)
+              * InnerProduct(u, v) * dx(m, bonus_intorder=4))
 
 # 4. RHS (your applied source / Biot-Savart background)
 f = LinearForm(fes)
@@ -2861,8 +2885,9 @@ on a coarse mesh can be accidentally close to the truth because the
 pseudo-inverse picks a small-norm gradient pollution; refining the
 mesh enlarges the kernel and the pollution.
 
-**Fix order**: (1) `nograds=True`, (2) gauge reg restricted to
-non-Kelvin, (3) bonus_intorder=4, (4) THEN refine mesh / raise order.
+**Fix order**: (1) `nograds=True`, (2) gauge regularization in the physical
+and Kelvin domains using the corresponding weights, (3) `bonus_intorder=4`,
+(4) refine the mesh or raise the order.
 
 ## p=2 and beyond: use A-Phi (A-V), not the plain A-method (measured 2026-07-25)
 
@@ -2899,7 +2924,11 @@ fes  = fesA * fesV
 (u, w), (v, q) = fes.TnT()
 a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
 a += s * sigma_cf * InnerProduct(u + grad(w), v + grad(q)) * dx("conductor")
-a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin_mats)   # gauge reg
+if non_kelvin_mats:
+    a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
+for m in materials:
+    if "kelvin" in m.lower():
+        a += 1e-6 * NU_0 * R_K**2 / (rp_sq + 1e-20) * InnerProduct(u, v) * dx(m, bonus_intorder=4)
 a += 1e-6 * SIGMA * w * q * dx("conductor")   # pin the constant of W
 f += -s * sigma_cf * InnerProduct(A_s, v + grad(q)) * dx("conductor")
 # J = -s * sigma * (A_s + A_r + grad(W))
