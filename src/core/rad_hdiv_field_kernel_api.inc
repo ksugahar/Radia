@@ -53,6 +53,8 @@ RAD_FIELD_KERNEL void QuadTriField(const double V[3][3], const double r[3], doub
                   const double s[3], const double S[3][3], double out[3]);
 RAD_FIELD_KERNEL void QuadTriFieldBasis(const double V[3][3], const double r[3],
                        double out[10][3]);
+RAD_FIELD_KERNEL bool QuadTriFieldBasisHessian(const double V[3][3], const double r[3],
+                       double out[10][3][3][3]);
 RAD_FIELD_KERNEL void TriFieldBasisUpTo4(const double V[3][3], const double r[3],
                         double out[35][3]);
 RAD_FIELD_KERNEL void CubicTriField(const double V[3][3], const double r[3],

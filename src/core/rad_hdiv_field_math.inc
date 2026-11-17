@@ -2269,6 +2269,204 @@ RAD_FIELD_KERNEL void QuadTriFieldBasis(const double V[3][3], const double r[3],
     for(int k=0;k<3;++k)out[0][k]+=n[k]*h*J3_0;
 }
 
+// Receivers closer to the source plane than this fraction of the longest edge
+// are outside the verified range of the off-plane closed form below and are
+// rejected rather than approximated.
+constexpr double TRI_HESSIAN_PLANE_TOL=1e-4;
+
+RAD_FIELD_KERNEL static inline double hessian_asinh(double x)
+{
+    const double a=std::fabs(x);
+    const double v=std::log1p(a+a*a/(1.0+std::sqrt(a*a+1.0)));
+    return x<0.0?-v:v;
+}
+
+// Primitives of u^n/R^3 (n<=2) and u^n/R^5 (n<=4), R^2 = rho^2 + u^2.
+RAD_FIELD_KERNEL static void hessian_segment_primitives(double u,double rho,
+                                                        double F3[3],double F5[5])
+{
+    const double rho2=rho*rho,R=std::sqrt(rho2+u*u),R3=R*R*R;
+    const double a=hessian_asinh(u/rho);
+    F3[0]=u/(rho2*R);F3[1]=-1.0/R;F3[2]=a-u/R;
+    F5[0]=u*(3.0*rho2+2.0*u*u)/(3.0*rho2*rho2*R3);
+    F5[1]=-1.0/(3.0*R3);
+    F5[2]=u*u*u/(3.0*rho2*R3);
+    F5[3]=-1.0/R+rho2/(3.0*R3);
+    F5[4]=a-u/R-u*u*u/(3.0*R3);
+}
+
+// x^alpha along r'(l)=A+l*tau as coefficients of l^0..l^2 (total degree <= 2).
+RAD_FIELD_KERNEL static void hessian_edge_monomial(const int alpha[3],const double A[3],
+                                                   const double tau[3],double poly[3])
+{
+    poly[0]=1.0;poly[1]=poly[2]=0.0;
+    for(int c=0;c<3;++c)for(int e=0;e<alpha[c];++e){
+        for(int p=2;p>=1;--p)poly[p]=poly[p]*A[c]+poly[p-1]*tau[c];
+        poly[0]*=A[c];
+    }
+}
+
+// Receiver Hessian of the monomial surface-charge fields through degree two:
+// out[i][k][j][l] = d^2/(dr_j dr_l) INT_T x^alpha_i (r-x)_k/|r-x|^3 dS, without
+// 1/(4 pi), in PotentialMomentIndex order, source geometry and coefficients fixed.
+// Off the source plane, integration by parts on the flat triangle gives for
+// in-plane directions s, t
+//   d_s d_t H[sigma] = H[d_s d_t sigma] - sum_e (s.m_e) H_e[d_t sigma]
+//                      - sum_e (t.m_e) d_s H_e[sigma],
+// with H_e the field of a line charge on edge e and m_e its outward in-plane
+// normal; the segment integrals are closed form.  The third derivative of the
+// potential is symmetric and trace free, which gives the components that carry
+// the plane normal.  Far receivers use the collapsed Gauss rule of
+// TriFarMonomialFields on the analytic kernel derivative.  Returns false with
+// zeros for a degenerate triangle or for any receiver, near or far, whose
+// distance from the triangle plane is at most 1e-4 times the longest edge.
+RAD_FIELD_KERNEL bool QuadTriFieldBasisHessian(const double V[3][3], const double r[3],
+                                               double out[10][3][3][3])
+{
+    for(int i=0;i<10;++i)for(int k=0;k<3;++k)for(int j=0;j<3;++j)for(int l=0;l<3;++l)
+        out[i][k][j][l]=0.0;
+    int alpha[10][3];
+    {
+        int index=0;
+        for(int total=0;total<=2;++total)for(int ax=0;ax<=total;++ax)
+            for(int ay=0;ay<=total-ax;++ay){
+                alpha[index][0]=ax;alpha[index][1]=ay;alpha[index][2]=total-ax-ay;++index;
+            }
+    }
+    double e1u[3],e2u[3],n[3];
+    for(int k=0;k<3;++k){e1u[k]=V[1][k]-V[0][k];e2u[k]=V[2][k]-V[0][k];}
+    v3cross(e1u,e2u,n);
+    const double nl=v3nrm(n),e1l=v3nrm(e1u);
+    if(!(nl>1e-300)||!(e1l>1e-300))return false;
+    for(int k=0;k<3;++k)n[k]/=nl;
+    double t1[3],t2[3];
+    for(int k=0;k<3;++k)t1[k]=e1u[k]/e1l;
+    v3cross(n,t1,t2);
+    double centroid[3]={0.0,0.0,0.0};
+    for(int v=0;v<3;++v)for(int k=0;k<3;++k)centroid[k]+=V[v][k]/3.0;
+    double tau[3][3],m[3][3],length[3],p[3][3],l0[3],K3[3][3],K5[3][5];
+    double longest=0.0;
+    for(int e=0;e<3;++e){
+        const double* A=V[e];const double* B=V[(e+1)%3];
+        for(int k=0;k<3;++k)tau[e][k]=B[k]-A[k];
+        length[e]=v3nrm(tau[e]);
+        if(!(length[e]>1e-300))return false;
+        for(int k=0;k<3;++k)tau[e][k]/=length[e];
+        longest=FieldMax(longest,length[e]);
+        edge_outnormal(A,B,n,centroid,m[e]);
+    }
+    double offset[3];for(int k=0;k<3;++k)offset[k]=r[k]-V[0][k];
+    const double h=v3dot(offset,n);
+    if(!(std::fabs(h)>TRI_HESSIAN_PLANE_TOL*longest))return false;
+    if(const int nodes=FarNodes(FarRatio(V,3,r),4)){
+        const auto& gauss=FarGauss();
+        const double e1[3]={V[1][0]-V[0][0],V[1][1]-V[0][1],V[1][2]-V[0][2]};
+        const double e2[3]={V[2][0]-V[0][0],V[2][1]-V[0][1],V[2][2]-V[0][2]};
+        double normal[3];v3cross(e1,e2,normal);
+        const double jacobian=v3nrm(normal);
+        if(!(jacobian>1e-300))return false;
+        double monomial[10];
+        for(int iu=0;iu<nodes;++iu)for(int iv=0;iv<nodes;++iv){
+            const double u=gauss.x[nodes][iu],v=gauss.x[nodes][iv];
+            const double l1=u,l2=(1.0-u)*v;
+            double x[3];
+            for(int k=0;k<3;++k)x[k]=V[0][k]+l1*e1[k]+l2*e2[k];
+            const double d[3]={r[0]-x[0],r[1]-x[1],r[2]-x[2]};
+            const double d2=v3dot(d,d),R=std::sqrt(d2);
+            const double R5=d2*d2*R,R7=R5*d2;
+            const double weight=gauss.w[nodes][iu]*gauss.w[nodes][iv]*jacobian*(1.0-u);
+            double kernel[3][3][3];
+            for(int k=0;k<3;++k)for(int j=0;j<3;++j)for(int l=0;l<3;++l)
+                kernel[k][j][l]=15.0*d[j]*d[k]*d[l]/R7
+                    -3.0*((k==l?d[j]:0.0)+(j==k?d[l]:0.0)+(j==l?d[k]:0.0))/R5;
+            FarMonomials(x,2,monomial);
+            for(int i=0;i<10;++i){
+                const double scale=weight*monomial[i];
+                for(int k=0;k<3;++k)for(int j=0;j<3;++j)for(int l=0;l<3;++l)
+                    out[i][k][j][l]+=scale*kernel[k][j][l];
+            }
+        }
+        return true;
+    }
+    for(int e=0;e<3;++e){
+        double q[3];for(int k=0;k<3;++k)q[k]=r[k]-V[e][k];
+        l0[e]=v3dot(q,tau[e]);
+        for(int k=0;k<3;++k)p[e][k]=q[k]-l0[e]*tau[e][k];
+        const double rho=v3nrm(p[e]);
+        double F3a[3],F5a[5],F3b[3],F5b[5];
+        hessian_segment_primitives(-l0[e],rho,F3a,F5a);
+        hessian_segment_primitives(length[e]-l0[e],rho,F3b,F5b);
+        for(int q3=0;q3<3;++q3)K3[e][q3]=F3b[q3]-F3a[q3];
+        for(int q5=0;q5<5;++q5)K5[e][q5]=F5b[q5]-F5a[q5];
+    }
+    double field0[3];TriField(V,r,field0);
+    const double* frame[3]={t1,t2,n};
+    for(int i=0;i<10;++i){
+        const int* a_i=alpha[i];
+        const int total=a_i[0]+a_i[1]+a_i[2];
+        double D[2][2][3];
+        for(int a=0;a<2;++a)for(int b=a;b<2;++b){
+            const double* s=frame[a];const double* t=frame[b];
+            double second=0.0;
+            if(total==2)
+                for(int c=0;c<3;++c)for(int d=0;d<3;++d)
+                    second+=s[c]*t[d]*a_i[c]*(a_i[d]-(c==d?1:0));
+            double acc[3];
+            for(int k=0;k<3;++k)acc[k]=second*field0[k];
+            for(int e=0;e<3;++e){
+                const double* A=V[e];
+                // Line field of d_t sigma (degree <= 1 along the edge).
+                double g[3]={0.0,0.0,0.0};
+                for(int c=0;c<3;++c)if(a_i[c]>0&&t[c]!=0.0){
+                    int lower[3]={a_i[0],a_i[1],a_i[2]};--lower[c];
+                    double poly[3];hessian_edge_monomial(lower,A,tau[e],poly);
+                    for(int q=0;q<3;++q)g[q]+=t[c]*a_i[c]*poly[q];
+                }
+                const double c0=g[0]+g[1]*l0[e],c1=g[1];
+                const double sm=v3dot(s,m[e]),tm=v3dot(t,m[e]);
+                for(int k=0;k<3;++k){
+                    const double line=p[e][k]*(c0*K3[e][0]+c1*K3[e][1])
+                                     -tau[e][k]*(c0*K3[e][1]+c1*K3[e][2]);
+                    acc[k]-=sm*line;
+                }
+                // s-derivative of the line field of sigma (degree <= 2).
+                double poly[3];hessian_edge_monomial(a_i,A,tau[e],poly);
+                const double L0=l0[e];
+                const double b[3]={poly[0]+poly[1]*L0+poly[2]*L0*L0,
+                                   poly[1]+2.0*poly[2]*L0,poly[2]};
+                const double sp=v3dot(s,p[e]),st=v3dot(s,tau[e]);
+                double S3=0.0,S50=0.0,S51=0.0,S52=0.0;
+                for(int q=0;q<3;++q){
+                    S3+=b[q]*K3[e][q];
+                    S50+=b[q]*K5[e][q];S51+=b[q]*K5[e][q+1];S52+=b[q]*K5[e][q+2];
+                }
+                for(int k=0;k<3;++k){
+                    const double jacobian=s[k]*S3-3.0*(sp*p[e][k]*S50
+                        -(sp*tau[e][k]+st*p[e][k])*S51+st*tau[e][k]*S52);
+                    acc[k]-=tm*jacobian;
+                }
+            }
+            for(int k=0;k<3;++k){D[a][b][k]=acc[k];D[b][a][k]=acc[k];}
+        }
+        // G[a][b][c] = d_a d_b H_c in the (t1,t2,n) frame.
+        double G[3][3][3];
+        for(int a=0;a<2;++a)for(int b=0;b<2;++b)for(int c=0;c<3;++c)
+            G[a][b][c]=v3dot(D[a][b],frame[c]);
+        for(int a=0;a<2;++a){
+            for(int c=0;c<2;++c)G[a][2][c]=G[2][a][c]=G[a][c][2];
+            G[a][2][2]=G[2][a][2]=-(G[a][0][0]+G[a][1][1]);
+        }
+        for(int c=0;c<3;++c)G[2][2][c]=-(G[0][0][c]+G[1][1][c]);
+        for(int k=0;k<3;++k)for(int j=0;j<3;++j)for(int l=0;l<3;++l){
+            double value=0.0;
+            for(int a=0;a<3;++a)for(int b=0;b<3;++b)for(int c=0;c<3;++c)
+                value+=G[a][b][c]*frame[a][j]*frame[b][l]*frame[c][k];
+            out[i][k][j][l]=value;
+        }
+    }
+    return true;
+}
+
 // Forward-mode copy of the exact Wilton/Graglia triangle field.  Keeping the
 // same branch decisions as TriField makes the derivative the tangent of the
 // production closed form, including near-plane targets.

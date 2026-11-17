@@ -124,6 +124,10 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
 void QuadTriFieldBasis(const double V[3][3], const double r[3],
                        double out[10][3]);                                        /* fields of physical monomials */
+/* Receiver Hessian d2H_k/dr_j dr_l of the same monomial fields, out[i][k][j][l];
+ * receivers off the source plane (false inside the near-plane limit). */
+bool QuadTriFieldBasisHessian(const double V[3][3], const double r[3],
+                              double out[10][3][3][3]);
 void TriFieldBasisUpTo4(const double V[3][3], const double r[3],
                         double out[35][3]);                                       /* fields through total degree 4 */
 void CubicTriField(const double V[3][3], const double r[3],
