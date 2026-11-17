@@ -84,6 +84,31 @@ orchestration around that foundation.
 [Eqnedit64](#eqnedit64) |
 [Documentation](#documentation) | [Contributing](#contributing)
 
+## Engineering usefulness and numerical rigor
+
+Radia brings together practical design workflows and numerical rigor. A useful
+engineering calculation provides an answer quickly enough to guide a decision,
+with its assumptions and uncertainty visible. A precision study adds controlled
+meshes, discretization choices, convergence evidence and independent checks.
+Both approaches belong in Radia; the required accuracy follows the engineering
+question and the user's acceptance criteria.
+
+A coarse mesh can be the right starting point when a roughly 10% error is
+acceptable for the decision. That is a case-specific target, not a universal
+accuracy guarantee or a relaxation of existing validation criteria. Record the
+mesh, calculation time and numerical discrepancy, then refine where the decision
+requires it. NGSolve and controlled meshing through Coreform Cubit support the
+more demanding studies, including mesh quality, geometry fidelity and convergence.
+
+MCP access to existing engineering tools also has value in its own right: it
+makes practical analysis workflows and established model libraries operable by
+an AI assistant. Assess each integration by completed real calculations, useful
+comparisons, execution time and clearly recorded failures or limitations.
+Comparison completion, model fidelity, numerical agreement, independent review
+and adoption of an accuracy claim are separate outcomes. Review can improve a
+comparison while other authorized examples continue; it need not hold up the
+next experiment. Production validation and release requirements remain in force.
+
 ## Find your next engineering workflow
 
 Use the documentation to discover capabilities and inspect results. Carry out

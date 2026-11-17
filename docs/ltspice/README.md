@@ -455,8 +455,8 @@ redistribute the results.
 
 | Asset | Owner | Status here |
 |-------|-------|-------------|
-| Converter source code | © 2026 Mitsutoshi Sugahara | **MIT** |
-| Test fixtures in `tests/ltspice/fixtures/` | © 2026 Mitsutoshi Sugahara | **MIT** |
+| Converter source code | © 2026 Kengo Sugahara | **MIT** |
+| Test fixtures in `tests/ltspice/fixtures/` | © 2026 Kengo Sugahara | **MIT** |
 | API reference in `docs/ltspice/pyltspice_api.md` | reformat of public PyLTSpice/spicelib API | fair-use technical citation |
 | LTspice itself | © Analog Devices, Inc. | not redistributed (install separately) |
 | LTspice bundled example circuits | © Analog Devices, Inc. | **excluded** |
@@ -465,7 +465,7 @@ redistribute the results.
 
 ## Author
 
-[Mitsutoshi Sugahara (菅原光俊)](https://github.com/ksugahar) —
+[Kengo Sugahara](https://github.com/ksugahar) —
 Department of Electric and Electronic Engineering, Kindai University
 
 ## License

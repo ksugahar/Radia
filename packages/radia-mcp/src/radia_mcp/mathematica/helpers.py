@@ -257,6 +257,12 @@ def mathematica_verification_guide(topic: str = "electromagnetics") -> dict:
         }
 
     common = {
+        "execution_location": {
+            "client_without_kernel": "Transfer the selected article WLS and explicit inputs over SSH/SCP to the designated licensed executor; do not install or start a local kernel as fallback",
+            "job_contract": "Use a unique executor-local absolute job directory, verify input SHA-256 before and after execution, and retrieve stdout, stderr, exit code, execution host and Wolfram version",
+            "article_scope": "Verify only the updated article; reuse successful unchanged-input evidence; no whole-site or unrelated article verification",
+            "failure_policy": "SSH, license, timeout or input-hash failure is a failed verification; never silently switch execution host",
+        },
         "small_batch": "mathematica_check_identities",
         "tracked_suite": "mathematica_run_script",
         "single_exploration": "mathematica_evaluate",

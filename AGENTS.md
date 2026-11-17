@@ -38,7 +38,7 @@ Python/MCP is the first-class AI interface. Operational workflows use MCP or hum
 
 ### Shared MCP Runtime Ownership
 - radia-mcp releases independently of Radia: it deploys to build (editable) and validation (verified wheel), never JMAG or retired targets; isolated CI is not deployment.
-- Routine editable updates: update the usual source, reconnect, check the live source and one harmless affected tool. Pure Python edits need no reinstall; relocation or dependency/metadata changes do.
+- Routine editable MCP: edit in place, run scoped checks, reconnect and verify live source and one harmless affected tool. Skip CI, precheck, full suite, wheel and version bump. Reinstall on relocation or dependency/metadata changes. Solver/native, shared-interface, packaging and release gates apply.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with `pip install -e`; no dedicated branch, frozen snapshot or separate deployment approval is required for routine MCP experiments.
 - Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
@@ -53,6 +53,7 @@ The bibliography is managed separately (private). Adopted validation records cit
 - radia first: build C++/.cu kernels and shared host control once with CMake/nvcc; develop via pybind11 and link the same objects/library from plain mex/matlab_add_mex. mexcuda is retired; no fallback. Share domain data, validation/errors and lifecycle; bindings adapt ABI/types/memory/handles. `radia` owns EM; `radia-simulink` depends one-way; no MATLAB runtime in `radia`. Preserve same-kernel pybind11/MEX bitwise and CPU/GPU user-tolerance parity with independent physical validation. See [CUDA policy](docs/induction_heating/CUDA_VALIDATION.md).
 - MEX may use NGSolve-inherited DLLs, host control; Radia-owned MEX kernels never include, link or use TaskManager; MATLAB schedules host, CUDA device; judge bounded OpenMP by parity, transfer-inclusive time. [Forks](docs/operations/ngsolve-fork-lanes.md).
 - Windows builds: VS Build Tools 2022/MSVC 14.44, MATLAB-bundled CUDA 12.8; Linux `radia` GPU: nvcc 12.8; no other CUDA/compiler overrides. BLAS: MKL (x86), NVPL (aarch64). Python GPU runtime (2026-10-21): exact-version pip NVIDIA CUDA 12.8 runtime packages, loaded lazily on GPU paths only; wheels never ship the CUDA runtime.
+- Matrix residency (2026-11-02): H-matrices and sparse matrices, including blocks, factors, preconditioners and coarse operators, stay on the selected backend from assembly through solve. No CPU/GPU matrix transfers. Transfer only needed non-matrix inputs and requested results; log bytes and cost. Raise on backend failure. NGSolve owns its assembly and solver internals.
 - No implicit CPU/GPU/Python fallback: select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. GPU-first; measure speed per case; record parity/artifact hashes/validation JSON; Poisson does not certify ICCG/AMS/HDiv-MMM.
 - `radia-simulink` (CPU/GPU) is Windows-only: built on the build host, accepted with independent review and GPU-deployed on the validation host. Prove CPU/GPU agreement on small publishable cases before scaling; backend names are not speedup evidence. Data is HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8) plus NGSolve `.vol`/`.sol`; no MAT. Validate readers/writers above 2 GB, never split. Claim GPU portability only after validated architecture/PTX compatibility and a rebuild per OS/MATLAB ABI.
 
@@ -98,7 +99,7 @@ Radia is implemented only by AI agents; humans do not write code. Tests therefor
 - Assertions report actual and expected values. Prefer behavioral tests and generated single sources of truth over string-pinned text checks.
 - Never claim results that were not executed; evidence carries the source SHA and artifact hashes. Keep files small enough for an agent's context.
 
-Every AI output passes at least one independent check: an agent that is about 90 % right becomes about 99 % right after one. A check counts only if independent (a different model or agent, or independent evidence), actually executed (not a summary read) and able to fail. Scale checks by impact: routine changes take one check (reciprocal review plus CI); releases, deletions and acceptance-criteria changes take at least two, and acceptance-criteria changes also need user approval.
+Every AI output passes at least one independent check: an agent that is about 90 % right becomes about 99 % right after one. A check counts only if independent (a different model or agent, or independent evidence), actually executed (not a summary read) and able to fail. Scale checks by impact: routine changes take one check (reciprocal review plus CI); editable MCP maintenance uses focused checks and live-tool verification, not CI per update. Releases, deletions and acceptance-criteria changes take at least two, and acceptance-criteria changes also need user approval.
 Reliability comes from cheap independent checks on every change, not exhaustive test enumeration. Aim for the necessary, sufficient and minimal set: two independent detectors where code changes often, one where it is mature; no just-in-case variants.
 
 ### Compute Host Routing
@@ -142,7 +143,8 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Never reset, clean, stash, delete, or overwrite another session's WIP.
 - Commit only reviewed files owned by the task; use clean integration worktrees. Inspect branches, PRs and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
-- Every candidate is reviewed by a different agent before merge; each review runs the shared CI-equivalent precheck (`tools/ci_precheck.py`), not a diff read alone.
+- Every candidate is reviewed by a different agent before merge; each review runs the shared CI-equivalent precheck (`tools/ci_precheck.py`), not a diff read alone, except routine editable MCP maintenance (scoped checks and live-tool verification above).
+- Reciprocal-review defects (2026-11-01): Claude Code fixes them as a labeled child commit on the candidate; design, criterion, tolerance and baseline changes keep their approval. The original owner reviews the fix, never its author.
 
 Domain knowledge lives in repo knowledge/skills, not session memory. Session roles, review transport and host maps are private local configuration, not repository policy. User assignments prevail.
 

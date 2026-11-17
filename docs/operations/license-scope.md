@@ -5,7 +5,7 @@ Previously published releases and repository history are unchanged. Component
 license expressions describe combined distribution contents, not a choice of
 licenses for each file. See the root LICENSE and package license files.
 
-ESRF core, HACApK, sparseSolv, Mitsutoshi Sugahara's SPICE/LTspice integration,
+ESRF core, HACApK, sparseSolv, Kengo Sugahara's SPICE/LTspice integration,
 Optuna/Rustuna notices, SciPy Sobol data, NVIDIA CUB notices, Bootstrap Icons,
 and GUST fonts retain their original terms and attributions. MPL file-level
 obligations remain applicable. External runtimes are dependencies rather than

@@ -115,7 +115,7 @@ and documentation tools. This inventory does not relicense dependencies.
 | radia-simulink | mcp | test |
 
 Native files bearing MPL-2.0 headers retain those terms; see licenses/MPL-2.0.txt.
-SPICE/LTspice integration remains Copyright (c) 2026 Mitsutoshi Sugahara, MIT;
+SPICE/LTspice integration remains Copyright (c) 2026 Kengo Sugahara, MIT;
 see src/radia_simulink/ltspice/LICENSE.
 
 ## Native binding provenance

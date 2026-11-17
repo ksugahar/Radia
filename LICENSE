@@ -9,7 +9,7 @@ Components:
 - HACApK: MIT; original text below.
 - sparseSolv: MPL-2.0; full text in src/ext/sparsesolv/LICENSE.
   Its file-level obligations remain applicable.
-- SPICE/LTspice integration by Mitsutoshi Sugahara: MIT; original text below
+- SPICE/LTspice integration by Kengo Sugahara: MIT; original text below
   and packages/radia-simulink/src/radia_simulink/ltspice/LICENSE.
 
 RADIA CORE (SPDX: LicenseRef-ESRF-Radia)
@@ -95,7 +95,7 @@ SPICE/LTSPICE (SPDX: MIT)
 
 Location: packages/radia-simulink/src/radia_simulink/ltspice/
 
-Copyright (c) 2026 Mitsutoshi Sugahara
+Copyright (c) 2026 Kengo Sugahara
 
 MIT License
 
