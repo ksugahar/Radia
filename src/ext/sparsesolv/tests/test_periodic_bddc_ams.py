@@ -134,29 +134,43 @@ def _pi_constant_rows(mesh, periodic, complex_):
     return np.stack(out, axis=1)
 
 
-def _edge_interpolant(mesh):
-    """Lowest-order edge interpolant of the unit fields, NGSolve orientation (edge row e)."""
-    fes = ng.HCurl(mesh, order=0)
-    gf = ng.GridFunction(fes)
-    cols = []
-    for c in ((1, 0, 0), (0, 1, 0), (0, 0, 1)):
-        gf.Set(ng.CF(c))
-        cols.append(np.array(gf.vec.FV())[: mesh.nedge])
-    return np.stack(cols, axis=1)
+# Fixture identification slave -> master (vertex numbers = insertion order).
+_SLAVE_TO_MASTER = {5: 0, 6: 1, 4: 2}
+
+
+def _expected_pi_one(mesh, fes, periodic):
+    """Signed unit-field interpolant per edge row, from the fixture alone.
+
+    Free (representative) rows: oriented from the lower to the higher vertex class
+    (slave vertices replaced by their masters), as the periodic element orients it.
+    Other rows: the ordinary lower-to-higher physical orientation."""
+    vmap = _SLAVE_TO_MASTER if periodic else {}
+    free = fes.FreeDofs()
+    pts = [np.array(v.point) for v in mesh.vertices]
+    rows = []
+    for e, edge in enumerate(mesh.edges):
+        a, b = (v.nr for v in edge.vertices)
+        if free[e]:
+            ca, cb = vmap.get(a, a), vmap.get(b, b)
+            assert ca != cb
+            lo, hi = (a, b) if ca < cb else (b, a)
+        else:
+            lo, hi = min(a, b), max(a, b)
+        rows.append(pts[hi] - pts[lo])
+    return np.array(rows), np.array([bool(free[e]) for e in range(mesh.nedge)])
 
 
 @pytest.mark.parametrize("complex_", [False, True])
 @pytest.mark.parametrize("periodic", [True, False])
 def test_wirebasket_ams_pi_reproduces_constant_fields(periodic, complex_):
-    """Pi * 1 on every edge is the physical edge vector (the edge interpolant of
-    the unit fields) up to G's row orientation; the periodic G alone (representative
-    vertex columns) gives the vector across the period on edges touching the paired face."""
+    """Pi * 1 on every edge row is the signed physical edge vector (the edge
+    interpolant of the unit fields, oriented like the representative row of G).
+    A Pi built from the periodic G alone gives the vector across the period on edges
+    touching the paired face; a Pi with the opposite orientation flips the sign."""
     mesh = _two_tets(periodic)
     got = _pi_constant_rows(mesh, periodic, complex_)
-    want = _edge_interpolant(mesh)
-    same = np.all(np.isclose(got, want, atol=1e-12), axis=1)
-    flipped = np.all(np.isclose(got, -want, atol=1e-12), axis=1)
-    bad = np.flatnonzero(~(same | flipped))
-    assert bad.size == 0, {"edges": bad.tolist(), "pi_one": got[bad].tolist(), "interpolant": want[bad].tolist()}
-    if not periodic:
-        assert same.all(), "nonperiodic G must keep NGSolve's edge orientation"
+    base = ng.HCurl(mesh, order=2, nograds=True, complex=complex_)
+    fes = ng.Periodic(base) if periodic else base
+    want, active = _expected_pi_one(mesh, fes, periodic)
+    assert active.sum() == (mesh.nedge - 3 if periodic else mesh.nedge)
+    np.testing.assert_allclose(got[active], want[active], atol=1e-12, rtol=0)
