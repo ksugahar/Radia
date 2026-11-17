@@ -741,7 +741,6 @@ _TOPIC_MAP = {
     "nthreads":         TASKMANAGER_SET_NUM_THREADS,         # alias
     "mkl_interaction":  TASKMANAGER_MKL_INTERACTION,
     "mkl":              TASKMANAGER_MKL_INTERACTION,         # alias
-    "pardiso":          TASKMANAGER_MKL_INTERACTION,         # alias
     "cpp_kernels":      TASKMANAGER_CPP_KERNELS,
     "cpp":              TASKMANAGER_CPP_KERNELS,             # alias
     "parallel_for":     TASKMANAGER_CPP_KERNELS,             # alias

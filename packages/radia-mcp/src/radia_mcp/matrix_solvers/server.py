@@ -60,7 +60,6 @@ def matrix_solvers_direct(topic: str = "overview") -> str:
             "overview"      - Speed, capacity and direct-solver policy (DEFAULT)
             "capacity"      - Memory/BDDC diagnostics; aliases memory, diagnostics, bddc
             "sparsecholesky" - Supported symmetric FE direct solve
-            "pardiso"       - Retired selection: migration guidance only
             "mumps"         - Separate external integration, not a fallback
             "lu_radia"      - Legacy dense-LU compatibility (not HDiv-VIM)
             "all"           - Everything
