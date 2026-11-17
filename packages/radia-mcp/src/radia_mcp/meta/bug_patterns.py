@@ -770,33 +770,6 @@ PATTERNS: list[dict] = [
                       "form that leaks the handle.",
         "related": [],
     },
-    {
-        "id": "pardiso-mkl-thread-dll-fails-in-pytest-subprocess",
-        "title": "A calc_*.py run with --solver pardiso FAILS in a "
-                 "subprocess spawned under pytest on LAB "
-                 "(mkl_intel_thread.dll cannot load).",
-        "topics": ["test", "pytest", "pardiso", "mkl", "ngsolve", "lab"],
-        "severity": "medium",
-        "first_seen": "2026-06-02",
-        "last_seen": "2026-06-02",
-        "what": "A golden test that subprocess-runs a calc script with "
-                "--solver pardiso fails (returncode 2) with 'Intel MKL "
-                "FATAL ERROR: Cannot load mkl_intel_thread.dll'.  The SAME "
-                "command run directly (no pytest) works fine.",
-        "root_cause": "pytest's conftest MKL add_dll_directory shadow "
-                      "poisons the DLL search path the subprocess "
-                      "inherits; MKL's threading layer fails to load.  "
-                      "sparsecholesky-based calcs are unaffected (no MKL "
-                      "threads).  Same family as the pytest+PySide6 DLL "
-                      "crash.",
-        "detection": "Native validation fails only on a host with the affected "
-                     "MKL runtime.",
-        "prevention": "Guard pardiso golden tests: if returncode != 0 and "
-                      "'MKL FATAL ERROR'/'Cannot load mkl' in output -> "
-                      "pytest.skip; verify via a DIRECT (non-pytest) run.  "
-                      "See validation_test/panels/test_fem_coilmesh_esim_golden.py.",
-        "related": ["validation_test/panels/test_fem_coilmesh_esim_golden.py"],
-    },
 
     # =====================================================
     # CI / GIT INFRASTRUCTURE BUGS

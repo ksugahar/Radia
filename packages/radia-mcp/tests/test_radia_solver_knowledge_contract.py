@@ -73,15 +73,14 @@ def test_mcp_result_ownership_distinguishes_docs_from_validation():
     assert "`validation_test/` owns" in guidance
 
 
-def test_legacy_direct_topic_explains_migration_without_enabling_pardiso():
+def test_retired_pardiso_has_no_direct_solver_topic():
+    """Guards: PARDISO is retired; no knowledge topic offers it as a direct solver."""
     guidance = get_direct_solvers_knowledge("pardiso")
-    flat_guidance = " ".join(guidance.split())
+    all_direct = get_direct_solvers_knowledge("all")
 
-    assert "ngsolve-openblas" in guidance
-    assert "mkl>=2026,<2027" in guidance
-    assert "does not select PARDISO" in flat_guidance
-    assert "Use SparseCholesky explicitly" in flat_guidance
-    assert 'inverse="pardiso"' not in guidance
+    assert guidance.startswith("Unknown topic"), guidance[:120]
+    assert "pardiso" not in guidance.split("Available:")[1].lower()
+    assert 'inverse="pardiso"' not in all_direct
 
 
 def test_matrix_solver_guidance_preserves_the_direct_solve_contract():

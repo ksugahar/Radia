@@ -602,15 +602,15 @@ iteration -- 100x more expensive at the same accuracy.
 ## Historical per-iteration Karl cost comparison
 
 Historical gapped-torus + steel-cylinder benchmark (50 kHz, 1 A).
-The PARDISO rows below predate the current SparseCholesky/AMS policy;
-these timings are not measurements of the current backends:
+The timings below are historical and are not measurements of the current
+SparseCholesky/AMS backends:
 
 | Path | Outer DOFs | Per-iter cost | Karl scaling |
 |------|-----------|---------------|--------------|
 | A (scalar BIE, dense LU)     | 166-580      | 0.2 s | diagonal re-scaling only |
 | A (scalar BIE, HACApK)       | 5000+        | 3-5 s | diagonal re-scaling only (scalar only -- HACApK per-DOF roadmap) |
-| C (FEM-Kelvin, pardiso)      | 76000        | 12 s  | full re-assembly of Robin term |
-| D (FEM-coilmesh, pardiso)    | 87500        | 25 s  | full re-assembly of Robin + coil-sigma term |
+| C (FEM-Kelvin, historical)   | 76000        | 12 s  | full re-assembly of Robin term |
+| D (FEM-coilmesh, historical) | 87500        | 25 s  | full re-assembly of Robin + coil-sigma term |
 
 The scalar BIE path is the recommended PUBLICATION path; FEM paths
 serve as cross-checks ([three-path consistency at <2 %](repo:/docs/esim/CROSS_VALIDATION.md)).
