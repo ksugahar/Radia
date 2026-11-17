@@ -48,16 +48,26 @@ NU_0 = 1.0 / MU_0
 
 
 
-def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnd):
+def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnds, contract_bnd,
+                           reverse_edges=False):
     """Free DOFs of ``fes`` with A's lowest-order DOFs on a spanning tree removed.
 
-    The tree spans the vertex graph (periodic identifications merged) with
-    every vertex on ``ground_bnd`` merged into one grounded node.  Raises if
-    the graph is not connected, since an unspanned component keeps its
-    gradient kernel.
+    The coupled kernel is (A + grad psi, phi - psi) with psi = 0 on the
+    ``ground_bnds`` (phi is Dirichlet there) and psi constant on each
+    connected component of the ``contract_bnd`` trace (the Robin term only
+    sees tangential A).  The tree spans the quotient vertex graph in which
+    periodic identifications are merged and every connected component of a
+    labelled trace is one node; the source and sink stay separate nodes, and
+    the one tree edge beyond the kernel fixes the gap circulation of A on
+    the shortest geometric source-sink path, independent of the tree.
+    Grounding both ports together would leave grad A free across the gap
+    and let it cancel the phi drive.  Raises if a
+    label has no vertices or the graph is not connected.  ``reverse_edges``
+    only reverses the edge enumeration (a different, equally valid tree).
     """
     from ngsolve import BitArray, BND, EDGE, NodeId
     from collections import deque
+    import heapq
 
     parent = list(range(mesh.nv))
 
@@ -67,45 +77,86 @@ def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnd):
             i = parent[i]
         return i
 
-    for p1, p2, _ in mesh.ngmesh.GetIdentifications():
-        r1, r2 = find(p1.nr0), find(p2.nr0)
-        if r1 != r2:
-            parent[r2] = r1
-    grounded = {find(v.nr) for el in mesh.Elements(BND) if el.mat == ground_bnd
-                for v in el.vertices}
-    if not grounded:
-        raise ValueError(f"tree gauge: boundary {ground_bnd!r} has no vertices")
+    def union(i, j):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[rj] = ri
 
-    def node(i):
-        r = find(i)
-        return -1 if r in grounded else r
+    for p1, p2, _ in mesh.ngmesh.GetIdentifications():
+        union(p1.nr0, p2.nr0)
+    labelled = {}
+    for el in mesh.Elements(BND):
+        if el.mat in ground_bnds or el.mat == contract_bnd:
+            labelled.setdefault(el.mat, []).append([v.nr for v in el.vertices])
+    for name in (*ground_bnds, contract_bnd):
+        if name not in labelled:
+            raise ValueError(f"tree gauge: boundary {name!r} has no vertices")
+    for name in (*ground_bnds, contract_bnd):
+        for vs in labelled[name]:
+            for v in vs[1:]:
+                union(vs[0], v)
 
     a_free = fesA.FreeDofs()
     adj = {}
     seen = set()
-    for e in mesh.edges:
+    edges = list(mesh.edges)
+    if reverse_edges:
+        edges.reverse()
+    for e in edges:
         d = fesA.GetDofNrs(NodeId(EDGE, e.nr))[0]
         if d < 0 or d in seen or not a_free[d]:
             continue
         seen.add(d)
-        u, v = (node(q.nr) for q in e.vertices)
+        i, j = (q.nr for q in e.vertices)
+        u, v = find(i), find(j)
         if u != v:
-            adj.setdefault(u, []).append((v, d))
-            adj.setdefault(v, []).append((u, d))
-    visited = {-1}
+            length = float(np.linalg.norm(np.subtract(
+                mesh.vertices[i].point, mesh.vertices[j].point)))
+            adj.setdefault(u, []).append((v, d, length))
+            adj.setdefault(v, []).append((u, d, length))
+    # The A circulation from the first to the last port is fixed to zero on
+    # the shortest geometric path (ties by DOF number), not on whatever path
+    # the tree happens to take, so the drive does not depend on the tree.
+    src = find(labelled[ground_bnds[0]][0][0])
+    dst = find(labelled[ground_bnds[-1]][0][0])
+    best = {src: (0.0, -1, None, None)}  # node -> (dist, dof, prev, dof)
+    heap = [(0.0, -1, src)]
+    done = set()
+    while heap:
+        dist, _, u = heapq.heappop(heap)
+        if u in done:
+            continue
+        done.add(u)
+        if u == dst:
+            break
+        for v, d, length in adj.get(u, ()):
+            key = (dist + length, d)
+            if v not in done and (v not in best or key < best[v][:2]):
+                best[v] = (key[0], d, u, d)
+                heapq.heappush(heap, (key[0], d, v))
+    if dst not in done:
+        raise RuntimeError(f"tree gauge: ports {ground_bnds!r} are not connected")
     tree = []
-    queue = deque([-1])
+    visited = set()
+    node = dst
+    while node != src:
+        _, _, prev, d = best[node]
+        tree.append(d)
+        visited.add(node)
+        node = prev
+    visited.add(src)
+    queue = deque(sorted(visited))
     while queue:
         u = queue.popleft()
-        for v, d in adj.get(u, ()):
+        for v, d, _ in adj.get(u, ()):
             if v not in visited:
                 visited.add(v)
                 tree.append(d)
                 queue.append(v)
     if len(visited) != len(adj):
         raise RuntimeError(
-            f"tree gauge: {len(adj) - len(visited)} vertices are not connected "
-            f"to {ground_bnd!r}; their gradients would stay singular")
+            f"tree gauge: {len(adj) - len(visited)} vertex nodes are not "
+            f"connected to {ground_bnds!r}; their gradients would stay singular")
     free = BitArray(fes.FreeDofs())
     for d in tree:  # A is the first component, so its DOF numbers are global
         free[d] = False
@@ -248,15 +299,16 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     # Compound FES: HCurl(A) x H1(phi on coil), gauged by a spanning tree.
     #
     # nograds=True removes only the higher-order gradients; the lowest-order
-    # edge space still holds the gradient of every vertex hat.  Outside the
-    # SIBC surface those gradients are either pure gauge (air, Kelvin) or a
-    # duplicate of grad(phi) (coil, including the source/sink vertices, where
-    # a free A gradient would undo the phi drive).  A small mass penalty left
-    # them a near-null space (condition ~1e13) whose multithreaded
-    # SparseCholesky solve changed L/P by ~1 % from run to run.  On the SIBC
-    # surface the Robin term reads E = -s*A, so those gradients are physical
-    # and are kept: the SIBC vertices form one grounded node and the tree
-    # spans every other vertex.
+    # edge space still holds the gradient of every vertex hat.  The kernel
+    # of the coupled form is (A + grad psi, phi - psi): psi must vanish on
+    # source/sink, where phi is Dirichlet, and be constant on each connected
+    # SIBC trace component, where the Robin term reads tangential A.  The
+    # source and sink faces are separate tree nodes, which also fixes the
+    # A circulation across the gap (otherwise it cancels the drive).  A
+    # small mass penalty left this kernel a near-null space (condition
+    # ~1e13) whose multithreaded SparseCholesky solve changed L/P by ~1 %
+    # from run to run.  The tree spans exactly this kernel, so L and P do
+    # not depend on which tree is taken.
     fesA_base = HCurl(mesh, order=fes_order, nograds=True, complex=True)
     fesA = Periodic(fesA_base) if has_kelvin_periodic else fesA_base
     fesPhi = H1(mesh, order=fes_order, complex=True,
@@ -264,7 +316,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                 dirichlet=f"{source_bnd}|{sink_bnd}")
     fes = fesA * fesPhi
     (A, phi), (N, psi) = fes.TnT()
-    free_dofs = _tree_gauged_free_dofs(mesh, fesA, fes, sibc_bnd)
+    free_dofs = _tree_gauged_free_dofs(
+        mesh, fesA, fes, (source_bnd, sink_bnd), sibc_bnd)
     progress("FEM", f"ndof={fes.ndof} (A:{fesA.ndof} + phi:{fesPhi.ndof})")
 
     # Bilinear form pieces (Robin term depends on Z_s_wp and is rebuilt
