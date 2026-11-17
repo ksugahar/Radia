@@ -26,6 +26,7 @@
 #define SPARSESOLV_AMS_WIREBASKET_HPP
 
 #include <comp.hpp>
+#include <periodic.hpp>
 #include <chrono>
 #include <algorithm>
 #include "sparsesolv/preconditioners/compact_ams.hpp"
@@ -36,9 +37,12 @@ namespace ngla {
 /// Discrete gradient of the vertex space into the lowest-order edge dofs:
 /// row e holds -1 / +1 at the lower / higher vertex number of edge e, the
 /// global orientation NGSolve's HCurl spaces use. Rows past the edges (extra
-/// dofs) stay empty.
+/// dofs) stay empty. For a periodic space, representative rows use the
+/// vertex classes used to orient the periodic finite element. Inactive slave
+/// rows retain the original incidence pair required by the AMS adapter.
 inline shared_ptr<SparseMatrix<double>> BuildLowestOrderGradient(const ngcomp::MeshAccess& ma,
-                                                                 size_t rows = 0) {
+                                                                 size_t rows = 0,
+                                                                 const ngcomp::PeriodicFESpace* periodic = nullptr) {
     const size_t nedge = ma.GetNEdges();
     rows = std::max(rows, nedge);
     Array<int> counts(rows);
@@ -47,7 +51,14 @@ inline shared_ptr<SparseMatrix<double>> BuildLowestOrderGradient(const ngcomp::M
     auto gradient = make_shared<SparseMatrix<double>>(counts, int(ma.GetNV()));
     ParallelFor(nedge, [&](size_t e) {
         auto pnums = ma.GetEdgePNums(e);
-        const int first = pnums[0], second = pnums[1];
+        int first = pnums[0], second = pnums[1];
+        if (periodic && periodic->GetDofMap()[e] == int(e)) {
+            const auto& vertex_map = periodic->GetVertexMap();
+            first = vertex_map[first];
+            second = vertex_map[second];
+            if (first == second)
+                throw Exception("sparsesolv_ams: periodic edge has coincident vertex representatives");
+        }
         auto columns = gradient->GetRowIndices(e);
         auto values = gradient->GetRowValues(e);
         if (first < second) {
@@ -75,10 +86,37 @@ struct AMSWirebasketStats {
     long applies = 0;
     double apply_s = 0;
     std::weak_ptr<ComplexHypreBasedAMS> complex_ams;  // stage timers of the complex cycle
+    std::weak_ptr<HypreBasedAMS> real_ams;           // real route: G and Pi for inspection
 };
 inline AMSWirebasketStats& GetAMSWirebasketStats() {
     static AMSWirebasketStats stats;
     return stats;
+}
+
+/// Physical edge vectors oriented like the rows of a periodic gradient G:
+/// for edge e = (a, b), sign * (p_b - p_a) where sign is G's value at the
+/// representative of b. Rows past the edges stay zero.
+inline std::array<std::vector<double>, 3> PeriodicEdgeVectors(const ngcomp::MeshAccess& ma,
+                                const SparseMatrix<double>& gradient,
+                                const ngcomp::PeriodicFESpace& periodic) {
+    const size_t rows = gradient.Height(), nedge = ma.GetNEdges();
+    std::array<std::vector<double>, 3> out;
+    for (auto& component : out) component.assign(rows, 0.0);
+    const auto& vertex_map = periodic.GetVertexMap();
+    ParallelFor(nedge, [&](size_t e) {
+        auto pnums = ma.GetEdgePNums(e);
+        const int head = periodic.GetDofMap()[e] == int(e) ? vertex_map[pnums[1]] : pnums[1];
+        auto columns = gradient.GetRowIndices(e);
+        auto values = gradient.GetRowValues(e);
+        double sign = 0;
+        for (int j = 0; j < columns.Size(); j++)
+            if (columns[j] == head) sign = values[j];
+        if (sign != 1.0 && sign != -1.0)
+            throw Exception("sparsesolv_ams: periodic edge orientation not found in G");
+        auto a = ma.GetPoint<3>(pnums[0]), b = ma.GetPoint<3>(pnums[1]);
+        for (int d = 0; d < 3; d++) out[d][e] = sign * (b(d) - a(d));
+    });
+    return out;
 }
 
 /// Full-size operator: gathers the wirebasket block (edges, then the extra
@@ -229,12 +267,27 @@ private:
         const size_t nv = ma->GetNV();
         const size_t ndof = fes->GetNDof();
 
-        // The edge block must be the lowest-order edge dofs, dof e on edge e.
+        // On the base space, dof e must belong to physical edge e.
+        // Periodic maps keep that numbering for representatives, but their
+        // slave edge queries resolve to the representative DOF.
+        const auto* periodic = dynamic_cast<const ngcomp::PeriodicFESpace*>(fes.get());
+        if (periodic && typeid(*periodic) != typeid(ngcomp::PeriodicFESpace))
+            throw Exception("sparsesolv_ams: phased periodic edge spaces are unsupported");
+        const auto edge_space = periodic ? periodic->GetBaseSpace() : fes;
+        auto free = wb_free_ ? wb_free_ : fes->GetFreeDofs();
         std::atomic<size_t> misnumbered{0};
         ParallelFor(nedge, [&](size_t e) {
             Array<ngcomp::DofId> dnums;
-            fes->GetDofNrs(ngfem::NodeId(ngfem::NT_EDGE, e), dnums);
+            edge_space->GetDofNrs(ngfem::NodeId(ngfem::NT_EDGE, e), dnums);
             if (dnums.Size() < 1 || size_t(dnums[0]) != e) misnumbered++;
+            if (periodic) {
+                const auto& map = periodic->GetDofMap();
+                const int representative = map[e];
+                if (representative < 0 || size_t(representative) >= nedge ||
+                    map[representative] != representative ||
+                    (representative != int(e) && free->Test(e)))
+                    misnumbered++;
+            }
         });
         if (misnumbered)
             throw Exception("sparsesolv_ams: the space does not number its lowest-order "
@@ -242,7 +295,6 @@ private:
                             "it needs an HCurl space");
 
         // Local numbering: edges 0..nedge-1, then the free wirebasket dofs past them.
-        auto free = wb_free_ ? wb_free_ : fes->GetFreeDofs();
         std::vector<int> extra;
         for (size_t i = nedge; i < free->Size(); i++)
             if (free->Test(i)) extra.push_back(int(i));
@@ -332,12 +384,14 @@ private:
         local_free->Clear();
         for (size_t li = 0; li < nloc; li++)
             if (free->Test(global[li])) local_free->SetBit(li);
-        auto gradient = BuildLowestOrderGradient(*ma, nloc);
+        auto gradient = BuildLowestOrderGradient(*ma, nloc, periodic);
         std::vector<double> x(nv), y(nv), z(nv);
         for (size_t v = 0; v < nv; v++) {
             auto p = ma->GetPoint<3>(v);
             x[v] = p(0); y[v] = p(1); z[v] = p(2);
         }
+        std::array<std::vector<double>, 3> edge_vectors;
+        if (periodic) edge_vectors = PeriodicEdgeVectors(*ma, *gradient, *periodic);
         auto t1 = clock::now();
 
         const bool has_extra = !extra.empty();
@@ -348,14 +402,17 @@ private:
                 throw Exception("sparsesolv_ams: beta_zero and mixed_precision are real-only");
             auto complex_ams = make_shared<ComplexHypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                                     int(nloc), cycle_type_, print_level_,
-                                                    1.0, 0, num_smooth_, has_extra, lean_coarse_);
+                                                    1.0, 0, num_smooth_, has_extra, lean_coarse_,
+                                                    edge_vectors);
             GetAMSWirebasketStats().complex_ams = complex_ams;
             ams = complex_ams;
         } else {
-            ams = make_shared<HypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
+            auto real_ams = make_shared<HypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                              cycle_type_, num_smooth_, 0.25, print_level_,
                                              1.0, 0, beta_zero_, false, mixed_precision_,
-                                             has_extra, lean_coarse_);
+                                             has_extra, lean_coarse_, edge_vectors);
+            GetAMSWirebasketStats().real_ams = real_ams;
+            ams = real_ams;
         }
         auto& stats = GetAMSWirebasketStats();
         stats.builds++;

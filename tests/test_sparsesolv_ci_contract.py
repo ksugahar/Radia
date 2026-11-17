@@ -124,7 +124,8 @@ def test_sparsesolv_is_in_native_release_and_focused_tiers_only():
     assert SUITE in profiles["native-smoke"]["paths"]
     parallel = "tests/test_ams_internal_setup_parallel.py"
     additional = ["src/ext/sparsesolv/tests/test_hermitian_iccg.py",
-                  "src/ext/sparsesolv/tests/test_ams_repeatability.py"]
+                  "src/ext/sparsesolv/tests/test_ams_repeatability.py",
+                  "src/ext/sparsesolv/tests/test_periodic_bddc_ams.py"]
     assert profiles["sparsesolv"]["paths"] == [SUITE, *additional, parallel]
     assert all(path in profiles["native-smoke"]["paths"] for path in additional)
     assert parallel in profiles["native-smoke"]["paths"]
