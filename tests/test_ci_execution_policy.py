@@ -400,7 +400,13 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert not re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", policy), "IPv4 address in public policy"
     assert "### Tests For AI-Authored Code" in policy
     assert "Investigations remain in Git" in policy
-    assert "Never include, link, or use NGSolve TaskManager in MEX builds" in policy
+    # User decision 2026-11-16: Radia-owned MEX kernels stay TaskManager-free
+    # (no include, link or use); only the four NGSolve fork lanes inherit it.
+    assert "Radia-owned MEX kernels never include, link or use TaskManager" in policy
+    assert "judge bounded OpenMP by parity, transfer-inclusive time" in policy
+    assert "docs/operations/ngsolve-fork-lanes.md" in policy
+    lanes = (ROOT / "docs" / "operations" / "ngsolve-fork-lanes.md").read_text(encoding="utf-8")
+    assert "Radia-owned MEX kernels never include, link or use TaskManager" in lanes
     assert "mexcuda is retired; no fallback" in policy
     assert "link the same objects/library from plain mex/matlab_add_mex" in policy
     assert all("mexcuda" not in line.lower() or "retired" in line.lower() for line in agents)
