@@ -96,6 +96,18 @@ def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnds, contract_bnd,
             for v in vs[1:]:
                 union(vs[0], v)
 
+    pparent = list(range(mesh.nv))  # periodic images only
+
+    def pid(i):
+        while pparent[i] != i:
+            i = pparent[i]
+        return i
+
+    for p1, p2, _ in mesh.ngmesh.GetIdentifications():
+        a1, a2 = pid(p1.nr0), pid(p2.nr0)
+        if a1 != a2:
+            pparent[a2] = a1
+    vedges = []
     a_free = fesA.FreeDofs()
     adj = {}
     seen = set()
@@ -114,35 +126,51 @@ def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnds, contract_bnd,
                 mesh.vertices[i].point, mesh.vertices[j].point)))
             adj.setdefault(u, []).append((v, d, length))
             adj.setdefault(v, []).append((u, d, length))
+            vedges.append((i, j, d, length))
     # The A circulation from the first to the last port is fixed to zero on
     # the shortest geometric path (ties by DOF number), not on whatever path
     # the tree happens to take, so the drive does not depend on the tree.
+    # The path runs on the physical vertex graph (periodic images merged)
+    # and avoids the contracted SIBC trace, whose tangential A is physical.
     src = find(labelled[ground_bnds[0]][0][0])
     dst = find(labelled[ground_bnds[-1]][0][0])
-    best = {src: (0.0, -1, None, None)}  # node -> (dist, dof, prev, dof)
-    heap = [(0.0, -1, src)]
+    sibc_nodes = {find(vs[0]) for vs in labelled[contract_bnd]} - {src, dst}
+    vadj = {}
+    for i, j, d, length in vedges:
+        vi, vj = pid(i), pid(j)
+        if vi == vj or find(i) in sibc_nodes or find(j) in sibc_nodes:
+            continue
+        vadj.setdefault(vi, []).append((vj, d, length))
+        vadj.setdefault(vj, []).append((vi, d, length))
+    starts = sorted({pid(v) for vs in labelled[ground_bnds[0]] for v in vs})
+    best = {v: (0.0, -1, None, None) for v in starts}
+    heap = [(0.0, -1, v) for v in starts]
     done = set()
+    end = None
     while heap:
         dist, _, u = heapq.heappop(heap)
         if u in done:
             continue
         done.add(u)
-        if u == dst:
+        if find(u) == dst:
+            end = u
             break
-        for v, d, length in adj.get(u, ()):
+        for v, d, length in vadj.get(u, ()):
             key = (dist + length, d)
             if v not in done and (v not in best or key < best[v][:2]):
                 best[v] = (key[0], d, u, d)
                 heapq.heappush(heap, (key[0], d, v))
-    if dst not in done:
-        raise RuntimeError(f"tree gauge: ports {ground_bnds!r} are not connected")
+    if end is None:
+        raise RuntimeError(
+            f"tree gauge: no path between ports {ground_bnds!r} off {contract_bnd!r}")
     tree = []
-    visited = set()
-    node = dst
-    while node != src:
+    visited = {dst}
+    node = end
+    while best[node][2] is not None:
         _, _, prev, d = best[node]
-        tree.append(d)
-        visited.add(node)
+        if find(prev) != find(node):
+            tree.append(d)
+            visited.add(find(prev))
         node = prev
     visited.add(src)
     queue = deque(sorted(visited))
