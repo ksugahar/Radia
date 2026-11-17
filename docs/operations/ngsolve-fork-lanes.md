@@ -43,6 +43,15 @@ checks the installed distribution versions and native ABI.
   consumed through `find_package(NGSolve CONFIG)`. No SDK DLL and no MEX file
   may import a `python*.dll`.
 
+## GPU development order
+
+Establish the CPU reference through pybind11 and MATLAB on the build host,
+develop the Python GPU lane on Flow2, then develop the MATLAB GPU lane through
+plain MEX on the validation host. Follow the shared
+[CUDA development policy](../induction_heating/CUDA_VALIDATION.md#development-order)
+for parity and host-specific evidence. Keep the four supported fork lanes and
+the maintenance release checks for each applicable artifact.
+
 ## MEX + CUDA build
 
 The MEX GPU lane is a **MEX + CUDA build**. MSVC builds the MEX through
@@ -80,5 +89,6 @@ results or memory corruption.
 ## Evidence
 
 Build receipts, hashes and consumer checks stay in private storage. A GPU
-result counts only after a run on the validation host; a build or link check
-is not GPU evidence.
+result is scoped to the binding, source and GPU that actually ran it. Flow2
+qualifies Python development cases; the validation host checks the Windows
+MATLAB lane. Record build and link checks as separate evidence.

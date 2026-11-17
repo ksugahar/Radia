@@ -54,15 +54,29 @@ oracle. Keep pybind11/MEX bitwise parity and separately user-approved CPU/GPU
 numerical parity, plus analytic/independent formulation validation. A shared
 bug can reproduce in both bindings. No new implementation is certified here.
 
+## Development order
+
+Follow this sequence for GPU implementations in the Netgen/NGSolve forks,
+radia-optuna, and Radia:
+
+1. Establish the CPU reference on the build host through Python/pybind11 and
+   MATLAB. Use the same inputs and record reference results for both adapters.
+2. Develop the Python/pybind11 GPU route on Flow2 in an allocated compute job.
+   Compare it with the CPU reference before carrying the kernel into MATLAB.
+3. Develop the MATLAB GPU route on the validation host through plain MEX.
+   Reuse the qualified kernel and recheck binding parity and numerical agreement
+   on the Windows build.
+
+The Windows MATLAB build and the Flow2 Python build each record their
+toolchain, architecture, source and artifact identities. The development
+sequence leaves package-specific CI, formal builds and release acceptance
+under their existing ownership.
+
 ## Routine execution and GPU overflow
 
-The validation host is the primary GPU development role; the build host is the
-secondary GPU development role and owns CPU development, CI and formal release
-artifact production. Validation-host GPU development uses isolated source
-checkouts and job environments, separate from exact-wheel QA and the deployed
-runtime. It does not expand normal deployment rights or permit Cubit/cme.
-This role assignment alone authorizes no install, remote operation, host
-configuration change or otherwise unapproved source-build route.
+Use isolated source checkouts and job environments for GPU development,
+separate from exact-wheel QA and the deployed runtime. Existing authorization
+rules apply to installations, host configuration and remote execution.
 
 CPU jobs using at most eight physical cores each, with at most six concurrent
 CPU jobs across the build host, are unconditionally pre-authorized. Count
@@ -99,9 +113,8 @@ kernel, pybind11/MEX parity remains bitwise. Declare Simulink-only behavior
 (ports, sample time, S-Function lifecycle or LTspice) and GPU-only kernels without
 a CPU counterpart in the parity manifest, with reasons and separate validation.
 
-GPU development can proceed alongside CPU validation; Python CPU accuracy
-validation is not a prerequisite imposed on GPU users. Adoption must identify
-the validated reference and its qualified scope. A backend name is not speedup
+Maintain the CPU reference and its qualification evidence for adoption.
+Record the reference and the scope it qualifies. A backend name is not speedup
 evidence: measure setup, transfers, solve, total time and memory, preserving
 source/artifact identities. Do not claim an unexecuted backend is qualified.
 
