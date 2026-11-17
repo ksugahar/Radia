@@ -781,14 +781,21 @@ u, v = fes.TnT()
 # Bilinear form: curl-curl with Kelvin-modulated nu
 a = BilinearForm(fes)
 a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
-# Gauge regularization: nograds=True removes H1 gradient subspace,
-# but residual harmonic cohomology can still leave curl-curl singular.
-# Restrict to non-kelvin materials because nu_kelvin = (r'/R)^2 * nu0
-# vanishes at r'=0 and a constant NU_0 mass term would dominate there
-# and corrupt the magnetic energy integral.
+# Gauge regularization: nograds=True removes only the higher-order
+# gradients; the lowest-order gradients (and residual harmonic cohomology)
+# still leave curl-curl singular.  Apply it on EVERY region.  In the Kelvin
+# domain use the Kelvin-mapped 1-form weight NU_0 * (R/r')^2 -- the image
+# of the air term (the curl weight maps to (r'/R)^2, the mass weight to its
+# inverse).  Without it the exterior gradients are zero pivots and a
+# SparseCholesky factorization returns NaN.
 non_kelvin_mats = [m for m in mesh.GetMaterials() if "kelvin" not in m.lower()]
-if reg > 0 and non_kelvin_mats:
-    a += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
+if reg > 0:
+    if non_kelvin_mats:
+        a += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
+    for m in mesh.GetMaterials():
+        if "kelvin" in m.lower():
+            rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2 + 1e-20
+            a += reg * NU_0 * a_kelvin**2 / rp_sq * u * v * dx(m, bonus_intorder=4)
 
 # SIBC = Robin BC on hole boundary (conductor NOT meshed, NOT solved)
 # Validated 2026-04-14: 2D axisym Kelvin + SIBC (3D HCurl, hole approach)
@@ -1497,14 +1504,21 @@ The gauge regularization `reg * NU_0 * u * v * dx` in the bilinear form
 provides the missing mass term where nu vanishes.
 
 **IMPORTANT for gauge regularization with Kelvin**:
-Do NOT apply `reg * NU_0 * u * v * dx` in the Kelvin domain -- the
-nu_cf = (r'/R)^2 * nu0 vanishes near r'=0, so a constant NU_0 mass
-term would dominate and corrupt the magnetic energy integral there.
-Restrict regularization to non-kelvin materials:
+Apply the gauge mass term in the Kelvin domain too, with the
+Kelvin-mapped 1-form weight `NU_0 * (R/r')^2` (the image of the air
+term; the 2-form weight maps to `(r'/R)^2`, the 1-form weight to its
+inverse).  Omitting it leaves the lowest-order exterior gradients as a
+null space: a pivoting solver hides it, SparseCholesky returns NaN.
+A constant `NU_0` weight also removes the zero pivots but varies more
+with `reg` than the mapped weight.
 ```python
 non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
 if non_kelvin_mats:
     a += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
+for m in materials:
+    if "kelvin" in m.lower():
+        rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2 + 1e-20
+        a += reg * NU_0 * R**2 / rp_sq * u * v * dx(m, bonus_intorder=4)
 ```
 
 ### 4. kelvin_int / kelvin_ext Identification
@@ -2715,15 +2729,15 @@ certainly missing one of the five elements below.
      want the master/slave pairing on the already-gradient-stripped
      basis.
 
-3. **Gauge regularization restricted to non-Kelvin materials**.
-   - `nograds=True` removes the H1 gradient subspace, but the
-     residual harmonic cohomology (nontrivial topology, in particular
-     the period gluing) can still leave curl-curl singular.
-   - Add `reg * NU_0 * u * v * dx(non_kelvin_mats)` to fix the kernel.
-   - **DO NOT** apply this term in the Kelvin domain: `nu_kelvin =
-     (r'/R)^2 * nu0` vanishes near r'=0, so a constant `NU_0` mass
-     term would dominate there and corrupt the magnetic-energy
-     integral.
+3. **Gauge regularization on every region, Kelvin-mapped in the exterior**.
+   - `nograds=True` removes only the higher-order gradients; the
+     lowest-order gradients and residual harmonic cohomology (in
+     particular the period gluing) still leave curl-curl singular.
+   - Add `reg * NU_0 * u * v * dx(non_kelvin_mats)` and, in the Kelvin
+     domain, `reg * NU_0 * (R/r')^2 * u * v * dx(kelvin, bonus_intorder=4)`
+     -- the image of the air term under the inversion.
+   - Without the Kelvin-domain term the exterior gradients are zero
+     pivots: SparseCholesky returns NaN on every DOF.
    - Typical magnitude: `reg = 1e-6`.
 
 4. **`bonus_intorder=4` on the curl-curl integral**.
@@ -2785,6 +2799,9 @@ a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
 a += 1j * omega * sigma_cf * InnerProduct(u, v) * dx("conductor_name")
 if non_kelvin_mats:
     a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
+for m in materials:  # Kelvin-mapped gauge weight NU_0 (R/r')^2
+    if "kelvin" in m.lower():
+        a += 1e-6 * NU_0 * R_K**2 / (x*x + y*y + z*z + 1e-20) *             InnerProduct(u, v) * dx(m, bonus_intorder=4)
 
 # 4. RHS (your applied source / Biot-Savart background)
 f = LinearForm(fes)
