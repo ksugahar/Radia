@@ -477,12 +477,16 @@ CATALOG: dict[str, dict[str, Any]] = {
 EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
     "cubit": {
         "pypi": "cubit-mesh-export",
-        "github": "https://github.com/ksugahar/Radia",
+        "github": "https://github.com/ksugahar/cubit-mesh-export",
         "install": "pip install cubit-mesh-export",
         "subpackage": "cubit_mesh_export.mcp",
         "selftest_command": "mcp-server-cubit --selftest",
         "audit_command": "mcp-server-cubit --selftest --audit-repo",
-        "description": "Independent Cubit APREPRO/headless meshing, export and MCP; no Radia required.",
+        "description": (
+            "Independent Cubit APREPRO/headless meshing, export and MCP; no Radia required. "
+            "Direct mesh export uses the Cubit mesh. "
+            "Netgen/NGSolve are used for Python curving and solver-side mesh checks."
+        ),
         "related": ["build123d-mcp", "gmsh-mcp", "radia-ngsolve", "topology-optimization"],
     },
     "optuna-mcp": {
