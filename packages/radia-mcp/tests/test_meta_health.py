@@ -228,6 +228,9 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
 
     assert "cubit" not in CATALOG
     assert EXTERNAL_PACKAGES["cubit"]["pypi"] == "cubit-mesh-export"
+    assert EXTERNAL_PACKAGES["cubit"]["github"] == (
+        "https://github.com/ksugahar/cubit-mesh-export"
+    )
     assert EXTERNAL_PACKAGES["cubit"]["subpackage"] == "cubit_mesh_export.mcp"
 
     for name in ("build123d-mcp", "gmsh-mcp"):
