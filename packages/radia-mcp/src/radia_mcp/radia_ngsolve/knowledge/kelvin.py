@@ -2776,13 +2776,24 @@ from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
 MU_0 = 4e-7 * 3.141592653589793
 NU_0 = 1.0 / MU_0
 
+# Inputs (SI units; set them for your model)
+freq = 50.0                        # Hz
+p = 2                              # FE order
+sigma_cond = 5.8e7                 # S/m, material "conductor_name"
+# Absolute centre of the meshed Kelvin (outer) sphere in mesh coordinates
+# and its inversion radius R_K in metres.  detect_kelvin_offset(mesh)
+# returns the inner-to-outer translation, not this centre: for a shifted
+# inner sphere add the inner centre, or read both values from the geometry.
+kelvin_center = (0.0, 0.0, 0.0)    # m
+R_K = 0.1                          # m
+
 mesh = Mesh("model.vol")
 omega = 2 * 3.141592653589793 * freq
 
 # 1. Material-dependent nu_cf with Kelvin modulation
 materials = mesh.GetMaterials()
 non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
-kx, ky, kz = kelvin_center  # center of the meshed Kelvin sphere
+kx, ky, kz = kelvin_center
 rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2
 nu_list = []
 sigma_list = []
