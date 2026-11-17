@@ -113,21 +113,40 @@ def test_surface_dirichlet_rejects_ambiguous_boundary(bad, match):
         solve(mesh, source, -100*ng.z, 1., (0, 0, 0), **options)
 
 
-def test_dirichlet_junction_is_rejected_before_singular_multiplier_solve():
+def _junction_mesh(maxh):
     import ngsolve as ng
     from netgen.occ import Box, Pnt, Glue, OCCGeometry, X
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve
     a = Box(Pnt(-1,-1,-1), Pnt(0,1,1))
     b = Box(Pnt(0,-1,-1), Pnt(1,1,1))
     a.mat('air'); b.mat('iron')
     a.faces.name = 'left'; b.faces.name = 'right'
     a.faces.Max(X).name = 'interface'; b.faces.Min(X).name = 'interface'
-    mesh = ng.Mesh(OCCGeometry(Glue([a,b])).GenerateMesh(maxh=1.))
+    return ng.Mesh(OCCGeometry(Glue([a,b])).GenerateMesh(maxh=maxh))
+
+
+def _solve_junction(mesh):
+    import ngsolve as ng
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve
+    return solve(mesh, ng.CoefficientFunction((0,0,1)), -ng.z, 1., (0,0,0),
+                 reduced_materials=('air',), total_materials=('iron',),
+                 interface_boundary='interface', kelvin_mats=(),
+                 surface_dirichlet={'reduced': {'left': 0}, 'total': {'right': -ng.z}})
+
+
+def test_dirichlet_junction_is_rejected_before_singular_multiplier_solve():
+    """Guards: a mesh whose every potential DOF is prescribed fails before factorization."""
+    mesh = _junction_mesh(1.)
     with pytest.raises(ValueError, match='junction'):
-        solve(mesh, ng.CoefficientFunction((0,0,1)), -ng.z, 1., (0,0,0),
-              reduced_materials=('air',), total_materials=('iron',),
-              interface_boundary='interface', kelvin_mats=(),
-              surface_dirichlet={'reduced': {'left': 0}, 'total': {'right': -ng.z}})
+        _solve_junction(mesh)
+
+
+def test_compatible_junction_with_free_dofs_is_solved():
+    """Guards: the rejection above is limited to fully prescribed meshes."""
+    import ngsolve as ng
+    mesh = _junction_mesh(.5)
+    with ng.TaskManager():
+        result = _solve_junction(mesh)
+    assert result['linear_residual']['free_dofs']['relative'] < 1e-6
 
 
 @pytest.mark.parametrize('order', [1, 2])

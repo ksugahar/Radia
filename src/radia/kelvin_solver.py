@@ -1818,6 +1818,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         **({"dirichlet": interface_multiplier_dirichlet_boundary}
            if interface_multiplier_dirichlet_boundary else {})))
     fes = fes_reduced * fes_total * fes_multiplier
+    if has_surface and not any(fes_reduced.FreeDofs()) and not any(fes_total.FreeDofs()):
+        # Every potential DOF is prescribed: each interface vertex is then a
+        # Dirichlet junction and every multiplier row is redundant.  The free
+        # rows carry only roundoff, so no residual gate can certify a solve.
+        raise ValueError(
+            "surface Dirichlet prescribes every potential DOF (each interface vertex is a "
+            "Dirichlet junction); there is no field problem to solve. Refine the mesh or "
+            "remove a surface condition.")
     if kelvin_selector is None:
         _check_mixed_omega_component_gauges(
             mesh, (fes_reduced, fes_total, fes_multiplier), reduced_set, interface_boundary)
