@@ -584,7 +584,7 @@ class VectorPotentialSolver:
 
     def solve_linear(self, dirichlet='default',
                      eps=DEFAULT_GAUGE_EPSILON, solver='auto',
-                     kelvin_eps=None):
+                     kelvin_eps=None, *, bonus_intorder=0):
         """Solve the linear A_r formulation.
 
         Finds A_r in HCurl satisfying:
@@ -610,6 +610,8 @@ class VectorPotentialSolver:
             Kelvin region. Defaults to ``eps``. This separate control is for
             convergence studies; weakening only one side can make BDDC local
             blocks singular.
+        bonus_intorder : int
+            Additional quadrature order for the stiffness and source load.
         """
         from ngsolve import (GridFunction, BilinearForm, LinearForm,
                              curl, InnerProduct, dx, Preconditioner,
@@ -645,7 +647,8 @@ class VectorPotentialSolver:
             if resolved_kelvin_eps is not None else physical_gauge_coeff)
         a = BilinearForm(fes, symmetric=True)
         for mat in all_mats:
-            a += nu_cf * InnerProduct(curl(A), curl(v)) * dx(mat)
+            a += nu_cf * InnerProduct(curl(A), curl(v)) * dx(
+                mat, bonus_intorder=bonus_intorder)
             gauge_coeff = (kelvin_gauge_coeff
                            if mat == self._kelvin_region
                            else physical_gauge_coeff)
@@ -660,7 +663,8 @@ class VectorPotentialSolver:
         nu_contrast = nu_0 - nu_cf
         f = LinearForm(fes)
         for mat in self.iron_domains:
-            f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx(mat)
+            f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx(
+                mat, bonus_intorder=bonus_intorder)
         f.Assemble()
 
         self._A_gf = GridFunction(fes, name='A_reduced')
