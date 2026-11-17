@@ -170,12 +170,17 @@ def solve_fem_coilmesh(vol, frequency, I_target,
 
     # nu per material: NU_0 everywhere; Kelvin exterior gets (rho'/a_k)^2.
     kx, ky, kz = kelvin_center
+    # The gauge mass weight is the Kelvin image of the air weight: the
+    # inversion scales the 2-form (curl) weight by (rho'/a_k)^2 and the
+    # 1-form (mass) weight by (a_k/rho')^2.
     nu_dict = {}
+    mass_dict = {}
     for m in materials:
         if "kelvin" in m.lower():
             dxk, dyk, dzk = x - kx, y - ky, z - kz
             rp_sq = dxk * dxk + dyk * dyk + dzk * dzk + 1e-20
             nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
+            mass_dict[m] = NU_0 * a_kelvin ** 2 / rp_sq
         else:
             nu_dict[m] = NU_0  # non-magnetic coil + air share NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
@@ -191,8 +196,12 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     #   - nograds=True removes pure-gradient modes;
     #   - the coil's j*omega*sigma*A term provides positive-definite
     #     gauge fixing in the conducting region (AC);
-    #   - reg=1e-6 on the air mass term covers DC and harmonic-form
-    #     residuals.
+    #   - reg=1e-6 on the mass term covers DC and harmonic-form
+    #     residuals.  It is applied in the Kelvin exterior too, with the
+    #     Kelvin-mapped weight: without it the lowest-order gradients of
+    #     the exterior vertices are a null space that a pivoting direct
+    #     solver perturbed away but SparseCholesky factors as zero pivots
+    #     (NaN on every DOF).
     fesA_base = HCurl(mesh, order=fes_order, nograds=True, complex=True)
     fesA = Periodic(fesA_base) if has_kelvin_periodic else fesA_base
     fesPhi = H1(mesh, order=fes_order, complex=True,
@@ -217,6 +226,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         a_bf += nu_cf * curl(A) * curl(N) * dx(bonus_intorder=4)
         if non_kelvin:
             a_bf += 1e-6 * NU_0 * A * N * dx("|".join(non_kelvin))
+        for m, w in mass_dict.items():
+            a_bf += 1e-6 * w * A * N * dx(m, bonus_intorder=4)
         a_bf += robin_coeff * A.Trace() * N.Trace() * ds(sibc_bnd)
         a_bf += s * coil_sigma * (A + grad(phi)) * (N + grad(psi)) * \
                 dx(coil_mat)
