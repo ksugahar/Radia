@@ -2757,6 +2757,16 @@ certainly missing one of the five elements below.
 
 ## Copy-paste skeleton
 
+Set these inputs from the model before running the skeleton:
+
+- `kelvin_center = (kx, ky, kz)` is the center of the meshed Kelvin sphere in
+  mesh coordinates, in metres.
+- `R_K` is the positive inversion radius in metres from the geometry used
+  to generate `model.vol`.
+- `freq` is the frequency in Hz, `p` is the HCurl order, and `sigma_cond`
+  is the conductor conductivity in S/m.
+
+
 ```python
 from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
                      GridFunction, CoefficientFunction, Integrate,
