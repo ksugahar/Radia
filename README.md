@@ -520,7 +520,7 @@ the shared CUDA kernels and are not a GPU-user prerequisite.
 The GPU toolchain uses MATLAB-bundled CUDA 12.8 and Visual Studio Build Tools
 2022 / MSVC 14.44; see the package guide for build and validation requirements.
 
-[`radia-optuna`](https://github.com/ksugahar/radia-optuna) independently owns MATLAB
+[`radia-optuna`](https://github.com/ksugahar/optuna/tree/main/radia-optuna) independently owns MATLAB
 optimization workflows. [Eqnedit64](#eqnedit64) is the independent equation editor.
 These packages are separate from installing and using the Python CPU solver.
 

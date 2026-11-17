@@ -327,7 +327,7 @@ bestSnapshot = study.bestSolution();
 ```
 
 The independently released `radia-optuna` package uses pinned Optuna 5.0.0
-as its behavioral oracle. See the [package contract](https://github.com/ksugahar/radia-optuna)
+as its behavioral oracle. See the [package contract](https://github.com/ksugahar/optuna/tree/main/radia-optuna)
 for the current native, Python fallback, persistence and Simulink boundaries.
 The Radia gateway and its solver dependencies remain separate from the
 21-command `optuna_mex` gateway.

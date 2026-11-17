@@ -120,19 +120,6 @@ MATLAB `radia.ngsolve.Matrix.inverse()` explicitly selects this same native
 backend. No Python process is needed by that MEX path.
 """
 
-PARDISO = r"""
-# Retired Radia FE solver selection: PARDISO
-
-This legacy documentation topic remains discoverable to explain migration.
-Radia does not select PARDISO for FE direct solves. Use SparseCholesky explicitly
-for supported symmetric systems, or the validated AMS / BDDC+AMS application
-path. Do not install another backend or silently fall back after a failure.
-
-NGSolve's `ngsolve-openblas` dependency and Radia's `mkl>=2026,<2027` dependency
-serve different native components. MKL remains for Radia dense BLAS/LAPACK and FFT;
-its presence is not permission to choose PARDISO.
-"""
-
 MUMPS = r"""
 # MUMPS: separate external integration
 
@@ -183,13 +170,11 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
         return SPARSECHOLESKY
     if topic in ("capacity", "memory", "diagnostics", "bddc"):
         return SOLVER_CAPACITY
-    if topic == "pardiso":
-        return PARDISO
     if topic == "mumps":
         return MUMPS
     if topic in ("lu", "lu_radia", "radia_lu"):
         return LU_RADIA
     if topic == "all":
-        return "\n\n".join([OVERVIEW, SPARSECHOLESKY, PARDISO, MUMPS, LU_RADIA])
+        return "\n\n".join([OVERVIEW, SPARSECHOLESKY, MUMPS, LU_RADIA])
     return (f"Unknown topic '{topic}'. Available: overview, sparsecholesky, "
-            "capacity (memory, diagnostics, bddc), pardiso (migration), mumps, lu_radia, all.")
+            "capacity (memory, diagnostics, bddc), mumps, lu_radia, all.")
