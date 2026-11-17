@@ -104,7 +104,7 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Build owns CPU/secondary GPU development, CI/formal artifacts. Validation is primary GPU development in isolated checkouts/venvs, separate from exact-wheel QA/runtime; no Cubit/cme. JMAG evaluation runs no Radia. Timings are diagnostic.
+Develop CPU on build (pybind11/MATLAB), Python GPU on Flow2, then MATLAB GPU on validation. Build owns CI/formal artifacts. Validation isolates jobs from QA/runtime; no Cubit/cme. JMAG runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
 CPU/GPU jobs: build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL. GPU jobs use a separate slot, not a CPU slot; record host CPU use, avoid oversubscription. Validation GPU busy: overflow to a free build GPU slot is pre-authorized; <=1 GPU job/host, <=2 across both. Keep artifact/architecture/ABI/runtime/owner scope; no install/config or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
 Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.
@@ -119,7 +119,7 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 
 ## Build And Release
 
-- Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Validation may build isolated GPU development artifacts within authorized scope, never substitute them into exact-wheel QA or others' runtimes.
+- Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Flow2/validation build only isolated GPU dev artifacts, not CI/formal ones, within authorized scope; never substitute them into exact-wheel QA or others' runtimes.
 - PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
