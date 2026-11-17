@@ -424,8 +424,12 @@ def solve_fem(vol_file="", fes_order=1,
     # r' = distance from exterior sphere center (kelvin_center)
     # R = a_kelvin (sphere radius, same for both spheres)
     # All other domains: nu = nu0 (workpiece treated as air for SIBC)
+    # The gauge mass weight is the Kelvin image of the air weight: the
+    # inversion scales the 2-form (curl) weight by (r'/R)^2 and the 1-form
+    # (mass) weight by (R/r')^2.
     kx, ky, kz = kelvin_center
     nu_dict = {}
+    kelvin_mass = {}
     for m in materials:
         if "kelvin" in m.lower():
             dx_k = x - kx
@@ -434,9 +438,26 @@ def solve_fem(vol_file="", fes_order=1,
             rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
             kelvin_fac = rp_sq / a_kelvin**2  # (r'/R)^2
             nu_dict[m] = NU_0 * kelvin_fac
+            kelvin_mass[m] = NU_0 / kelvin_fac  # (R/r')^2
         else:
             nu_dict[m] = NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+    non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+
+    def add_gauge_mass(form, trial, test, eps):
+        """Add eps * (Kelvin-mapped) NU_0 * trial * test over every region.
+
+        Without the Kelvin-domain term the lowest-order gradients of the
+        exterior vertices are a null space of the curl-curl block, and a
+        SparseCholesky factorization meets them as zero pivots.
+        """
+        if not kelvin_mass:
+            form += eps * NU_0 * trial * test * dx
+            return
+        if non_kelvin_mats:
+            form += eps * NU_0 * trial * test * dx("|".join(non_kelvin_mats))
+        for mat, weight in kelvin_mass.items():
+            form += eps * weight * trial * test * dx(mat, bonus_intorder=4)
     if has_kelvin:
         _log(f"KELVIN:a={a_kelvin}, center=({kx},{ky},{kz})")
 
@@ -778,22 +799,12 @@ def solve_fem(vol_file="", fes_order=1,
         a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
         # Gauge regularization. nograds=True removes higher-order H1 gradient
         # subspace but residual harmonic forms (cohomology of nontrivial
-        # topology) still leave the curl-curl operator singular. Add a
-        # tiny mass term to fix the kernel.  This is needed in BOTH DC
-        # and AC mode unless an SIBC Robin term covers the air domain.
-        #
-        # IMPORTANT: in the Kelvin domain nu_cf = (r'/R)^2 * nu_0 vanishes
-        # near r'=0, so a constant NU_0 mass term would dominate the curl
-        # term there and corrupt the magnetic energy integral. Restrict the
-        # regularization to non-kelvin materials when Periodic Kelvin is on;
-        # otherwise apply it everywhere.
+        # topology) and, in the Kelvin exterior, the lowest-order gradients
+        # still leave the curl-curl operator singular. Add a tiny mass term
+        # on every region; in the Kelvin domain it carries the Kelvin-mapped
+        # weight NU_0 * (R/r')^2, the image of the air term.
         if reg > 0:
-            if has_kelvin and has_kelvin_periodic:
-                non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
-                if non_kelvin_mats:
-                    a_bf += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
-            else:
-                a_bf += reg * NU_0 * u * v * dx
+            add_gauge_mass(a_bf, u, v, reg)
 
         # robin is either a complex scalar (legacy) or a CF (per-DOF).
         # Skip the surface term only when has_wp is False or scalar robin
@@ -994,12 +1005,7 @@ def solve_fem(vol_file="", fes_order=1,
                 a_free = BilinearForm(fes)
                 a_free += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
                 if reg > 0:
-                    if has_kelvin and has_kelvin_periodic:
-                        if non_kelvin_mats:
-                            a_free += reg * NU_0 * u * v * dx(
-                                "|".join(non_kelvin_mats))
-                    else:
-                        a_free += reg * NU_0 * u * v * dx
+                    add_gauge_mass(a_free, u, v, reg)
                 a_free.Assemble()
                 gfu_inc = GridFunction(fes)
                 with TaskManager():
