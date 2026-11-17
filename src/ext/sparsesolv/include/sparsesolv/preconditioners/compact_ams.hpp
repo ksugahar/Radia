@@ -30,6 +30,7 @@
 #include <comp.hpp>
 #include <core/taskmanager.hpp>
 #include <vector>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <chrono>
@@ -97,14 +98,16 @@ public:
                bool reuse_hierarchy = false,
                bool mixed_precision = false,
                bool smoothing_only_rows = false,
-               bool lean_coarse = false)
+               bool lean_coarse = false,
+               std::array<std::vector<double>, 3> edge_vectors = {})
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
           reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
-          smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse)
+          smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse),
+          edge_vectors_(std::move(edge_vectors))
     {
         RequireSerialSetup();
         if (mixed_precision_ && !beta_zero_)
@@ -357,6 +360,10 @@ private:
     // Auxiliary AMGs stop coarsening where it stalls and solve a small coarsest
     // level with a dense inverse (CompactAMG::SetLeanCoarse).
     const bool lean_coarse_;
+    // Optional physical edge vectors (x, y, z per row of G). Empty: G * coord.
+    // A periodic G has representative vertex columns, so G * coord would give
+    // the vector across the period on edges touching the periodic faces.
+    const std::array<std::vector<double>, 3> edge_vectors_;
     std::vector<float> abc_values_f_;  // float32 mirror of A_bc_ (mixed precision only)
     std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
     int hierarchy_refreshes_ = 0;
@@ -807,6 +814,14 @@ private:
         // Step 1: Compute Gd[e] = (G * coord_d)[e] for d=x,y,z
         // This is the edge vector in each coordinate direction.
         std::vector<double> Gx(nedges, 0.0), Gy(nedges, 0.0), Gz(nedges, 0.0);
+        const bool given = !edge_vectors_[0].empty();
+        if (given)
+            for (const auto& component : edge_vectors_)
+                if ((int)component.size() != nedges)
+                    throw std::runtime_error("HypreBasedAMS: edge vector size mismatch with G rows");
+        if (given) {
+            Gx = edge_vectors_[0]; Gy = edge_vectors_[1]; Gz = edge_vectors_[2];
+        } else
         CompactParallelFor(nedges, [&](size_t e) {
             auto cols = grad_->GetRowIndices(e);
             auto vals = grad_->GetRowValues(e);

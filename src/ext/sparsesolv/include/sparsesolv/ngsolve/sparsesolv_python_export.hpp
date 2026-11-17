@@ -1532,6 +1532,29 @@ print_level : int
 )raw_string");
 
   RegisterAMSWirebasket();
+  m.def("AMSCoarseOperators", []() {
+      const auto& s = GetAMSWirebasketStats();
+      const HypreBasedAMS* ams = nullptr;
+      shared_ptr<HypreBasedAMS> real;
+      shared_ptr<ComplexHypreBasedAMS> cplx;
+      if (s.complex) { cplx = s.complex_ams.lock(); if (cplx) ams = &cplx->Real(); }
+      else { real = s.real_ams.lock(); ams = real.get(); }
+      if (!ams) throw std::runtime_error("AMSCoarseOperators: no live wirebasket AMS");
+      auto csr = [](const SparseMatrix<double>& m) {
+        py::list rows, cols, vals;
+        for (size_t i = 0; i < m.Height(); i++) {
+          auto c = m.GetRowIndices(i); auto v = m.GetRowValues(i);
+          for (int j = 0; j < c.Size(); j++) { rows.append(int(i)); cols.append(int(c[j])); vals.append(v[j]); }
+        }
+        return py::make_tuple(rows, cols, vals, int(m.Height()), int(m.Width()));
+      };
+      py::dict d;
+      d["G"] = csr(ams->GetGrad());
+      d["Pix"] = csr(ams->GetPix()); d["Piy"] = csr(ams->GetPiy()); d["Piz"] = csr(ams->GetPiz());
+      return d;
+    },
+    "COO (rows, cols, values, height, width) of G and Pi_x/y/z of the most recent live BDDC wirebasket AMS.");
+
   m.def("AMSCoarseStats", []() {
       const auto& s = GetAMSWirebasketStats();
       py::dict d;

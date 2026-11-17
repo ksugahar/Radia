@@ -86,10 +86,37 @@ struct AMSWirebasketStats {
     long applies = 0;
     double apply_s = 0;
     std::weak_ptr<ComplexHypreBasedAMS> complex_ams;  // stage timers of the complex cycle
+    std::weak_ptr<HypreBasedAMS> real_ams;           // real route: G and Pi for inspection
 };
 inline AMSWirebasketStats& GetAMSWirebasketStats() {
     static AMSWirebasketStats stats;
     return stats;
+}
+
+/// Physical edge vectors oriented like the rows of a periodic gradient G:
+/// for edge e = (a, b), sign * (p_b - p_a) where sign is G's value at the
+/// representative of b. Rows past the edges stay zero.
+inline std::array<std::vector<double>, 3> PeriodicEdgeVectors(const ngcomp::MeshAccess& ma,
+                                const SparseMatrix<double>& gradient,
+                                const ngcomp::PeriodicFESpace& periodic) {
+    const size_t rows = gradient.Height(), nedge = ma.GetNEdges();
+    std::array<std::vector<double>, 3> out;
+    for (auto& component : out) component.assign(rows, 0.0);
+    const auto& vertex_map = periodic.GetVertexMap();
+    ParallelFor(nedge, [&](size_t e) {
+        auto pnums = ma.GetEdgePNums(e);
+        const int head = periodic.GetDofMap()[e] == int(e) ? vertex_map[pnums[1]] : pnums[1];
+        auto columns = gradient.GetRowIndices(e);
+        auto values = gradient.GetRowValues(e);
+        double sign = 0;
+        for (int j = 0; j < columns.Size(); j++)
+            if (columns[j] == head) sign = values[j];
+        if (sign != 1.0 && sign != -1.0)
+            throw Exception("sparsesolv_ams: periodic edge orientation not found in G");
+        auto a = ma.GetPoint<3>(pnums[0]), b = ma.GetPoint<3>(pnums[1]);
+        for (int d = 0; d < 3; d++) out[d][e] = sign * (b(d) - a(d));
+    });
+    return out;
 }
 
 /// Full-size operator: gathers the wirebasket block (edges, then the extra
@@ -363,6 +390,8 @@ private:
             auto p = ma->GetPoint<3>(v);
             x[v] = p(0); y[v] = p(1); z[v] = p(2);
         }
+        std::array<std::vector<double>, 3> edge_vectors;
+        if (periodic) edge_vectors = PeriodicEdgeVectors(*ma, *gradient, *periodic);
         auto t1 = clock::now();
 
         const bool has_extra = !extra.empty();
@@ -373,14 +402,17 @@ private:
                 throw Exception("sparsesolv_ams: beta_zero and mixed_precision are real-only");
             auto complex_ams = make_shared<ComplexHypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                                     int(nloc), cycle_type_, print_level_,
-                                                    1.0, 0, num_smooth_, has_extra, lean_coarse_);
+                                                    1.0, 0, num_smooth_, has_extra, lean_coarse_,
+                                                    edge_vectors);
             GetAMSWirebasketStats().complex_ams = complex_ams;
             ams = complex_ams;
         } else {
-            ams = make_shared<HypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
+            auto real_ams = make_shared<HypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                              cycle_type_, num_smooth_, 0.25, print_level_,
                                              1.0, 0, beta_zero_, false, mixed_precision_,
-                                             has_extra, lean_coarse_);
+                                             has_extra, lean_coarse_, edge_vectors);
+            GetAMSWirebasketStats().real_ams = real_ams;
+            ams = real_ams;
         }
         auto& stats = GetAMSWirebasketStats();
         stats.builds++;

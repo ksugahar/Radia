@@ -75,3 +75,88 @@ def test_periodic_wirebasket_ams_matches_sparsecholesky():
     np.testing.assert_allclose(ng.curl(ams)(point), ng.curl(direct)(point), atol=1e-8)
     stats = ssn.AMSCoarseStats()
     assert stats["n_free"] == mesh.nedge - 3 and stats["n_extra"] == 0
+
+
+def _two_tets(periodic):
+    from netgen.csg import Pnt
+    from netgen.meshing import (
+        Element2D, Element3D, FaceDescriptor, IdentificationType, Mesh, MeshPoint,
+    )
+
+    native = Mesh(dim=3)
+    points = [
+        native.Add(MeshPoint(Pnt(*xyz)))
+        for xyz in ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1),
+                    (3, 1, 0), (3, 0, 0), (4, 0, 0), (3, 0, 1))
+    ]
+    for material, indices, name in (
+        (1, (0, 1, 2, 3), "air"), (2, (5, 6, 4, 7), "kelvin"),
+    ):
+        native.SetMaterial(material, name)
+        native.Add(Element3D(material, [points[i] for i in indices]))
+        boundary = native.Add(
+            FaceDescriptor(surfnr=material, domin=material, domout=0, bc=material)
+        )
+        for face in ((0, 2, 1), (0, 1, 3), (0, 3, 2), (1, 2, 3)):
+            native.Add(Element2D(boundary, [points[indices[i]] for i in face]))
+    if periodic:
+        for master, slave in ((0, 5), (1, 6), (2, 4)):
+            native.AddPointIdentification(
+                points[master], points[slave], 1, IdentificationType.PERIODIC
+            )
+    return ng.Mesh(native)
+
+
+def _pi_constant_rows(mesh, periodic, complex_):
+    """Builds the wirebasket AMS and returns Pi * 1 per edge row (x, y, z)."""
+    from radia import sparsesolv_ngsolve as ssn
+
+    base = ng.HCurl(mesh, order=2, nograds=True, complex=complex_)
+    fes = ng.Periodic(base) if periodic else base
+    for dof in range(mesh.nedge, fes.ndof):
+        if fes.CouplingType(dof) == ng.COUPLING_TYPE.WIREBASKET_DOF:
+            fes.SetCouplingType(dof, ng.COUPLING_TYPE.INTERFACE_DOF)
+    u, v = fes.TnT()
+    matrix = ng.BilinearForm(fes, symmetric=True)
+    matrix += (ng.curl(u) * ng.curl(v) + 1e-6 * u * v) * ng.dx
+    pre = ng.Preconditioner(matrix, "bddc", coarsetype="sparsesolv_ams")
+    with ng.TaskManager():
+        matrix.Assemble()
+    assert ssn.AMSCoarseStats()["complex"] == complex_
+    ops = ssn.AMSCoarseOperators()
+    out = []
+    for name in ("Pix", "Piy", "Piz"):
+        rows, _, vals, height, _ = ops[name]
+        acc = np.zeros(height)
+        np.add.at(acc, np.array(rows, dtype=int), np.array(vals))
+        out.append(acc[: mesh.nedge])
+    del pre
+    return np.stack(out, axis=1)
+
+
+def _edge_interpolant(mesh):
+    """Lowest-order edge interpolant of the unit fields, NGSolve orientation (edge row e)."""
+    fes = ng.HCurl(mesh, order=0)
+    gf = ng.GridFunction(fes)
+    cols = []
+    for c in ((1, 0, 0), (0, 1, 0), (0, 0, 1)):
+        gf.Set(ng.CF(c))
+        cols.append(np.array(gf.vec.FV())[: mesh.nedge])
+    return np.stack(cols, axis=1)
+
+
+@pytest.mark.parametrize("complex_", [False, True])
+@pytest.mark.parametrize("periodic", [True, False])
+def test_wirebasket_ams_pi_reproduces_constant_fields(periodic, complex_):
+    """Pi * 1 on every edge is the physical edge vector (the edge interpolant of
+    the unit fields) up to G's row orientation; the periodic G alone (representative
+    vertex columns) gives the vector across the period on edges touching the paired face."""
+    mesh = _two_tets(periodic)
+    got = _pi_constant_rows(mesh, periodic, complex_)
+    want = _edge_interpolant(mesh)
+    same = np.all(np.isclose(got, want, atol=1e-12), axis=1)
+    flipped = np.all(np.isclose(got, -want, atol=1e-12), axis=1)
+    bad = np.flatnonzero(~(same | flipped))
+    assert bad.size == 0, {"edges": bad.tolist(), "pi_one": got[bad].tolist(), "interpolant": want[bad].tolist()}
+    if not periodic:
+        assert same.all(), "nonperiodic G must keep NGSolve's edge orientation"

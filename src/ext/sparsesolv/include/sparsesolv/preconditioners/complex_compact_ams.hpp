@@ -42,7 +42,8 @@ public:
         int subspace_solver = 0,
         int num_smooth = 1,
         bool smoothing_only_rows = false,
-        bool lean_coarse = false)
+        bool lean_coarse = false,
+        std::array<std::vector<double>, 3> edge_vectors = {})
         : ndof_complex_(ndof_complex > 0 ? ndof_complex : a_real_mat->Height())
     {
         // Build the real AMS hierarchy (shared for Re and Im)
@@ -50,7 +51,8 @@ public:
             a_real_mat, grad_mat, freedofs,
             coord_x, coord_y, coord_z,
             cycle_type, num_smooth, 0.25, print_level, correction_weight,
-            subspace_solver, false, false, false, smoothing_only_rows, lean_coarse);
+            subspace_solver, false, false, false, smoothing_only_rows, lean_coarse,
+            std::move(edge_vectors));
 
         // Cache accessors
         ndof_hc_ = ams_->GetNdofHC();
