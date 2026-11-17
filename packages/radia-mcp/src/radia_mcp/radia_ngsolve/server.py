@@ -2123,7 +2123,10 @@ def dual_fem_reference_estimate(
     uncertainty, the last-step drift and a nesting check.
     The optional coarse level is judged only against that frozen reference:
     errors of A, Omega, midpoint and 2:1, the ratio r, and which blend is closer
-    (midpoint iff r < 1.4; inconclusive inside the reference width).
+    (midpoint iff r < 1.4; inconclusive inside the reference width or while the
+    reference is not converged, with the would-be answer kept as
+    provisional_closer). convergence_fraction must be finite and >= 0;
+    non-finite derived values raise instead of returning a verdict.
     r depends on the case, mesh and order, so no fixed weight is assumed.
     Bounds certify the mapped mesh domain. Planar-faced bodies on affine
     meshes have no geometry error; curved CAD bodies do.

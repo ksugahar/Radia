@@ -107,3 +107,29 @@ def test_dual_bracket_reference_rejects_invalid_bounds_before_any_verdict():
     assert equal["half_width"] == 0.0 and "coarse" not in equal
     with_equal_coarse = dual_bracket_reference(good, coarse={"q_lower": 9.5, "q_upper": 9.5})
     assert with_equal_coarse["coarse"]["closer"] in {"midpoint", "two_to_one", "inconclusive"}
+
+
+def test_dual_bracket_reference_rejects_bad_fraction_and_unrepresentable_values():
+    """Guards: a non-finite or negative convergence_fraction raises; finite
+    bounds whose derived reference overflows raise instead of returning
+    converged=True; an unconverged reference never reports a closer blend and
+    keeps the would-be answer as provisional_closer.  Assumes: the default
+    fraction 0.1 and the r < 1.4 rule are unchanged."""
+    from radia.dual_fem_delta import dual_bracket_reference
+
+    unconverged = [{"q_lower": 0.0, "q_upper": 30.0}, {"q_lower": 9.9, "q_upper": 10.1}]
+    coarse = {"q_lower": 9.0, "q_upper": 40.0}
+    for fraction in (float("inf"), float("nan"), -0.1, "x", None):
+        with raises(ValueError, match="convergence_fraction"):
+            dual_bracket_reference(unconverged, coarse=coarse, convergence_fraction=fraction)
+    huge = [{"q_lower": 1e308, "q_upper": 1e308}, {"q_lower": 1e308, "q_upper": 1e308}]
+    with raises(ValueError, match="not representable"):
+        dual_bracket_reference(huge)
+    with raises(ValueError, match="not representable"):
+        dual_bracket_reference([{"q_lower": 9.9, "q_upper": 10.1}] * 2,
+                               coarse={"q_lower": -1e308, "q_upper": 1e308})
+    result = dual_bracket_reference(unconverged, coarse=coarse)
+    assert result["converged"] is False, result
+    assert result["coarse"]["closer"] == "inconclusive", result["coarse"]
+    assert result["coarse"]["provisional_closer"] == "two_to_one", result["coarse"]
+    assert result["last_step_drift"] == {"lower": 9.9, "upper": -19.9}, result["last_step_drift"]

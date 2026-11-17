@@ -278,10 +278,21 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
     ``convergence_fraction`` of the coarse |midpoint - 2:1| difference (or of
     the final width when no coarse level is given).  A comparison is
     inconclusive when the two absolute errors differ by no more than the
-    reference width.
+    reference width, or when the reference has not converged; the latter keeps
+    the would-be answer as ``provisional_closer`` for diagnosis only.
+
+    ``convergence_fraction`` must be finite and non-negative.  A derived value
+    (reference, width, drift, coarse estimate or error) that is not a finite
+    float raises ``ValueError`` before any verdict is returned.
     """
     if len(levels) < 2:
         raise ValueError("Need at least two refinement levels")
+    try:
+        fraction = float(convergence_fraction)
+    except (TypeError, ValueError):
+        raise ValueError(f"convergence_fraction must be a number, got {convergence_fraction!r}") from None
+    if not isfinite(fraction) or fraction < 0:
+        raise ValueError(f"convergence_fraction must be finite and >= 0, got {fraction}")
     rows = [_checked_bounds(level, f"levels[{i}]") for i, level in enumerate(levels)]
     if coarse is not None:
         coarse_bounds = _checked_bounds(coarse, "coarse")
@@ -291,6 +302,8 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
     reference = 0.5 * (lower + upper)
     half_width = 0.5 * (upper - lower)
     drift = {"lower": lower - prev_lower, "upper": upper - prev_upper}
+    _require_finite(reference=reference, half_width=half_width,
+                    drift_lower=drift["lower"], drift_upper=drift["upper"])
     result = {
         "q_ref": reference, "half_width": half_width,
         "relative_half_width": half_width / abs(reference) if reference else None,
@@ -305,6 +318,9 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
         errors = {name: value - reference for name, value in estimates.items()}
         difference = abs(errors["two_to_one"]) - abs(errors["midpoint"])
         scale = abs(estimates["midpoint"] - estimates["two_to_one"])
+        _require_finite(**{f"coarse_{k}": v for k, v in estimates.items()},
+                        **{f"coarse_error_{k}": v for k, v in errors.items()},
+                        coarse_difference=difference, coarse_scale=scale)
         if abs(difference) <= 2 * half_width:
             closer = "inconclusive"
         else:
@@ -316,6 +332,21 @@ def dual_bracket_reference(levels, coarse=None, convergence_fraction=0.1):
             "r": (c_upper - reference) / below if below > 0 else None,
             "closer": closer,
         }
-    result["converged"] = bool(not nesting and max(abs(drift["lower"]), abs(drift["upper"]))
-                               <= convergence_fraction * scale)
+        derived = dict(result["coarse"]["relative_errors"] or {})
+        if result["coarse"]["r"] is not None:
+            derived["r"] = result["coarse"]["r"]
+        _require_finite(**{f"coarse_{k}": v for k, v in derived.items()})
+    converged = bool(not nesting and max(abs(drift["lower"]), abs(drift["upper"]))
+                     <= fraction * scale)
+    result["converged"] = converged
+    if coarse is not None and not converged:
+        result["coarse"]["provisional_closer"] = result["coarse"]["closer"]
+        result["coarse"]["closer"] = "inconclusive"
     return result
+
+
+def _require_finite(**values):
+    """Raise ``ValueError`` naming every derived value that is not finite."""
+    bad = {name: value for name, value in values.items() if not isfinite(value)}
+    if bad:
+        raise ValueError(f"derived values are not representable: {bad}")
