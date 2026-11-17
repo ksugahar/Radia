@@ -35,10 +35,8 @@ OMEGA = 2.0 * math.pi * FREQ
 
 
 def _inv(mat, freedofs):
-    try:
-        return mat.Inverse(freedofs, inverse="umfpack")
-    except Exception:
-        return mat.Inverse(freedofs, inverse="sparsecholesky")
+    # Complex-symmetric system: SparseCholesky (LDL^T) only, no fallback.
+    return mat.Inverse(freedofs, inverse="sparsecholesky")
 
 
 def age_solve():

@@ -120,3 +120,5 @@ for this saddle-point system: it returned an all-NaN field on worker-b).
 directory next to the script and take the thread count as the only argument.
 `ctype_near_coil_subdivision.py` takes `--staging` (the same directory, which
 must also hold `ctype_rhs_quadrature.py`) and `--output`.
+PARDISO is retired, so `ctype_near_coil_subdivision.py` now stops with an explicit
+"unsupported" status before assembly; the results above remain historical records.
