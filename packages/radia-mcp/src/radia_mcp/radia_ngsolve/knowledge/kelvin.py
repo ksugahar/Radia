@@ -2772,12 +2772,14 @@ omega = 2 * 3.141592653589793 * freq
 # 1. Material-dependent nu_cf with Kelvin modulation
 materials = mesh.GetMaterials()
 non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+kx, ky, kz = kelvin_center  # center of the meshed Kelvin sphere
+rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2
 nu_list = []
 sigma_list = []
 for m in materials:
     if "kelvin" in m.lower():
         # Sugahara 2022 canonical: nu' = (r'/R)^2 * nu_0
-        nu_list.append((x*x + y*y + z*z) / R_K**2 * NU_0)
+        nu_list.append(rp_sq / R_K**2 * NU_0)
         sigma_list.append(0.0)
     elif m == "conductor_name":
         nu_list.append(NU_0)
@@ -2801,7 +2803,8 @@ if non_kelvin_mats:
     a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
 for m in materials:  # Kelvin-mapped gauge weight NU_0 (R/r')^2
     if "kelvin" in m.lower():
-        a += 1e-6 * NU_0 * R_K**2 / (x*x + y*y + z*z + 1e-20) *             InnerProduct(u, v) * dx(m, bonus_intorder=4)
+        a += (1e-6 * NU_0 * R_K**2 / (rp_sq + 1e-20)
+              * InnerProduct(u, v) * dx(m, bonus_intorder=4))
 
 # 4. RHS (your applied source / Biot-Savart background)
 f = LinearForm(fes)
@@ -2861,8 +2864,9 @@ on a coarse mesh can be accidentally close to the truth because the
 pseudo-inverse picks a small-norm gradient pollution; refining the
 mesh enlarges the kernel and the pollution.
 
-**Fix order**: (1) `nograds=True`, (2) gauge reg restricted to
-non-Kelvin, (3) bonus_intorder=4, (4) THEN refine mesh / raise order.
+**Fix order**: (1) `nograds=True`, (2) gauge regularization in the physical
+and Kelvin domains using the corresponding weights, (3) `bonus_intorder=4`,
+(4) refine the mesh or raise the order.
 
 ## p=2 and beyond: use A-Phi (A-V), not the plain A-method (measured 2026-07-25)
 
@@ -2899,7 +2903,11 @@ fes  = fesA * fesV
 (u, w), (v, q) = fes.TnT()
 a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
 a += s * sigma_cf * InnerProduct(u + grad(w), v + grad(q)) * dx("conductor")
-a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin_mats)   # gauge reg
+if non_kelvin_mats:
+    a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
+for m in materials:
+    if "kelvin" in m.lower():
+        a += 1e-6 * NU_0 * R_K**2 / (rp_sq + 1e-20) * InnerProduct(u, v) * dx(m, bonus_intorder=4)
 a += 1e-6 * SIGMA * w * q * dx("conductor")   # pin the constant of W
 f += -s * sigma_cf * InnerProduct(A_s, v + grad(q)) * dx("conductor")
 # J = -s * sigma * (A_s + A_r + grad(W))
