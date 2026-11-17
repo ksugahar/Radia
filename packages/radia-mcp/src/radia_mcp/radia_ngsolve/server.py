@@ -2065,6 +2065,79 @@ def _selftest():
 
 
 @_validation.tool()
+def ellipsoid_delta_benchmark(
+    order: int = 2, curve_order: int = 2, iron_maxh: float = 0.45,
+    mu_r: float = 20.0, integration_order: int = 12,
+    air_divisions: int = 5, assembly_bonus: int = 0,
+) -> dict:
+    """Compare reduced A and mixed Omega on a synthetic curved Kelvin ellipsoid.
+
+    Returns the magnetic moment gap, field-energy defect, exact CAD moment
+    errors, and timings. Hold curve_order and iron_maxh fixed for p convergence.
+    The result is diagnostic and does not certify an exact-geometry bracket.
+    """
+    import ngsolve as ng
+    from radia.dual_fem_delta import ellipsoid_delta_benchmark as benchmark
+
+    with ng.TaskManager():
+        return benchmark(order=order, curve_order=curve_order, iron_maxh=iron_maxh,
+                         mu_r=mu_r, integration_order=integration_order,
+                         air_divisions=air_divisions, assembly_bonus=assembly_bonus)
+
+
+@_validation.tool()
+def ellipsoid_delta_series(
+    orders: list[int] | None = None, curve_order: int = 2, shape: str = "triaxial",
+    iron_maxh: float = 0.45, mu_r: float = 20.0, integration_order: int = 12,
+    air_divisions: int = 5, assembly_bonus: int = 0, vol_path: str = "",
+) -> dict:
+    """Compare A, mixed Omega, 2:1 and midpoint at several p on one verified mesh.
+
+    Triaxial has a built-in OCC mesh; prolate requires a local affine Cubit
+    .vol. An affine file must contain the full iron/air/Kelvin benchmark with
+    the selected analytic dimensions and radius 2.75 m. Curve order must not
+    exceed any requested p.
+    The operation rejects folded elements and mismatched curved Kelvin seams
+    before solving. Reported CAD errors apply to the source-conjugate moment.
+    """
+    import ngsolve as ng
+    from radia.dual_fem_delta import ellipsoid_delta_series as series
+
+    with ng.TaskManager():
+        return series(orders=(2, 3, 4) if orders is None else orders,
+                      curve_order=curve_order, shape=shape, iron_maxh=iron_maxh,
+                      mu_r=mu_r, integration_order=integration_order,
+                      air_divisions=air_divisions, assembly_bonus=assembly_bonus,
+                      vol_path=vol_path)
+
+
+@_validation.tool()
+def dual_fem_reference_estimate(
+    levels: list[dict], coarse: dict | None = None, convergence_fraction: float = 0.1,
+) -> dict:
+    """Freeze an estimated true value from converged A/Omega dual bounds.
+
+    levels: coarse-to-fine list of {"q_lower": A bound, "q_upper": Omega bound}
+    computed on one geometry with energy-functional (kappa-corrected) values.
+    The finest level gives the reference midpoint, with its half-width as
+    uncertainty, the last-step drift and a nesting check.
+    The optional coarse level is judged only against that frozen reference:
+    errors of A, Omega, midpoint and 2:1, the ratio r, and which blend is closer
+    (midpoint iff r < 1.4; inconclusive inside the reference width or while the
+    reference is not converged, with the would-be answer kept as
+    provisional_closer). convergence_fraction must be finite and >= 0;
+    non-finite derived values raise instead of returning a verdict.
+    r depends on the case, mesh and order, so no fixed weight is assumed.
+    Bounds certify the mapped mesh domain. Planar-faced bodies on affine
+    meshes have no geometry error; curved CAD bodies do.
+    """
+    from radia.dual_fem_delta import dual_bracket_reference
+
+    return dual_bracket_reference(levels, coarse=coarse,
+                                  convergence_fraction=convergence_fraction)
+
+
+@_validation.tool()
 def rf_sweep_artifact_summary_gate(
     summary_json: str,
     passivity_tolerance: float = 1.0e-3,
