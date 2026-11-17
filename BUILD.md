@@ -40,7 +40,7 @@ Radia consumes checked `.vol` files without requiring Cubit. Build and deploy
 the optional mesh exporter from the standalone
 [cubit-mesh-export repository](https://github.com/ksugahar/cubit-mesh-export).
 The MATLAB Optuna gateway builds and releases from
-[radia-optuna](https://github.com/ksugahar/radia-optuna).
+[radia-optuna](https://github.com/ksugahar/optuna/tree/main/radia-optuna).
 
 ## Toolchain Contract
 

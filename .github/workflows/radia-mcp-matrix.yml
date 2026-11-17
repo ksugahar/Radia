@@ -269,7 +269,7 @@ jobs:
         if: needs.scope.outputs.run_tests == 'true'
         uses: actions/checkout@v4
         with:
-          repository: ksugahar/radia-optuna
+          repository: ksugahar/optuna
           ref: 274e312cf084e1975f32e4d9dbf35b63d3f4fcd7
           path: .ci-deps/radia-optuna
           persist-credentials: false
