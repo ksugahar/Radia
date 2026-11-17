@@ -26,6 +26,7 @@
 #define SPARSESOLV_AMS_WIREBASKET_HPP
 
 #include <comp.hpp>
+#include <periodic.hpp>
 #include <chrono>
 #include <algorithm>
 #include "sparsesolv/preconditioners/compact_ams.hpp"
@@ -36,9 +37,12 @@ namespace ngla {
 /// Discrete gradient of the vertex space into the lowest-order edge dofs:
 /// row e holds -1 / +1 at the lower / higher vertex number of edge e, the
 /// global orientation NGSolve's HCurl spaces use. Rows past the edges (extra
-/// dofs) stay empty.
+/// dofs) stay empty. For a periodic space, representative rows use the
+/// vertex classes used to orient the periodic finite element. Inactive slave
+/// rows retain the original incidence pair required by the AMS adapter.
 inline shared_ptr<SparseMatrix<double>> BuildLowestOrderGradient(const ngcomp::MeshAccess& ma,
-                                                                 size_t rows = 0) {
+                                                                 size_t rows = 0,
+                                                                 const ngcomp::PeriodicFESpace* periodic = nullptr) {
     const size_t nedge = ma.GetNEdges();
     rows = std::max(rows, nedge);
     Array<int> counts(rows);
@@ -47,7 +51,14 @@ inline shared_ptr<SparseMatrix<double>> BuildLowestOrderGradient(const ngcomp::M
     auto gradient = make_shared<SparseMatrix<double>>(counts, int(ma.GetNV()));
     ParallelFor(nedge, [&](size_t e) {
         auto pnums = ma.GetEdgePNums(e);
-        const int first = pnums[0], second = pnums[1];
+        int first = pnums[0], second = pnums[1];
+        if (periodic && periodic->GetDofMap()[e] == int(e)) {
+            const auto& vertex_map = periodic->GetVertexMap();
+            first = vertex_map[first];
+            second = vertex_map[second];
+            if (first == second)
+                throw Exception("sparsesolv_ams: periodic edge has coincident vertex representatives");
+        }
         auto columns = gradient->GetRowIndices(e);
         auto values = gradient->GetRowValues(e);
         if (first < second) {
@@ -229,12 +240,27 @@ private:
         const size_t nv = ma->GetNV();
         const size_t ndof = fes->GetNDof();
 
-        // The edge block must be the lowest-order edge dofs, dof e on edge e.
+        // On the base space, dof e must belong to physical edge e.
+        // Periodic maps keep that numbering for representatives, but their
+        // slave edge queries resolve to the representative DOF.
+        const auto* periodic = dynamic_cast<const ngcomp::PeriodicFESpace*>(fes.get());
+        if (periodic && typeid(*periodic) != typeid(ngcomp::PeriodicFESpace))
+            throw Exception("sparsesolv_ams: phased periodic edge spaces are unsupported");
+        const auto edge_space = periodic ? periodic->GetBaseSpace() : fes;
+        auto free = wb_free_ ? wb_free_ : fes->GetFreeDofs();
         std::atomic<size_t> misnumbered{0};
         ParallelFor(nedge, [&](size_t e) {
             Array<ngcomp::DofId> dnums;
-            fes->GetDofNrs(ngfem::NodeId(ngfem::NT_EDGE, e), dnums);
+            edge_space->GetDofNrs(ngfem::NodeId(ngfem::NT_EDGE, e), dnums);
             if (dnums.Size() < 1 || size_t(dnums[0]) != e) misnumbered++;
+            if (periodic) {
+                const auto& map = periodic->GetDofMap();
+                const int representative = map[e];
+                if (representative < 0 || size_t(representative) >= nedge ||
+                    map[representative] != representative ||
+                    (representative != int(e) && free->Test(e)))
+                    misnumbered++;
+            }
         });
         if (misnumbered)
             throw Exception("sparsesolv_ams: the space does not number its lowest-order "
@@ -242,7 +268,6 @@ private:
                             "it needs an HCurl space");
 
         // Local numbering: edges 0..nedge-1, then the free wirebasket dofs past them.
-        auto free = wb_free_ ? wb_free_ : fes->GetFreeDofs();
         std::vector<int> extra;
         for (size_t i = nedge; i < free->Size(); i++)
             if (free->Test(i)) extra.push_back(int(i));
@@ -332,7 +357,7 @@ private:
         local_free->Clear();
         for (size_t li = 0; li < nloc; li++)
             if (free->Test(global[li])) local_free->SetBit(li);
-        auto gradient = BuildLowestOrderGradient(*ma, nloc);
+        auto gradient = BuildLowestOrderGradient(*ma, nloc, periodic);
         std::vector<double> x(nv), y(nv), z(nv);
         for (size_t v = 0; v < nv; v++) {
             auto p = ma->GetPoint<3>(v);
