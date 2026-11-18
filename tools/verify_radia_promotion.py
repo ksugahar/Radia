@@ -21,6 +21,8 @@ try:
     from release_acceptance import PUBLIC_RELEASE_ACCEPTANCE_ROLES
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
     from release_acceptance import CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
+    from release_acceptance import PUBLISHED_WHEEL_LANE, RELEASE_LANES_SUMMARY
+    from release_acceptance import verify_lane_summary
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
@@ -30,6 +32,9 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     PUBLIC_RELEASE_ACCEPTANCE_ROLES = _acceptance_module.PUBLIC_RELEASE_ACCEPTANCE_ROLES
+    PUBLISHED_WHEEL_LANE = _acceptance_module.PUBLISHED_WHEEL_LANE
+    RELEASE_LANES_SUMMARY = _acceptance_module.RELEASE_LANES_SUMMARY
+    verify_lane_summary = _acceptance_module.verify_lane_summary
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -345,6 +350,26 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
 
 
 
+def release_lanes_path(source_sha):
+    return f"validation_test/esrf_three_engine/results/candidate_{source_sha[:9]}/{RELEASE_LANES_SUMMARY}"
+
+
+def verify_release_lanes(api, run, commit, expected_hash):
+    """Require the committed four-lane summary written by ``release_quad done``.
+
+    The receipts and evidence stay private; ``done`` verifies them and writes
+    this summary, which is reviewed into main at the acceptance commit.
+    """
+    summary = strict_json(api.file(release_lanes_path(run["head_sha"]), commit))
+    try:
+        lanes = verify_lane_summary(summary, run["head_sha"])
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"Malformed release lane summary: {exc!r}") from exc
+    require(expected_hash in lanes[PUBLISHED_WHEEL_LANE].values(),
+            f"Published wheel is not the validated {PUBLISHED_WHEEL_LANE} lane artifact")
+    return lanes
+
+
 def publication_identity(api, env):
     """Bind the publishing attempt, independently of the native producer run."""
     require(env.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Tag dispatch required")
@@ -389,6 +414,8 @@ def verify_publication(api, report, env, wheel_dir, native_dir, run_id, commit, 
     wheels = list(wheel_dir.rglob("*.whl"))
     require(len(wheels) == 1 and hashlib.sha256(wheels[0].read_bytes()).hexdigest() == expected_hash, "Approved wheel changed")
     require(report["native_bundle"] == native_bundle(wheel_dir, native_dir), "Approved native bundle changed")
+    require(expected_hash in report.get("release_lanes", {}).get(PUBLISHED_WHEEL_LANE, {}).values(),
+            "Four-lane release receipts were not verified for this wheel")
 
 
 def main():
@@ -415,6 +442,7 @@ def main():
     report = verify_artifact(api, run, args.acceptance_commit, args.wheel_dir,
                              args.context_dir, args.wheel_sha256)
     report["publication"] = publication
+    report["release_lanes"] = verify_release_lanes(api, run, args.acceptance_commit, args.wheel_sha256)
     report["native_bundle"] = native_bundle(args.wheel_dir, args.native_dir)
     verify_publication(api, report, os.environ, args.wheel_dir, args.native_dir,
                        args.run_id, args.acceptance_commit, args.wheel_sha256)

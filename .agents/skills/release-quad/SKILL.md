@@ -65,4 +65,9 @@ the files it accepted. GPU Python lanes require a `checks.cpu_gpu_parity`
 entry. The MATLAB lane requires `checks.simulink_acceptance` and
 `checks.ltspice_acceptance`. Every evidence or artifact entry has a manifest-relative
 `path` and lowercase SHA-256 `sha256`. Keep the manifest and evidence private.
+Pass `--public-summary FILE` to write `release-lanes.json`: the lane roles,
+pass status, check names and artifact hashes, with no evidence or paths.
+Commit it under the candidate's validation results next to the acceptance
+record. The publish workflow requires it at the acceptance commit and requires
+the published wheel to be the `windows-python-gpu` lane artifact.
 Use explicit deployment tools only as part of a separately authorized operation.

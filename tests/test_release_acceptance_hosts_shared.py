@@ -143,5 +143,11 @@ def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, 
     manifest.write_text(json.dumps(data), encoding="utf-8")
     monkeypatch.setattr(quad, "_verify_local_release_source",
                         lambda path, sha: 0 if path == str(tmp_path.resolve()) and sha == source else 4)
-    args = Namespace(source_sha=source, manifest=manifest, release_source=tmp_path)
+    summary = tmp_path / "release-lanes.json"
+    args = Namespace(source_sha=source, manifest=manifest, release_source=tmp_path, public_summary=summary)
     assert quad.cmd_done(args) == (0 if defect is None else 4)
+    if defect is None:
+        written = json.loads(summary.read_text(encoding="utf-8"))
+        lanes = quad._release_acceptance.verify_lane_summary(written, source)
+        assert set(lanes) == set(quad.RELEASE_LANES)
+        assert "evidence" not in summary.read_text(encoding="utf-8")

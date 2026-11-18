@@ -22,7 +22,7 @@ Usage:
         Cross-machine editable consistency probe.
 
 
-    python tools/release_quad.py done --source-sha SHA --manifest FILE [--release-source PATH]
+    python tools/release_quad.py done --source-sha SHA --manifest FILE [--release-source PATH] [--public-summary FILE]
     python tools/release_quad.py all --source-sha SHA --manifest FILE [--release-source PATH]
         Verify four candidate lanes and their exact-source, exact-artifact
         acceptance evidence for release-owner handoff. Does not deploy.
@@ -142,12 +142,14 @@ _KNOWN_SOLVER_TARGETS = {
 # candidate. SOLVER_TARGETS are the explicit runtime-maintenance targets.
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    import release_acceptance as _release_acceptance
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
+    _release_acceptance = _acceptance_module
 
 SOLVER_TARGETS = dict(_KNOWN_SOLVER_TARGETS)
 
@@ -1719,62 +1721,21 @@ def _run_retired_standalone_pyside_guard():
     return 0
 
 
-RELEASE_LANES = {
-    "cpu": ("cpu-build", "windows-validation"),
-    "linux-python-gpu": ("linux-gpu", "linux-gpu"),
-    "windows-python-gpu": ("windows-gpu", "windows-gpu"),
-    "matlab": ("windows-gpu", "windows-gpu"),
-}
-
-
-REQUIRED_VALIDATION_CHECKS = {
-    "linux-python-gpu": ("cpu_gpu_parity",),
-    "windows-python-gpu": ("cpu_gpu_parity",),
-    "matlab": ("simulink_acceptance", "ltspice_acceptance"),
-}
-
-
-def _receipt_file(base, entry):
-    path = (base / entry["path"]).resolve()
-    if not path.is_relative_to(base) or not path.is_file():
-        raise ValueError(f"Missing file or path outside receipt directory: {entry['path']}")
-    digest = entry["sha256"]
-    if not re.fullmatch(r"[0-9a-f]{64}", digest) or _sha256_file(path) != digest:
-        raise ValueError(f"SHA-256 mismatch for {entry['path']}")
-    return digest
+RELEASE_LANES = _release_acceptance.RELEASE_LANES
+REQUIRED_VALIDATION_CHECKS = _release_acceptance.REQUIRED_VALIDATION_CHECKS
 
 
 def _verify_candidate_receipts(manifest, source_sha):
     base = manifest.resolve().parent
+
+    def read(rel):
+        path = (base / rel).resolve()
+        if not path.is_relative_to(base) or not path.is_file():
+            raise ValueError(f"Missing file or path outside receipt directory: {rel}")
+        return path.read_bytes()
+
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    if data["schema"] != 1 or data["source_sha"] != source_sha:
-        raise ValueError("Release manifest schema or source SHA mismatch")
-    native_ci = data["native_ci"]
-    if native_ci["source_sha"] != source_sha or native_ci["passed"] is not True:
-        raise ValueError("Exact-source native CI receipt must pass")
-    _receipt_file(base, native_ci["evidence"])
-    lanes = data["lanes"]
-    if set(lanes) != set(RELEASE_LANES):
-        raise ValueError("A receipt is required for each of the four release lanes")
-    for name, (build_role, validation_role) in RELEASE_LANES.items():
-        lane = lanes[name]
-        build, validation = lane["build"], lane["validation"]
-        if build["role"] != build_role or validation["role"] != validation_role:
-            raise ValueError(f"Incorrect build or validation role for {name}")
-        if build["source_sha"] != source_sha or validation["source_sha"] != source_sha:
-            raise ValueError(f"Source SHA mismatch for {name}")
-        _receipt_file(base, build["evidence"])
-        if validation["passed"] is not True:
-            raise ValueError(f"Validation did not pass for {name}")
-        _receipt_file(base, validation["evidence"])
-        for check in REQUIRED_VALIDATION_CHECKS.get(name, ()):
-            _receipt_file(base, validation["checks"][check])
-        artifacts = build["artifacts"]
-        if not artifacts:
-            raise ValueError(f"No artifacts for {name}")
-        actual = {entry["path"]: _receipt_file(base, entry) for entry in artifacts}
-        if len(actual) != len(artifacts) or actual != validation["artifact_sha256"]:
-            raise ValueError(f"Validated artifact set or hash mismatch for {name}")
+    return _release_acceptance.verify_lane_receipts(data, source_sha, read)
 
 
 def cmd_done(args):
@@ -1787,11 +1748,18 @@ def cmd_done(args):
     if rc:
         return rc
     try:
-        _verify_candidate_receipts(Path(args.manifest), source_sha)
+        validated = _verify_candidate_receipts(Path(args.manifest), source_sha)
+        summary = getattr(args, "public_summary", None)
+        if summary:
+            data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+            Path(summary).write_text(json.dumps(
+                _release_acceptance.lane_summary(data, validated), indent=2) + "\n", encoding="utf-8")
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
         fail(f"Release candidate evidence failed: {exc}")
         return 4
     ok(f"All four artifact lanes verified for {source_sha}; ready for release-owner review.")
+    if summary:
+        info(f"Public lane summary for the acceptance commit: {summary}")
     return 0
 
 
@@ -2085,6 +2053,8 @@ def main():
         handoff.add_argument("--source-sha", required=True, help="full fixed source commit SHA")
         handoff.add_argument("--manifest", required=True, help="candidate evidence manifest JSON")
         handoff.add_argument("--release-source", help="clean candidate checkout (default: controller checkout)")
+        handoff.add_argument("--public-summary",
+                             help="write the public four-lane summary that the publish gate reads")
 
     shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
     shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")

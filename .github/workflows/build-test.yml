@@ -828,7 +828,6 @@ jobs:
             src/radia/*.pyd
             src/radia/*.pyd.build.json
             src/radia/*.dll
-            ${{ env.RADIA_CI_OUTPUT_DIR }}/cpu-natives.manifest.json
           if-no-files-found: error
           retention-days: 7
       - name: Upload wheel artifact
