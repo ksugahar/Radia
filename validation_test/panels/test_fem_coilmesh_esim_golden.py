@@ -54,7 +54,7 @@ def test_fem_coilmesh_esim_converges_steel():
         "--mu-r", str(p["wp_mu_r"]),
         "--half-thickness", str(p["half_thickness_m"]),
         "--fes-order", str(p["fes_order"]),
-        "--solver", "pardiso",
+        "--solver", "sparsecholesky",
         "--sibc-bnd", "sibc", "--source-bnd", "source",
         "--sink-bnd", "sink", "--coil-mat", "coil",
         "--impedance-model", "esim",
@@ -63,20 +63,6 @@ def test_fem_coilmesh_esim_converges_steel():
         "--esim-tol", str(p["esim_tol"]),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-    # validation runtime pytest+pardiso artifact: MKL's threading DLL (mkl_intel_thread)
-    # fails to load in a subprocess spawned under pytest (the conftest
-    # MKL add_dll_directory shadow).  The DIRECT (non-pytest) run works
-    # fine -- this is an environment limitation, not a solver/test
-    # failure, so skip cleanly rather than red-fail.  The assertion logic
-    # itself is cross-checked in private-runtime-path against
-    # the captured values; run calc_fem_coilmesh directly to re-verify.
-    _out = (proc.stdout or "") + (proc.stderr or "")
-    if proc.returncode != 0 and (
-            "Cannot load mkl" in _out or "MKL FATAL ERROR" in _out):
-        pytest.skip(
-            "MKL thread DLL failed to load in the pardiso subprocess "
-            "(known LAB pytest+MKL env issue; run calc_fem_coilmesh "
-            "directly to verify the esim path).")
     assert proc.returncode == 0, (
         f"calc_fem_coilmesh esim failed:\nSTDOUT:\n{proc.stdout}\n"
         f"STDERR:\n{proc.stderr}")

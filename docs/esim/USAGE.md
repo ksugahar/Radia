@@ -113,7 +113,7 @@ python src/radia/panels/calc_fem_kelvin.py \
     --formulation total \
     --impedance esim --bh-file em_sample_bh.txt \
     --max-iter 15 \
-    --solver pardiso \
+    --solver sparsecholesky \
     --peec-step coil.step --peec-sigma 5.8e7 \
     --peec-n-peri 16 --peec-nwinc 3 --peec-nhinc 3 \
     --require-kelvin
@@ -146,7 +146,7 @@ python src/radia/panels/calc_fem_coilmesh.py \
     --coil-sigma 5.8e7 --sigma 2e6 --mu-r 100 \
     --half-thickness 0.005 \
     --fes-order 1 \
-    --solver pardiso \
+    --solver sparsecholesky \
     --sibc-bnd sibc --source-bnd source --sink-bnd sink \
     --coil-mat coil \
     --impedance-model esim --bh-file em_sample_bh.txt \

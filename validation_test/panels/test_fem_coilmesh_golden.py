@@ -61,7 +61,7 @@ def test_fem_coilmesh_matches_2d_ref_gapped():
         "--mu-r", "1.0",
         "--half-thickness", str(phys["half_thickness_m"]),
         "--fes-order", str(phys["fes_order"]),
-        "--solver", "pardiso",
+        "--solver", "sparsecholesky",
         "--sibc-bnd", "sibc",
         "--source-bnd", "source",
         "--sink-bnd", "sink",

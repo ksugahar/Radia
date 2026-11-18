@@ -36,7 +36,7 @@ R/delta = 3 to 160.  Script: `validation_test/eddy_current_analytical_validation
 - 2-sphere architecture: interior (coil+air) + exterior (Kelvin), same radius R
 - Webcut both spheres + `copy mesh surface` for 1:1 node correspondence
 - `export netgen` writes periodic identification as translation
-- PARDISO (direct) or BDDC+BVP (iterative) solver
+- SparseCholesky (direct) or BDDC+BVP (iterative) solver
 - Verified: L=88.91 nH (+0.4% vs analytical 88.55 nH)
 - High-order: curve_order=2 + fes_order=2 verified
 

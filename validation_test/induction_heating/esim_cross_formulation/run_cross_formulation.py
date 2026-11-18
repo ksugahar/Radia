@@ -151,7 +151,7 @@ def _fem(vol, frequency, current, max_iter, per_panel, tmp):
         "--sigma", str(SIGMA), "--mu-r", str(MU_R), "--bh-file", BH_FILE,
         "--half-thickness", str(HALF_THICKNESS),
         "--impedance", "esim", "--max-iter", str(max_iter),
-        "--fes-order", "1", "--solver", "pardiso",
+        "--fes-order", "1", "--solver", "auto",
     ]
     if per_panel:
         extra.append("--esim-per-panel")

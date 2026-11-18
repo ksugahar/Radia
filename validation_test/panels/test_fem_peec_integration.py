@@ -159,7 +159,7 @@ class TestFEMPEECCubitIntegration:
             peec_step=peec_cubit_model["step_path"],
             peec_sigma=5.8e7,
             I_total=1.0,
-            solver="pardiso",
+            solver="auto",
             reg=1e-6,
             nthreads=0,
         )

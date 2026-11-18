@@ -59,6 +59,53 @@ This IH BDDC route explicitly configures AMS coarse cycles. Aggregate t_solve_s
 is not isolated factor time; absent memory/factor telemetry stays unavailable.
 No universal speed claim or new validation result follows from this recipe.
 
+### Gauge fixing for a port-driven A–V coil with a SIBC workpiece
+
+For the FEM gauge reference, see `fem_gauge_open_boundary(topic="coil_av_tree")`.
+
+This applies to a meshed conducting coil with source and sink faces,
+surrounding air, and a workpiece represented by a surface impedance. See
+`radia.panels.calc_fem_coilmesh` for the solver in the installed Radia
+version. The spanning-tree method below describes the reviewed solver
+candidate. Check which gauge the installed solver uses before reproducing
+its results.
+
+With the solver's scaled scalar potential `phi` and `s = 1j * omega`,
+the coil electric field is `E = -s * (A + grad(phi))`. The transformation
+`A -> A + grad(chi)`, `phi -> phi - chi` preserves this field and
+`curl(A)`. Lowest-order edge elements still contain vertex gradients with
+`nograds=True`. A point constraint on an H1 potential or a choice of
+sparse solver cannot remove this HCurl nullspace.
+
+- **SIBC trace.** The surface law uses the tangential trace of `A`.
+  A gauge function must be constant on each connected SIBC component so
+  its tangential gradient vanishes there. Collapse each component to its
+  own node in the gauge graph, accounting for periodic vertex
+  identifications. Keep the physical trace degrees of freedom.
+- **Ports.** Keep the source and sink as separate graph nodes. Since
+  `phi` is prescribed on the ports, the homogeneous gauge must preserve
+  those data. The candidate also fixes the line integral of `A` along a
+  designated physical source-to-sink path. This defines the voltage
+  convention across the gap. Choose the path on actual mesh edges,
+  accounting for periodic copies and avoiding the SIBC surface. Reject
+  the setup if no such path exists. A unit `phi` lift corresponds to a
+  voltage of magnitude `abs(s)` in this convention.
+- **Tree and verification.** With the path held fixed, use a spanning
+  tree of the resulting graph to constrain the lowest-order edge
+  degrees of freedom. Check that different admissible trees have
+  different masks and reproduce current-normalized inductance and both
+  losses. Check the true residual and the unnormalized terminal current.
+  A small residual can coexist with an incorrect port drive. When
+  comparing formulations, keep the mesh, excitation and complex
+  `Z_s` fixed first, then check against an independent reference with
+  compatible ports and return path.
+
+An air-coil inductance comparison checks the port convention in that
+setup. Coil losses still require mesh refinement against the copper
+skin depth. When a surface-current reference reports external
+inductance, account for the conductor's internal contribution before
+comparing it with total volume-FEM inductance.
+
 ## Recipe 4: Verify-First Policy on a typical IH FES setup
 
 **MANDATORY** before any 5-minute physics solve. Each check is <1 s.

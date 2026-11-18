@@ -32,7 +32,7 @@ Kelvin-far singularity (1/8 only):
   reduction axes, which means the kelvin_far cut plane passes
   through r'=0 -- mesh elements there have a 1/0 reluctivity at the
   Dirichlet boundary, leading to ill-conditioning that the standard
-  H1 + pardiso linear solve cannot handle on this mesh density.
+  H1 direct linear solve cannot handle on this mesh density.
   The 1/8 build still produces a clean .vol; the solver issue is a
   formulation problem, not a mesh problem.  See README.
 

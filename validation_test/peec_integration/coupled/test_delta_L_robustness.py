@@ -188,7 +188,7 @@ def solve_reduced_A_kelvin(R_wp, center_wp, mu_r,
     gfu = GridFunction(fes)
     with TaskManager():
         gfu.vec.data = a.mat.Inverse(
-            fes.FreeDofs(), inverse="pardiso") * f.vec
+            fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=6)
     back = compute_back_reaction(fil_currents, delta_phi, I_TOTAL)

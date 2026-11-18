@@ -33,7 +33,7 @@ NU_0 = 1.0 / MU_0
 
 def solve_3d_uniformJ(vol_file, mat, frequency=7000, I_total=1.0,
                        a_coil=0.003, half_thickness=0.0125,
-                       fes_order=1, solver='pardiso'):
+                       fes_order=1, solver='sparsecholesky'):
     from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
                          GridFunction, Integrate, Conj, curl, dx, ds, CF,
                          BND, VOL, TaskManager, sqrt, IfPos, x, y, z)

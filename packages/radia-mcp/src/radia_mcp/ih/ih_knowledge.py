@@ -2307,66 +2307,44 @@ INDUCTION_HEATING_AV_COIL_SIGMA = """
 ## Formulation
 
 A (vector potential) + phi (scalar potential in conductor) compound space.
-Driving force: phi Dirichlet lift (phi=1 on source, phi=0 on sink).
-Total current I_out computed post-solve, solution scaled to I_total.
+The coil field is `E = -s * (A + grad(phi))` with `s = 1j * omega`.
+The volume term uses the coupled combination `A + grad(phi)` and the
+workpiece uses the tangential A trace in the SIBC term.
 
-```python
-# FES: HCurl(A) x H1(phi, conductor-only)
-fesA = HCurl(mesh, order=1, nograds=True, complex=True, dirichlet=dirichlet_bnd)
-fesA_p = Periodic(fesA) if has_kelvin else fesA
-fesPhi = H1(mesh, order=1, complex=True, definedon="coil", dirichlet="source|sink")
-fes = fesA_p * fesPhi
-(A, phi), (N, psi) = fes.TnT()
+Use `python -m radia.panels.calc_fem_coilmesh --help` for the installed
+entry point. It applies the port lift, computes terminal current from
+the conductor integral of `J_coil * grad(psi_n)`, and scales the solution
+to the requested current. The direct solve uses `inverse="sparsecholesky"`
+with the free degrees of freedom of the formulation.
 
-# Bilinear form (KEY: unified s*sigma*(A+grad(phi))*(N+grad(psi)) term)
-a = BilinearForm(fes, symmetric=True)
-a += nu_cf*curl(A)*curl(N)*dx(bonus_intorder=4)
-a += reg*NU_0*A*N*dx("<non-kelvin materials>")
-a += robin*A.Trace()*N.Trace()*ds("sibc")
-a += s*sigma_coil*(A+grad(phi))*(N+grad(psi))*dx("coil")
-a.Assemble()
-
-# Dirichlet lift: phi=1 on source, phi=0 on sink
-gfu = GridFunction(fes)
-gf_A, gf_phi = gfu.components
-gf_phi.Set(CF(1), definedon=mesh.Boundaries("source"))
-r = gfu.vec.CreateVector()
-r.data = -a.mat * gfu.vec
-gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * r
-
-# Post-normalization to I_total
-s_eddy = 1j * omega
-J_coil = -s_eddy * sigma_coil * (gf_A + grad(gf_phi))
-fes_psi_n = H1(mesh, order=1, complex=True, dirichlet="sink", definedon="coil")
-gf_psi_n = GridFunction(fes_psi_n)
-gf_psi_n.Set(CF(1), definedon=mesh.Boundaries("source"))
-I_out = Integrate(J_coil * grad(gf_psi_n) * dx("coil"), mesh)
-scale = I_total / I_out
-gfu.vec.data = complex(scale) * gfu.vec
-```
+For the spanning-tree gauge, the separate port nodes, gap voltage
+convention, and SIBC trace constraints, see
+`ih_sibc(topic="ngsolve_recipes")`. A unit scaled-potential lift has
+voltage magnitude `abs(s)` when the A line integral across the designated
+gap path is fixed to zero.
 
 ## Gotchas
 
-1. **nograds=True on HCurl** — standard NGSolve policy; phi provides the
-   gauge for the gradient part of A in the conductor. Both together give
-   a well-posed A-V system.
+1. **Lowest-order HCurl gradients remain with `nograds=True`.** The
+   coupled A–V space still needs a gauge consistent with the ports and
+   SIBC traces.
 2. **phi defined only on conductor** (`definedon="coil"`). If defined globally,
    the unconstrained phi in air breaks the solution (A becomes pure gradient,
    curl(A)=0 trivial solution).
 3. **Periodic Kelvin requires separate validation**. Pure-HCurl AMS results
    do not certify this compound A-V system. Check finite values and true
    residuals for the chosen direct solve; never silently change the operator.
-4. **GND nodeset does NOT constrain HCurl** — Dirichlet on HCurl works only
-   on sidesets (boundary faces), not nodesets (vertices). Regularization term
-   `reg * NU_0 * A * N * dx` provides uniqueness instead.
+4. **A GND nodeset constrains a scalar point value.** HCurl edge degrees of
+   freedom require the formulation's own gauge constraints. A small mass
+   penalty can leave a nearly singular system and change normalized results.
 5. **Mesh requirement**: coil surface elements < delta/3 (typically 0.3 mm
    for Cu at 7 kHz). Use `surface with length < X interval N` in Cubit.
-6. **Post-normalize**: solve with V_applied=1 (phi Dirichlet), compute I_out
-   as integral of J.grad(psi_n) over coil, scale gfu by I_total/I_out.
+6. **Check the port drive before normalizing.** Inspect the true linear
+   residual and the raw terminal current. Verify inductance and both
+   losses across admissible trees with the gap path fixed.
 
 ## Reference: existing A-V implementation
-Internal A-V implementation notebook by K. Sugahara (machine-local path
-omitted). Production code pattern for A-V + BDDC+CG (non-Kelvin outer).
+`radia.panels.calc_fem_coilmesh` implements the port-driven coil route.
 """
 
 INDUCTION_HEATING_FAILED_APPROACHES = """
