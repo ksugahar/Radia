@@ -289,6 +289,84 @@ def test_per_material_physical_groups():
     assert n_views == 2
 
 
+def _two_material_curved_mesh():
+    from netgen.csg import CSGeometry, OrthoBrick, Pnt, Sphere
+    from ngsolve import Mesh
+    geo = CSGeometry()
+    geo.Add(Sphere(Pnt(0, 0, 0), 0.05).mat("sphere"))
+    geo.Add(OrthoBrick(Pnt(-0.15, -0.15, -0.15), Pnt(0.15, 0.15, 0.15)).mat("air")
+            - Sphere(Pnt(0, 0, 0), 0.05))
+    mesh = Mesh(geo.GenerateMesh(maxh=0.06))
+    curve_mesh(mesh, 2)
+    return mesh
+
+
+def test_element_node_data_keeps_both_interface_traces():
+    """Guards: ElementNodeData evaluates a field inside each element, so a
+    field that jumps across a material interface is exact on both sides.
+    Assumes: gmsh reads ElementNodeData back with its element node order.
+
+    The field is 1*(x,y,z) in the sphere and 3*(x,y,z) in the air. NodeData
+    can store only one of the two values at a shared interface node."""
+    mesh = _two_material_curved_mesh()
+    scale = mesh.MaterialCF({"sphere": 1.0}, default=3.0)
+    post = GmshPostExport(mesh)
+    post.add_vector_field("F", scale * CF((x, y, z)), element_nodes=True)
+    post.add_vector_field("F_air", scale * CF((x, y, z)), material=("air",),
+                          element_nodes=True)
+    out = os.path.join(_TMP, "rt_element_node_data.msh")
+    post.write(out)
+
+    gmsh.initialize()
+    try:
+        gmsh.open(out)
+        tags = gmsh.view.getTags()
+        node_tags, coords, _ = gmsh.model.mesh.getNodes()
+        xyz = dict(zip(node_tags, np.asarray(coords).reshape(-1, 3)))
+        material_of = {}
+        for dim, ptag in gmsh.model.getPhysicalGroups(3):
+            name = gmsh.model.getPhysicalName(dim, ptag)
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(dim, ptag):
+                for elem_tags in gmsh.model.mesh.getElements(dim, ent)[1]:
+                    material_of.update({int(t): name for t in elem_tags})
+        found = {}
+        for view in tags:
+            name = gmsh.view.option.getString(view, "Name")
+            kind, elems, data, _t, ncomp = gmsh.view.getModelData(view, 0)
+            assert kind == "ElementNodeData" and ncomp == 3, (name, kind, ncomp)
+            found[name] = {material_of[int(e)] for e in elems}
+            sides = set()
+            for elem, values in zip(elems, data):
+                _type, conn, _dim, _ent = gmsh.model.mesh.getElement(int(elem))
+                mat = material_of[int(elem)]
+                expect = np.array([xyz[n] for n in conn]) * (
+                    1.0 if mat == "sphere" else 3.0)
+                np.testing.assert_allclose(
+                    np.asarray(values).reshape(-1, 3), expect, atol=1e-12,
+                    err_msg=f"{name}: element {elem} ({mat})")
+                sides.add(mat)
+        assert found == {"F": {"sphere", "air"}, "F_air": {"air"}}, found
+    finally:
+        gmsh.finalize()
+
+
+def test_element_node_data_rejects_bad_requests():
+    """Guards: unknown materials and array data fail loudly instead of
+    silently dropping a field."""
+    mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
+    post = GmshPostExport(mesh)
+    post.add_scalar_field("s", x, material=("default", "missing"),
+                          element_nodes=True)
+    with pytest.raises(ValueError, match="missing"):
+        post.write(os.path.join(_TMP, "rt_element_node_bad_material.msh"))
+    with pytest.raises(TypeError, match="CoefficientFunction"):
+        GmshPostExport(mesh).add_scalar_field(
+            "a", np.zeros(mesh.nv), element_nodes=True)
+    with pytest.raises(ValueError, match="exclusive"):
+        GmshPostExport(mesh).add_scalar_field(
+            "c", x, cell_data=True, element_nodes=True)
+
+
 def test_mesh_only_roundtrip():
     """write_mesh (no fields) still produces a gmsh-valid file with 0 views."""
     mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)

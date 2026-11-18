@@ -185,12 +185,17 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
     a += Mu * grad(u) * grad(v) * dx
 
     # ---- Linear form: source lift in air + Neumann correction on sphere ----
+    # Source lift g: Omega_s on the sphere boundary, zero at every other
+    # DOF. Continuity of the total potential across the sphere makes the
+    # air-side reduced potential u - g, so g also enters the exported
+    # air field below.
+    gfLift = GridFunction(fes)
+    gfLift.vec[:] = 0.0
+    gfLift.Set(Omega_s, BND, mesh.Boundaries("sphere"))
     gfOmega = GridFunction(fes)
-    gfOmega.vec[:] = 0.0
-    gfOmega.Set(Omega_s, BND, mesh.Boundaries("sphere"))
 
     f = LinearForm(fes)
-    f += Mu * grad(gfOmega) * grad(v) * dx("air")
+    f += Mu * grad(gfLift) * grad(v) * dx("air")
     f.Assemble()
 
     # Remove Dirichlet components from f.vec (matches the archived
@@ -212,8 +217,8 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
     with TaskManager():
         a.Assemble()
         inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
-        # The source lift above only builds the load; the solved potential
-        # has homogeneous essential data, as in the original direct solve.
+        # The source lift only builds the load; the solved potential has
+        # homogeneous essential data, as in the original direct solve.
         gfOmega.vec[:] = 0.0
         linear_residual = apply_fe_inverse(
             a.mat, inverse, f.vec, gfOmega.vec, fes.FreeDofs())
@@ -228,19 +233,27 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
          f"err {err_pct:+.2f}%)")
 
     # ---- Optional GMSH post-export ----
+    # Physical fields only. Magnetic region: total potential, H = grad u.
+    # Air: reduced potential u - g plus the source, H = grad(u - g) + H0.
+    # The Kelvin region is a mapped image of the exterior, so it is left
+    # out. ElementNodeData keeps both traces at the magnetic/air interface.
     msh_file = ""
     if output_msh:
-        try:
-            from gmsh_post_export import GmshPostExport
-            post = GmshPostExport(mesh)
-            B_field = Mu * grad_Omega
-            post.add_vector_field("B", B_field)
-            post.add_vector_field("H", grad_Omega)
-            post.write(output_msh)
-            msh_file = output_msh
-            _log(f"wrote {output_msh}")
-        except Exception as e:
-            _log(f"GMSH post-export skipped: {e}")
+        from radia.gmsh_post_export import GmshPostExport
+        Hs = [0.0, 0.0, 0.0]
+        Hs[field_idx] = H0
+        in_air = mesh.MaterialCF({"air": 1.0}, default=0.0)
+        H_total = grad_Omega + in_air * (
+            CoefficientFunction(tuple(Hs)) - grad(gfLift))
+        physical = ("magnetic", "air")
+        post = GmshPostExport(mesh)
+        post.add_vector_field("B", Mu * H_total, material=physical,
+                              element_nodes=True)
+        post.add_vector_field("H", H_total, material=physical,
+                              element_nodes=True)
+        post.write(output_msh)
+        msh_file = output_msh
+        _log(f"wrote {output_msh}")
 
     return {
         "vol_path": vol_path,
