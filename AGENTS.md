@@ -75,8 +75,8 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CPU CI and CPU candidate builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts. The build host is a CPU machine (2026-11-18): no CUDA compile, NVIDIA/CUDA/cuDSS libraries, GPU execution or GPU CI. `gpu-a100` builds CUDA artifacts and runs GPU acceptance on demand; never gates PRs.
-Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU on the supercomputer, Windows Python GPU and MATLAB/MEX on validation; publish once all four receipts pass.
+**POLICY** (radia, radia-optuna, NGSolve forks; 2026-11-19): CPU build and CPU CI run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` fast contracts. The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution. Supercomputer GPU debug is outside CI. `gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs.
+Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU (supercomputer), Windows Python GPU and MATLAB/MEX (validation); publish once all four receipts pass.
 Deployment follows release: radia uses editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
@@ -124,7 +124,7 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 - PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
-- `release-quad` / `tools/release_quad.py done` verifies the four lane receipts (exact-source CI, artifact hashes, native and machine gates) and deploys nothing; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
+- `release-quad` / `tools/release_quad.py done` checks four lane receipts (exact-source CI, artifact hashes, native and machine gates); deploys nothing; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 
 ## Optuna
 `radia-optuna` shares nvcc-built CUDA kernels through pybind11 and plain MEX. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.

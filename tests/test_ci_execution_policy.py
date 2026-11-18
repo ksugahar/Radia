@@ -304,14 +304,14 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "with the `100` runner label" in normalized
+    assert "CPU build and CPU CI run on the build host with the `100` runner label" in normalized
     # Hosts appear by role only; the role-to-host map is private configuration.
     assert "Deployment follows release: radia uses editable sources on build and validation roles" in normalized
     assert "isolated exact-wheel QA" in normalized
     assert "radia-mcp stays build-editable/validation-wheel" in normalized
     assert "cubit-mesh-export is build-only" in normalized
-    assert "The build host is a CPU machine (2026-11-18): no CUDA compile" in normalized
-    assert "`gpu-a100` builds CUDA artifacts and runs GPU acceptance on demand; never gates PRs" in normalized
+    assert "The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution" in normalized
+    assert "`gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs" in normalized
     assert "retired targets stay excluded" in normalized
     assert "validation has no Cubit/cme" in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
