@@ -41,11 +41,13 @@ def test_reference_surface_triangle_geometry_and_stiffness():
     assert geo["area"] == pytest.approx(0.5)
     assert geo["area_vector"] == pytest.approx((0.0, 0.0, 0.5))
     assert geo["unit_normal"] == pytest.approx((0.0, 0.0, 1.0))
-    assert geo["gradients"] == pytest.approx([
+    expected_gradients = [
         (-1.0, -1.0, 0.0),
         (1.0, 0.0, 0.0),
         (0.0, 1.0, 0.0),
-    ])
+    ]
+    for actual, expected in zip(geo["gradients"], expected_gradients, strict=True):
+        assert actual == pytest.approx(expected)
 
     K = p1_surface_triangle_stiffness(tri)
     expected = [[1.0, -0.5, -0.5], [-0.5, 0.5, 0.0], [-0.5, 0.0, 0.5]]

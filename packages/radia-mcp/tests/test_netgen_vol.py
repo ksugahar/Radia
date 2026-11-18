@@ -652,14 +652,18 @@ def test_boundary_normal_summary_rows_for_named_box_faces():
     }
 
     assert [row["boundary_number"] for row in rows] == [1, 2, 3, 4, 5, 6]
-    assert mesh.surface_vector_area_by_boundary_number() == pytest.approx({
+    expected_by_number = {
         1: expected_vectors["xmin"],
         2: expected_vectors["xmax"],
         3: expected_vectors["ymin"],
         4: expected_vectors["ymax"],
         5: expected_vectors["zmin"],
         6: expected_vectors["zmax"],
-    })
+    }
+    actual_by_number = mesh.surface_vector_area_by_boundary_number()
+    assert actual_by_number.keys() == expected_by_number.keys()
+    for number, vector in expected_by_number.items():
+        assert actual_by_number[number] == pytest.approx(vector)
     for name, vector in expected_vectors.items():
         assert by_name[name]["vector_area"] == pytest.approx(vector)
         assert by_name[name]["vector_area_norm"] == pytest.approx(by_name[name]["surface_area"])
