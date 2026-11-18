@@ -649,21 +649,21 @@ jobs:
       # ----------------------------------------------------------------
       # Upload native binaries as an artifact for the CD workflow to consume
       # ----------------------------------------------------------------
+      - name: Record the CPU natives with their hashes
+        if: success()
+        shell: pwsh
+        run: |
+          $natives = Join-Path $env:RUNNER_TEMP "radia-cpu-natives-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python tools/ci_cpu_natives.py record --source-dir src/radia --out $natives --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_CPU_NATIVES_DIR=$natives" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Upload native binary artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-cpu-pyd
-          path: |
-            src/radia/*.pyd
-            src/radia/*.pyd.build.json
-            src/radia/*.dll
-            src/radia/*.so
-            src/radia/*.dylib
-            !src/radia/*.locked-old.*
-            !src/radia/*.lockedold.*
-            !src/radia/*.pre_*.*
-            !src/radia/*.backup*.*
+          path: ${{ env.RADIA_CPU_NATIVES_DIR }}
+          if-no-files-found: error
           retention-days: 7
 
       # ----------------------------------------------------------------
@@ -753,20 +753,11 @@ jobs:
         with:
           name: radia-cpu-pyd
           path: ${{ runner.temp }}/radia-cpu-pyd-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Stage the CPU natives after checking their provenance
+      - name: Stage exactly the recorded CPU natives
         run: |
           $source = "$env:RUNNER_TEMP/radia-cpu-pyd-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $receipts = @(Get-ChildItem -LiteralPath $source -Recurse -Filter '*.pyd.build.json')
-          if ($receipts.Count -eq 0) { throw 'CPU natives carry no build receipts' }
-          foreach ($receipt in $receipts) {
-            $record = Get-Content -LiteralPath $receipt.FullName -Raw | ConvertFrom-Json
-            if ($record.source_commit -ne $env:GITHUB_SHA -or $record.source_dirty -ne $false) { throw "CPU native is not from this clean commit: $($receipt.Name)" }
-          }
-          $files = @(Get-ChildItem -LiteralPath $source -Recurse -File)
-          if (@($files | Where-Object Name -like '_*_cuda*').Count -ne 0) { throw 'CUDA modules must not come from the CPU build host' }
-          $files | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination src/radia }
-          $files | Select-Object Name, @{n='sha256'; e={ (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }} |
-            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RADIA_CI_OUTPUT_DIR 'cpu-natives.sha256.json') -Encoding utf8
+          python tools/ci_cpu_natives.py stage --artifact $source --dest src/radia --sha $env:GITHUB_SHA --evidence (Join-Path $env:RADIA_CI_OUTPUT_DIR 'cpu-natives.manifest.json')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build and stage Radia Python GPU payload
         run: |
           # Compile and import-only coexistence for this exact checkout. No resident
@@ -837,7 +828,7 @@ jobs:
             src/radia/*.pyd
             src/radia/*.pyd.build.json
             src/radia/*.dll
-            ${{ env.RADIA_CI_OUTPUT_DIR }}/cpu-natives.sha256.json
+            ${{ env.RADIA_CI_OUTPUT_DIR }}/cpu-natives.manifest.json
           if-no-files-found: error
           retention-days: 7
       - name: Upload wheel artifact
