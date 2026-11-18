@@ -304,56 +304,6 @@ def test_later_tooling_controller_must_descend_cleanly_from_the_release(
     assert release_quad._verify_release_controller(repo, release, "5.2.1") == 4
 
 
-def _done_until_source_gates(monkeypatch, controller, release):
-    monkeypatch.setattr(release_quad, "REPO", controller)
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: release)
-    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.2.1")
-    passed = AssertionError("source gates passed")
-
-    def next_gate():
-        raise passed
-
-    monkeypatch.setattr(release_quad, "_verify_head_release_tag", next_gate)
-    return passed
-
-
-def test_done_accepts_a_later_controller_with_a_separate_exact_tag_source(
-        tmp_path, monkeypatch, release_template):
-    from argparse import Namespace
-    controller, release = _release_repo(tmp_path, release_template)
-    source = _release_source(tmp_path, release_template)
-    _git(source, "checkout", "-q", "--detach", "v5.2.1")
-    passed = _done_until_source_gates(monkeypatch, controller, release)
-    with pytest.raises(AssertionError) as raised:
-        release_quad.cmd_done(Namespace(simulink_package=None, release_source=str(source)))
-    assert raised.value is passed
-    # Without a separate source the later controller is itself the source: refused.
-    assert release_quad.cmd_done(Namespace(simulink_package=None, release_source=None)) == 4
-
-
-@pytest.mark.parametrize("case", ["stale-source", "dirty-source", "dirty-controller",
-                                  "unrelated-controller"])
-def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case, release_template):
-    from argparse import Namespace
-    controller, release = _release_repo(tmp_path, release_template)
-    source = _release_source(tmp_path, release_template)
-    if case != "stale-source":
-        _git(source, "checkout", "-q", "--detach", "v5.2.1")
-    if case == "dirty-source":
-        (source / "tool.py").write_text("parallel WIP\n", encoding="ascii")
-    elif case == "dirty-controller":
-        (controller / "tool.py").write_text("unreviewed\n", encoding="ascii")
-    elif case == "unrelated-controller":
-        _git(controller, "checkout", "-q", "--orphan", "unrelated")
-        _git(controller, "commit", "-q", "-m", "unrelated history")
-    _done_until_source_gates(monkeypatch, controller, release)
-    assert release_quad.cmd_done(
-        Namespace(simulink_package=None, release_source=str(source))) == 4
-
-
-
-
 def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
     monkeypatch.setattr(
         release_quad, "_read_repo_versions", lambda: {"radia": "4.95.80"}
@@ -896,21 +846,6 @@ def test_isolated_qa_verifier_propagates_payload_check_exit(monkeypatch,role,rc)
     label,host,python=release_quad._solver_qa_target(role)
     assert calls[0][2]==dict(python=python,source=False,qa=True)
     assert calls[1]==('wheel',host,label+' QA',dict(python_path=python,isolated=True))
-
-
-def test_done_requires_both_normal_and_both_qa_views_before_phase9(monkeypatch):
-    """Guards: no missing role/QA completion. Assumes: earlier gates are observed mocks."""
-    from argparse import Namespace
-    calls=[]
-    monkeypatch.setattr(release_quad,'cmd_preflight',lambda a:0)
-    monkeypatch.setattr(release_quad,'_release_head',lambda:'a'*40)
-    monkeypatch.setattr(release_quad,'_verify_local_release_source',lambda *a:0)
-    monkeypatch.setattr(release_quad,'_verify_head_release_tag',lambda:0)
-    monkeypatch.setattr(release_quad,'_verify_role_editable',lambda role:calls.append(('normal',role)) or 0)
-    monkeypatch.setattr(release_quad,'_verify_qa_wheel',lambda role:calls.append(('qa',role)) or 0)
-    monkeypatch.setattr(release_quad,'cmd_phase9',lambda a:4)
-    assert release_quad.cmd_done(Namespace(simulink_package=None))==4
-    assert set(calls)=={('normal','100'),('normal','validation'),('qa','100'),('qa','validation')} and len(calls)==4
 
 
 @pytest.mark.parametrize('defect',['hostname','python','commit','dirty'])

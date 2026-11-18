@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""release_quad.py — CPU numerical Radia solver two-machine gate.
+"""release_quad.py — Radia release candidate verification and explicit runtime operations.
 
 Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
@@ -19,20 +19,13 @@ Usage:
         Reject the retired compute refresh route without contacting a host.
 
     python tools/release_quad.py phase9
-        Cross-machine consistency probe. Final gate.
+        Cross-machine editable consistency probe.
 
 
-    python tools/release_quad.py all
-        phase8 -> phase9 with all preconditions enforced.
-
-        Both normal roles require explicit host, Python, source and release
-        commit bindings; isolated QA interpreters are configured separately.
-
-    python tools/release_quad.py done [--release-source <path>]
-        Require the CPU solver release gate. The release source is the controller (which must then
-        sit at the tag) or a separate exact-tag checkout; with the latter the
-        controller must be a tracked-clean descendant declaring the same
-        version. No runtime is changed.
+    python tools/release_quad.py done --source-sha SHA --manifest FILE [--release-source PATH]
+    python tools/release_quad.py all --source-sha SHA --manifest FILE [--release-source PATH]
+        Verify four candidate lanes and their exact-source, exact-artifact
+        acceptance evidence for release-owner handoff. Does not deploy.
 
     python tools/release_quad.py verify-editable
         Read-only: verify both bound normal editable installations.
@@ -1257,10 +1250,8 @@ def cmd_phase9(args):
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 validation+100, phase9)."""
-    rc = cmd_phase8(argparse.Namespace(target="validation,100"))
-    if rc != 0: return rc
-    return cmd_phase9(args)
+    """Verify release candidates without deploying them."""
+    return cmd_done(args)
 
 
 def _remote_100_editable_packages():
@@ -1734,79 +1725,70 @@ def _run_retired_standalone_pyside_guard():
     return 0
 
 
+RELEASE_LANES = {
+    "cpu": ("cpu-build", "windows-validation"),
+    "linux-python-gpu": ("linux-gpu", "linux-gpu"),
+    "windows-python-gpu": ("windows-gpu", "windows-gpu"),
+    "matlab": ("windows-gpu", "windows-gpu"),
+}
+
+
+def _receipt_file(base, entry):
+    path = (base / entry["path"]).resolve()
+    if not path.is_relative_to(base) or not path.is_file():
+        raise ValueError(f"Missing file or path outside receipt directory: {entry['path']}")
+    digest = entry["sha256"]
+    if not re.fullmatch(r"[0-9a-f]{64}", digest) or _sha256_file(path) != digest:
+        raise ValueError(f"SHA-256 mismatch for {entry['path']}")
+    return digest
+
+
+def _verify_candidate_receipts(manifest, source_sha):
+    base = manifest.resolve().parent
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    if data["schema"] != 1 or data["source_sha"] != source_sha:
+        raise ValueError("Release manifest schema or source SHA mismatch")
+    native_ci = data["native_ci"]
+    if native_ci["source_sha"] != source_sha or native_ci["passed"] is not True:
+        raise ValueError("Exact-source native CI receipt must pass")
+    _receipt_file(base, native_ci["evidence"])
+    lanes = data["lanes"]
+    if set(lanes) != set(RELEASE_LANES):
+        raise ValueError("A receipt is required for each of the four release lanes")
+    for name, (build_role, validation_role) in RELEASE_LANES.items():
+        lane = lanes[name]
+        build, validation = lane["build"], lane["validation"]
+        if build["role"] != build_role or validation["role"] != validation_role:
+            raise ValueError(f"Incorrect build or validation role for {name}")
+        if build["source_sha"] != source_sha or validation["source_sha"] != source_sha:
+            raise ValueError(f"Source SHA mismatch for {name}")
+        _receipt_file(base, build["evidence"])
+        if validation["passed"] is not True:
+            raise ValueError(f"Validation did not pass for {name}")
+        _receipt_file(base, validation["evidence"])
+        artifacts = build["artifacts"]
+        if not artifacts:
+            raise ValueError(f"No artifacts for {name}")
+        actual = {entry["path"]: _receipt_file(base, entry) for entry in artifacts}
+        if len(actual) != len(artifacts) or actual != validation["artifact_sha256"]:
+            raise ValueError(f"Validated artifact set or hash mismatch for {name}")
+
+
 def cmd_done(args):
-    """Verify both normal editable roles and their isolated exact-wheel QA runtimes.
-
-    Exact-tag, native/source and cross-role checks remain mandatory. Independent
-    distributions retain their own release gates.
-    """
-    step("Definition-of-done check "
-         "(preflight + editable tier + phase9 + retired standalone panel guard)")
-    rc = cmd_preflight(args)
-    if rc != 0:
-        fail("preflight failed — repo state not release-ready.")
-        return rc
-
-    release_sha = _release_head()
-    release_source = _done_release_source(args)
-    if _norm_path(release_source) != _norm_path(str(REPO)):
-        rc = _verify_release_controller(REPO, release_sha, _radia_version())
-        if rc != 0:
-            fail("release controller is not a clean descendant of the release commit.")
-            return rc
-    rc = _verify_local_release_source(release_source, release_sha)
-    if rc != 0:
-        fail("release source is not the exact clean release SHA.")
-        return rc
-
-
-    rc = _verify_head_release_tag()
-    if rc != 0:
-        fail("release HEAD is not anchored by its declared Radia version tag.")
-        return rc
-
-    if any(_editable_target(role)["commit"] != release_sha for role in SOLVER_TARGETS):
-        fail("Normal editable source bindings do not match the exact release tag")
+    """Verify the fixed source and artifacts for release-owner handoff."""
+    source_sha = args.source_sha
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        fail("A full lowercase source SHA is required")
         return 4
-    drift = sum(_verify_qa_wheel(role) + _verify_role_editable(role) for role in SOLVER_TARGETS)
-    if drift > 0:
-        fail(f"{drift} runtime-tier check(s) drifted.  "
-             "Run the printed recovery commands, then re-run "
-             "`release_quad done`.")
-        return 1
-
-    rc = cmd_phase9(args)
-    if rc != 0:
-        fail("phase9 drift detected — at least one machine is out of sync.")
+    rc = _verify_local_release_source(str(Path(args.release_source or REPO).resolve()), source_sha)
+    if rc:
         return rc
-
-    rc = _run_retired_standalone_pyside_guard()
-    if rc != 0:
-        fail("retired standalone PySide panel surface reappeared. Remove it, then re-run "
-             "`release_quad done`.")
-        return rc
-
-    rc = _check_main_synced(hard=True)
-    if rc != 0:
-        fail("NAS main diverged from origin/main — sync before calling the "
-             "release done (this is the root cause of the recurring "
-             "rebase-conflict sessions).")
-        return rc
-
-    if getattr(args, "simulink_package", None):
-        fail("MATLAB/Simulink artifacts belong to radia-simulink, not the CPU Radia release.")
+    try:
+        _verify_candidate_receipts(Path(args.manifest), source_sha)
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        fail(f"Release candidate evidence failed: {exc}")
         return 4
-
-    rc = _verify_final_pip_checks()
-    if rc != 0:
-        return rc
-
-    print("")
-    ok("Windows role checks passed. The four-case wrapper still requires its CPU/GPU compute-build receipts. "
-       "both normal operating roles use their bound editable source, isolated QA runtimes hold the verified wheel, "
-       "and the retired standalone PySide panel surface is absent. "
-       "The recorded editable intent names this release source; move it later "
-       "only with an explicit `release_quad repoint --reason`.")
+    ok(f"All four artifact lanes verified for {source_sha}; ready for release-owner review.")
     return 0
 
 
@@ -2055,8 +2037,7 @@ def main():
                          "provide the package's radia release")
 
 
-    sub.add_parser("all",
-                    help="phase8 -> phase9 in one shot")
+
     sub.add_parser("verify-editable",
                     help="verify validation's fixed Radia wheel and 100号機's development editable")
     rp = sub.add_parser(
@@ -2096,18 +2077,11 @@ def main():
                     help="verify the SHA pins only (fast, no MATLAB)")
     em.add_argument("--force", action="store_true",
                     help="regenerate even when the pins are current")
-    done = sub.add_parser(
-        "done",
-        help="non-mutating definition-of-done: exact source + phase9 + guards")
-    done.add_argument(
-        "--simulink-package",
-        help="also require a matching two-machine Simulink candidate pass")
-    done.add_argument(
-        "--release-source",
-        help="separate exact-tag checkout to verify as the release source; the "
-             "controller running `done` must then be a tracked-clean descendant of "
-             "the release commit declaring the same version (default: the "
-             "controller itself, which must sit at the tag)")
+    for name in ("done", "all"):
+        handoff = sub.add_parser(name, help="verify exact candidate receipts for release handoff")
+        handoff.add_argument("--source-sha", required=True, help="full fixed source commit SHA")
+        handoff.add_argument("--manifest", required=True, help="candidate evidence manifest JSON")
+        handoff.add_argument("--release-source", help="clean candidate checkout (default: controller checkout)")
 
     shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
     shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")

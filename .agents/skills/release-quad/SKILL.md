@@ -1,38 +1,65 @@
 ---
 name: release-quad
-description: Coordinate the four Radia release cases, preserving exact-artifact and numerical acceptance gates.
+description: Prepare, verify, and hand off CPU, Python GPU, and MATLAB release artifacts from one fixed source.
 ---
 
-# Radia release wrapper
+# Radia release
 
-Coordinate all four release cases through the dedicated, privately configured skills:
+Start with CPU development. Advance the fixed source through the GPU and MATLAB
+builds, verify the exact artifacts on the assigned machines, and hand them to
+the release owner for publication.
 
-- Build-role editable installation.
-- Validation-role editable installation.
-- CPU compute build.
-- GPU compute build for the qualified device architecture.
+| Order | Role | Work and evidence |
+| --- | --- | --- |
+| 1 | CPU build host | Develop and debug the CPU implementation. Run the shared precheck and the affected CPU checks. Freeze the source and build the CPU release candidate. Record its artifact hashes. |
+| 2 | Linux GPU host | Build Linux Python GPU artifacts from the frozen source. Verify the artifacts on the intended device architecture. |
+| 2 | Windows GPU host | Build Windows Python GPU artifacts and the MATLAB/Simulink package's CUDA MEX artifacts from the frozen source. Use the reviewed Windows CUDA, compiler, and MATLAB ABI. |
+| 3 | Designated validation roles | Verify the exact hashes before execution. Run the applicable native, numerical, and package acceptance checks in isolated runtimes. |
+| 4 | Assigned release owner | Verify the evidence against the publication scope. Publish and distribute the accepted artifacts under each package's release workflow. |
 
-`release-dual` and the interim `release-flow` are retired; do not create aliases
-or route new work through them. Host-specific skills and host/runtime mappings
-are private configuration. Public evidence uses neutral roles.
+Resolve the machine mapping privately. The CPU build host stops at CPU
+candidate preparation. Schedule CUDA compilation, GPU CI, and GPU execution
+on the assigned GPU hosts. Run isolated exact-wheel CPU acceptance on the
+validation host. Keep editable runtime maintenance separate. The GPU builds may
+proceed in parallel after the CPU source and dependencies are frozen.
 
-Normal Radia operation uses editable sources on both Windows roles. Keep
-isolated exact-wheel acceptance separate on both roles. Editable installation
-does not waive wheel RECORD, native artifact provenance, dependency ABI,
-CPU/GPU numerical acceptance or exact-source CI gates. Build cases alone do
-not certify GPU runtime, numerical accuracy or performance.
+## Acceptance and handoff
 
-Use the reviewed `tools/release_quad.py` controller. Resolve explicit private
-host, interpreter, source and commit bindings before mutation. Preserve other
-packages' release ownership and existing environments. If the controller does
-not implement all four cases, report the missing gates and keep wrapper
-completion pending. Never equate a two-role deployment result with four-case
-completion.
+- Record the exact source and dependency identities, platform, compiler,
+  runtime, architecture, artifact hashes, and the checks run on each artifact.
+  Verify package contents and wheel RECORD where applicable.
+- Retain the applicable exact-source CI results and adopted numerical checks.
+  Require explicit backend selection, the existing CPU/GPU parity checks and
+  the existing transfer policy. Record performance as diagnostic evidence.
+- Keep MATLAB acceptance in the owning package. Check the MATLAB ABI, native
+  MEX execution, shared-kernel parity and applicable Simulink model checks.
+  Keep MATLAB and Simulink artifacts outside the Radia Python release gates.
+- Give the manager a release manifest with source, artifact identities,
+  evidence links, acceptance status and pending items. Public evidence uses
+  neutral roles. Keep machine identities and private paths outside it.
+- MCP, Cubit, Simulink and Optuna retain independent publication ownership and
+  package gates. Use live MCP discovery for catalog evidence.
 
-Publication requires exact-release native CI, accepted artifact hashes and all
-mandatory adopted numerical cases. Preserve user-owned acceptance criteria and
-experimental/unqualified labels. Require evidence for all four cases before
-claiming wrapper completion. MCP, Cubit and Simulink release independently;
-their artifacts and unrelated gates are not folded into the Radia wrapper.
+## Controller coverage
 
-MCP discovery uses the live catalog; do not restore a tracked generated `docs/TOOLS.md` gate.
+Run `python tools/release_quad.py done --source-sha SHA --manifest FILE
+--release-source CHECKOUT` on the reviewed candidate. The controller verifies
+the supplied receipts and artifacts without deploying any runtime. Build and
+validate each lane using its owning package workflow.
+
+The manifest uses `schema: 1`, the full `source_sha`, an exact-source
+`native_ci` record with `passed: true` and `evidence`, and a `lanes` object:
+
+| Lane | Build role | Validation role |
+| --- | --- | --- |
+| cpu | cpu-build | windows-validation |
+| linux-python-gpu | linux-gpu | linux-gpu |
+| windows-python-gpu | windows-gpu | windows-gpu |
+| matlab | windows-gpu | windows-gpu |
+
+Each lane has a `build` and `validation` record with `role`, `source_sha`,
+and `evidence`. The build lists `artifacts`. Validation declares `passed: true`
+and an `artifact_sha256` mapping from artifact paths to hashes for exactly
+the files it accepted. Every evidence or artifact entry has a manifest-relative
+`path` and lowercase SHA-256 `sha256`. Keep the manifest and evidence private.
+Use explicit deployment tools only as part of a separately authorized operation.

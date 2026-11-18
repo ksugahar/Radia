@@ -10,6 +10,8 @@ neither has grown a private copy again.
 """
 from __future__ import annotations
 
+import pytest
+
 import importlib.util
 import re
 import sys
@@ -64,17 +66,19 @@ def test_retired_host_has_no_release_route():
     assert not hasattr(quad, "SSH_MDX2")
 
 
-def test_release_all_never_refreshes_compute_hosts(monkeypatch):
+def test_release_all_is_read_only_candidate_verification(monkeypatch):
     quad = _load("release_quad")
+    args = object()
     calls = []
+
     def forbidden(*args):
-        raise AssertionError("release must not contact compute hosts")
-    monkeypatch.setattr(quad, "cmd_phase8e", forbidden)
-    monkeypatch.setattr(quad, "cmd_temp_shadows", forbidden)
-    monkeypatch.setattr(quad, "cmd_phase8", lambda args: calls.append(args.target) or 0)
-    monkeypatch.setattr(quad, "cmd_phase9", lambda args: calls.append("phase9") or 0)
-    assert quad.cmd_all(None) == 0
-    assert calls == ["validation,100", "phase9"]
+        pytest.fail("candidate handoff attempted a deployment")
+
+    monkeypatch.setattr(quad, "cmd_phase8", forbidden)
+    monkeypatch.setattr(quad, "cmd_phase9", forbidden)
+    monkeypatch.setattr(quad, "cmd_done", lambda received: calls.append(received) or 4)
+    assert quad.cmd_all(args) == 4
+    assert calls == [args]
 
 
 def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
@@ -83,3 +87,49 @@ def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
     source = inspect.getsource(quad.cmd_done)
     assert "cmd_phase8e(" not in source
     assert "cmd_temp_shadows(" not in source
+
+
+
+@pytest.mark.parametrize("defect", [None, "source", "role", "artifact", "acceptance", "ci"])
+def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, monkeypatch, defect):
+    from argparse import Namespace
+    import hashlib
+    import json
+
+    quad = _load("release_quad")
+    source = "a" * 40
+
+    def evidence(name):
+        path = tmp_path / name
+        path.write_bytes(name.encode("ascii"))
+        return {"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+    receipts = {}
+    for name, (build_role, validation_role) in quad.RELEASE_LANES.items():
+        artifact = evidence(name + ".whl")
+        receipts[name] = {
+            "build": {"role": build_role, "source_sha": source, "evidence": evidence(name + ".build"),
+                      "artifacts": [artifact]},
+            "validation": {"role": validation_role, "source_sha": source, "passed": True,
+                           "evidence": evidence(name + ".validation"),
+                           "artifact_sha256": {artifact["path"]: artifact["sha256"]}},
+        }
+    data = {"schema": 1, "source_sha": source, "lanes": receipts,
+            "native_ci": {"source_sha": source, "passed": True, "evidence": evidence("ci.json")}}
+    if defect == "source":
+        receipts["matlab"]["validation"]["source_sha"] = "b" * 40
+    elif defect == "role":
+        receipts["windows-python-gpu"]["build"]["role"] = "cpu-build"
+    elif defect == "artifact":
+        (tmp_path / "linux-python-gpu.whl").write_bytes(b"changed")
+    elif defect == "acceptance":
+        del receipts["cpu"]
+    elif defect == "ci":
+        data["native_ci"]["passed"] = False
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(quad, "_verify_local_release_source",
+                        lambda path, sha: 0 if path == str(tmp_path.resolve()) and sha == source else 4)
+    args = Namespace(source_sha=source, manifest=manifest, release_source=tmp_path)
+    assert quad.cmd_done(args) == (0 if defect is None else 4)
