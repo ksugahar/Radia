@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$venv/Scripts/python.exe" -I -m pip install --only-binary=:all: "$($wheels[0].FullName)[gpu]" pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$venv/Scripts/python.exe" -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "HDIV_LANE_PYTHON=$venv/Scripts/python.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "HDIV_LANE_WHEEL=$($wheels[0].FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Execute the HDiv device tests on the installed wheel without compilation

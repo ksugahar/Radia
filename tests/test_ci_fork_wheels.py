@@ -38,3 +38,17 @@ def test_lock_identifies_both_cpu_wheels_and_native_dlls():
         expected = lock["sources"]["netgen" if package == "netgen-mesher" else "ngsolve"]
         assert "+radia." + expected[:8] in wheel["filename"]
     assert lock["wheels"]["ngsolve"]["version"].endswith(".cpu")
+
+
+@pytest.mark.parametrize("outside", ["netgen", "ngsolve"])
+def test_verify_rejects_packages_outside_the_venv(tmp_path, monkeypatch, outside):
+    from types import SimpleNamespace
+
+    prefix = tmp_path / "venv"
+    monkeypatch.setattr(sys, "prefix", str(prefix))
+    monkeypatch.setattr(fork.importlib.util, "find_spec",
+                        lambda name: SimpleNamespace(submodule_search_locations=[
+                            str((tmp_path if name == outside else prefix) / name)
+                        ]))
+    with pytest.raises(RuntimeError, match=outside + " is outside the CI environment"):
+        fork.verify_installed({"wheels": {}, "dlls": {}, "sources": {}})

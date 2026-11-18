@@ -754,6 +754,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_GMSH_PROVENANCE=$env:RADIA_GMSH_PROVENANCE" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Verify the locked fork after dependency installation
+        if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
+        shell: pwsh
+        run: |
+          python -I tools/ci_fork_wheels.py verify
+          exit $LASTEXITCODE
+
       - name: Verify native build provenance contracts
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.native_required == 'true'
         shell: pwsh

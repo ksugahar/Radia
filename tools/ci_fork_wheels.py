@@ -24,11 +24,17 @@ def verify_installed(lock):
     for name, wheel in lock["wheels"].items():
         if importlib.metadata.version(name) != wheel["version"]:
             raise RuntimeError(f"Incorrect installed version: {name}")
-    package = Path(importlib.util.find_spec("netgen").submodule_search_locations[0]).resolve()
-    if not package.is_relative_to(site):
-        raise RuntimeError(f"Netgen is outside the CI environment: {package}")
+    packages = {}
+    for name in ("netgen", "ngsolve"):
+        spec = importlib.util.find_spec(name)
+        if spec is None or not spec.submodule_search_locations:
+            raise RuntimeError(f"Missing package: {name}")
+        directories = [Path(path).resolve() for path in spec.submodule_search_locations]
+        if any(not path.is_relative_to(site) for path in directories):
+            raise RuntimeError(f"{name} is outside the CI environment: {directories}")
+        packages[name] = directories[0]
     for name, sha in lock["dlls"].items():
-        if digest(package / name) != sha:
+        if digest(packages["netgen"] / name) != sha:
             raise RuntimeError(f"Incorrect installed DLL: {name}")
     return lock["sources"]
 
