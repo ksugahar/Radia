@@ -7,7 +7,7 @@ Scope: (1) complete and validate HDiv-MMM topology optimization; (2) improve rep
 Do not add unrelated features. No backward compatibility: keep only the latest design; delete legacy paths, aliases, flags, shims and old releases; repository health comes first.
 ## Repository Boundaries
 Radia, Simulink and MCP release here. Cubit export, MATLAB Optuna and EqnEdit64 release separately. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
-`radia`: Python/pybind11 CPU and GPU, Windows and Linux; its code and tests never import `radia_simulink`. `packages/radia-simulink`: all MATLAB/Simulink/LTspice source, build and distribution, depending on `radia` one-way (the retired `radia-gpu` name is not published). `radia-mcp`: cross-package knowledge/tools, optional GPU backend. `radia-optuna` stays independent. `radia` releases exclude MATLAB/MEX, LTspice and Simulink artifacts and their CI gates; shared and CPU numerical gates remain mandatory.
+`radia`: Python/pybind11 CPU and GPU, Windows and Linux; its code and tests never import `radia_simulink`. `packages/radia-simulink`: all MATLAB/Simulink/LTspice source, build and distribution, depending on `radia` one-way (the retired `radia-gpu` name is not published). `radia-mcp`: cross-package knowledge/tools, optional GPU backend. `radia-optuna` stays independent. `radia` wheels exclude MATLAB/MEX, LTspice and Simulink artifacts; each distribution keeps its CI lane, yet releases wait for all four lane receipts.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: protect against breakage by future changes, every push, impact-selected: surrogate tests (an adopted case's coarsest convergence level vs its stored baseline; ~1 % off analytic is fine: it guards code, not accuracy) and lint-like contracts. Docstrings state `Guards:`/`Assumes:`; never independent validation.
@@ -37,10 +37,10 @@ Prefer established public abstractions over proprietary plumbing.
 Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `cubit-mesh-export` toolbar, and normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: it deploys to build (editable) and validation (verified wheel), never JMAG or retired targets; isolated CI is not deployment.
+- radia-mcp releases independently of Radia (deployment below), never to JMAG or retired targets; isolated CI is not deployment.
 - Routine editable MCP: edit in place, run scoped checks, reconnect and verify live source and one harmless affected tool. Skip CI, precheck, full suite, wheel and version bump. Reinstall on relocation or dependency/metadata changes. Solver/native, shared-interface, packaging and release gates apply.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
-- MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with `pip install -e`; no dedicated branch, frozen snapshot or separate deployment approval is required for routine MCP experiments.
+- MCP is experimental tooling, not a solver release. Developers may edit live MCP source and change its editable source (`pip install -e`); no dedicated branch, frozen snapshot or separate deployment approval.
 - Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
 - Verify the interpreter and actual import path after repointing. Report each client's live loaded source separately; reconnect as needed. Unknown or mixed evidence must stay unverified.
 - Keep solver release tests isolated from development. See [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
@@ -55,7 +55,7 @@ The bibliography is managed separately (private). Adopted validation records cit
 - Windows builds: VS Build Tools 2022/MSVC 14.44, MATLAB-bundled CUDA 12.8; Linux `radia` GPU: nvcc 12.8; no other CUDA/compiler overrides. BLAS: MKL (x86), NVPL (aarch64). Python GPU runtime (2026-10-21): exact-version pip NVIDIA CUDA 12.8 runtime packages, loaded lazily on GPU paths only; wheels never ship the CUDA runtime.
 - Matrix residency (2026-11-02): H-matrices and sparse matrices, including blocks, factors, preconditioners and coarse operators, stay on the selected backend from assembly through solve. No CPU/GPU matrix transfers. Transfer only needed non-matrix inputs and requested results; log bytes and cost. Raise on backend failure. NGSolve owns its assembly and solver internals.
 - No implicit CPU/GPU/Python fallback: select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. GPU-first; measure speed per case; record parity/artifact hashes/validation JSON; Poisson does not certify ICCG/AMS/HDiv-MMM.
-- `radia-simulink` (CPU/GPU) is Windows-only: CPU MEX built on the build host; CUDA MEX built, accepted with independent review and GPU-deployed on the validation host. Prove CPU/GPU agreement on small publishable cases before scaling; backend names are not speedup evidence. Data is HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8) plus NGSolve `.vol`/`.sol`; no MAT. Validate readers/writers above 2 GB, never split. Claim GPU portability only after validated architecture/PTX compatibility and a rebuild per OS/MATLAB ABI.
+- `radia-simulink` (CPU/GPU) is Windows-only: MEX (CPU execution and CUDA) is built, reviewed, accepted and deployed on the validation host. Prove CPU/GPU agreement on small publishable cases before scaling; backend names are not speedup evidence. Data is HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8) plus NGSolve `.vol`/`.sol`; no MAT. Validate readers/writers above 2 GB, never split. Claim GPU portability only after validated architecture/PTX compatibility and a rebuild per OS/MATLAB ABI.
 
 ### MATLAB And Simulink
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit; record stable tool versions and regression-test upgrades. MATLAB Engine sessions never waive Toolkit model-edit, check, save/reopen or diagnostic gates. Close only owned sessions.
@@ -75,9 +75,9 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI and formal artifact builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts; `100` heavy CPU jobs and CPU compiles. The build host is a CPU machine (2026-11-18): no CUDA compile, no NVIDIA/CUDA/cuDSS libraries, no GPU execution or GPU CI. `gpu-a100` builds CUDA artifacts and runs GPU acceptance on the validation host; never gates PRs.
-Release order (2026-11-18): CPU development and CPU release candidates on the build host; Python GPU builds on the supercomputer and the validation host; MATLAB/MEX CPU+GPU on the validation host; then release.
-Deployment: radia uses bound editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
+**POLICY**: CPU CI and CPU candidate builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts. The build host is a CPU machine (2026-11-18): no CUDA compile, NVIDIA/CUDA/cuDSS libraries, GPU execution or GPU CI. `gpu-a100` builds CUDA artifacts and runs GPU acceptance on demand; never gates PRs.
+Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU on the supercomputer, Windows Python GPU and MATLAB/MEX on validation; publish once all four receipts pass.
+Deployment follows release: radia uses editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
@@ -100,7 +100,7 @@ Radia is implemented only by AI agents; humans do not write code. Tests therefor
 - Assertions report actual and expected values. Prefer behavioral tests and generated single sources of truth over string-pinned text checks.
 - Never claim results that were not executed; evidence carries the source SHA and artifact hashes. Keep files small enough for an agent's context.
 
-Every AI output passes at least one independent check: an agent that is about 90 % right becomes about 99 % right after one. A check counts only if independent (a different model or agent, or independent evidence), actually executed (not a summary read) and able to fail. Scale checks by impact: routine changes take one check (reciprocal review plus CI); editable MCP maintenance uses focused checks and live-tool verification, not CI per update. Releases, deletions and acceptance-criteria changes take at least two, and acceptance-criteria changes also need user approval.
+Every AI output passes at least one independent check (about 90 % right becomes about 99 %). A check counts only if independent (a different model or agent, or independent evidence), actually executed (not a summary read) and able to fail. Scale checks by impact: routine changes take one check (reciprocal review plus CI); editable MCP maintenance uses focused checks and live-tool verification, not CI per update. Releases, deletions and acceptance-criteria changes take at least two, and acceptance-criteria changes also need user approval.
 Reliability comes from cheap independent checks on every change, not exhaustive test enumeration. Aim for the necessary, sufficient and minimal set: two independent detectors where code changes often, one where it is mature; no just-in-case variants.
 
 ### Compute Host Routing
@@ -116,15 +116,15 @@ Historical timings retain provenance; neutral roles only. Keep host maps/origina
 
 ### Compute Scratch Cleanup
 
-Remote compute jobs finish only after verified recovery and cleanup of their job-owned scratch. Recover JSON, logs, commands, identities, hashes and non-reconstructible inputs to private storage; verify hashes before deleting the remote copy, then verify and report the deletion. Never blanket-delete scratch: preserve active/queued jobs and CI, resolve approved absolute targets and reject escaping links/junctions. Retention needs an explicit owner, reason and cleanup trigger; compute hosts are not archives.
+Remote compute jobs finish only after verified recovery and cleanup of their job-owned scratch: recover JSON, logs, commands, identities, hashes and non-reconstructible inputs to private storage, verify hashes, delete the remote copy, then verify and report the deletion. Never blanket-delete scratch: preserve active/queued jobs and CI, resolve approved absolute targets and reject escaping links/junctions. Retention needs an explicit owner, reason and cleanup trigger; compute hosts are not archives.
 
 ## Build And Release
 
-- Build owns formal release artifacts from reviewed isolated sources via current `Build.ps1`/CMake. Flow2/validation build only isolated GPU dev artifacts, not CI/formal ones, within authorized scope; never substitute them into exact-wheel QA or others' runtimes.
+- The build role owns the CPU candidate (`Build.ps1`/CMake, reviewed isolated sources); GPU/MATLAB lanes build at that SHA on their roles. Never substitute dev artifacts into exact-wheel QA or others' runtimes.
 - PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
-- Use `release-quad` / `tools/release_quad.py` for build- and validation-role editable deployment (CPU builds on the build role, GPU builds on GPU roles; redesign pending); host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Publish only after owning-distribution CI, artifact hashes, native and required machine gates pass at the release source. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
+- `release-quad` / `tools/release_quad.py done` verifies the four lane receipts (exact-source CI, artifact hashes, native and machine gates) and deploys nothing; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 
 ## Optuna
 `radia-optuna` shares nvcc-built CUDA kernels through pybind11 and plain MEX. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.
