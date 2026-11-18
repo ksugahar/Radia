@@ -98,11 +98,14 @@ class ElementBlock:
 
 @dataclass
 class DataField:
-    kind: str        # "$NodeData" or "$ElementData"
+    kind: str        # "$NodeData", "$ElementData" or "$ElementNodeData"
     name: str
     ncomp: int       # 1 (scalar) or 3 (vector)
     # items[i] = (gmsh_id, value_or_tuple). For scalar ncomp=1 value is
     # float; for ncomp>=2 value is iterable of floats.
+    # $ElementNodeData: items[i] = (gmsh_elem_id, gmsh_type, values) with
+    # values of shape (nodes_per_element, ncomp) in the element's own
+    # connectivity order.
     items: List[Tuple[int, object]]
     time: float = 0.0
     timestep: int = 0
@@ -196,6 +199,10 @@ def _emit_data_section(f, df: DataField) -> None:
     f.write(f'1\n{df.time:.15e}\n')
     f.write(f'3\n{df.timestep}\n{df.ncomp}\n')
     f.write(f'{len(df.items)}\n')
+    if df.kind == '$ElementNodeData':
+        _emit_element_node_blocks(f, df)
+        f.write(f'{end_kind}\n')
+        return
     tags = [int(tag) for tag, _ in df.items]
     if any(tag <= 0 for tag in tags) or len(set(tags)) != len(tags):
         raise ValueError('field tags must be positive and unique')
@@ -217,6 +224,45 @@ def _emit_data_section(f, df: DataField) -> None:
             vals = ' '.join(f'{float(c):.15e}' for c in vec)
             f.write(f'{vals}\n')
     f.write(f'{end_kind}\n')
+
+
+def _emit_element_node_blocks(f, df: DataField) -> None:
+    """Write MSH 4.2 ElementNodeData blocks (one per element type).
+
+    Layout after the tag header: ``numBlocks count minTag maxTag``, then
+    per block ``elementType nodesPerElement numElements``, the element
+    tags, and one line per element holding nodesPerElement * ncomp values.
+    """
+    if df.ncomp not in (1, 3, 9):
+        raise ValueError(f'unsupported Gmsh component count: {df.ncomp}')
+    tags = [int(tag) for tag, _gt, _v in df.items]
+    if not tags:
+        f.write('0 0 0 0\n')
+        return
+    if any(tag <= 0 for tag in tags) or len(set(tags)) != len(tags):
+        raise ValueError('field tags must be positive and unique')
+    blocks = {}
+    for tag, gmsh_type, values in df.items:
+        vals = np.asarray(values, dtype=float).reshape(-1, df.ncomp)
+        n_el_nodes = _GMSH_NODES_PER_TYPE.get(int(gmsh_type))
+        if n_el_nodes is None or vals.shape[0] != n_el_nodes:
+            raise ValueError(
+                f'field {df.name!r}: element {tag} type {gmsh_type} has '
+                f'{vals.shape[0]} node samples, expected {n_el_nodes}')
+        if not np.all(np.isfinite(vals)):
+            raise ValueError(
+                f'field {df.name!r}: non-finite value on element {tag}')
+        blocks.setdefault(int(gmsh_type), []).append((int(tag), vals))
+    f.write(f'{len(blocks)} {len(tags)} {min(tags)} {max(tags)}\n')
+    for gmsh_type in sorted(blocks):
+        entries = blocks[gmsh_type]
+        f.write(f'{gmsh_type} {_GMSH_NODES_PER_TYPE[gmsh_type]} '
+                f'{len(entries)}\n')
+        for tag, _vals in entries:
+            f.write(f'{tag}\n')
+        for _tag, vals in entries:
+            f.write(' '.join(f'{float(c):.15e}' for c in vals.reshape(-1))
+                    + '\n')
 
 
 # ============================================================
@@ -448,36 +494,61 @@ class GmshPostExport:
     def __init__(self, mesh, boundary=False):
         self.mesh = mesh
         self._boundary = boundary
-        # (name, ncomp, data_array, is_cell, material_name_or_None)
+        # (name, ncomp, data, assoc, materials_tuple_or_None) with
+        # assoc in {"node", "cell", "element_node"}
         self._fields = []
 
-    def add_field(self, name, data, ncomp=None, material=None, cell_data=False):
-        """Add a field for export, optionally restricted to a material.
+    def add_field(self, name, data, ncomp=None, material=None, cell_data=False,
+                  element_nodes=False):
+        """Add a field for export, optionally restricted to materials.
 
         Args:
             name: Field name (displayed in GMSH GUI)
             data: CoefficientFunction, GridFunction, or numpy array
             ncomp: Number of components. If None, auto-detected
                    (1 for scalar, 3 for vector).
-            material: Material name to restrict field to (GMSH physical group).
-                      If None, field applies to all elements.
+            material: Material name, or a sequence of names, to restrict
+                      the field to (GMSH physical groups). If None, the
+                      field applies to all elements.
             cell_data: If True, evaluate at element centroids (ElementData).
-                       If False, evaluate at vertices (NodeData).
+            element_nodes: If True, write ElementNodeData: every element
+                      carries its own value at each of its nodes, evaluated
+                      inside that element. Use it for fields that jump
+                      across material interfaces (B, H with discontinuous
+                      permeability); NodeData keeps one value per shared
+                      node and cannot represent both traces. Requires a
+                      CoefficientFunction.
+            Default (both False): one value per node (NodeData).
         """
         if ncomp is None:
             ncomp = _detect_ncomp(data)
-        arr = self._resolve_data(data, ncomp=ncomp, cell_data=cell_data)
-        self._fields.append((name, ncomp, arr, cell_data, material))
+        self._append_field(name, ncomp, data, material, cell_data,
+                           element_nodes)
 
-    def add_scalar_field(self, name, data, cell_data=False, material=None):
+    def add_scalar_field(self, name, data, cell_data=False, material=None,
+                         element_nodes=False):
         """Add a scalar field. See add_field() for args."""
-        arr = self._resolve_data(data, ncomp=1, cell_data=cell_data)
-        self._fields.append((name, 1, arr, cell_data, material))
+        self._append_field(name, 1, data, material, cell_data, element_nodes)
 
-    def add_vector_field(self, name, data, cell_data=False, material=None):
+    def add_vector_field(self, name, data, cell_data=False, material=None,
+                         element_nodes=False):
         """Add a 3-component vector field. See add_field() for args."""
-        arr = self._resolve_data(data, ncomp=3, cell_data=cell_data)
-        self._fields.append((name, 3, arr, cell_data, material))
+        self._append_field(name, 3, data, material, cell_data, element_nodes)
+
+    def _append_field(self, name, ncomp, data, material, cell_data,
+                      element_nodes):
+        if cell_data and element_nodes:
+            raise ValueError(
+                f"field {name!r}: cell_data and element_nodes are exclusive")
+        arr = self._resolve_data(data, ncomp=ncomp, cell_data=cell_data)
+        if element_nodes and isinstance(arr, np.ndarray):
+            raise TypeError(
+                f"field {name!r}: element_nodes needs a CoefficientFunction "
+                "(per-element evaluation), not a numpy array")
+        assoc = ("element_node" if element_nodes
+                 else "cell" if cell_data else "node")
+        self._fields.append((name, ncomp, arr, assoc,
+                             _normalize_materials(material)))
 
     def write(self, filename, time=0.0, timestep=0):
         """Write mesh + field data to GMSH .msh v4.2 format.
@@ -578,7 +649,30 @@ class GmshPostExport:
         # original GmshPostExport.write path)
         data_fields = []
         n_nodes = len(nodes)
-        for name, ncomp, data, is_cell, material in self._fields:
+        gmsh_id_of = {oi: gid for pairs in mat_elem_map.values()
+                      for oi, gid in pairs}
+        for name, ncomp, data, assoc, materials in self._fields:
+            if materials is not None:
+                unknown = [m for m in materials if not mat_elem_map.get(m)]
+                if unknown:
+                    raise ValueError(
+                        f"field {name!r}: material(s) {unknown} not in "
+                        f"mesh materials {list(mat_names)}")
+            if assoc == "element_node":
+                selected = [e for e in elem_data
+                            if materials is None or e[0] in materials]
+                values = _evaluate_cf_per_element(
+                    self.mesh, data, ncomp, nodes, selected,
+                    boundary=(_is_surface_mesh(self.mesh) or self._boundary),
+                    field_name=name)
+                items = [(gmsh_id_of[oi], gt, vals)
+                         for (_mn, gt, _conn, oi), vals
+                         in zip(selected, values)]
+                data_fields.append(DataField(
+                    kind='$ElementNodeData', name=name, ncomp=ncomp,
+                    items=items, time=time, timestep=timestep))
+                continue
+            is_cell = assoc == "cell"
             if not isinstance(data, np.ndarray):
                 # CoefficientFunction, evaluated lazily now that the
                 # emitted node list is known.
@@ -596,12 +690,10 @@ class GmshPostExport:
                     np.asarray(data), ncomp, n_nodes, elem_data,
                     field_name=name)
             if is_cell:
-                if material is not None:
-                    elem_ids = mat_elem_map.get(material, [])
-                    if not elem_ids:
-                        print(f"  WARNING: material '{material}' not found, "
-                              f"skipping field '{name}'")
-                        continue
+                if materials is not None:
+                    elem_ids = []
+                    for mn in materials:
+                        elem_ids.extend(mat_elem_map[mn])
                 else:
                     elem_ids = []
                     for mn in mat_names:
@@ -619,10 +711,10 @@ class GmshPostExport:
                     kind='$ElementData', name=name, ncomp=ncomp,
                     items=items, time=time, timestep=timestep))
             else:
-                if material is not None:
+                if materials is not None:
                     node_set = set()
                     for mat_name, _gt, conn, _oi in elem_data:
-                        if mat_name == material:
+                        if mat_name in materials:
                             node_set.update(conn)
                     indices = sorted(node_set)
                 else:
@@ -2000,6 +2092,124 @@ def _evaluate_cf_at_points(mesh, cf, ncomp, points):
     if ncomp == 1:
         return vals.reshape(-1)
     return vals.reshape(-1, ncomp)
+
+
+def _normalize_materials(material):
+    """None, one material name, or a sequence of names -> tuple or None."""
+    if material is None:
+        return None
+    if isinstance(material, str):
+        return (material,)
+    names = tuple(material)
+    if not names or not all(isinstance(m, str) for m in names):
+        raise ValueError(f"material must be a name or names, got {material!r}")
+    return names
+
+
+def _gmsh_type_shape(gmsh_type):
+    """(NGSolve element name, Lagrange order) of a Gmsh element type."""
+    for name, code in _NGSOLVE_TO_GMSH_1ST.items():
+        if code == gmsh_type:
+            return name, 1
+    for name, orders in _GMSH_TYPE_BY_ORDER.items():
+        for order, code in orders.items():
+            if code == gmsh_type:
+                return name, order
+    for name, code in _NGSOLVE_TO_GMSH_2ND.items():
+        if code == gmsh_type:
+            return name, 2
+    raise ValueError(f"unknown Gmsh element type {gmsh_type}")
+
+
+def _reference_lattice(et_name, order):
+    """Points of spacing 1/(2*order) inside an NGSolve reference element.
+
+    Every Gmsh Lagrange node of that order lies on this lattice in NGSolve
+    reference coordinates (multiples of 1/order; halves for PYRAMID).
+    """
+    n = 2 * order
+    t = np.arange(n + 1) / n
+    zs = t if et_name in ('TET', 'HEX', 'PRISM', 'PYRAMID') else np.zeros(1)
+    g = np.array(np.meshgrid(t, t, zs, indexing='ij')).reshape(3, -1).T
+    eps = 1e-12
+    if et_name in ('TET',):
+        keep = g.sum(axis=1) <= 1 + eps
+    elif et_name in ('TRIG', 'PRISM'):
+        keep = g[:, 0] + g[:, 1] <= 1 + eps
+    elif et_name == 'PYRAMID':
+        keep = (g[:, 0] <= 1 - g[:, 2] + eps) & (g[:, 1] <= 1 - g[:, 2] + eps)
+    else:  # HEX, QUAD
+        keep = np.ones(len(g), dtype=bool)
+    return g[keep]
+
+
+def _evaluate_cf_per_element(mesh, cf, ncomp, nodes, selected, *,
+                             boundary=False, field_name=""):
+    """Evaluate ``cf`` at each element's own nodes, inside that element.
+
+    A shared node gets one value per adjacent element, so fields that
+    jump across material interfaces keep both traces. No point location
+    is used: each element's geometry map is evaluated on the reference
+    lattice that holds its Lagrange nodes. Each emitted node is matched
+    to the lattice point that maps onto it, and ``cf`` is evaluated
+    there in that element. A node without a match within 1e-9 of the
+    element size raises.
+
+    Returns a list of (nodes_per_element, ncomp) arrays aligned with
+    ``selected`` (entries of ``elem_data``).
+    """
+    if boundary:
+        raise NotImplementedError(
+            f"field {field_name!r}: element_nodes supports volume-element "
+            "exports only")
+    if not selected:
+        return []
+    from ngsolve import CoefficientFunction, x, y, z
+
+    xyz = np.asarray(nodes, dtype=float)
+    coord = CoefficientFunction((x, y) if mesh.dim == 2 else (x, y, z))
+    # A one-point batch lookup supplies the structured MeshPoint record
+    # (mesh pointer, VorB); its element and reference fields are replaced.
+    first = [xyz[:1, k] for k in range(mesh.dim)]
+    template = np.asarray(mesh(*first)).reshape(1)
+
+    by_type = {}
+    for pos, (_mn, gt, conn, oi) in enumerate(selected):
+        by_type.setdefault(gt, []).append(pos)
+    results = [None] * len(selected)
+    for gt, positions in by_type.items():
+        lattice = _reference_lattice(*_gmsh_type_shape(gt))
+        n_lat = len(lattice)
+        el_nrs = np.array([selected[p][3] for p in positions])
+        mips = np.repeat(template, len(el_nrs) * n_lat)
+        mips['nr'] = np.repeat(el_nrs, n_lat)
+        mips['VorB'] = template['VorB'][0]
+        for k, axis in enumerate(('x', 'y', 'z')):
+            mips[axis] = np.tile(lattice[:, k], len(el_nrs))
+        mapped = np.asarray(coord(mips), dtype=float).reshape(
+            len(el_nrs), n_lat, -1)
+        conns = np.array([selected[p][2] for p in positions])
+        pts = xyz[conns][:, :, :mapped.shape[2]]
+        dist = np.linalg.norm(pts[:, :, None, :] - mapped[:, None, :, :],
+                              axis=3)
+        best = dist.argmin(axis=2)
+        miss = np.take_along_axis(dist, best[:, :, None], axis=2)[:, :, 0]
+        size = np.ptp(pts, axis=1).max(axis=1)
+        bad = np.argwhere(miss > 1e-9 * size[:, None] + 1e-14)
+        if bad.size:
+            e, k = (int(v) for v in bad[0])
+            raise RuntimeError(
+                f"field {field_name!r}: {len(bad)} element-node sample(s) "
+                f"have no reference point in their element (first: node "
+                f"{int(conns[e, k])} of element {int(el_nrs[e])}, offset "
+                f"{miss[e, k]:.3e} m)")
+        pick = (np.arange(len(el_nrs))[:, None] * n_lat + best).reshape(-1)
+        vals = np.asarray(cf(mips[pick]), dtype=float).reshape(
+            len(el_nrs), conns.shape[1], ncomp)
+        for p, v in zip(positions, vals):
+            results[p] = v
+    return results
+
 
 
 # P1 -> high-order node fill rules per gmsh element type:
