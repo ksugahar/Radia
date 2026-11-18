@@ -38,7 +38,7 @@
     "The June ESIM depth mesh under-resolved the steel skin depth. The current depth solver was checked against the constant-permeability analytic impedance.",
     "The B-H curve is interpolated between the origin and first measured point (13.898 A/m); that segment has no low-field measurements. Fractions apply to the steel surface under the uniform-Zs model.",
     "The final A-V port gauge gave 39.65 nH in a separate air-coil check. BEM-A including surface reactance gave 39.91–40.00 nH and the old gauge gave 28.01 nH.",
-    "This golden covers the specified discrete model. Convergence of physical coil loss is not established by matching the coarse case. The separate air-coil loss changed 7.85% on its last refinement."
+    "This golden covers the specified discrete model. Convergence of physical coil loss is not established by matching the coarse case. The steel case at fixed Z_s gave coil losses of 1.0929, 1.0714, and 1.1566 W on successive refinements. The final refinement increased the loss by 7.95%, so mesh convergence of coil loss remains unestablished."
   ],
   "supersedes": {
     "captured_at": "2026-06-02",
