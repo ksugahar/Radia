@@ -41,7 +41,7 @@ def test_release_rejects_foreign_ci_and_mismatched_installed_artifact(tmp_path,m
         qualify()
 
 
-def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_path, monkeypatch):
+def test_stable_release_requires_review_and_same_wheel_windows_gpu_parity(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.syspath_prepend(str(root))
     spec = importlib.util.spec_from_file_location('gpu_stable_gate', root/'release_gate.py')
@@ -68,7 +68,7 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
                          independent_review=dict(source_commit=wheel['source_commit'],
                              outcome='accepted', unresolved_findings=[], reviewer='independent Codex',
                              report='Completed read-only review of the exact release source.'),
-                         build_host_acceptance=dict(installed, execution_role='cuda-build-host', device='Quadro RTX 5000',
+                         windows_gpu_acceptance=dict(installed, execution_role='windows-gpu', device='NVIDIA A100-SXM4-80GB',
                              cpu_parity_checked=True, cpu_parity={
                                  'csr_pcg':dict(relative_l2=2e-10, true_relative_residual=1e-10),
                                  'ams':dict(relative_l2=3e-9, true_relative_residual=2e-10)}))
@@ -84,7 +84,7 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
                            residual_applicability='not_applicable_operator',
                            true_relative_residual=None)
     extended = json.loads(json.dumps(qualification))
-    extended['build_host_acceptance']['cpu_parity'].update(
+    extended['windows_gpu_acceptance']['cpu_parity'].update(
         fmm=dict(operator_record), projection=dict(operator_record),
         hdiv_device=dict(relative_l2=5e-10, true_relative_residual=8e-12))
     wheel['cuda_solvers'] = ['csr_pcg', 'ams', 'hdiv_device', 'projection', 'fmm']
@@ -97,7 +97,7 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
             ('hdiv_device', 'operation_kind', 'operator'),
             ('hdiv_device', 'true_relative_residual', None)):
         invalid = json.loads(json.dumps(extended))
-        invalid['build_host_acceptance']['cpu_parity'][module][key] = value
+        invalid['windows_gpu_acceptance']['cpu_parity'][module][key] = value
         path.write_text(json.dumps(invalid))
         with pytest.raises(ValueError):
             qualify()
@@ -108,19 +108,19 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
         ('independent_review.outcome', 'pending'),
         ('independent_review.unresolved_findings', ['P2 still open']),
         ('independent_review.report', ''),
-        ('build_host_acceptance.wheel_sha256', 'c'*64),
-        ('build_host_acceptance.manifest_sha256', 'c'*64),
-        ('build_host_acceptance.device', 'NVIDIA A100'),
-        ('build_host_acceptance.execution_role', 'cpu-distribution-host'),
-        ('build_host_acceptance.ltspice_checked', False),
-        ('build_host_acceptance.cpu_parity_checked', False),
-        ('build_host_acceptance.simulink_failure_cleanup', False),
-        ('build_host_acceptance.simulink_repeated_runs', float('nan')),
-        ('build_host_acceptance.simulink_repeated_runs', float('inf')),
-        ('build_host_acceptance.cpu_parity', {}),
-        ('build_host_acceptance.cpu_parity', {'csr_pcg':dict(relative_l2=0, true_relative_residual=0)}),
-        ('build_host_acceptance.cpu_parity.csr_pcg.relative_l2', 1e-5),
-        ('build_host_acceptance.cpu_parity.csr_pcg.true_relative_residual', float('nan')),
+        ('windows_gpu_acceptance.wheel_sha256', 'c'*64),
+        ('windows_gpu_acceptance.manifest_sha256', 'c'*64),
+        ('windows_gpu_acceptance.device', 'Quadro RTX 5000'),
+        ('windows_gpu_acceptance.execution_role', 'cuda-build-host'),
+        ('windows_gpu_acceptance.ltspice_checked', False),
+        ('windows_gpu_acceptance.cpu_parity_checked', False),
+        ('windows_gpu_acceptance.simulink_failure_cleanup', False),
+        ('windows_gpu_acceptance.simulink_repeated_runs', float('nan')),
+        ('windows_gpu_acceptance.simulink_repeated_runs', float('inf')),
+        ('windows_gpu_acceptance.cpu_parity', {}),
+        ('windows_gpu_acceptance.cpu_parity', {'csr_pcg':dict(relative_l2=0, true_relative_residual=0)}),
+        ('windows_gpu_acceptance.cpu_parity.csr_pcg.relative_l2', 1e-5),
+        ('windows_gpu_acceptance.cpu_parity.csr_pcg.true_relative_residual', float('nan')),
     ]
     for key, value in mutations:
         candidate = json.loads(json.dumps(qualification))

@@ -137,28 +137,22 @@ _KNOWN_SOLVER_TARGETS = {
     "validation": ("validation", None, None),
     "100": ("build", SSH_100, "python"),
 }
-# The promotion gate imports the same tuple, so the machines that produce
-# release evidence and the machines the gate demands evidence from cannot
-# drift apart again.  release_acceptance.py is the single owner of the list.
+# Exact-wheel release acceptance runs only on the validation role
+# (release_acceptance.py owns that list); the build host stops at the CPU
+# candidate. SOLVER_TARGETS are the explicit runtime-maintenance targets.
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
-    from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
-    RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
 
-SOLVER_TARGETS = {host: _KNOWN_SOLVER_TARGETS[host]
-                    for host in RELEASE_ACCEPTANCE_HOSTS}
+SOLVER_TARGETS = dict(_KNOWN_SOLVER_TARGETS)
 
-assert tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
-    "release_quad targets and the release acceptance hosts have drifted")
-# The promotion gate checks each stored row label against the same table.
-assert {key: row[0] for key, row in SOLVER_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
-    "Simulink target labels and the release acceptance host labels have drifted")
+assert set(RELEASE_ACCEPTANCE_HOSTS) <= set(SOLVER_TARGETS), (
+    "release acceptance names a role release_quad cannot reach")
 
 
 VALIDATION_SSH_ENV = "RADIA_RELEASE_SSH_VALIDATION"

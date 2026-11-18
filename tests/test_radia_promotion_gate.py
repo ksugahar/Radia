@@ -169,15 +169,14 @@ def test_public_export_preserves_numbers_and_passes_privacy_policy():
             assert not lint.public_runtime_identity_hits(prefix + "/" + name, content)
         proofs.append(public_a["private_runtime_verification"])
     gate.verify_private_batch(proofs)
-    assert proofs[0]["machine_token"] != proofs[1]["machine_token"]
 
 
 def test_public_export_rejects_historical_machine_for_current_role():
-    a, f, xml, identity = private_current_evidence("100")
+    a, f, xml, identity = private_current_evidence("validation")
     tree = ET.fromstring(xml)
     tree.find(".//testsuite").set("hostname", "other-machine")
     with pytest.raises(ValueError, match="Wrong acceptance host"):
-        gate.prepare_public_host(a, f, ET.tostring(tree), identity, "100", b"x" * 32)
+        gate.prepare_public_host(a, f, ET.tostring(tree), identity, "validation", b"x" * 32)
 
 
 @pytest.mark.parametrize("changed", ["acceptance", "full6", "focused", "unverified", "missing"])
@@ -200,17 +199,16 @@ def test_public_gate_rejects_changed_or_unverified_export(changed):
         gate.verify_host(a, f, xml, identity, "validation", public=True)
 
 
-@pytest.mark.parametrize("changed", ["machine_token", "verification_batch", "missing_role"])
-def test_public_gate_requires_distinct_machines_in_one_complete_batch(changed):
+@pytest.mark.parametrize("changed", ["build_role", "missing_role"])
+def test_public_gate_requires_exactly_the_acceptance_roles(changed):
+    """Guards: the CPU build role cannot stand in for, or add to, validation acceptance."""
     proofs = []
     for host in gate.RELEASE_ACCEPTANCE_HOSTS:
         a, f, xml, identity = private_current_evidence(host)
         a, _, _ = gate.prepare_public_host(a, f, xml, identity, host, b"x" * 32)
         proofs.append(a["private_runtime_verification"])
-    if changed == "machine_token":
-        proofs[1][changed] = proofs[0][changed]
-    elif changed == "verification_batch":
-        proofs[1][changed] = "a" * 64
+    if changed == "build_role":
+        proofs.append(dict(proofs[0], execution_role="build", machine_token="b" * 64))
     else:
         proofs.pop()
     with pytest.raises(ValueError):
@@ -317,7 +315,7 @@ def test_public_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["passed"] and report["execution_roles"] == ["validation", "build"]
+    assert report["passed"] and report["execution_roles"] == ["validation"]
 
 
 def test_exact_wheel_end_to_end(tmp_path):
@@ -339,7 +337,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert commit == "b" * 40
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
-        # Synthetic two-host API fixture, not a claim of machine acceptance.
+        # Synthetic API fixture, not a claim of machine acceptance.
         a, f, x, _ = evidence()
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
@@ -353,7 +351,7 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["validation", "100"] and report["passed"]
+    assert report["hosts"] == ["validation"] and report["passed"]
     for missing_host in report["hosts"]:
         def incomplete(path, commit):
             if path.split("/")[-2] == missing_host:
@@ -376,8 +374,8 @@ def test_exact_wheel_end_to_end(tmp_path):
         data = read_file(path, commit)
         if path.endswith("focused.xml"):
             tree = ET.fromstring(data)
-            host = path.split("/")[-2]
-            tree.find(".//testsuite").set("hostname", "validation-machine" if host == "validation" else "other-machine")
+            # A machine that formerly held the role is not the current acceptance host.
+            tree.find(".//testsuite").set("hostname", "retired-validation-machine")
             return ET.tostring(tree)
         return data
     api.file = old_fleet
@@ -433,31 +431,6 @@ def test_old_success_cannot_hide_a_failed_ci_rerun():
     api.records[key]["workflow_runs"].append(failed)
     with pytest.raises(ValueError, match="Acceptance CI not successful"):
         gate.verify_run(api, 9, "b" * 40)
-
-
-def application_proof():
-    return {"schema": "radia.release-quad.simulink-candidate.v1", "version": "5.1.0",
-            "commit": "a"*40, "package_sha256": "b"*64, "mex_sha256": "c"*64,
-            "targets": {host: {"label": gate.RELEASE_ACCEPTANCE_HOST_LABELS[host],
-                              "status": "passed", "mex_sha256": "c"*64,
-                              "verified_at_utc": "2026-09-30T00:00:00Z"}
-                        for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
-
-
-def test_application_acceptance_requires_two_exact_mex_results():
-    identity = {"source_commit": "a"*40, "version": "5.1.0"}
-    gate.verify_application_acceptance(application_proof(), identity)
-    for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
-                     "wrong_label"):
-        proof = application_proof()
-        if mutation == "missing_host": del proof["targets"]["validation"]
-        elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
-        elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
-        elif mutation == "wrong_mex": proof["targets"]["validation"]["mex_sha256"] = "d"*64
-        elif mutation == "wrong_source": proof["commit"] = "e"*40
-        else: del proof["targets"]["validation"]["verified_at_utc"]
-        with pytest.raises(ValueError):
-            gate.verify_application_acceptance(proof, identity)
 
 
 def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path):

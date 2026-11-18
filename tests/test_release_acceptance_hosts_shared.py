@@ -1,12 +1,10 @@
-"""The gate that publishes and the tool that produces evidence name one host list.
+"""The gate that publishes and the tool that produces evidence name one role list.
 
-Release-quad requires validation role and 100号機 for the same release commit.
-The promotion verifier used to carry its own two-host list -- one of them a
-computation host that is not an acceptance target -- so a release with
-evidence from two of the four machines would have passed the public gate.
-Both tools now import the list from `tools/release_acceptance.py`; these
-tests pin that the list is the policy's, that both tools use it, and that
-neither has grown a private copy again.
+Guards: exact-wheel release acceptance is the validation role only. The CPU
+build host prepares release candidates and is never an acceptance target, while
+release_quad keeps it as an explicit runtime-maintenance role. The promotion
+verifier imports the shared list rather than carrying a private copy.
+Assumes: tools/release_acceptance.py is the single owner of the list.
 """
 from __future__ import annotations
 
@@ -33,19 +31,20 @@ def _load(name):
 
 def test_the_shared_list_is_the_policy_list():
     shared = _load("release_acceptance")
-    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("validation", "100")
-    assert "hibino" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
-        "hibino is a computation host, not a release acceptance target")
+    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("validation",), shared.RELEASE_ACCEPTANCE_HOSTS
+    assert shared.PUBLIC_RELEASE_ACCEPTANCE_ROLES == {"validation": "validation"}
+    assert "100" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
+        "the CPU build host prepares candidates; it is not an acceptance target")
 
 
-
-def test_release_quad_produces_evidence_for_exactly_those_hosts():
-    """The producer's target table is the shared tuple, key for key."""
+def test_release_quad_reaches_every_acceptance_role():
+    """Acceptance roles are a subset of the runtime roles release_quad can address."""
     source = (TOOLS / "release_quad.py").read_text(encoding="utf-8")
     assert "from release_acceptance import RELEASE_ACCEPTANCE_HOSTS" in source
-    assert "tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS" in source
-    keys = re.findall(r'^\s{4}"([a-z0-9]+)": \("', source, re.M)
-    assert tuple(_load("release_quad").SOLVER_TARGETS) == ("validation", "100")
+    quad = _load("release_quad")
+    assert set(quad.RELEASE_ACCEPTANCE_HOSTS) <= set(quad.SOLVER_TARGETS), (
+        quad.RELEASE_ACCEPTANCE_HOSTS, tuple(quad.SOLVER_TARGETS))
+    assert tuple(quad.SOLVER_TARGETS) == ("validation", "100"), tuple(quad.SOLVER_TARGETS)
 
 
 def test_the_promotion_gate_has_no_private_host_list():

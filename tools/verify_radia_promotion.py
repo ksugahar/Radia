@@ -21,7 +21,6 @@ try:
     from release_acceptance import PUBLIC_RELEASE_ACCEPTANCE_ROLES
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
     from release_acceptance import CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
-    from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
@@ -29,7 +28,6 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES
     CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
-    RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     PUBLIC_RELEASE_ACCEPTANCE_ROLES = _acceptance_module.PUBLIC_RELEASE_ACCEPTANCE_ROLES
 
@@ -290,25 +288,6 @@ def verify_host(acceptance, full, junit, identity, host, *, public=False):
             "Nonfinite or invalid focused duration")
 
 
-def verify_application_acceptance(proof, identity):
-    require(proof.get("schema") == "radia.release-quad.simulink-candidate.v1",
-            "Unknown MATLAB/Simulink acceptance schema")
-    require(proof.get("commit") == identity["source_commit"]
-            and proof.get("version") == identity["version"], "MATLAB/Simulink source identity mismatch")
-    for key in ("package_sha256", "mex_sha256"):
-        require(isinstance(proof.get(key), str) and HASH.fullmatch(proof[key]),
-                f"Missing MATLAB/Simulink artifact identity: {key}")
-    targets = proof.get("targets", {})
-    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires both hosts")
-    for host, row in targets.items():
-        # Rows are keyed by host and carry the human label simulink-candidate prints.
-        require(row.get("label") == RELEASE_ACCEPTANCE_HOST_LABELS[host]
-                and row.get("status") == "passed",
-                f"MATLAB/Simulink failed or missing: {host}")
-        require(row.get("mex_sha256") == proof["mex_sha256"], f"MEX identity mismatch: {host}")
-        require(bool(row.get("verified_at_utc")), f"Missing MATLAB/Simulink verification time: {host}")
-
-
 def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     require(HASH.fullmatch(expected_hash), "Wheel hash must be lowercase SHA-256")
     wheels = list(wheel_dir.rglob("*.whl"))
@@ -332,10 +311,8 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
                     source_commit=run["head_sha"], ci_run=run["id"],
                     sources_verified=sources, version=version)
     prefix = f"validation_test/esrf_three_engine/results/candidate_{run['head_sha'][:9]}"
-    # The hosts come from the same tuple release-quad produces evidence for,
-    # so this gate cannot quietly ask for fewer machines than policy requires.
-    # It used to name two hosts of its own, one of which is not an acceptance
-    # target at all, and would have published on two of the four.
+    # The roles come from the shared release_acceptance tuple, so this gate
+    # cannot quietly ask for different acceptance machines than policy requires.
     missing = []
     public = tuple(map(int, version.split("."))) >= (5, 3, 1)
     private_proofs = []
