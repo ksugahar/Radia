@@ -2786,9 +2786,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Build_Wheel.ps1 -DryRun
 python tools/release_quad.py done --source-sha <full-sha> --manifest <candidate-json> --release-source <clean-checkout>
 ```
 
-Freeze the CPU candidate source, then run the Linux Python GPU build and
-validation, followed by Windows Python GPU and MATLAB candidate builds and
-acceptance. Use `ci-monitor` or `gh run view` to inspect the exact source CI.
+Freeze the CPU candidate source and dependencies before starting the Linux
+Python GPU and Windows Python GPU/MATLAB builds. The GPU builds may run in
+parallel. Collect each lane's acceptance receipts before handoff. Use `ci-monitor` or `gh run view` to inspect the exact source CI.
 The candidate manifest binds all four lanes to the same commit and verified
 artifacts. A successful receipt check is required for handoff. The release owner
 publishes through each distribution's workflow after approval; deployment is
