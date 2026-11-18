@@ -569,6 +569,7 @@ def fem_gauge_open_boundary(topic: str = "gauge") -> str:
             "gauge"             - Gauge choices for HCurl A (DEFAULT)
             "kelvin_transform"  - ★ Kelvin transformation (lab default)
             "abc_pml"           - Asymptotic BC and PML alternatives
+            "coil_av_tree"      - Tree gauge for port-driven A-V coils with SIBC
             "all"               - Everything
     """
     return get_gauge_open_boundary_knowledge(topic)

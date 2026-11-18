@@ -94,11 +94,9 @@ def ih_sibc(topic: str = "all") -> str:
                                           sphere reference, per-panel Mitzner
                                           check) for symbolic side-by-side
                                           validation of BEM/FEM SIBC results.
-            "ngsolve_recipes"           - Production NGSolve code patterns:
-                                          Scalar BIE+SIBC with COCR+ComplexCompactAMS,
-                                          per-node Z_s from per-panel curvature,
-                                          FEM+Kelvin+Robin hole approach,
-                                          Verify-First Policy FES checks.
+            "ngsolve_recipes"           - Scalar BIE+SIBC and FEM+Kelvin recipes,
+                                          port-driven A-V spanning-tree gauge,
+                                          and FES verification checks.
     """
     return get_ih_sibc_documentation(topic)
 

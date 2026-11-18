@@ -184,6 +184,52 @@ Theoretically reflectionless for ALL frequencies and incident angles
 - `radia_mcp.bem.fem_bem_hybrid` — when to use FEM-BEM coupling instead
 """
 
+COIL_AV_TREE = r"""
+# Tree gauge for a voltage-driven coil (A-V with ports and SIBC)
+
+Gauge choice is not only a solver-efficiency question. In an A-V coil
+model with terminal ports and surface-impedance (SIBC/ESIM) faces, a
+wrong tree changes the physics: the fixed edges silently impose a
+voltage or a current path, and inductance and losses move.
+
+## Rules
+
+1. **Source and sink are separate electrodes.** Do not merge the two
+   port faces into one tree node. Merging closes the coil through the
+   tree and removes the terminal voltage from the unknowns.
+2. **Fix the gap voltage along the shortest admissible mesh path.**
+   The path can run through air along actual edges. Identify periodic
+   copies, and keep the path off the SIBC trace. Hold the path fixed
+   when comparing different trees.
+3. **Preserve tangential A on the SIBC/ESIM trace.** Contract each
+   connected SIBC component separately when building the tree graph.
+   Fail loudly when no port path avoids the SIBC faces.
+4. **The tree must be a spanning tree of the free edges only.**
+   Dirichlet and inactive (periodic slave) edges are excluded first.
+
+## How to verify a gauge (it must not change B, L or losses)
+
+- A gauge only selects a representative of A. Two correct gauges give
+  the same L, terminal impedance and losses to discretization error.
+- Compare against a gauge-independent reference on a small case:
+  coil alone in air versus an independent BEM / Neumann-integral
+  inductance (NGSolve BEM) or PEEC, with internal reactance included.
+- Cross-check the terminal impedance from port V/I against the
+  energy/loss integrals.
+- In one air-coil check, the final tree-gauge L agreed within 1% with
+  BEM-A including its internal reactance. The earlier mass-regularized
+  formulation gave L about 30% lower. This check addresses inductance
+  for the modeled coil and port convention. Check loss convergence
+  separately.
+
+## Cross-reference
+
+- `fem_gauge_open_boundary('gauge')` - general gauge catalog
+- `ih_sibc(topic="ngsolve_recipes")` - scaled potential, voltage convention,
+  and induction-heating verification procedure
+- Radia source: the coil A-V tree gauge in `src/radia/panels/calc_fem_coilmesh.py`
+"""
+
 
 def get_gauge_open_boundary_knowledge(topic: str = "gauge") -> str:
     """Dispatch gauge / open-boundary topics.
@@ -192,6 +238,7 @@ def get_gauge_open_boundary_knowledge(topic: str = "gauge") -> str:
         gauge              - Gauge choices for HCurl A (DEFAULT)
         kelvin_transform   - Kelvin transformation (★ lab default for open BC)
         abc_pml            - Asymptotic BC and PML alternatives
+        coil_av_tree       - Tree gauge for port-driven A-V coils with SIBC
         all                - Everything
     """
     topic = topic.lower().strip()
@@ -201,7 +248,9 @@ def get_gauge_open_boundary_knowledge(topic: str = "gauge") -> str:
         return KELVIN_TRANSFORM
     if topic in ("abc_pml", "abc", "pml", "open_boundary"):
         return ABC_PML
+    if topic in ("coil_av_tree", "av_tree", "coil_tree_gauge"):
+        return COIL_AV_TREE
     if topic == "all":
-        return "\n\n".join([GAUGE, KELVIN_TRANSFORM, ABC_PML])
+        return "\n\n".join([GAUGE, KELVIN_TRANSFORM, ABC_PML, COIL_AV_TREE])
     return (f"Unknown topic '{topic}'. Available: gauge, kelvin_transform, "
-            "abc_pml, all.")
+            "abc_pml, coil_av_tree, all.")
