@@ -36,7 +36,7 @@ GLOBAL_INPUTS = {'CMakeLists.txt', 'Build.ps1', 'MANIFEST.in', TIER,
                  'tools/ci_distribution_manifest.json', 'tools/ci_distribution_contract.py',
                  'tools/native_build_provenance.ps1', 'tools/validation_source_gate.py',
                  # Every numerical case runs on the patched Netgen library these build.
-                 'tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch'}
+                 'tools/ci_fork_wheels.py', 'tools/ci_fork_wheels.json'}
 EXTERNAL = set(sys.stdlib_module_names) | {
     'numpy', 'scipy', 'ngsolve', 'netgen', 'pytest', 'gmsh', 'h5py', 'psutil',
     'matplotlib', 'sympy', 'yaml', 'pefile', 'packaging', 'setuptools', 'pybind11',

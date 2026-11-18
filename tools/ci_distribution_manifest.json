@@ -817,7 +817,13 @@
       ]
     },
     {
-      "pattern": "tools/netgen_overlay.py",
+      "pattern": "tools/ci_fork_wheels.json",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/ci_fork_wheels.py",
       "owners": [
         "radia"
       ]
@@ -3655,11 +3661,11 @@
             "tools/regression_lock.py",
             "src/radia/hdiv_gpu.py",
             "tests/test_hdiv_gpu_mesh_integration.py",
-            "tools/netgen_overlay.py",
-            "tools/patches/netgen-pyramid.patch",
+            "tools/ci_fork_wheels.py",
+            "tools/ci_fork_wheels.json",
+            "tests/test_ci_fork_wheels.py",
             "tests/test_curve_order_contract.py",
             "tests/test_cubit_mesh_quality.py",
-            "tests/test_netgen_overlay_tool.py",
             "tests/fixtures/cubit/**",
             "validation_test/hdiv_cuda/run_installed.py",
             "!**/*.md"
@@ -3968,11 +3974,11 @@
             "tools/regression_lock.py",
             "src/radia/hdiv_gpu.py",
             "tests/test_hdiv_gpu_mesh_integration.py",
-            "tools/netgen_overlay.py",
-            "tools/patches/netgen-pyramid.patch",
+            "tools/ci_fork_wheels.py",
+            "tools/ci_fork_wheels.json",
+            "tests/test_ci_fork_wheels.py",
             "tests/test_curve_order_contract.py",
             "tests/test_cubit_mesh_quality.py",
-            "tests/test_netgen_overlay_tool.py",
             "tests/fixtures/cubit/**",
             "validation_test/hdiv_cuda/run_installed.py",
             "!**/*.md"

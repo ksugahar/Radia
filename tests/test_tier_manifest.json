@@ -555,7 +555,6 @@
       "paths": [
         "tests/test_curve_order_contract.py",
         "tests/test_cubit_mesh_quality.py",
-        "tests/test_netgen_overlay_tool.py",
         "tests/test_planar_eddy_direct_inverse.py",
         "tests/test_vector_potential_direct_inverse.py",
         "tests/test_bem_complete_reaction.py",
