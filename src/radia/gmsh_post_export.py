@@ -293,7 +293,7 @@ _TRIG_GMSH_TYPE_BY_ORDER = _GMSH_TYPE_BY_ORDER['TRIG']
 
 _GMSH_NODES_PER_TYPE = {
     2: 3, 3: 4, 4: 4, 5: 8, 6: 6, 7: 5,
-    9: 6, 10: 9, 11: 10, 12: 27, 17: 20, 18: 15, 19: 13,
+    9: 6, 10: 9, 11: 10, 12: 27, 13: 18, 14: 14, 17: 20, 18: 15, 19: 13,
     21: 10, 23: 15, 25: 21,  # high-order triangles
     29: 20, 30: 35, 31: 56,  # high-order tets
     36: 16, 37: 25, 38: 36,  # high-order quads
