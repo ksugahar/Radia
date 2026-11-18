@@ -1733,6 +1733,13 @@ RELEASE_LANES = {
 }
 
 
+REQUIRED_VALIDATION_CHECKS = {
+    "linux-python-gpu": ("cpu_gpu_parity",),
+    "windows-python-gpu": ("cpu_gpu_parity",),
+    "matlab": ("simulink_acceptance", "ltspice_acceptance"),
+}
+
+
 def _receipt_file(base, entry):
     path = (base / entry["path"]).resolve()
     if not path.is_relative_to(base) or not path.is_file():
@@ -1766,6 +1773,8 @@ def _verify_candidate_receipts(manifest, source_sha):
         if validation["passed"] is not True:
             raise ValueError(f"Validation did not pass for {name}")
         _receipt_file(base, validation["evidence"])
+        for check in REQUIRED_VALIDATION_CHECKS.get(name, ()):
+            _receipt_file(base, validation["checks"][check])
         artifacts = build["artifacts"]
         if not artifacts:
             raise ValueError(f"No artifacts for {name}")

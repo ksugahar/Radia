@@ -90,7 +90,8 @@ def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
 
 
 
-@pytest.mark.parametrize("defect", [None, "source", "role", "artifact", "acceptance", "ci"])
+@pytest.mark.parametrize("defect", [None, "source", "role", "artifact", "acceptance", "ci",
+                                    "simulink", "ltspice", "linux-parity", "windows-parity"])
 def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, monkeypatch, defect):
     from argparse import Namespace
     import hashlib
@@ -112,6 +113,8 @@ def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, 
                       "artifacts": [artifact]},
             "validation": {"role": validation_role, "source_sha": source, "passed": True,
                            "evidence": evidence(name + ".validation"),
+                           "checks": {check: evidence(f"{name}.{check}")
+                                      for check in quad.REQUIRED_VALIDATION_CHECKS.get(name, ())},
                            "artifact_sha256": {artifact["path"]: artifact["sha256"]}},
         }
     data = {"schema": 1, "source_sha": source, "lanes": receipts,
@@ -126,6 +129,16 @@ def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, 
         del receipts["cpu"]
     elif defect == "ci":
         data["native_ci"]["passed"] = False
+
+    required = {
+        "simulink": ("matlab", "simulink_acceptance"),
+        "ltspice": ("matlab", "ltspice_acceptance"),
+        "linux-parity": ("linux-python-gpu", "cpu_gpu_parity"),
+        "windows-parity": ("windows-python-gpu", "cpu_gpu_parity"),
+    }
+    if defect in required:
+        lane, check = required[defect]
+        del receipts[lane]["validation"]["checks"][check]
 
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps(data), encoding="utf-8")
