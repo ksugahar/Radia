@@ -361,10 +361,9 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional" in normalized
     assert "no admission, owner-pool, idle-core or load gates" in normalized
     assert "Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL" in normalized
-    assert "GPU jobs use a separate slot, not a CPU slot" in normalized
+    assert "GPU jobs run only on the validation host (<=1 at a time), never on the build host" in normalized
     assert "record host CPU use, avoid oversubscription" in normalized
-    assert "overflow to a free build GPU slot is pre-authorized" in normalized
-    assert "<=1 GPU job/host, <=2 across both" in normalized
+    assert "overflow to a free build GPU slot" not in normalized
     assert "Keep artifact/architecture/ABI/runtime/owner scope" in normalized
     assert "no install/config or unverified substitution" in normalized
     assert "Never stop, repin or overwrite others' jobs/runtimes" in normalized
