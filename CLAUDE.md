@@ -40,7 +40,7 @@ Python/MCP is the first-class AI interface. Operational workflows use MCP or hum
 - radia-mcp releases independently of Radia (deployment below), never to JMAG or retired targets; isolated CI is not deployment.
 - Routine editable MCP: edit in place, run scoped checks, reconnect and verify live source and one harmless affected tool. Skip CI, precheck, full suite, wheel and version bump. Reinstall on relocation or dependency/metadata changes. Solver/native, shared-interface, packaging and release gates apply.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
-- MCP is experimental tooling, not a solver release. Developers may edit live MCP source and change its editable source (`pip install -e`); no dedicated branch, frozen snapshot or separate deployment approval.
+- MCP is experimental tooling, not a solver release. Developers may edit live MCP source and change its editable source (`pip install -e`); routine experiments need no dedicated branch, frozen snapshot or separate deployment approval.
 - Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
 - Verify the interpreter and actual import path after repointing. Report each client's live loaded source separately; reconnect as needed. Unknown or mixed evidence must stay unverified.
 - Keep solver release tests isolated from development. See [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
@@ -78,7 +78,7 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 **POLICY** (radia, radia-optuna, NGSolve forks; 2026-11-19): CPU build and CPU CI run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` fast contracts. The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution. Supercomputer GPU debug is outside CI. `gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs.
 Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU (supercomputer), Windows Python GPU and MATLAB/MEX (validation); publish once all four receipts pass.
 Deployment follows release: radia uses editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
-Build owns release preflight/native builds; development follows host routing. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
+Build owns CPU preflight/native builds; validation GPU/MATLAB builds. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
 
@@ -105,7 +105,7 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Develop CPU on build (pybind11/MATLAB), Python GPU on Flow2, then MATLAB GPU on validation. Build owns CI/formal artifacts. Validation isolates jobs from QA/runtime; no Cubit/cme. JMAG runs no Radia. Timings are diagnostic.
+Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation. Validation isolates jobs from QA/runtime; no Cubit/cme. JMAG runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
 CPU/GPU jobs: build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL. GPU jobs use a separate slot, not a CPU slot; record host CPU use, avoid oversubscription. Validation GPU busy: overflow to a free build GPU slot is pre-authorized; <=1 GPU job/host, <=2 across both. Keep artifact/architecture/ABI/runtime/owner scope; no install/config or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
 Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.
@@ -124,7 +124,7 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 - PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
-- `release-quad` / `tools/release_quad.py done` checks four lane receipts (exact-source CI, artifact hashes, native and machine gates); deploys nothing; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
+- `release-quad` gate: four lane receipts (exact-source CI, artifact hashes, native/machine gates); deploys nothing; legacy `release_quad.py done` is not it; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 
 ## Optuna
 `radia-optuna` shares nvcc-built CUDA kernels through pybind11 and plain MEX. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.

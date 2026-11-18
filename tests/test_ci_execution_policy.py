@@ -349,8 +349,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
-    assert "Develop CPU on build (pybind11/MATLAB), Python GPU on Flow2, then MATLAB GPU on validation" in normalized
-    assert "Build owns CI/formal artifacts" in normalized
+    assert "Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation" in normalized
+    assert "Build owns CI/formal artifacts" not in normalized
     assert "Validation isolates jobs from QA/runtime; no Cubit/cme" in normalized
     assert "JMAG runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
