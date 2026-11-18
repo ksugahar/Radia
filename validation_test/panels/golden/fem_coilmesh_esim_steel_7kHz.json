@@ -1,5 +1,5 @@
 {
-  "description": "Regression baseline for the converged steel ESIM Karl iteration in calc_fem_coilmesh.py on the regenerated Kelvin skin mesh.",
+  "description": "75 A regression baseline for the converged steel ESIM Karl iteration on the regenerated Kelvin skin mesh.",
   "sample": {
     "vol": "src/radia/panels/samples/ih_fem_kelvin_skin.vol",
     "bh_file": "src/radia/panels/samples/em_sample_bh.txt",
@@ -9,7 +9,7 @@
   },
   "physics": {
     "frequency_Hz": 7000,
-    "current_A": 1.0,
+    "current_A": 75.0,
     "coil_sigma_Sm": 58000000.0,
     "wp_sigma_Sm": 2000000.0,
     "wp_mu_r": 1.0,
@@ -22,12 +22,12 @@
   "expected": {
     "esim_converged": true,
     "esim_iterations_max": 4,
-    "Z_s_wp_real": 0.011889389354578499,
-    "Z_s_wp_imag": 0.012016107073402511,
-    "P_wp_W": 0.0001039274006335744,
-    "P_coil_W": 0.00019393730225385206,
-    "L_total_nH": 167.13120566123638,
-    "H_t_rms_wp_Am": 1.4924174464990498,
+    "Z_s_wp_real": 0.012379062637538341,
+    "Z_s_wp_imag": 0.011595743680899488,
+    "P_wp_W": 0.6065289986931552,
+    "P_coil_W": 1.091258361457652,
+    "L_total_nH": 167.31307277365053,
+    "H_t_rms_wp_Am": 111.7344162018524,
     "tolerance_pct": 2.0,
     "tolerance_L_pct": 5.0,
     "tolerance_Pcoil_pct": 15.0
@@ -36,12 +36,21 @@
   "captured_commit": "da42bf9dbe9f5f4861d7bdc5ef7fe7350e1682b5",
   "notes": [
     "The June ESIM depth mesh under-resolved the steel skin depth. The current depth solver was checked against the constant-permeability analytic impedance.",
-    "Coil loss is the volumetric Joule loss. The coil mesh remains coarse relative to the copper skin depth. This baseline covers the specified discrete model.",
-    "The steel B-H curve drives the nonlinear surface impedance. The workpiece uses a surface condition, with mu_r=1.0 as the volume seed."
+    "The B-H curve is interpolated between the origin and first measured point (13.898 A/m); that segment has no low-field measurements. Fractions apply to the steel surface under the uniform-Zs model.",
+    "The final A-V port gauge gave 39.65 nH in a separate air-coil check. BEM-A including surface reactance gave 39.91–40.00 nH and the old gauge gave 28.01 nH.",
+    "This golden covers the specified discrete model. Convergence of physical coil loss is not established by matching the coarse case. The separate air-coil loss changed 7.85% on its last refinement."
   ],
   "supersedes": {
     "captured_at": "2026-06-02",
     "sha256": "eaccea92cb1d53edd9acc34a67818d9141f6f39a74712c6bbae158ca72076857",
     "status": "superseded"
+  },
+  "qualification": {
+    "ht_threshold_Am": 13.898,
+    "surface_quadrature_order": 64,
+    "area_fraction_below_threshold": 0.04900033870609796,
+    "steel_loss_fraction_below_threshold": 0.0003719963715727873,
+    "numerical_trace_sha256": "26ca3446433656677ba1dbf76480127cb43e4fc68626459d15834d98440b7848",
+    "held_1a_golden_sha256": "9d88fbe030f235ab37cb926c77de5897b6c0bafea8d1ded8de9a1c101e4991d1"
   }
 }
