@@ -68,7 +68,7 @@ def test_stable_release_requires_review_and_same_wheel_windows_gpu_parity(tmp_pa
                          independent_review=dict(source_commit=wheel['source_commit'],
                              outcome='accepted', unresolved_findings=[], reviewer='independent Codex',
                              report='Completed read-only review of the exact release source.'),
-                         windows_gpu_acceptance=dict(installed, execution_role='windows-gpu', device='NVIDIA A100-SXM4-80GB',
+                         windows_gpu_acceptance=dict(installed, execution_role='windows-gpu', device='NVIDIA A100-SXM4-40GB',
                              cpu_parity_checked=True, cpu_parity={
                                  'csr_pcg':dict(relative_l2=2e-10, true_relative_residual=1e-10),
                                  'ams':dict(relative_l2=3e-9, true_relative_residual=2e-10)}))
@@ -111,6 +111,9 @@ def test_stable_release_requires_review_and_same_wheel_windows_gpu_parity(tmp_pa
         ('windows_gpu_acceptance.wheel_sha256', 'c'*64),
         ('windows_gpu_acceptance.manifest_sha256', 'c'*64),
         ('windows_gpu_acceptance.device', 'Quadro RTX 5000'),
+        ('windows_gpu_acceptance.device', 'Quadro RTX 5000 (not A100)'),
+        ('windows_gpu_acceptance.device', 'NVIDIA A100-SXM4-40GB-fake'),
+        ('windows_gpu_acceptance.device', 'A100'),
         ('windows_gpu_acceptance.execution_role', 'cuda-build-host'),
         ('windows_gpu_acceptance.ltspice_checked', False),
         ('windows_gpu_acceptance.cpu_parity_checked', False),

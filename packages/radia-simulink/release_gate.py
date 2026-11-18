@@ -6,6 +6,9 @@ from pathlib import Path
 import re
 from verify_wheel import verify
 
+# NVIDIA device names recorded by the qualified Windows GPU validation host.
+QUALIFIED_WINDOWS_GPU_DEVICES = frozenset({'NVIDIA A100-SXM4-40GB'})
+
 
 def _repeated_runs_pass(value):
     return isinstance(value, int) and not isinstance(value, bool) and value >= 2
@@ -36,7 +39,7 @@ def _qualify_stable(wheel, qualification_directory):
             or acceptance.get('manifest_sha256') != wheel['manifest_sha256']
             or acceptance.get('distribution_version') != wheel['version']
             or acceptance.get('execution_role') != 'windows-gpu'
-            or not re.search(r'\bA100\b', str(acceptance.get('device', '')))
+            or ' '.join(str(acceptance.get('device', '')).split()) not in QUALIFIED_WINDOWS_GPU_DEVICES
             or acceptance.get('ltspice_checked') is not True
             or not _repeated_runs_pass(acceptance.get('simulink_repeated_runs'))
             or acceptance.get('simulink_failure_cleanup') is not True
