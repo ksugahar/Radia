@@ -1,40 +1,47 @@
 {
-  "description": "Golden for calc_fem_coilmesh.py --impedance-model esim (nonlinear Karl).  Verified 2026-06-02 that the esim path RUNS + CONVERGES -- the '--impedance-model esim (WIP, raises)' help was stale and was dropped in the same change.  Regression-locks the converged Karl fixed point (Z_s, P_wp, L) + the convergence behaviour (esim_converged, iteration count, monotone dZ).  Physical validation vs an independent esim reference is future work (radia-ih #6, the +/-22-24% P_wp study).",
+  "description": "Regression baseline for the converged steel ESIM Karl iteration in calc_fem_coilmesh.py on the regenerated Kelvin skin mesh.",
   "sample": {
     "vol": "src/radia/panels/samples/ih_fem_kelvin_skin.vol",
     "bh_file": "src/radia/panels/samples/em_sample_bh.txt",
-    "note": "Gapped torus A-V coil + wp SIBC + Kelvin (skin-resolved, ne=236838).  The .vol is gitignored (Cubit-generated) so this golden SKIPS on a fresh checkout -- regenerate via the .jou family like the sibc golden."
+    "note": "Gapped torus A-V coil, workpiece SIBC and Kelvin exterior. Cubit-regenerated mesh with 246108 elements.",
+    "vol_sha256": "f69701f830c235595b21a400fdd35f72563793e853744075fcc51e529da5cf18",
+    "bh_sha256": "92fb5c28c114c95558494c478bc17799fad685e066b90772e49983e73274c7cb"
   },
   "physics": {
     "frequency_Hz": 7000,
     "current_A": 1.0,
-    "coil_sigma_Sm": 5.8e7,
-    "wp_sigma_Sm": 2.0e6,
+    "coil_sigma_Sm": 58000000.0,
+    "wp_sigma_Sm": 2000000.0,
     "wp_mu_r": 1.0,
     "half_thickness_m": 0.0125,
     "fes_order": 1,
     "impedance_model": "esim",
     "esim_max_iter": 4,
-    "esim_tol": 1e-2
+    "esim_tol": 0.01
   },
   "expected": {
     "esim_converged": true,
     "esim_iterations_max": 4,
-    "Z_s_wp_real": 5.5534e-3,
-    "Z_s_wp_imag": 7.3376e-3,
-    "P_wp_W": 1.5798e-4,
-    "P_coil_W": 1.3875e-4,
-    "L_total_nH": 155.70,
-    "H_t_rms_wp_Am": 2.6923,
+    "Z_s_wp_real": 0.011889389354578499,
+    "Z_s_wp_imag": 0.012016107073402511,
+    "P_wp_W": 0.0001039274006335744,
+    "P_coil_W": 0.00019393730225385206,
+    "L_total_nH": 167.13120566123638,
+    "H_t_rms_wp_Am": 1.4924174464990498,
     "tolerance_pct": 2.0,
     "tolerance_L_pct": 5.0,
     "tolerance_Pcoil_pct": 15.0
   },
-  "captured_at": "2026-06-02",
-  "captured_commit": "radia-ih-june task #4 (esim verified working; stale WIP label dropped)",
+  "captured_at": "2026-11-18",
+  "captured_commit": "da42bf9dbe9f5f4861d7bdc5ef7fe7350e1682b5",
   "notes": [
-    "Karl convergence captured: dZ 0.0911 -> 0.0412 -> 0.0173 -> 0.0070 (< esim_tol=1e-2 at iter 3), monotone decreasing; 4 outer iters, ~340 s total solve on the skin mesh.",
-    "P_coil is volumetric |J|^2/sigma, mesh-sensitive (coil h=1.46mm > delta=0.79mm, under-resolved) -> wider 15% band, same caveat as the sibc golden.",
-    "wp is steel (sigma=2e6) with the CEFC2020 BH curve (em_sample_bh.txt) driving the nonlinear surface impedance via the ESIM cell problem; mu_r=1.0 is the volume seed (wp is SIBC, not volume-meshed)."
-  ]
+    "The June ESIM depth mesh under-resolved the steel skin depth. The current depth solver was checked against the constant-permeability analytic impedance.",
+    "Coil loss is the volumetric Joule loss. The coil mesh remains coarse relative to the copper skin depth. This baseline covers the specified discrete model.",
+    "The steel B-H curve drives the nonlinear surface impedance. The workpiece uses a surface condition, with mu_r=1.0 as the volume seed."
+  ],
+  "supersedes": {
+    "captured_at": "2026-06-02",
+    "sha256": "eaccea92cb1d53edd9acc34a67818d9141f6f39a74712c6bbae158ca72076857",
+    "status": "superseded"
+  }
 }
