@@ -38,7 +38,7 @@ proceed in parallel after the CPU source and dependencies are frozen.
   evidence links, acceptance status and pending items. Public evidence uses
   neutral roles. Keep machine identities and private paths outside it.
 - MCP, Cubit, Simulink and Optuna retain independent publication ownership and
-  package gates. Use live MCP discovery for catalog evidence.
+  package gates. Use live MCP catalog discovery; do not restore a tracked generated `docs/TOOLS.md` gate.
 
 ## Controller coverage
 
