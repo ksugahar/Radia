@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -24,33 +25,38 @@ def read_section(source, axis, offset):
 
     if gmsh.__version__.split(".")[0] != "5":
         raise ValueError("Gmsh 5 is required")
-    if Path(f"{source}.opt").exists():
-        raise ValueError("Remove the adjacent Gmsh .opt from the input directory")
-    with source.open("rb") as file:
-        if file.readline().strip() != b"$MeshFormat" or file.readline().split() != [b"4.2", b"0", b"8"]:
-            raise ValueError("Expected an ASCII MSH 4.2 file")
+    # Gmsh auto-loads adjacent MSH option files even with readConfigFiles=False.
+    # Snapshot just the field file so normal Radia output can be used as-is.
+    with TemporaryDirectory(prefix="radia-blender-msh-") as tmp:
+        snapshot = Path(tmp) / "source.msh"
+        shutil.copyfile(source, snapshot)
+        with snapshot.open("rb") as file:
+            if file.readline().strip() != b"$MeshFormat" or file.readline().split() != [b"4.2", b"0", b"8"]:
+                raise ValueError("Expected an ASCII MSH 4.2 file")
+            file.seek(0)
+            source_sha256 = hashlib.file_digest(file, "sha256").hexdigest()
 
-    gmsh.initialize([], readConfigFiles=False)
-    try:
-        gmsh.open(str(source))
-        matches = [tag for tag in gmsh.view.getTags()
-                   if gmsh.view.option.getString(tag, "Name") == "B"]
-        if len(matches) != 1:
-            raise ValueError("Expected exactly one B view")
-        view = matches[0]
-        association, _, _, _, components = gmsh.view.getModelData(view, 0)
-        if association != "ElementNodeData" or components != 3:
-            raise ValueError("Expected three-component B ElementNodeData")
-        if gmsh.view.option.getNumber(view, "NbTimeStep") != 1:
-            raise ValueError("Expected one B time step")
-        settings = dict(zip("ABC", (int(c == axis) for c in "xyz")))
-        settings.update(D=-offset, View=gmsh.view.getIndex(view))
-        for key, value in settings.items():
-            gmsh.plugin.setNumber("CutPlane", key, value)
-        cut = gmsh.plugin.run("CutPlane")
-        types, counts, blocks = gmsh.view.getListData(cut)
-    finally:
-        gmsh.finalize()
+        gmsh.initialize([], readConfigFiles=False)
+        try:
+            gmsh.open(str(snapshot))
+            matches = [tag for tag in gmsh.view.getTags()
+                       if gmsh.view.option.getString(tag, "Name") == "B"]
+            if len(matches) != 1:
+                raise ValueError("Expected exactly one B view")
+            view = matches[0]
+            association, _, _, _, components = gmsh.view.getModelData(view, 0)
+            if association != "ElementNodeData" or components != 3:
+                raise ValueError("Expected three-component B ElementNodeData")
+            if gmsh.view.option.getNumber(view, "NbTimeStep") != 1:
+                raise ValueError("Expected one B time step")
+            settings = dict(zip("ABC", (int(c == axis) for c in "xyz")))
+            settings.update(D=-offset, View=gmsh.view.getIndex(view))
+            for key, value in settings.items():
+                gmsh.plugin.setNumber("CutPlane", key, value)
+            cut = gmsh.plugin.run("CutPlane")
+            types, counts, blocks = gmsh.view.getListData(cut)
+        finally:
+            gmsh.finalize()
 
     vertices, faces, magnitudes = [], [], []
     for kind, count, block in zip(types, counts, blocks, strict=True):
@@ -67,8 +73,6 @@ def read_section(source, axis, offset):
         raise ValueError("The section is empty or includes non-finite field values")
     if not all(math.isfinite(c) for point in vertices for c in point):
         raise ValueError("The section includes non-finite coordinates")
-    with source.open("rb") as file:
-        source_sha256 = hashlib.file_digest(file, "sha256").hexdigest()
     return dict(vertices=vertices, faces=faces, magnitudes=magnitudes,
                 axis=axis, offset_m=offset, gmsh_version=gmsh.__version__,
                 source_sha256=source_sha256)
