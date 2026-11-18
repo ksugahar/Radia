@@ -152,7 +152,7 @@ def solve_2d_axisym_air(R_coil, a_coil, a_kelvin, z_offset,
         a_bf.Assemble()
         f_lf.Assemble()
         gfu = GridFunction(fes)
-        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f_lf.vec
 
     # Energy: W = 0.5 * int nu/r |grad u|^2 dV_axisym = 2*pi* int (1/2) nu/r |grad u|^2 r dr dz
     # With 2D dx = dr*dz (no 2*pi), 3D energy = 2*pi * 2D integral of (1/2) nu/r |grad u|^2
@@ -222,8 +222,8 @@ def solve_3d_air(R_coil, a_coil, R_air, R_kelvin, gap_deg,
     u, v = fes.TnT()
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += nu_cf * curl(u) * curl(v) * dx
-    # Regularization (no mass) — HCurl curl-curl has kernel; tiny shift helps
-    # pardiso but doesn't change physics.
+    # Regularization (no mass) — HCurl curl-curl has kernel; tiny shift keeps
+    # the direct factorization positive definite; physics unchanged.
     a_bf += 1e-10 * NU_0 * u * v * dx
 
     f_lf = LinearForm(fes)
@@ -233,7 +233,7 @@ def solve_3d_air(R_coil, a_coil, R_air, R_kelvin, gap_deg,
         a_bf.Assemble()
         f_lf.Assemble()
         gfu = GridFunction(fes)
-        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f_lf.vec
 
     # L = 2*W/I^2, W = 0.5 * int nu |curl A|^2 dV = 0.5 * int nu |B|^2 dV / (mu0)
     # Wait: B = curl A, nu = 1/mu. Energy = 0.5 * int (1/mu) |B|^2 dV = 0.5 * int nu |curl A|^2 dV.

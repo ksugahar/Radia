@@ -98,8 +98,14 @@ def main():
     parser.add_argument("--whole-order", type=int, default=20)
     parser.add_argument("--near-ratio", type=float, default=1.0)
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--inverse", default="pardiso")
     args = parser.parse_args()
+    # Historical staged experiment: its recorded runs used PARDISO, which is retired.
+    # SparseCholesky (the only supported direct solver) returned an all-NaN field for
+    # this saddle-point family (README), so refuse before assembling anything.
+    raise SystemExit(
+        "unsupported: the staged mixed saddle-point C-type family has no supported "
+        "solver (PARDISO retired; SparseCholesky returned NaN). Results in README are "
+        "historical records.")
     global _LOG
     _LOG = args.output.with_suffix(".log")
     log("start", vars(args))
@@ -151,7 +157,7 @@ def main():
                "three_engine_sha256": sha256(staging / "run_three_engine.py"),
                "mesh_result_sha256": sha256(report_path), "coil": coil_manifest,
                "controls": {"order": order, "bonus_intorder": bonus, "mu_r": 1000.0,
-                            "inverse": args.inverse, "base_rule_order": 8,
+                            "inverse": "sparsecholesky", "base_rule_order": 8,
                             "near_ratio": args.near_ratio, "levels": args.levels,
                             "whole_order": args.whole_order},
                "distance_model": distance_manifest, "lines": line_info,
@@ -206,7 +212,7 @@ def main():
                 mesh, h_s, source["potential"], kelvin_radius, kelvin_center,
                 mu_r_by_material={"iron": 1000.0}, reduced_materials=("air",),
                 total_materials=("iron", "kelvin"), interface_boundary="iron_air_interface",
-                order=order, dirichlet_bbbnd="GND", bonus_intorder=bonus, inverse=args.inverse,
+                order=order, dirichlet_bbbnd="GND", bonus_intorder=bonus, inverse="sparsecholesky",
                 kelvin_mats=("kelvin",), kelvin_match_exact=True,
                 kelvin_interface_boundary="kelvin_int",
                 kelvin_source_potential=kelvin_trace["potential"],

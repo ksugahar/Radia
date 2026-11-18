@@ -962,8 +962,8 @@ air reaches `kelvin_int`; the total Kelvin trace is its periodic partner.  A
 Kelvin inversion reverses the orientation of the source 0-form, hence the
 minus sign on `Gamma_K`.  Omitting that constraint silently drops the source
 potential from the Kelvin pair and is not an admissible formulation.  This is
-a symmetric indefinite Lagrange-multiplier system, so its initial production
-solver is direct PARDISO; it is not incorrectly sent to the SPD-only CG path.
+a symmetric indefinite Lagrange-multiplier system, so its production
+solver is direct SparseCholesky with a checked true residual; it is not incorrectly sent to the SPD-only CG path.
 
 `Phi_s` is **not** reconstructed from an HDiv-projected `B`.  For source
 types whose native scalar potential has been independently verified,

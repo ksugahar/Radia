@@ -214,7 +214,7 @@ def solve_design(mesh, tables):
     gfA.Set(mesh.BoundaryCF({"wall": PHI}, default=0.0), BND)
     res = gfA.vec.CreateVector()
     res.data = -a.mat * gfA.vec
-    gfA.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * res
+    gfA.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
     return gfA, (aB, bB, qB)
 
 
@@ -489,7 +489,7 @@ def solve_magnet(mesh, NI, gfA=None, tol=3.0e-6, maxit=600):
         a += nu * InnerProduct(grad(u), grad(v)) * dx
         a.Assemble()
         gfw.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                     inverse="pardiso") * f.vec
+                                     inverse="sparsecholesky") * f.vec
         dn = np.linalg.norm(gfw.vec.FV().NumPy() - gfA.vec.FV().NumPy())
         rel = dn / max(np.linalg.norm(gfw.vec.FV().NumPy()), 1e-30)
         hist.append(rel)

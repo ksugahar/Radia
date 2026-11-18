@@ -28,6 +28,8 @@ def split_mesh(identify=True, scale=1., shape='box'):
         sides.append(points)
         fd_outer = native.Add(FaceDescriptor(surfnr=side*2+1,domin=side+1,bc=1))
         fd_inner = native.Add(FaceDescriptor(surfnr=side*2+2,domin=side+1,bc=2))
+        # Name every descriptor: an unnamed one is 'default' and drops out of dirichlet='outer'.
+        native.SetBCName(fd_outer-1,'outer'); native.SetBCName(fd_inner-1,'interface')
         for cell in itertools.product(range(2),repeat=3):
             keys = [tuple(a+b for a,b in zip(cell,c)) for c in corners]
             native.Add(Element3D(side+1,[points[q] for q in keys]))
@@ -37,11 +39,12 @@ def split_mesh(identify=True, scale=1., shape='box'):
                     continue
                 interface = all(q[0] == (2 if side == 0 else 0) for q in nodes)
                 native.Add(Element2D(fd_inner if interface else fd_outer,[points[q] for q in nodes]))
-    native.SetBCName(0,'outer'); native.SetBCName(1,'interface')
     if identify:
         for y,z in itertools.product(range(3), repeat=2):
             native.AddPointIdentification(sides[0][2,y,z].nr,sides[1][0,y,z].nr,1,IdentificationType.PERIODIC)
-    return ng.Mesh(native)
+    mesh = ng.Mesh(native)
+    assert set(mesh.GetBoundaries()) == {'outer','interface'}, set(mesh.GetBoundaries())
+    return mesh
 
 
 @pytest.mark.parametrize('order',[1,2,3])
@@ -65,7 +68,7 @@ def test_uniform_field_and_face_dofs(order):
     f += ng.InnerProduct(source,ng.grad(v))*ng.dx
     a.Assemble(); f.Assemble()
     g = ng.GridFunction(fes)
-    g.vec.data = a.mat.Inverse(fes.FreeDofs(),inverse='pardiso')*f.vec
+    g.vec.data = a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky')*f.vec
     assert ng.Integrate(ng.InnerProduct(ng.grad(g),ng.grad(g)),mesh) < 1e-20
 
 
@@ -94,7 +97,7 @@ def test_nonuniform_harmonic_field(order, shape, scale, record_property):
     a.Assemble()
     g = ng.GridFunction(fes)
     g.Set(exact,definedon=mesh.Boundaries('outer'))
-    g.vec.data -= a.mat.Inverse(fes.FreeDofs(),inverse='pardiso')*(a.mat*g.vec)
+    g.vec.data -= a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky')*(a.mat*g.vec)
     diff = ng.grad(g)-gradient
     error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/ng.Integrate(ng.InnerProduct(gradient,gradient),mesh))**.5
     record_property('relative_field_error',float(error))
@@ -117,7 +120,7 @@ def test_discontinuous_permeability(order, ratio, record_property):
     # A continuous boundary expression avoids ambiguous material selection on BND.
     boundary = ng.IfPos(ng.x-1,ng.y*(1+(ng.x-1)/ratio),ng.x*ng.y)
     g.Set(boundary,definedon=mesh.Boundaries('outer'))
-    g.vec.data -= a.mat.Inverse(fes.FreeDofs(),inverse='pardiso')*(a.mat*g.vec)
+    g.vec.data -= a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky')*(a.mat*g.vec)
     diff = mu*(ng.grad(g)-gradient)
     error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/
              ng.Integrate(mu**2*ng.InnerProduct(gradient,gradient),mesh))**.5
@@ -148,7 +151,7 @@ def test_nonlinear_constitutive_interface(order, record_property):
     g = ng.GridFunction(fes)
     boundary = ng.IfPos(ng.x-1,left+right*(ng.x-1),left*ng.x)
     g.Set(boundary,definedon=mesh.Boundaries('outer'))
-    status, iterations = Newton(a,g,maxit=50,maxerr=1e-13,inverse='pardiso',printing=False)
+    status, iterations = Newton(a,g,maxit=50,maxerr=1e-13,inverse='sparsecholesky',printing=False)
     assert status == 0
     diff = ng.grad(g)-gradient
     error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/

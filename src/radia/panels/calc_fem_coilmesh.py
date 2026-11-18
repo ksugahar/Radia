@@ -47,6 +47,150 @@ from em_material import EMMaterial, MU_0
 NU_0 = 1.0 / MU_0
 
 
+
+def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnds, contract_bnd,
+                           reverse_edges=False):
+    """Free DOFs of ``fes`` with A's lowest-order DOFs on a spanning tree removed.
+
+    The coupled kernel is (A + grad psi, phi - psi) with psi = 0 on the
+    ``ground_bnds`` (phi is Dirichlet there) and psi constant on each
+    connected component of the ``contract_bnd`` trace (the Robin term only
+    sees tangential A).  The tree spans the quotient vertex graph in which
+    periodic identifications are merged and every connected component of a
+    labelled trace is one node; the source and sink stay separate nodes, and
+    the one tree edge beyond the kernel fixes the gap circulation of A on
+    the shortest geometric source-sink path, independent of the tree.
+    Grounding both ports together would leave grad A free across the gap
+    and let it cancel the phi drive.  Raises if a
+    label has no vertices or the graph is not connected.  ``reverse_edges``
+    only reverses the edge enumeration (a different, equally valid tree).
+    """
+    from ngsolve import BitArray, BND, EDGE, NodeId
+    from collections import deque
+    import heapq
+
+    parent = list(range(mesh.nv))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i, j):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[rj] = ri
+
+    for p1, p2, _ in mesh.ngmesh.GetIdentifications():
+        union(p1.nr0, p2.nr0)
+    labelled = {}
+    for el in mesh.Elements(BND):
+        if el.mat in ground_bnds or el.mat == contract_bnd:
+            labelled.setdefault(el.mat, []).append([v.nr for v in el.vertices])
+    for name in (*ground_bnds, contract_bnd):
+        if name not in labelled:
+            raise ValueError(f"tree gauge: boundary {name!r} has no vertices")
+    for name in (*ground_bnds, contract_bnd):
+        for vs in labelled[name]:
+            for v in vs[1:]:
+                union(vs[0], v)
+
+    pparent = list(range(mesh.nv))  # periodic images only
+
+    def pid(i):
+        while pparent[i] != i:
+            i = pparent[i]
+        return i
+
+    for p1, p2, _ in mesh.ngmesh.GetIdentifications():
+        a1, a2 = pid(p1.nr0), pid(p2.nr0)
+        if a1 != a2:
+            pparent[a2] = a1
+    vedges = []
+    a_free = fesA.FreeDofs()
+    adj = {}
+    seen = set()
+    edges = list(mesh.edges)
+    if reverse_edges:
+        edges.reverse()
+    for e in edges:
+        d = fesA.GetDofNrs(NodeId(EDGE, e.nr))[0]
+        if d < 0 or d in seen or not a_free[d]:
+            continue
+        seen.add(d)
+        i, j = (q.nr for q in e.vertices)
+        u, v = find(i), find(j)
+        if u != v:
+            length = float(np.linalg.norm(np.subtract(
+                mesh.vertices[i].point, mesh.vertices[j].point)))
+            adj.setdefault(u, []).append((v, d, length))
+            adj.setdefault(v, []).append((u, d, length))
+            vedges.append((i, j, d, length))
+    # The A circulation from the first to the last port is fixed to zero on
+    # the shortest geometric path (ties by DOF number), not on whatever path
+    # the tree happens to take, so the drive does not depend on the tree.
+    # The path runs on the physical vertex graph (periodic images merged)
+    # and avoids the contracted SIBC trace, whose tangential A is physical.
+    src = find(labelled[ground_bnds[0]][0][0])
+    dst = find(labelled[ground_bnds[-1]][0][0])
+    sibc_nodes = {find(vs[0]) for vs in labelled[contract_bnd]} - {src, dst}
+    vadj = {}
+    for i, j, d, length in vedges:
+        vi, vj = pid(i), pid(j)
+        if vi == vj or find(i) in sibc_nodes or find(j) in sibc_nodes:
+            continue
+        vadj.setdefault(vi, []).append((vj, d, length))
+        vadj.setdefault(vj, []).append((vi, d, length))
+    starts = sorted({pid(v) for vs in labelled[ground_bnds[0]] for v in vs})
+    best = {v: (0.0, -1, None, None) for v in starts}
+    heap = [(0.0, -1, v) for v in starts]
+    done = set()
+    end = None
+    while heap:
+        dist, _, u = heapq.heappop(heap)
+        if u in done:
+            continue
+        done.add(u)
+        if find(u) == dst:
+            end = u
+            break
+        for v, d, length in vadj.get(u, ()):
+            key = (dist + length, d)
+            if v not in done and (v not in best or key < best[v][:2]):
+                best[v] = (key[0], d, u, d)
+                heapq.heappush(heap, (key[0], d, v))
+    if end is None:
+        raise RuntimeError(
+            f"tree gauge: no path between ports {ground_bnds!r} off {contract_bnd!r}")
+    tree = []
+    visited = {dst}
+    node = end
+    while best[node][2] is not None:
+        _, _, prev, d = best[node]
+        if find(prev) != find(node):
+            tree.append(d)
+            visited.add(find(prev))
+        node = prev
+    visited.add(src)
+    queue = deque(sorted(visited))
+    while queue:
+        u = queue.popleft()
+        for v, d, _ in adj.get(u, ()):
+            if v not in visited:
+                visited.add(v)
+                tree.append(d)
+                queue.append(v)
+    if len(visited) != len(adj):
+        raise RuntimeError(
+            f"tree gauge: {len(adj) - len(visited)} vertex nodes are not "
+            f"connected to {ground_bnds!r}; their gradients would stay singular")
+    free = BitArray(fes.FreeDofs())
+    for d in tree:  # A is the first component, so its DOF numbers are global
+        free[d] = False
+    progress("FEM", f"tree gauge: {len(tree)} edge DOFs fixed")
+    return free
+
 def solve_fem_coilmesh(vol, frequency, I_target,
                        coil_sigma,
                        wp_sigma, wp_mu_r, half_thickness,
@@ -170,38 +314,29 @@ def solve_fem_coilmesh(vol, frequency, I_target,
 
     # nu per material: NU_0 everywhere; Kelvin exterior gets (rho'/a_k)^2.
     kx, ky, kz = kelvin_center
-    # The gauge mass weight is the Kelvin image of the air weight: the
-    # inversion scales the 2-form (curl) weight by (rho'/a_k)^2 and the
-    # 1-form (mass) weight by (a_k/rho')^2.
     nu_dict = {}
-    mass_dict = {}
     for m in materials:
         if "kelvin" in m.lower():
             dxk, dyk, dzk = x - kx, y - ky, z - kz
             rp_sq = dxk * dxk + dyk * dyk + dzk * dzk + 1e-20
             nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
-            mass_dict[m] = NU_0 * a_kelvin ** 2 / rp_sq
         else:
             nu_dict[m] = NU_0  # non-magnetic coil + air share NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
 
-    # Compound FES: HCurl(A) x H1(phi on coil).
+    # Compound FES: HCurl(A) x H1(phi on coil), gauged by a spanning tree.
     #
-    # NB: HCurl A has no Dirichlet here.  An earlier version passed
-    # dirichlet="GND" when a "GND" boundary was present; empirically
-    # (2026-04-28) HCurl(dirichlet=<vertex_tag>) is a no-op because
-    # HCurl DOFs live on edges, so the path was silently dead.  The
-    # gauge null-space of HCurl A in the A-phi system is locked by:
-    #   - phi's source/sink Dirichlet drives the coil current;
-    #   - nograds=True removes pure-gradient modes;
-    #   - the coil's j*omega*sigma*A term provides positive-definite
-    #     gauge fixing in the conducting region (AC);
-    #   - reg=1e-6 on the mass term covers DC and harmonic-form
-    #     residuals.  It is applied in the Kelvin exterior too, with the
-    #     Kelvin-mapped weight: without it the lowest-order gradients of
-    #     the exterior vertices are a null space that a pivoting direct
-    #     solver perturbed away but SparseCholesky factors as zero pivots
-    #     (NaN on every DOF).
+    # nograds=True removes only the higher-order gradients; the lowest-order
+    # edge space still holds the gradient of every vertex hat.  The kernel
+    # of the coupled form is (A + grad psi, phi - psi): psi must vanish on
+    # source/sink, where phi is Dirichlet, and be constant on each connected
+    # SIBC trace component, where the Robin term reads tangential A.  The
+    # source and sink faces are separate tree nodes, which also fixes the
+    # A circulation across the gap (otherwise it cancels the drive).  A
+    # small mass penalty left this kernel a near-null space (condition
+    # ~1e13) whose multithreaded SparseCholesky solve changed L/P by ~1 %
+    # from run to run.  The tree spans exactly this kernel, so L and P do
+    # not depend on which tree is taken.
     fesA_base = HCurl(mesh, order=fes_order, nograds=True, complex=True)
     fesA = Periodic(fesA_base) if has_kelvin_periodic else fesA_base
     fesPhi = H1(mesh, order=fes_order, complex=True,
@@ -209,12 +344,13 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                 dirichlet=f"{source_bnd}|{sink_bnd}")
     fes = fesA * fesPhi
     (A, phi), (N, psi) = fes.TnT()
+    free_dofs = _tree_gauged_free_dofs(
+        mesh, fesA, fes, (source_bnd, sink_bnd), sibc_bnd)
     progress("FEM", f"ndof={fes.ndof} (A:{fesA.ndof} + phi:{fesPhi.ndof})")
 
     # Bilinear form pieces (Robin term depends on Z_s_wp and is rebuilt
     # per Karl iteration; everything else is geometry/material-only and
     # is reassembled trivially because BilinearForm composition is cheap).
-    non_kelvin = [m for m in materials if "kelvin" not in m.lower()]
 
     def _assemble_a_bf(robin_coeff):
         """(Re)build + assemble the A-V BilinearForm at given Robin coef.
@@ -224,10 +360,6 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         """
         a_bf = BilinearForm(fes, symmetric=True)
         a_bf += nu_cf * curl(A) * curl(N) * dx(bonus_intorder=4)
-        if non_kelvin:
-            a_bf += 1e-6 * NU_0 * A * N * dx("|".join(non_kelvin))
-        for m, w in mass_dict.items():
-            a_bf += 1e-6 * w * A * N * dx(m, bonus_intorder=4)
         a_bf += robin_coeff * A.Trace() * N.Trace() * ds(sibc_bnd)
         a_bf += s * coil_sigma * (A + grad(phi)) * (N + grad(psi)) * \
                 dx(coil_mat)
@@ -310,8 +442,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             rhs = gfu.vec.CreateVector()
             rhs[:] = 0
             linear_residual = apply_fe_inverse(
-                a_bf.mat, a_bf.mat.Inverse(fes.FreeDofs(), inverse=solver),
-                rhs, gfu.vec, fes.FreeDofs())
+                a_bf.mat, a_bf.mat.Inverse(free_dofs, inverse=solver),
+                rhs, gfu.vec, free_dofs)
             linear_residuals.append(float(linear_residual))
         t_solve_iter = time.perf_counter() - t0
         t_solve += t_solve_iter
@@ -460,8 +592,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             rhs = gfu.vec.CreateVector()
             rhs[:] = 0
             linear_residual = apply_fe_inverse(
-                a_bf.mat, a_bf.mat.Inverse(fes.FreeDofs(), inverse=solver),
-                rhs, gfu.vec, fes.FreeDofs())
+                a_bf.mat, a_bf.mat.Inverse(free_dofs, inverse=solver),
+                rhs, gfu.vec, free_dofs)
             linear_residuals.append(float(linear_residual))
         t_solve += time.perf_counter() - t0
         J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))

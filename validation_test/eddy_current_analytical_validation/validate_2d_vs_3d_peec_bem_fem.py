@@ -75,7 +75,7 @@ def run_fem_coilmesh(vol, freq):
         coil_sigma=5.8e7, coil_mu_r=1.0,
         wp_sigma=5.8e7, wp_mu_r=1.0,
         half_thickness=wp_half_thickness(0.025, 0.025),
-        fes_order=1, solver="pardiso",
+        fes_order=1, solver="sparsecholesky",
         sibc_bnd="sibc", source_bnd="source", sink_bnd="sink",
         coil_mat="coil")
     return {"L_nH": r["L_total_nH"], "P_W": r["P_total_W"],

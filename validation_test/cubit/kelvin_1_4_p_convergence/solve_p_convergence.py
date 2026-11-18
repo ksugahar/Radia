@@ -137,9 +137,9 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     print(f"  assembling...")
     with TaskManager():
         a.Assemble()
-        print(f"  solving (pardiso)...")
+        print(f"  solving (sparsecholesky)...")
         gfOmega.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                         inverse="pardiso") * f.vec
+                                         inverse="sparsecholesky") * f.vec
         sol = gfOmega
 
     # H = grad(Omega) in total region (magnetic), H = grad(Omega_r) + Hs in air

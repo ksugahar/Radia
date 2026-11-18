@@ -72,7 +72,7 @@ adds the Kelvin exterior sphere and the GND nodeset.
    from the nodeset propagation added 2026-04-24 (commit 07b15414).
 4. Run `calc_accel_magnet.py --coil-script em_sample_coil.{step|py}
    --vol <generated>.vol --formulation omega --material linear
-   --mu-r 1000 --solver pardiso`.
+   --mu-r 1000 --solver sparsecholesky`.
 5. Compare against the committed JSON under
    `validation_test/panels/golden/`. The owning validation test checks the
    quantities and tolerances; ordinary unit tests do not regenerate evidence.

@@ -212,7 +212,7 @@ def solve_direct_fem(include_workpiece, mu_r_wp=1.0):
 
     gfu = GridFunction(fes)
     with TaskManager():
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     L = L_energy(mesh, curl(gfu), nu_cf, I_TOTAL)
     return L, ne, fes.ndof
@@ -252,7 +252,7 @@ def solve_reduced_A_ferrite(mu_r_wp):
 
     gfu = GridFunction(fes)
     with TaskManager():
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     return gfu, gf_As, mesh, nu_cf, ne, fes.ndof, fil_paths, fil_currents
 
@@ -380,7 +380,7 @@ def run_copper(frequency=50000, sigma_wp=5.8e7):
 
     gfu = GridFunction(fes)
     with TaskManager():
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
     delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=4)
     back = compute_back_reaction(fil_currents, delta_phi, I_TOTAL)
