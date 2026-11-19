@@ -75,17 +75,35 @@ def test_source_tree_worker_is_found():
     assert default.is_file(), f"expected worker at {default}"
 
 
+OFFSET = 1e-4
+
+
+def _glyphs(pay, spec, k):
+    """Arrows as a faithful renderer would draw them (closed-form, not the worker)."""
+    out = []
+    jmax = pay["J_scale_max_A_per_m2"]
+    for sid, p, v in zip(pay["samples"]["id"], pay["samples"]["point_m"], pay["J_A_per_m2"][k]):
+        mag = float(np.linalg.norm(v))
+        d = np.array([v[0], 0.0, v[2]]) / np.hypot(v[0], v[2])
+        c = np.array([p[0], p[1] + OFFSET, p[2]])
+        L = spec["arrow_length_m"] * min(mag / jmax, 1.0)
+        out.append({"id": int(sid), "base": list(c - 0.5 * L * d), "tip": list(c + 0.5 * L * d),
+                    "color": list(fa.expected_color(mag / jmax))})
+    return out
+
+
 def _back(pay, spec):
     n = len(pay["time_s"])
     steps = {}
     for k in range(n):
-        steps[str(k)] = {"center_m": pay["magnet"]["center_m"][k],
+        steps[str(k)] = {"glyphs": _glyphs(pay, spec, k), "center_m": pay["magnet"]["center_m"][k],
                          "rotation": pay["magnet"]["rotation"][k],
                          "visible": [f"J_glyph_{k:04d}", f"Time_{k:04d}"],
                          "time_label": f"t = {pay['time_s'][k]:.3f} s",
                          "sample_id": pay["samples"]["id"],
                          "J_A_per_m2": np.asarray(pay["J_A_per_m2"][k]).ravel().tolist()}
     return {"frame_start": 1, "frame_end": n, "fps": spec["fps"], "schema": fa.SCHEMA,
+            "arrow_length_m": spec["arrow_length_m"], "glyph_display_offset_m": OFFSET,
             "camera_animated": False, "camera_motion": "static", "n_glyph_objects": n,
             "interpolations": ["CONSTANT"],
             "bbox_m": {"Conductor": [pay["conductor"]["box_min_m"], pay["conductor"]["box_max_m"]]},
@@ -96,7 +114,7 @@ def _back(pay, spec):
 def test_compare_accepts_faithful_and_rejects_altered_readback(tmp_path):
     pay = fa.load_dataset(_dataset(tmp_path / "d.h5"))
     pay["J_scale_max_A_per_m2"] = 100.0
-    spec = {"fps": 12}
+    spec = {"fps": 12, "arrow_length_m": 1e-3}
     good = _back(pay, spec)
     ok = fa.compare(pay, good, spec, [0, 1, 3])
     assert ok["passed"], ok["failures"]
@@ -106,6 +124,12 @@ def test_compare_accepts_faithful_and_rejects_altered_readback(tmp_path):
             (lambda b: b.__setitem__("camera_animated", True), "camera"),
             (lambda b: b["steps"]["1"].__setitem__("visible", ["J_glyph_0002"]), "visible"),
             (lambda b: b.__setitem__("fps", 24), "fps"),
+            # Visible glyphs alone altered; hidden J data untouched.
+            (lambda b: b["steps"]["1"]["glyphs"][2].update(base=b["steps"]["1"]["glyphs"][2]["tip"],
+                                                           tip=b["steps"]["1"]["glyphs"][2]["base"]), "direction"),
+            (lambda b: b["steps"]["3"]["glyphs"][0]["base"].__setitem__(0, 0.5), "position"),
+            (lambda b: b["steps"]["0"]["glyphs"][4].__setitem__("color", [1.0, 0.0, 0.0]), "color"),
+            (lambda b: b["steps"]["1"]["glyphs"].pop(), "arrow ids"),
             (lambda b: b.__setitem__("interpolations", ["BEZIER", "CONSTANT"]), "interpolation"),
             (lambda b: b["bbox_m"].__setitem__("Conductor", [[0, 0, 0], [1, 1, 1]]), "bounding box")):
         bad = copy.deepcopy(good)
@@ -125,3 +149,39 @@ def test_live_write_reopen_matches_closed_form(tmp_path):
     assert res["readback"]["steps"]["2"]["J_max_rel_err"] <= 1e-6
     assert res["J_scale_A_per_m2"][1] == pytest.approx(100.0)
     assert abs(np.cos(th)) <= 1.0
+
+
+_FLIP = """
+import sys, bpy
+bpy.ops.wm.open_mainfile(filepath=sys.argv[1])
+me = bpy.data.objects["J_glyph_0002"].data
+for a in range(len(me.vertices) // 7):        # reverse every arrow of step 2 only
+    v = [me.vertices[7 * a + i].co.copy() for i in range(7)]
+    base, tip = (v[0] + v[6]) / 2, v[3]
+    for i in range(7):
+        me.vertices[7 * a + i].co = base + tip - v[i]
+bpy.ops.wm.save_mainfile(filepath=sys.argv[1])
+"""
+
+
+@pytest.mark.skipif(not os.environ.get("RADIA_BLENDER_PYTHON"), reason="optional bpy worker not configured")
+def test_live_rendered_glyph_edit_is_rejected(tmp_path):
+    import subprocess
+    p = _dataset(tmp_path / "d.h5")
+    res = fa.field_animation(p, tmp_path / "out", {"resolution": [160, 90], "samples": 1,
+                                                   "video": False, "preview_steps": [2], "threads": 2})
+    assert res["status"] == "ok", json.dumps(res["readback"], indent=1)
+    py, worker, _ = fa.resolve_worker()
+    script = tmp_path / "flip.py"
+    script.write_text(_FLIP, encoding="utf-8")
+    blend = res["artifacts"]["blend"]
+    subprocess.run([py, "-I", "-B", str(script), blend], check=True, capture_output=True,
+                   stdin=subprocess.DEVNULL, timeout=300)
+    back = fa._run(py, worker, "inspect", {"blend_path": blend, "steps": [0, 2]}, tmp_path, 300)
+    pay = fa.load_dataset(p)
+    pay["J_scale_max_A_per_m2"] = res["J_scale_A_per_m2"][1]
+    v = fa.compare(pay, back, res["spec"], [0, 2])
+    # Hidden J data is untouched, so only the rendered-arrow check can catch this.
+    assert v["steps"]["2"]["J_max_rel_err"] <= 1e-6
+    assert not v["passed"] and any("step 2: rendered arrow direction" in f for f in v["failures"]), v["failures"]
+    assert not any(f.startswith("step 0") for f in v["failures"]), v["failures"]

@@ -1,7 +1,7 @@
 """Export the rotating-magnet eddy-current solve as a field-animation dataset.
 
 Runs the full-FEM A-phi reference of ``rotating_magnet_eddy.py`` for ONE
-period T (default 2 s, Yano's low-Rm case) and writes the solved conductor
+period T (default 2 s; Radia public demo, not a reproduction of the lab original) and writes the solved conductor
 current density J(x, t) together with the magnet pose used for the same
 solver step.  Nothing is recomputed for display: J is the backward-Euler
 eddy current ``-sigma/dt (dA_s + dA_r + grad dphi)`` of the reference solve,
@@ -122,6 +122,9 @@ def write_h5(path, d, T, maxh, ncfg):
         f.attrs["units"] = "SI"
         f.attrs["index_base"] = 0
         f.attrs["case"] = "rotating_magnet_over_copper_plate"
+        f.attrs["reference_status"] = ("Radia public demo: geometry, magnet and trajectory follow the lab "
+                                       "case, but the conductor-only mesh, boundary conditions, period and "
+                                       "step count differ; not a faithful reproduction")
         f.attrs["source_script"] = "docs/maglev/demos/rotating_magnet_eddy.py"
         f.attrs["source_script_sha256"] = _sha256(rme.__file__)
         f.attrs["export_script_sha256"] = _sha256(__file__)

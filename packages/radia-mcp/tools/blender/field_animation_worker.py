@@ -127,11 +127,15 @@ def _constant(ob):
                 k.interpolation = "CONSTANT"
 
 
-def _arrows(name, pts, vecs, jmax, length, width, y_disp):
-    """Flat arrows in the display plane y = y_disp, coloured by |J|."""
+def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
+    """Flat arrows in the display plane y = y_disp, coloured by |J|.
+
+    Each arrow is 7 vertices (base-left .. tip .. base-right) carrying the
+    sample id, so the rendered geometry itself can be checked after reopening.
+    """
     me = bpy.data.meshes.new(name)
-    verts, faces, cols = [], [], []
-    for p, v in zip(pts, vecs):
+    verts, faces, cols, gid = [], [], [], []
+    for sid, p, v in zip(ids, pts, vecs):
         mag = float(np.linalg.norm(v))
         if mag <= 0.0:
             continue
@@ -153,10 +157,12 @@ def _arrows(name, pts, vecs, jmax, length, width, y_disp):
         faces.extend([(i0, i0 + 1, i0 + 5, i0 + 6), (i0 + 2, i0 + 3, i0 + 4)])
         c = _cmap(mag / jmax)
         cols.extend([c] * 7)
+        gid.extend([int(sid)] * 7)
     me.from_pydata(verts, [], faces)
     attr = me.color_attributes.new("J_color", "FLOAT_COLOR", "POINT")
     for i, c in enumerate(cols):
         attr.data[i].color = (*c, 1.0)
+    me.attributes.new("glyph_sample_id", "INT", "POINT").data.foreach_set("value", gid)
     ob = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(ob)
     return ob
@@ -253,7 +259,7 @@ def write(req):
 
     for k in range(n):
         J = pay["J_A_per_m2"][k]
-        g = _arrows(f"J_glyph_{k:04d}", pts, J, jmax, float(spec["arrow_length_m"]),
+        g = _arrows(f"J_glyph_{k:04d}", ids, pts, J, jmax, float(spec["arrow_length_m"]),
                     float(spec["arrow_width_m"]), y_disp)
         g.data.materials.append(glyph_mat)
         dpt = _data_points(f"J_data_{k:04d}", ids, pts, J)
@@ -300,6 +306,7 @@ def write(req):
     sc["frame_map"] = "frame = frame_start + solver step index; values held constant between steps"
     sc["J_scale_A_per_m2"] = [0.0, jmax]
     sc["camera_motion"] = "static"
+    sc["arrow_length_m"] = float(spec["arrow_length_m"])
     sc["glyph_display_offset_m"] = y_disp - pay["samples"]["point_m"][0][1]
 
     r = sc.render
@@ -357,6 +364,30 @@ def _world_bbox(ob):
     return [[min(p[i] for p in pts) for i in range(3)], [max(p[i] for p in pts) for i in range(3)]]
 
 
+def _glyph_readback(ob):
+    """Evaluated (as rendered) glyph geometry: per arrow id, base, tip, colour."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = ob.evaluated_get(dg)
+    me = ev.to_mesh()
+    mw = ev.matrix_world
+    nv = len(me.vertices)
+    if nv % 7:
+        raise RuntimeError(f"{ob.name}: {nv} vertices is not a whole number of arrows")
+    gid = [0] * nv
+    me.attributes["glyph_sample_id"].data.foreach_get("value", gid)
+    col = [0.0] * (4 * nv)
+    me.color_attributes["J_color"].data.foreach_get("color", col)
+    co = [mw @ v.co for v in me.vertices]
+    arrows = []
+    for a in range(nv // 7):
+        i = 7 * a
+        base = (co[i] + co[i + 6]) / 2
+        arrows.append({"id": gid[i], "base": list(base), "tip": list(co[i + 3]),
+                       "color": col[4 * i:4 * i + 3]})
+    ev.to_mesh_clear()
+    return arrows
+
+
 def inspect(req):
     bpy.ops.wm.open_mainfile(filepath=req["blend_path"])
     sc = bpy.context.scene
@@ -376,6 +407,8 @@ def inspect(req):
            "bbox_m": {o.name: _world_bbox(o) for o in bpy.data.objects
                       if o.type == "MESH" and o.name in ("Conductor", "Magnet_N", "Magnet_S")},
            "interpolations": sorted(_interpolations()),
+           "arrow_length_m": sc.get("arrow_length_m"),
+           "glyph_display_offset_m": sc.get("glyph_display_offset_m"),
            "steps": {}}
     for k in req["steps"]:
         sc.frame_set(sc.frame_start + k)
@@ -388,7 +421,9 @@ def inspect(req):
         d.attributes["sample_id"].data.foreach_get("value", ids)
         J = [0.0] * (3 * len(d.vertices))
         d.attributes["J_A_per_m2"].data.foreach_get("vector", J)
+        out_glyph = _glyph_readback(bpy.data.objects[f"J_glyph_{k:04d}"])
         out["steps"][str(k)] = {
+            "glyphs": out_glyph,
             "center_m": list(mw.translation),
             "rotation": [list(mw.to_3x3()[i]) for i in range(3)],
             "visible": visible,

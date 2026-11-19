@@ -32,6 +32,58 @@ DEFAULT_SPEC = {
 }
 
 
+# Independent copy of the worker's colour stops (viridis subset): the rendered
+# glyph colours are checked against this, not against data read from the file.
+_STOPS = [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
+          (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
+          (1.0, (0.993, 0.906, 0.144))]
+
+
+def expected_color(t):
+    t = min(max(float(t), 0.0), 1.0)
+    for (a, ca), (b, cb) in zip(_STOPS, _STOPS[1:]):
+        if t <= b:
+            w = (t - a) / (b - a)
+            return np.array([ca[i] + w * (cb[i] - ca[i]) for i in range(3)])
+    return np.array(_STOPS[-1][1])
+
+
+def check_glyphs(pay, glyphs, k, arrow_length, offset):
+    """Rendered arrows vs the dataset: one per nonzero in-plane J, at the sample
+    (plus the declared vertical display offset), pointing along signed J,
+    length and colour linear in |J| on the fixed scale."""
+    fails = []
+    jmax = pay["J_scale_max_A_per_m2"]
+    pts = np.asarray(pay["samples"]["point_m"])
+    J = np.asarray(pay["J_A_per_m2"][k])
+    pos = {int(i): j for j, i in enumerate(pay["samples"]["id"])}
+    expect = {int(i) for i, v in zip(pay["samples"]["id"], J) if np.hypot(v[0], v[2]) > 0}
+    got = [int(g["id"]) for g in glyphs]
+    if len(got) != len(set(got)) or set(got) != expect:
+        return [f"step {k}: rendered arrow ids differ ({len(set(got))} vs {len(expect)} expected)"], {}
+    worst = {"position_m": 0.0, "direction": 0.0, "length_rel": 0.0, "color": 0.0}
+    for g in glyphs:
+        j = pos[int(g["id"])]
+        v = J[j]
+        mag = float(np.linalg.norm(v))
+        d = np.array([v[0], 0.0, v[2]]); d /= np.linalg.norm(d)
+        base = np.asarray(g["base"]); tip = np.asarray(g["tip"])
+        centre = 0.5 * (base + tip)
+        want = np.array([pts[j][0], pts[j][1] + offset, pts[j][2]])
+        L = float(np.linalg.norm(tip - base))
+        Lw = arrow_length * min(mag / jmax, 1.0)
+        worst["position_m"] = max(worst["position_m"], float(np.abs(centre - want).max()))
+        worst["direction"] = max(worst["direction"], float(1.0 - np.dot((tip - base) / max(L, 1e-300), d)))
+        # float32 vertices: judge length against the full-scale arrow, not a tiny one
+        worst["length_rel"] = max(worst["length_rel"], abs(L - Lw) / arrow_length)
+        worst["color"] = max(worst["color"], float(np.abs(np.asarray(g["color"]) - expected_color(mag / jmax)).max()))
+    tol = {"position_m": 1e-8, "direction": 1e-6, "length_rel": 1e-5, "color": 1e-5}
+    for key, lim in tol.items():
+        if worst[key] > lim:
+            fails.append(f"step {k}: rendered arrow {key} error {worst[key]:.3e} > {lim}")
+    return fails, worst
+
+
 class BlenderWorkerError(RuntimeError):
     """The optional worker is missing, misconfigured or failed."""
 
@@ -244,7 +296,17 @@ def compare(pay, back, spec, steps):
         vis = [v for v in b["visible"] if v.startswith("J_glyph_")]
         ok_vis = vis == [f"J_glyph_{k:04d}"]
         label_ok = f"{pay['time_s'][k]:.3f} s" in b["time_label"]
-        per_step[str(k)] = {"J_max_rel_err": jerr, "pose_center_max_err_m": perr,
+        offset = back.get("glyph_display_offset_m")
+        alen = back.get("arrow_length_m")
+        if offset is None or alen is None or not (np.isfinite(offset) and offset >= 0.0 and alen > 0.0):
+            fails.append(f"step {k}: display offset {offset} / arrow length {alen} missing or implausible")
+            gworst = {}
+        else:
+            if abs(alen - spec["arrow_length_m"]) > 1e-12:
+                fails.append(f"arrow length in file {alen} != requested {spec['arrow_length_m']}")
+            gfails, gworst = check_glyphs(pay, b.get("glyphs", []), k, alen, offset)
+            fails.extend(gfails)
+        per_step[str(k)] = {"rendered_arrows": gworst, "J_max_rel_err": jerr, "pose_center_max_err_m": perr,
                        "pose_rotation_max_err": rerr, "visible_glyphs": vis,
                        "time_label": b["time_label"]}
         if jerr > 1e-6:

@@ -46,7 +46,11 @@ fps, physical time per frame, |J| scale, camera animation, the magnet's world
 pose and the stored (sample_id, J) of selected steps.  The server compares
 these with the HDF5 dataset: J relative error <= 1e-6 (float32 storage),
 centre <= 1e-8 m, rotation <= 1e-6, exactly one glyph object visible per
-frame and the time label of that step.  Review the preview PNGs and MP4 for
+frame and the time label of that step.  The rendered arrows themselves are
+also read back (evaluated mesh, per-vertex sample id): one arrow per nonzero
+in-plane J, centred on the sample plus the declared display offset
+(<= 1e-8 m), pointing along signed J (1 - cos <= 1e-6), length and colour
+from |J| on the fixed scale, recomputed independently of the stored data.  Review the preview PNGs and MP4 for
 readability; that judgement is separate from numerical validation.
 
 ## Design references (public Blender MCP servers, MIT; ideas reimplemented, no code copied)
