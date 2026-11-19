@@ -89,8 +89,8 @@
  "timing_s": {
   "coarsest_peec": 4.336123300003237
  },
- "status": "current",
- "stale_reason": null,
+ "status": "stale",
+ "stale_reason": "Covered binding src/lib/rad_peec_matrices_api.cpp changed: PEECBuilder gained the opt-in near_section_average argument and set_last_width_dir (default 0 keeps every existing builder bit-identical); the axisymmetric PEEC path is untouched. Needs a replay of entry.py on the new source before re-adoption.",
  "superseded_by": null,
  "private": false,
  "milestone": "Fin physical verdict: axisymmetric volume PEEC against the adaptive P2 reference",
