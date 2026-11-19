@@ -426,6 +426,9 @@ def _solve_coil_fin_volume(args):
         "fin_sweep": dict(sol["sweep"].meta),
         "fin_n_branches": sol["n_branches"],
         "fin_volume_gates": sol["lattice"].gates,
+        "fin_volume_box_order": sol["box_order"],
+        "fin_volume_inductance_energy": sol["inductance_energy"],
+        "fin_volume_energy_receipt": sol["energy_receipt"],
         "coil_power_W": sol["coil_power_W"],
         "coil_true_residual": sol["coil_true_residual"],
     }
@@ -1984,6 +1987,9 @@ def _assemble_vacuum_output(args, coil_data):
         out["fin_n_branches"] = int(coil_data["fin_n_branches"])
         out["fin_sweep"] = coil_data["fin_sweep"]
         out["fin_volume_gates"] = coil_data["fin_volume_gates"]
+        for key in ("fin_volume_box_order", "fin_volume_inductance_energy",
+                    "fin_volume_energy_receipt"):
+            out[key] = coil_data[key]
         out["coil_power_W"] = float(coil_data["coil_power_W"])
         out["coil_true_residual"] = coil_data["coil_true_residual"]
     else:

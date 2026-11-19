@@ -105,6 +105,23 @@ def test_skew_plates_match_an_independent_six_dimensional_integral():
     flipped = _matrix([bars[0], (bars[1][1], bars[1][0], width, height, ez)], oriented_box_order=8)
     assert flipped[0, 1] == -got[0, 1]
     assert np.linalg.eigvalsh(got)[0] > 0
+    # Equal volumes: the outer/inner choice must not follow insertion order.
+    swapped = _matrix(bars[::-1], oriented_box_order=8)
+    assert swapped[0, 1] == got[0, 1], (swapped[0, 1], got[0, 1])
+
+
+def test_near_coincident_centres_keep_the_full_order():
+    """Guards: the quadrature count is clamped in floating point, so a
+    centre distance far below the bar size (1e-150 m) keeps the maximum
+    order instead of overflowing the integer conversion, and the entry
+    equals the coincident-pair self term.
+    Assumes: two identical 10 mm bars."""
+    def pair(dx):
+        return [((x, 0, 0), (x, 0, 10e-3), 1e-3, 0.2e-3, (1, 0, 0)) for x in (0.0, dx)]
+
+    near = _matrix(pair(1e-150), oriented_box_order=24)
+    assert np.isfinite(near).all(), near
+    assert abs(near[0, 1] - near[0, 0]) <= 1e-9 * near[0, 0], near
 
 
 def test_overlapping_support_keeps_positive_energy():
@@ -154,3 +171,66 @@ def test_oriented_box_kernel_rejects_bad_input():
     b.add_connected_segment(n0, n1, 1e-4, 1e-4)
     with pytest.raises(Exception, match="parallel"):
         b.set_last_width_dir(0.0, 0.0, 1.0)
+
+
+def test_energy_gate_rejects_malformed_input_and_handles_zero_scale():
+    """Guards: the gate is fail-closed on non-finite, empty, non-square or
+    complex input, and a zero matrix reports finite diagnostics (all modes
+    null) instead of NaN.
+    Assumes: synthetic matrices."""
+    from radia.fin_volume import require_energy_admissible
+
+    for bad, match in ((np.diag([1.0, np.nan]), "non-finite"), (np.diag([1.0, np.inf]), "non-finite"),
+                       (np.zeros((0, 0)), "non-empty"), (np.ones((2, 3)), "square"),
+                       (np.eye(2) * (1 + 1j), "real")):
+        with pytest.raises(ValueError, match=match):
+            require_energy_admissible(bad)
+    rec = require_energy_admissible(np.zeros((2, 2)))
+    assert rec["n_null"] == 2 and rec["min_eig_over_max"] is None, rec
+
+
+def _junction(gap, angle_deg):
+    """Fin-like junction: a long longitudinal bar along z and a short, wide
+    transverse plate leaving its side at angle_deg to the bar (90 = the
+    straight-lattice orthogonal case), width axis shared along y."""
+    th = math.radians(angle_deg)
+    d_plate = np.array([math.sin(th), 0.0, math.cos(th)])
+    bar = (np.array([0.0, 0, -1e-3]), np.array([0.0, 0, 1e-3]), 0.3e-3, 0.2e-3, (0, 1, 0))
+    start = np.array([0.1e-3 + gap, 0.0, 0.0])
+    plate = (start, start + 0.8e-3 * d_plate, 0.6e-3, 0.15e-3, (0, 1, 0))
+    return [bar, plate]
+
+
+def test_junction_entries_are_order_independent_of_insertion_and_converge():
+    """Guards: for a skew transverse/longitudinal junction (80 degrees, the
+    curved-lattice case) the entry matches a plain 6-D Gauss integral at
+    near contact (10 um gap) within 3e-3, is bitwise independent of the
+    insertion order, and for touching and overlapping support it converges
+    with the quadrature order (orders 24 vs 32 within 1e-4) and stays PSD.
+    Assumes: a 12-point composite Gauss per axis resolves the 10 um gap."""
+    bars = _junction(10e-6, 80.0)
+    got = _matrix(bars, oriented_box_order=24)
+    swapped = _matrix(bars[::-1], oriented_box_order=24)
+    assert got[0, 1] == swapped[0, 1] and got[0, 0] == swapped[1, 1]
+
+    frames = []
+    for p0, p1, w, h, wd in bars:
+        d = (p1 - p0) / np.linalg.norm(p1 - p0)
+        ew = np.asarray(wd, float) - np.dot(wd, d) * d
+        ew /= np.linalg.norm(ew)
+        frames.append((0.5 * (p0 + p1), [d, ew, np.cross(d, ew)],
+                       (0.5 * np.linalg.norm(p1 - p0), w / 2, h / 2), d, w * h))
+    pa, wa = _gauss_box(frames[0][0], frames[0][1], frames[0][2], 6, 2)
+    pb, wb = _gauss_box(frames[1][0], frames[1][1], frames[1][2], 6, 2)
+    integral = 0.0
+    for chunk in range(0, len(pa), 512):
+        dist = np.linalg.norm(pa[chunk:chunk + 512, None] - pb[None], axis=2)
+        integral += float(wa[chunk:chunk + 512] @ (1 / dist) @ wb)
+    ref = MU0_4PI * float(frames[0][3] @ frames[1][3]) * integral / (frames[0][4] * frames[1][4])
+    assert abs(got[0, 1] - ref) <= 3e-3 * abs(ref), (got[0, 1], ref)
+
+    for gap in (0.0, -0.05e-3):
+        m24 = _matrix(_junction(gap, 80.0), oriented_box_order=24)
+        m32 = _matrix(_junction(gap, 80.0), oriented_box_order=32)
+        assert abs(m24[0, 1] - m32[0, 1]) <= 1e-4 * abs(m32[0, 1]), (gap, m24[0, 1], m32[0, 1])
+        assert np.linalg.eigvalsh(m24)[0] > 0, (gap, m24)

@@ -14,6 +14,7 @@
 #include <queue>
 #include <limits>
 #include <stdexcept>
+#include <array>
 
 #include "rad_parallel.h"
 
@@ -1117,13 +1118,32 @@ BoxFrame MakeBoxFrame(const PEECSegment& s) {
 
 double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
                                                 bool self) const {
-    const BoxFrame fi = MakeBoxFrame(seg_i), fj = MakeBoxFrame(seg_j);
+    BoxFrame fi = MakeBoxFrame(seg_i), fj = MakeBoxFrame(seg_j);
     const double dot = fi.e[0].x * fj.e[0].x + fi.e[0].y * fj.e[0].y + fi.e[0].z * fj.e[0].z;
     if (!self && dot == 0.0) return 0.0;  // exactly orthogonal currents: zero Galerkin entry
-    // Outer quadrature over the smaller box (deterministic for the pair).
-    const double vol_i = fi.half[0] * fi.half[1] * fi.half[2];
-    const double vol_j = fj.half[0] * fj.half[1] * fj.half[2];
-    const bool swap = vol_j < vol_i;
+    // The integral of 1/r depends on the box as a point set, not on the
+    // current sign: give each frame a canonical orientation so reversing a
+    // bar flips the entry's sign exactly and leaves its magnitude bitwise.
+    auto canonical = [](BoxFrame& f) {
+        const TVector3d& d = f.e[0];
+        const double lead = d.x != 0.0 ? d.x : (d.y != 0.0 ? d.y : d.z);
+        if (lead < 0.0) {
+            f.e[0] = TVector3d(-d.x, -d.y, -d.z);
+            f.e[2] = TVector3d(-f.e[2].x, -f.e[2].y, -f.e[2].z);
+        }
+    };
+    canonical(fi);
+    canonical(fj);
+    // Outer quadrature over the smaller box; ties broken by a canonical
+    // geometric key (volume, centre, half extents, frame), never by index,
+    // so the entry does not depend on insertion order.
+    auto key = [](const BoxFrame& f) {
+        return std::array<double, 16>{f.half[0] * f.half[1] * f.half[2], f.c.x, f.c.y, f.c.z,
+                                      f.half[0], f.half[1], f.half[2],
+                                      f.e[0].x, f.e[0].y, f.e[0].z, f.e[1].x, f.e[1].y, f.e[1].z,
+                                      f.e[2].x, f.e[2].y, f.e[2].z};
+    };
+    const bool swap = key(fj) < key(fi);
     const BoxFrame& fo = swap ? fj : fi;  // outer (quadrature)
     const BoxFrame& fn = swap ? fi : fj;  // inner (closed form)
     const double dx = fo.c.x - fn.c.x, dy = fo.c.y - fn.c.y, dz = fo.c.z - fn.c.z;
@@ -1131,9 +1151,11 @@ double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const 
     int n[3];
     for (int k = 0; k < 3; ++k) {
         const double ext = 2.0 * fo.half[k];
-        const int m = (self || !(dist > 0.0)) ? box_max_order_
-                                               : static_cast<int>(std::ceil(0.5 * box_max_order_ * ext / dist));
-        n[k] = std::max(1, std::min(box_max_order_, m));
+        // Clamp in floating point before narrowing: a tiny centre distance
+        // must not overflow the int conversion.
+        double m = static_cast<double>(box_max_order_);
+        if (!self && dist > 0.0) m = std::min(m, std::ceil(0.5 * box_max_order_ * ext / dist));
+        n[k] = std::max(1, static_cast<int>(m));
     }
     const std::vector<double>& x0 = box_gauss_x_[n[0] - 1];
     const std::vector<double>& w0 = box_gauss_w_[n[0] - 1];

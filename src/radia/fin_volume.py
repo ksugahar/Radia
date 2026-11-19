@@ -248,32 +248,68 @@ def build_volume_lattice(sweep, n_layers, *, exponent=2.0):
 def require_energy_admissible(L):
     """Fail loudly unless the inductance matrix is positive semidefinite.
 
-    A Cholesky factorisation that succeeds proves positive definiteness.
-    When it fails, the symmetric spectrum decides: eigenvalues within the
-    roundoff scale n * eps * lambda_max are null or roundoff modes
-    (admissible, counted); anything below is negative magnetic energy and
-    raises with the witness eigenvalue and its dominant branches.  No
-    diagonal loading or eigenvalue clipping.
+    The input must be a real, finite, non-empty, square and exactly
+    symmetric matrix.  A Cholesky factorisation that succeeds proves
+    positive definiteness.  When it fails, the symmetric spectrum decides:
+    eigenvalues within the roundoff scale n * eps * max|lambda| are null or
+    roundoff modes (admissible, counted); anything below is negative
+    magnetic energy and raises with the witness eigenvalue and its dominant
+    branches.  No diagonal loading or eigenvalue clipping.
     """
-    L = np.asarray(L, dtype=float)
+    L = np.asarray(L)
+    if L.ndim != 2 or L.shape[0] != L.shape[1] or L.shape[0] == 0:
+        raise ValueError(f"inductance matrix must be non-empty and square, got shape {L.shape}")
+    if not np.isrealobj(L) or not np.issubdtype(L.dtype, np.number):
+        raise ValueError(f"inductance matrix must be real, got dtype {L.dtype}")
+    L = L.astype(float, copy=False)
+    bad = ~np.isfinite(L)
+    if bad.any():
+        i, j = (int(k) for k in np.argwhere(bad)[0])
+        raise ValueError(f"inductance matrix has {int(bad.sum())} non-finite entries, "
+                         f"first at ({i}, {j}) = {L[i, j]}")
     asym = float(np.abs(L - L.T).max())
     if asym > 0.0:
         raise ValueError(f"inductance matrix is not symmetric (max |L - L^T| = {asym:.3e} H)")
+    n = len(L)
     try:
         np.linalg.cholesky(L)
-        return {"cholesky": True, "min_eig_over_max": None, "n_null": 0}
+        return {"cholesky": True, "n": n, "min_eig_over_max": None, "n_null": 0}
     except np.linalg.LinAlgError:
         pass
     ev, vec = np.linalg.eigh(L)
-    tol = len(L) * np.finfo(float).eps * ev[-1]
+    scale = float(max(abs(ev[0]), abs(ev[-1])))
+    tol = n * np.finfo(float).eps * scale
     if ev[0] < -tol:
         top = np.argsort(-np.abs(vec[:, 0]))[:6].tolist()
         raise ValueError(
             f"inductance matrix has negative energy: min eigenvalue {ev[0]:.6e} H "
-            f"({ev[0] / ev[-1]:.3e} of the largest; roundoff scale {tol:.3e} H), "
+            f"({ev[0] / scale:.3e} of the spectral scale; roundoff scale {tol:.3e} H), "
             f"{int(np.sum(ev < -tol))} negative modes; witness branches {top}")
-    return {"cholesky": False, "min_eig_over_max": float(ev[0] / ev[-1]),
+    return {"cholesky": False, "n": n,
+            "min_eig_over_max": float(ev[0] / scale) if scale > 0.0 else None,
             "n_null": int(np.sum(np.abs(ev) <= tol))}
+
+
+def energy_receipt(L, branches, current):
+    """Source-bound record of the admitted L and the solved current's energy.
+
+    Hashes bind the receipt to the exact matrix and incidence; the
+    magnetic energies of the real and imaginary parts of the peak phasor
+    (1/2 x^T L x each) are those of the actual fin current mode, and their
+    sum is the peak-phasor stored energy.
+    """
+    import hashlib
+
+    L = np.ascontiguousarray(np.asarray(L, dtype=float))
+    br = np.ascontiguousarray(np.asarray(branches, dtype=np.int64))
+    cur = np.asarray(current, dtype=complex)
+    e_re = 0.5 * float(cur.real @ L @ cur.real)
+    e_im = 0.5 * float(cur.imag @ L @ cur.imag)
+    return {"L_sha256": hashlib.sha256(L.tobytes()).hexdigest(),
+            "L_shape": list(L.shape),
+            "incidence_sha256": hashlib.sha256(br.tobytes()).hexdigest(),
+            "energy_real_part_J": e_re, "energy_imag_part_J": e_im}
+
 
 def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
@@ -339,6 +375,7 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     return {"sweep": sweep, "lattice": lat, "current": current,
             "R_ohm": r_total, "L_H": l_total, "coil_true_residual": residuals,
             "box_order": int(box_order), "inductance_energy": energy,
+            "energy_receipt": energy_receipt(topo["L"], lat.branches, current),
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
             "paths": paths, "I_fil": current}
