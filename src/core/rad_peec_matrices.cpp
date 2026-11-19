@@ -139,8 +139,8 @@ void PEECMatrixBuilder::EnableVolumeKernel(int order) {
 
 void PEECMatrixBuilder::EnableOrientedBoxKernel(int max_order) {
     if (!segments_.empty()) throw std::logic_error("Select the oriented-box kernel before adding geometry");
-    if (max_order < 0 || max_order > 16)
-        throw std::invalid_argument("oriented-box kernel order must be 0 (off) or 1..16");
+    if (max_order < 0 || max_order > 32)
+        throw std::invalid_argument("oriented-box kernel order must be 0 (off) or 1..32");
     if (max_order > 0 && volume_rule_)
         throw std::logic_error("the oriented-box kernel and the Cartesian volume kernel are exclusive");
     box_max_order_ = max_order;
@@ -1132,7 +1132,7 @@ double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const 
     for (int k = 0; k < 3; ++k) {
         const double ext = 2.0 * fo.half[k];
         const int m = (self || !(dist > 0.0)) ? box_max_order_
-                                               : static_cast<int>(std::ceil(4.0 * ext / dist));
+                                               : static_cast<int>(std::ceil(0.5 * box_max_order_ * ext / dist));
         n[k] = std::max(1, std::min(box_max_order_, m));
     }
     const std::vector<double>& x0 = box_gauss_x_[n[0] - 1];

@@ -237,8 +237,8 @@ public:
      *   L_ij = mu0/(4 pi) (d_i . d_j) / (A_i A_j) int_i int_j dV dV' / |r - r'|,
      * with the inner integral in closed form (potential of a uniform
      * rectangular prism) and the outer one by tensor Gauss-Legendre over the
-     * smaller box, at most ``max_order`` points per axis (the order per axis
-     * grows with box extent over centre distance).  L is the Gram matrix of
+     * smaller box: ceil(max_order/2 * extent / centre distance) points per
+     * axis, between 1 and ``max_order`` (1..32).  L is the Gram matrix of
      * the box currents under the positive-definite 1/r kernel for any
      * orientation and for touching or overlapping support.  0 (default)
      * keeps the original filament model.  Select before adding geometry.

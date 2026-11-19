@@ -1090,7 +1090,7 @@ Example:
         )doc")
         .def(py::init<int, int>(), py::arg("volume_order")=0, py::arg("oriented_box_order")=0,
              "volume_order: explicit volume order 8..256; zero selects the original filament model.  "
-             "oriented_box_order: opt-in 1..16 makes every entry, self included, the Galerkin integral of "
+             "oriented_box_order: opt-in 1..32 makes every entry, self included, the Galerkin integral of "
              "uniform currents over oriented rectangular boxes (closed-form prism potential, Gauss outer "
              "quadrature up to this order per axis); zero keeps the original filament model.")
         .def("set_last_width_dir", &PyPEECBuilder::set_last_width_dir, py::arg("x"), py::arg("y"), py::arg("z"),

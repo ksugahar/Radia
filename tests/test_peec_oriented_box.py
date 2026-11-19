@@ -144,7 +144,7 @@ def test_oriented_box_kernel_rejects_bad_input():
     Assumes: none."""
     from radia.peec_matrices import PEECBuilder
 
-    for order in (-1, 17):
+    for order in (-1, 33):
         with pytest.raises(Exception, match="order"):
             PEECBuilder(oriented_box_order=order)
     with pytest.raises(Exception, match="exclusive"):
