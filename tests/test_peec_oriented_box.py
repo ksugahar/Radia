@@ -234,3 +234,31 @@ def test_junction_entries_are_order_independent_of_insertion_and_converge():
         m32 = _matrix(_junction(gap, 80.0), oriented_box_order=32)
         assert abs(m24[0, 1] - m32[0, 1]) <= 1e-4 * abs(m32[0, 1]), (gap, m24[0, 1], m32[0, 1])
         assert np.linalg.eigvalsh(m24)[0] > 0, (gap, m24)
+
+
+def test_oblique_crossing_uses_the_composite_rule():
+    """Guards: when the outer box crosses the inner box surface obliquely (a
+    long fin bar under a wide transverse plate of the same layer, geometry of
+    a real fin pair, rounded) the entry matches an independent reference
+    within 2e-4 at order 24 (the single tensor rule was 3.5e-3 off), is
+    bitwise independent of insertion order and flips sign exactly under
+    current reversal.
+    Assumes: reference -2.6883734243e-10 H from a NumPy integral of the
+    closed-form sheet potential over the plate thickness, outer composite
+    Gauss 4 points x 16 sub-intervals per axis (4 -> 16: 4.5e-4, 8 -> 16:
+    1.9e-5)."""
+    mm = 1e-3
+    d_b = np.array([-0.8011, 0.5986, 0.0])
+    d_b /= np.linalg.norm(d_b)
+    w_b = np.array([-d_b[1], d_b[0], 0.0])
+    c_b = np.array([-1.53, -2.88, 0.0]) * mm
+    bar = (np.array([0.0, 4.037, 0]) * mm, np.array([0.0, -4.037, 0]) * mm, 1.206 * mm, 0.233 * mm, (1, 0, 0))
+    plate = (c_b - 0.6435 * mm * d_b, c_b + 0.6435 * mm * d_b, 7.812 * mm, 0.426 * mm, w_b)
+    ref = -2.6883734243e-10
+    got = _matrix([bar, plate], oriented_box_order=24)
+    assert abs(got[0, 1] / ref - 1) <= 2e-4, (got[0, 1], ref)
+    swapped = _matrix([plate, bar], oriented_box_order=24)
+    assert swapped[0, 1] == got[0, 1] and swapped[0, 0] == got[1, 1]
+    reversed_plate = (plate[1], plate[0], *plate[2:])
+    flipped = _matrix([bar, reversed_plate], oriented_box_order=24)
+    assert flipped[0, 1] == -got[0, 1] and flipped[1, 1] == got[1, 1]
