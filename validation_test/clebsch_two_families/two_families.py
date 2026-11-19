@@ -33,7 +33,6 @@ import time
 
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.interpolate import CubicSpline
 
 import ngsolve as ngs
 from ngsolve.meshes import MakeStructured3DMesh
@@ -400,7 +399,10 @@ def track(field, X0, z_st, hmax, check_faces=True):
 def track_reference(field, X0, z_st, rtol):
     def rhs(zz, s):
         p = s.reshape(-1, 2)
-        return field.slope(p, np.full(len(p), zz)).ravel()
+        zz_ = np.full(len(p), zz)
+        cells = [np.clip(np.searchsorted(f, v, side="right") - 1, 0, len(f) - 2)
+                 for f, v in ((field.fx, p[:, 0]), (field.fy, p[:, 1]), (field.fz, zz_))]
+        return field.slope(p, zz_, cells).ravel()
     sol = solve_ivp(rhs, (z_st[0], z_st[-1]), X0.ravel(), method="DOP853", rtol=rtol, atol=rtol * 0.1, t_eval=z_st)
     if not sol.success:
         raise RuntimeError("reference trace failed: " + sol.message)
@@ -417,19 +419,37 @@ def loop_points(x0, y0, x1, y1, m):
     return e
 
 
-def loop_flux(mesh, a_cf, edges, zc):
-    """Signed flux = closed line integral of A_h along per-edge splines."""
-    g, w = np.polynomial.legendre.leggauss(8)
-    tot = 0.0
-    for e in edges:
-        t = np.arange(len(e), dtype=float)
-        sp = CubicSpline(t, e, bc_type="not-a-knot")
-        tq = np.concatenate([k + 0.5 + 0.5 * g for k in range(len(e) - 1)])
-        wq = np.tile(0.5 * w, len(e) - 1)
-        p, dp = sp(tq), sp(tq, 1)
-        av = np.asarray(a_cf(mesh(p[:, 0], p[:, 1], np.full(len(tq), zc))))
-        tot += float(np.sum(wq * (av[:, 0] * dp[:, 0] + av[:, 1] * dp[:, 1])))
-    return tot
+def loop_flux(afield, edges, zc):
+    """Signed flux through the closed polygon through the transported points:
+    Stokes, closed line integral of A_h along straight chords, each chord split
+    at every element face and integrated cell-locally (A_h.dl jumps where a
+    chord crosses a face obliquely). Exact for the polygon up to quadrature;
+    the polygon approximates the transported curve to O(spacing^2) away from
+    kinks of the piecewise-smooth flow map."""
+    poly = np.vstack([e[:-1] for e in edges])
+    q0, q1 = poly, np.roll(poly, -1, axis=0)
+    g, w = np.polynomial.legendre.leggauss(6)
+    g, w = 0.5 * (g + 1), 0.5 * w
+    P, D, W = [], [], []
+    for a_, b_ in zip(q0, q1):
+        cuts = [0.0, 1.0]
+        for c, f in ((0, afield.fx), (1, afield.fy)):
+            if b_[c] != a_[c]:
+                tt = (f - a_[c]) / (b_[c] - a_[c])
+                cuts += list(tt[(tt > 0) & (tt < 1)])
+        cuts = np.unique(cuts)
+        for t0, t1 in zip(cuts[:-1], cuts[1:]):
+            tq = t0 + (t1 - t0) * g
+            P.append(a_[None, :] + tq[:, None] * (b_ - a_)[None, :])
+            D.append(np.repeat((b_ - a_)[None, :], len(g), 0))
+            W.append((t1 - t0) * w)
+    P, D, W = np.vstack(P), np.vstack(D), np.concatenate(W)
+    mid = P  # Gauss points are interior to each piece, so floor gives its cell
+    zz = np.full(len(P), zc)
+    cells = [np.clip(np.searchsorted(f, v, side="right") - 1, 0, len(f) - 2)
+             for f, v in ((afield.fx, mid[:, 0]), (afield.fy, mid[:, 1]), (afield.fz, zz))]
+    av = afield.local(P, zz, *cells)
+    return float(np.sum(W * (av[:, 0] * D[:, 0] + av[:, 1] * D[:, 1])))
 
 
 # ---------------------------------------------------------- reconstruction
@@ -495,6 +515,7 @@ def run_config(n, order, args, rng):
     fx = np.linspace(-HALF, HALF, n + 1)
     fz = np.linspace(0, ZEND, nz + 1)
     field = Field(mesh, bh, fx, fx, fz)
+    afield = Field(mesh, gfa, fx, fx, fz)
     bfun_h = lambda S: field(S[:, 0], S[:, 1], S[:, 2])
 
     # (2) tracking vs independent reference on identical seeds
@@ -519,7 +540,8 @@ def run_config(n, order, args, rng):
     # (2b) transported patch flux: Stokes loop integral of A_h, inlet vs outlet vs exact
     t0 = time.perf_counter()
     pf = {}
-    patches = [(x0, y0) for x0 in np.arange(-1, 1, 0.5) for y0 in np.arange(-1, 1, 0.5)]
+    po = args.seed_offset
+    patches = [(x0 + po, y0 + po) for x0 in np.arange(-1, 1, 0.5) for y0 in np.arange(-1, 1, 0.5)]
     for m in args.loop_m:
         edges_all, counts = [], []
         for x0, y0 in patches:
@@ -538,7 +560,7 @@ def run_config(n, order, args, rng):
                 for s_ in sizes:
                     ee.append(P[si][o:o + s_])
                     o += s_
-                r[zc] = loop_flux(mesh, gfa, ee, zc)
+                r[zc] = loop_flux(afield, ee, zc)
             off += sum(sizes)
             rows.append(r)
         fin = np.array([r[0.0] for r in rows])
@@ -556,9 +578,11 @@ def run_config(n, order, args, rng):
     t0 = time.perf_counter()
     fams = []
     for fam in (0, 1):
-        for label0 in SURF_LABELS:
+        for label0 in [l + args.seed_offset for l in SURF_LABELS]:
             for ns in args.ns_list:
                 tseed, X0 = seeds_family(fam, label0, ns)
+                tseed = tseed + args.seed_offset
+                X0[:, 1 - fam] += args.seed_offset
                 for mz in args.mz_list:
                     z_st_s = np.linspace(0, ZEND, nz * mz + 1)
                     # oracle-sampled surface, exact B: pure reconstruction error
@@ -592,6 +616,8 @@ def main():
     ap.add_argument("--ns-list", type=int, nargs="+", default=[9, 17, 33])
     ap.add_argument("--mz-list", type=int, nargs="+", default=[2, 4])
     ap.add_argument("--q-list", type=int, nargs="+", default=[3, 6])
+    ap.add_argument("--seed-offset", type=float, default=0.0,
+                    help="shift patch partition and surface labels; 0 puts patch edges and u=0 seeds on element faces")
     args = ap.parse_args()
     ngs.SetNumThreads(args.threads)
     rng = np.random.default_rng(20261120)
