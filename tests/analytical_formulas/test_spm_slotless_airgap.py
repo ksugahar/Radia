@@ -38,7 +38,8 @@ def test_matches_independent_fem():
     p, Br, mur, Rr, Rm, Rs, ap = 2, 1.2, 1.05, 0.025, 0.03, 0.032, 0.8
     r = 0.5 * (Rm + Rs); th = np.linspace(0, np.pi / p, 41)[1:-1]
     br, bt = slotless_spm_airgap_field(r, th, p, Br, mur, Rr, Rm, Rs, ap)
-    fr, ft = _fem_gap_field(p, Br, mur, Rr, Rm, Rs, ap, r, th)
+    with ngsolve.TaskManager():          # caller-owned parallel region; the helper stays region-free
+        fr, ft = _fem_gap_field(p, Br, mur, Rr, Rm, Rs, ap, r, th)
     sc = np.abs(br).max()
     err_r, err_t = np.abs(fr - br).max() / sc, np.abs(ft - bt).max() / sc
     assert err_r < 5e-3 and err_t < 5e-3, f"B_r err {err_r:.2e}, B_theta err {err_t:.2e} (of max|B_r| {sc:.4f} T)"
@@ -56,5 +57,7 @@ def test_iron_boundary_and_symmetry():
 def test_rejects_unsupported_input():
     with pytest.raises(ValueError, match="pole_pairs"):
         slotless_spm_airgap_field(0.031, [0.0], 1, 1.2, 1.05, 0.025, 0.03, 0.032, 0.8)
+    with pytest.raises(ValueError, match="integer"):
+        slotless_spm_airgap_field(0.031, [0.0], 2.9, 1.2, 1.05, 0.025, 0.03, 0.032, 0.8)
     with pytest.raises(ValueError, match="outside the air gap"):
         slotless_spm_airgap_field(0.028, [0.0], 2, 1.2, 1.05, 0.025, 0.03, 0.032, 0.8)

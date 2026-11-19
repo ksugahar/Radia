@@ -34,3 +34,6 @@ def test_invalid_inputs_are_reported():
     assert _gate([0.0] * 3, [0.0] * 19)["status"] == "invalid_input"
     assert _gate([0.0] * 19, [0.0] * 19, pole_pairs=1)["status"] == "invalid_input"
     assert _gate([0.0] * 19, [0.0] * 19, radius_m=0.02)["status"] == "invalid_input"
+    assert _gate([0.0] * 19, [0.0] * 19, pole_pairs=2.9)["status"] == "invalid_input"
+    for tol in (float("inf"), float("nan"), 0.0):
+        assert _gate([5.0] * 19, [5.0] * 19, maximum_relative_difference=tol)["status"] == "invalid_input", tol

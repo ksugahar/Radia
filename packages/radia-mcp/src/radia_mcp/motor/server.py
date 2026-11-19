@@ -1483,8 +1483,8 @@ def motor_slotless_spm_airgap_field_gate(
             raise ValueError("theta_rad, computed_b_r_t and computed_b_theta_t need the same non-zero length")
         if not (np.all(np.isfinite(br)) and np.all(np.isfinite(bt))):
             raise ValueError("computed field must be finite")
-        if not maximum_relative_difference > 0:
-            raise ValueError("maximum_relative_difference must be positive")
+        if not (np.isfinite(maximum_relative_difference) and maximum_relative_difference > 0):
+            raise ValueError("maximum_relative_difference must be finite and positive")
         rr, rt = slotless_spm_airgap_field(radius_m, th, pole_pairs, remanence_t, recoil_permeability,
                                            rotor_radius_m, magnet_radius_m, stator_radius_m,
                                            pole_arc_fraction)

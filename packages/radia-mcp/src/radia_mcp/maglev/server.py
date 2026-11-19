@@ -212,8 +212,8 @@ def maglev_cuboid_magnet_force_gate(
         got = np.asarray(computed_force_n, float)
         if got.shape != (3,) or not np.all(np.isfinite(got)):
             raise ValueError("computed_force_n must be three finite numbers")
-        if not maximum_relative_difference > 0:
-            raise ValueError("maximum_relative_difference must be positive")
+        if not (np.isfinite(maximum_relative_difference) and maximum_relative_difference > 0):
+            raise ValueError("maximum_relative_difference must be finite and positive")
         scale = float(np.linalg.norm(ref))
         if scale == 0.0:
             raise ValueError("reference force is zero; a relative comparison is undefined")

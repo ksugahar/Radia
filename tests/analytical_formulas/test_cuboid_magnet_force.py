@@ -37,6 +37,7 @@ CASES = [
     (1.3, (0.01, 0.01, 0.01), 1.3, (0.01, 0.01, 0.01), (0.0, 0.0, 0.0125)),
     (1.1, (0.01, 0.01, 0.01), 1.1, (0.01, 0.01, 0.01), (0.012, 0.0, -0.003)),   # side by side, below
     (1.0, (0.008, 0.012, 0.006), 1.0, (0.004, 0.004, 0.004), (0.003, -0.004, -0.009)),
+    (1.0, (0.01, 0.01, 0.01), 1.0, (0.01, 0.01, 0.01), (0.02, 0.03, 0.09)),   # near the accepted far edge
 ]
 
 
@@ -50,15 +51,26 @@ def test_matches_independent_charge_quadrature(J1, s1, J2, s2, d):
 
 def test_far_field_dipole_limit_and_newton_third_law():
     s1, s2 = (0.01, 0.01, 0.01), (0.01, 0.02, 0.005)
-    dz = 0.5
+    dz = 0.1
     m1 = 1.0 / MU0 * np.prod(s1); m2 = 1.0 / MU0 * np.prod(s2)
     got = cuboid_magnet_force(1.0, s1, 1.0, s2, (0.0, 0.0, dz))[2]
     ref = -3 * MU0 * m1 * m2 / (2 * math.pi * dz ** 4)
-    assert abs(got / ref - 1) < 2e-3, f"F_z {got} vs dipole {ref}"
+    assert abs(got / ref - 1) < 3e-2, f"F_z {got} vs dipole {ref}"  # finite-size term ~2 % at d = 10 s
     d = (0.004, 0.003, 0.012)
     f12 = cuboid_magnet_force(1.0, s1, 1.0, s2, d)
     f21 = cuboid_magnet_force(1.0, s2, 1.0, s1, tuple(-x for x in d))
     assert np.allclose(f12, -f21, rtol=1e-10, atol=0), f"{f12} vs -{f21}"
+
+
+def test_far_separation_is_rejected_not_sign_flipped():
+    # Two 10 mm cubes 10 m apart: the corner sum cancels completely in double precision.
+    # The result must never be returned with the wrong sign; the formula refuses instead.
+    with pytest.raises(ValueError, match="separation too large"):
+        cuboid_magnet_force(1.0, (0.01,) * 3, 1.0, (0.01,) * 3, (0.0, 0.0, 10.0))
+    for dz in (0.03, 0.05, 0.1):
+        f = cuboid_magnet_force(1.0, (0.01,) * 3, 1.0, (0.01,) * 3, (0.0, 0.0, dz))[2]
+        m = 1e-6 / MU0
+        assert f < 0 and abs(f / (-3 * MU0 * m * m / (2 * math.pi * dz ** 4)) - 1) < 2e-2, (dz, f)
 
 
 def test_rejects_overlap_and_bad_sizes():

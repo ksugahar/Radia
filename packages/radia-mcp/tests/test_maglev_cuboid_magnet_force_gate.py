@@ -37,3 +37,6 @@ def test_wrong_force_needs_attention_and_bad_input_is_invalid():
     assert _gate(ref.tolist())["relative_difference"] == 0.0
     assert _gate(ref.tolist(), d=[0.002, 0.0, 0.0])["status"] == "invalid_input"
     assert _gate([1.0, float("nan"), 0.0])["status"] == "invalid_input"
+    for tol in (float("inf"), float("nan"), 0.0, -1.0):
+        assert _gate((ref * 40).tolist(), tol=tol)["status"] == "invalid_input", tol
+    assert _gate(ref.tolist(), d=[0.0, 0.0, 10.0])["status"] == "invalid_input"

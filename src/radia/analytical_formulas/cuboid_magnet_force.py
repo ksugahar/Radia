@@ -31,12 +31,19 @@ import numpy as np
 
 MU0 = 4.0e-7 * math.pi
 
-__all__ = ["cuboid_magnet_force"]
+MAX_REL_ROUNDING = 1.0e-6
+
+__all__ = ["cuboid_magnet_force", "MAX_REL_ROUNDING"]
 
 
 def _xlog(coef: float, arg: float) -> float:
     # c ln(x) with the limit c ln(x) -> 0 where the coefficient vanishes on an edge.
     return 0.0 if coef == 0.0 else coef * math.log(arg)
+
+
+def _r_minus(r: float, a: float, b2: float) -> float:
+    """r - a without cancellation: equals b2 / (r + a) when a > 0 (b2 = r^2 - a^2)."""
+    return b2 / (r + a) if a > 0.0 else r - a
 
 
 def cuboid_magnet_force(polarization_1_t: float, size_1_m, polarization_2_t: float,
@@ -49,7 +56,9 @@ def cuboid_magnet_force(polarization_1_t: float, size_1_m, polarization_2_t: flo
         center_offset_m: centre of magnet 2 minus centre of magnet 1, metres.
 
     Raises:
-        ValueError: non-positive sizes, non-finite input or overlapping volumes.
+        ValueError: non-positive sizes, non-finite input, overlapping volumes, or a
+            separation so large that double-precision cancellation in the corner
+            sum could exceed MAX_REL_ROUNDING of |F| (a-posteriori bound).
     """
     s1 = np.asarray(size_1_m, float); s2 = np.asarray(size_2_m, float)
     d = np.asarray(center_offset_m, float)
@@ -65,7 +74,7 @@ def cuboid_magnet_force(polarization_1_t: float, size_1_m, polarization_2_t: flo
     a, b, c = 0.5 * s1
     A, B, C = 0.5 * s2
     al, be, ga = d
-    F = np.zeros(3)
+    terms = ([], [], [])
     for i in (0, 1):
         for j in (0, 1):
             u = al + (-1) ** j * A - (-1) ** i * a
@@ -78,10 +87,22 @@ def cuboid_magnet_force(polarization_1_t: float, size_1_m, polarization_2_t: flo
                             r = math.sqrt(u * u + v * v + w * w)
                             sgn = (-1) ** (i + j + k + l + p + q)
                             at = math.atan(u * v / (r * w)) if w != 0.0 else 0.0
-                            fx = (_xlog(0.5 * (v * v - w * w), r - u) + _xlog(u * v, r - v)
+                            ru = _r_minus(r, u, v * v + w * w)
+                            rv = _r_minus(r, v, u * u + w * w)
+                            fx = (_xlog(0.5 * (v * v - w * w), ru) + _xlog(u * v, rv)
                                   + v * w * at + 0.5 * r * u)
-                            fy = (_xlog(0.5 * (u * u - w * w), r - v) + _xlog(u * v, r - u)
+                            fy = (_xlog(0.5 * (u * u - w * w), rv) + _xlog(u * v, ru)
                                   + u * w * at + 0.5 * r * v)
-                            fz = -_xlog(u * w, r - u) - _xlog(v * w, r - v) + u * v * at - r * w
-                            F += sgn * np.array([fx, fy, fz])
+                            fz = -_xlog(u * w, ru) - _xlog(v * w, rv) + u * v * at - r * w
+                            terms[0].append(sgn * fx); terms[1].append(sgn * fy); terms[2].append(sgn * fz)
+    F = np.array([math.fsum(t) for t in terms])
+    # The alternating corner sum cancels as the separation grows (terms ~ d^2,
+    # result ~ d^-4).  Bound the rounding error from the largest term and refuse
+    # results whose bound exceeds MAX_REL_ROUNDING of |F| (use a dipole model there).
+    bound = 64.0 * 8.0 * np.finfo(float).eps * max(abs(x) for t in terms for x in t)
+    norm = float(np.linalg.norm(F))
+    if not bound <= MAX_REL_ROUNDING * norm:
+        raise ValueError(f"separation too large for the closed form in double precision "
+                         f"(rounding bound {bound / max(norm, 1e-300):.1e} of |F| > {MAX_REL_ROUNDING:.0e}); "
+                         f"use the far-field dipole force instead")
     return polarization_1_t * polarization_2_t / (4.0 * math.pi * MU0) * F

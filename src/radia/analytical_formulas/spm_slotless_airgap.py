@@ -41,10 +41,15 @@ def slotless_spm_airgap_field(r_m, theta_rad, pole_pairs: int, remanence_t: floa
     Raises:
         ValueError: p < 2 (the k = 1 term needs a separate limit and is not
             implemented), radii out of order, r outside the air gap,
-            pole_arc_fraction outside (0, 1], non-positive mu_r, or even/negative
-            max_harmonic.
+            pole_arc_fraction outside (0, 1], non-positive mu_r, non-integral
+            pole_pairs or max_harmonic, or even/negative max_harmonic.
     """
+    if isinstance(pole_pairs, bool) or not float(pole_pairs).is_integer():
+        raise ValueError(f"pole_pairs must be an integer, got {pole_pairs!r}")
+    if isinstance(max_harmonic, bool) or not float(max_harmonic).is_integer():
+        raise ValueError(f"max_harmonic must be an integer, got {max_harmonic!r}")
     p = int(pole_pairs)
+    max_harmonic = int(max_harmonic)
     Rr, Rm, Rs, ap, mur = (float(rotor_radius_m), float(magnet_radius_m),
                            float(stator_radius_m), float(pole_arc_fraction),
                            float(recoil_permeability))
