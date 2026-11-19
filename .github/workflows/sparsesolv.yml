@@ -720,7 +720,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
         shell: pwsh
         run: |
-          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
+          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.6.0
           exit $LASTEXITCODE
 
       # Patched Netgen runtime (6.2.2608 + pyramid apex clamp + base-edge blend):
