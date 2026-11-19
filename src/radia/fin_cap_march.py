@@ -530,6 +530,37 @@ def section_frames(points, tangents):
     return u, np.cross(t, u)
 
 
+STATION_AREA_TOL = 0.25
+
+
+def _station_section(solid_w, p, t, band, caps, index):
+    """The station section through ``p``, consistent with the dense march.
+
+    Its area must lie in ``band`` (the neighbouring march sections widened
+    by STATION_AREA_TOL) and its centroid within sqrt(area) of ``p``.  A
+    plane through CAD edges can make OCC return one merged face (2026-11-19:
+    a 139 mm^2 face across a ring of 24.6 mm^2 sections); such a cut is
+    retried with tilts up to 1e-3 rad, then raises.
+    """
+    u, v = _frame(t)
+    seen = []
+    for tilt in (0.0, 1e-4, -1e-4, 1e-3, -1e-3):
+        for axis in ((u,) if tilt == 0.0 else (u, v)):
+            n = t + tilt * axis
+            n = n / np.linalg.norm(n)
+            comp = _containing(section_components(solid_w, p, n), p, caps)
+            if comp is None:
+                seen.append(None)
+                continue
+            seen.append(round(float(comp[2]), 9))
+            if (band[0] <= comp[2] <= band[1]
+                    and np.linalg.norm(comp[1] - p) <= math.sqrt(band[1])):
+                return comp, n
+    raise MarchError(
+        f"station {index}: no section through {np.round(p, 6).tolist()} matches the "
+        f"march (area band {band[0]:.6g}..{band[1]:.6g}; got {seen})")
+
+
 def station_sections(solid_w, line: Centerline, n_stations):
     """Equal-arc-length stations: list of (face, centroid, tangent, area)."""
     if n_stations < 3:
@@ -543,12 +574,10 @@ def station_sections(solid_w, line: Centerline, n_stations):
         p = (1 - w) * line.points[k] + w * line.points[k + 1]
         t = (1 - w) * line.tangents[k] + w * line.tangents[k + 1]
         t /= np.linalg.norm(t)
-        comp = _containing(section_components(solid_w, p, t), p,
-                           (line.cap_a, line.cap_b))
-        if comp is None:
-            raise MarchError(f"station {i}: no unique section contains the centreline "
-                             f"point {np.round(p, 6).tolist()}")
-        out.append((comp[0], comp[1], t, comp[2]))
+        band = (min(line.areas[k], line.areas[k + 1]) / (1 + STATION_AREA_TOL),
+                max(line.areas[k], line.areas[k + 1]) * (1 + STATION_AREA_TOL))
+        comp, n = _station_section(solid_w, p, t, band, (line.cap_a, line.cap_b), i)
+        out.append((comp[0], comp[1], n, comp[2]))
     out.append((line.cap_b.face, line.cap_b.centroid, -line.cap_b.inward, line.cap_b.area))
     return out
 
