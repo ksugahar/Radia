@@ -384,6 +384,7 @@ def _solve_coil_fin_surface(args):
         "fin_sweep": meta,
         "fin_metrics": sol["stations"],
         "fin_n_branches": sol["n_branches"],
+        "coil_true_residual": sol["coil_true_residual"],
     }
 
 
@@ -1811,6 +1812,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_basis_order": int(basis_order),
         "wp_vol_curve_order": int(vol_curve_order),
         "wp_gmres_info": int(info),
+        "wp_linear_residual_rel": res_bem.get("linear_residual_rel"),
+        "wp_linear_residual_limit": res_bem.get("linear_residual_limit"),
         "Z_s_wp_real": Z_s_real_out,
         "Z_s_wp_imag": Z_s_imag_out,
         "skin_depth_wp_mm": None if panel_zs_file else float(delta_wp * 1e3),
@@ -1932,6 +1935,7 @@ def _assemble_vacuum_output(args, coil_data):
         out["fin_n_branches"] = int(coil_data["fin_n_branches"])
         out["fin_sweep"] = coil_data["fin_sweep"]
         out["fin_metrics"] = coil_data["fin_metrics"]
+        out["coil_true_residual"] = coil_data["coil_true_residual"]
     else:
         out["coil_mesh_nv"] = int(coil_data["coil_mesh_nv"])
         out["coil_mesh_n_tris"] = int(coil_data["coil_mesh_n_tris"])
@@ -2014,6 +2018,8 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["wp_basis_order"] = int(wp_data.get("wp_basis_order", 1))
     out["wp_vol_curve_order"] = int(wp_data.get("wp_vol_curve_order", 1))
     out["wp_gmres_info"] = wp_data["wp_gmres_info"]
+    out["wp_linear_residual_rel"] = wp_data["wp_linear_residual_rel"]
+    out["wp_linear_residual_limit"] = wp_data["wp_linear_residual_limit"]
     out["Z_s_wp_real"] = wp_data["Z_s_wp_real"]
     out["Z_s_wp_imag"] = wp_data["Z_s_wp_imag"]
     out["skin_depth_wp_mm"] = wp_data["skin_depth_wp_mm"]
