@@ -69,6 +69,13 @@ PACKS = {
             "education": ("acoustic_fembem",),
         },
     },
+    "radia-mcp-postprocess": {
+        "subpackage": "radia_mcp.radia_postprocess",
+        "description": "Post-processing: Blender 3-D model animation (Gmsh inspection and sections stay in gmsh-mcp)",
+        "profiles": {
+            "blender": ("blender",),
+        },
+    },
     "radia-mcp-rna": {
         "subpackage": "radia_mcp.radia_rna",
         "description": "Reluctance network analysis / magnetic equivalent circuits and hysteresis modeling",

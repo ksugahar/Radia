@@ -46,8 +46,16 @@ CATALOG: dict[str, dict[str, Any]] = {
                           "gmsh_render",
                           "gmsh_write_post_launch_artifact",
                           "gmsh_usage", "gmsh_reference"],
-        "related": ["build123d-mcp", "cubit", "radia-ngsolve"],
+        "related": ["blender-mcp", "build123d-mcp", "cubit", "radia-ngsolve"],
         "audit_command": "radia-mcp serve gmsh-mcp --selftest --audit-repo",
+        "tags": ["mesh"],
+    },
+    "blender-mcp": {
+        "subpackage": "radia_mcp.blender",
+        "description": "Solver-faithful 3-D model animation through an optional "
+                       "headless Blender worker (write + separate reopen check)",
+        "primary_tools": ["blender_field_animation", "blender_usage"],
+        "related": ["gmsh-mcp"],
         "tags": ["mesh"],
     },
     # ============================================================
