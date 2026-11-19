@@ -2949,7 +2949,7 @@ def build_argparser():
                         help="fin-surface: cells requested on each tip arc "
                              "(default: measured)")
     parser.add_argument("--fin-route", choices=("auto", "straight_prism",
-                                                "section_planes"),
+                                                "cap_march"),
                         default="auto",
                         help="fin-surface: STEP sectioning route")
 
