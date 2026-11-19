@@ -19,7 +19,6 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
-from .field_animation import BlenderWorkerError, field_animation, resolve_worker
 from .knowledge import GUIDE
 
 mcp = FastMCP("blender-mcp")
@@ -47,6 +46,10 @@ def blender_field_animation(dataset_path: str, out_dir: str, spec_json: str = "{
     the reopened .blend did not reproduce the dataset.  Rendering quality is
     not numerical validation.
     """
+    # Imported on use: the module needs numpy (optional), and tool discovery must
+    # work under the minimum SDK without optional numeric dependencies.
+    from .field_animation import BlenderWorkerError, field_animation
+
     try:
         spec = json.loads(spec_json or "{}")
         if not isinstance(spec, dict):
@@ -77,6 +80,7 @@ def main():
     if "--selftest" in sys.argv:
         print("blender MCP server self-test:")
         print(f"  guide: {len(GUIDE)} chars")
+        from .field_animation import BlenderWorkerError, resolve_worker
         try:
             py, worker, version = resolve_worker()
             print(f"  worker: {worker} (bpy {version})")
