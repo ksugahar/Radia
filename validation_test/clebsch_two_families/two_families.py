@@ -21,7 +21,7 @@ Three error sources are measured separately:
       tracked curves (on the curves the integrand vanishes by construction).
       Oracle-sampled surfaces with the exact B isolate pure reconstruction.
 
-Usage: python two_families.py --out result.json [--configs 4:2,8:3] [--threads 6]
+Usage: python two_families.py --out result.json [--configs 4:2,8:3,2x1x1:6] [--threads 6]
 """
 import argparse
 import hashlib
@@ -82,8 +82,8 @@ def exact_cf():
 
 
 # --------------------------------------------------------------- projection
-def build_mesh(n, nz):
-    m = MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=nz,
+def build_mesh(nx, ny, nz):
+    m = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz,
                              mapping=lambda X, Y, Z: (-HALF + 2 * HALF * X, -HALF + 2 * HALF * Y, ZEND * Z))
     return m if isinstance(m, ngs.Mesh) else ngs.Mesh(m)
 
@@ -148,17 +148,18 @@ def heldout(mesh, bh, rng):
             "direction_max_rad": float(np.max(np.arccos(cosang))), "direction_rms_rad": float(np.sqrt(np.mean(np.arccos(cosang) ** 2)))}
 
 
-def cut_flux(mesh, bh, n, zc):
-    # flux of B_h,z through [-1, 1]^2 at z = zc, Gauss per element-aligned interval
-    edges = np.linspace(-HALF, HALF, n + 1)
-    edges = edges[(edges >= -1 - 1e-12) & (edges <= 1 + 1e-12)]
-    if abs(edges[0] + 1) > 1e-12 or abs(edges[-1] - 1) > 1e-12:
-        raise ValueError("cut square not aligned with the element grid")
+def cut_flux(mesh, bh, fx, fy, zc):
+    # flux of B_h,z through [-1, 1]^2 at z = zc, Gauss per interval split at element faces
     g, w = np.polynomial.legendre.leggauss(12)
-    xs = np.concatenate([0.5 * (a + b) + 0.5 * (b - a) * g for a, b in zip(edges[:-1], edges[1:])])
-    ws = np.concatenate([0.5 * (b - a) * w for a, b in zip(edges[:-1], edges[1:])])
-    X, Y = np.meshgrid(xs, xs, indexing="ij")
-    W = np.outer(ws, ws)
+
+    def rule(f):
+        edges = np.unique(np.concatenate([[-1.0, 1.0], f[(f > -1) & (f < 1)]]))
+        return (np.concatenate([0.5 * (a + b) + 0.5 * (b - a) * g for a, b in zip(edges[:-1], edges[1:])]),
+                np.concatenate([0.5 * (b - a) * w for a, b in zip(edges[:-1], edges[1:])]))
+    xs, wx = rule(fx)
+    ys, wy = rule(fy)
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    W = np.outer(wx, wy)
     bz = np.asarray(bh(mesh(X.ravel(), Y.ravel(), np.full(X.size, zc))))[:, 2]
     flux = float(np.sum(W.ravel() * bz))
     return {"z": zc, "flux_h": flux, "flux_exact": 4.0, "rel_err": abs(flux / 4.0 - 1)}
@@ -505,17 +506,18 @@ def seeds_family(fam, label0, ns):
 
 
 # -------------------------------------------------------------------- main
-def run_config(n, order, args, rng):
-    nz = n
-    mesh = build_mesh(n, nz)
+def run_config(nx, ny, nz, order, args, rng):
+    mesh = build_mesh(nx, ny, nz)
     gfa, bh, pdiag = project(mesh, order, args.eps)
-    out = {"n_xy": n, "n_z": nz, "order": order, "h_xy": 2 * HALF / n, "h_z": ZEND / nz, "projection": pdiag,
-           "heldout": heldout(mesh, bh, rng),
-           "cuts": [cut_flux(mesh, bh, n, zc) for zc in (0.37 * ZEND, 0.61 * ZEND, 0.93 * ZEND)]}
-    fx = np.linspace(-HALF, HALF, n + 1)
+    fx = np.linspace(-HALF, HALF, nx + 1)
+    fy = np.linspace(-HALF, HALF, ny + 1)
     fz = np.linspace(0, ZEND, nz + 1)
-    field = Field(mesh, bh, fx, fx, fz)
-    afield = Field(mesh, gfa, fx, fx, fz)
+    out = {"n_xy": nx if nx == ny else None, "n_x": nx, "n_y": ny, "n_z": nz, "order": order,
+           "h_x": 2 * HALF / nx, "h_y": 2 * HALF / ny, "h_z": ZEND / nz, "projection": pdiag,
+           "heldout": heldout(mesh, bh, rng),
+           "cuts": [cut_flux(mesh, bh, fx, fy, zc) for zc in (0.37 * ZEND, 0.61 * ZEND, 0.93 * ZEND)]}
+    field = Field(mesh, bh, fx, fy, fz)
+    afield = Field(mesh, gfa, fx, fy, fz)
     bfun_h = lambda S: field(S[:, 0], S[:, 1], S[:, 2])
 
     # (2) tracking vs independent reference on identical seeds
@@ -630,12 +632,18 @@ def main():
     t0 = time.perf_counter()
     with ngs.TaskManager():
         for c in args.configs.split(","):
-            n, k = map(int, c.split(":"))
+            sz, k = c.split(":")
+            dims = [int(d) for d in sz.split("x")]
+            if len(dims) == 1:
+                dims = dims * 3
+            if len(dims) != 3:
+                raise ValueError("config %r: use n:k or NXxNYxNZ:k" % c)
+            k = int(k)
             tc = time.perf_counter()
-            r = run_config(n, k, args, rng)
+            r = run_config(*dims, k, args, rng)
             r["t_total_s"] = time.perf_counter() - tc
             res["configs"].append(r)
-            print("config n=%d k=%d done in %.1f s" % (n, k, r["t_total_s"]), flush=True)
+            print("config %s k=%d done in %.1f s" % (sz, k, r["t_total_s"]), flush=True)
             with open(args.out, "w") as fh:
                 json.dump(res, fh, indent=1, default=float)
     res["t_total_s"] = time.perf_counter() - t0

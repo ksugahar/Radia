@@ -23,7 +23,9 @@ It reports three error sources separately:
    refinement, with signed and absolute normal flux and oracle surface distance;
    oracle-sampled surfaces with the exact B isolate pure reconstruction error.
 
-Run: `python two_families.py --out result.json --configs 4:2,8:3`.
+Run: `python two_families.py --out result.json --configs 4:2,8:3` (a config is
+`n:k` or `NXxNYxNZ:k`, e.g. `1x1x1:6,2x1x1:6` for one hex and two hexes sharing
+the face x = 0).
 Gmsh is not used; any display export is post-processing only.
 
 ## Derivation (`derivation.wls`)
