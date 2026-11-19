@@ -1448,6 +1448,63 @@ def motor_force_torque_method_agreement_gate(
 
 
 @_validation.tool()
+def motor_slotless_spm_airgap_field_gate(
+    pole_pairs: int,
+    remanence_t: float,
+    recoil_permeability: float,
+    rotor_radius_m: float,
+    magnet_radius_m: float,
+    stator_radius_m: float,
+    pole_arc_fraction: float,
+    radius_m: float,
+    theta_rad: list[float],
+    computed_b_r_t: list[float],
+    computed_b_theta_t: list[float],
+    maximum_relative_difference: float = 1.0e-2,
+) -> str:
+    """Compare a computed slotless-SPM air-gap field with the Zhu-Howe 1993 closed form.
+
+    Idealised internal-rotor machine: infinitely permeable rotor yoke (R_r) and
+    stator bore (R_s), radially magnetised magnets R_r..R_m over a pole-arc
+    fraction, recoil permeability mu_r, p >= 2 pole pairs; theta = 0 at a north
+    pole centre.  Samples at one air-gap radius in SI (m, rad, T).  Difference
+    is max|B - B_ref| over both components divided by max|B_r,ref|.  Use it to
+    check a solver route (FEM, Radia MMM) before slots, saturation or 3-D ends
+    are added; those are modelling differences, not closed-form errors.
+    """
+    import numpy as np
+    from radia.analytical_formulas.spm_slotless_airgap import slotless_spm_airgap_field
+
+    policy = "radia.motor-slotless-spm-airgap-field/v1"
+    try:
+        th = np.asarray(theta_rad, float)
+        br = np.asarray(computed_b_r_t, float); bt = np.asarray(computed_b_theta_t, float)
+        if th.ndim != 1 or th.size == 0 or br.shape != th.shape or bt.shape != th.shape:
+            raise ValueError("theta_rad, computed_b_r_t and computed_b_theta_t need the same non-zero length")
+        if not (np.all(np.isfinite(br)) and np.all(np.isfinite(bt))):
+            raise ValueError("computed field must be finite")
+        if not (np.isfinite(maximum_relative_difference) and maximum_relative_difference > 0):
+            raise ValueError("maximum_relative_difference must be finite and positive")
+        rr, rt = slotless_spm_airgap_field(radius_m, th, pole_pairs, remanence_t, recoil_permeability,
+                                           rotor_radius_m, magnet_radius_m, stator_radius_m,
+                                           pole_arc_fraction)
+        scale = float(np.abs(rr).max())
+        if scale == 0.0:
+            raise ValueError("reference B_r is zero at all samples; relative comparison undefined")
+        e_r = float(np.abs(br - rr).max() / scale); e_t = float(np.abs(bt - rt).max() / scale)
+        rel = max(e_r, e_t)
+        result = {"policy": policy, "status": "ok" if rel <= maximum_relative_difference else "needs_attention",
+                  "relative_difference": rel, "relative_difference_b_r": e_r,
+                  "relative_difference_b_theta": e_t, "reference_max_abs_b_r_t": scale,
+                  "maximum_relative_difference": maximum_relative_difference, "samples": int(th.size),
+                  "reference": "Zhu, Howe, Bolte, Ackermann, IEEE Trans. Magn. 29(1):124-135, 1993",
+                  "assumptions": "slotless, infinitely permeable iron, radial magnetisation, 2-D"}
+    except (TypeError, ValueError) as exc:
+        result = {"policy": policy, "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
 def motor_phase_flux_park_alignment_gate(
     mechanical_angles_deg_json: str,
     phase_flux_wb_json: str,

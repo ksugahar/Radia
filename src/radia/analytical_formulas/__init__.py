@@ -27,6 +27,10 @@ shielding          Static shielding factor of a magnetic shell
 rect_magnet_2d     2D rectangular bar A_z, B_x, B_y (Part 2, eq 2-3)
 plate_eddy         Thin rectangular-plate eddy current
                    (Part 1, eq 26-27)
+cuboid_magnet_force  Force between two z-magnetised cuboid magnets
+                   (Akoun & Yonnet, IEEE Trans. Magn. 20:1962, 1984)
+spm_slotless_airgap  Slotless surface-magnet machine air-gap field
+                   (Zhu, Howe, Bolte, Ackermann, IEEE Trans. Magn. 29:124, 1993)
 
 Coil and line geometries:
 

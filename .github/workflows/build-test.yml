@@ -196,7 +196,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
+          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.6.0
           if ($LASTEXITCODE -ne 0) { throw "Standalone mesh checker install failed" }
           # The full release numerical contracts include STEP coil tests, so the
           # declared STEP CAD extra is installed into this same isolated venv.
