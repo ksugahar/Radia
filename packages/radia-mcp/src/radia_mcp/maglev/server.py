@@ -183,6 +183,50 @@ def maglev_force_weight_equilibrium_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
+@_validation.tool()
+def maglev_cuboid_magnet_force_gate(
+    polarization_1_t: float,
+    size_1_m: list[float],
+    polarization_2_t: float,
+    size_2_m: list[float],
+    center_offset_m: list[float],
+    computed_force_n: list[float],
+    maximum_relative_difference: float = 5.0e-2,
+) -> str:
+    """Compare a computed magnet-magnet force with the Akoun-Yonnet closed form.
+
+    Two z-magnetised, axis-aligned, disjoint cuboids (polarisation J in tesla,
+    negative = -z; full edge lengths and centre offset of magnet 2 relative to
+    magnet 1 in metres).  computed_force_n is the force on magnet 2 [N] from the
+    route under test (Radia, FEM, measurement).  The closed form assumes rigid
+    uniform magnetisation (mu_r = 1); a softer magnet is a modelling difference,
+    not a closed-form error.  Relative difference = |F - F_ref|_inf / |F_ref|_2.
+    """
+    import numpy as np
+    from radia.analytical_formulas.cuboid_magnet_force import cuboid_magnet_force
+
+    policy = "radia.maglev-cuboid-magnet-force/v1"
+    try:
+        ref = cuboid_magnet_force(polarization_1_t, size_1_m, polarization_2_t, size_2_m,
+                                  center_offset_m)
+        got = np.asarray(computed_force_n, float)
+        if got.shape != (3,) or not np.all(np.isfinite(got)):
+            raise ValueError("computed_force_n must be three finite numbers")
+        if not maximum_relative_difference > 0:
+            raise ValueError("maximum_relative_difference must be positive")
+        scale = float(np.linalg.norm(ref))
+        if scale == 0.0:
+            raise ValueError("reference force is zero; a relative comparison is undefined")
+        rel = float(np.abs(got - ref).max() / scale)
+        result = {"policy": policy, "status": "ok" if rel <= maximum_relative_difference else "needs_attention",
+                  "reference_force_n": ref.tolist(), "computed_force_n": got.tolist(),
+                  "relative_difference": rel,
+                  "maximum_relative_difference": maximum_relative_difference,
+                  "reference": "Akoun & Yonnet, IEEE Trans. Magn. 20(5):1962-1964, 1984",
+                  "assumptions": "rigid uniform magnetisation along z, axis-aligned disjoint cuboids"}
+    except (TypeError, ValueError) as exc:
+        result = {"policy": policy, "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 _validation.install()
