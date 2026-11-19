@@ -82,6 +82,11 @@ struct PEECSegment {
     int nhinc;              // Height subdivisions (default: 1 = no subdivision)
     int parent_segment;     // Parent segment index (-1 if not a sub-filament)
 
+    // Optional cross-section width axis (unit, perpendicular to direction);
+    // used only by the opt-in near-pair section-average mutual rule.
+    TVector3d width_dir;
+    bool has_width_dir = false;
+
     PEECSegment()
         : length(0), width(0), height(0), sigma(5.8e7),
           cross_section_type(CrossSectionType::RECTANGULAR),
@@ -222,6 +227,19 @@ public:
     PEECMatrixBuilder();
     ~PEECMatrixBuilder();
     void EnableVolumeKernel(int quadrature_order);
+
+    /**
+     * @brief Opt-in near-pair rule: two bars whose centres are closer than
+     * ``factor`` times the sum of their bounding radii get the mutual
+     * inductance averaged over both rectangular cross-sections (3x3 Gauss
+     * per section, each in its own width/height frame); farther pairs keep
+     * the centreline Neumann mutual.  ``factor`` = 0 (default) keeps the
+     * original model for every pair.  Select before adding geometry.
+     */
+    void EnableNearSectionAverage(double factor);
+
+    /// Width axis of the most recently added segment (see PEECSegment::width_dir).
+    void SetLastSegmentWidthDir(double x, double y, double z);
 
     // ========== Input geometry ==========
 
@@ -401,6 +419,7 @@ public:
 
 private:
     std::shared_ptr<const VolumeGreenRule> volume_rule_;
+    double near_section_factor_ = 0.0;
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
@@ -438,6 +457,13 @@ private:
     double MutualInductanceRectBar(const PEECSegment& seg_i,
                                     const PEECSegment& seg_j,
                                     int n_gauss = 3) const;
+
+    /** Mutual inductance averaged over two rectangular cross-sections,
+     * each in its own frame (width_dir when given), 3x3 Gauss points per
+     * section, centreline Neumann between the sub-filaments.  Valid for
+     * parallel and non-parallel bars. */
+    double MutualInductanceSectionAverage(const PEECSegment& seg_i,
+                                          const PEECSegment& seg_j) const;
 
     // Compute self-potential coefficient (disk approximation)
     double SelfPotential(const PEECNode& node) const;

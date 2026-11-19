@@ -33,10 +33,12 @@ using namespace radia;
  */
 class PyPEECBuilder {
 public:
-    explicit PyPEECBuilder(int volume_order=0) : builder_(std::make_unique<PEECMatrixBuilder>()),
-                      matrices_built_(false) {
+    explicit PyPEECBuilder(int volume_order=0, double near_section_average=0.0)
+        : builder_(std::make_unique<PEECMatrixBuilder>()), matrices_built_(false) {
         if(volume_order) builder_->EnableVolumeKernel(volume_order);
+        builder_->EnableNearSectionAverage(near_section_average);  // validates; 0 keeps the centreline rule
     }
+    void set_last_width_dir(double x, double y, double z) { builder_->SetLastSegmentWidthDir(x, y, z); }
     double inductance_entry(int i,int j) const { return builder_->InductanceEntry(i,j); }
 
     /**
@@ -1086,7 +1088,13 @@ Example:
 
         Constructs L, P, R, M_LS matrices from conductor segments.
         )doc")
-        .def(py::init<int>(), py::arg("volume_order")=0, "Explicit volume order 8..256; zero selects the original filament model")
+        .def(py::init<int, double>(), py::arg("volume_order")=0, py::arg("near_section_average")=0.0,
+             "volume_order: explicit volume order 8..256; zero selects the original filament model.  "
+             "near_section_average: opt-in factor f > 0 averages the mutual over both rectangular "
+             "cross-sections for bars whose centres are closer than f x (sum of bounding radii); "
+             "zero keeps the centreline mutual for every pair.")
+        .def("set_last_width_dir", &PyPEECBuilder::set_last_width_dir, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Cross-section width axis of the most recently added segment (near-pair rule only).")
         .def("inductance_entry", &PyPEECBuilder::inductance_entry, py::arg("i"), py::arg("j"))
 
         .def("add_segment", &PyPEECBuilder::add_segment,

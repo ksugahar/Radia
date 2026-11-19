@@ -14,6 +14,8 @@
 #include <queue>
 #include <limits>
 #include <stdexcept>
+#include <cstdint>
+#include <cstring>
 
 #include "rad_parallel.h"
 
@@ -135,6 +137,32 @@ PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0), eps_r_(1.0) {}
 void PEECMatrixBuilder::EnableVolumeKernel(int order) {
     if (!segments_.empty()) throw std::logic_error("Select volume kernel before adding geometry");
     volume_rule_ = std::make_shared<VolumeGreenRule>(order);
+}
+
+void PEECMatrixBuilder::EnableNearSectionAverage(double factor) {
+    if (!segments_.empty()) throw std::logic_error("Select the near-pair rule before adding geometry");
+    // Bit-level finiteness test: the library builds with /fp:fast, under
+    // which NaN comparisons and std::isfinite may be folded away.
+    std::uint64_t bits;
+    std::memcpy(&bits, &factor, sizeof bits);
+    const bool finite = ((bits >> 52) & 0x7FFu) != 0x7FFu;
+    if (!finite || (bits >> 63) != 0u)
+        throw std::invalid_argument("near-pair section-average factor must be finite and >= 0");
+    if (factor > 0.0 && volume_rule_)
+        throw std::logic_error("near-pair section average and the volume kernel are exclusive");
+    near_section_factor_ = factor;
+}
+
+void PEECMatrixBuilder::SetLastSegmentWidthDir(double x, double y, double z) {
+    if (segments_.empty()) throw std::logic_error("no segment to set a width axis on");
+    PEECSegment& seg = segments_.back();
+    const TVector3d& d = seg.direction;
+    const double dot = x * d.x + y * d.y + z * d.z;
+    const double wx = x - dot * d.x, wy = y - dot * d.y, wz = z - dot * d.z;
+    const double n = std::sqrt(wx * wx + wy * wy + wz * wz);
+    if (!(n > 1e-9)) throw std::invalid_argument("width axis is parallel to the segment");
+    seg.width_dir = TVector3d(wx / n, wy / n, wz / n);
+    seg.has_width_dir = true;
 }
 
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
@@ -572,6 +600,18 @@ double PEECMatrixBuilder::InductanceEntry(int i, int j) const {
         return volume_rule_->Inductance(box(a),box(b));
     }
     if (i == j) return SelfInductance(a);
+    if (near_section_factor_ > 0.0 &&
+        a.cross_section_type == CrossSectionType::RECTANGULAR &&
+        b.cross_section_type == CrossSectionType::RECTANGULAR &&
+        a.width > 1.e-15 && a.height > 1.e-15 && b.width > 1.e-15 && b.height > 1.e-15) {
+        auto radius = [](const PEECSegment& s) {
+            return 0.5 * std::sqrt(s.length * s.length + s.width * s.width + s.height * s.height);
+        };
+        const double dx = a.center.x - b.center.x, dy = a.center.y - b.center.y,
+                     dz = a.center.z - b.center.z;
+        if (std::sqrt(dx * dx + dy * dy + dz * dz) < near_section_factor_ * (radius(a) + radius(b)))
+            return MutualInductanceSectionAverage(a, b);
+    }
     const double dot=a.direction.x*b.direction.x+a.direction.y*b.direction.y+a.direction.z*b.direction.z;
     const bool same_parent=a.parent_segment>=0 && a.parent_segment==b.parent_segment;
     if(same_parent && std::abs(std::abs(dot)-1.)<1.e-3 &&
@@ -1000,6 +1040,48 @@ double PEECMatrixBuilder::MutualInductanceRectBar(
     }
 
     return M_sum / w_sum;
+}
+
+double PEECMatrixBuilder::MutualInductanceSectionAverage(
+        const PEECSegment& seg_i, const PEECSegment& seg_j) const {
+    auto frame = [](const PEECSegment& s, TVector3d& e_w, TVector3d& e_h) {
+        const TVector3d& d = s.direction;
+        if (s.has_width_dir) {
+            e_w = s.width_dir;
+        } else {
+            const TVector3d ref = std::abs(d.x) < 0.9 ? TVector3d(1, 0, 0) : TVector3d(0, 1, 0);
+            const double x = ref.y * d.z - ref.z * d.y, y = ref.z * d.x - ref.x * d.z,
+                         z = ref.x * d.y - ref.y * d.x;
+            const double n = std::sqrt(x * x + y * y + z * z);
+            e_w = TVector3d(x / n, y / n, z / n);
+        }
+        e_h = TVector3d(d.y * e_w.z - d.z * e_w.y, d.z * e_w.x - d.x * e_w.z,
+                        d.x * e_w.y - d.y * e_w.x);
+    };
+    TVector3d wi, hi, wj, hj;
+    frame(seg_i, wi, hi);
+    frame(seg_j, wj, hj);
+    const double* gp = GAUSS3_PTS;
+    const double* gw = GAUSS3_WTS;
+    double m_sum = 0.0, w_sum = 0.0;
+    for (int a = 0; a < 3; ++a) for (int b = 0; b < 3; ++b) {
+        const double owi = 0.5 * seg_i.width * gp[a], ohi = 0.5 * seg_i.height * gp[b];
+        const PEECSegment fi(TVector3d(seg_i.center.x + owi * wi.x + ohi * hi.x,
+                                       seg_i.center.y + owi * wi.y + ohi * hi.y,
+                                       seg_i.center.z + owi * wi.z + ohi * hi.z),
+                             seg_i.direction, seg_i.length, 0, 0, 0);
+        for (int c = 0; c < 3; ++c) for (int e = 0; e < 3; ++e) {
+            const double owj = 0.5 * seg_j.width * gp[c], ohj = 0.5 * seg_j.height * gp[e];
+            const PEECSegment fj(TVector3d(seg_j.center.x + owj * wj.x + ohj * hj.x,
+                                           seg_j.center.y + owj * wj.y + ohj * hj.y,
+                                           seg_j.center.z + owj * wj.z + ohj * hj.z),
+                                 seg_j.direction, seg_j.length, 0, 0, 0);
+            const double w = gw[a] * gw[b] * gw[c] * gw[e];
+            m_sum += w * MutualInductance(fi, fj);
+            w_sum += w;
+        }
+    }
+    return m_sum / w_sum;
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,

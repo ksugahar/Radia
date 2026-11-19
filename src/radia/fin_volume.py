@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 LONGITUDINAL, CIRCUMFERENTIAL, RADIAL = 0, 1, 2
+NEAR_SECTION_AVERAGE = 2.0
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class VolumeLattice:
     station: np.ndarray      # (M,) owning station (longitudinal: lower station)
     width: np.ndarray        # (M,) m
     height: np.ndarray       # (M,) m
+    width_dir: np.ndarray    # (M, 3) unit cross-section width axis; zero = kernel frame
     port_plus: int
     port_minus: int
     rho: np.ndarray          # (n_layers,) ring scale factors, rho[0] = 1
@@ -163,17 +165,24 @@ def build_volume_lattice(sweep, n_layers, *, exponent=2.0):
     ax_c = np.zeros(S)
     ax_c[1:-1] = 0.5 * (seg_c[:-1] + seg_c[1:])
 
-    rows = []  # (n0, n1, p0, p1, kind, station, width, height)
+    # In-plane ring tangent at every lattice point (longitudinal bar width axis).
+    ring_t = np.roll(xyz, -1, axis=2) - np.roll(xyz, 1, axis=2)
+    ring_t /= np.linalg.norm(ring_t, axis=3, keepdims=True)
+    axial = np.array([st.tangent for st in stations], dtype=float)
+    axial /= np.linalg.norm(axial, axis=1, keepdims=True)
+    none = np.zeros(3)
+
+    rows = []  # (n0, n1, p0, p1, kind, station, width, height, width_dir)
     for s in range(S - 1):
         for j in range(J):
             for k in range(K):
                 area = 0.5 * (dual[s, j, k] + dual[s + 1, j, k])
                 w = 0.5 * (circ[s, j, k] + circ[s + 1, j, k])
                 rows.append((nid[s, col(j, k)], nid[s + 1, col(j, k)], pt(s, j, k),
-                             pt(s + 1, j, k), LONGITUDINAL, s, w, area / w))
+                             pt(s + 1, j, k), LONGITUDINAL, s, w, area / w, ring_t[s, j, k]))
         area = 0.5 * (dual_c[s] + dual_c[s + 1])
         rows.append((nid[s, J * K], nid[s + 1, J * K], centre[s], centre[s + 1],
-                     LONGITUDINAL, s, math.sqrt(area), math.sqrt(area)))
+                     LONGITUDINAL, s, math.sqrt(area), math.sqrt(area), none))
     for s in range(1, S - 1):
         for j in range(J):
             for k in range(K):
@@ -181,19 +190,20 @@ def build_volume_lattice(sweep, n_layers, *, exponent=2.0):
                 rows.append((nid[s, col(j, k)], nid[s, col(j, k1)], pt(s, j, k),
                              pt(s, j, k1), CIRCUMFERENTIAL, s,
                              0.5 * (ax[s, j, k] + ax[s, j, k1]),
-                             0.5 * (rad[s, j, k] + rad[s, j, k1])))
+                             0.5 * (rad[s, j, k] + rad[s, j, k1]), axial[s]))
                 c_out = circ[s, j, k]
                 c_in = circ[s, j + 1, k] if j + 1 < J else c_out
                 a_in = ax[s, j + 1, k] if j + 1 < J else ax_c[s]
                 rows.append((nid[s, col(j, k)], nid[s, col(j + 1, k)], pt(s, j, k),
                              pt(s, j + 1, k), RADIAL, s,
-                             0.5 * (ax[s, j, k] + a_in), 0.5 * (c_out + c_in)))
+                             0.5 * (ax[s, j, k] + a_in), 0.5 * (c_out + c_in), axial[s]))
     branches = np.array([[r[0], r[1]] for r in rows], dtype=np.int64)
     branch_xyz = np.array([[r[2], r[3]] for r in rows], dtype=float)
     kind = np.array([r[4] for r in rows], dtype=np.int8)
     owner = np.array([r[5] for r in rows], dtype=np.int64)
     width = np.array([r[6] for r in rows], dtype=float)
     height = np.array([r[7] for r in rows], dtype=float)
+    width_dir = np.array([r[8] for r in rows], dtype=float)
     if len(rows) != lattice_branch_count(S, K, J):
         raise RuntimeError("volume lattice branch count does not match its formula")
 
@@ -231,14 +241,22 @@ def build_volume_lattice(sweep, n_layers, *, exponent=2.0):
         "each_branch_owned_once": True,
     }
     return VolumeLattice(nodes, branches, branch_xyz, kind, owner, width, height,
-                         port_plus, port_minus, rho, gates)
+                         width_dir, port_plus, port_minus, rho, gates)
 
 
 def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
                      tip_lanes=None, exponent=2.0, route="auto",
-                     cad_units_per_meter="auto", max_branches=None):
-    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors)."""
+                     cad_units_per_meter="auto", max_branches=None,
+                     near_section_average=NEAR_SECTION_AVERAGE):
+    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+
+    ``near_section_average`` is the kernel's opt-in near-pair factor: bars
+    closer than that many bounding radii get the mutual inductance averaged
+    over both cross-sections (each bar's width axis comes from the lattice).
+    Centreline mutuals between near bars do not converge on a skin-depth
+    lattice; 0 selects them anyway (diagnostic only).
+    """
     from radia.fin_surface_solver import coil_true_residuals
     from radia.fin_sweep import DEFAULT_MAX_BRANCHES, fin_graph_from_step
     from radia.peec_matrices import PEECBuilder
@@ -260,11 +278,13 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
         cad_units_per_meter=cad_units_per_meter, route=route, max_branches=budget)
     lat = build_volume_lattice(sweep, n_layers, exponent=exponent)
 
-    builder = PEECBuilder()
-    for (p0, p1), w, h in zip(lat.branch_xyz, lat.width, lat.height):
+    builder = PEECBuilder(near_section_average=float(near_section_average))
+    for (p0, p1), w, h, wd in zip(lat.branch_xyz, lat.width, lat.height, lat.width_dir):
         n0 = builder.add_node_at(*map(float, p0))
         n1 = builder.add_node_at(*map(float, p1))
         builder.add_connected_segment(n0, n1, float(w), float(h), sigma=float(sigma))
+        if np.any(wd):
+            builder.set_last_width_dir(*map(float, wd))
     topo = builder.build_topology()
     if int(topo["n_loop"]) != len(lat.branches):
         raise RuntimeError("PEEC kernel dropped a volume bar")
@@ -285,6 +305,7 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     paths = [[(tuple(map(float, p0)), tuple(map(float, p1)))] for p0, p1 in lat.branch_xyz]
     return {"sweep": sweep, "lattice": lat, "current": current,
             "R_ohm": r_total, "L_H": l_total, "coil_true_residual": residuals,
+            "near_section_average": float(near_section_average),
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
             "paths": paths, "I_fil": current}
