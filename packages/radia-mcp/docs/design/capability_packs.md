@@ -22,6 +22,7 @@ Every pack runs as `radia-mcp serve <pack>`.
 | `radia-mcp-motor` | - (motor, electromagnet, materials) |
 | `radia-mcp-pcb` | - (PCB, PEEC, litz/transmission) |
 | `radia-mcp-acoustic` | `production`, `education` |
+| `radia-mcp-postprocess` | `blender` (Gmsh stays in `gmsh-mcp`) |
 | `radia-mcp-rna` | - (RNA/MEC, magnetic materials and hysteresis) |
 
 The default is `all`. Use a narrow profile when one exists, e.g.
