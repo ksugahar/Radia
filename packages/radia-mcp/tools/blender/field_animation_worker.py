@@ -128,7 +128,7 @@ def _constant(ob):
 
 
 def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
-    """Flat arrows in the display plane y = y_disp, coloured by |J|.
+    """Flat arrows in the display plane y = y_disp, coloured by |field|.
 
     Each arrow is 7 vertices (base-left .. tip .. base-right) carrying the
     sample id, so the rendered geometry itself can be checked after reopening.
@@ -159,7 +159,7 @@ def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
         cols.extend([c] * 7)
         gid.extend([int(sid)] * 7)
     me.from_pydata(verts, [], faces)
-    attr = me.color_attributes.new("J_color", "FLOAT_COLOR", "POINT")
+    attr = me.color_attributes.new("glyph_color", "FLOAT_COLOR", "POINT")
     for i, c in enumerate(cols):
         attr.data[i].color = (*c, 1.0)
     me.attributes.new("glyph_sample_id", "INT", "POINT").data.foreach_set("value", gid)
@@ -168,12 +168,12 @@ def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
     return ob
 
 
-def _data_points(name, ids, pts, vecs):
-    """Non-rendered carrier of the solved samples (id, point, signed J)."""
+def _data_points(name, ids, pts, vecs, key):
+    """Non-rendered carrier of the solved samples (id, point, signed field)."""
     me = bpy.data.meshes.new(name)
     me.from_pydata([tuple(p) for p in pts], [], [])
     a_id = me.attributes.new("sample_id", "INT", "POINT")
-    a_j = me.attributes.new("J_A_per_m2", "FLOAT_VECTOR", "POINT")
+    a_j = me.attributes.new(key, "FLOAT_VECTOR", "POINT")
     a_id.data.foreach_set("value", [int(i) for i in ids])
     a_j.data.foreach_set("vector", np.asarray(vecs, dtype=np.float64).ravel().tolist())
     ob = bpy.data.objects.new(name, me)
@@ -193,9 +193,12 @@ def write(req):
     sc.render.fps = int(spec["fps"])
     sc.unit_settings.system = "METRIC"
     sc.unit_settings.length_unit = "MILLIMETERS"
-    lo, hi = pay["conductor"]["box_min_m"], pay["conductor"]["box_max_m"]
+    fld = pay["field"]
+    sym, key, unit = fld["symbol"], fld["key"], fld["unit"]
+    reg = pay["region"]
+    lo, hi = reg["box_min_m"], reg["box_max_m"]
     span = max(hi[i] - lo[i] for i in range(3))
-    jmax = float(pay["J_scale_max_A_per_m2"])
+    jmax = float(pay["scale_max"])
     y_disp = hi[1] + 0.02 * span * 0.1
 
     world = bpy.data.worlds.new("World")
@@ -204,35 +207,53 @@ def write(req):
     world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.012, 0.015, 0.022, 1)
     world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.6
 
-    copper = _material("Conductor", (0.80, 0.42, 0.25), metallic=0.9, rough=0.28)
-    _box("Conductor", lo, hi, copper)
-    north = _material("Magnet_N", (0.85, 0.08, 0.12), metallic=0.3, rough=0.18)
-    south = _material("Magnet_S", (0.08, 0.22, 0.85), metallic=0.3, rough=0.18)
-    s = pay["magnet"]["size_m"]
-    mag = bpy.data.objects.new("Magnet", None)
-    sc.collection.objects.link(mag)
-    mdir = np.asarray(pay["magnet"]["magnetization_A_per_m"], float)
-    ax = int(np.argmax(np.abs(mdir)))
-    sign = 1.0 if mdir[ax] >= 0 else -1.0
-    for half, mat in (("N", north), ("S", south)):
-        hlo = [-0.5 * s[i] for i in range(3)]
-        hhi = [0.5 * s[i] for i in range(3)]
-        if (half == "N") == (sign > 0):
-            hlo[ax] = 0.0
-        else:
-            hhi[ax] = 0.0
-        part = _box(f"Magnet_{half}", hlo, hhi, mat)
-        part.parent = mag
-    mag.rotation_mode = "QUATERNION"
-    for k in range(n):
-        R = Matrix([list(r) for r in pay["magnet"]["rotation"][k]])
-        mag.location = Vector(pay["magnet"]["center_m"][k])
-        mag.keyframe_insert("location", frame=first + k)
-        mag.rotation_quaternion = R.to_quaternion()
-        mag.keyframe_insert("rotation_quaternion", frame=first + k)
-    _constant(mag)
+    if reg["name"] == "Conductor":
+        body_mat = _material("Conductor", (0.80, 0.42, 0.25), metallic=0.9, rough=0.28)
+    else:
+        body_mat = _material(reg["name"], (0.55, 0.57, 0.60), metallic=0.8, rough=0.35)
+    if reg["shape"] == "sphere":
+        # 32 x 16 UV sphere: equator ring and poles hit the bounding box exactly.
+        me = bpy.data.meshes.new(reg["name"])
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=0.5)
+        bm.to_mesh(me); bm.free()
+        body = bpy.data.objects.new(reg["name"], me)
+        bpy.context.scene.collection.objects.link(body)
+        body.location = [(lo[i] + hi[i]) / 2 for i in range(3)]
+        body.scale = [hi[i] - lo[i] for i in range(3)]
+        body.data.materials.append(body_mat)
+        body.display_type = "WIRE"
+        body.visible_camera = False
+    else:
+        _box(reg["name"], lo, hi, body_mat)
+    if pay["magnet"] is not None:
+        north = _material("Magnet_N", (0.85, 0.08, 0.12), metallic=0.3, rough=0.18)
+        south = _material("Magnet_S", (0.08, 0.22, 0.85), metallic=0.3, rough=0.18)
+        s = pay["magnet"]["size_m"]
+        mag = bpy.data.objects.new("Magnet", None)
+        sc.collection.objects.link(mag)
+        mdir = np.asarray(pay["magnet"]["magnetization_A_per_m"], float)
+        ax = int(np.argmax(np.abs(mdir)))
+        sign = 1.0 if mdir[ax] >= 0 else -1.0
+        for half, mat in (("N", north), ("S", south)):
+            hlo = [-0.5 * s[i] for i in range(3)]
+            hhi = [0.5 * s[i] for i in range(3)]
+            if (half == "N") == (sign > 0):
+                hlo[ax] = 0.0
+            else:
+                hhi[ax] = 0.0
+            part = _box(f"Magnet_{half}", hlo, hhi, mat)
+            part.parent = mag
+        mag.rotation_mode = "QUATERNION"
+        for k in range(n):
+            R = Matrix([list(r) for r in pay["magnet"]["rotation"][k]])
+            mag.location = Vector(pay["magnet"]["center_m"][k])
+            mag.keyframe_insert("location", frame=first + k)
+            mag.rotation_quaternion = R.to_quaternion()
+            mag.keyframe_insert("rotation_quaternion", frame=first + k)
+        _constant(mag)
 
-    glyph_mat = _material("J_glyph", (1, 1, 1), emission=3.0, rough=0.6, attr="J_color")
+    glyph_mat = _material("Glyph", (1, 1, 1), emission=3.0, rough=0.6, attr="glyph_color")
     text_mat = _material("Label", (0.92, 0.93, 0.95), emission=2.0)
     ids = pay["samples"]["id"]
     pts = pay["samples"]["point_m"]
@@ -258,11 +279,11 @@ def write(req):
         return ob
 
     for k in range(n):
-        J = pay["J_A_per_m2"][k]
-        g = _arrows(f"J_glyph_{k:04d}", ids, pts, J, jmax, float(spec["arrow_length_m"]),
+        J = pay["vectors"][k]
+        g = _arrows(f"{sym}_glyph_{k:04d}", ids, pts, J, jmax, float(spec["arrow_length_m"]),
                     float(spec["arrow_width_m"]), y_disp)
         g.data.materials.append(glyph_mat)
-        dpt = _data_points(f"J_data_{k:04d}", ids, pts, J)
+        dpt = _data_points(f"{sym}_data_{k:04d}", ids, pts, J, key)
         lab = hud(_text(f"Time_{k:04d}", f"t = {pay['time_s'][k]:.3f} s   (solver step {k} of {n - 1})",
                         (0, 0, 0), 0.045 * hw, text_mat), -0.95, -0.92)
         for ob in (g, dpt, lab):
@@ -275,7 +296,8 @@ def write(req):
     phys = tt[-1] - tt[0] + (tt[1] - tt[0])
     rate = phys / (n / sc.render.fps)
     sc["playback_physical_s_per_video_s"] = rate
-    hud(_text("Subtitle", f"Magnet pose and J from the same solver steps; camera static; no interpolation; "
+    what = f"Magnet pose and {sym} from the same solver steps" if pay["magnet"] else f"Solved {sym} per step"
+    hud(_text("Subtitle", f"{what}; camera static; no interpolation; "
               f"playback {rate:.3g} s physical per 1 s video",
               (0, 0, 0), 0.032 * hw, text_mat), -0.95, 0.76)
     # Fixed legend: vertical colour bar + bounds in SI, on screen.
@@ -286,7 +308,7 @@ def write(req):
         hud(seg, 0.78, -0.45 + 0.9 * t0)
     hud(_text("Legend_min", "0", (0, 0, 0), 0.032 * hw, text_mat), 0.82, -0.46)
     hud(_text("Legend_max", f"{jmax:.3g}", (0, 0, 0), 0.032 * hw, text_mat), 0.82, 0.42)
-    hud(_text("Legend_unit", "|J| (A/m²)", (0, 0, 0), 0.032 * hw, text_mat), 0.74, 0.52)
+    hud(_text("Legend_unit", f"|{sym}| ({unit.replace('^2', '²')})", (0, 0, 0), 0.032 * hw, text_mat), 0.74, 0.52)
 
     sun = bpy.data.objects.new("Key", bpy.data.lights.new("Key", "SUN"))
     sun.data.energy = 3.0
@@ -304,7 +326,10 @@ def write(req):
     sc["radia_source"] = json.dumps(pay["provenance"])
     sc["physical_time_s"] = pay["time_s"]
     sc["frame_map"] = "frame = frame_start + solver step index; values held constant between steps"
-    sc["J_scale_A_per_m2"] = [0.0, jmax]
+    sc["field_key"] = key
+    sc["field_symbol"] = sym
+    sc["field_unit"] = unit
+    sc["field_scale"] = [0.0, jmax]
     sc["camera_motion"] = "static"
     sc["arrow_length_m"] = float(spec["arrow_length_m"])
     sc["glyph_display_offset_m"] = y_disp - pay["samples"]["point_m"][0][1]
@@ -376,7 +401,7 @@ def _glyph_readback(ob):
     gid = [0] * nv
     me.attributes["glyph_sample_id"].data.foreach_get("value", gid)
     col = [0.0] * (4 * nv)
-    me.color_attributes["J_color"].data.foreach_get("color", col)
+    me.color_attributes["glyph_color"].data.foreach_get("color", col)
     co = [mw @ v.co for v in me.vertices]
     arrows = []
     for a in range(nv // 7):
@@ -391,45 +416,48 @@ def _glyph_readback(ob):
 def inspect(req):
     bpy.ops.wm.open_mainfile(filepath=req["blend_path"])
     sc = bpy.context.scene
+    sym, key = sc["field_symbol"], sc["field_key"]
     out = {"blender": bpy.app.version_string, "frame_start": sc.frame_start,
            "frame_end": sc.frame_end, "fps": sc.render.fps,
            "schema": sc.get("radia_schema"), "camera_motion": sc.get("camera_motion"),
-           "J_scale_A_per_m2": list(sc.get("J_scale_A_per_m2", [])),
+           "field_key": sc.get("field_key"), "field_unit": sc.get("field_unit"),
+           "field_scale": list(sc.get("field_scale", [])),
+           "magnet_present": "Magnet" in bpy.data.objects,
            "physical_time_s": list(sc.get("physical_time_s", [])),
            "camera_animated": bool(sc.camera and sc.camera.animation_data),
            "objects": sorted(o.name for o in bpy.data.objects
-                             if not o.name.startswith(("J_glyph_", "J_data_", "Time_", "Legend_"))),
-           "n_glyph_objects": sum(o.name.startswith("J_glyph_") for o in bpy.data.objects),
+                             if not o.name.startswith((f"{sym}_glyph_", f"{sym}_data_", "Time_", "Legend_"))),
+           "n_glyph_objects": sum(o.name.startswith(f"{sym}_glyph_") for o in bpy.data.objects),
            "render": {"engine": sc.render.engine, "device": sc.cycles.device,
                       "resolution": [sc.render.resolution_x, sc.render.resolution_y],
                       "samples": sc.cycles.samples, "view_transform": sc.view_settings.view_transform},
            "length_unit": sc.unit_settings.length_unit,
            "bbox_m": {o.name: _world_bbox(o) for o in bpy.data.objects
-                      if o.type == "MESH" and o.name in ("Conductor", "Magnet_N", "Magnet_S")},
+                      if o.type == "MESH" and o.name in ("Conductor", "Body", "Magnet_N", "Magnet_S")},
            "interpolations": sorted(_interpolations()),
            "arrow_length_m": sc.get("arrow_length_m"),
            "glyph_display_offset_m": sc.get("glyph_display_offset_m"),
            "steps": {}}
     for k in req["steps"]:
         sc.frame_set(sc.frame_start + k)
-        mag = bpy.data.objects["Magnet"]
-        mw = mag.matrix_world
         visible = sorted(o.name for o in bpy.data.objects
-                         if o.name.startswith(("J_glyph_", "Time_")) and not o.hide_render)
-        d = bpy.data.objects[f"J_data_{k:04d}"].data
+                         if o.name.startswith((f"{sym}_glyph_", "Time_")) and not o.hide_render)
+        d = bpy.data.objects[f"{sym}_data_{k:04d}"].data
         ids = [0] * len(d.vertices)
         d.attributes["sample_id"].data.foreach_get("value", ids)
         J = [0.0] * (3 * len(d.vertices))
-        d.attributes["J_A_per_m2"].data.foreach_get("vector", J)
-        out_glyph = _glyph_readback(bpy.data.objects[f"J_glyph_{k:04d}"])
+        d.attributes[key].data.foreach_get("vector", J)
+        out_glyph = _glyph_readback(bpy.data.objects[f"{sym}_glyph_{k:04d}"])
         out["steps"][str(k)] = {
             "glyphs": out_glyph,
-            "center_m": list(mw.translation),
-            "rotation": [list(mw.to_3x3()[i]) for i in range(3)],
             "visible": visible,
             "time_label": bpy.data.objects[f"Time_{k:04d}"].data.body,
-            "sample_id": ids, "J_A_per_m2": J,
+            "sample_id": ids, "vectors": J,
         }
+        if "Magnet" in bpy.data.objects:
+            mw = bpy.data.objects["Magnet"].matrix_world
+            out["steps"][str(k)].update(center_m=list(mw.translation),
+                                        rotation=[list(mw.to_3x3()[i]) for i in range(3)])
     return out
 
 

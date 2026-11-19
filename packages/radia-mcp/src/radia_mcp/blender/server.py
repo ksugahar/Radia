@@ -2,8 +2,8 @@
 
 Gmsh owns Radia mesh/field inspection and sections; this domain owns 3-D model
 animation.  One typed operation, ``blender_field_animation``, maps a solver
-dataset (``radia.field-animation.v1`` HDF5: conductor J(x, t) and the magnet
-pose of the same solver steps) to a ``.blend``, preview frames and an MP4,
+dataset (``radia.field-animation.v1`` HDF5: one solved vector field, J in A/m^2
+or B in T, optionally with the magnet pose of the same solver steps) to a ``.blend``, preview frames and an MP4,
 then reopens the ``.blend`` in a separate process and compares it with the
 dataset.  The Blender worker is optional, runs as an explicit Python 3.13 +
 bpy interpreter with ``-I -B`` and is not shipped in the wheel.  There is no
@@ -26,10 +26,11 @@ mcp = FastMCP("blender-mcp")
 
 @mcp.tool(meta={"caeai.maturity": "artifact_gate"})
 def blender_field_animation(dataset_path: str, out_dir: str, spec_json: str = "{}") -> str:
-    """Animate a solved moving-magnet / conductor-current dataset in Blender, then verify it.
+    """Animate a solved vector field (J or B, optional moving magnet) in Blender, then verify it.
 
     Input: a `radia.field-animation.v1` HDF5 file (SI; /time_s, /magnet/center_m,
-    /magnet/rotation, /samples/id, /samples/point_m, /field/J_A_per_m2), for
+    /samples/id, /samples/point_m, exactly one of /field/J_A_per_m2 or /field/B_T,
+    optional /magnet/center_m and /magnet/rotation), for
     example from docs/maglev/demos/rotating_magnet_eddy_animation_export.py.
     Writes <stem>.blend, <stem>_stepNNNN.png previews and <stem>.mp4 into
     out_dir, then reopens the .blend in a separate headless process and
@@ -38,7 +39,7 @@ def blender_field_animation(dataset_path: str, out_dir: str, spec_json: str = "{
 
     spec_json (optional keys): fps, samples, threads, resolution [w, h], title,
     arrow_length_m, arrow_width_m, glyph_stride, preview_steps [solver steps],
-    video (bool), J_scale ("global" or a positive A/m^2 value).
+    video (bool), field_scale ("global" or a positive value in the field unit).
 
     Requires RADIA_BLENDER_PYTHON (Python 3.13 with bpy) and, outside a source
     checkout, RADIA_BLENDER_WORKER.  Returns JSON with artifact paths, SHA-256,

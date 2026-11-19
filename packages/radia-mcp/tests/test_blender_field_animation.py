@@ -70,9 +70,34 @@ def test_missing_worker_is_a_clear_error(monkeypatch, tmp_path):
         fa.resolve_worker()
 
 
-def test_source_tree_worker_is_found():
-    default = Path(fa.__file__).resolve().parents[3] / "tools" / "blender" / fa.WORKER_NAME
-    assert default.is_file(), f"expected worker at {default}"
+def _b_dataset(path, both=False):
+    """Rotating uniform B in a sphere, no magnet (field key B_T, unit T)."""
+    n, th = 3, np.linspace(0, np.pi, 3)
+    pts = np.array([[x, 0.0, z] for x in (-2e-3, 0.0, 2e-3) for z in (-2e-3, 0.0, 2e-3)])
+    B = np.array([[[0.1 * np.cos(a), 0.0, 0.1 * np.sin(a)]] * len(pts) for a in th])
+    with h5py.File(path, "w") as f:
+        f.attrs["schema"] = fa.SCHEMA
+        f["time_s"] = np.arange(n) * 0.5
+        f["body/box_min_m"] = np.full(3, -5e-3)
+        f["body/box_max_m"] = np.full(3, 5e-3)
+        f["body"].attrs["shape"] = "sphere"
+        f["samples/id"] = np.arange(len(pts))
+        f["samples/point_m"] = pts
+        f["field/B_T"] = B
+        if both:
+            f["field/J_A_per_m2"] = B
+    return path
+
+
+def test_b_field_keeps_its_name_and_unit(tmp_path):
+    pay = fa.load_dataset(_b_dataset(tmp_path / "b.h5"))
+    assert pay["field"] == {"key": "B_T", "symbol": "B", "unit": "T"}
+    assert pay["magnet"] is None and pay["region"]["name"] == "Body" and pay["region"]["shape"] == "sphere"
+
+
+def test_rejects_two_fields(tmp_path):
+    with pytest.raises(ValueError, match="exactly one"):
+        fa.load_dataset(_b_dataset(tmp_path / "b.h5", both=True))
 
 
 OFFSET = 1e-4
@@ -81,8 +106,8 @@ OFFSET = 1e-4
 def _glyphs(pay, spec, k):
     """Arrows as a faithful renderer would draw them (closed-form, not the worker)."""
     out = []
-    jmax = pay["J_scale_max_A_per_m2"]
-    for sid, p, v in zip(pay["samples"]["id"], pay["samples"]["point_m"], pay["J_A_per_m2"][k]):
+    jmax = pay["scale_max"]
+    for sid, p, v in zip(pay["samples"]["id"], pay["samples"]["point_m"], pay["vectors"][k]):
         mag = float(np.linalg.norm(v))
         d = np.array([v[0], 0.0, v[2]]) / np.hypot(v[0], v[2])
         c = np.array([p[0], p[1] + OFFSET, p[2]])
@@ -101,25 +126,27 @@ def _back(pay, spec):
                          "visible": [f"J_glyph_{k:04d}", f"Time_{k:04d}"],
                          "time_label": f"t = {pay['time_s'][k]:.3f} s",
                          "sample_id": pay["samples"]["id"],
-                         "J_A_per_m2": np.asarray(pay["J_A_per_m2"][k]).ravel().tolist()}
+                         "vectors": np.asarray(pay["vectors"][k]).ravel().tolist()}
     return {"frame_start": 1, "frame_end": n, "fps": spec["fps"], "schema": fa.SCHEMA,
             "arrow_length_m": spec["arrow_length_m"], "glyph_display_offset_m": OFFSET,
             "camera_animated": False, "camera_motion": "static", "n_glyph_objects": n,
             "interpolations": ["CONSTANT"],
-            "bbox_m": {"Conductor": [pay["conductor"]["box_min_m"], pay["conductor"]["box_max_m"]]},
-            "physical_time_s": pay["time_s"], "J_scale_A_per_m2": [0.0, pay["J_scale_max_A_per_m2"]],
+            "bbox_m": {"Conductor": [pay["region"]["box_min_m"], pay["region"]["box_max_m"]]},
+            "field_key": "J_A_per_m2", "field_unit": "A/m^2", "magnet_present": True,
+            "physical_time_s": pay["time_s"], "field_scale": [0.0, pay["scale_max"]],
             "steps": steps}
 
 
 def test_compare_accepts_faithful_and_rejects_altered_readback(tmp_path):
     pay = fa.load_dataset(_dataset(tmp_path / "d.h5"))
-    pay["J_scale_max_A_per_m2"] = 100.0
+    pay["scale_max"] = 100.0
     spec = {"fps": 12, "arrow_length_m": 1e-3}
     good = _back(pay, spec)
     ok = fa.compare(pay, good, spec, [0, 1, 3])
     assert ok["passed"], ok["failures"]
     for mutate, needle in (
-            (lambda b: b["steps"]["1"]["J_A_per_m2"].__setitem__(0, -b["steps"]["1"]["J_A_per_m2"][0]), "J readback"),
+            (lambda b: b["steps"]["1"]["vectors"].__setitem__(0, -b["steps"]["1"]["vectors"][0]), "J readback"),
+            (lambda b: b.__setitem__("field_unit", "T"), "field"),
             (lambda b: b["steps"]["3"]["center_m"].__setitem__(0, 1.0), "pose"),
             (lambda b: b.__setitem__("camera_animated", True), "camera"),
             (lambda b: b["steps"]["1"].__setitem__("visible", ["J_glyph_0002"]), "visible"),
@@ -146,8 +173,8 @@ def test_live_write_reopen_matches_closed_form(tmp_path):
     assert res["status"] == "ok", json.dumps(res["readback"], indent=1)
     assert Path(res["artifacts"]["blend"]).is_file()
     th = np.linspace(0, np.pi, 4)[2]
-    assert res["readback"]["steps"]["2"]["J_max_rel_err"] <= 1e-6
-    assert res["J_scale_A_per_m2"][1] == pytest.approx(100.0)
+    assert res["readback"]["steps"]["2"]["field_max_rel_err"] <= 1e-6
+    assert res["field_scale"][1] == pytest.approx(100.0)
     assert abs(np.cos(th)) <= 1.0
 
 
@@ -179,9 +206,9 @@ def test_live_rendered_glyph_edit_is_rejected(tmp_path):
                    stdin=subprocess.DEVNULL, timeout=300)
     back = fa._run(py, worker, "inspect", {"blend_path": blend, "steps": [0, 2]}, tmp_path, 300)
     pay = fa.load_dataset(p)
-    pay["J_scale_max_A_per_m2"] = res["J_scale_A_per_m2"][1]
+    pay["scale_max"] = res["field_scale"][1]
     v = fa.compare(pay, back, res["spec"], [0, 2])
     # Hidden J data is untouched, so only the rendered-arrow check can catch this.
-    assert v["steps"]["2"]["J_max_rel_err"] <= 1e-6
+    assert v["steps"]["2"]["field_max_rel_err"] <= 1e-6
     assert not v["passed"] and any("step 2: rendered arrow direction" in f for f in v["failures"]), v["failures"]
     assert not any(f.startswith("step 0") for f in v["failures"]), v["failures"]

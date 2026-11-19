@@ -14,9 +14,12 @@ GUIDE = """\
 /magnet/center_m (n,3)           magnet centre of that step
 /magnet/rotation (n,3,3)         columns = magnet body u, v, w axes (orthonormal)
 /magnet/size_m (3), /magnet/magnetization_A_per_m (3, body frame)
-/conductor/box_min_m, box_max_m (3)
 /samples/id (m) unique stable ids, /samples/point_m (m,3)
-/field/J_A_per_m2 (n,m,3)        signed solved current density
+Exactly one field (it keeps its own name and unit in the scene; never relabelled):
+/field/J_A_per_m2 (n,m,3)  signed current density, region /conductor/box_min_m, box_max_m
+/field/B_T (n,m,3)         signed flux density, region /body/box_min_m, box_max_m
+Region attribute shape = "box" (default) or "sphere" (inscribed in the box).
+/magnet/* is optional (a static scene, e.g. a sphere in a rotating field, has none).
 Root attributes: schema, units, source script and its SHA-256, solver settings.
 Example producer: docs/maglev/demos/rotating_magnet_eddy_animation_export.py
 (rotating 1 mm NdFeB-like cube over a copper plate, full-FEM A-phi reference).
@@ -62,7 +65,7 @@ readability; that judgement is separate from numerical validation.
   typed animation/render operations, one-call multi-view/frame previews.
 Deliberately NOT adopted: live-session sockets, execute-code tools, asset
 download, generative content.  Here the reopened file is checked by
-numbers (interpolation must be CONSTANT only; conductor bbox equals the
+numbers (interpolation must be CONSTANT only; region bbox equals the
 dataset), not by a vision judgement.
 
 ## Analytic mapping check

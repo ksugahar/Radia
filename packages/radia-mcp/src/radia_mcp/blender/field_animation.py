@@ -26,11 +26,16 @@ SCHEMA = "radia.field-animation.v1"
 WORKER_NAME = "field_animation_worker.py"
 DEFAULT_SPEC = {
     "fps": 12, "samples": 16, "threads": 8, "resolution": [1280, 720],
-    "title": "Moving magnet over a copper plate: eddy current J",
+    "title": None,
     "arrow_length_m": None, "arrow_width_m": None, "glyph_stride": 1,
-    "preview_steps": None, "video": True, "J_scale": "global",
+    "preview_steps": None, "video": True, "field_scale": "global",
 }
 
+
+# Supported vector fields: dataset key -> (symbol, SI unit, region group, region object).
+# Each keeps its own name and unit through the scene; nothing is relabelled.
+FIELDS = {"J_A_per_m2": ("J", "A/m^2", "conductor", "Conductor"),
+          "B_T": ("B", "T", "body", "Body")}
 
 # Independent copy of the worker's colour stops (viridis subset): the rendered
 # glyph colours are checked against this, not against data read from the file.
@@ -53,9 +58,9 @@ def check_glyphs(pay, glyphs, k, arrow_length, offset):
     (plus the declared vertical display offset), pointing along signed J,
     length and colour linear in |J| on the fixed scale."""
     fails = []
-    jmax = pay["J_scale_max_A_per_m2"]
+    jmax = pay["scale_max"]
     pts = np.asarray(pay["samples"]["point_m"])
-    J = np.asarray(pay["J_A_per_m2"][k])
+    J = np.asarray(pay["vectors"][k])
     pos = {int(i): j for j, i in enumerate(pay["samples"]["id"])}
     expect = {int(i) for i, v in zip(pay["samples"]["id"], J) if np.hypot(v[0], v[2]) > 0}
     got = [int(g["id"]) for g in glyphs]
@@ -134,37 +139,56 @@ def load_dataset(path):
             schema = schema.decode()
         if schema != SCHEMA:
             raise ValueError(f"dataset schema {schema!r} is not {SCHEMA!r}")
+        present = [k for k in FIELDS if f"field/{k}" in f]
+        if len(present) != 1:
+            raise ValueError(f"dataset must hold exactly one of {['field/' + k for k in FIELDS]}, "
+                             f"found {present}")
+        key = present[0]
+        sym, unit, region, rname = FIELDS[key]
         t = f["time_s"][()]
-        J = f["field/J_A_per_m2"][()]
+        V = f[f"field/{key}"][()]
         ids = f["samples/id"][()]
         pts = f["samples/point_m"][()]
-        center = f["magnet/center_m"][()]
-        rot = f["magnet/rotation"][()]
         n, m = len(t), len(ids)
-        checks = [(J.shape == (n, m, 3), f"J shape {J.shape} != ({n}, {m}, 3)"),
+        checks = [(V.shape == (n, m, 3), f"{sym} shape {V.shape} != ({n}, {m}, 3)"),
                   (pts.shape == (m, 3), f"sample points {pts.shape}"),
-                  (center.shape == (n, 3), f"magnet centre {center.shape}"),
-                  (rot.shape == (n, 3, 3), f"magnet rotation {rot.shape}"),
+                  (f"{region}/box_min_m" in f and f"{region}/box_max_m" in f,
+                   f"field {key} needs /{region}/box_min_m and box_max_m"),
                   (len(np.unique(ids)) == m, "sample ids are not unique"),
                   (n >= 2 and np.all(np.diff(t) > 0), "time_s must increase"),
-                  (np.all(np.isfinite(J)), "J contains non-finite values")]
+                  (np.all(np.isfinite(V)), f"{sym} contains non-finite values")]
+        has_magnet = "magnet" in f
+        if has_magnet:
+            center = f["magnet/center_m"][()]
+            rot = f["magnet/rotation"][()]
+            checks += [(center.shape == (n, 3), f"magnet centre {center.shape}"),
+                       (rot.shape == (n, 3, 3), f"magnet rotation {rot.shape}")]
         for ok, msg in checks:
             if not ok:
                 raise ValueError(f"invalid dataset: {msg}")
-        orth = np.abs(np.einsum("nji,njk->nik", rot, rot) - np.eye(3)).max()
-        if orth > 1e-9:
-            raise ValueError(f"magnet rotation is not orthonormal (max error {orth:.2e})")
+        magnet = None
+        if has_magnet:
+            orth = np.abs(np.einsum("nji,njk->nik", rot, rot) - np.eye(3)).max()
+            if orth > 1e-9:
+                raise ValueError(f"magnet rotation is not orthonormal (max error {orth:.2e})")
+            magnet = {"center_m": center.tolist(), "rotation": rot.tolist(),
+                      "size_m": f["magnet/size_m"][()].tolist(),
+                      "magnetization_A_per_m": f["magnet/magnetization_A_per_m"][()].tolist()}
+        shape = f[region].attrs.get("shape", "box")
+        shape = shape.decode() if isinstance(shape, bytes) else str(shape)
+        if shape not in ("box", "sphere"):
+            raise ValueError(f"invalid dataset: /{region} shape {shape!r} is not box or sphere")
         prov = {k: (v.decode() if isinstance(v, bytes) else
                     v.item() if hasattr(v, "item") else v) for k, v in f.attrs.items()}
         return {
             "schema": SCHEMA, "provenance": prov, "time_s": t.tolist(),
-            "magnet": {"center_m": center.tolist(), "rotation": rot.tolist(),
-                       "size_m": f["magnet/size_m"][()].tolist(),
-                       "magnetization_A_per_m": f["magnet/magnetization_A_per_m"][()].tolist()},
-            "conductor": {"box_min_m": f["conductor/box_min_m"][()].tolist(),
-                          "box_max_m": f["conductor/box_max_m"][()].tolist()},
+            "field": {"key": key, "symbol": sym, "unit": unit},
+            "magnet": magnet,
+            "region": {"name": rname, "shape": shape,
+                       "box_min_m": f[f"{region}/box_min_m"][()].tolist(),
+                       "box_max_m": f[f"{region}/box_max_m"][()].tolist()},
             "samples": {"id": ids.tolist(), "point_m": pts.tolist()},
-            "J_A_per_m2": J.tolist(),
+            "vectors": V.tolist(),
         }
 
 
@@ -196,22 +220,25 @@ def field_animation(dataset_path, out_dir, spec=None, timeout_s=3600):
     s.update(spec or {})
     py, worker, blender_version = resolve_worker()
     pay = load_dataset(dataset_path)
-    J = np.asarray(pay["J_A_per_m2"])
+    J = np.asarray(pay["vectors"])
     n = J.shape[0]
     mag = np.linalg.norm(J, axis=-1)
-    if s["J_scale"] == "global":
+    if s["field_scale"] == "global":
         jmax = float(mag.max())
     else:
-        jmax = float(s["J_scale"])
+        jmax = float(s["field_scale"])
     if not jmax > 0:
-        raise ValueError(f"|J| scale must be positive, got {jmax}")
-    pay["J_scale_max_A_per_m2"] = jmax
+        raise ValueError(f"|{pay['field']['symbol']}| scale must be positive, got {jmax}")
+    pay["scale_max"] = jmax
+    if s["title"] is None:
+        s["title"] = (f"Solved {pay['field']['symbol']} ({pay['field']['unit']})"
+                      + (" with the moving magnet" if pay["magnet"] else ""))
     stride = int(s["glyph_stride"])
     if stride > 1:
         keep = slice(None, None, stride)
         pay["samples"] = {k: v[keep] for k, v in pay["samples"].items()}
-        pay["J_A_per_m2"] = J[:, keep].tolist()
-    lo = np.array(pay["conductor"]["box_min_m"]); hi = np.array(pay["conductor"]["box_max_m"])
+        pay["vectors"] = J[:, keep].tolist()
+    lo = np.array(pay["region"]["box_min_m"]); hi = np.array(pay["region"]["box_max_m"])
     pitch = (hi[0] - lo[0]) / max(np.sqrt(len(pay["samples"]["id"])), 1.0)
     s["arrow_length_m"] = s["arrow_length_m"] or 1.5 * pitch
     s["arrow_width_m"] = s["arrow_width_m"] or 0.5 * pitch
@@ -241,14 +268,14 @@ def field_animation(dataset_path, out_dir, spec=None, timeout_s=3600):
                     "provenance": pay["provenance"], "steps": n,
                     "samples_drawn": len(pay["samples"]["id"])},
         "blender": blender_version, "worker_sha256": _sha256(worker),
-        "spec": s, "J_scale_A_per_m2": [0.0, jmax],
+        "spec": s, "field": pay["field"], "field_scale": [0.0, jmax],
         "scene": {k: back.get(k) for k in ("render", "length_unit", "bbox_m", "interpolations", "objects")},
         "timing": {"fps": s["fps"], "frame_start": back["frame_start"],
                    "frame_end": back["frame_end"],
-                   "interpolation": "none: pose and J held constant between solver steps",
+                   "interpolation": "none: pose and field held constant between solver steps",
                    "camera": back["camera_motion"]},
         "readback": verification,
-        "note": "Rendering readability is not numerical validation; the J values are the solver's.",
+        "note": "Rendering readability is not numerical validation; the field values are the solver's.",
     }
 
 
@@ -266,17 +293,26 @@ def compare(pay, back, spec, steps):
         fails.append("camera is animated")
     if back.get("interpolations") != ["CONSTANT"]:
         fails.append(f"keyframe interpolation {back.get('interpolations')} is not CONSTANT only")
-    lo = np.array(pay["conductor"]["box_min_m"]); hi = np.array(pay["conductor"]["box_max_m"])
-    cb = back.get("bbox_m", {}).get("Conductor")
+    sym, key = pay["field"]["symbol"], pay["field"]["key"]
+    if back.get("field_key") != key or back.get("field_unit") != pay["field"]["unit"]:
+        fails.append(f"field {back.get('field_key')} [{back.get('field_unit')}] != dataset {key} "
+                     f"[{pay['field']['unit']}]")
+    rname = pay["region"]["name"]
+    lo = np.array(pay["region"]["box_min_m"]); hi = np.array(pay["region"]["box_max_m"])
+    cb = back.get("bbox_m", {}).get(rname)
     if cb is None or np.abs(np.array(cb) - np.array([lo, hi])).max() > 1e-8:
-        fails.append(f"conductor bounding box {cb} != dataset {[lo.tolist(), hi.tolist()]}")
+        fails.append(f"{rname} bounding box {cb} != dataset {[lo.tolist(), hi.tolist()]}")
+    if bool(back.get("magnet_present")) != (pay["magnet"] is not None):
+        fails.append(f"magnet object present={back.get('magnet_present')} but dataset magnet "
+                     f"present={pay['magnet'] is not None}")
     if back["n_glyph_objects"] != n:
         fails.append(f"glyph objects {back['n_glyph_objects']} != {n}")
     dt = np.abs(np.array(back["physical_time_s"]) - np.array(pay["time_s"])).max()
     if dt > 1e-12:
         fails.append(f"physical time differs by {dt:.3e} s")
-    if abs(back["J_scale_A_per_m2"][1] - pay["J_scale_max_A_per_m2"]) > 1e-9 * pay["J_scale_max_A_per_m2"]:
-        fails.append("|J| scale differs")
+    fs = back.get("field_scale") or [0.0, float("nan")]
+    if not abs(fs[1] - pay["scale_max"]) <= 1e-9 * pay["scale_max"]:
+        fails.append(f"|{sym}| scale differs")
     per_step = {}
     ids_ref = np.asarray(pay["samples"]["id"])
     for k in steps:
@@ -286,15 +322,18 @@ def compare(pay, back, spec, steps):
         if not np.array_equal(ids[order], np.sort(ids_ref)):
             fails.append(f"step {k}: sample identifiers differ")
             continue
-        Jb = np.asarray(b["J_A_per_m2"]).reshape(-1, 3)
+        Jb = np.asarray(b["vectors"]).reshape(-1, 3)
         pos = {int(i): j for j, i in enumerate(ids_ref)}
-        Jr = np.asarray(pay["J_A_per_m2"][k])[[pos[int(i)] for i in ids]]
+        Jr = np.asarray(pay["vectors"][k])[[pos[int(i)] for i in ids]]
         scale = max(float(np.abs(Jr).max()), 1e-300)
         jerr = float(np.abs(Jb - Jr).max() / scale) if np.abs(Jr).max() > 0 else float(np.abs(Jb).max())
-        perr = float(np.abs(np.asarray(b["center_m"]) - np.asarray(pay["magnet"]["center_m"][k])).max())
-        rerr = float(np.abs(np.asarray(b["rotation"]) - np.asarray(pay["magnet"]["rotation"][k])).max())
-        vis = [v for v in b["visible"] if v.startswith("J_glyph_")]
-        ok_vis = vis == [f"J_glyph_{k:04d}"]
+        if pay["magnet"] is not None:
+            perr = float(np.abs(np.asarray(b["center_m"]) - np.asarray(pay["magnet"]["center_m"][k])).max())
+            rerr = float(np.abs(np.asarray(b["rotation"]) - np.asarray(pay["magnet"]["rotation"][k])).max())
+        else:
+            perr = rerr = 0.0
+        vis = [v for v in b["visible"] if v.startswith(f"{sym}_glyph_")]
+        ok_vis = vis == [f"{sym}_glyph_{k:04d}"]
         label_ok = f"{pay['time_s'][k]:.3f} s" in b["time_label"]
         offset = back.get("glyph_display_offset_m")
         alen = back.get("arrow_length_m")
@@ -306,11 +345,11 @@ def compare(pay, back, spec, steps):
                 fails.append(f"arrow length in file {alen} != requested {spec['arrow_length_m']}")
             gfails, gworst = check_glyphs(pay, b.get("glyphs", []), k, alen, offset)
             fails.extend(gfails)
-        per_step[str(k)] = {"rendered_arrows": gworst, "J_max_rel_err": jerr, "pose_center_max_err_m": perr,
+        per_step[str(k)] = {"rendered_arrows": gworst, "field_max_rel_err": jerr, "pose_center_max_err_m": perr,
                        "pose_rotation_max_err": rerr, "visible_glyphs": vis,
                        "time_label": b["time_label"]}
         if jerr > 1e-6:
-            fails.append(f"step {k}: J readback rel err {jerr:.2e}")
+            fails.append(f"step {k}: {sym} readback rel err {jerr:.2e}")
         if perr > 1e-8 or rerr > 1e-6:
             fails.append(f"step {k}: pose readback err {perr:.2e} m / {rerr:.2e}")
         if not ok_vis:
@@ -318,5 +357,5 @@ def compare(pay, back, spec, steps):
         if not label_ok:
             fails.append(f"step {k}: time label {b['time_label']!r}")
     return {"passed": not fails, "failures": fails, "steps": per_step,
-            "tolerances": {"J_rel": 1e-6, "center_m": 1e-8, "rotation": 1e-6,
-                           "note": "float32 mesh coordinates; J stored as float attribute"}}
+            "tolerances": {"field_rel": 1e-6, "center_m": 1e-8, "rotation": 1e-6,
+                           "note": "float32 mesh coordinates; field stored as float attribute"}}
