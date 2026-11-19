@@ -25,3 +25,31 @@ It reports three error sources separately:
 
 Run: `python two_families.py --out result.json --configs 4:2,8:3`.
 Gmsh is not used; any display export is post-processing only.
+
+## Derivation (`derivation.wls`)
+
+`wolframscript -file derivation.wls` builds on the repository FEEC library
+(`radia_mcp/mathematica/basis_functions/hcurl.wls`) and prints every check:
+
+- S1: the analytic field identities used by the code. The z = pi map is the
+  identity, so a patch outlet at z = pi has no curvature. The field line
+  (u = c, v = 0) lies in the element face x = c over its whole length.
+- S2: for the hex Nedelec/RT pair (p = 2..4), curl maps HCurl into HDiv and
+  div curl = 0. A zero tangential trace forces a zero normal curl, so B_h.n is
+  continuous. A_n and the tangential curl stay free, so they jump across faces.
+  A_h.dl along a chord in a z = const plane has degree 2p+1, so 6-point Gauss
+  per face-split piece is exact.
+- S3: discrete Clebsch. With u, v in H1 (degree p), u grad v is H(curl)
+  conforming and grad u x grad v lies in HDivHexT[2p+1] but not in [2p]. The
+  wedge is conforming and exactly div-free, but a given B_h of order k is not
+  in general a single wedge of order-k labels.
+- S4: d/dz(B_z det J) = det J div B.
+- S5: reconstruction leakage is O(dt^2) + O(dz^3) and geometry error is
+  O(dt^2) + O(dz^4), from series on the analytic surfaces. The polygon flux
+  error over one chord is h^3 (smooth), h^2 (kink), h^(3/2) (fold) or h (jump).
+  A grazing crossing with tangential jump J shifts the outlet by J*2 sqrt(d/c).
+
+A field line lying in a face plus the tangential jump J of B_h gives the discrete
+flow map a steep layer. Its width is about the B_h error, and across it the
+outlet moves by about J times the hugging length. Until the loop spacing h
+resolves this layer, the transported patch flux error is the jump-type O(J h).
