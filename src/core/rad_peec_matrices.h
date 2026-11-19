@@ -83,7 +83,7 @@ struct PEECSegment {
     int parent_segment;     // Parent segment index (-1 if not a sub-filament)
 
     // Optional cross-section width axis (unit, perpendicular to direction);
-    // used only by the opt-in near-pair section-average mutual rule.
+    // used only by the opt-in oriented-box kernel.
     TVector3d width_dir;
     bool has_width_dir = false;
 
@@ -229,14 +229,21 @@ public:
     void EnableVolumeKernel(int quadrature_order);
 
     /**
-     * @brief Opt-in near-pair rule: two bars whose centres are closer than
-     * ``factor`` times the sum of their bounding radii get the mutual
-     * inductance averaged over both rectangular cross-sections (3x3 Gauss
-     * per section, each in its own width/height frame); farther pairs keep
-     * the centreline Neumann mutual.  ``factor`` = 0 (default) keeps the
-     * original model for every pair.  Select before adding geometry.
+     * @brief Opt-in oriented-box kernel for every entry, self included.
+     *
+     * Each bar carries a uniform current density over its oriented
+     * rectangular box (length x width x height in its own frame).  Every
+     * entry is the same Galerkin integral
+     *   L_ij = mu0/(4 pi) (d_i . d_j) / (A_i A_j) int_i int_j dV dV' / |r - r'|,
+     * with the inner integral in closed form (potential of a uniform
+     * rectangular prism) and the outer one by tensor Gauss-Legendre over the
+     * smaller box, at most ``max_order`` points per axis (the order per axis
+     * grows with box extent over centre distance).  L is the Gram matrix of
+     * the box currents under the positive-definite 1/r kernel for any
+     * orientation and for touching or overlapping support.  0 (default)
+     * keeps the original filament model.  Select before adding geometry.
      */
-    void EnableNearSectionAverage(double factor);
+    void EnableOrientedBoxKernel(int max_order);
 
     /// Width axis of the most recently added segment (see PEECSegment::width_dir).
     void SetLastSegmentWidthDir(double x, double y, double z);
@@ -419,7 +426,8 @@ public:
 
 private:
     std::shared_ptr<const VolumeGreenRule> volume_rule_;
-    double near_section_factor_ = 0.0;
+    int box_max_order_ = 0;
+    std::vector<std::vector<double>> box_gauss_x_, box_gauss_w_;  // [n-1]: nodes/weights on [-1,1]
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
@@ -458,12 +466,9 @@ private:
                                     const PEECSegment& seg_j,
                                     int n_gauss = 3) const;
 
-    /** Mutual inductance averaged over two rectangular cross-sections,
-     * each in its own frame (width_dir when given), 3x3 Gauss points per
-     * section, centreline Neumann between the sub-filaments.  Valid for
-     * parallel and non-parallel bars. */
-    double MutualInductanceSectionAverage(const PEECSegment& seg_i,
-                                          const PEECSegment& seg_j) const;
+    /** Oriented-box Galerkin entry (see EnableOrientedBoxKernel). */
+    double OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
+                                 bool self) const;
 
     // Compute self-potential coefficient (disk approximation)
     double SelfPotential(const PEECNode& node) const;

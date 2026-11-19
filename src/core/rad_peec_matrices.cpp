@@ -14,8 +14,6 @@
 #include <queue>
 #include <limits>
 #include <stdexcept>
-#include <cstdint>
-#include <cstring>
 
 #include "rad_parallel.h"
 
@@ -139,18 +137,40 @@ void PEECMatrixBuilder::EnableVolumeKernel(int order) {
     volume_rule_ = std::make_shared<VolumeGreenRule>(order);
 }
 
-void PEECMatrixBuilder::EnableNearSectionAverage(double factor) {
-    if (!segments_.empty()) throw std::logic_error("Select the near-pair rule before adding geometry");
-    // Bit-level finiteness test: the library builds with /fp:fast, under
-    // which NaN comparisons and std::isfinite may be folded away.
-    std::uint64_t bits;
-    std::memcpy(&bits, &factor, sizeof bits);
-    const bool finite = ((bits >> 52) & 0x7FFu) != 0x7FFu;
-    if (!finite || (bits >> 63) != 0u)
-        throw std::invalid_argument("near-pair section-average factor must be finite and >= 0");
-    if (factor > 0.0 && volume_rule_)
-        throw std::logic_error("near-pair section average and the volume kernel are exclusive");
-    near_section_factor_ = factor;
+void PEECMatrixBuilder::EnableOrientedBoxKernel(int max_order) {
+    if (!segments_.empty()) throw std::logic_error("Select the oriented-box kernel before adding geometry");
+    if (max_order < 0 || max_order > 16)
+        throw std::invalid_argument("oriented-box kernel order must be 0 (off) or 1..16");
+    if (max_order > 0 && volume_rule_)
+        throw std::logic_error("the oriented-box kernel and the Cartesian volume kernel are exclusive");
+    box_max_order_ = max_order;
+    box_gauss_x_.assign(max_order, {});
+    box_gauss_w_.assign(max_order, {});
+    const double pi = 3.141592653589793238462643383279502884;
+    for (int n = 1; n <= max_order; ++n) {
+        std::vector<double>& x = box_gauss_x_[n - 1];
+        std::vector<double>& w = box_gauss_w_[n - 1];
+        x.assign(n, 0.0);
+        w.assign(n, 0.0);
+        if (n == 1) { w[0] = 2.0; continue; }
+        for (int i = 0; i < n; ++i) {
+            double z = std::cos(pi * (i + 0.75) / (n + 0.5)), dp = 0.0;
+            for (int it = 0; it < 100; ++it) {
+                double p0 = 1.0, p1 = 0.0;
+                for (int k = 1; k <= n; ++k) {
+                    const double p2 = p1;
+                    p1 = p0;
+                    p0 = ((2 * k - 1) * z * p1 - (k - 1) * p2) / k;
+                }
+                dp = n * (z * p0 - p1) / (z * z - 1.0);
+                const double dz = p0 / dp;
+                z -= dz;
+                if (std::abs(dz) < 1e-15) break;
+            }
+            x[i] = -z;
+            w[i] = 2.0 / ((1.0 - z * z) * dp * dp);
+        }
+    }
 }
 
 void PEECMatrixBuilder::SetLastSegmentWidthDir(double x, double y, double z) {
@@ -599,19 +619,8 @@ double PEECMatrixBuilder::InductanceEntry(int i, int j) const {
         };
         return volume_rule_->Inductance(box(a),box(b));
     }
+    if (box_max_order_ > 0) return OrientedBoxInductance(a, b, i == j);
     if (i == j) return SelfInductance(a);
-    if (near_section_factor_ > 0.0 &&
-        a.cross_section_type == CrossSectionType::RECTANGULAR &&
-        b.cross_section_type == CrossSectionType::RECTANGULAR &&
-        a.width > 1.e-15 && a.height > 1.e-15 && b.width > 1.e-15 && b.height > 1.e-15) {
-        auto radius = [](const PEECSegment& s) {
-            return 0.5 * std::sqrt(s.length * s.length + s.width * s.width + s.height * s.height);
-        };
-        const double dx = a.center.x - b.center.x, dy = a.center.y - b.center.y,
-                     dz = a.center.z - b.center.z;
-        if (std::sqrt(dx * dx + dy * dy + dz * dz) < near_section_factor_ * (radius(a) + radius(b)))
-            return MutualInductanceSectionAverage(a, b);
-    }
     const double dot=a.direction.x*b.direction.x+a.direction.y*b.direction.y+a.direction.z*b.direction.z;
     const bool same_parent=a.parent_segment>=0 && a.parent_segment==b.parent_segment;
     if(same_parent && std::abs(std::abs(dot)-1.)<1.e-3 &&
@@ -1042,46 +1051,117 @@ double PEECMatrixBuilder::MutualInductanceRectBar(
     return M_sum / w_sum;
 }
 
-double PEECMatrixBuilder::MutualInductanceSectionAverage(
-        const PEECSegment& seg_i, const PEECSegment& seg_j) const {
-    auto frame = [](const PEECSegment& s, TVector3d& e_w, TVector3d& e_h) {
-        const TVector3d& d = s.direction;
-        if (s.has_width_dir) {
-            e_w = s.width_dir;
-        } else {
-            const TVector3d ref = std::abs(d.x) < 0.9 ? TVector3d(1, 0, 0) : TVector3d(0, 1, 0);
-            const double x = ref.y * d.z - ref.z * d.y, y = ref.z * d.x - ref.x * d.z,
-                         z = ref.x * d.y - ref.y * d.x;
-            const double n = std::sqrt(x * x + y * y + z * z);
-            e_w = TVector3d(x / n, y / n, z / n);
-        }
-        e_h = TVector3d(d.y * e_w.z - d.z * e_w.y, d.z * e_w.x - d.x * e_w.z,
-                        d.x * e_w.y - d.y * e_w.x);
-    };
-    TVector3d wi, hi, wj, hj;
-    frame(seg_i, wi, hi);
-    frame(seg_j, wj, hj);
-    const double* gp = GAUSS3_PTS;
-    const double* gw = GAUSS3_WTS;
-    double m_sum = 0.0, w_sum = 0.0;
-    for (int a = 0; a < 3; ++a) for (int b = 0; b < 3; ++b) {
-        const double owi = 0.5 * seg_i.width * gp[a], ohi = 0.5 * seg_i.height * gp[b];
-        const PEECSegment fi(TVector3d(seg_i.center.x + owi * wi.x + ohi * hi.x,
-                                       seg_i.center.y + owi * wi.y + ohi * hi.y,
-                                       seg_i.center.z + owi * wi.z + ohi * hi.z),
-                             seg_i.direction, seg_i.length, 0, 0, 0);
-        for (int c = 0; c < 3; ++c) for (int e = 0; e < 3; ++e) {
-            const double owj = 0.5 * seg_j.width * gp[c], ohj = 0.5 * seg_j.height * gp[e];
-            const PEECSegment fj(TVector3d(seg_j.center.x + owj * wj.x + ohj * hj.x,
-                                           seg_j.center.y + owj * wj.y + ohj * hj.y,
-                                           seg_j.center.z + owj * wj.z + ohj * hj.z),
-                                 seg_j.direction, seg_j.length, 0, 0, 0);
-            const double w = gw[a] * gw[b] * gw[c] * gw[e];
-            m_sum += w * MutualInductance(fi, fj);
-            w_sum += w;
-        }
+namespace {
+// ln(u + r) without cancellation when u < 0 (q = r^2 - u^2 > 0).
+inline double LogUPlusR(double u, double r, double q) {
+    return u >= 0.0 ? std::log(u + r) : std::log(q / (r - u));
+}
+// Corner primitive F of int dV / |r| over a rectangular prism.
+inline double PrismCorner(double x, double y, double z) {
+    const double x2 = x * x, y2 = y * y, z2 = z * z;
+    const double r = std::sqrt(x2 + y2 + z2);
+    if (r == 0.0) return 0.0;
+    double t = 0.0;
+    if (x != 0.0 && y != 0.0) t += x * y * LogUPlusR(z, r, x2 + y2);
+    if (y != 0.0 && z != 0.0) t += y * z * LogUPlusR(x, r, y2 + z2);
+    if (z != 0.0 && x != 0.0) t += z * x * LogUPlusR(y, r, z2 + x2);
+    if (x != 0.0) t -= 0.5 * x2 * std::atan(y * z / (x * r));
+    if (y != 0.0) t -= 0.5 * y2 * std::atan(z * x / (y * r));
+    if (z != 0.0) t -= 0.5 * z2 * std::atan(x * y / (z * r));
+    return t;
+}
+// Newtonian potential int_box dV / |p - r|, box bounds given relative to p:
+// sum over corners of (+/-) F, + at (hi, hi, hi).
+inline double PrismPotential(const double lo[3], const double hi[3]) {
+    double v = 0.0;
+    for (int i = 0; i < 2; ++i)
+        for (int j = 0; j < 2; ++j)
+            for (int k = 0; k < 2; ++k) {
+                const int lows = 3 - (i + j + k);  // number of lower limits
+                const double sgn = (lows % 2 == 0) ? 1.0 : -1.0;
+                v += sgn * PrismCorner(i ? hi[0] : lo[0], j ? hi[1] : lo[1], k ? hi[2] : lo[2]);
+            }
+    return v;
+}
+struct BoxFrame {
+    TVector3d c, e[3];
+    double half[3];
+};
+BoxFrame MakeBoxFrame(const PEECSegment& s) {
+    if (s.cross_section_type != CrossSectionType::RECTANGULAR || !(s.width > 0.0) ||
+        !(s.height > 0.0) || !(s.length > 0.0))
+        throw std::invalid_argument(
+            "oriented-box kernel requires rectangular bars with positive length, width and height");
+    BoxFrame f;
+    const TVector3d& d = s.direction;
+    TVector3d ew;
+    if (s.has_width_dir) {
+        ew = s.width_dir;
+    } else {
+        const TVector3d ref = std::abs(d.x) < 0.9 ? TVector3d(1, 0, 0) : TVector3d(0, 1, 0);
+        const double x = ref.y * d.z - ref.z * d.y, y = ref.z * d.x - ref.x * d.z,
+                     z = ref.x * d.y - ref.y * d.x;
+        const double n = std::sqrt(x * x + y * y + z * z);
+        ew = TVector3d(x / n, y / n, z / n);
     }
-    return m_sum / w_sum;
+    f.c = s.center;
+    f.e[0] = d;
+    f.e[1] = ew;
+    f.e[2] = TVector3d(d.y * ew.z - d.z * ew.y, d.z * ew.x - d.x * ew.z, d.x * ew.y - d.y * ew.x);
+    f.half[0] = 0.5 * s.length;
+    f.half[1] = 0.5 * s.width;
+    f.half[2] = 0.5 * s.height;
+    return f;
+}
+}  // namespace
+
+double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
+                                                bool self) const {
+    const BoxFrame fi = MakeBoxFrame(seg_i), fj = MakeBoxFrame(seg_j);
+    const double dot = fi.e[0].x * fj.e[0].x + fi.e[0].y * fj.e[0].y + fi.e[0].z * fj.e[0].z;
+    if (!self && dot == 0.0) return 0.0;  // exactly orthogonal currents: zero Galerkin entry
+    // Outer quadrature over the smaller box (deterministic for the pair).
+    const double vol_i = fi.half[0] * fi.half[1] * fi.half[2];
+    const double vol_j = fj.half[0] * fj.half[1] * fj.half[2];
+    const bool swap = vol_j < vol_i;
+    const BoxFrame& fo = swap ? fj : fi;  // outer (quadrature)
+    const BoxFrame& fn = swap ? fi : fj;  // inner (closed form)
+    const double dx = fo.c.x - fn.c.x, dy = fo.c.y - fn.c.y, dz = fo.c.z - fn.c.z;
+    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    int n[3];
+    for (int k = 0; k < 3; ++k) {
+        const double ext = 2.0 * fo.half[k];
+        const int m = (self || !(dist > 0.0)) ? box_max_order_
+                                               : static_cast<int>(std::ceil(4.0 * ext / dist));
+        n[k] = std::max(1, std::min(box_max_order_, m));
+    }
+    const std::vector<double>& x0 = box_gauss_x_[n[0] - 1];
+    const std::vector<double>& w0 = box_gauss_w_[n[0] - 1];
+    const std::vector<double>& x1 = box_gauss_x_[n[1] - 1];
+    const std::vector<double>& w1 = box_gauss_w_[n[1] - 1];
+    const std::vector<double>& x2 = box_gauss_x_[n[2] - 1];
+    const std::vector<double>& w2 = box_gauss_w_[n[2] - 1];
+    double acc = 0.0;
+    for (int a = 0; a < n[0]; ++a)
+        for (int b = 0; b < n[1]; ++b)
+            for (int c = 0; c < n[2]; ++c) {
+                const double u = fo.half[0] * x0[a], v = fo.half[1] * x1[b], w = fo.half[2] * x2[c];
+                const double px = fo.c.x + u * fo.e[0].x + v * fo.e[1].x + w * fo.e[2].x - fn.c.x;
+                const double py = fo.c.y + u * fo.e[0].y + v * fo.e[1].y + w * fo.e[2].y - fn.c.y;
+                const double pz = fo.c.z + u * fo.e[0].z + v * fo.e[1].z + w * fo.e[2].z - fn.c.z;
+                double lo[3], hi[3];
+                for (int k = 0; k < 3; ++k) {
+                    const double pk = px * fn.e[k].x + py * fn.e[k].y + pz * fn.e[k].z;
+                    lo[k] = -fn.half[k] - pk;
+                    hi[k] = fn.half[k] - pk;
+                }
+                acc += w0[a] * w1[b] * w2[c] * PrismPotential(lo, hi);
+            }
+    // (1/(A_o A_n)) int_o int_n = (L_o / A_n) * mean_o(potential of n)
+    const double mean = acc / 8.0;
+    const double area_n = 4.0 * fn.half[1] * fn.half[2];
+    const double mu0_4pi = 1.0e-7;
+    return mu0_4pi * (self ? 1.0 : dot) * (2.0 * fo.half[0]) * mean / area_n;
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,

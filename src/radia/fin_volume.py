@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 LONGITUDINAL, CIRCUMFERENTIAL, RADIAL = 0, 1, 2
-NEAR_SECTION_AVERAGE = 2.0
+BOX_ORDER = 8
 
 
 @dataclass(frozen=True)
@@ -244,18 +244,50 @@ def build_volume_lattice(sweep, n_layers, *, exponent=2.0):
                          width_dir, port_plus, port_minus, rho, gates)
 
 
+
+def require_energy_admissible(L):
+    """Fail loudly unless the inductance matrix is positive semidefinite.
+
+    A Cholesky factorisation that succeeds proves positive definiteness.
+    When it fails, the symmetric spectrum decides: eigenvalues within the
+    roundoff scale n * eps * lambda_max are null or roundoff modes
+    (admissible, counted); anything below is negative magnetic energy and
+    raises with the witness eigenvalue and its dominant branches.  No
+    diagonal loading or eigenvalue clipping.
+    """
+    L = np.asarray(L, dtype=float)
+    asym = float(np.abs(L - L.T).max())
+    if asym > 0.0:
+        raise ValueError(f"inductance matrix is not symmetric (max |L - L^T| = {asym:.3e} H)")
+    try:
+        np.linalg.cholesky(L)
+        return {"cholesky": True, "min_eig_over_max": None, "n_null": 0}
+    except np.linalg.LinAlgError:
+        pass
+    ev, vec = np.linalg.eigh(L)
+    tol = len(L) * np.finfo(float).eps * ev[-1]
+    if ev[0] < -tol:
+        top = np.argsort(-np.abs(vec[:, 0]))[:6].tolist()
+        raise ValueError(
+            f"inductance matrix has negative energy: min eigenvalue {ev[0]:.6e} H "
+            f"({ev[0] / ev[-1]:.3e} of the largest; roundoff scale {tol:.3e} H), "
+            f"{int(np.sum(ev < -tol))} negative modes; witness branches {top}")
+    return {"cholesky": False, "min_eig_over_max": float(ev[0] / ev[-1]),
+            "n_null": int(np.sum(np.abs(ev) <= tol))}
+
 def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
                      tip_lanes=None, exponent=2.0, route="auto",
                      cad_units_per_meter="auto", max_branches=None,
-                     near_section_average=NEAR_SECTION_AVERAGE):
+                     box_order=BOX_ORDER):
     """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
 
-    ``near_section_average`` is the kernel's opt-in near-pair factor: bars
-    closer than that many bounding radii get the mutual inductance averaged
-    over both cross-sections (each bar's width axis comes from the lattice).
-    Centreline mutuals between near bars do not converge on a skin-depth
-    lattice; 0 selects them anyway (diagnostic only).
+    Every inductance entry, self included, is the Galerkin integral of
+    uniform currents over the bars' oriented boxes (kernel option
+    ``oriented_box_order`` = ``box_order``; each bar's width axis comes from
+    the lattice).  Filament mutuals make the lattice L indefinite: the
+    transverse bars are short, wide plates.  Before the solve, L must pass
+    :func:`require_energy_admissible`.
     """
     from radia.fin_surface_solver import coil_true_residuals
     from radia.fin_sweep import DEFAULT_MAX_BRANCHES, fin_graph_from_step
@@ -278,7 +310,7 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
         cad_units_per_meter=cad_units_per_meter, route=route, max_branches=budget)
     lat = build_volume_lattice(sweep, n_layers, exponent=exponent)
 
-    builder = PEECBuilder(near_section_average=float(near_section_average))
+    builder = PEECBuilder(oriented_box_order=int(box_order))
     for (p0, p1), w, h, wd in zip(lat.branch_xyz, lat.width, lat.height, lat.width_dir):
         n0 = builder.add_node_at(*map(float, p0))
         n1 = builder.add_node_at(*map(float, p1))
@@ -291,6 +323,7 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     topo["segment_nodes"] = lat.branches.copy()
     topo["n_nodes"] = len(lat.nodes)
     topo["ports"] = [(lat.port_plus, lat.port_minus, 0)]
+    energy = require_energy_admissible(np.asarray(topo["L"]))
     peec = PEECCircuitSolver(topo)
 
     r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc, dtype=float)
@@ -305,7 +338,7 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     paths = [[(tuple(map(float, p0)), tuple(map(float, p1)))] for p0, p1 in lat.branch_xyz]
     return {"sweep": sweep, "lattice": lat, "current": current,
             "R_ohm": r_total, "L_H": l_total, "coil_true_residual": residuals,
-            "near_section_average": float(near_section_average),
+            "box_order": int(box_order), "inductance_energy": energy,
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
             "paths": paths, "I_fil": current}
