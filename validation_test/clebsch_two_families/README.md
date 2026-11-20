@@ -55,3 +55,18 @@ A field line lying in a face plus the tangential jump J of B_h gives the discret
 flow map a steep layer. Its width is about the B_h error, and across it the
 outlet moves by about J times the hugging length. Until the loop spacing h
 resolves this layer, the transported patch flux error is the jump-type O(J h).
+
+## Display (`display_surfaces.py`)
+
+Display only. On the two-hex case (default `2x1x1:6`) the script tracks five
+surfaces of each family from the inlet section through B_h = curl(A_h) and
+writes `<out>.msh` (MSH 4.2 ASCII for Gmsh) plus `<out>.json`. The JSON
+carries the same diagnostics as `two_families.py`: projection, signed patch
+flux at z = 0, pi/2, pi, and per surface the tracked and oracle leakage
+together with the crossings of the shared face. The `.msh` carries the
+surfaces, their field lines, the element edges and the shared face x = 0.
+Its views are the distance to the exact surface (nodes) and the family label
+and local |B_h.n|/|B_h| (quad centres). The quantitative leakage is the
+integrated value in the JSON, not the view.
+
+    python display_surfaces.py --out <dir>/display --threads 1
