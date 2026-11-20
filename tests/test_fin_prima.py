@@ -17,10 +17,10 @@ def small_fin():
     the kernel, is under test)."""
     from radia.fin_volume import assemble_fin_volume
 
-    _sweep, lat, builder, topo, _energy = assemble_fin_volume(
+    _sweep, lat, _builder, topo, _energy = assemble_fin_volume(
         FIXTURES / "beak_fin_short.step", sigma=5.8e7, n_layers=1, n_lanes=8,
         n_stations=5, lane_grading="uniform", box_order=4)
-    return lat, builder, topo
+    return lat, topo
 
 
 class _DenseL:
@@ -59,14 +59,14 @@ def test_cpp_prima_matches_python_reference_on_identical_inputs(small_fin):
     Assumes: one port, expansion at s0 = 0 (the Python reference's point)."""
     from radia.fin_prima import reduce_topology
 
-    _lat, builder, topo = small_fin
+    _lat, topo = small_fin
     q = 8
-    model, info = reduce_topology(builder, topo, q)
+    model, info = reduce_topology(topo, q)
     V_py, E_py, G_py, B_py, q_py = _python_prima(topo, q)
     assert info["q"] == q_py == q
     assert info["max_solve_residual"] <= 1e-10, info
 
-    from radia.peec_matrices import prima_reduce  # same entry, raw arrays
+    from radia.peec_matrices import prima_reduce
     raw = prima_reduce(np.asarray(topo["L"]), np.asarray(topo["R"]),
                        np.asarray(topo["segment_nodes"], dtype=np.int32), int(topo["n_nodes"]),
                        [topo["ports"][0][0]], [topo["ports"][0][1]], q)
@@ -86,7 +86,7 @@ def test_full_reference_matches_the_verified_circuit_solver(small_fin):
     from radia.fin_prima import full_port_impedance
     from radia.peec_topology import PEECCircuitSolver
 
-    _lat, _builder, topo = small_fin
+    _lat, topo = small_fin
     z = full_port_impedance(topo["L"], topo["R"], topo["segment_nodes"], topo["n_nodes"],
                             [topo["ports"][0][:2]], F_OP)[0, 0]
     z_ref = complex(PEECCircuitSolver(topo).compute_port_impedance(F_OP))
@@ -100,9 +100,9 @@ def test_reduced_matches_unreduced_and_is_passive(small_fin):
     Assumes: small lattice, dense full solve affordable."""
     from radia.fin_prima import order_error_table, reduce_topology, select_order
 
-    _lat, builder, topo = small_fin
+    _lat, topo = small_fin
     full = len(topo["R"]) + int(topo["n_nodes"]) - 1
-    table = order_error_table(builder, topo, [1, 2, 4, 8, 16, full], F_OP)
+    table = order_error_table(topo, [1, 2, 4, 8, 16, full], F_OP)
     err = [row["rel_error"] for row in table["rows"]]
     assert err[-1] <= 1e-9, table
     assert err[3] <= 1e-3 * err[0], err
@@ -112,7 +112,7 @@ def test_reduced_matches_unreduced_and_is_passive(small_fin):
     with pytest.raises(ValueError, match="explicit tolerance"):
         select_order(table, None)
 
-    model, _ = reduce_topology(builder, topo, 8)
+    model, _ = reduce_topology(topo, 8)
     G = -model.A
     for sym in (model.E, G + G.T):
         ev = np.linalg.eigvalsh(0.5 * (sym + sym.T))
@@ -153,11 +153,15 @@ def test_block_arnoldi_two_ports_reaches_the_exact_impedance_matrix():
     assert np.linalg.norm(z_q - z) <= 1e-9 * np.linalg.norm(z), (z_q, z)
     r2 = prima_reduce(L, R, br, n_nodes, [p[0] for p in ports], [p[1] for p in ports], 2)
     assert r2["q"] == 2 and r2["B"].shape == (2, 2)
+    with pytest.raises(ValueError, match="start-block rank"):
+        prima_reduce(L, R, br, n_nodes, [p[0] for p in ports], [p[1] for p in ports], 1)
 
 
 def test_prima_rejects_unsupported_input():
     """Guards: fail-loud input contract (no silent repair).
-    Assumes: nothing beyond the C++ validation messages."""
+    Assumes: nothing beyond the C++ validation messages.  The parallel-edge
+    case has a zero-incidence loop (1, -1) with negative energy that the
+    reduced-E check cannot see; only the full-L admission rejects it."""
     from radia.peec_matrices import prima_reduce
 
     L, R, br, n_nodes = _ladder()
@@ -177,6 +181,10 @@ def test_prima_rejects_unsupported_input():
     for change, message in cases:
         with pytest.raises((ValueError, RuntimeError), match=message):
             prima_reduce(**{**ok, **change})
+    par = np.array([[1, 0], [1, 0]], dtype=np.int32)
+    with pytest.raises(RuntimeError, match="L is not positive definite"):
+        prima_reduce(np.array([[0.0, 1e-9], [1e-9, 0.0]]), np.full(2, 1e-3), par, 2,
+                     [1], [0], 2)
     indefinite = L - 2.0 * np.linalg.eigvalsh(L).max() * np.eye(len(R))
     with pytest.raises(RuntimeError, match="positive definite|negative energy"):
         prima_reduce(**{**ok, "L": indefinite, "s0": 2 * math.pi * F_OP})

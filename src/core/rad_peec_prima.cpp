@@ -119,12 +119,23 @@ ReducedModel Reduce(const PortModelInput& in, std::size_t order, double s0) {
         }
     };
 
+    // Full magnetic energy admission: L itself must be positive definite.
+    // The reduced-E check below cannot see an energy hole of L that the
+    // Krylov basis misses (e.g. a zero-incidence loop with negative energy).
+    int n = static_cast<int>(N), info = 0;
+    char uplo = 'L';
+    {
+        std::vector<double> Lc(in.L);
+        RADIA_PRIMA_POTRF(&uplo, &n, Lc.data(), &n, &info);
+        if (info != 0)
+            throw std::runtime_error("peec_prima: L is not positive definite (full magnetic energy "
+                                     "not admissible, dpotrf info " + std::to_string(info) + ")");
+    }
+
     // Cholesky of K = R + s0 L (symmetric, so the row-major buffer is its own transpose).
     std::vector<double> K(N * N);
     for (std::size_t i = 0; i < N * N; ++i) K[i] = s0 * in.L[i];
     for (std::size_t i = 0; i < N; ++i) K[i * N + i] += in.R[i];
-    int n = static_cast<int>(N), info = 0;
-    char uplo = 'L';
     RADIA_PRIMA_POTRF(&uplo, &n, K.data(), &n, &info);
     if (info != 0)
         throw std::runtime_error("peec_prima: R + s0 L is not positive definite (dpotrf info "
@@ -239,8 +250,12 @@ ReducedModel Reduce(const PortModelInput& in, std::size_t order, double s0) {
         for (double& x : w) x /= after;
         basis.push_back(std::move(w));
     };
-    for (std::size_t p = 0; p < P && basis.size() < order; ++p)
+    for (std::size_t p = 0; p < P; ++p)
         accept(solve_pencil(Bcol[p]), -1 - static_cast<int>(p));
+    if (basis.size() > order)
+        throw std::invalid_argument("peec_prima: order " + std::to_string(order)
+                                    + " is below the independent port start-block rank "
+                                    + std::to_string(basis.size()));
     for (std::size_t j = 0; j < basis.size() && basis.size() < order; ++j) {
         Vec Ev(dim, 0.0);
         apply_L(basis[j].data(), Ev.data());

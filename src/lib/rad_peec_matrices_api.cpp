@@ -293,15 +293,6 @@ public:
      *
      * Returns dict with L, R, P (optional), incidence matrix (CSR), ports.
      */
-    py::dict prima_reduce(PrimaIArr branch_nodes, std::size_t n_nodes,
-                          const std::vector<int>& port_plus, const std::vector<int>& port_minus,
-                          std::size_t order, double s0) {
-        if (!matrices_built_)
-            throw std::runtime_error("prima_reduce needs build_topology() first");
-        return PrimaReduceToDict(PrimaInput(matrices_.L, matrices_.R, branch_nodes, n_nodes,
-                                            port_plus, port_minus), order, s0);
-    }
-
     py::dict build_topology(bool include_star = false, double eps_eff = 1.0) {
         matrices_ = builder_->Build(include_star, eps_eff);
         matrices_built_ = true;
@@ -1334,24 +1325,6 @@ Example:
 
         .def("clear", &PyPEECBuilder::clear, "Clear all geometry")
 
-        .def("prima_reduce", &PyPEECBuilder::prima_reduce,
-             py::arg("branch_nodes"), py::arg("n_nodes"), py::arg("port_plus"),
-             py::arg("port_minus"), py::arg("order"), py::arg("s0") = 0.0,
-             R"doc(
-             PRIMA reduction of the built L and R with a caller-owned incidence.
-
-             Block Arnoldi on (G + s0 E)^-1 E from (G + s0 E)^-1 B and the
-             congruence E_q = V^T E V, G_q = V^T G V, B_q = V^T B of the MNA
-             port model E = [[L,0],[0,0]], G = [[R,A^T],[-A,0]], B = [0;P]
-             (port current in, port voltage out).  Ground is port_minus[0].
-             Needs build_topology() first.  Raises on malformed input, a
-             failed Cholesky factor, a shifted solve with true residual
-             above 1e-6, or negative reduced magnetic energy.
-
-             Returns dict: V, E, G, B, q, n_full, s0, deflated,
-             max_solve_residual, min_E_eig_over_max.
-             )doc")
-
         // Topology-aware methods
         .def("add_node_at", &PyPEECBuilder::add_node_at,
              py::arg("x"), py::arg("y"), py::arg("z"),
@@ -1849,7 +1822,23 @@ Example:
           },
           py::arg("L"), py::arg("R"), py::arg("branch_nodes"), py::arg("n_nodes"),
           py::arg("port_plus"), py::arg("port_minus"), py::arg("order"), py::arg("s0") = 0.0,
-          "PRIMA reduction of a dense branch port model; see PEECBuilder.prima_reduce.");
+          R"doc(
+          PRIMA reduction of a dense branch port model.
+
+          L, R and the incidence (branch_nodes, n_nodes, ports) are passed
+          together so the energy and the incidence come from one model.
+          Block Arnoldi on (G + s0 E)^-1 E from (G + s0 E)^-1 B and the
+          congruence E_q = V^T E V, G_q = V^T G V, B_q = V^T B of the MNA
+          port model E = [[L,0],[0,0]], G = [[R,A^T],[-A,0]], B = [0;P]
+          (port current in, port voltage out).  Ground is port_minus[0].
+          Raises on malformed input, L not positive definite, an order
+          below the independent port start-block rank, a failed Cholesky
+          factor, a shifted solve with true residual above 1e-6, or
+          negative reduced magnetic energy.
+
+          Returns dict: V, E, G, B, q, n_full, s0, deflated,
+          max_solve_residual, min_E_eig_over_max.
+          )doc");
     m.def("tet_potential",
           [](DArr x, DArr verts) {
               if (x.size() != 3 || verts.ndim() != 2 || verts.shape(0) != 4 || verts.shape(1) != 3)

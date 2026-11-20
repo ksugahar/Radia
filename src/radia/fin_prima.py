@@ -6,7 +6,9 @@ The full port model is the modified nodal analysis of the lattice
     E = [[L, 0], [0, 0]],  G = [[R, A^T], [-A, 0]],  B = [0; P]
 
 with the port current as input and the port voltage as output.  The
-reduction runs in C++ (:meth:`radia.peec_matrices.PEECBuilder.prima_reduce`):
+reduction runs in C++ (:func:`radia.peec_matrices.prima_reduce`), which takes
+L, R and the incidence together from one assembled topology and requires L
+itself to be positive definite:
 block Arnoldi on ``(G + s0 E)^-1 E`` from ``(G + s0 E)^-1 B`` and the
 congruence ``V^T E V``, ``V^T G V``, ``V^T B``, which keeps passivity.
 
@@ -38,17 +40,20 @@ def _port_model(reduced, port_names, metadata):
                                dict(metadata))
 
 
-def reduce_topology(builder, topology, order, *, s0=0.0, port_names=None):
-    """PRIMA model of a built ``PEECBuilder`` with the incidence in ``topology``.
+def reduce_topology(topology, order, *, s0=0.0, port_names=None):
+    """PRIMA model of one assembled topology.
 
-    ``topology`` holds ``segment_nodes`` (branch node pairs), ``n_nodes`` and
-    ``ports``; ``builder`` holds the L and R of those branches
-    (``build_topology`` called).  Returns ``(DescriptorPortModel, info)``.
+    ``topology`` holds ``L``, ``R``, ``segment_nodes`` (branch node pairs),
+    ``n_nodes`` and ``ports`` of the same model, so energy and incidence
+    cannot come from different models.  Returns ``(DescriptorPortModel, info)``.
     """
+    from radia.peec_matrices import prima_reduce
+
     plus, minus = _ports(topology)
     branches = np.ascontiguousarray(np.asarray(topology["segment_nodes"], dtype=np.int32))
-    reduced = builder.prima_reduce(branches, int(topology["n_nodes"]), plus, minus,
-                                   int(order), float(s0))
+    reduced = prima_reduce(np.asarray(topology["L"], dtype=float),
+                           np.asarray(topology["R"], dtype=float), branches,
+                           int(topology["n_nodes"]), plus, minus, int(order), float(s0))
     info = {k: reduced[k] for k in ("q", "n_full", "s0", "deflated",
                                     "max_solve_residual", "min_E_eig_over_max")}
     model = _port_model(reduced, port_names, {"source": "radia.fin_prima", **info,
@@ -93,7 +98,7 @@ def full_port_impedance(L, R, branches, n_nodes, ports, frequency):
     return rhs.T @ x
 
 
-def order_error_table(builder, topology, orders, frequency, *, s0=0.0):
+def order_error_table(topology, orders, frequency, *, s0=0.0):
     """Relative port-impedance error of each PRIMA order at ``frequency``.
 
     The error is ``||Z_q - Z_full||_F / ||Z_full||_F`` with ``Z_full`` from
@@ -106,7 +111,7 @@ def order_error_table(builder, topology, orders, frequency, *, s0=0.0):
     s = 2j * math.pi * float(frequency)
     rows = []
     for order in orders:
-        model, info = reduce_topology(builder, topology, order, s0=s0)
+        model, info = reduce_topology(topology, order, s0=s0)
         z_q = model.response(s)
         rows.append({"order": int(order), "q": int(info["q"]),
                      "Z_ohm": z_q.tolist() if z_q.size > 1 else complex(z_q[0, 0]),
