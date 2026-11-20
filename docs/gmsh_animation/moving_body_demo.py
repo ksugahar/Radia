@@ -5,7 +5,7 @@ Creates:
   1. A stator geometry (STEP file, static)
   2. A rotor mesh (Netgen .vol with curving)
   3. A GMSH .msh v4.2 with multiple time steps (rotor displaced at each step)
-  4. A .geo companion file for GMSH settings
+The tracked animation.geo (+ .geo.opt) merges the STEP and the .msh for display.
 
 The resulting .msh can be opened in GMSH and animated using
   Tools -> Options -> General -> Time step slider
@@ -15,8 +15,8 @@ Usage:
   python moving_body_demo.py
 
 Requirements:
-  pip install ngsolve
-  gmsh (for visualization)
+  ngsolve (with netgen.occ for the STEP), radia
+  Gmsh 5 + MSH 4.2 (for visualization)
 """
 
 import math
@@ -36,24 +36,11 @@ def create_stator_step(filename):
 
     Stator = hollow cylinder (outer R=0.08, inner R=0.052, height=0.1).
     """
-    try:
-        from netgen.occ import OCCGeometry, Box, Cylinder as OCCCylinder, Axes
-        ax = Axes(Pnt(0, 0, 0), Vec(0, 0, 1))
-        outer = OCCCylinder(ax, 0.08, 0.1)
-        inner = OCCCylinder(ax, 0.052, 0.1)
-        stator = outer - inner
-        geo = OCCGeometry(stator)
-        geo.Glue()
-        # Export STEP
-        from netgen.occ import step as occ_step
-        occ_step.OCCGeometryWrite(geo, filename)
-        return True
-    except Exception:
-        pass
-
-    # Fallback: create STEP via simple CSG description file
-    # (STEP export requires OCC which may not be available in fork)
-    return False
+    from netgen.occ import Cylinder as OCCCylinder, Pnt as OPnt, Z
+    stator = OCCCylinder(OPnt(0, 0, 0), Z, 0.08, 0.1) - OCCCylinder(OPnt(0, 0, 0), Z, 0.052, 0.1)
+    stator.WriteStep(filename)
+    if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
+        raise RuntimeError(f"stator STEP was not written: {filename}")
 
 
 def create_rotor_vol(filename, order=2):
@@ -138,28 +125,6 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
     return output_msh
 
 
-def create_geo_file(output_geo, stator_step, rotor_msh):
-    """Create .geo companion file for GMSH visualization settings."""
-    with open(output_geo, "w") as f:
-        f.write(f'// Animation: stator (STEP) + moving rotor (.msh)\n')
-        f.write(f'// Open this file in GMSH, then use View -> Animation\n\n')
-        f.write(f'Merge "{os.path.basename(stator_step)}";\n')
-        f.write(f'Merge "{os.path.basename(rotor_msh)}";\n\n')
-        f.write(f'// Display settings\n')
-        f.write(f'Mesh.SurfaceEdges = 1;\n')
-        f.write(f'Mesh.VolumeEdges = 0;\n')
-        f.write(f'Mesh.NumSubEdges = 4;  // curved element rendering\n\n')
-        f.write(f'// Displacement view settings\n')
-        f.write(f'View[0].VectorType = 5;  // displacement\n')
-        f.write(f'View[0].DisplacementFactor = 1.0;\n')
-        f.write(f'View[0].ShowElement = 1;\n')
-        f.write(f'View[0].ShowScale = 0;\n\n')
-        f.write(f'// Animation\n')
-        f.write(f'General.TranslationX = 0;\n')
-        f.write(f'General.TranslationY = 0;\n')
-    print(f"Written: {output_geo}")
-
-
 def main():
     out_dir = os.path.join(_this_dir)
     os.makedirs(out_dir, exist_ok=True)
@@ -181,35 +146,18 @@ def main():
     area = Integrate(CF(1), m, BND)
     print(f"   Rotor: {m.ne} elements, V={vol:.6e} m^3, A={area:.6e} m^2")
 
-    # Create stator STEP (if OCC available)
     print("\n2. Creating stator geometry (STEP)...")
-    has_step = create_stator_step(stator_step)
-    if has_step:
-        print(f"   Stator STEP: {stator_step}")
-    else:
-        print("   OCC not available -- stator STEP skipped")
-        print("   (demo works without stator, rotor animation still visible)")
+    create_stator_step(stator_step)
+    print(f"   Stator STEP: {stator_step}")
 
-    # Create animation .msh
     print("\n3. Creating animation .msh (GMSH v4.2)...")
     create_animation_msh(rotor_vol, rotor_msh,
                           n_steps=20, displacement=0.15,
                           direction=(1, 0, 0))
 
-    # Create .geo companion
-    print("\n4. Creating .geo companion...")
-    if has_step:
-        create_geo_file(geo_file, stator_step, rotor_msh)
-    else:
-        # Just rotor
-        with open(geo_file, "w") as f:
-            f.write(f'Merge "{os.path.basename(rotor_msh)}";\n')
-            f.write(f'Mesh.NumSubEdges = 4;\n')
-            f.write(f'View[0].VectorType = 5;\n')
-            f.write(f'View[0].DisplacementFactor = 1.0;\n')
-            f.write(f'View[0].ShowElement = 1;\n')
-            f.write(f'View[0].ShowScale = 0;\n')
-        print(f"   Written: {geo_file}")
+    # The tracked animation.geo (+ .geo.opt) is the curated launch file; it is not rewritten here.
+    if not os.path.isfile(geo_file):
+        raise FileNotFoundError(f"tracked launch file missing: {geo_file}")
 
     print("\n" + "=" * 60)
     print("To view animation:")
