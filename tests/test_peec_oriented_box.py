@@ -264,10 +264,11 @@ def test_oblique_crossing_uses_the_composite_rule():
     assert flipped[0, 1] == -got[0, 1] and flipped[1, 1] == got[1, 1]
 
 
+
 def _plates(thick, gap, tilt=0.0):
     """Two parallel 2 mm x 1 mm plates of thickness thick stacked along x
     with surface gap gap (negative = overlap); the second is tilted by tilt
-    rad about y (near-parallel cross axes)."""
+    rad about y."""
     out = []
     for x, r in ((0.0, np.eye(3)), (thick + gap, _rot([0, 1, 0], tilt))):
         c = np.array([x, 0, 0])
@@ -276,44 +277,66 @@ def _plates(thick, gap, tilt=0.0):
 
 
 @pytest.mark.parametrize("thick", [20e-6, 2e-6])
-def test_thin_plates_through_contact_match_the_cartesian_rule(thick):
-    """Guards: for thin, nearly parallel plates (tilt 1e-7 rad, so the SAT
-    cross axes are near-degenerate) the mutual entry through separation,
-    tolerance-scale gaps, contact and overlap matches the independent
-    aligned Cartesian volume rule in relative (2e-3) and absolute
-    (1e-6 L_ii) terms, varies continuously across contact and stays PSD.
-    Assumes: tilt 1e-7 changes the exact entry by far less than 1e-6;
-    Cartesian order 64 is converged for these plates."""
-    gaps = [5 * thick, thick, 1e-12, 0.0, -1e-12, -0.5 * thick]
-    prev = None
-    for gap in gaps:
-        ref = _matrix(_plates(thick, gap), volume_order=64)
-        got = _matrix(_plates(thick, gap, tilt=1e-7), oriented_box_order=24)
-        err = abs(got[0, 1] - ref[0, 1])
-        assert err <= 2e-3 * abs(ref[0, 1]), (thick, gap, got[0, 1], ref[0, 1])
-        assert err <= 1e-6 * ref[0, 0] or err <= 2e-3 * abs(ref[0, 1]), (thick, gap, err)
-        ev = np.linalg.eigvalsh(got)
-        assert ev[0] >= -4 * np.finfo(float).eps * ev[-1], (thick, gap, ev)
-        if prev is not None and abs(gap) <= 1e-12:
-            assert abs(got[0, 1] - prev) <= 1e-5 * abs(prev), (thick, gap, got[0, 1], prev)
-        if abs(gap) <= 1e-12:
-            prev = got[0, 1]
+def test_thin_plates_agree_with_the_cartesian_rule_and_are_continuous(thick):
+    """Guards: thin aligned plates from separation through contact to
+    overlap match the independent Cartesian rule (order 128) within 1e-5;
+    inside the SAT contact tolerance (about 2.2e-15 m here) the entry is
+    constant to 1e-12 (only the geometry moves), and just beyond it (-1e-14 m, composite path) it moves
+    by less than 1e-6; tilts bracketing the 1e-12 cross-axis cutoff (1e-13,
+    1e-11 rad) give the same entry within 1e-12.
+    Assumes: measured order-24 error at most 3.2e-7 on frozen 0024997
+    (controls/diag_amend2); not a discriminating control between the
+    composite and single-tensor rules (both pass)."""
+    for gap in (-0.5 * thick, -0.1 * thick, 0.1 * thick):
+        ref = _matrix(_plates(thick, gap), volume_order=128)[0, 1]
+        got = _matrix(_plates(thick, gap), oriented_box_order=24)[0, 1]
+        assert abs(got / ref - 1) <= 1e-5, (thick, gap, got, ref)
+    at = [_matrix(_plates(thick, g), oriented_box_order=24)[0, 1] for g in (-2e-16, 0.0, 2e-16)]
+    assert max(abs(a / at[1] - 1) for a in at) <= 1e-12, at
+    beyond = _matrix(_plates(thick, -1e-14), oriented_box_order=24)[0, 1]
+    assert abs(beyond / at[1] - 1) <= 1e-6, (beyond, at[1])
+    t13, t11 = (_matrix(_plates(thick, -0.5 * thick, a), oriented_box_order=24)[0, 1] for a in (1e-13, 1e-11))
+    assert abs(t13 / t11 - 1) <= 1e-12, (t13, t11)
+    m = _matrix(_plates(thick, -0.5 * thick, 1e-7), oriented_box_order=24)
+    ev = np.linalg.eigvalsh(m)
+    assert ev[0] >= -4 * np.finfo(float).eps * ev[-1], ev
 
 
-def test_nested_child_cell_matches_the_cartesian_rule():
-    """Guards: a small bar wholly inside a larger one (the containment
-    shortcut of the composite rule) matches the independent Cartesian
-    volume rule within 2e-3, also after a rigid rotation, is bitwise
-    independent of insertion order and keeps |L_ij| <= sqrt(L_ii L_jj).
-    Assumes: Cartesian order 64 is converged for the nested pair."""
-    big = ((0.0, 0, -1e-3), (0.0, 0, 1e-3), 1e-3, 0.4e-3, (0, 1, 0))
-    small = ((0.05e-3, 0.1e-3, -0.3e-3), (0.05e-3, 0.1e-3, 0.4e-3), 0.3e-3, 0.1e-3, (0, 1, 0))
-    ref = _matrix([big, small], volume_order=64)
-    rot = _rot([1, 2, 3], 0.7)
-    for r in (np.eye(3), rot):
-        bars = [(r @ p0, r @ p1, w, h, r @ np.asarray(wd, float)) for p0, p1, w, h, wd in (big, small)]
+_BIG = ((0.0, 0, -1e-3), (0.0, 0, 1e-3), 1e-3, 0.4e-3, (0, 1, 0))
+
+
+def _small(zc):
+    return ((0.05e-3, 0.1e-3, zc - 0.35e-3), (0.05e-3, 0.1e-3, zc + 0.35e-3), 0.3e-3, 0.1e-3, (0, 1, 0))
+
+
+def test_partially_penetrating_bar_uses_contained_descendant_cells():
+    """Guards: a small bar half inside a larger one (end face crossing; the
+    composite rule's descendant cells inside the big bar take the contained
+    path) matches the Cartesian rule (order 128) within 1e-6, in the
+    identity and a rotated frame, bitwise independent of insertion order.
+    Discriminating: the single-tensor rule (frozen 42f3032) is 3.0e-5 off,
+    the composite rule 3.5e-8 (controls/diag_amend2).
+    Assumes: Cartesian order 128 converged to well below 1e-6 here."""
+    ref = _matrix([_BIG, _small(0.9e-3)], volume_order=128)
+    for r in (np.eye(3), _rot([1, 2, 3], 0.7)):
+        bars = [(r @ p0, r @ p1, w, h, r @ np.asarray(wd, float))
+                for p0, p1, w, h, wd in (_BIG, _small(0.9e-3))]
         got = _matrix(bars, oriented_box_order=24)
-        assert np.allclose(got, ref, rtol=2e-3, atol=0), (got, ref)
+        assert abs(got[0, 1] / ref[0, 1] - 1) <= 1e-6, (got[0, 1], ref[0, 1])
         swapped = _matrix(bars[::-1], oriented_box_order=24)
         assert swapped[0, 1] == got[0, 1] and swapped[0, 0] == got[1, 1]
+
+
+def test_contained_top_level_box_matches_the_cartesian_rule():
+    """Guards: a small bar wholly inside a larger one (top-level containment
+    shortcut, no subdivision) matches the Cartesian rule within 2e-3 in the
+    identity and a rotated frame and keeps |L_ij|^2 <= L_ii L_jj.
+    Assumes: Cartesian order 64 converged for the nested pair; coarse guard,
+    not a composite-rule discriminator."""
+    small = ((0.05e-3, 0.1e-3, -0.3e-3), (0.05e-3, 0.1e-3, 0.4e-3), 0.3e-3, 0.1e-3, (0, 1, 0))
+    ref = _matrix([_BIG, small], volume_order=64)
+    for r in (np.eye(3), _rot([1, 2, 3], 0.7)):
+        bars = [(r @ p0, r @ p1, w, h, r @ np.asarray(wd, float)) for p0, p1, w, h, wd in (_BIG, small)]
+        got = _matrix(bars, oriented_box_order=24)
+        assert np.allclose(got, ref, rtol=2e-3, atol=0), (got, ref)
         assert got[0, 1] ** 2 <= got[0, 0] * got[1, 1], got
