@@ -4,12 +4,12 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.request import urlopen
 
 LOCK = Path(__file__).with_name("ci_fork_wheels.json")
 
@@ -39,7 +39,7 @@ def verify_installed(lock):
     return lock["sources"]
 
 
-def install(lock, directory):
+def install(lock):
     if sys.prefix == sys.base_prefix:
         raise RuntimeError("Install requires an isolated CI venv")
     with tempfile.TemporaryDirectory(prefix="radia-fork-wheels-") as tmp:
@@ -47,7 +47,8 @@ def install(lock, directory):
         for wheel in lock["wheels"].values():
             filename = wheel["filename"]
             path = Path(tmp) / filename
-            shutil.copyfile(directory / filename, path)
+            with urlopen(wheel["url"], timeout=60) as response, path.open("wb") as output:
+                shutil.copyfileobj(response, output)
             if digest(path) != wheel["sha256"]:
                 raise RuntimeError(f"Incorrect wheel SHA-256: {filename}")
             paths.append(str(path))
@@ -60,10 +61,7 @@ def main():
     args = parser.parse_args()
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
     if args.action == "install":
-        directory = os.environ.get("RADIA_FORK_WHEEL_DIR")
-        if not directory:
-            raise RuntimeError("RADIA_FORK_WHEEL_DIR must point to the provisioned fork wheel directory")
-        install(lock, Path(directory))
+        install(lock)
     print(json.dumps(verify_installed(lock)))
 
 

@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+from io import BytesIO
 import json
 from pathlib import Path
 import sys
@@ -14,14 +15,15 @@ SPEC.loader.exec_module(fork)
 
 def test_modified_wheel_cannot_reach_pip(tmp_path, monkeypatch):
     filename = "netgen_mesher-test.whl"
-    (tmp_path / filename).write_bytes(b"modified")
+    url = "https://example.invalid/netgen_mesher-test.whl"
+    monkeypatch.setattr(fork, "urlopen", lambda url, timeout: BytesIO(b"modified"))
     lock = {"wheels": {"netgen-mesher": {
-        "filename": filename, "sha256": hashlib.sha256(b"verified").hexdigest()
+        "filename": filename, "url": url, "sha256": hashlib.sha256(b"verified").hexdigest()
     }}}
     monkeypatch.setattr(sys, "prefix", str(tmp_path))
     monkeypatch.setattr(fork.subprocess, "run", lambda *a, **k: pytest.fail("pip received an unverified wheel"))
     with pytest.raises(RuntimeError, match="Incorrect wheel SHA-256"):
-        fork.install(lock, tmp_path)
+        fork.install(lock)
 
 
 def test_lock_identifies_both_cpu_wheels_and_native_dlls():

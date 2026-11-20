@@ -1,23 +1,25 @@
 {
   "sources": {
-    "ngsolve": "ab43f6fcd28b8a5122be9532a3fa0ec8830dc675",
-    "netgen": "1987f29498a90692dbb09aa0160de086267dcf07"
+    "ngsolve": "f2223d8b1df476c5a9d4cbe0bf3917ec1a83075a",
+    "netgen": "b2894d9f05b16175a3c361aaba53387b6e0a73f6"
   },
   "wheels": {
     "netgen-mesher": {
-      "filename": "netgen_mesher-6.2.2608+radia.1987f294-cp312-cp312-win_amd64.whl",
-      "version": "6.2.2608+radia.1987f294",
-      "sha256": "260cb034c045d16330c609b94db0f3d61421696fc6c2ef46ee24465d57851e7b"
+      "filename": "netgen_mesher-6.2.2608+radia.b2894d9f-cp312-cp312-win_amd64.whl",
+      "version": "6.2.2608+radia.b2894d9f",
+      "url": "https://github.com/ksugahar/netgen/releases/download/radia-win-b2894d9f/netgen_mesher-6.2.2608%2Bradia.b2894d9f-cp312-cp312-win_amd64.whl",
+      "sha256": "4edd8c7a14d76bc862b9f97f5f5aaccade60cb05d5d71bdc22fb7e43dbcacf00"
     },
     "ngsolve": {
-      "filename": "ngsolve-6.2.2608+radia.ab43f6fcd.cpu-cp312-cp312-win_amd64.whl",
-      "version": "6.2.2608+radia.ab43f6fcd.cpu",
-      "sha256": "84c1f0f043db7d283bb54574e40bc7146db61d4ababf4a9f0af75671c835a607"
+      "filename": "ngsolve-6.2.2608+radia.f2223d8b1.cpu-cp312-cp312-win_amd64.whl",
+      "version": "6.2.2608+radia.f2223d8b1.cpu",
+      "url": "https://github.com/ksugahar/ngsolve/releases/download/radia-win-f2223d8b/ngsolve-6.2.2608%2Bradia.f2223d8b1.cpu-cp312-cp312-win_amd64.whl",
+      "sha256": "6951885984012046aed578863bfeb5204c2a6261c1004bf80584d0501d81a475"
     }
   },
   "dlls": {
-    "ngcore.dll": "9e7e8399a341123a7179d5111d003e32ae61974272295c46e685bb9a1d18fdf1",
-    "nglib.dll": "e08041683aed6b77442f171a79c0ddee4de63da36a98d1c15d7744683932d96d",
-    "libngsolve.dll": "98b6b28cd4371c7c3513a951dc86988d55a6da83471dfb27790655f9b7c8651f"
+    "ngcore.dll": "b76dffb7ba856a8c8c4bb46fb99c4c36ab476552e6e6118a819b72ab6b304dc2",
+    "nglib.dll": "ccfeb9a5c0e81fd97e27fb84841616f94557482980be57fe21e5971f0ec024a2",
+    "libngsolve.dll": "67c6e15386040bfb77d9f5e9049628fa17a16763aab432f90cda7804d186faab"
   }
 }
