@@ -20,8 +20,8 @@ intent=release_quad.editable_intent
 @pytest.fixture(autouse=True)
 def explicit_roles(monkeypatch,tmp_path):
     monkeypatch.setenv(intent.INTENT_FILE_ENV,str(tmp_path/'intent.json'))
-    for role in ('100','VALIDATION'):
-        host='build-test' if role=='100' else 'validation-test'
+    for role in ('VALIDATION',):
+        host='validation-test'
         values={'SSH':host,'HOSTNAME':host,'PYTHON':f'C:/Runtime/{host}/python.exe',
                 'QA_PYTHON':f'C:/QA/{host}/Scripts/python.exe',
                 'EDITABLE_REPO':f'C:/Sources/{host}','EDITABLE_COMMIT':'a'*40,
@@ -38,14 +38,14 @@ def test_remote_verifier_is_the_shipped_tool_without_private_default_aliases():
     assert release_quad._PATH_ALIASES==()
 
 
-def test_verify_editable_visits_both_normal_roles(monkeypatch):
+def test_verify_editable_visits_the_validation_role_only(monkeypatch):
     calls=[]
     monkeypatch.setattr(release_quad,'_verify_role_editable',lambda role:calls.append(role) or 0)
     assert release_quad.cmd_verify_editable(None)==0
-    assert set(calls)=={'100','validation'} and len(calls)==2
+    assert calls==['validation']
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_normal_verification_limits_the_remote_cli_to_radia(monkeypatch,role):
     calls=[]
     monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:0)
@@ -68,10 +68,10 @@ def test_remote_drift_unverified_or_failed_exit_are_not_success(monkeypatch,coun
 def test_failed_live_check_stops_before_intent_transport(monkeypatch):
     monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:4)
     monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda *args:pytest.fail('No transport after failed payload check'))
-    assert release_quad._verify_role_editable('100')==1
+    assert release_quad._verify_role_editable('validation')==1
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_record_current_binds_one_role_and_one_package(monkeypatch,role):
     seen=[]
     monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda target,argv:seen.append((target,argv)) or (0,{'results':[],'record_file':'r','exit_code':0},''))
@@ -83,28 +83,28 @@ def test_record_current_binds_one_role_and_one_package(monkeypatch,role):
 
 
 def args_for(role='validation',**updates):
-    values=dict(host=role,package=['radia'],source=[f'C:/Sources/{"build-test" if role=="100" else "validation-test"}'],reason='reviewed update',record_current=False,rollback=False,dry_run=False)
+    values=dict(host=role,package=['radia'],source=['C:/Sources/validation-test'],reason='reviewed update',record_current=False,rollback=False,dry_run=False)
     return SimpleNamespace(**(values|updates))
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_repoint_dry_run_exposes_bound_plan_without_any_action(monkeypatch,capsys,role):
     monkeypatch.setattr(release_quad,'run',lambda *a,**k:pytest.fail('dry-run network action'))
     assert release_quad.cmd_repoint(args_for(role,dry_run=True))==0
     plan=json.loads(capsys.readouterr().out)
     assert plan['role']==role and plan['mode']=='editable'
-    assert plan['binding']['role']==('build' if role=='100' else 'validation')
+    assert plan['binding']['role']=='validation'
     assert plan['install'][-1]==args_for(role).source[0]+'[gpu]'
 
 
-@pytest.mark.parametrize('updates',[{'source':[]},{'source':['C:/Wrong']},{'reason':''},{'record_current':True},{'rollback':True},{'package':['radia-mcp']},{'host':'retired-test'}])
+@pytest.mark.parametrize('updates',[{'source':[]},{'source':['C:/Wrong']},{'reason':''},{'record_current':True},{'rollback':True},{'package':['radia-mcp']},{'host':'retired-test'},{'host':'100'}])
 def test_repoint_refuses_incomplete_wrong_source_and_foreign_package_requests(monkeypatch,updates):
     monkeypatch.setattr(release_quad,'_deploy_editable_role',lambda *a:pytest.fail('Invalid plan mutated runtime'))
     monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda *a:pytest.fail('Invalid plan recorded intent'))
     assert release_quad.cmd_repoint(args_for(**updates))==2
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_repoint_routes_only_selected_normal_role(monkeypatch,role):
     seen=[]
     monkeypatch.setattr(release_quad,'_deploy_editable_role',lambda actual,reason:seen.append((actual,reason)) or 3)

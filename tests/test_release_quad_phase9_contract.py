@@ -1,4 +1,4 @@
-"""Guards: four independent normal/QA probes fail closed on drift.
+"""Guards: the normal and separate QA probes fail closed on drift.
 
 Assumes: explicit synthetic Windows role bindings; no SSH is executed.
 """
@@ -19,8 +19,8 @@ spec.loader.exec_module(quad)
 
 @pytest.fixture(autouse=True)
 def explicit_validation_runtime(monkeypatch):
-    for role in ("100", "VALIDATION"):
-        host = "build-test" if role == "100" else "validation-test"
+    for role in ("VALIDATION",):
+        host = "validation-test"
         for key, value in {
             "SSH": host,
             "HOSTNAME": host,
@@ -65,8 +65,8 @@ def test_phase9_probes_each_normal_editable_and_its_separate_qa_wheel(monkeypatc
         return probe()
     monkeypatch.setattr(quad, "_probe", record)
     assert quad.cmd_phase9(None) == 0
-    assert set(seen) == {"build", "build QA", "validation", "validation QA"}
-    for role in ("100", "validation"):
+    assert set(seen) == {"validation", "validation QA"}
+    for role in ("validation",):
         target = quad._editable_target(role)
         label, host, qa_python = quad._solver_qa_target(role)
         assert seen[label] == (
@@ -109,7 +109,7 @@ def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
     assert quad.cmd_phase9(None) == 0
 
 
-@pytest.mark.parametrize("label", ["build", "build QA", "validation", "validation QA"])
+@pytest.mark.parametrize("label", ["validation", "validation QA"])
 @pytest.mark.parametrize("failure", [None, ""])
 def test_failed_host_cannot_be_omitted(monkeypatch, failure, label):
     monkeypatch.setattr(

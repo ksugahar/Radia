@@ -1,8 +1,8 @@
 """The gate that publishes and the tool that produces evidence name one role list.
 
 Guards: exact-wheel release acceptance is the validation role only. The CPU
-build host prepares release candidates and is never an acceptance target, while
-release_quad keeps it as an explicit runtime-maintenance role. The promotion
+build host prepares release candidates and is neither an acceptance target nor
+a release_quad runtime role (that runtime installs GPU extras). The promotion
 verifier imports the shared list rather than carrying a private copy.
 Assumes: tools/release_acceptance.py is the single owner of the list.
 """
@@ -44,7 +44,7 @@ def test_release_quad_reaches_every_acceptance_role():
     quad = _load("release_quad")
     assert set(quad.RELEASE_ACCEPTANCE_HOSTS) <= set(quad.SOLVER_TARGETS), (
         quad.RELEASE_ACCEPTANCE_HOSTS, tuple(quad.SOLVER_TARGETS))
-    assert tuple(quad.SOLVER_TARGETS) == ("validation", "100"), tuple(quad.SOLVER_TARGETS)
+    assert tuple(quad.SOLVER_TARGETS) == ("validation",), tuple(quad.SOLVER_TARGETS)
 
 
 def test_the_promotion_gate_has_no_private_host_list():
@@ -58,11 +58,9 @@ def test_the_promotion_gate_has_no_private_host_list():
 
 def test_retired_host_has_no_release_route():
     quad = _load("release_quad")
-    assert not hasattr(quad, "SSH_MDX1")
-    assert quad._deploy_mdx("md" + "x") == 2
-    assert quad.cmd_phase8e(None) == 2
-    assert "mdx2" not in quad.SIMULINK_TARGETS
-    assert not hasattr(quad, "SSH_MDX2")
+    for name in ("SSH_MDX1", "SSH_MDX2", "SSH_100", "_deploy_mdx", "_deploy_100",
+                 "cmd_phase8e", "cmd_temp_shadows", "SIMULINK_TARGETS"):
+        assert not hasattr(quad, name), name
 
 
 def test_release_all_is_read_only_candidate_verification(monkeypatch):
@@ -78,15 +76,6 @@ def test_release_all_is_read_only_candidate_verification(monkeypatch):
     monkeypatch.setattr(quad, "cmd_done", lambda received: calls.append(received) or 4)
     assert quad.cmd_all(args) == 4
     assert calls == [args]
-
-
-def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
-    import inspect
-    quad = _load("release_quad")
-    source = inspect.getsource(quad.cmd_done)
-    assert "cmd_phase8e(" not in source
-    assert "cmd_temp_shadows(" not in source
-
 
 
 @pytest.mark.parametrize("defect", [None, "source", "role", "artifact", "acceptance", "ci",

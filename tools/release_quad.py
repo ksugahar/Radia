@@ -9,17 +9,20 @@ Usage:
     python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_quad.py phase8 [--target validation|100|all]
-        Install the bound Radia source editable on either operating role,
-        with metadata-pinned GPU dependencies and same-source native payloads.
-        Exact-wheel QA runs in separate explicitly configured environments.
-        Never change radia-mcp or cubit-mesh-export.
+    python tools/release_quad.py deployment-plan
+        Read-only: print the four release lanes (build and validation roles)
+        and the solver runtime role. Never contacts a host.
 
-    python tools/release_quad.py phase8e
-        Reject the retired compute refresh route without contacting a host.
+    python tools/release_quad.py phase8 [--target validation]
+        Install the bound Radia source editable on the validation role, with
+        metadata-pinned GPU dependencies and same-source native payloads.
+        Exact-wheel QA runs in a separate explicitly configured environment.
+        The CPU-only build host is never a target: it prepares CPU candidates
+        and installs no GPU dependencies. Never change radia-mcp or
+        cubit-mesh-export.
 
     python tools/release_quad.py phase9
-        Cross-machine editable consistency probe.
+        Editable and isolated exact-wheel QA consistency probe.
 
 
     python tools/release_quad.py done --source-sha SHA --manifest FILE [--release-source PATH] [--public-summary FILE]
@@ -28,7 +31,7 @@ Usage:
         acceptance evidence for release-owner handoff. Does not deploy.
 
     python tools/release_quad.py verify-editable
-        Read-only: verify both bound normal editable installations.
+        Read-only: verify the bound normal editable installation.
 
     python tools/release_quad.py repoint --host <role> --package radia --source <path> --reason "..."
         Explicitly update one bound normal Radia source and verify it before
@@ -56,15 +59,12 @@ import hashlib
 import importlib.util
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import tomllib
-import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
 from pathlib import Path
@@ -122,24 +122,17 @@ if GIT_EXE is None:
     raise RuntimeError("Git is required by tools/release_quad.py")
 
 REPO = Path(__file__).resolve().parent.parent
-EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
 # The three repository packages installed editable on the development tier.
 EDITABLE_PACKAGES = ("radia", "cubit-mesh-export", "radia-mcp")
-# Resolve 100号機 through the machine SSH configuration.  Its LAN address may
-# change between lab network segments, while the supported host alias remains
-# stable and carries the correct user/key settings.
-SSH_100 = "100"
-# 100号機's editable lives only in this dedicated development venv, separate
-# from the machine's release runtime (host policy, 2026-10-04).
-MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
-SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
+# The solver runtime installs the "[gpu]" extra and verifies GPU payloads, so
+# it runs only on the validation role. The CPU-only build host prepares CPU
+# candidates; it is neither a deployment nor an acceptance target.
 _KNOWN_SOLVER_TARGETS = {
     "validation": ("validation", None, None),
-    "100": ("build", SSH_100, "python"),
 }
 # Exact-wheel release acceptance runs only on the validation role
-# (release_acceptance.py owns that list); the build host stops at the CPU
-# candidate. SOLVER_TARGETS are the explicit runtime-maintenance targets.
+# (release_acceptance.py owns that list). SOLVER_TARGETS are the explicit
+# runtime-maintenance targets.
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
     import release_acceptance as _release_acceptance
@@ -281,14 +274,6 @@ def _runtime_guard_powershell(python_path):
             "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n")
 
 
-SIMULINK_TARGETS = {"100": SOLVER_TARGETS["100"]}
-
-
-def _editable_repo_100():
-    """Return the explicitly selected build-role source, never a historic path."""
-    return _editable_target("100")["source"]
-
-
 def _radia_version() -> str:
     return _read_repo_versions({"radia"})["radia"]
 
@@ -308,14 +293,15 @@ def _release_head():
 
 
 def cmd_deployment_plan(args):
-    """Read-only normal editable routing; QA runtimes remain separate."""
-    plans = []
-    for role in SOLVER_TARGETS:
-        target = _editable_target(role)
-        plans.append(dict(host=role, solver_runtime="editable", python=target["python"],
-                          source=target["source"], source_commit=target["commit"],
-                          solver_action="verify-and-install-radia-gpu", isolated_wheel_qa_required=True))
-    print(json.dumps(plans, indent=2))
+    """Read-only: the four release lanes and the solver runtime role; no host access."""
+    plan = dict(
+        lanes=[dict(lane=name, build_role=build, validation_role=validation)
+               for name, (build, validation) in _release_acceptance.RELEASE_LANES.items()],
+        published_wheel_lane=_release_acceptance.PUBLISHED_WHEEL_LANE,
+        solver_runtime_roles=list(SOLVER_TARGETS),
+        acceptance_roles=list(RELEASE_ACCEPTANCE_HOSTS),
+    )
+    print(json.dumps(plan, indent=2))
     return 0
 
 
@@ -396,38 +382,6 @@ def _solver_hdf5_requirement() -> str:
     return requirements[0]
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _simulink_manifest(package: Path) -> dict:
-    verifier = REPO / "tools/verify_simulink_release.py"
-    result = subprocess.run(
-        [sys.executable, str(verifier), str(package), "--manifest-only"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
-    with zipfile.ZipFile(package) as bundle:
-        return json.loads(bundle.read("manifest.json"))
-
-
-def _simulink_state_path(package_sha256: str) -> Path:
-    return SIMULINK_GATE_ROOT / f"simulink-{package_sha256}.json"
-
-
-def _simulink_mex_sha256(manifest: dict) -> str:
-    matches = [row.get("sha256") for row in manifest.get("files", [])
-               if row.get("path") == "packages/radia-simulink/matlab/radia_mex.mexw64"]
-    if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
-        raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
-    return matches[0].lower()
-
-
 def _release_tag_commit(version: object) -> str | None:
     """Return the peeled commit for the public ``v<version>`` tag, if any."""
     if not isinstance(version, str) or not version.strip():
@@ -455,234 +409,6 @@ def _verify_head_release_tag() -> int:
         )
         return 4
     ok(f"release commit is anchored at v{version} ({head[:12]})")
-    return 0
-
-
-def _simulink_candidate_commit_is_release_anchored(
-        manifest: dict, head: str) -> tuple[bool, str]:
-    """Accept an exact tagged candidate when release-tooling later advances main.
-
-    The archive bytes are built and tested from the tagged release source.  The
-    definition-of-done controller can acquire a later release-only repair, so
-    requiring the archive commit to equal the controller's ``HEAD`` would reject
-    the already-tested public artifact.  A candidate is therefore accepted only
-    when its commit is the peeled ``v<version>`` tag and remains an ancestor of
-    the controller commit.
-    """
-    commit = manifest.get("commit")
-    version = manifest.get("radia_version") or manifest.get("version")
-    if not isinstance(commit, str) or not commit.strip():
-        return False, "Simulink manifest has no source commit"
-    commit = commit.strip().lower()
-    tag_commit = _release_tag_commit(version)
-    if tag_commit is None:
-        return False, f"Simulink manifest version {version!r} has no v<version> release tag"
-    if commit != tag_commit:
-        return False, "Simulink manifest commit does not match its peeled release tag"
-    ancestry = _git("merge-base", "--is-ancestor", commit, head, check=False)
-    if ancestry.returncode != 0:
-        return False, "Simulink tagged commit is not an ancestor of the release controller HEAD"
-    return True, f"Simulink candidate is anchored at v{version} ({commit[:12]})"
-
-
-def _write_simulink_state(path: Path, state: dict, target: str) -> None:
-    """Merge only the completed target under a process lock, then publish atomically."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Keep this lock file: unlinking it could split concurrent writers' locks.
-    with path.with_suffix(path.suffix + '.lock').open('a+b') as lock:
-        deadline = time.monotonic() + 30
-        while True:
-            try:
-                if os.name == 'nt':
-                    import msvcrt
-                    lock.seek(0)
-                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError(f'Timed out locking candidate state: {path}')
-                time.sleep(0.05)
-        temporary = None
-        try:
-            previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-            if previous:
-                for field in ('schema', 'package_sha256', 'wheel_sha256', 'commit',
-                              'ci_run_id', 'mex_sha256'):
-                    if previous.get(field) != state.get(field):
-                        raise ValueError(f'Candidate state identity mismatch: {field}')
-            merged = {**state, 'targets': {**previous.get('targets', {})}}
-            merged['targets'][target] = state['targets'][target]
-            with tempfile.NamedTemporaryFile(
-                    mode='w', encoding='utf-8', dir=path.parent,
-                    prefix=path.name + '.', suffix='.tmp', delete=False) as output:
-                temporary = Path(output.name)
-                json.dump(merged, output, indent=2)
-                output.write('\n')
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, path)
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
-            if os.name == 'nt':
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-
-
-def _run_ssh_powershell(host: str, script: str, timeout: int):
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    command = ["ssh", "-v", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-               host, "pwsh", "-NoProfile",
-               "-EncodedCommand", encoded]
-    # Use a file rather than inherited output pipes: Windows SSH/Engine
-    # descendants can keep a pipe open after the command has exited.
-    with tempfile.TemporaryDirectory(prefix="radia-ssh-", dir=tempfile.gettempdir()) as scratch:
-        with (Path(scratch) / "output.log").open("w+b") as output:
-            result = subprocess.run(command, stdin=subprocess.DEVNULL,
-                                    stdout=output, stderr=subprocess.STDOUT,
-                                    timeout=timeout)
-            output.seek(0)
-            return subprocess.CompletedProcess(
-                command, result.returncode,
-                output.read().decode("utf-8", errors="replace"), "")
-
-
-def _engine_sessions(args, requested: list[str]) -> dict[str, str] | None:
-    """Per-target Engine names or com:PID selectors; None after a bad pair."""
-    sessions = {}
-    for entry in getattr(args, "engine_session", None) or []:
-        key, separator, name = entry.partition("=")
-        if not separator or key not in requested or not name.strip() or key in sessions:
-            fail("engine sessions must be unique selected-target=shared-name pairs")
-            return None
-        sessions[key] = name.strip()
-    return sessions
-
-
-def _local_com_target_error(key: str, session: str | None) -> str | None:
-    """COM borrows the chosen host's desktop, never another host's session."""
-    if not session or not session.startswith("com:"):
-        return None
-    if not re.fullmatch(r"com:[1-9][0-9]*", session):
-        return "COM session must be com:<positive PID>"
-    expected = os.environ.get("RADIA_ACCEPTANCE_HOSTNAME_" + key.upper(), "").strip().lower()
-    if not expected or platform.node().strip().lower() != expected:
-        return f"Run COM acceptance locally in the selected {key} desktop logon"
-    return None
-
-
-def _run_simulink_candidate_target(
-        key: str, package: Path, package_sha256: str,
-        success_marker: str, engine_session: str | None = None,
-        python_executable: str | None = None) -> tuple[bool, str]:
-    if key not in SIMULINK_TARGETS:
-        return False, "unsupported Simulink target"
-    label, host, python_command = SIMULINK_TARGETS[key]
-    if engine_session and engine_session.startswith("com:"):
-        error = _local_com_target_error(key, engine_session)
-        if error:
-            return False, error
-        host = None
-    if python_executable:
-        # The verifier hands its own interpreter to MATLAB as RADIA_PYTHON_EXECUTABLE.
-        python_command = "'" + python_executable.replace("'", "''") + "'"
-    verifier = REPO / "tools/verify_simulink_release.py"
-    if host is None:
-        command = [
-            python_executable or sys.executable, str(verifier), str(package),
-            "--matlab", MATLAB_EXE,
-        ]
-        if engine_session:
-            command.extend(["--engine-session", engine_session])
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-    else:
-        remote_root_posix = f"C:/temp/radia-release-quad/{package_sha256[:16]}"
-        remote_root_windows = remote_root_posix.replace("/", "\\")
-        prepare = f"New-Item -ItemType Directory -Force -Path '{remote_root_windows}' | Out-Null\n"
-        created = _run_ssh_powershell(host, prepare, timeout=60)
-        if created.returncode != 0:
-            return False, created.stderr.strip() or created.stdout.strip()
-        remote_package = f"{remote_root_posix}/{package.name}"
-        remote_verifier = f"{remote_root_posix}/{verifier.name}"
-        for source, destination in (
-                (package, remote_package), (verifier, remote_verifier)):
-            copied = subprocess.run(
-                ["scp", str(source), f"{host}:{destination}"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=180,
-            )
-            if copied.returncode != 0:
-                return False, copied.stderr.strip() or copied.stdout.strip()
-        session_option = (
-            " --engine-session '" + engine_session.replace("'", "''") + "'"
-            if engine_session else "")
-        invocation = (
-            f"& {python_command} '{remote_verifier}' '{remote_package}' "
-            f"--matlab '{MATLAB_EXE}'{session_option}\nexit $LASTEXITCODE\n"
-        )
-        result = _run_ssh_powershell(host, invocation, timeout=420)
-    output = ((result.stdout or "") + (result.stderr or "")).strip()
-    if result.returncode != 0:
-        return False, output
-    if success_marker not in output or '"status": "passed"' not in output:
-        return False, f"{label} did not emit both release success markers:\n{output}"
-    return True, output
-
-
-def cmd_simulink_candidate(args):
-    """Reject the retired CPU MEX release route."""
-    fail("CPU MEX releases are unsupported; use the independent radia-simulink release workflow.")
-    return 4
-
-
-def _verify_simulink_candidate_state(package_arg: str) -> int:
-    package = Path(package_arg).resolve()
-    try:
-        manifest = _simulink_manifest(package)
-        package_sha256 = _sha256_file(package)
-        mex_sha256 = _simulink_mex_sha256(manifest)
-    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
-        fail(f"invalid Simulink candidate: {error}")
-        return 2
-    state_path = _simulink_state_path(package_sha256)
-    if not state_path.is_file():
-        fail("Simulink candidate has no release-quad state. Run "
-             "`release_quad simulink-candidate --package <zip> --target all`.")
-        return 4
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    if state.get("package_sha256") != package_sha256 or \
-            state.get("commit") != manifest.get("commit") or \
-            state.get("mex_sha256") != mex_sha256:
-        fail("Simulink candidate state does not match the supplied archive")
-        return 4
-    missing = [key for key in SIMULINK_TARGETS
-               if state.get("targets", {}).get(key, {}).get("status") != "passed"
-               or state.get("targets", {}).get(key, {}).get("mex_sha256") != mex_sha256]
-    if missing:
-        fail(f"Simulink candidate has not passed: {', '.join(missing)}")
-        return 4
-    head = _release_head()
-    anchored, message = _simulink_candidate_commit_is_release_anchored(
-        manifest, head)
-    if not anchored:
-        fail(message)
-        return 4
-    info(message)
-    ok("supplied Simulink candidate passed on the build target")
     return 0
 
 
@@ -838,7 +564,7 @@ def _solver_abi_probe_command(python_command="python"):
 
 
 def _verify_final_pip_checks() -> int:
-    """Check both normal editable and separate exact-wheel QA runtimes."""
+    """Check the normal editable and separate exact-wheel QA runtimes."""
     targets = [_editable_target(role) for role in SOLVER_TARGETS]
     checks = [(t["ssh"], t["python"]) for t in targets]
     checks += [(host, python) for _, host, python in (_solver_qa_target(role) for role in SOLVER_TARGETS)]
@@ -983,56 +709,18 @@ def _editable_install_program(target):
             "subprocess.run(" + repr(check) + ",check=True)\n")
 
 
-def _deploy_100():
-    return _deploy_editable_role("100")
-
-
-def _deploy_mdx(host):
-    """Reject every retired refresh route before runtime or network changes."""
-    fail("Retired compute deployment routes are disabled")
-    return 2
-
-
 def cmd_phase8(args):
-    """Deploy and verify the Radia solver on selected QUAD targets."""
-    targets = [t.strip().lower() for t in (args.target or "validation,100").split(",")]
-    if any(t not in (*SOLVER_TARGETS, "all") for t in targets):
-        fail("unsupported solver target")
+    """Deploy and verify the Radia solver on the validation role."""
+    target = (args.target or "validation").strip().lower()
+    if target not in SOLVER_TARGETS:
+        fail("unsupported solver target; the CPU-only build host is never a deployment target")
         return 2
-    selected = list(SOLVER_TARGETS) if "all" in targets else list(dict.fromkeys(targets))
-    resolved = [_editable_target(role) for role in selected]
-    expected = _release_head()
-    if any(target["commit"] != expected for target in resolved):
+    if _editable_target(target)["commit"] != _release_head():
         raise ValueError("Normal editable source bindings must match the exact release tag")
     rc = cmd_preflight(args)
     if rc != 0:
         return rc
-    for t in targets:
-        if t == "validation":
-            rc = _deploy_validation()
-            if rc != 0:
-                return rc
-        elif t == "100":
-            rc = _deploy_100()
-            if rc != 0:
-                return rc
-        elif t == "all":
-            rc = _deploy_validation()
-            if rc != 0:
-                return rc
-            rc = _deploy_100()
-            if rc != 0:
-                return rc
-        else:
-            fail(f"unknown target: {t!r}")
-            return 2
-    return 0
-
-
-def cmd_phase8e(args):
-    """Reject the retired optional compute refresh command."""
-    fail("Retired compute refresh is disabled; release targets are validation and 100")
-    return 2
+    return _deploy_validation()
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, importlib.metadata as md, os
@@ -1238,21 +926,16 @@ def cmd_phase9(args):
 
     if drift:
         print("")
-        fail(f"{drift} field(s) drift across machines — release NOT done.")
+        fail(f"{drift} field(s) drift across runtimes — release NOT done.")
         return 4
     print("")
-    ok("all fields match across validation / 100号機 — release verified.")
+    ok("all fields match across the normal and isolated QA runtimes — release verified.")
     return 0
 
 
 def cmd_all(args):
     """Verify release candidates without deploying them."""
     return cmd_done(args)
-
-
-def _remote_100_editable_packages():
-    root = _editable_repo_100()
-    return [("radia", root)]
 
 
 def _verify_release_controller(controller, release_sha, version):
@@ -1400,7 +1083,7 @@ def _fresh_import_origin(pkg):
 
 
 # tools/editable_intent.py is piped to the remote interpreter as a script, so
-# 100号機 runs the same verification and repoint code. Arguments travel
+# the target runs the same verification and repoint code. Arguments travel
 # as one base64 JSON token so the remote shell cannot re-split them.
 REMOTE_EDITABLE_VERIFY = _EDITABLE_INTENT_SOURCE
 
@@ -1446,7 +1129,7 @@ def _verify_role_editable(role, report=None):
 
 
 def cmd_verify_editable(args):
-    """Verify both normal editable roles; isolated QA has its own wheel checks."""
+    """Verify the normal editable role; isolated QA has its own wheel checks."""
     for role in SOLVER_TARGETS:_editable_target(role)
     return 0 if sum(_verify_role_editable(role) for role in SOLVER_TARGETS) == 0 else 1
 
@@ -1473,8 +1156,8 @@ def _done_release_source(args):
 
 
 def cmd_repoint(args):
-    """Explicit, bound Radia update on either supported normal operating role."""
-    role = (getattr(args, "host", None) or "100").strip().lower()
+    """Explicit, bound Radia update on the supported normal operating role."""
+    role = (getattr(args, "host", None) or "validation").strip().lower()
     if role not in SOLVER_TARGETS:
         fail("Unsupported editable target role")
         return 2
@@ -1885,20 +1568,6 @@ _MOTOR_ACCEPTANCE_TESTS = (
     "tests/mcp_integration/test_annular_motor_dual_lane_artifact.py",
     "tests/mcp_integration/test_matlab_source_contract.py",
 )
-# Complete root-relative closure the HIBINO run needs (learned 2026-08-07:
-# missing pyproject.toml / maglev data / team28 docs each cost one round trip).
-_MOTOR_SNAPSHOT_ROOTS = (
-    "matlab",
-    "src/matlab",
-    "tests/matlab",
-    "validation_test/radia_mcp",
-    "validation_test/maglev",
-    "docs/maglev/demos/team28",
-)
-_MOTOR_SNAPSHOT_FILES = ("pyproject.toml",)
-_HIBINO_DEST = r"C:\temp\radia_motor_evidence_quad"
-
-
 def _motor_text_sha(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -1961,62 +1630,27 @@ def _motor_acceptance(run_fn=None):
 # CLI
 # ============================================================
 
-def cmd_temp_shadows(args):
-    # cmd_done reaches this from callers that never put tools/ on sys.path.
-    _tools_dir = str(Path(__file__).resolve().parent)
-    if _tools_dir not in sys.path:
-        sys.path.insert(0, _tools_dir)
-    from release_temp_shadows import inspect_shadows
-    if getattr(args, "apply", False):
-        merged = run(["git", "-c", f"safe.directory={REPO.as_posix()}",
-                      "merge-base", "--is-ancestor", "7ffda79d3", "origin/main"],
-                     check=False, capture=True)
-        if merged.returncode:
-            fail("Kelvin source commits are not confirmed in origin/main; refusing cleanup")
-            return 2
-    results = inspect_shadows(apply=getattr(args, "apply", False))
-    print(json.dumps(results, indent=2))
-    return 0 if all(record.get("passed") for record in results.values()) else 2
-
-
 def main():
     p = argparse.ArgumentParser(prog="release_quad",
                                  description="Verify normal editable deployment and isolated exact-wheel release QA.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
+    sub.add_parser("deployment-plan",
+                    help="print the four release lanes and the solver runtime role (read-only)")
     s8 = sub.add_parser("phase8",
-                         help="deploy and verify the Radia solver on validation / 100号機")
-    s8.add_argument("--target", default="validation,100",
-                     help="comma list: validation, 100, all (default validation,100)")
-    sub.add_parser("phase8e",
-                    help="retired compute refresh; always rejected")
+                         help="deploy and verify the Radia solver on the validation role")
+    s8.add_argument("--target", choices=tuple(SOLVER_TARGETS), default="validation")
     sub.add_parser("phase9",
-                    help="cross-machine consistency probe")
-    ss = sub.add_parser(
-        "simulink-candidate",
-        help="verify one extracted Simulink package on the build target")
-    ss.add_argument("--package", required=True,
-                    help="path to an IH preview or full Radia Simulink ZIP")
-    ss.add_argument("--target", default="all",
-                    help="comma list: 100, all")
-    ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
-                    help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable)")
-    ss.add_argument("--python", action="append", metavar="HOST=PATH",
-                    help="candidate interpreter on this target, which runs the verifier and "
-                         "becomes MATLAB's RADIA_PYTHON_EXECUTABLE (repeatable); it must "
-                         "provide the package's radia release")
-
-
-
+                    help="editable and isolated exact-wheel QA consistency probe")
     sub.add_parser("verify-editable",
-                    help="verify validation's fixed Radia wheel and 100号機's development editable")
+                    help="verify the validation role's bound Radia editable installation")
     rp = sub.add_parser(
         "repoint",
         help=("explicit editable move: record previous pointer, pip install -e, "
               "verify, record intent (no process stop, no uninstall)"))
-    rp.add_argument("--host", default="100",
-                    help="100 only; editable installs are not allowed on validation")
+    rp.add_argument("--host", choices=tuple(SOLVER_TARGETS), default="validation",
+                    help="solver runtime role (validation only)")
     rp.add_argument("--package", action="append", default=[],
                     help="package name (repeatable)")
     rp.add_argument("--source", action="append", default=[],
@@ -2043,7 +1677,7 @@ def main():
     sm.add_argument("--no-push", action="store_true",
                     help="stop after the rebase (prep-only)")
     em = sub.add_parser("evidence-motor",
-                        help="regenerate the motor MEX evidence artifact on HIBINO")
+                        help="check the motor evidence SHA pins; CPU MEX regeneration is retired")
     em.add_argument("--check", action="store_true",
                     help="verify the SHA pins only (fast, no MATLAB)")
     em.add_argument("--force", action="store_true",
@@ -2055,17 +1689,12 @@ def main():
         handoff.add_argument("--release-source", help="clean candidate checkout (default: controller checkout)")
         handoff.add_argument("--public-summary",
                              help="write the public four-lane summary that the publish gate reads")
-
-    shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
-    shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")
     args = p.parse_args()
     handler = {
         "preflight":        cmd_preflight,
-        "temp-shadows":     cmd_temp_shadows,
+        "deployment-plan":  cmd_deployment_plan,
         "phase8":           cmd_phase8,
-        "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
-        "simulink-candidate": cmd_simulink_candidate,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "repoint":          cmd_repoint,

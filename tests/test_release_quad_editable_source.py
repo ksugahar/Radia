@@ -28,8 +28,8 @@ assert _GIT is not None, "Git is required by the release-quad contract tests"
 
 @pytest.fixture(autouse=True)
 def explicit_role_bindings(monkeypatch):
-    for role in ("100", "VALIDATION"):
-        host="build-test" if role=="100" else "validation-test"
+    for role in ("VALIDATION",):
+        host="validation-test"
         for key,value in {"SSH":host,"HOSTNAME":host,"PYTHON":f"C:/Runtime/{host}/python.exe",
                           "QA_PYTHON":f"C:/QA/{host}/Scripts/python.exe",
                           "EDITABLE_REPO":f"C:/Sources/{host}","EDITABLE_COMMIT":"a"*40,
@@ -179,36 +179,6 @@ def test_remote_default_aliases_match_local_normalization_contract():
         assert alias in release_quad.REMOTE_EDITABLE_VERIFY
 
 
-
-
-def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
-        tmp_path, monkeypatch):
-    repo = tmp_path / "release-controller"
-    repo.mkdir()
-    _git(repo, "init")
-    _git(repo, "config", "user.name", "Radia Test")
-    _git(repo, "config", "user.email", "radia-test@example.invalid")
-    tracked = repo / "tracked.txt"
-    tracked.write_text("candidate\n", encoding="ascii")
-    _git(repo, "add", "tracked.txt")
-    _git(repo, "commit", "-m", "candidate source")
-    candidate = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "tag", "-a", "v4.95.75", "-m", "release", candidate)
-    tracked.write_text("controller repair\n", encoding="ascii")
-    _git(repo, "commit", "-am", "controller repair")
-    head = _git(repo, "rev-parse", "HEAD")
-    monkeypatch.setattr(release_quad, "REPO", repo)
-
-    valid, message = release_quad._simulink_candidate_commit_is_release_anchored(
-        {"commit": candidate, "radia_version": "4.95.75"}, head)
-
-    assert valid
-    assert "v4.95.75" in message
-
-    valid, message = release_quad._simulink_candidate_commit_is_release_anchored(
-        {"commit": candidate, "radia_version": "4.95.76"}, head)
-    assert not valid
-    assert "release tag" in message
 
 
 def test_local_release_source_requires_exact_sha_and_tracked_clean(
@@ -542,17 +512,6 @@ def test_gpu_named_native_check_cannot_replace_cpu_native_acceptance(monkeypatch
     assert not ok and release_quad.RELEASE_CHECK_RUN in message
 
 
-@pytest.mark.parametrize("host", ["100"])
-def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypatch, host):
-    env = getattr(release_quad, "EDITABLE_REPO_" + host.upper() + "_ENV")
-    monkeypatch.setenv(env, "C:/release-quad/v5.1.0-ccccccccc/")
-    monkeypatch.setattr(release_quad, "_release_commit",
-                        lambda: pytest.fail("explicit root must not resolve a controller tag"))
-    assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc/"
-
-
-
-
 @pytest.mark.parametrize(
     "expected_version,shadow,wrong_root,expected_rc,expected_message",
     [
@@ -613,7 +572,7 @@ def test_validation_config_fails_before_any_phase8_action(monkeypatch, missing):
     monkeypatch.setattr(release_quad, "run", lambda *a, **kw: pytest.fail("No remote action"))
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda *a: pytest.fail("No preflight before config"))
     with pytest.raises(ValueError, match=missing):
-        release_quad.cmd_phase8(Namespace(target="100,validation"))
+        release_quad.cmd_phase8(Namespace(target="validation"))
 
 
 @pytest.mark.parametrize("name,value", [
@@ -631,7 +590,7 @@ def test_validation_rejects_ambiguous_runtime_configuration(monkeypatch,name,val
 
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_explicit_source_is_required_without_historic_defaults(monkeypatch,role):
     """Guards: no implicit source choice. Assumes: synthetic private bindings."""
     setting='RADIA_RELEASE_EDITABLE_REPO_'+role.upper()
@@ -639,37 +598,39 @@ def test_explicit_source_is_required_without_historic_defaults(monkeypatch,role)
     with pytest.raises(ValueError,match=setting):release_quad._editable_target(role)
 
 
-def test_deployment_plan_names_normal_editable_and_separate_qa(monkeypatch,capsys):
-    """Guards: dry planning never installs. Assumes: no actual host lookup."""
+def test_deployment_plan_names_four_lanes_and_validation_runtime_only(monkeypatch,capsys):
+    """Guards: dry planning never installs; GPU lanes never run on the CPU build role. Assumes: no host lookup."""
     import json
     monkeypatch.setattr(release_quad,'run',lambda *a,**k:pytest.fail('planning mutated a host'))
+    monkeypatch.setattr(release_quad,'_editable_target',lambda *a:pytest.fail('planning resolved a host'))
     assert release_quad.cmd_deployment_plan(None)==0
-    plans=json.loads(capsys.readouterr().out)
-    assert {p['host'] for p in plans}=={'100','validation'}
-    for plan in plans:
-        bound=release_quad._editable_target(plan['host'])
-        assert plan['solver_runtime']=='editable' and plan['python']==bound['python']
-        assert plan['source']==bound['source'] and plan['source_commit']=='a'*40
-        assert plan['isolated_wheel_qa_required'] is True
+    plan=json.loads(capsys.readouterr().out)
+    lanes={row['lane']:(row['build_role'],row['validation_role']) for row in plan['lanes']}
+    assert lanes==release_quad.RELEASE_LANES
+    assert set(lanes)=={'cpu','linux-python-gpu','windows-python-gpu','matlab'}
+    assert all(lanes[name][0]!='cpu-build' for name in lanes if name!='cpu'),lanes
+    assert plan['solver_runtime_roles']==['validation'] and plan['acceptance_roles']==['validation']
+    assert plan['published_wheel_lane']=='windows-python-gpu'
 
 
-@pytest.mark.parametrize('targets',['validation,100','all'])
-def test_phase8_checks_all_bindings_before_first_mutation(monkeypatch,targets):
-    """Guards: a later invalid target cannot leave partial installs. Assumes: mocked actions."""
+def test_phase8_rejects_the_build_host_and_checks_binding_before_mutation(monkeypatch):
+    """Guards: the CPU-only build host is never a GPU-extra deployment target. Assumes: mocked actions."""
     from argparse import Namespace
     seen=[]
     monkeypatch.setattr(release_quad,'_release_head',lambda:'a'*40)
     monkeypatch.setattr(release_quad,'cmd_preflight',lambda a:seen.append('preflight') or 0)
     monkeypatch.setattr(release_quad,'_deploy_validation',lambda:seen.append('validation') or 0)
-    monkeypatch.setattr(release_quad,'_deploy_100',lambda:seen.append('100') or 0)
-    assert release_quad.cmd_phase8(Namespace(target=targets))==0
-    assert seen==['preflight','validation','100']
-    seen.clear();monkeypatch.setenv('RADIA_RELEASE_EDITABLE_COMMIT_100','b'*40)
-    with pytest.raises(ValueError,match='release tag'):release_quad.cmd_phase8(Namespace(target=targets))
+    for target in ('100','all','validation,100'):
+        assert release_quad.cmd_phase8(Namespace(target=target))==2
+    assert seen==[]
+    assert release_quad.cmd_phase8(Namespace(target='validation'))==0
+    assert seen==['preflight','validation']
+    seen.clear();monkeypatch.setenv('RADIA_RELEASE_EDITABLE_COMMIT_VALIDATION','b'*40)
+    with pytest.raises(ValueError,match='release tag'):release_quad.cmd_phase8(Namespace(target='validation'))
     assert seen==[]
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 @pytest.mark.parametrize('installer_rc',[0,3])
 def test_role_deployment_checks_identity_and_installer_before_intent(monkeypatch,role,installer_rc):
     """Guards: install failure never records success. Assumes: observed remote transport."""
@@ -684,7 +645,7 @@ def test_role_deployment_checks_identity_and_installer_before_intent(monkeypatch
     assert [c[0] for c in calls]==(['target','install'] if installer_rc else ['target','install','record','verify'])
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 def test_installer_program_checks_before_pip_and_changes_only_bound_radia(monkeypatch,role):
     """Guards: identity/native checks precede a single editable install. Assumes: Python control flow is executed with observed subprocesses."""
     target=release_quad._editable_target(role);seen=[]
@@ -813,8 +774,8 @@ else:
         assert 'exit status 37' in result.stderr, result.stderr
 
 
-@pytest.mark.parametrize('failure',[None,0,1,2,3])
-def test_final_pip_checks_cover_four_explicit_interpreters_and_fail_fast(monkeypatch,failure):
+@pytest.mark.parametrize('failure',[None,0,1])
+def test_final_pip_checks_cover_both_explicit_interpreters_and_fail_fast(monkeypatch,failure):
     """Guards: all normal and QA dependencies checked. Assumes: exit codes are synthetic."""
     calls=[]
     def run(cmd,**kw):
@@ -826,7 +787,7 @@ def test_final_pip_checks_cover_four_explicit_interpreters_and_fail_fast(monkeyp
     for role in release_quad.SOLVER_TARGETS:
         target=release_quad._editable_target(role);expected.append((target['ssh'],target['python']))
     expected += [(host,python) for _,host,python in (release_quad._solver_qa_target(role) for role in release_quad.SOLVER_TARGETS)]
-    assert len(calls)==(4 if failure is None else failure+1)
+    assert len(calls)==(2 if failure is None else failure+1)
     for cmd,(host,python) in zip(calls,expected):
         assert cmd[:2]==['ssh',host]
         script=base64.b64decode(cmd[-1]).decode('utf-16le')
@@ -835,7 +796,7 @@ def test_final_pip_checks_cover_four_explicit_interpreters_and_fail_fast(monkeyp
         assert 'exit $LASTEXITCODE' in script
 
 
-@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('role',['validation'])
 @pytest.mark.parametrize('rc',[0,1])
 def test_isolated_qa_verifier_propagates_payload_check_exit(monkeypatch,role,rc):
     """Guards: QA is selected separately and failures propagate. Assumes: no SSH executed."""

@@ -10,7 +10,6 @@ import sys
 from types import SimpleNamespace
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,14 +21,13 @@ def load_tool(name):
     return module
 
 
-@pytest.mark.parametrize("target", ["md" + "x", "mdx1", "mdx2", "hibino", "unknown"])
-def test_retired_compute_deployment_never_contacts_hosts(monkeypatch, target):
+def test_retired_compute_routes_are_deleted():
+    """Guards: retired hosts have no command, target or shim left to call."""
     tool = load_tool("release_quad")
-    monkeypatch.setattr(tool, "_deploy_editable_role", lambda *_a, **_k: pytest.fail("retired route deployed"))
-    monkeypatch.setattr(tool, "run", lambda *_a, **_k: pytest.fail("retired route ran a command"))
-    assert tool._deploy_mdx(target) == 2
-    assert tool.cmd_phase8e(None) == 2
-    assert set(tool.SIMULINK_TARGETS) == {"100"}
+    for name in ("_deploy_mdx", "cmd_phase8e", "cmd_temp_shadows", "SIMULINK_TARGETS", "SSH_100"):
+        assert not hasattr(tool, name), name
+    assert tuple(tool.SOLVER_TARGETS) == ("validation",), tuple(tool.SOLVER_TARGETS)
+    assert not (ROOT / "tools" / "release_temp_shadows.py").exists()
 
 
 def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys, tmp_path):
@@ -56,9 +54,3 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     assert compute_rows[0].endswith('= 1.0')
     assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE
     assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE
-
-
-def test_retired_mdx2_refresh_is_refused(monkeypatch):
-    tool = load_tool("release_quad")
-    monkeypatch.setattr(tool, "_deploy_editable_role", lambda *_a, **_k: pytest.fail("retired host deployed"))
-    assert tool._deploy_mdx("mdx2") == 2
