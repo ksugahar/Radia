@@ -89,3 +89,24 @@ def test_station_targets_without_features_are_equal_arc():
 
     np.testing.assert_array_equal(station_targets(_fin_line(200, 300), 7),
                                   np.linspace(0.0, 100.0, 7))
+
+
+@pytest.mark.parametrize("n", [16, 23, 29])
+def test_station_targets_have_no_half_pair_or_near_cap_station(n):
+    """Guards: a feature end within h/3 of a cap gets no pair, so no one-sided
+    pair and no station nearly coincident with a cap; spacing >= 2h/16."""
+    from radia.fin_cap_march import station_targets
+
+    h = 100.0 / (n - 1)
+    t = station_targets(_fin_line(h / 6, 60.3), n)
+    assert np.min(np.diff(t)) >= h / 8 * (1 - 1e-9), (n, np.min(np.diff(t)))
+    assert t[1] > h / 4 and t[-2] < 100.0 - h / 4, t[:3]
+    lo, hi = t[t < 60.3].max(), t[t > 60.3].min()
+    assert hi - lo <= h / 8 + 0.25 + 1e-9, (lo, hi)
+
+
+def test_station_targets_reject_features_closer_than_two_thirds_spacing():
+    from radia.fin_cap_march import MarchError, station_targets
+
+    with pytest.raises(MarchError, match="closer than 2h/3"):
+        station_targets(_fin_line(40.0, 41.0), 16)

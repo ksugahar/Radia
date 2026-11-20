@@ -79,3 +79,28 @@ def test_volume_lattice_rejects_points_outside_the_section():
     bad = dataclasses.replace(sweep, stations=tuple(stations))
     with pytest.raises(ValueError, match="outside their section"):
         build_volume_lattice(bad, 3)
+
+
+def test_branch_budget_refuses_actual_stations_before_the_lattice(monkeypatch):
+    """Guards: the dense-kernel budget uses the stations actually placed
+    (feature-aligned placement can add some), before any lattice is built.
+    Assumes: lattice_branch_count(29, 24, 6) = 11836 <= 12000 < 12702 (31)."""
+    from types import SimpleNamespace
+    import radia.fin_sweep as fsw
+    import radia.fin_volume as fv
+
+    def graph(*a, n_stations, **k):
+        return SimpleNamespace(meta={"n_stations": graph.actual})
+
+    def lattice(*a, **k):
+        raise AssertionError("lattice built")
+
+    monkeypatch.setattr(fsw, "fin_graph_from_step", graph)
+    monkeypatch.setattr(fv, "build_volume_lattice", lattice)
+    kw = dict(sigma=5.8e7, n_layers=6, n_lanes=24, n_stations=29)
+    graph.actual = 31
+    with pytest.raises(ValueError, match="31 stations after feature-aligned"):
+        fv.assemble_fin_volume("x.step", **kw)
+    graph.actual = 29
+    with pytest.raises(AssertionError, match="lattice built"):
+        fv.assemble_fin_volume("x.step", **kw)

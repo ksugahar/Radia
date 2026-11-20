@@ -588,12 +588,20 @@ def station_targets(line: Centerline, n_stations):
     inside = np.abs(a / ref - 1.0) > FEATURE_AREA_STEP
     ends = [0.5 * (s[k] + s[k + 1]) for k in np.nonzero(inside[1:] != inside[:-1])[0]]
     d = FEATURE_PAIR_FRACTION * h
-    pairs = [x for e in ends for x in (e - d, e + d) if 0.0 < x - d and x + d < s[-1]]
-    if not pairs:
+    # A feature end within h/3 of a cap is resolved by the cap station itself;
+    # a pair there would be one-sided or nearly coincide with the cap.
+    ends = [e for e in ends if h / 3 < e < s[-1] - h / 3]
+    if not ends:
         return grid
-    pairs = np.asarray(pairs)
+    if len(ends) > 1 and np.min(np.diff(ends)) <= 2 * h / 3:
+        raise MarchError(f"station targets: section-area features {np.round(ends, 6).tolist()} "
+                         f"are closer than 2h/3 = {2 * h / 3:.6g}; raise n_stations")
+    pairs = np.asarray([x for e in ends for x in (e - d, e + d)])
     keep = [g for g in grid if g in (0.0, s[-1]) or np.min(np.abs(pairs - g)) > h / 3]
-    return np.unique(np.concatenate([keep, pairs]))
+    t = np.unique(np.concatenate([keep, pairs]))
+    if np.min(np.diff(t)) < 2 * d * (1 - 1e-9):
+        raise MarchError(f"station targets: spacing {np.min(np.diff(t)):.6g} below 2h/16")
+    return t
 
 
 def station_sections(solid_w, line: Centerline, n_stations):
