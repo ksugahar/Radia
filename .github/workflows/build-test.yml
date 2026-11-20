@@ -168,9 +168,6 @@ jobs:
           "Netgen_DIR=$(Join-Path $netgenRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "MKLROOT=$mklRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          & $ciPython -I tools/ci_fork_wheels.py verify
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       # ----------------------------------------------------------------
       # Install dependencies for the Radia distribution tests. Package-level
       # dependencies and tests live in their own workflows.
@@ -218,9 +215,10 @@ jobs:
       - name: Verify NGSolve
         shell: pwsh
         run: |
+          & $ciPython -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
             Write-Host "::error::NGSolve not found at $env:NGSOLVE_DIR"
-            Write-Host "Install: pip install ngsolve"
             exit 1
           }
           Write-Host "NGSolve: $env:NGSOLVE_ROOT"
