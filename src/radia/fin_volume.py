@@ -340,6 +340,11 @@ def assemble_fin_volume(step_path, *, sigma, n_layers, n_lanes, n_stations,
         lane_grading=lane_grading, tip_lanes=tip_lanes,
         cad_units_per_meter=cad_units_per_meter, route=route, max_branches=budget)
     lat = build_volume_lattice(sweep, n_layers, exponent=exponent)
+    m = len(lat.branch_xyz)
+    if m > budget:  # feature-aligned stations can add stations beyond n_stations
+        raise ValueError(f"the volume lattice needs {m} branches after feature-aligned "
+                         f"stations, over the {budget} the dense partial-element kernel "
+                         f"is budgeted for")
 
     builder = PEECBuilder(oriented_box_order=int(box_order))
     for (p0, p1), w, h, wd in zip(lat.branch_xyz, lat.width, lat.height, lat.width_dir):
