@@ -563,8 +563,9 @@ def test_phase8_rejects_the_build_host_and_unbound_candidates_before_mutation(mo
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda a: seen.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_wheel",
                         lambda manifest, sha: seen.append(("wheel", str(manifest), sha)) or (wheel, "f" * 64))
+    monkeypatch.setattr(release_quad, "_fork_wheel_lock", lambda sha: {"sha": sha})
     monkeypatch.setattr(release_quad, "_deploy_wheel",
-                        lambda role, path, digest: seen.append(("deploy", role, path, digest)) or 0)
+                        lambda role, path, digest, lock: seen.append(("deploy", role, path, digest, lock)) or 0)
     for target in ("100", "all", "validation,100"):
         assert release_quad.cmd_phase8(_phase8_args(target=target)) == 2
     for sha in ("b" * 40, "A" * 40, "a" * 39, None):
@@ -572,7 +573,7 @@ def test_phase8_rejects_the_build_host_and_unbound_candidates_before_mutation(mo
     assert seen == []
     assert release_quad.cmd_phase8(_phase8_args()) == 0
     assert seen == ["preflight", ("wheel", "manifest.json", "a" * 40),
-                    ("deploy", "validation", wheel, "f" * 64)]
+                    ("deploy", "validation", wheel, "f" * 64, {"sha": "a" * 40})]
     seen.clear()
     monkeypatch.setattr(release_quad, "_release_wheel",
                         lambda *a: (_ for _ in ()).throw(ValueError("SHA-256 mismatch")))
@@ -609,16 +610,22 @@ def test_release_wheel_is_the_one_hash_verified_published_lane_wheel(monkeypatch
     assert seen == ["a" * 40]
 
 
-@pytest.mark.parametrize("staged_ok", [True, False])
-def test_installer_hash_checks_the_staged_wheel_and_never_installs_editable(monkeypatch, tmp_path, staged_ok):
-    """Guards: hash and identity checks precede pip; only the exact wheel is installed, never -e.
+def _lock():
+    return json.loads((_TOOL.parent / "ci_fork_wheels.json").read_text(encoding="utf-8"))
 
-    Assumes: the installer's Python control flow runs here with observed subprocesses.
+
+@pytest.mark.parametrize("staged_ok", [True, False])
+def test_installer_hash_checks_staged_wheels_and_never_installs_editable(monkeypatch, tmp_path, staged_ok):
+    """Guards: hash and identity checks precede pip; the exact Radia wheel and locked
+    fork pair are installed, never -e. Assumes: observed subprocesses.
     """
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "9.9.9")
     wheel = tmp_path / "radia-9.9.9-cp312-cp312-win_amd64.whl"
+    fork = tmp_path / "ngsolve-fork.whl"
     wheel.write_bytes(b"candidate wheel")
-    digest = hashlib.sha256(b"candidate wheel" if staged_ok else b"other").hexdigest()
+    fork.write_bytes(b"fork wheel")
+    staged = {str(wheel): hashlib.sha256(b"candidate wheel").hexdigest(),
+              str(fork): hashlib.sha256(b"fork wheel" if staged_ok else b"other").hexdigest()}
     target = release_quad._wheel_target("validation")
     seen = []
     monkeypatch.setattr(release_quad, "_target_check_code", lambda t: "seen.append('identity')\n")
@@ -626,23 +633,22 @@ def test_installer_hash_checks_the_staged_wheel_and_never_installs_editable(monk
 
     def observe(cmd, **kwargs):
         assert kwargs.get("check") is True
-        seen.append(("fresh", cmd[0], "identity" in cmd[3]) if cmd[1:3] == ["-I", "-c"] else cmd)
+        seen.append(("fresh", cmd[0], "verify_installed" in cmd[3]) if cmd[1:3] == ["-I", "-c"] else cmd)
     monkeypatch.setattr(release_quad.subprocess, "run", observe)
-    scope = {"seen": seen, "subprocess": release_quad.subprocess}
-    program = release_quad._wheel_install_program(target, str(wheel), digest).replace(
-        "import hashlib,subprocess\n", "import hashlib\n", 1)
+    program = release_quad._wheel_install_program(target, staged, _lock())
     if not staged_ok:
         with pytest.raises(SystemExit, match="SHA-256 differs"):
-            exec(program, scope)
+            exec(program, {"seen": seen})
         assert seen == ["identity"]
         return
-    exec(program, scope)
+    exec(program, {"seen": seen})
     python = target["python"]
     assert seen == [
         "identity", "lock",
-        [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:", str(wheel) + "[gpu]"],
         [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
-         "--force-reinstall", "--no-deps", str(wheel)],
+         str(wheel) + "[gpu]", str(fork)],
+        [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
+         "--force-reinstall", "--no-deps", str(fork), str(wheel)],
         ("fresh", python, True),
         [python, "-I", "-m", "pip", "check"],
     ]
@@ -650,30 +656,118 @@ def test_installer_hash_checks_the_staged_wheel_and_never_installs_editable(monk
     assert all("-e" not in cmd and "--editable" not in cmd for cmd in installs), installs
 
 
-@pytest.mark.parametrize("failure", [None, "identity", "scp", "install"])
-def test_deploy_wheel_stages_installs_and_always_removes_its_copy(monkeypatch, tmp_path, failure):
-    """Guards: failures never report success and the staging copy is removed. Assumes: observed transport."""
+@pytest.mark.parametrize("defect", [None, "stock", "wrong-base", "missing-dlls"])
+def test_fork_lock_comes_from_the_deployment_source_and_names_a_radia_build(monkeypatch, defect):
+    """Guards: stock or mismatched NGSolve/Netgen pins cannot enter the lock. Assumes: git show is observed."""
+    lock = _lock()
+    if defect == "stock":
+        lock["wheels"]["ngsolve"]["version"] = "6.2.2608"
+    elif defect == "wrong-base":
+        lock["wheels"]["netgen-mesher"]["version"] = "6.2.2607+radia.b2894d9f"
+    elif defect == "missing-dlls":
+        lock["dlls"] = {}
+    calls = []
+    monkeypatch.setattr(release_quad, "_git", lambda *a, **k: calls.append(a) or
+                        subprocess.CompletedProcess(a, 0, json.dumps(lock), ""))
+    if defect is None:
+        assert release_quad._fork_wheel_lock("c" * 40) == lock
+    else:
+        with pytest.raises(ValueError):
+            release_quad._fork_wheel_lock("c" * 40)
+    assert calls == [("show", "c" * 40 + ":tools/ci_fork_wheels.json")]
+
+
+@pytest.mark.parametrize("defect", [None, "stock", "wrong-build", "dll"])
+def test_installed_fork_check_accepts_only_the_locked_pair(tmp_path, defect):
+    """Guards: the target-side check rejects stock or wrong-build NGSolve/Netgen and
+    foreign DLLs. Assumes: a synthetic prefix with fake packages and metadata.
+    """
+    lock = _lock()
+    site = tmp_path / "site"
+    for package in ("netgen", "ngsolve"):
+        (site / package).mkdir(parents=True)
+        (site / package / "__init__.py").write_text("", encoding="utf-8")
+    dll_bytes = {name: name.encode() for name in lock["dlls"]}
+    lock["dlls"] = {name: hashlib.sha256(data).hexdigest() for name, data in dll_bytes.items()}
+    for name, data in dll_bytes.items():
+        (site / "netgen" / name).write_bytes(data + (b"x" if defect == "dll" else b""))
+    (site / "radia").mkdir()
+    (site / "radia" / "__init__.py").write_text("", encoding="utf-8")
+    (site / "radia" / "_cuda_runtime.py").write_text("def _pins():\n    return {}\n", encoding="utf-8")
+    versions = {name: wheel["version"] for name, wheel in lock["wheels"].items()}
+    if defect == "stock":
+        versions["ngsolve"] = "6.2.2608"
+    elif defect == "wrong-build":
+        versions["netgen-mesher"] = "6.2.2608+radia.00000000"
+    setup = (f"import sys, importlib.metadata\nsys.prefix = {str(tmp_path)!r}\nsys.path.insert(0, {str(site)!r})\n"
+             f"importlib.metadata.version = {versions!r}.__getitem__\n")
+    result = subprocess.run([sys.executable, "-I", "-c", setup + release_quad._solver_pin_check_code(lock)],
+                            capture_output=True, text=True, timeout=30)
+    assert (result.returncode == 0) == (defect is None), (defect, result.stdout, result.stderr)
+
+
+def _fake_lock(tmp_path):
+    lock = _lock()
+    paths = []
+    for wheel in lock["wheels"].values():
+        path = tmp_path / wheel["filename"]
+        path.write_bytes(b"fork")
+        paths.append(path)
+    return lock, paths
+
+
+@pytest.mark.parametrize("failure", [None, "identity", "mkdir", "scp", "install", "cleanup"])
+def test_deploy_wheel_owns_its_staging_and_reports_cleanup_failure(monkeypatch, tmp_path, failure):
+    """Guards: exclusive job-owned staging, per-file cleanup only, and failures
+    (including cleanup) are nonzero. Assumes: observed transport.
+    """
     wheel = tmp_path / "radia-9.9.9-cp312-cp312-win_amd64.whl"
     wheel.write_bytes(b"w")
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "9.9.9")
-    calls = []
+    lock, forks = _fake_lock(tmp_path)
+    monkeypatch.setattr(release_quad, "_fetch_fork_wheels", lambda lk, scratch: forks)
+    calls, scripts = [], []
     monkeypatch.setattr(release_quad, "_check_remote_target",
                         lambda target: calls.append("identity") or int(failure == "identity"))
 
     def ssh(host, script):
         kind = ("mkdir" if "New-Item" in script else "cleanup" if "Remove-Item" in script else "install")
         calls.append(kind)
-        assert host == "validation-test"
+        scripts.append((kind, script))
         return int(failure == kind)
     monkeypatch.setattr(release_quad, "_ssh_pwsh", ssh)
-    monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: calls.append(cmd[0]) or
+    monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: calls.append("scp") or
                         subprocess.CompletedProcess(cmd, int(failure == "scp")))
-    rc = release_quad._deploy_wheel("validation", wheel, "f" * 64)
+    rc = release_quad._deploy_wheel("validation", wheel, "f" * 64, lock)
     assert rc == (0 if failure is None else 3)
-    expected = {"identity": ["identity"], "scp": ["identity", "mkdir", "scp", "cleanup"],
-                "install": ["identity", "mkdir", "scp", "install", "cleanup"],
-                None: ["identity", "mkdir", "scp", "install", "cleanup"]}[failure]
+    expected = {"identity": ["identity"], "mkdir": ["identity", "mkdir"],
+                "scp": ["identity", "mkdir", "scp", "cleanup"]}.get(
+        failure, ["identity", "mkdir", "scp", "scp", "scp", "install", "cleanup"])
     assert calls == expected
+    mkdir = dict(scripts).get("mkdir")
+    if mkdir:
+        assert "-Force" not in mkdir and "exit 1" in mkdir
+    cleanup = dict(scripts).get("cleanup")
+    if cleanup:
+        assert "-Recurse" not in cleanup
+        assert cleanup.count("Remove-Item") == (1 if failure == "scp" else 3) + 1
+
+
+def test_same_wheel_retries_never_share_a_staging_directory(monkeypatch, tmp_path):
+    """Guards: two deployments of one wheel use distinct directories. Assumes: observed transport."""
+    wheel = tmp_path / "radia-9.9.9-cp312-cp312-win_amd64.whl"
+    wheel.write_bytes(b"w")
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "9.9.9")
+    lock, forks = _fake_lock(tmp_path)
+    monkeypatch.setattr(release_quad, "_fetch_fork_wheels", lambda lk, scratch: forks)
+    monkeypatch.setattr(release_quad, "_check_remote_target", lambda target: 0)
+    created = []
+    monkeypatch.setattr(release_quad, "_ssh_pwsh",
+                        lambda host, script: created.append(script) if "New-Item" in script else 0)
+    monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
+    for _ in range(2):
+        assert release_quad._deploy_wheel("validation", wheel, "f" * 64, lock) == 0
+    assert len(created) == 2 and created[0] != created[1]
 
 
 def test_validation_role_has_no_editable_route():

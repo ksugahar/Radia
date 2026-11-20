@@ -34,12 +34,18 @@ deploys one release:
 2. The published lane must hold exactly one `radia-<version>-*.whl`; its
    SHA-256 is re-checked locally and again after it is staged on the target.
    A mismatch fails before pip runs.
-3. pip installs the wheel's `[gpu]` dependencies from binaries only, then
-   force-reinstalls the exact wheel without dependencies.
+3. The NGSolve/Netgen pair comes from the public fork wheel lock
+   (`tools/ci_fork_wheels.json`) at the release source commit; each fork wheel
+   is downloaded, SHA-256 checked and staged with the Radia wheel. pip resolves
+   the `[gpu]` extra with the fork wheels supplied, then force-reinstalls the
+   exact fork and Radia wheels without dependencies. Staging uses a
+   job-owned, exclusively created directory; only the files this run placed
+   are removed, and a cleanup failure fails the run.
 4. A fresh target interpreter refuses an editable `direct_url.json`, checks
    version, import origin under site-packages, every installed RECORD hash,
-   that the installed hashes equal the candidate wheel's own RECORD, the
-   metadata-pinned NGSolve/Netgen and GPU runtime pins, and `pip check`.
+   that the installed hashes equal the candidate wheel's own RECORD, the exact
+   locked fork versions, their location and DLL hashes, the GPU runtime pins,
+   and `pip check`.
 5. The staged wheel copy is removed and its removal verified.
 
 `phase9` re-probes the runtime read-only: non-editable registration, unshadowed

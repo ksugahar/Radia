@@ -451,17 +451,60 @@ print('LABEL_PLACEHOLDER wheel verified:', version, len(installed))
         "WHEEL_PLACEHOLDER", repr(wheel)).replace("LABEL_PLACEHOLDER", label)
 
 
-def _solver_pin_check_code():
-    """Target-side check of the metadata-pinned ABI and GPU runtime packages."""
+def _load_fork_wheels_module():
+    spec = importlib.util.spec_from_file_location(
+        "radia_ci_fork_wheels", Path(__file__).resolve().with_name("ci_fork_wheels.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_fork_wheels = _load_fork_wheels_module()
+
+
+def _fork_wheel_lock(source_sha):
+    """The NGSolve/Netgen fork wheel lock of the exact deployment source commit."""
+    result = _git("show", f"{source_sha}:tools/ci_fork_wheels.json", check=False)
+    if result.returncode:
+        raise ValueError("The release source has no tools/ci_fork_wheels.json fork wheel lock")
+    lock = json.loads(result.stdout)
     pins = _solver_dependency_pins()
-    return f"""import importlib.metadata as m
-assert m.version('ngsolve') == {pins['ngsolve']!r} and m.version('netgen-mesher') == {pins['netgen-mesher']!r}, 'Installed NGSolve/Netgen differ from package metadata pins'
-import ngsolve
-assert ngsolve.__version__ == {pins['ngsolve']!r}, 'Loaded NGSolve differs from package metadata pin'
-from radia._cuda_runtime import _pins
+    if set(lock.get("wheels", {})) != {"ngsolve", "netgen-mesher"} or not lock.get("dlls"):
+        raise ValueError("The fork wheel lock must name ngsolve, netgen-mesher and their DLL hashes")
+    for name, wheel in lock["wheels"].items():
+        if wheel["version"].split("+", 1)[0] != pins[name] or "+radia." not in wheel["version"]:
+            raise ValueError(f"Fork wheel {name} {wheel['version']} is not a radia build of the {pins[name]} pin")
+        if not re.fullmatch(r"[0-9a-f]{64}", wheel["sha256"]) or "/" in wheel["filename"]:
+            raise ValueError(f"Invalid fork wheel lock entry: {name}")
+    return lock
+
+
+def _fetch_fork_wheels(lock, directory):
+    """Download the locked fork wheels and verify their SHA-256 before staging."""
+    from urllib.request import urlopen
+    paths = []
+    for wheel in lock["wheels"].values():
+        path = Path(directory) / wheel["filename"]
+        with urlopen(wheel["url"], timeout=120) as response, path.open("wb") as output:
+            shutil.copyfileobj(response, output)
+        if _fork_wheels.digest(path) != wheel["sha256"]:
+            raise ValueError(f"Incorrect fork wheel SHA-256: {wheel['filename']}")
+        paths.append(path)
+    return paths
+
+
+def _solver_pin_check_code(lock):
+    """Target-side check: the exact locked fork pair (version, location, DLLs) and GPU pins."""
+    import inspect
+    return ("import hashlib, importlib.metadata, importlib.util, json, sys\n"
+            "from pathlib import Path\n"
+            + inspect.getsource(_fork_wheels.digest) + "\n"
+            + inspect.getsource(_fork_wheels.verify_installed) + "\n"
+            + f"verify_installed(json.loads({json.dumps(lock)!r}))\n"
+            + """from radia._cuda_runtime import _pins
 for name, pin in _pins().items():
-    assert m.version(name) == pin, 'GPU runtime metadata pin mismatch: ' + name
-"""
+    assert importlib.metadata.version(name) == pin, 'GPU runtime metadata pin mismatch: ' + name
+""")
 
 
 def _release_wheel(manifest, source_sha):
@@ -480,61 +523,94 @@ def _release_wheel(manifest, source_sha):
     return path, digest
 
 
-def _wheel_install_program(target, wheel, sha256):
-    """Hash-check the staged wheel, install it, then verify in a fresh process."""
+def _wheel_install_program(target, staged, lock):
+    """Hash-check every staged wheel, install the exact set, then verify in a fresh process.
+
+    ``staged`` maps remote path -> SHA-256; the first entry is the Radia wheel,
+    the rest are the locked NGSolve/Netgen fork wheels.
+    """
     python = target["python"]
+    paths = list(staged)
+    wheel, forks = paths[0], paths[1:]
+    # Resolve the [gpu] extra with the fork wheels supplied, so stock NGSolve/Netgen
+    # are never selected; then force the exact files without dependency resolution.
     dependencies = [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
-                    wheel + "[gpu]"]
+                    wheel + "[gpu]", *forks]
     exact = [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
-             "--force-reinstall", "--no-deps", wheel]
+             "--force-reinstall", "--no-deps", *forks, wheel]
     # This process may predate the install; only a fresh target interpreter certifies it.
     verify = [python, "-I", "-c", _target_check_code(target)
               + _wheel_runtime_probe_code(_radia_version(), target["label"], wheel)
-              + _solver_pin_check_code()]
+              + _solver_pin_check_code(lock)]
     check = [python, "-I", "-m", "pip", "check"]
-    return ("import hashlib,subprocess\n" + _target_check_code(target) +
-            f"with open({wheel!r},'rb') as staged: staged_sha256=hashlib.sha256(staged.read()).hexdigest()\n"
-            f"if staged_sha256!={sha256!r}:"
-            " raise SystemExit('Staged wheel SHA-256 differs from the release candidate')\n" +
+    hashes = "".join(
+        f"with open({path!r},'rb') as staged: staged_sha256=hashlib.sha256(staged.read()).hexdigest()\n"
+        f"if staged_sha256!={digest!r}: raise SystemExit('Staged wheel SHA-256 differs from the release candidate: ' + {path!r})\n"
+        for path, digest in staged.items())
+    return ("import hashlib,subprocess\n" + _target_check_code(target) + hashes +
             "exec(" + repr(SOLVER_INSTALL_GUARD) + ")\n" +
             "".join(f"subprocess.run({command!r},check=True)\n"
                     for command in (dependencies, exact, verify, check)))
 
 
-def _deploy_wheel(role, wheel, sha256):
-    """Stage, install and verify one exact wheel; remove and verify the staging copy."""
+def _deploy_wheel(role, wheel, sha256, lock):
+    """Stage, install and verify the exact wheels in a job-owned directory, then remove only its files."""
+    import uuid
+    import zlib
     target = _wheel_target(role)
     if _check_remote_target(target):
         return 3
-    staging = "C:/temp/radia-release-wheel-" + sha256[:16]
-    remote = staging + "/" + wheel.name
+    staging = f"C:/temp/radia-release-wheel-{sha256[:12]}-{uuid.uuid4().hex}"
     literal = _powershell_literal(staging)
-    if _ssh_pwsh(target["ssh"], f"New-Item -ItemType Directory -Force -Path {literal} | Out-Null; exit 0"):
-        fail(target["label"] + ": could not create the wheel staging directory")
+    # Exclusive creation: an existing path is never adopted or cleaned.
+    if _ssh_pwsh(target["ssh"], f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; "
+                 f"New-Item -ItemType Directory -Path {literal} -ErrorAction Stop | Out-Null; exit 0"):
+        fail(target["label"] + ": could not exclusively create the wheel staging directory")
         return 3
+    placed = []
+    rc = 0
     try:
-        if run(["scp", "-o", "BatchMode=yes", str(wheel), f"{target['ssh']}:{remote}"], check=False).returncode:
-            fail(target["label"] + ": wheel transfer failed")
-            return 3
-        # Compression is transport only: avoid the Windows command-line limit
-        # while executing the same inspectable checks.
-        import zlib
-        program = _wheel_install_program(target, remote, sha256)
-        token = base64.b64encode(zlib.compress(program.encode("utf-8"))).decode("ascii")
-        invocation = [target["python"], "-I", "-c",
-                      f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{token}')))"]
-        script = _runtime_guard_powershell(target["python"]) + _ps_python(invocation) + "\nexit $LASTEXITCODE"
-        if len(base64.b64encode(script.encode("utf-16le"))) > 28000:
-            raise ValueError("Wheel installer exceeds the Windows command-line transport budget")
-        if _ssh_pwsh(target["ssh"], script):
-            fail(target["label"] + " wheel hash/installation/ABI/pip verification failed")
-            return 3
+        with tempfile.TemporaryDirectory(prefix="radia-fork-wheels-") as scratch:
+            sources = [(wheel, sha256)] + [
+                (path, lock["wheels"][name]["sha256"])
+                for name, path in zip(lock["wheels"], _fetch_fork_wheels(lock, scratch))]
+            staged = {}
+            for source, digest in sources:
+                remote = staging + "/" + source.name
+                placed.append(remote)
+                if run(["scp", "-o", "BatchMode=yes", str(source), f"{target['ssh']}:{remote}"],
+                       check=False).returncode:
+                    fail(target["label"] + ": wheel transfer failed")
+                    rc = 3
+                    break
+                staged[remote] = digest
+        if rc == 0:
+            # Compression is transport only: avoid the Windows command-line limit
+            # while executing the same inspectable checks.
+            program = _wheel_install_program(target, staged, lock)
+            token = base64.b64encode(zlib.compress(program.encode("utf-8"))).decode("ascii")
+            invocation = [target["python"], "-I", "-c",
+                          f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{token}')))"]
+            script = _runtime_guard_powershell(target["python"]) + _ps_python(invocation) + "\nexit $LASTEXITCODE"
+            if len(base64.b64encode(script.encode("utf-16le"))) > 28000:
+                raise ValueError("Wheel installer exceeds the Windows command-line transport budget")
+            if _ssh_pwsh(target["ssh"], script):
+                fail(target["label"] + " wheel hash/installation/ABI/pip verification failed")
+                rc = 3
     finally:
-        if _ssh_pwsh(target["ssh"], f"if (Test-Path -LiteralPath {literal}) {{ Remove-Item -LiteralPath {literal}"
-                     f" -Recurse -Force }}; if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; exit 0"):
-            fail(target["label"] + ": staged wheel copy was not removed")
-    ok(f"{target['label']} holds the verified Radia wheel {wheel.name} ({sha256[:12]})")
-    return 0
+        # Remove only the files this invocation placed, then the (now empty) directory.
+        removals = "".join(f"if (Test-Path -LiteralPath {_powershell_literal(path)}) "
+                           f"{{ Remove-Item -LiteralPath {_powershell_literal(path)} -Force }}; "
+                           for path in placed)
+        cleanup = (removals + f"Remove-Item -LiteralPath {literal}; "
+                   f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; exit 0")
+        if _ssh_pwsh(target["ssh"], cleanup):
+            fail(target["label"] + ": staged wheel copies were not removed: " + staging)
+            rc = rc or 3
+    if rc == 0:
+        ok(f"{target['label']} holds the verified Radia wheel {wheel.name} ({sha256[:12]}) "
+           "and the locked NGSolve/Netgen fork pair")
+    return rc
 
 
 def cmd_phase8(args):
@@ -556,10 +632,11 @@ def cmd_phase8(args):
         return rc
     try:
         wheel, digest = _release_wheel(Path(args.manifest), source_sha)
+        lock = _fork_wheel_lock(source_sha)
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
         fail(f"Release candidate wheel failed verification: {exc}")
         return 4
-    return _deploy_wheel(role, wheel, digest)
+    return _deploy_wheel(role, wheel, digest, lock)
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, importlib.metadata as md, os

@@ -23,19 +23,18 @@ def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     assert bool(checked_main) == matched
 
 
-def test_wheel_installer_checks_metadata_pins_after_install(monkeypatch):
-    """Guards: installed ABI and GPU pins come from package metadata. Assumes: synthetic pins, no remote action."""
-    monkeypatch.setattr(module, "_solver_dependency_pins",
-                        lambda: {"ngsolve": "sentinel-ng", "netgen-mesher": "sentinel-netgen"})
-    code = module._solver_pin_check_code()
-    assert "m.version('ngsolve') == 'sentinel-ng'" in code
-    assert "m.version('netgen-mesher') == 'sentinel-netgen'" in code
-    assert "from radia._cuda_runtime import _pins" in code
+def test_wheel_installer_verifies_the_locked_fork_pair_after_install(monkeypatch):
+    """Guards: the fresh-process check embeds the exact fork lock. Assumes: no remote action."""
+    import json
+    lock = json.loads((TOOL.parent / "ci_fork_wheels.json").read_text(encoding="utf-8"))
+    code = module._solver_pin_check_code(lock)
+    assert "def verify_installed" in code and "from radia._cuda_runtime import _pins" in code
+    assert lock["wheels"]["ngsolve"]["version"] in code
     monkeypatch.setattr(module, "_radia_version", lambda: "9.9.9")
     program = module._wheel_install_program(
         {"python": "C:/Runtime/python.exe", "hostname": "test", "label": "validation"},
-        "C:/temp/x/radia-9.9.9-py3-none-any.whl", "f" * 64)
-    assert repr(code)[1:-1][:40] in program
+        {"C:/temp/x/radia-9.9.9-py3-none-any.whl": "f" * 64}, lock)
+    assert "verify_installed" in program
 
 
 def test_solver_dependency_versions_come_from_exact_metadata_pins():
