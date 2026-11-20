@@ -215,6 +215,7 @@ jobs:
       - name: Verify NGSolve
         shell: pwsh
         run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
           & $ciPython -I tools/ci_fork_wheels.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
