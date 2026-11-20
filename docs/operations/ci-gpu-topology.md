@@ -14,7 +14,7 @@ The GPU job audit identified these actual consumers:
 
 | Job | Before | After | Evidence in steps |
 | --- | --- | --- | --- |
-| radia-simulink.yml:cuda-mex | heavy + RTX | `gpu-a100` | Compiles CUDA/MEX and seals the compute bundle on the Windows GPU host. |
+| radia-simulink.yml:cuda-mex | heavy + GPU | `gpu-a100` | Compiles CUDA/MEX and seals the compute bundle on the Windows GPU host. |
 | radia-simulink-a100.yml:validate | absent | gpu-a100 | Validates the sealed bundle. |
 | `gpu-validation.yml:validate` | absent | `gpu-a100` | installed GPU/Simulink acceptance, larger CSR solves and Optuna GPU oracle driver |
 | `gpu-validation.yml:nightly-failure` | absent | `ubuntu-latest` | create/update failure issue |
