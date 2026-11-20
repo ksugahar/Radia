@@ -8,6 +8,7 @@
 
 #include "rad_peec_matrices.h"
 #include "rad_bicgstab.h"
+#include "peec_oriented_box.hpp"
 #include <cmath>
 #include <algorithm>
 #include <set>
@@ -145,33 +146,10 @@ void PEECMatrixBuilder::EnableOrientedBoxKernel(int max_order) {
     if (max_order > 0 && volume_rule_)
         throw std::logic_error("the oriented-box kernel and the Cartesian volume kernel are exclusive");
     box_max_order_ = max_order;
-    box_gauss_x_.assign(max_order, {});
-    box_gauss_w_.assign(max_order, {});
-    const double pi = 3.141592653589793238462643383279502884;
-    for (int n = 1; n <= max_order; ++n) {
-        std::vector<double>& x = box_gauss_x_[n - 1];
-        std::vector<double>& w = box_gauss_w_[n - 1];
-        x.assign(n, 0.0);
-        w.assign(n, 0.0);
-        if (n == 1) { w[0] = 2.0; continue; }
-        for (int i = 0; i < n; ++i) {
-            double z = std::cos(pi * (i + 0.75) / (n + 0.5)), dp = 0.0;
-            for (int it = 0; it < 100; ++it) {
-                double p0 = 1.0, p1 = 0.0;
-                for (int k = 1; k <= n; ++k) {
-                    const double p2 = p1;
-                    p1 = p0;
-                    p0 = ((2 * k - 1) * z * p1 - (k - 1) * p2) / k;
-                }
-                dp = n * (z * p0 - p1) / (z * z - 1.0);
-                const double dz = p0 / dp;
-                z -= dz;
-                if (std::abs(dz) < 1e-15) break;
-            }
-            x[i] = -z;
-            w[i] = 2.0 / ((1.0 - z * z) * dp * dp);
-        }
-    }
+    const std::size_t packed = static_cast<std::size_t>(max_order) * (max_order + 1) / 2;
+    box_rule_x_.assign(packed, 0.0);
+    box_rule_w_.assign(packed, 0.0);
+    radia_peec_box::GaussRules(max_order, box_rule_x_.data(), box_rule_w_.data());
 }
 
 void PEECMatrixBuilder::SetLastSegmentWidthDir(double x, double y, double z) {
@@ -1053,150 +1031,16 @@ double PEECMatrixBuilder::MutualInductanceRectBar(
 }
 
 namespace {
-// ln(u + r) without cancellation when u < 0 (q = r^2 - u^2 > 0).
-inline double LogUPlusR(double u, double r, double q) {
-    return u >= 0.0 ? std::log(u + r) : std::log(q / (r - u));
-}
-// Corner primitive F of int dV / |r| over a rectangular prism.
-inline double PrismCorner(double x, double y, double z) {
-    const double x2 = x * x, y2 = y * y, z2 = z * z;
-    const double r = std::sqrt(x2 + y2 + z2);
-    if (r == 0.0) return 0.0;
-    double t = 0.0;
-    if (x != 0.0 && y != 0.0) t += x * y * LogUPlusR(z, r, x2 + y2);
-    if (y != 0.0 && z != 0.0) t += y * z * LogUPlusR(x, r, y2 + z2);
-    if (z != 0.0 && x != 0.0) t += z * x * LogUPlusR(y, r, z2 + x2);
-    if (x != 0.0) t -= 0.5 * x2 * std::atan(y * z / (x * r));
-    if (y != 0.0) t -= 0.5 * y2 * std::atan(z * x / (y * r));
-    if (z != 0.0) t -= 0.5 * z2 * std::atan(x * y / (z * r));
-    return t;
-}
-// Newtonian potential int_box dV / |p - r|, box bounds given relative to p:
-// sum over corners of (+/-) F, + at (hi, hi, hi).
-inline double PrismPotential(const double lo[3], const double hi[3]) {
-    double v = 0.0;
-    for (int i = 0; i < 2; ++i)
-        for (int j = 0; j < 2; ++j)
-            for (int k = 0; k < 2; ++k) {
-                const int lows = 3 - (i + j + k);  // number of lower limits
-                const double sgn = (lows % 2 == 0) ? 1.0 : -1.0;
-                v += sgn * PrismCorner(i ? hi[0] : lo[0], j ? hi[1] : lo[1], k ? hi[2] : lo[2]);
-            }
-    return v;
-}
-struct BoxFrame {
-    TVector3d c, e[3];
-    double half[3];
-};
-BoxFrame MakeBoxFrame(const PEECSegment& s) {
+namespace pb = radia_peec_box;
+pb::Frame MakeBoxFrame(const PEECSegment& s) {
     if (s.cross_section_type != CrossSectionType::RECTANGULAR || !(s.width > 0.0) ||
         !(s.height > 0.0) || !(s.length > 0.0))
         throw std::invalid_argument(
             "oriented-box kernel requires rectangular bars with positive length, width and height");
-    BoxFrame f;
-    const TVector3d& d = s.direction;
-    TVector3d ew;
-    if (s.has_width_dir) {
-        ew = s.width_dir;
-    } else {
-        const TVector3d ref = std::abs(d.x) < 0.9 ? TVector3d(1, 0, 0) : TVector3d(0, 1, 0);
-        const double x = ref.y * d.z - ref.z * d.y, y = ref.z * d.x - ref.x * d.z,
-                     z = ref.x * d.y - ref.y * d.x;
-        const double n = std::sqrt(x * x + y * y + z * z);
-        ew = TVector3d(x / n, y / n, z / n);
-    }
-    f.c = s.center;
-    f.e[0] = d;
-    f.e[1] = ew;
-    f.e[2] = TVector3d(d.y * ew.z - d.z * ew.y, d.z * ew.x - d.x * ew.z, d.x * ew.y - d.y * ew.x);
-    f.half[0] = 0.5 * s.length;
-    f.half[1] = 0.5 * s.width;
-    f.half[2] = 0.5 * s.height;
-    return f;
-}
-inline double Dot3(const TVector3d& a, const TVector3d& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-// Sub-box of the outer box: centre in outer-local coordinates, half extents
-// along the outer axes, subdivision depth.
-struct BoxCell {
-    double u[3], h[3];
-    int depth;
-};
-TVector3d CellCentre(const BoxFrame& f, const double u[3]) {
-    return TVector3d(f.c.x + u[0] * f.e[0].x + u[1] * f.e[1].x + u[2] * f.e[2].x,
-                     f.c.y + u[0] * f.e[0].y + u[1] * f.e[1].y + u[2] * f.e[2].y,
-                     f.c.z + u[0] * f.e[0].z + u[1] * f.e[1].z + u[2] * f.e[2].z);
-}
-// True when the cell crosses the inner box surface, i.e. overlaps the inner
-// box with positive measure without lying inside it. Only such cells carry
-// the potential's surface kink; touching cells do not.
-bool CellStraddles(const BoxFrame& fo, const BoxCell& cell, const BoxFrame& fn,
-                   PEECMatrixBuilder::OrientedBoxTrace* trace = nullptr) {
-    const TVector3d cw = CellCentre(fo, cell.u);
-    bool contained = true;
-    for (int s = 0; s < 8 && contained; ++s) {
-        const double a = (s & 1) ? cell.h[0] : -cell.h[0], b = (s & 2) ? cell.h[1] : -cell.h[1],
-                     c = (s & 4) ? cell.h[2] : -cell.h[2];
-        const TVector3d p(cw.x + a * fo.e[0].x + b * fo.e[1].x + c * fo.e[2].x - fn.c.x,
-                          cw.y + a * fo.e[0].y + b * fo.e[1].y + c * fo.e[2].y - fn.c.y,
-                          cw.z + a * fo.e[0].z + b * fo.e[1].z + c * fo.e[2].z - fn.c.z);
-        for (int k = 0; k < 3; ++k)
-            if (std::abs(Dot3(p, fn.e[k])) > fn.half[k]) contained = false;
-    }
-    if (contained) {
-        if (trace) ++(cell.depth == 0 ? trace->contained_top : trace->contained_descendants);
-        return false;
-    }
-    // Separating-axis test; touching (zero-measure contact) counts as separated.
-    const double tol =
-        1e-12 * (std::sqrt(cell.h[0] * cell.h[0] + cell.h[1] * cell.h[1] + cell.h[2] * cell.h[2]) +
-                 std::sqrt(fn.half[0] * fn.half[0] + fn.half[1] * fn.half[1] + fn.half[2] * fn.half[2]));
-    const TVector3d d(fn.c.x - cw.x, fn.c.y - cw.y, fn.c.z - cw.z);
-    auto separated = [&](const TVector3d& ax) {
-        double ra = 0.0, rb = 0.0;
-        for (int k = 0; k < 3; ++k) {
-            ra += cell.h[k] * std::abs(Dot3(fo.e[k], ax));
-            rb += fn.half[k] * std::abs(Dot3(fn.e[k], ax));
-        }
-        return std::abs(Dot3(d, ax)) >= ra + rb - tol;
-    };
-    for (int k = 0; k < 3; ++k)
-        if (separated(fo.e[k]) || separated(fn.e[k])) return false;
-    for (int a = 0; a < 3; ++a)
-        for (int b = 0; b < 3; ++b) {
-            const TVector3d& x = fo.e[a];
-            const TVector3d& y = fn.e[b];
-            const TVector3d z(x.y * y.z - x.z * y.y, x.z * y.x - x.x * y.z, x.x * y.y - x.y * y.x);
-            const double nz = std::sqrt(Dot3(z, z));
-            if (!(nz > 1e-12)) {
-                if (trace) ++trace->cross_axes_skipped;
-                continue;
-            }
-            if (trace) ++trace->cross_axes_evaluated;
-            if (separated(TVector3d(z.x / nz, z.y / nz, z.z / nz))) return false;
-        }
-    return true;
-}
-// Potential of the inner box at p (given relative to its centre).
-double InnerPotential(const BoxFrame& fn, double px, double py, double pz) {
-    double lo[3], hi[3];
-    for (int k = 0; k < 3; ++k) {
-        const double pk = px * fn.e[k].x + py * fn.e[k].y + pz * fn.e[k].z;
-        lo[k] = -fn.half[k] - pk;
-        hi[k] = fn.half[k] - pk;
-    }
-    return PrismPotential(lo, hi);
-}
-// Distance from p to the inner box surface (from outside or inside).
-double SurfaceDistance(const BoxFrame& fn, const TVector3d& p) {
-    const TVector3d r(p.x - fn.c.x, p.y - fn.c.y, p.z - fn.c.z);
-    double out = 0.0, in = std::numeric_limits<double>::infinity();
-    for (int k = 0; k < 3; ++k) {
-        const double q = std::abs(Dot3(r, fn.e[k]));
-        const double o = std::max(q - fn.half[k], 0.0);
-        out += o * o;
-        in = std::min(in, fn.half[k] - q);
-    }
-    return out > 0.0 ? std::sqrt(out) : std::max(in, 0.0);
+    const pb::V3 w{s.width_dir.x, s.width_dir.y, s.width_dir.z};
+    return pb::FrameFromBar({s.center.x, s.center.y, s.center.z},
+                            {s.direction.x, s.direction.y, s.direction.z},
+                            s.has_width_dir ? &w : nullptr, s.length, s.width, s.height);
 }
 }  // namespace
 
@@ -1211,135 +1055,19 @@ PEECMatrixBuilder::OrientedBoxTrace PEECMatrixBuilder::TraceOrientedBoxEntry(int
 
 double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
                                                 bool self, OrientedBoxTrace* trace) const {
-    BoxFrame fi = MakeBoxFrame(seg_i), fj = MakeBoxFrame(seg_j);
-    const double dot = fi.e[0].x * fj.e[0].x + fi.e[0].y * fj.e[0].y + fi.e[0].z * fj.e[0].z;
-    if (!self && dot == 0.0) return 0.0;  // exactly orthogonal currents: zero Galerkin entry
-    // The integral of 1/r depends on the box as a point set, not on the
-    // current sign: give each frame a canonical orientation so reversing a
-    // bar flips the entry's sign exactly and leaves its magnitude bitwise.
-    auto canonical = [](BoxFrame& f) {
-        const TVector3d& d = f.e[0];
-        const double lead = d.x != 0.0 ? d.x : (d.y != 0.0 ? d.y : d.z);
-        if (lead < 0.0) {
-            f.e[0] = TVector3d(-d.x, -d.y, -d.z);
-            f.e[2] = TVector3d(-f.e[2].x, -f.e[2].y, -f.e[2].z);
-        }
-    };
-    canonical(fi);
-    canonical(fj);
-    // Outer quadrature over the smaller box; ties broken by a canonical
-    // geometric key (volume, centre, half extents, frame), never by index,
-    // so the entry does not depend on insertion order.
-    auto key = [](const BoxFrame& f) {
-        return std::array<double, 16>{f.half[0] * f.half[1] * f.half[2], f.c.x, f.c.y, f.c.z,
-                                      f.half[0], f.half[1], f.half[2],
-                                      f.e[0].x, f.e[0].y, f.e[0].z, f.e[1].x, f.e[1].y, f.e[1].z,
-                                      f.e[2].x, f.e[2].y, f.e[2].z};
-    };
-    const bool swap = key(fj) < key(fi);
-    const BoxFrame& fo = swap ? fj : fi;  // outer (quadrature)
-    const BoxFrame& fn = swap ? fi : fj;  // inner (closed form)
-    const double mu0_4pi = 1.0e-7;
-    const double area_n = 4.0 * fn.half[1] * fn.half[2];
-    const BoxCell top{{0.0, 0.0, 0.0}, {fo.half[0], fo.half[1], fo.half[2]}, 0};
-    if (!self && CellStraddles(fo, top, fn, trace)) {
-        if (trace) trace->composite = true;
-        // The outer box crosses the inner box surface, where the potential is
-        // only C^1: integrate over a composite of sub-boxes, bisecting the cells
-        // that still cross the (possibly oblique) surface. The subdivision
-        // depends only on the canonical frames, so exchange and reversal stay
-        // exact.
-        constexpr int kSplitDepth = 3;
-        const int leaf = std::max(1, (box_max_order_ + 1) / 2);
-        const double alpha = 0.5 * box_max_order_;
-        std::vector<BoxCell> stack{top};
-        double integral = 0.0;  // int_o phi_n dV
-        while (!stack.empty()) {
-            const BoxCell cell = stack.back();
-            stack.pop_back();
-            const bool cross = CellStraddles(fo, cell, fn, trace);
-            if (cross && cell.depth < kSplitDepth) {
-                if (trace) ++trace->splits;
-                const double hm = std::max(cell.h[0], std::max(cell.h[1], cell.h[2]));
-                int axes[3], na = 0;
-                for (int k = 0; k < 3; ++k)
-                    if (cell.h[k] >= 0.5 * hm) axes[na++] = k;
-                for (int m = 0; m < (1 << na); ++m) {
-                    BoxCell child = cell;
-                    child.depth = cell.depth + 1;
-                    for (int t = 0; t < na; ++t) {
-                        const int k = axes[t];
-                        child.h[k] = 0.5 * cell.h[k];
-                        child.u[k] += ((m >> t) & 1) ? child.h[k] : -child.h[k];
-                    }
-                    stack.push_back(child);
-                }
-                continue;
-            }
-            if (trace) {
-                ++trace->leaves;
-                if (cross) ++trace->straddling_leaves;
-            }
-            int n[3] = {leaf, leaf, leaf};
-            if (!cross) {
-                const double ds = SurfaceDistance(fn, CellCentre(fo, cell.u));
-                if (ds > 0.0)
-                    for (int k = 0; k < 3; ++k)
-                        n[k] = std::max(1, static_cast<int>(std::min(static_cast<double>(leaf),
-                                                                     std::ceil(alpha * 2.0 * cell.h[k] / ds))));
-            }
-            const std::vector<double>& x0 = box_gauss_x_[n[0] - 1];
-            const std::vector<double>& w0 = box_gauss_w_[n[0] - 1];
-            const std::vector<double>& x1 = box_gauss_x_[n[1] - 1];
-            const std::vector<double>& w1 = box_gauss_w_[n[1] - 1];
-            const std::vector<double>& x2 = box_gauss_x_[n[2] - 1];
-            const std::vector<double>& w2 = box_gauss_w_[n[2] - 1];
-            double acc = 0.0;
-            for (int a = 0; a < n[0]; ++a)
-                for (int b = 0; b < n[1]; ++b)
-                    for (int c = 0; c < n[2]; ++c) {
-                        const double u = cell.u[0] + cell.h[0] * x0[a], v = cell.u[1] + cell.h[1] * x1[b],
-                                     w = cell.u[2] + cell.h[2] * x2[c];
-                        acc += w0[a] * w1[b] * w2[c] *
-                               InnerPotential(fn, fo.c.x + u * fo.e[0].x + v * fo.e[1].x + w * fo.e[2].x - fn.c.x,
-                                         fo.c.y + u * fo.e[0].y + v * fo.e[1].y + w * fo.e[2].y - fn.c.y,
-                                         fo.c.z + u * fo.e[0].z + v * fo.e[1].z + w * fo.e[2].z - fn.c.z);
-                    }
-            integral += acc * cell.h[0] * cell.h[1] * cell.h[2];
-        }
-        const double area_o = 4.0 * fo.half[1] * fo.half[2];
-        return mu0_4pi * dot * integral / (area_o * area_n);
-    }
-    const double dx = fo.c.x - fn.c.x, dy = fo.c.y - fn.c.y, dz = fo.c.z - fn.c.z;
-    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-    int n[3];
-    for (int k = 0; k < 3; ++k) {
-        const double ext = 2.0 * fo.half[k];
-        // Clamp in floating point before narrowing: a tiny centre distance
-        // must not overflow the int conversion.
-        double m = static_cast<double>(box_max_order_);
-        if (!self && dist > 0.0) m = std::min(m, std::ceil(0.5 * box_max_order_ * ext / dist));
-        n[k] = std::max(1, static_cast<int>(m));
-    }
-    const std::vector<double>& x0 = box_gauss_x_[n[0] - 1];
-    const std::vector<double>& w0 = box_gauss_w_[n[0] - 1];
-    const std::vector<double>& x1 = box_gauss_x_[n[1] - 1];
-    const std::vector<double>& w1 = box_gauss_w_[n[1] - 1];
-    const std::vector<double>& x2 = box_gauss_x_[n[2] - 1];
-    const std::vector<double>& w2 = box_gauss_w_[n[2] - 1];
-    double acc = 0.0;
-    for (int a = 0; a < n[0]; ++a)
-        for (int b = 0; b < n[1]; ++b)
-            for (int c = 0; c < n[2]; ++c) {
-                const double u = fo.half[0] * x0[a], v = fo.half[1] * x1[b], w = fo.half[2] * x2[c];
-                const double px = fo.c.x + u * fo.e[0].x + v * fo.e[1].x + w * fo.e[2].x - fn.c.x;
-                const double py = fo.c.y + u * fo.e[0].y + v * fo.e[1].y + w * fo.e[2].y - fn.c.y;
-                const double pz = fo.c.z + u * fo.e[0].z + v * fo.e[1].z + w * fo.e[2].z - fn.c.z;
-                acc += w0[a] * w1[b] * w2[c] * InnerPotential(fn, px, py, pz);
-            }
-    // (1/(A_o A_n)) int_o int_n = (L_o / A_n) * mean_o(potential of n)
-    const double mean = acc / 8.0;
-    return mu0_4pi * (self ? 1.0 : dot) * (2.0 * fo.half[0]) * mean / area_n;
+    const pb::Rules rules{box_rule_x_.data(), box_rule_w_.data(), box_max_order_};
+    if (!trace) return pb::Inductance(MakeBoxFrame(seg_i), MakeBoxFrame(seg_j), self, rules, nullptr);
+    pb::Trace t;
+    const double v = pb::Inductance(MakeBoxFrame(seg_i), MakeBoxFrame(seg_j), self, rules, &t);
+    trace->composite = t.composite;
+    trace->splits += t.splits;
+    trace->leaves += t.leaves;
+    trace->straddling_leaves += t.straddling_leaves;
+    trace->contained_top += t.contained_top;
+    trace->contained_descendants += t.contained_descendants;
+    trace->cross_axes_skipped += t.cross_axes_skipped;
+    trace->cross_axes_evaluated += t.cross_axes_evaluated;
+    return v;
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,

@@ -441,7 +441,7 @@ public:
 private:
     std::shared_ptr<const VolumeGreenRule> volume_rule_;
     int box_max_order_ = 0;
-    std::vector<std::vector<double>> box_gauss_x_, box_gauss_w_;  // [n-1]: nodes/weights on [-1,1]
+    std::vector<double> box_rule_x_, box_rule_w_;  // Gauss rules n = 1..order packed for radia_peec_box::Rules
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;

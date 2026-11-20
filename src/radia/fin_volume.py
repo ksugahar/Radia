@@ -311,22 +311,12 @@ def energy_receipt(L, branches, current):
             "energy_real_part_J": e_re, "energy_imag_part_J": e_im}
 
 
-def assemble_fin_volume(step_path, *, sigma, n_layers, n_lanes, n_stations,
-                        n_outline=None, lane_grading=None, tip_lanes=None,
-                        exponent=2.0, route="auto", cad_units_per_meter="auto",
-                        max_branches=None, box_order=BOX_ORDER):
-    """STEP -> volume lattice and its built PEEC branch model.
-
-    Returns ``(sweep, lattice, builder, topology, energy)``; ``topology``
-    carries the lattice incidence (``segment_nodes``, ``n_nodes``) and the
-    one terminal port, and ``energy`` is the
-    :func:`require_energy_admissible` record of its L.
-    """
+def fin_volume_lattice(step_path, *, n_layers, n_lanes, n_stations, n_outline=None,
+                       lane_grading=None, tip_lanes=None, exponent=2.0, route="auto",
+                       cad_units_per_meter="auto", max_branches=None):
+    """STEP -> (sweep, volume lattice) within the dense-kernel branch budget."""
     from radia.fin_sweep import DEFAULT_MAX_BRANCHES, fin_graph_from_step
-    from radia.peec_matrices import PEECBuilder
 
-    if sigma <= 0:
-        raise ValueError("fin-volume needs sigma > 0")
     if n_lanes is None or n_stations is None:
         raise ValueError("fin-volume needs explicit n_lanes and n_stations")
     budget = DEFAULT_MAX_BRANCHES if max_branches is None else int(max_branches)
@@ -350,6 +340,29 @@ def assemble_fin_volume(step_path, *, sigma, n_layers, n_lanes, n_stations,
     if len(lat.branch_xyz) != m:
         raise RuntimeError(f"volume lattice has {len(lat.branch_xyz)} branches, "
                            f"lattice_branch_count says {m}")
+    return sweep, lat
+
+
+def assemble_fin_volume(step_path, *, sigma, n_layers, n_lanes, n_stations,
+                        n_outline=None, lane_grading=None, tip_lanes=None,
+                        exponent=2.0, route="auto", cad_units_per_meter="auto",
+                        max_branches=None, box_order=BOX_ORDER):
+    """STEP -> volume lattice and its built PEEC branch model (CPU).
+
+    Returns ``(sweep, lattice, builder, topology, energy)``; ``topology``
+    carries the lattice incidence (``segment_nodes``, ``n_nodes``) and the
+    one terminal port, and ``energy`` is the
+    :func:`require_energy_admissible` record of its L.
+    """
+    from radia.peec_matrices import PEECBuilder
+
+    if sigma <= 0:
+        raise ValueError("fin-volume needs sigma > 0")
+    sweep, lat = fin_volume_lattice(
+        step_path, n_layers=n_layers, n_lanes=n_lanes, n_stations=n_stations,
+        n_outline=n_outline, lane_grading=lane_grading, tip_lanes=tip_lanes,
+        exponent=exponent, route=route, cad_units_per_meter=cad_units_per_meter,
+        max_branches=max_branches)
 
     builder = PEECBuilder(oriented_box_order=int(box_order))
     for (p0, p1), w, h, wd in zip(lat.branch_xyz, lat.width, lat.height, lat.width_dir):
@@ -372,8 +385,12 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
                      tip_lanes=None, exponent=2.0, route="auto",
                      cad_units_per_meter="auto", max_branches=None,
-                     box_order=BOX_ORDER):
+                     box_order=BOX_ORDER, backend="cpu"):
     """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+
+    ``backend`` selects the route explicitly: ``"cpu"`` builds L with the
+    C++ builder and solves on the host; ``"gpu"`` assembles, gates and
+    solves on the device (:func:`solve_fin_volume_gpu`). No fallback.
 
     Every inductance entry, self included, is the Galerkin integral of
     uniform currents over the bars' oriented boxes (kernel option
@@ -387,6 +404,18 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
 
     if frequency <= 0 or sigma <= 0:
         raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
+    if backend == "gpu":
+        sweep, lat = fin_volume_lattice(
+            step_path, n_layers=n_layers, n_lanes=n_lanes, n_stations=n_stations,
+            n_outline=n_outline, lane_grading=lane_grading, tip_lanes=tip_lanes,
+            exponent=exponent, route=route, cad_units_per_meter=cad_units_per_meter,
+            max_branches=max_branches)
+        out = solve_fin_volume_gpu(lat, frequency=frequency, sigma=sigma,
+                                   current_A=current_A, box_order=box_order)
+        out["sweep"] = sweep
+        return out
+    if backend != "cpu":
+        raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
     sweep, lat, _builder, topo, energy = assemble_fin_volume(
         step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
         n_stations=n_stations, n_outline=n_outline, lane_grading=lane_grading,
@@ -411,4 +440,89 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
             "energy_receipt": energy_receipt(topo["L"], lat.branches, current),
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
-            "paths": paths, "I_fil": current}
+            "paths": paths, "I_fil": current, "backend": "cpu"}
+
+
+def bar_geometry(lattice):
+    """Bar centre, unit direction, length and width axis exactly as the C++
+    builder forms them from the two end points (AddConnectedSegment and
+    SetLastSegmentWidthDir), so CPU and GPU routes see identical bars."""
+    p = np.asarray(lattice.branch_xyz, dtype=float)
+    p1, p2 = p[:, 0], p[:, 1]
+    center = 0.5 * (p1 + p2)
+    d = p2 - p1
+    length = np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1] + d[:, 2] * d[:, 2])
+    if np.any(length < 1e-15):
+        raise ValueError("volume lattice has a zero-length bar")
+    d = d / length[:, None]
+    wd = np.asarray(lattice.width_dir, dtype=float)
+    has = np.any(wd != 0.0, axis=1)
+    dot = wd[:, 0] * d[:, 0] + wd[:, 1] * d[:, 1] + wd[:, 2] * d[:, 2]
+    w = wd - dot[:, None] * d
+    n = np.sqrt(w[:, 0] * w[:, 0] + w[:, 1] * w[:, 1] + w[:, 2] * w[:, 2])
+    if np.any(has & ~(n > 1e-9)):
+        raise ValueError("width axis is parallel to a bar")
+    w = np.where(has[:, None], w / np.where(n > 0, n, 1.0)[:, None], 0.0)
+    return center, d, length, w, has
+
+
+def solve_fin_volume_gpu(lattice, *, frequency, sigma, current_A, box_order=BOX_ORDER):
+    """Device-resident solve of a built volume lattice.
+
+    L (oriented-box Galerkin, the same shared kernel as the CPU builder) is
+    assembled on the GPU, gated for energy there (Cholesky, else the
+    spectrum), Z = R + j omega L is factorised there and the port solve runs
+    there; only bar geometry, R and incidence go up, and only branch
+    currents, node voltages and scalars come back. Raises when CUDA, the
+    module or the solve fails; there is no CPU fallback.
+    """
+    from radia.gpu import _native
+
+    if frequency <= 0 or sigma <= 0:
+        raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
+    mod = _native("_peec_fin_cuda")
+    center, d, length, wd, has = bar_geometry(lattice)
+    width = np.asarray(lattice.width, dtype=float)
+    height = np.asarray(lattice.height, dtype=float)
+    resistance = length / (float(sigma) * (width * height))
+    nodes = np.ascontiguousarray(lattice.branches, dtype=np.int32)
+    n_nodes = len(lattice.nodes)
+    plus, minus = int(lattice.port_plus), int(lattice.port_minus)
+    if plus == minus:
+        raise ValueError("port terminals coincide")
+    parent = np.arange(n_nodes)
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    for a, b in nodes:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+    roots = {find(k) for k in range(n_nodes)}
+    if len(roots) != 1:
+        raise ValueError(f"volume lattice has {len(roots)} disconnected parts")
+    node_map = np.full(n_nodes, -1, dtype=np.int32)
+    keep = np.flatnonzero(np.arange(n_nodes) != minus)  # the CPU solver grounds the negative terminal
+    node_map[keep] = np.arange(len(keep), dtype=np.int32)
+    injection = np.zeros(len(keep), dtype=complex)
+    injection[node_map[plus]] = complex(current_A)
+    current, voltage, meta = mod.solve(
+        np.ascontiguousarray(center.ravel()), np.ascontiguousarray(d.ravel()),
+        np.ascontiguousarray(wd.ravel()), np.ascontiguousarray(has, dtype=np.uint8),
+        np.ascontiguousarray(length), np.ascontiguousarray(width), np.ascontiguousarray(height),
+        np.ascontiguousarray(resistance), int(box_order), float(frequency),
+        np.ascontiguousarray(nodes.ravel()), node_map, int(len(keep)), injection)
+    i2 = abs(current_A) ** 2
+    r_total = float(meta["IRI"]) / i2
+    l_total = float(meta["ILI"]) / i2
+    delta = math.sqrt(2 / (2 * math.pi * frequency * 4e-7 * math.pi * sigma))
+    paths = [[(tuple(map(float, p0)), tuple(map(float, p1)))] for p0, p1 in lattice.branch_xyz]
+    return {"lattice": lattice, "current": np.asarray(current), "R_ohm": r_total, "L_H": l_total,
+            "port_voltage_V": complex(voltage[node_map[plus]]), "gpu": dict(meta),
+            "box_order": int(box_order), "coil_power_W": 0.5 * r_total * i2,
+            "skin_depth_m": delta, "n_branches": int(len(lattice.branches)),
+            "n_nodes": int(n_nodes), "paths": paths, "I_fil": np.asarray(current),
+            "backend": "gpu"}
