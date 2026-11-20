@@ -16,11 +16,64 @@
 #include "rad_peec_matrices.h"
 #include "rad_peec_axisym.h"
 #include "rad_peec_tet.h"
+#include "rad_peec_prima.h"
 #include "rad_parallel.h"
 
 namespace py = pybind11;
 
 using namespace radia;
+
+
+//=========================================================================
+// PRIMA reduction helpers (rad_peec_prima.h)
+//=========================================================================
+namespace {
+
+using PrimaIArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+
+peec_prima::PortModelInput PrimaInput(std::vector<double> L, std::vector<double> R,
+                                      PrimaIArr branch_nodes, std::size_t n_nodes,
+                                      const std::vector<int>& port_plus,
+                                      const std::vector<int>& port_minus) {
+    if (branch_nodes.ndim() != 2 || branch_nodes.shape(1) != 2)
+        throw std::invalid_argument("branch_nodes must have shape (n_branch, 2)");
+    peec_prima::PortModelInput in;
+    in.n_branch = R.size();
+    if (static_cast<std::size_t>(branch_nodes.shape(0)) != in.n_branch)
+        throw std::invalid_argument("branch_nodes rows must equal the branch count");
+    in.L = std::move(L);
+    in.R = std::move(R);
+    in.branch_nodes.assign(branch_nodes.data(), branch_nodes.data() + branch_nodes.size());
+    in.n_nodes = n_nodes;
+    in.port_plus = port_plus;
+    in.port_minus = port_minus;
+    return in;
+}
+
+py::dict PrimaReduceToDict(const peec_prima::PortModelInput& in, std::size_t order, double s0) {
+    peec_prima::ReducedModel r;
+    {
+        py::gil_scoped_release release;
+        SuspendTaskManager suspended_workers;   // LAPACK owns the threads of the dense solve
+        r = peec_prima::Reduce(in, order, s0);
+    }
+    const auto q = static_cast<py::ssize_t>(r.q), p = static_cast<py::ssize_t>(r.n_ports);
+    const auto nf = static_cast<py::ssize_t>(r.n_full);
+    py::array_t<double> V({nf, q}), E({q, q}), G({q, q}), B({q, p});
+    std::copy(r.V.begin(), r.V.end(), V.mutable_data());
+    std::copy(r.E.begin(), r.E.end(), E.mutable_data());
+    std::copy(r.G.begin(), r.G.end(), G.mutable_data());
+    std::copy(r.B.begin(), r.B.end(), B.mutable_data());
+    py::dict d;
+    d["V"] = V; d["E"] = E; d["G"] = G; d["B"] = B;
+    d["q"] = r.q; d["n_full"] = r.n_full; d["s0"] = s0;
+    d["deflated"] = r.deflated;
+    d["max_solve_residual"] = r.max_solve_residual;
+    d["min_E_eig_over_max"] = r.min_E_eig_over_max;
+    return d;
+}
+
+}  // namespace
 
 //=========================================================================
 // Python Wrapper Classes
@@ -240,6 +293,15 @@ public:
      *
      * Returns dict with L, R, P (optional), incidence matrix (CSR), ports.
      */
+    py::dict prima_reduce(PrimaIArr branch_nodes, std::size_t n_nodes,
+                          const std::vector<int>& port_plus, const std::vector<int>& port_minus,
+                          std::size_t order, double s0) {
+        if (!matrices_built_)
+            throw std::runtime_error("prima_reduce needs build_topology() first");
+        return PrimaReduceToDict(PrimaInput(matrices_.L, matrices_.R, branch_nodes, n_nodes,
+                                            port_plus, port_minus), order, s0);
+    }
+
     py::dict build_topology(bool include_star = false, double eps_eff = 1.0) {
         matrices_ = builder_->Build(include_star, eps_eff);
         matrices_built_ = true;
@@ -1272,6 +1334,24 @@ Example:
 
         .def("clear", &PyPEECBuilder::clear, "Clear all geometry")
 
+        .def("prima_reduce", &PyPEECBuilder::prima_reduce,
+             py::arg("branch_nodes"), py::arg("n_nodes"), py::arg("port_plus"),
+             py::arg("port_minus"), py::arg("order"), py::arg("s0") = 0.0,
+             R"doc(
+             PRIMA reduction of the built L and R with a caller-owned incidence.
+
+             Block Arnoldi on (G + s0 E)^-1 E from (G + s0 E)^-1 B and the
+             congruence E_q = V^T E V, G_q = V^T G V, B_q = V^T B of the MNA
+             port model E = [[L,0],[0,0]], G = [[R,A^T],[-A,0]], B = [0;P]
+             (port current in, port voltage out).  Ground is port_minus[0].
+             Needs build_topology() first.  Raises on malformed input, a
+             failed Cholesky factor, a shifted solve with true residual
+             above 1e-6, or negative reduced magnetic energy.
+
+             Returns dict: V, E, G, B, q, n_full, s0, deflated,
+             max_solve_residual, min_E_eig_over_max.
+             )doc")
+
         // Topology-aware methods
         .def("add_node_at", &PyPEECBuilder::add_node_at,
              py::arg("x"), py::arg("y"), py::arg("z"),
@@ -1757,6 +1837,19 @@ Example:
     // ------------------------------------------------------------------
     using DArr = py::array_t<double, py::array::c_style | py::array::forcecast>;
     using IArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+    m.def("prima_reduce",
+          [](DArr L, DArr R, IArr branch_nodes, std::size_t n_nodes, const std::vector<int>& port_plus,
+             const std::vector<int>& port_minus, std::size_t order, double s0) {
+              if (L.ndim() != 2 || L.shape(0) != L.shape(1) || R.ndim() != 1 || R.shape(0) != L.shape(0))
+                  throw std::invalid_argument("L must be (n, n) and R (n,)");
+              return PrimaReduceToDict(
+                  PrimaInput(std::vector<double>(L.data(), L.data() + L.size()),
+                             std::vector<double>(R.data(), R.data() + R.size()),
+                             branch_nodes, n_nodes, port_plus, port_minus), order, s0);
+          },
+          py::arg("L"), py::arg("R"), py::arg("branch_nodes"), py::arg("n_nodes"),
+          py::arg("port_plus"), py::arg("port_minus"), py::arg("order"), py::arg("s0") = 0.0,
+          "PRIMA reduction of a dense branch port model; see PEECBuilder.prima_reduce.");
     m.def("tet_potential",
           [](DArr x, DArr verts) {
               if (x.size() != 3 || verts.ndim() != 2 || verts.shape(0) != 4 || verts.shape(1) != 3)

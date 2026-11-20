@@ -340,6 +340,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_peec_volume.cpp           # Finite-volume Green integral
 	${CORE_DIR}/rad_hacapk_peec.cpp           # HACApK PEEC adapter (Ruehli filament kernel)
 	${CORE_DIR}/rad_peec_tet.cpp               # Tetrahedral volume PEEC kernel (face currents)
+	${CORE_DIR}/rad_peec_prima.cpp             # PRIMA reduction of dense branch port models
 	${CORE_DIR}/rad_hacapk_peec_tet.cpp       # HACApK tetrahedral volume PEEC inductance
 	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 	${CORE_DIR}/rad_hdiv_vim.cpp              # Symmetric HDiv-type VIM demag operator (N = B^T G B)
@@ -611,6 +612,7 @@ pybind11_add_module(peec_matrices
 	${CORE_DIR}/rad_peec_volume.cpp
 	${CORE_DIR}/rad_peec_axisym.cpp
 	${CORE_DIR}/rad_peec_tet.cpp
+	${CORE_DIR}/rad_peec_prima.cpp
 )
 
 # Add include directories
@@ -955,5 +957,5 @@ message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
 # Equation editing and document output belong to the independent EqnEdit64 product.
 
 # Preserve finite-volume Gaussian tail and axisymmetric near-field subtraction cancellation under optimized builds.
-set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp ${CORE_DIR}/rad_peec_axisym.cpp ${CORE_DIR}/rad_peec_tet.cpp PROPERTIES
+set_source_files_properties(${CORE_DIR}/rad_peec_volume.cpp ${CORE_DIR}/rad_peec_axisym.cpp ${CORE_DIR}/rad_peec_tet.cpp ${CORE_DIR}/rad_peec_prima.cpp PROPERTIES
     COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>;$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-fast-math>")
