@@ -537,12 +537,135 @@ jobs:
       # ----------------------------------------------------------------
       # Build wheel (DryRun: build + verify only, no upload)
       # ----------------------------------------------------------------
-      - name: Build and stage Radia Python GPU payload
+      - name: Build wheel
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Wheel build failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
+      # Upload native binaries as an artifact for the CD workflow to consume
+      # ----------------------------------------------------------------
+      - name: Record the CPU natives with their hashes
+        if: success()
         shell: pwsh
         run: |
-          # This tag/manual native-release dispatch authorizes only this exact
-          # checkout's compile and import-only coexistence. No resident objects or
-          # numerical solves are requested; exact-wheel acceptance is separate.
+          $natives = Join-Path $env:RUNNER_TEMP "radia-cpu-natives-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python tools/ci_cpu_natives.py record --source-dir src/radia --out $natives --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_CPU_NATIVES_DIR=$natives" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Upload native binary artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-cpu-pyd
+          path: ${{ env.RADIA_CPU_NATIVES_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Upload wheel as artifact for PyPI publishing
+      # ----------------------------------------------------------------
+      - name: Upload wheel artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-cpu-wheel
+          path: dist/*.whl
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
+      # ----------------------------------------------------------------
+      - name: Seal the patched Netgen library
+        if: success()
+        shell: pwsh
+        run: |
+          # The same library the tests ran on, copied so the seal never enters the cache.
+          $built = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-seal-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $overlay | Out-Null
+          Copy-Item -LiteralPath (Join-Path $built 'nglib.dll'), (Join-Path $built 'netgen-overlay.json') -Destination $overlay
+          python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload sealed Netgen library
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-netgen-overlay
+          path: |
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/nglib.dll
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/netgen-overlay.json
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # The build host stops at CPU natives. CUDA compilation and the published
+  # Windows wheel (CPU natives from build-test plus the Python GPU payload) are
+  # produced on the Windows GPU host from the same commit. Compile only: no
+  # CUDA context, no numerical solve; exact-wheel acceptance stays separate.
+  windows-gpu-wheel:
+    name: radia-native-release-gpu-wheel
+    needs: [build-test]
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Initialize runner-owned CI scratch
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          $output = Join-Path $env:RUNNER_TEMP "radia-gpu-output-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $output | Out-Null
+          "RADIA_CI_OUTPUT_DIR=$output" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - uses: actions/checkout@v4
+      - name: Require the exact commit and a clean tracked tree
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'Checkout is not the triggering commit' }
+          if (git status --porcelain --untracked-files=no) { throw 'Tracked tree is not clean' }
+      - name: Create the isolated wheel environment
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-gpu-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ciPython = Join-Path $venv 'Scripts/python.exe'
+          # All declared runtime dependencies: the coexistence check imports radia
+          # from this checkout next to the exact NGSolve/Netgen pins.
+          $deps = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['dependencies'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or @($deps | Where-Object { $_ -match '^(ngsolve|netgen-mesher)==' }).Count -ne 2) { throw 'Expected exact ngsolve and netgen-mesher pins' }
+          & $ciPython -I tools/ci_fork_wheels.py install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install @deps build wheel twine==6.2.0 "setuptools>=77"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Fetch the CPU natives built from this commit
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-cpu-pyd
+          path: ${{ runner.temp }}/radia-cpu-pyd-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Stage exactly the recorded CPU natives
+        run: |
+          $source = "$env:RUNNER_TEMP/radia-cpu-pyd-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python tools/ci_cpu_natives.py stage --artifact $source --dest src/radia --sha $env:GITHUB_SHA --evidence (Join-Path $env:RADIA_CI_OUTPUT_DIR 'cpu-natives.manifest.json')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and stage Radia Python GPU payload
+        run: |
+          # Compile and import-only coexistence for this exact checkout. No resident
+          # objects or numerical solves are requested; exact-wheel acceptance is separate.
           $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -597,22 +720,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Build wheel
-        if: success()
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
+      - name: Build the published wheel
         run: |
           & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun -RequirePythonGpu
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Wheel build failed"
             exit $LASTEXITCODE
           }
-
-      # ----------------------------------------------------------------
-      # Upload native binaries as an artifact for the CD workflow to consume
-      # ----------------------------------------------------------------
       - name: Upload native binary artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-pyd
@@ -620,31 +735,16 @@ jobs:
             src/radia/*.pyd
             src/radia/*.pyd.build.json
             src/radia/*.dll
-            src/radia/*.so
-            src/radia/*.dylib
-            !src/radia/*.locked-old.*
-            !src/radia/*.lockedold.*
-            !src/radia/*.pre_*.*
-            !src/radia/*.backup*.*
+          if-no-files-found: error
           retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Upload wheel as artifact for PyPI publishing
-      # ----------------------------------------------------------------
       - name: Upload wheel artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-wheel
           path: dist/*.whl
+          if-no-files-found: error
           retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Seal the same wheel for exact-SHA compute validation
-      # ----------------------------------------------------------------
       - name: Seal exact-SHA GPU wheel
-        if: success()
-        shell: pwsh
         run: |
           $sealed = Join-Path $env:RUNNER_TEMP "radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $sealed | Out-Null
@@ -654,9 +754,7 @@ jobs:
           python tools/ci_gpu_artifact.py seal $sealed --sha $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_GPU_WHEEL_DIR=$sealed" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
       - name: Upload sealed GPU wheel
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: gpu-radia-wheel

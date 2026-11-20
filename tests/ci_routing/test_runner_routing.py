@@ -173,9 +173,9 @@ def test_a100_is_compute_only_and_never_a_pr_gate():
     assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')
 
 
-def test_simulink_build_host_compiles_and_the_a100_only_executes():
+def test_simulink_cuda_build_compiles_only_and_the_acceptance_job_executes():
     build = yaml.safe_load((ROOT / '.github/workflows/radia-simulink.yml').read_text(encoding='utf-8'))['jobs']['cuda-mex']
-    assert build['runs-on'] == ['self-hosted', 'Windows', 'X64', '100']
+    assert build['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], build['runs-on']
     built = chr(10).join(step.get('run', '') for step in build['steps'])
     for executed in ('run_device_boundary.py', 'run_poisson.py', 'ams_cuda/run.py', 'fmm_physics.py', 'ic_cuda/run.py', 'run_installed.py', 'nonlinear_resident.py'):
         assert executed not in built, executed
@@ -209,9 +209,9 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     assert 'netgen_overlay.py' not in commands
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     native = yaml.safe_load((ROOT / '.github/workflows/build-test.yml').read_text(encoding='utf-8'))
-    steps = native['jobs']['build-test']['steps']
-    upload = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
-    assert 'ci_gpu_artifact.py seal' in steps[upload - 1]['run']
+    gpu_steps = native['jobs']['windows-gpu-wheel']['steps']
+    upload = next(i for i, step in enumerate(gpu_steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
+    assert 'ci_gpu_artifact.py seal' in gpu_steps[upload - 1]['run']
 
 
 @pytest.mark.parametrize('workflow, job', [('build-test.yml', 'build-test'), ('sparsesolv.yml', 'ams-regression')])
@@ -352,3 +352,35 @@ def test_other_json_inputs_are_not_blanket_exempted(tree):
     path.write_text('{"value":2}', encoding="utf-8")
     with pytest.raises(ValueError, match="closure changed"):
         routing.validate(root, manifest)
+
+
+def test_cuda_compilation_runs_only_on_the_windows_gpu_host():
+    """Guards: the CPU build host compiles no CUDA. The native release job builds CPU
+    natives on the build host; the Python GPU payload, the published wheel and the
+    MATLAB CUDA MEX are produced on the Windows GPU host from the same commit."""
+    workflows = ROOT / '.github/workflows'
+    native = yaml.safe_load((workflows / 'build-test.yml').read_text(encoding='utf-8'))['jobs']
+    cpu, gpu = native['build-test'], native['windows-gpu-wheel']
+    assert cpu['runs-on'] == ['self-hosted', 'Windows', 'X64', '100'], cpu['runs-on']
+    assert gpu['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], gpu['runs-on']
+    assert gpu['needs'] == ['build-test'], gpu['needs']
+    cpu_runs = chr(10).join(step.get('run', '') for step in cpu['steps'])
+    gpu_runs = chr(10).join(step.get('run', '') for step in gpu['steps'])
+    for token in ('build_python_gpu.py', 'nvcc', '-RequirePythonGpu', 'ci_gpu_artifact.py seal $sealed'):
+        assert token not in cpu_runs, token
+    for token in ('build_python_gpu.py', '-RequirePythonGpu', 'check_python_gpu_coexistence.py'):
+        assert token in gpu_runs, token
+    cpu_uploads = {step['with']['name'] for step in cpu['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')}
+    gpu_uploads = {step['with']['name'] for step in gpu['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')}
+    assert {'radia-cpu-pyd', 'radia-cpu-wheel'} <= cpu_uploads and not {'radia-pyd', 'radia-wheel', 'gpu-radia-wheel'} & cpu_uploads
+    assert {'radia-pyd', 'radia-wheel', 'gpu-radia-wheel'} <= gpu_uploads, gpu_uploads
+    fetch = next(step for step in gpu['steps'] if step.get('uses', '').startswith('actions/download-artifact@'))
+    assert fetch['with']['name'] == 'radia-cpu-pyd', fetch
+    simulink = yaml.safe_load((workflows / 'radia-simulink.yml').read_text(encoding='utf-8'))['jobs']['cuda-mex']
+    assert simulink['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], simulink['runs-on']
+    for path in workflows.glob('*.yml'):
+        for name, job in (yaml.safe_load(path.read_text(encoding='utf-8')).get('jobs') or {}).items():
+            labels = job.get('runs-on')
+            if isinstance(labels, list) and '100' in labels:
+                runs = chr(10).join(step.get('run', '') for step in job.get('steps', []))
+                assert not any(t in runs for t in ('nvcc', 'build_python_gpu.py', '-CudaMexOnly', 'mexcuda(')), f'{path.name}:{name}'

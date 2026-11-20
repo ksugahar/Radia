@@ -54,8 +54,13 @@
     },
     "radia-simulink.yml:cuda-mex": {
       "owner": "radia-simulink",
-      "target": "ci-native",
-      "legacy_100": true
+      "target": "gpu-a100",
+      "legacy_100": false
+    },
+    "build-test.yml:windows-gpu-wheel": {
+      "owner": "radia",
+      "target": "gpu-a100",
+      "legacy_100": false
     },
     "radia-mcp-matrix.yml:ci-impact": {
       "owner": "radia-mcp",
@@ -209,7 +214,7 @@
         "validation_test/induction_heating/fin_return_principle.py",
         "tools/check_ninja_msvc_deps.py"
       ],
-      "audit_sha256": "4dc6a174892c9f1faaccc6352ef602f95175091f9237b5c41518a0d2415f03f4",
+      "audit_sha256": "c6164474bff7518ef2cbdf2989a81910d550f2772d99e000fd262cc3f1cffc58",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

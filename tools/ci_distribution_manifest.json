@@ -3333,12 +3333,12 @@
               "type": "string"
             },
             "wheel_sha256": {
-              "description": "SHA-256 of the wheel accepted on build and validation targets",
+              "description": "SHA-256 of the published wheel, the validated Windows Python GPU lane artifact",
               "required": "true",
               "type": "string"
             },
             "acceptance_commit": {
-              "description": "Full main-reachable commit containing both required host acceptance records",
+              "description": "Full main-reachable commit holding the validation acceptance record and the four-lane release receipts",
               "required": "true",
               "type": "string"
             }

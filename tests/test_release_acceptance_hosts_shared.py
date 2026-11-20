@@ -1,14 +1,14 @@
-"""The gate that publishes and the tool that produces evidence name one host list.
+"""The gate that publishes and the tool that produces evidence name one role list.
 
-Release-quad requires validation role and 100号機 for the same release commit.
-The promotion verifier used to carry its own two-host list -- one of them a
-computation host that is not an acceptance target -- so a release with
-evidence from two of the four machines would have passed the public gate.
-Both tools now import the list from `tools/release_acceptance.py`; these
-tests pin that the list is the policy's, that both tools use it, and that
-neither has grown a private copy again.
+Guards: exact-wheel release acceptance is the validation role only. The CPU
+build host prepares release candidates and is never an acceptance target, while
+release_quad keeps it as an explicit runtime-maintenance role. The promotion
+verifier imports the shared list rather than carrying a private copy.
+Assumes: tools/release_acceptance.py is the single owner of the list.
 """
 from __future__ import annotations
+
+import pytest
 
 import importlib.util
 import re
@@ -31,19 +31,20 @@ def _load(name):
 
 def test_the_shared_list_is_the_policy_list():
     shared = _load("release_acceptance")
-    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("validation", "100")
-    assert "hibino" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
-        "hibino is a computation host, not a release acceptance target")
+    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("validation",), shared.RELEASE_ACCEPTANCE_HOSTS
+    assert shared.PUBLIC_RELEASE_ACCEPTANCE_ROLES == {"validation": "validation"}
+    assert "100" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
+        "the CPU build host prepares candidates; it is not an acceptance target")
 
 
-
-def test_release_quad_produces_evidence_for_exactly_those_hosts():
-    """The producer's target table is the shared tuple, key for key."""
+def test_release_quad_reaches_every_acceptance_role():
+    """Acceptance roles are a subset of the runtime roles release_quad can address."""
     source = (TOOLS / "release_quad.py").read_text(encoding="utf-8")
     assert "from release_acceptance import RELEASE_ACCEPTANCE_HOSTS" in source
-    assert "tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS" in source
-    keys = re.findall(r'^\s{4}"([a-z0-9]+)": \("', source, re.M)
-    assert tuple(_load("release_quad").SOLVER_TARGETS) == ("validation", "100")
+    quad = _load("release_quad")
+    assert set(quad.RELEASE_ACCEPTANCE_HOSTS) <= set(quad.SOLVER_TARGETS), (
+        quad.RELEASE_ACCEPTANCE_HOSTS, tuple(quad.SOLVER_TARGETS))
+    assert tuple(quad.SOLVER_TARGETS) == ("validation", "100"), tuple(quad.SOLVER_TARGETS)
 
 
 def test_the_promotion_gate_has_no_private_host_list():
@@ -64,17 +65,19 @@ def test_retired_host_has_no_release_route():
     assert not hasattr(quad, "SSH_MDX2")
 
 
-def test_release_all_never_refreshes_compute_hosts(monkeypatch):
+def test_release_all_is_read_only_candidate_verification(monkeypatch):
     quad = _load("release_quad")
+    args = object()
     calls = []
+
     def forbidden(*args):
-        raise AssertionError("release must not contact compute hosts")
-    monkeypatch.setattr(quad, "cmd_phase8e", forbidden)
-    monkeypatch.setattr(quad, "cmd_temp_shadows", forbidden)
-    monkeypatch.setattr(quad, "cmd_phase8", lambda args: calls.append(args.target) or 0)
-    monkeypatch.setattr(quad, "cmd_phase9", lambda args: calls.append("phase9") or 0)
-    assert quad.cmd_all(None) == 0
-    assert calls == ["validation,100", "phase9"]
+        pytest.fail("candidate handoff attempted a deployment")
+
+    monkeypatch.setattr(quad, "cmd_phase8", forbidden)
+    monkeypatch.setattr(quad, "cmd_phase9", forbidden)
+    monkeypatch.setattr(quad, "cmd_done", lambda received: calls.append(received) or 4)
+    assert quad.cmd_all(args) == 4
+    assert calls == [args]
 
 
 def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
@@ -83,3 +86,68 @@ def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
     source = inspect.getsource(quad.cmd_done)
     assert "cmd_phase8e(" not in source
     assert "cmd_temp_shadows(" not in source
+
+
+
+@pytest.mark.parametrize("defect", [None, "source", "role", "artifact", "acceptance", "ci",
+                                    "simulink", "ltspice", "linux-parity", "windows-parity"])
+def test_candidate_handoff_binds_all_four_receipts_to_exact_artifacts(tmp_path, monkeypatch, defect):
+    from argparse import Namespace
+    import hashlib
+    import json
+
+    quad = _load("release_quad")
+    source = "a" * 40
+
+    def evidence(name):
+        path = tmp_path / name
+        path.write_bytes(name.encode("ascii"))
+        return {"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+    receipts = {}
+    for name, (build_role, validation_role) in quad.RELEASE_LANES.items():
+        artifact = evidence(name + ".whl")
+        receipts[name] = {
+            "build": {"role": build_role, "source_sha": source, "evidence": evidence(name + ".build"),
+                      "artifacts": [artifact]},
+            "validation": {"role": validation_role, "source_sha": source, "passed": True,
+                           "evidence": evidence(name + ".validation"),
+                           "checks": {check: evidence(f"{name}.{check}")
+                                      for check in quad.REQUIRED_VALIDATION_CHECKS.get(name, ())},
+                           "artifact_sha256": {artifact["path"]: artifact["sha256"]}},
+        }
+    data = {"schema": 1, "source_sha": source, "lanes": receipts,
+            "native_ci": {"source_sha": source, "passed": True, "evidence": evidence("ci.json")}}
+    if defect == "source":
+        receipts["matlab"]["validation"]["source_sha"] = "b" * 40
+    elif defect == "role":
+        receipts["windows-python-gpu"]["build"]["role"] = "cpu-build"
+    elif defect == "artifact":
+        (tmp_path / "linux-python-gpu.whl").write_bytes(b"changed")
+    elif defect == "acceptance":
+        del receipts["cpu"]
+    elif defect == "ci":
+        data["native_ci"]["passed"] = False
+
+    required = {
+        "simulink": ("matlab", "simulink_acceptance"),
+        "ltspice": ("matlab", "ltspice_acceptance"),
+        "linux-parity": ("linux-python-gpu", "cpu_gpu_parity"),
+        "windows-parity": ("windows-python-gpu", "cpu_gpu_parity"),
+    }
+    if defect in required:
+        lane, check = required[defect]
+        del receipts[lane]["validation"]["checks"][check]
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(quad, "_verify_local_release_source",
+                        lambda path, sha: 0 if path == str(tmp_path.resolve()) and sha == source else 4)
+    summary = tmp_path / "release-lanes.json"
+    args = Namespace(source_sha=source, manifest=manifest, release_source=tmp_path, public_summary=summary)
+    assert quad.cmd_done(args) == (0 if defect is None else 4)
+    if defect is None:
+        written = json.loads(summary.read_text(encoding="utf-8"))
+        lanes = quad._release_acceptance.verify_lane_summary(written, source)
+        assert set(lanes) == set(quad.RELEASE_LANES)
+        assert "evidence" not in summary.read_text(encoding="utf-8")

@@ -118,10 +118,32 @@ def test_ci_native_artifact_excludes_backups_and_pre_push_does_not_upload():
         encoding="utf-8"
     )
     assert "upload_release_asset.py" not in hook
-    assert "!src/radia/*.locked-old.*" in workflow
-    assert "!src/radia/*.lockedold.*" in workflow
-    assert "!src/radia/*.pre_*.*" in workflow
-    assert "!src/radia/*.backup*.*" in workflow
+    # The CPU native artifact is the directory written by ci_cpu_natives record,
+    # which skips backup copies; check that behaviour rather than glob text.
+    assert "ci_cpu_natives.py record" in workflow
+    import importlib.util
+    import tempfile
+    spec = importlib.util.spec_from_file_location("ci_cpu_natives", ROOT / "tools" / "ci_cpu_natives.py")
+    natives = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(natives)
+    import hashlib
+    import json
+    sha = "a" * 40
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src"
+        src.mkdir()
+        (src / "_radia_pybind.pyd").write_bytes(b"core")
+        (src / "_radia_pybind.pyd.build.json").write_text(json.dumps(
+            {"source_commit": sha, "source_dirty": False,
+             "binary_sha256": hashlib.sha256(b"core").hexdigest()}), encoding="utf-8")
+        (src / "radia_motor_rom.dll").write_bytes(b"rom")
+        for name in ("_radia_pybind.locked-old.pyd", "_radia_pybind.lockedold.pyd",
+                     "_radia_pybind.pre_20260716.pyd", "_radia_pybind.backup1.pyd"):
+            (src / name).write_bytes(b"old")
+        manifest = natives.record(src, Path(tmp) / "out", sha)
+        recorded = sorted(entry["name"] for entry in manifest["files"])
+        assert recorded == ["_radia_pybind.pyd", "_radia_pybind.pyd.build.json",
+                            "radia_motor_rom.dll"], recorded
 
 
 def test_retired_notebook_workbenches_are_absent_from_source():
