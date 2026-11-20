@@ -14,13 +14,14 @@ the release owner for publication.
 | 1 | CPU build host | Develop and debug the CPU implementation. Run the shared precheck and the affected CPU checks. Freeze the source and build the CPU release candidate. Record its artifact hashes. |
 | 2 | Linux GPU host | Build Linux Python GPU artifacts from the frozen source. Verify the artifacts on the intended device architecture. |
 | 2 | Windows GPU host | Build Windows Python GPU artifacts and the MATLAB/Simulink package's CUDA MEX artifacts from the frozen source. Use the reviewed Windows CUDA, compiler, and MATLAB ABI. |
-| 3 | Designated validation roles | Verify the exact hashes before execution. Run the applicable native, numerical, and package acceptance checks in isolated runtimes. |
+| 3 | Designated validation roles | Verify the exact hashes before execution. Run the applicable native, numerical, and package acceptance checks on the verified-wheel runtimes. |
 | 4 | Assigned release owner | Verify the evidence against the publication scope. Publish and distribute the accepted artifacts under each package's release workflow. |
 
 Resolve the machine mapping privately. The CPU build host stops at CPU
 candidate preparation. Schedule CUDA compilation, GPU CI, and GPU execution
-on the assigned GPU hosts. Run isolated exact-wheel CPU acceptance on the
-validation host. Keep editable runtime maintenance separate. After freezing the CPU candidate source and dependency identities, the Linux and
+on the assigned GPU hosts. The validation host runs verified wheels only:
+`phase8 --source-sha SHA --manifest FILE` installs the hash-verified published
+lane wheel into its runtime, never an editable source. After freezing the CPU candidate source and dependency identities, the Linux and
 Windows GPU builds may proceed in parallel. The coordinated handoff requires all
 four lane receipts for the same source SHA.
 

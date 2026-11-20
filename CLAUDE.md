@@ -77,7 +77,7 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 **POLICY** (radia, radia-optuna, NGSolve forks; 2026-11-19): CPU build and CPU CI run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` fast contracts. The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution. Supercomputer GPU debug is outside CI. `gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs.
 Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU (supercomputer), Windows Python GPU and MATLAB/MEX (validation); publish once all four receipts pass.
-Deployment follows release: radia uses editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
+Deployment follows release: radia and radia-mcp use editable development installs on the build role and verified wheels on the validation role, never an editable install there; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns CPU preflight/native builds; validation GPU/MATLAB builds. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
 NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
@@ -120,7 +120,7 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 
 ## Build And Release
 
-- The build role owns the CPU candidate (`Build.ps1`/CMake, reviewed isolated sources); GPU/MATLAB lanes build at that SHA on their roles. Never substitute dev artifacts into exact-wheel QA or others' runtimes.
+- The build role owns the CPU candidate (`Build.ps1`/CMake, reviewed isolated sources); GPU/MATLAB lanes build at that SHA on their roles. Never substitute dev artifacts into the validation wheel runtime or others' runtimes.
 - PyPI: Windows wheel only; Linux is GitHub source (`tools/build_linux.py`).
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.

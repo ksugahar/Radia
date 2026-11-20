@@ -19,7 +19,7 @@ def test_install_deploy_topics_match_current_machine_roles():
     assert "Windows GPU validation host" in overview and "`gpu-a100`" in overview
     assert "GPU work never overflows to the build host" in " ".join(overview.split())
     assert "the only editable development host" in overview
-    assert "verified artifacts" in overview
+    assert "verified wheels only" in overview
     for retired in (r"\bLAB\b", "md" + "x", "hi" + "bino", "on-demand GPU worker"):
         assert not re.search(retired, INSTALL_DEPLOY), retired
     assert "editable `radia`, `cubit-mesh-export`, `radia-mcp`" not in overview
@@ -78,9 +78,9 @@ def test_release_workflow_does_not_restore_coupled_mcp_policy():
     assert "radia-ngsolve, cubit, build123d" not in RELEASE_WORKFLOW
     assert "Cubit MCP is distributed by cubit-mesh-export" in overview
     assert "CPU-only editable development install" in overview
-    assert "fixed release checkout" in overview
-    assert "release_native_payloads.json" in overview
-    assert "installed NGSolve/Netgen ABI" in overview
+    assert "binds the installed RECORD hashes to that wheel" in " ".join(overview.split())
+    assert "checks NGSolve/Netgen and GPU runtime pins against package metadata" in " ".join(overview.split())
+    assert "fixed release checkout" not in overview
     assert "Bump 4 version files" not in RELEASE_WORKFLOW
     assert "Composite commit (HEREDOC, all packages" not in RELEASE_WORKFLOW
     assert "the radia-mcp Scripts/mcp-server-*.exe" not in RELEASE_WORKFLOW
@@ -113,3 +113,9 @@ def test_host_roles_agree_across_package_guidance_and_recovery():
     assert "On LAB, repair with the verified current wheel, never an editable pointer" in incident["prevention"]
     assert "LAB wheel / 100 editable release-dual" in incident["prevention"]
     assert "Source edits no longer flow to runtime" in incident["what"]
+    assert "verify-editable" not in incident["detection"]
+    normalized = " ".join(RELEASE_WORKFLOW.split())
+    assert "The validation host runs verified wheels only, never an editable install" in normalized
+    assert "verified wheels only, never an editable install" in install
+    for retired in ("isolated exact-wheel QA", "verify-editable", "release_quad.py repoint"):
+        assert retired not in normalized, retired

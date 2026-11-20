@@ -18,7 +18,7 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 | Machine role | Primary role | Installation rule |
 |---|---|---|
 | build host | CPU builds, CPU CI (`100`, `ci-light`), early debugging, CPU release candidates | the only editable development host; CPU-only: no CUDA/nvcc/mexcuda, no NVIDIA/cuDSS packages, no GPU execution |
-| Windows GPU validation host | Windows Python GPU and CUDA MEX/MATLAB builds, their CI (`gpu-a100`) and release qualification | verified artifacts and isolated job/QA environments; no Cubit; one GPU job at a time |
+| Windows GPU validation host | Windows Python GPU and CUDA MEX/MATLAB builds, their CI (`gpu-a100`) and release qualification | verified wheels only, never an editable install; isolated job environments; no Cubit; one GPU job at a time |
 | supercomputer | Linux Python GPU build debugging and the `linux-python-gpu` lane | source builds outside CI; no Linux binary distribution |
 
 Regular CPU GitHub Actions CI uses the `100` and `ci-light` runner labels on

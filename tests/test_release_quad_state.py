@@ -23,18 +23,19 @@ def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     assert bool(checked_main) == matched
 
 
-def test_compute_host_installer_passes_metadata_pins_to_native_checks(monkeypatch):
-    """Guards: dependency identity precedes installation. Assumes: synthetic pins, no remote action."""
-    import ast
+def test_wheel_installer_checks_metadata_pins_after_install(monkeypatch):
+    """Guards: installed ABI and GPU pins come from package metadata. Assumes: synthetic pins, no remote action."""
     monkeypatch.setattr(module, "_solver_dependency_pins",
                         lambda: {"ngsolve": "sentinel-ng", "netgen-mesher": "sentinel-netgen"})
-    tree = ast.parse(module._editable_install_program(
-        {"source": "C:/Sources/test", "commit": "a" * 40,
-         "python": "C:/Runtime/python.exe", "binding": {"hostname": "test"}}))
-    args = next(ast.literal_eval(node.value) for node in tree.body
-                if isinstance(node, ast.Assign) and node.targets[0].id == "native_args")
-    assert args == ["native-check", "C:/Sources/test", "a" * 40,
-                    "sentinel-ng", "sentinel-netgen"]
+    code = module._solver_pin_check_code()
+    assert "m.version('ngsolve') == 'sentinel-ng'" in code
+    assert "m.version('netgen-mesher') == 'sentinel-netgen'" in code
+    assert "from radia._cuda_runtime import _pins" in code
+    monkeypatch.setattr(module, "_radia_version", lambda: "9.9.9")
+    program = module._wheel_install_program(
+        {"python": "C:/Runtime/python.exe", "hostname": "test", "label": "validation"},
+        "C:/temp/x/radia-9.9.9-py3-none-any.whl", "f" * 64)
+    assert repr(code)[1:-1][:40] in program
 
 
 def test_solver_dependency_versions_come_from_exact_metadata_pins():

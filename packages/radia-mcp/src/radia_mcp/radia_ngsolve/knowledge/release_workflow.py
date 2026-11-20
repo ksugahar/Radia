@@ -92,15 +92,14 @@ where an affected tool uses another package:
 * cubit-mesh-export owns Cubit meshing, export, and its C++ plugin binaries.
   Radia consumes the checked `.vol` boundary; it does not couple solver release
   acceptance to the exporter version.
-* The build host keeps a CPU-only editable development install in a dedicated
-  venv. The validation host consumes verified artifacts; `release_quad` maintains
-  its bound normal solver runtime and a separate isolated exact-wheel QA venv.
-  Before installation, verify the exact release SHA, tracked cleanliness,
-  installed NGSolve/Netgen ABI against package metadata, and native hashes
-  against `release_native_payloads.json`. The manifest must match the exact
-  accepted wheel; a matching Python version string alone is not acceptance.
-  A release editable acceptance points to a fixed release checkout.
-  radia-mcp keeps its independent maintained-source policy.
+* The build host keeps the only, CPU-only editable development install in a
+  dedicated venv. The validation host runs verified wheels only, never an
+  editable install: `release_quad phase8` installs the published-lane wheel
+  whose SHA-256 matches the verified candidate receipts, then a fresh process
+  refuses editable registration and binds the installed RECORD hashes to that
+  wheel, checks NGSolve/Netgen and GPU runtime pins against package metadata,
+  and runs `pip check`. A matching Python version string alone is not
+  acceptance. radia-mcp keeps its independent maintained-source policy.
 Solver compatibility is checked in the owning numerical lane. It does not make
 radia-mcp part of solver Phase 9 or require lock-step package versions.
 
@@ -143,9 +142,9 @@ the AI-readable summary; independent package lanes are excluded.
 | 5 | Create the Radia solver tag | always | package tags are created only in their owning independent lane |
 | 6 | Push approved main and the solver tag | after solver gates | Radia tag CI uploads `ci-release-context` but leaves PyPI on HOLD; other packages retain independent publication gates |
 | 7 | Monitor the exact solver CI run | always | use ci-monitor skill |
-| 8 | `phase8`: deploy/verify the Radia solver runtime on the validation role | when the runtime must move | the CPU-only build host is never a target; this phase does not install radia-mcp or cubit-mesh-export |
-| 9 | `phase9`: normal editable and isolated exact-wheel QA consistency probe | after phase 8 | package-independent MCP state is outside this probe |
-| DoD | `done --source-sha SHA --manifest FILE`: verify the four lane receipts and exact artifacts, then write the public lane summary | always | read-only; does not deploy. Only exit 0 authorizes the release-owner handoff. The release source (the controller by default, or `--release-source`) must be the exact tracked-clean release SHA. Any later runtime repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
+| 8 | `phase8 --source-sha SHA --manifest FILE`: install and verify the exact hash-verified release wheel on the validation role | when the runtime must move | never an editable install; the CPU-only build host is never a target; this phase does not install radia-mcp or cubit-mesh-export |
+| 9 | `phase9`: read-only verified-wheel runtime consistency probe | after phase 8 | refuses an editable install or a non-release version; package-independent MCP state is outside this probe |
+| DoD | `done --source-sha SHA --manifest FILE`: verify the four lane receipts and exact artifacts, then write the public lane summary | always | read-only; does not deploy. Only exit 0 authorizes the release-owner handoff. The release source (the controller by default, or `--release-source`) must be the exact tracked-clean release SHA. A later validation runtime change deploys a newer verified release wheel; never restore an older tree or an editable source. |
 
 ## ===
 ## simulink_candidate — independent GPU distribution boundary

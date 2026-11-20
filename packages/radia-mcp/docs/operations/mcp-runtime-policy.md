@@ -92,16 +92,11 @@ identity. Use registration-time provenance when exposed and a harmless changed
 tool call. Report contradictory evidence as unverified, with a mixed-generation
 reason; one verified client does not establish all clients are current.
 
-Editable intent records apply only to the 100 development venv. On 100,
-`python tools/release_quad.py repoint` (and Phase 8 of a release) writes the
-selected source to `%ProgramData%\Radia\editable-intent.json`
-(`RADIA_EDITABLE_INTENT_FILE`) together with the previous pointer, commit,
-actor, time and reason, and appends every change to a log beside it. `repoint`
-refuses other hosts, does not uninstall first and does not stop processes. The
-read-only `release_quad.py verify-editable` command checks validation host's fixed wheel
-and 100's development editable. A pushed ref is required only for
-formal handoff or completion evidence (`repoint --require-pushed`), not for
-routine MCP development.
+There is no editable-intent record or repoint command. On 100, check the
+editable registration and a fresh import of the intended development source
+directly. The validation host holds verified wheels only: Radia's
+`release_quad.py phase8` installs the hash-verified release wheel and
+`phase9` re-checks it read-only; neither ever installs an editable source.
 
 ## Reload And Reconnect
 

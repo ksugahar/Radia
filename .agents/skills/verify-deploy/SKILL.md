@@ -1,23 +1,23 @@
 ---
 name: verify-deploy
-description: Verify Radia normal editable runtime identity separately from isolated exact-wheel acceptance.
+description: Verify that the Radia validation runtime holds the exact verified release wheel.
 ---
 
 # Verify deployed Radia
 
-Use the reviewed `tools/release_quad.py verify-editable` with explicit private
-host, absolute interpreter, source and exact-commit bindings. Both normal
-Windows roles use editable Radia. Follow
-[editable operation and isolated QA](../../../docs/operations/editable-deployment.md).
+The validation role runs verified wheels only; editable installs exist only on
+the build host. Follow
+[validation-role verified-wheel deployment](../../../docs/operations/validation-wheel-deployment.md).
 
-In a fresh selected interpreter, verify editable `direct_url.json`, actual
-Radia import origin/version, exact source commit, native payload hashes and ABI,
-metadata-pinned dependencies, `pip check` and the recorded Radia source intent.
-A mismatch fails; do not repoint implicitly or manufacture an intent record.
+Use the reviewed `tools/release_quad.py phase9` with explicit private host,
+hostname and absolute interpreter bindings. In a fresh selected interpreter it
+refuses an editable `direct_url.json` and checks the Radia import origin,
+release version, ABI pins and native payload digest. `phase8` additionally
+binds every installed RECORD hash to the hash-verified candidate wheel.
+A mismatch fails; repair forward by deploying the verified release wheel with
+`phase8`, never an editable source.
 
-The QA interpreter must be a separate isolated venv holding the exact accepted
-wheel. Verify wheel/installed RECORD hashes and execute the required adopted
-CPU/GPU acceptance there. Normal editable identity is not wheel qualification.
+Execute the required adopted CPU/GPU acceptance on that wheel runtime.
 Compilation/import alone is not numerical or architecture qualification.
 
 MCP, Cubit's embedded toolbar and MATLAB/Simulink have independent runtime and

@@ -200,15 +200,10 @@
     ],
     "tools/release_quad.py": [
       "tests/test_release_quad_state.py",
-      "tests/test_release_quad_editable_source.py",
-      "tests/test_release_quad_editable_intent.py",
+      "tests/test_release_quad_deploy.py",
       "tests/test_release_quad_phase9_contract.py",
       "tests/test_release_quad_evidence_motor.py",
       "tests/test_mdx_runner_pool.py"
-    ],
-    "tools/editable_intent.py": [
-      "tests/test_editable_intent.py",
-      "tests/test_release_quad_editable_intent.py"
     ],
     "tools/verify_simulink_release.py": [
       "tests/test_simulink_release_package.py"
@@ -691,11 +686,9 @@
         "tests/test_simulink_release_package.py",
         "tests/test_sparsesolv_matlab_contract.py",
         "tests/test_beam_transfer_mex_pybind_validation.py",
-        "tests/test_editable_intent.py",
         "tests/test_privacy_source_contract.py",
         "tests/test_audit_taskmanager.py",
-        "tests/test_release_quad_editable_intent.py",
-        "tests/test_release_quad_editable_source.py",
+        "tests/test_release_quad_deploy.py",
         "tests/test_release_quad_evidence_motor.py",
         "tests/test_release_quad_phase9_contract.py",
         "tests/test_release_quad_state.py",

@@ -75,7 +75,7 @@ under their existing ownership.
 ## Routine execution and GPU overflow
 
 Use isolated source checkouts and job environments for GPU development,
-separate from exact-wheel QA and the deployed runtime. Existing authorization
+separate from the deployed verified-wheel runtime. Existing authorization
 rules apply to installations, host configuration and remote execution.
 
 CPU jobs using at most eight physical cores each, with at most six concurrent

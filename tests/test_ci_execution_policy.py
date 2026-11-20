@@ -306,9 +306,9 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     normalized = " ".join(policy.split())
     assert "CPU build and CPU CI run on the build host with the `100` runner label" in normalized
     # Hosts appear by role only; the role-to-host map is private configuration.
-    assert "Deployment follows release: radia uses editable sources on build and validation roles" in normalized
-    assert "isolated exact-wheel QA" in normalized
-    assert "radia-mcp stays build-editable/validation-wheel" in normalized
+    assert ("Deployment follows release: radia and radia-mcp use editable development installs on the build role "
+            "and verified wheels on the validation role, never an editable install there") in normalized
+    assert "isolated exact-wheel QA" not in normalized
     assert "cubit-mesh-export is build-only" in normalized
     assert "The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution" in normalized
     assert "`gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs" in normalized
