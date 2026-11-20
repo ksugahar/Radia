@@ -1129,7 +1129,8 @@ TVector3d CellCentre(const BoxFrame& f, const double u[3]) {
 // True when the cell crosses the inner box surface, i.e. overlaps the inner
 // box with positive measure without lying inside it. Only such cells carry
 // the potential's surface kink; touching cells do not.
-bool CellStraddles(const BoxFrame& fo, const BoxCell& cell, const BoxFrame& fn) {
+bool CellStraddles(const BoxFrame& fo, const BoxCell& cell, const BoxFrame& fn,
+                   PEECMatrixBuilder::OrientedBoxTrace* trace = nullptr) {
     const TVector3d cw = CellCentre(fo, cell.u);
     bool contained = true;
     for (int s = 0; s < 8 && contained; ++s) {
@@ -1141,7 +1142,10 @@ bool CellStraddles(const BoxFrame& fo, const BoxCell& cell, const BoxFrame& fn) 
         for (int k = 0; k < 3; ++k)
             if (std::abs(Dot3(p, fn.e[k])) > fn.half[k]) contained = false;
     }
-    if (contained) return false;
+    if (contained) {
+        if (trace) ++(cell.depth == 0 ? trace->contained_top : trace->contained_descendants);
+        return false;
+    }
     // Separating-axis test; touching (zero-measure contact) counts as separated.
     const double tol =
         1e-12 * (std::sqrt(cell.h[0] * cell.h[0] + cell.h[1] * cell.h[1] + cell.h[2] * cell.h[2]) +
@@ -1163,7 +1167,12 @@ bool CellStraddles(const BoxFrame& fo, const BoxCell& cell, const BoxFrame& fn) 
             const TVector3d& y = fn.e[b];
             const TVector3d z(x.y * y.z - x.z * y.y, x.z * y.x - x.x * y.z, x.x * y.y - x.y * y.x);
             const double nz = std::sqrt(Dot3(z, z));
-            if (nz > 1e-12 && separated(TVector3d(z.x / nz, z.y / nz, z.z / nz))) return false;
+            if (!(nz > 1e-12)) {
+                if (trace) ++trace->cross_axes_skipped;
+                continue;
+            }
+            if (trace) ++trace->cross_axes_evaluated;
+            if (separated(TVector3d(z.x / nz, z.y / nz, z.z / nz))) return false;
         }
     return true;
 }
@@ -1191,8 +1200,17 @@ double SurfaceDistance(const BoxFrame& fn, const TVector3d& p) {
 }
 }  // namespace
 
+PEECMatrixBuilder::OrientedBoxTrace PEECMatrixBuilder::TraceOrientedBoxEntry(int i, int j) const {
+    if (box_max_order_ <= 0) throw std::invalid_argument("oriented-box trace requires the oriented-box kernel");
+    const int n = static_cast<int>(segments_.size());
+    if (i < 0 || j < 0 || i >= n || j >= n) throw std::out_of_range("oriented-box trace: segment index");
+    OrientedBoxTrace t;
+    OrientedBoxInductance(segments_[i], segments_[j], i == j, &t);
+    return t;
+}
+
 double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
-                                                bool self) const {
+                                                bool self, OrientedBoxTrace* trace) const {
     BoxFrame fi = MakeBoxFrame(seg_i), fj = MakeBoxFrame(seg_j);
     const double dot = fi.e[0].x * fj.e[0].x + fi.e[0].y * fj.e[0].y + fi.e[0].z * fj.e[0].z;
     if (!self && dot == 0.0) return 0.0;  // exactly orthogonal currents: zero Galerkin entry
@@ -1224,7 +1242,8 @@ double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const 
     const double mu0_4pi = 1.0e-7;
     const double area_n = 4.0 * fn.half[1] * fn.half[2];
     const BoxCell top{{0.0, 0.0, 0.0}, {fo.half[0], fo.half[1], fo.half[2]}, 0};
-    if (!self && CellStraddles(fo, top, fn)) {
+    if (!self && CellStraddles(fo, top, fn, trace)) {
+        if (trace) trace->composite = true;
         // The outer box crosses the inner box surface, where the potential is
         // only C^1: integrate over a composite of sub-boxes, bisecting the cells
         // that still cross the (possibly oblique) surface. The subdivision
@@ -1238,8 +1257,9 @@ double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const 
         while (!stack.empty()) {
             const BoxCell cell = stack.back();
             stack.pop_back();
-            const bool cross = CellStraddles(fo, cell, fn);
+            const bool cross = CellStraddles(fo, cell, fn, trace);
             if (cross && cell.depth < kSplitDepth) {
+                if (trace) ++trace->splits;
                 const double hm = std::max(cell.h[0], std::max(cell.h[1], cell.h[2]));
                 int axes[3], na = 0;
                 for (int k = 0; k < 3; ++k)
@@ -1255,6 +1275,10 @@ double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const 
                     stack.push_back(child);
                 }
                 continue;
+            }
+            if (trace) {
+                ++trace->leaves;
+                if (cross) ++trace->straddling_leaves;
             }
             int n[3] = {leaf, leaf, leaf};
             if (!cross) {

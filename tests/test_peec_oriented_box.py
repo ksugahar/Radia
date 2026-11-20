@@ -357,3 +357,65 @@ def test_contained_top_level_box_matches_the_cartesian_rule():
         got = _matrix(bars, oriented_box_order=24)
         assert np.allclose(got, ref, rtol=2e-3, atol=0), (got, ref)
         assert got[0, 1] ** 2 <= got[0, 0] * got[1, 1], got
+
+
+def _trace(bars, i=0, j=1, order=24):
+    from radia.peec_matrices import PEECBuilder
+
+    b = PEECBuilder(oriented_box_order=order)
+    for p0, p1, w, h, wd in bars:
+        n0 = b.add_node_at(*map(float, p0))
+        n1 = b.add_node_at(*map(float, p1))
+        b.add_connected_segment(n0, n1, float(w), float(h))
+        b.set_last_width_dir(*map(float, wd))
+    return b.oriented_box_trace(i, j)
+
+
+def test_sat_cross_axis_cutoff_is_bracketed_by_the_trace():
+    """Guards: near-parallel half-overlapping plates reach the SAT edge-cross
+    axes; a 1e-13 rad tilt (cross norm below the 1e-12 cutoff) skips the
+    tilted pairs that a 1e-11 rad tilt evaluates, and the entry is the same
+    within 1e-12 on both sides of the cutoff.
+    Assumes: the diagnostic trace counts each skipped and evaluated cross
+    axis of every CellStraddles call."""
+    lo, hi = (_trace(_plates(2e-6, -1e-6, a)) for a in (1e-13, 1e-11))
+    assert lo["composite"] and hi["composite"], (lo, hi)
+    assert lo["cross_axes_skipped"] > hi["cross_axes_skipped"], (lo, hi)
+    assert hi["cross_axes_evaluated"] > lo["cross_axes_evaluated"], (lo, hi)
+    g = [_matrix(_plates(2e-6, -1e-6, a), oriented_box_order=24)[0, 1] for a in (1e-13, 1e-11)]
+    assert abs(g[0] / g[1] - 1) <= 1e-12, g
+
+
+def test_trace_reports_contained_descendants_after_subdivision():
+    """Guards: the partially penetrating bar takes the composite route, and
+    after subdivision descendant cells inside the big bar take the corner
+    containment shortcut (contained_descendants > 0, none at the top level);
+    the wholly contained bar takes the top-level shortcut without splitting;
+    a separated pair never enters the composite route; and the trace leaves
+    the entry bitwise unchanged.
+    Assumes: penetration geometry as in the composite-rule witness above."""
+    pen = _trace([_BIG, _small(0.9e-3)])
+    assert pen["composite"] and pen["splits"] > 0, pen
+    assert pen["contained_descendants"] > 0 and pen["contained_top"] == 0, pen
+    inside = ((0.05e-3, 0.1e-3, -0.3e-3), (0.05e-3, 0.1e-3, 0.4e-3), 0.3e-3, 0.1e-3, (0, 1, 0))
+    top = _trace([_BIG, inside])
+    assert not top["composite"] and top["contained_top"] == 1 and top["splits"] == 0, top
+    far = _trace(_pair(0.6e-3))
+    assert not far["composite"] and far["leaves"] == 0, far
+    before = _matrix([_BIG, _small(0.9e-3)], oriented_box_order=24)
+    _trace([_BIG, _small(0.9e-3)])
+    assert np.array_equal(_matrix([_BIG, _small(0.9e-3)], oriented_box_order=24), before)
+
+
+def test_trace_rejects_bad_input():
+    """Guards: fail-loud trace contract (kernel off, index out of range).
+    Assumes: none."""
+    from radia.peec_matrices import PEECBuilder
+
+    b = PEECBuilder()
+    n0, n1 = b.add_node_at(0.0, 0.0, 0.0), b.add_node_at(0.0, 0.0, 1e-3)
+    b.add_connected_segment(n0, n1, 1e-4, 1e-4)
+    with pytest.raises(Exception, match="oriented-box"):
+        b.oriented_box_trace(0, 0)
+    with pytest.raises(Exception, match="index"):
+        _trace(_pair(0.6e-3), 0, 2)

@@ -424,6 +424,20 @@ public:
      */
     double InductanceEntry(int i, int j) const;
 
+    /// Branch counts of one oriented-box entry (diagnostic; no effect on values).
+    struct OrientedBoxTrace {
+        bool composite = false;          ///< top-level outer box straddles the inner box surface
+        long long splits = 0;            ///< cells bisected
+        long long leaves = 0;            ///< composite leaf cells integrated
+        long long straddling_leaves = 0; ///< leaves still crossing the surface (depth limit)
+        long long contained_top = 0;     ///< corner containment at depth 0
+        long long contained_descendants = 0;  ///< corner containment at depth > 0
+        long long cross_axes_skipped = 0;     ///< SAT edge-cross axes below the norm cutoff
+        long long cross_axes_evaluated = 0;   ///< SAT edge-cross axes tested
+    };
+    /// Recompute entry (i, j) of the oriented-box kernel and return its branch counts.
+    OrientedBoxTrace TraceOrientedBoxEntry(int i, int j) const;
+
 private:
     std::shared_ptr<const VolumeGreenRule> volume_rule_;
     int box_max_order_ = 0;
@@ -468,7 +482,7 @@ private:
 
     /** Oriented-box Galerkin entry (see EnableOrientedBoxKernel). */
     double OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
-                                 bool self) const;
+                                 bool self, OrientedBoxTrace* trace = nullptr) const;
 
     // Compute self-potential coefficient (disk approximation)
     double SelfPotential(const PEECNode& node) const;

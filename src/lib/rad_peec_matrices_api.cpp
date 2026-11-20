@@ -40,6 +40,15 @@ public:
     }
     void set_last_width_dir(double x, double y, double z) { builder_->SetLastSegmentWidthDir(x, y, z); }
     double inductance_entry(int i,int j) const { return builder_->InductanceEntry(i,j); }
+    py::dict oriented_box_trace(int i, int j) const {
+        const auto t = builder_->TraceOrientedBoxEntry(i, j);
+        py::dict d;
+        d["composite"] = t.composite; d["splits"] = t.splits; d["leaves"] = t.leaves;
+        d["straddling_leaves"] = t.straddling_leaves; d["contained_top"] = t.contained_top;
+        d["contained_descendants"] = t.contained_descendants;
+        d["cross_axes_skipped"] = t.cross_axes_skipped; d["cross_axes_evaluated"] = t.cross_axes_evaluated;
+        return d;
+    }
 
     /**
      * Add a conductor segment
@@ -1096,6 +1105,10 @@ Example:
         .def("set_last_width_dir", &PyPEECBuilder::set_last_width_dir, py::arg("x"), py::arg("y"), py::arg("z"),
              "Cross-section width axis of the most recently added segment (oriented-box kernel only).")
         .def("inductance_entry", &PyPEECBuilder::inductance_entry, py::arg("i"), py::arg("j"))
+        .def("oriented_box_trace", &PyPEECBuilder::oriented_box_trace, py::arg("i"), py::arg("j"),
+             "Diagnostic branch counts of oriented-box entry (i, j): composite, splits, leaves, "
+             "straddling_leaves, contained_top, contained_descendants, cross_axes_skipped, "
+             "cross_axes_evaluated.  Recomputes the entry; values are unaffected.")
 
         .def("add_segment", &PyPEECBuilder::add_segment,
              py::arg("center"),
