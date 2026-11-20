@@ -54,3 +54,38 @@ def test_station_section_raises_when_no_cut_matches_the_march(monkeypatch):
     _stub(monkeypatch, good_when_tilted=False)
     with pytest.raises(MarchError, match="station 1: no section"):
         station_sections(None, _straight_line(), 5)
+
+
+def _fin_line(start, end, n=401):
+    """Straight 0..100 sweep, area 1 except 1.1 on [start, end] (a fin)."""
+    from radia.fin_cap_march import Centerline
+
+    x = np.linspace(0.0, 100.0, n)
+    pts = np.c_[x, np.zeros(n), np.zeros(n)]
+    cap = SimpleNamespace(face="cap", centroid=pts[0], inward=np.array([1.0, 0, 0]),
+                          area=1.0)
+    areas = np.where((x >= start) & (x <= end), 1.1, 1.0)
+    return Centerline(pts, np.tile([1.0, 0.0, 0.0], (n, 1)), areas, cap, cap, 0)
+
+
+@pytest.mark.parametrize("n", [16, 20, 23, 25, 27, 29])
+def test_station_targets_bracket_each_fin_end(n):
+    """Guards: every fin end gets a station pair +/- h/16 within one dense step,
+    so the captured fin length no longer depends on the station count.
+    Assumes: feature ends are located on the dense centerline areas."""
+    from radia.fin_cap_march import station_targets
+
+    t = station_targets(_fin_line(31.4, 68.9), n)
+    h = 100.0 / (n - 1)
+    assert t[0] == 0.0 and t[-1] == 100.0 and np.all(np.diff(t) > 0), t
+    for e in (31.4, 68.9):
+        lo, hi = t[t < e].max(), t[t > e].min()
+        assert hi - lo <= h / 8 + 0.25 + 1e-9, (n, e, lo, hi)
+    assert np.min(np.diff(t)) >= h / 8 - 0.25 - 1e-9, np.min(np.diff(t))
+
+
+def test_station_targets_without_features_are_equal_arc():
+    from radia.fin_cap_march import station_targets
+
+    np.testing.assert_array_equal(station_targets(_fin_line(200, 300), 7),
+                                  np.linspace(0.0, 100.0, 7))

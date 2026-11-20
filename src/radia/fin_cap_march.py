@@ -561,12 +561,45 @@ def _station_section(solid_w, p, t, band, caps, index):
         f"march (area band {band[0]:.6g}..{band[1]:.6g}; got {seen})")
 
 
-def station_sections(solid_w, line: Centerline, n_stations):
-    """Equal-arc-length stations: list of (face, centroid, tangent, area)."""
+FEATURE_AREA_STEP = 0.03   # relative section-area change that marks a feature end (fin start/end)
+FEATURE_PAIR_FRACTION = 1.0 / 16.0   # feature station offset, fraction of the grid spacing
+
+
+def station_targets(line: Centerline, n_stations):
+    """Arc-length station positions aligned to the section-area features.
+
+    An equal-arc grid of ``n_stations`` lets a feature that starts or ends
+    between stations (a fin along the sweep) gain or lose up to one spacing
+    of length depending on the count, so refinement is not monotone.  Each
+    feature end (where the dense-march area crosses ``FEATURE_AREA_STEP``
+    relative to the median area) gets a station pair at +/- h/16 around it
+    (h = grid spacing); grid points within h/3 of a pair are dropped.  The
+    returned count therefore differs from ``n_stations``.
+    """
     if n_stations < 3:
         raise ValueError("need n_stations >= 3")
     s = line.arclength
-    targets = np.linspace(0.0, s[-1], n_stations)
+    a = np.asarray(line.areas, dtype=float)
+    grid = np.linspace(0.0, s[-1], n_stations)
+    h = s[-1] / (n_stations - 1)
+    ref = float(np.median(a))
+    if not np.isfinite(ref) or ref <= 0.0:
+        raise MarchError("station targets: non-positive median section area")
+    inside = np.abs(a / ref - 1.0) > FEATURE_AREA_STEP
+    ends = [0.5 * (s[k] + s[k + 1]) for k in np.nonzero(inside[1:] != inside[:-1])[0]]
+    d = FEATURE_PAIR_FRACTION * h
+    pairs = [x for e in ends for x in (e - d, e + d) if 0.0 < x - d and x + d < s[-1]]
+    if not pairs:
+        return grid
+    pairs = np.asarray(pairs)
+    keep = [g for g in grid if g in (0.0, s[-1]) or np.min(np.abs(pairs - g)) > h / 3]
+    return np.unique(np.concatenate([keep, pairs]))
+
+
+def station_sections(solid_w, line: Centerline, n_stations):
+    """Feature-aligned stations (see station_targets): list of (face, centroid, tangent, area)."""
+    s = line.arclength
+    targets = station_targets(line, n_stations)
     out = [(line.cap_a.face, line.cap_a.centroid, line.cap_a.inward, line.cap_a.area)]
     for i, st in enumerate(targets[1:-1], start=1):
         k = int(np.clip(np.searchsorted(s, st) - 1, 0, len(s) - 2))
