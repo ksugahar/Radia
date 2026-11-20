@@ -285,8 +285,10 @@ def test_thin_plates_agree_with_the_cartesian_rule_and_are_continuous(thick):
     by less than 1e-6; tilts bracketing the 1e-12 cross-axis cutoff (1e-13,
     1e-11 rad) give the same entry within 1e-12.
     Assumes: measured order-24 error at most 3.2e-7 on frozen 0024997
-    (controls/diag_amend2); not a discriminating control between the
-    composite and single-tensor rules (both pass)."""
+    (controls/diag_amend2). Not discriminating: both rules pass, and with the
+    shared width axis the tilted cross axes coincide with face normals, so it
+    does not show whether the SAT skip fires; the skip only selects the
+    quadrature path, which no entry value here can reveal."""
     for gap in (-0.5 * thick, -0.1 * thick, 0.1 * thick):
         ref = _matrix(_plates(thick, gap), volume_order=128)[0, 1]
         got = _matrix(_plates(thick, gap), oriented_box_order=24)[0, 1]
@@ -300,6 +302,19 @@ def test_thin_plates_agree_with_the_cartesian_rule_and_are_continuous(thick):
     m = _matrix(_plates(thick, -0.5 * thick, 1e-7), oriented_box_order=24)
     ev = np.linalg.eigvalsh(m)
     assert ev[0] >= -4 * np.finfo(float).eps * ev[-1], ev
+
+
+
+def test_thin_overlap_absolute_error_discriminates_the_composite_rule():
+    """Guards: aligned 2 um plates overlapping by half their thickness give a
+    mutual entry within 1e-6 L_ii (absolute) of the Cartesian rule at order
+    256. Discriminating: composite rule 1.22e-7 L_ii, single-tensor rule
+    (frozen 42f3032) 1.18e-6 L_ii; both pass the 1e-5 relative guard above.
+    Assumes: Cartesian 128 -> 256 shifts this entry by 1.1e-7 relative."""
+    bars = _plates(2e-6, -1e-6)
+    ref = _matrix(bars, volume_order=256)
+    got = _matrix(bars, oriented_box_order=24)
+    assert abs(got[0, 1] - ref[0, 1]) <= 1e-6 * ref[0, 0], (got[0, 1], ref[0, 1], ref[0, 0])
 
 
 _BIG = ((0.0, 0, -1e-3), (0.0, 0, 1e-3), 1e-3, 0.4e-3, (0, 1, 0))
@@ -316,7 +331,9 @@ def test_partially_penetrating_bar_uses_contained_descendant_cells():
     identity and a rotated frame, bitwise independent of insertion order.
     Discriminating: the single-tensor rule (frozen 42f3032) is 3.0e-5 off,
     the composite rule 3.5e-8 (controls/diag_amend2).
-    Assumes: Cartesian order 128 converged to well below 1e-6 here."""
+    Assumes: Cartesian order 128 converged to well below 1e-6 here. Covers
+    the composite route as a whole; it does not isolate the descendant
+    containment shortcut, which only selects the quadrature path."""
     ref = _matrix([_BIG, _small(0.9e-3)], volume_order=128)
     for r in (np.eye(3), _rot([1, 2, 3], 0.7)):
         bars = [(r @ p0, r @ p1, w, h, r @ np.asarray(wd, float))
