@@ -1,6 +1,6 @@
 {
   "sources": {
-    "ngsolve": "f2223d8b1df476c5a9d4cbe0bf3917ec1a83075a",
+    "ngsolve": "5a3ae730bf4ba52dac2226e0ee75932789d32156",
     "netgen": "b2894d9f05b16175a3c361aaba53387b6e0a73f6"
   },
   "wheels": {
@@ -11,15 +11,15 @@
       "sha256": "4edd8c7a14d76bc862b9f97f5f5aaccade60cb05d5d71bdc22fb7e43dbcacf00"
     },
     "ngsolve": {
-      "filename": "ngsolve-6.2.2608+radia.f2223d8b1.cpu-cp312-cp312-win_amd64.whl",
-      "version": "6.2.2608+radia.f2223d8b1.cpu",
-      "url": "https://github.com/ksugahar/ngsolve/releases/download/radia-win-f2223d8b/ngsolve-6.2.2608%2Bradia.f2223d8b1.cpu-cp312-cp312-win_amd64.whl",
-      "sha256": "6951885984012046aed578863bfeb5204c2a6261c1004bf80584d0501d81a475"
+      "filename": "ngsolve-6.2.2608+radia.5a3ae730b.cpu-cp312-cp312-win_amd64.whl",
+      "version": "6.2.2608+radia.5a3ae730b.cpu",
+      "url": "https://github.com/ksugahar/ngsolve/releases/download/radia-win-5a3ae730/ngsolve-6.2.2608%2Bradia.5a3ae730b.cpu-cp312-cp312-win_amd64.whl",
+      "sha256": "e9cd0c0af623420d220f5ff54acf9c4ef3ffe625bf14c70ef2400c5150b37538"
     }
   },
   "dlls": {
     "ngcore.dll": "b76dffb7ba856a8c8c4bb46fb99c4c36ab476552e6e6118a819b72ab6b304dc2",
     "nglib.dll": "ccfeb9a5c0e81fd97e27fb84841616f94557482980be57fe21e5971f0ec024a2",
-    "libngsolve.dll": "67c6e15386040bfb77d9f5e9049628fa17a16763aab432f90cda7804d186faab"
+    "libngsolve.dll": "062e60fe8111aa12fca7932895dd3c7f1117eba3b85e2a0fbaf6c051d37de487"
   }
 }
