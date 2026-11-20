@@ -582,6 +582,9 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -eq 0) { throw 'Expected exact GPU runtime metadata pins' }
           & $ciPython -m pip install --only-binary=:all: @gpuPins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The GPU runtime pins are the last dependency install of this job.
+          & $ciPython -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython tools/check_python_gpu_coexistence.py --source-commit $env:GITHUB_SHA --report (Join-Path $env:RADIA_CI_OUTPUT_DIR 'python-gpu-coexistence.json')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -662,7 +665,3 @@ jobs:
             ${{ env.RADIA_GPU_WHEEL_DIR }}/gpu-artifact.json
           if-no-files-found: error
           retention-days: 30
-
-      # ----------------------------------------------------------------
-      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
-      # ----------------------------------------------------------------

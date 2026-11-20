@@ -54,3 +54,69 @@ def test_verify_rejects_packages_outside_the_venv(tmp_path, monkeypatch, outside
                         ]))
     with pytest.raises(RuntimeError, match=outside + " is outside the CI environment"):
         fork.verify_installed({"wheels": {}, "dlls": {}, "sources": {}})
+
+
+def _installed(tmp_path, monkeypatch, versions, dll=b"good"):
+    """A fake isolated venv holding netgen/ngsolve packages and one locked DLL."""
+    from types import SimpleNamespace
+
+    prefix = tmp_path / "venv"
+    for name in ("netgen", "ngsolve"):
+        (prefix / name).mkdir(parents=True)
+    (prefix / "netgen" / "nglib.dll").write_bytes(dll)
+    monkeypatch.setattr(sys, "prefix", str(prefix))
+    monkeypatch.setattr(fork.importlib.metadata, "version", versions.__getitem__)
+    monkeypatch.setattr(fork.importlib.util, "find_spec",
+                        lambda name: SimpleNamespace(submodule_search_locations=[str(prefix / name)]))
+    return {"wheels": {"ngsolve": {"version": "6.2.2608+radia.f2223d8b1.cpu"}},
+            "dlls": {"nglib.dll": hashlib.sha256(b"good").hexdigest()}, "sources": {"ok": True}}
+
+
+def test_verify_rejects_a_stock_or_other_variant_version(tmp_path, monkeypatch):
+    """Guards: a dependency install that swaps in stock or CUDA NGSolve fails the lane."""
+    for wrong in ("6.2.2608", "6.2.2608+radia.f2223d8b1.cuda"):
+        lock = _installed(tmp_path / wrong, monkeypatch, {"ngsolve": wrong})
+        with pytest.raises(RuntimeError, match="Incorrect installed version: ngsolve"):
+            fork.verify_installed(lock)
+
+
+def test_verify_rejects_a_replaced_native_library(tmp_path, monkeypatch):
+    """Guards: the installed Netgen DLL bytes are bound to the locked fork build."""
+    lock = _installed(tmp_path, monkeypatch, {"ngsolve": "6.2.2608+radia.f2223d8b1.cpu"}, dll=b"stock")
+    with pytest.raises(RuntimeError, match="Incorrect installed DLL: nglib.dll"):
+        fork.verify_installed(lock)
+
+
+def test_verify_accepts_the_locked_installation(tmp_path, monkeypatch):
+    lock = _installed(tmp_path, monkeypatch, {"ngsolve": "6.2.2608+radia.f2223d8b1.cpu"})
+    assert fork.verify_installed(lock) == {"ok": True}
+
+
+def test_a_rejected_download_leaves_no_wheel_behind(tmp_path, monkeypatch):
+    """Guards: a corrupted download is not kept where a later run could reuse it."""
+    monkeypatch.setattr(fork.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(fork, "urlopen", lambda url, timeout: BytesIO(b"modified"))
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "venv"))
+    monkeypatch.setattr(fork.subprocess, "run", lambda *a, **k: pytest.fail("pip ran"))
+    lock = {"wheels": {"netgen-mesher": {"filename": "w.whl", "url": "u",
+                                         "sha256": hashlib.sha256(b"verified").hexdigest()}}}
+    with pytest.raises(RuntimeError, match="Incorrect wheel SHA-256"):
+        fork.install(lock)
+    assert list(tmp_path.glob("radia-fork-wheels-*")) == []
+
+
+def test_install_refuses_the_base_interpreter(monkeypatch):
+    """Guards: fork wheels are never installed into a shared base Python."""
+    monkeypatch.setattr(sys, "prefix", sys.base_prefix)
+    with pytest.raises(RuntimeError, match="isolated CI venv"):
+        fork.install({"wheels": {}})
+
+
+def test_lock_urls_name_the_locked_release_and_file():
+    import urllib.parse
+
+    lock = json.loads(fork.LOCK.read_text(encoding="utf-8"))
+    for package, wheel in lock["wheels"].items():
+        source = lock["sources"]["netgen" if package == "netgen-mesher" else "ngsolve"]
+        assert wheel["url"].endswith("/" + urllib.parse.quote(wheel["filename"], safe="")), wheel["url"]
+        assert f"/releases/download/radia-win-{source[:8]}" in wheel["url"], wheel["url"]
