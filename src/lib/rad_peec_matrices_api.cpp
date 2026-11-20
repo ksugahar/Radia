@@ -1108,7 +1108,10 @@ Example:
         .def("oriented_box_trace", &PyPEECBuilder::oriented_box_trace, py::arg("i"), py::arg("j"),
              "Diagnostic branch counts of oriented-box entry (i, j): composite, splits, leaves, "
              "straddling_leaves, contained_top, contained_descendants, cross_axes_skipped, "
-             "cross_axes_evaluated.  Recomputes the entry; values are unaffected.")
+             "cross_axes_evaluated.  Recomputes this one entry on each call; values are unaffected.  "
+             "Counts are visits, not unique cells: the composite root is tested twice (dispatch and "
+             "traversal) and SAT stops at the first separating axis.  Self and exactly orthogonal "
+             "entries return all-zero counts.  Diagnostic only, not a stable quadrature contract.")
 
         .def("add_segment", &PyPEECBuilder::add_segment,
              py::arg("center"),

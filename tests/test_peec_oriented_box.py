@@ -359,7 +359,7 @@ def test_contained_top_level_box_matches_the_cartesian_rule():
         assert got[0, 1] ** 2 <= got[0, 0] * got[1, 1], got
 
 
-def _trace(bars, i=0, j=1, order=24):
+def _builder(bars, order=24):
     from radia.peec_matrices import PEECBuilder
 
     b = PEECBuilder(oriented_box_order=order)
@@ -368,7 +368,11 @@ def _trace(bars, i=0, j=1, order=24):
         n1 = b.add_node_at(*map(float, p1))
         b.add_connected_segment(n0, n1, float(w), float(h))
         b.set_last_width_dir(*map(float, wd))
-    return b.oriented_box_trace(i, j)
+    return b
+
+
+def _trace(bars, i=0, j=1, order=24):
+    return _builder(bars, order).oriented_box_trace(i, j)
 
 
 def test_sat_cross_axis_cutoff_is_bracketed_by_the_trace():
@@ -391,8 +395,9 @@ def test_trace_reports_contained_descendants_after_subdivision():
     after subdivision descendant cells inside the big bar take the corner
     containment shortcut (contained_descendants > 0, none at the top level);
     the wholly contained bar takes the top-level shortcut without splitting;
-    a separated pair never enters the composite route; and the trace leaves
-    the entry bitwise unchanged.
+    a separated pair never enters the composite route; and tracing on the
+    same builder leaves its entries and assembled L bitwise unchanged and
+    is symmetric in (i, j).
     Assumes: penetration geometry as in the composite-rule witness above."""
     pen = _trace([_BIG, _small(0.9e-3)])
     assert pen["composite"] and pen["splits"] > 0, pen
@@ -402,9 +407,28 @@ def test_trace_reports_contained_descendants_after_subdivision():
     assert not top["composite"] and top["contained_top"] == 1 and top["splits"] == 0, top
     far = _trace(_pair(0.6e-3))
     assert not far["composite"] and far["leaves"] == 0, far
-    before = _matrix([_BIG, _small(0.9e-3)], oriented_box_order=24)
-    _trace([_BIG, _small(0.9e-3)])
-    assert np.array_equal(_matrix([_BIG, _small(0.9e-3)], oriented_box_order=24), before)
+    b = _builder([_BIG, _small(0.9e-3)])
+    entries = [b.inductance_entry(i, j) for i in (0, 1) for j in (0, 1)]
+    t01, t10 = b.oriented_box_trace(0, 1), b.oriented_box_trace(1, 0)
+    assert t01 == t10 == pen, (t01, t10, pen)
+    assert [b.inductance_entry(i, j) for i in (0, 1) for j in (0, 1)] == entries
+    after = np.asarray(b.build_topology()["L"])
+    assert np.array_equal(after, _matrix([_BIG, _small(0.9e-3)], oriented_box_order=24)), after
+    assert [after[i, j] for i in (0, 1) for j in (0, 1)] == entries
+
+
+def test_tilted_plate_contact_switches_the_route():
+    """Guards: for 2 um plates tilted 1e-7 rad about y the composite route is
+    taken just inside the analytic first contact (gap g_c - 1e-14 m) and the
+    plain route at and just beyond it (g_c, g_c + 1e-14 m).
+    Assumes: g_c = 1 mm sin(t) - (t_p / 2)(1 - cos(t)), the gap at which the
+    tilted plate's nearest edge touches the first plate. Routing only: the
+    order-24 entry moves by 1.7e-6 relative across this bracket (reviewer
+    diagnostic) and no accuracy tolerance is adopted for it."""
+    thick, tilt = 2e-6, 1e-7
+    gc = 1e-3 * math.sin(tilt) - 0.5 * thick * (1 - math.cos(tilt))
+    routes = [_trace(_plates(thick, gc + d, tilt))["composite"] for d in (-1e-14, 0.0, 1e-14)]
+    assert routes == [True, False, False], (gc, routes)
 
 
 def test_trace_rejects_bad_input():
