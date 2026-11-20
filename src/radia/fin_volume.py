@@ -311,27 +311,22 @@ def energy_receipt(L, branches, current):
             "energy_real_part_J": e_re, "energy_imag_part_J": e_im}
 
 
-def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
-                     n_lanes, n_stations, n_outline=None, lane_grading=None,
-                     tip_lanes=None, exponent=2.0, route="auto",
-                     cad_units_per_meter="auto", max_branches=None,
-                     box_order=BOX_ORDER):
-    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+def assemble_fin_volume(step_path, *, sigma, n_layers, n_lanes, n_stations,
+                        n_outline=None, lane_grading=None, tip_lanes=None,
+                        exponent=2.0, route="auto", cad_units_per_meter="auto",
+                        max_branches=None, box_order=BOX_ORDER):
+    """STEP -> volume lattice and its built PEEC branch model.
 
-    Every inductance entry, self included, is the Galerkin integral of
-    uniform currents over the bars' oriented boxes (kernel option
-    ``oriented_box_order`` = ``box_order``; each bar's width axis comes from
-    the lattice).  Filament mutuals make the lattice L indefinite: the
-    transverse bars are short, wide plates.  Before the solve, L must pass
-    :func:`require_energy_admissible`.
+    Returns ``(sweep, lattice, builder, topology, energy)``; ``topology``
+    carries the lattice incidence (``segment_nodes``, ``n_nodes``) and the
+    one terminal port, and ``energy`` is the
+    :func:`require_energy_admissible` record of its L.
     """
-    from radia.fin_surface_solver import coil_true_residuals
     from radia.fin_sweep import DEFAULT_MAX_BRANCHES, fin_graph_from_step
     from radia.peec_matrices import PEECBuilder
-    from radia.peec_topology import PEECCircuitSolver
 
-    if frequency <= 0 or sigma <= 0:
-        raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
+    if sigma <= 0:
+        raise ValueError("fin-volume needs sigma > 0")
     if n_lanes is None or n_stations is None:
         raise ValueError("fin-volume needs explicit n_lanes and n_stations")
     budget = DEFAULT_MAX_BRANCHES if max_branches is None else int(max_branches)
@@ -360,6 +355,34 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     topo["n_nodes"] = len(lat.nodes)
     topo["ports"] = [(lat.port_plus, lat.port_minus, 0)]
     energy = require_energy_admissible(np.asarray(topo["L"]))
+    return sweep, lat, builder, topo, energy
+
+
+def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
+                     n_lanes, n_stations, n_outline=None, lane_grading=None,
+                     tip_lanes=None, exponent=2.0, route="auto",
+                     cad_units_per_meter="auto", max_branches=None,
+                     box_order=BOX_ORDER):
+    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+
+    Every inductance entry, self included, is the Galerkin integral of
+    uniform currents over the bars' oriented boxes (kernel option
+    ``oriented_box_order`` = ``box_order``; each bar's width axis comes from
+    the lattice).  Filament mutuals make the lattice L indefinite: the
+    transverse bars are short, wide plates.  Before the solve, L must pass
+    :func:`require_energy_admissible`.
+    """
+    from radia.fin_surface_solver import coil_true_residuals
+    from radia.peec_topology import PEECCircuitSolver
+
+    if frequency <= 0 or sigma <= 0:
+        raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
+    sweep, lat, _builder, topo, energy = assemble_fin_volume(
+        step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
+        n_stations=n_stations, n_outline=n_outline, lane_grading=lane_grading,
+        tip_lanes=tip_lanes, exponent=exponent, route=route,
+        cad_units_per_meter=cad_units_per_meter, max_branches=max_branches,
+        box_order=box_order)
     peec = PEECCircuitSolver(topo)
 
     r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc, dtype=float)
