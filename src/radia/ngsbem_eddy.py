@@ -402,7 +402,7 @@ class EddyCurrentFEMBEM:
             [None, Projector(self._fes_l2.FreeDofs(), True)],
         ])
         auxiliary = GMRes(A=lhs @ pre, b=rhs, pre=identity,
-                          tol=0, reltol=1e-10, maxsteps=500,
+                          tol=None, reltol=1e-10, maxsteps=500,
                           printrates=printrates)
         sol = rhs.CreateVector()
         sol.data = pre * auxiliary
