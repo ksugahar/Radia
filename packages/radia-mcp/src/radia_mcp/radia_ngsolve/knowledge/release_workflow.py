@@ -1,12 +1,13 @@
 """
 Package release workflows for the Radia monorepo.
 
-The Radia monorepo ships independently versioned CPU, GPU, MCP, CAD, optimization
-and editor distributions from one git tree. The numerical Radia
-solver uses its multi-host QUAD gate. radia-mcp and cubit-mesh-export publish
-independently and deploy verified wheels to LAB and editable sources to 100 through DUAL lanes;
-radia-optuna has its own exact-wheel lane. These release boundaries must not
-be collapsed into one coupled version or deployment requirement.
+The Radia monorepo ships independently versioned solver, MCP and Simulink
+distributions from one git tree. The numerical Radia solver waits for four
+lane receipts of one SHA (cpu, linux-python-gpu, windows-python-gpu, matlab).
+radia-mcp publishes independently and deploys a verified wheel to the
+validation host and an editable source to the build host through its DUAL lane.
+These release boundaries must not be collapsed into one coupled version or
+deployment requirement.
 
 This module is the canonical AI-readable record of the workflow,
 the gates that must pass at each phase, the failure modes that have
@@ -27,31 +28,42 @@ version_pairs, ci_monitor_skill.
 """
 
 RELEASE_WORKFLOW = """\
-# Package-scoped releases: Radia QUAD and MCP/Cubit DUAL
+# Package-scoped releases: Radia four-lane solver release and MCP release-dual
 
 radia-mcp releases independently of Radia. Its release-dual deployment targets
-are LAB (verified wheel) and 100 (editable) only, like cubit-mesh-export.
-Never deploy radia-mcp to hibino, mdx1 or mdx2. Isolated CI is not deployment.
+are the validation host (verified wheel) and the build host (editable) only.
+No retired host receives any deployment. Isolated CI is not deployment.
 For MCP-only updates use update source -> reconnect -> check an affected live
-tool, following packages/radia-mcp/docs/maintenance.md, not the QUAD installer.
+tool, following packages/radia-mcp/docs/maintenance.md, not the solver release.
 release-dual is the two-host scope, not a separate release_dual.py command.
 The `mcp_release` topic is the authoritative MCP release contract. Other
 sections describe the numerical solver, Simulink, or their named package lane;
 they do not add MCP deployment targets or completion gates.
 
 This document is the AI-readable canonical reference for the Radia
-release flow.  Its canonical local orchestrator is
-`tools/release_quad.py`; the former triple-machine workflow is retired.
-Radia PyPI publication is explicitly held after tag CI. Accept the exact tag
-run's wheel on LAB, 100, mdx1 and mdx2 and merge its tracked acceptance.json/full6.json/
-focused.xml evidence to main under validation_test/esrf_three_engine/results/
-candidate_<source-sha-first-9>/. Dispatch the Release workflow on main with
-ci_run_id, wheel_sha256, and full acceptance_commit. Its read-only gate checks
-the GitHub run/workflow/repository, tag context and peeled SHA, main reachability,
-all four hosts and all mandatory tests, and wheel/native hashes. Publication uses
-the same artifact without rebuilding. Changed bytes require new acceptance;
-CPU QUAD done remains mandatory. mexcuda, MATLAB, LTspice and Simulink
-artifacts and their CI gates are outside normal radia releases.
+release flow.  Its canonical local orchestrator is `tools/release_quad.py`.
+A Radia release waits for four lane receipts of one source SHA:
+
+| Lane | Built on | Validated on |
+|---|---|---|
+| `cpu` | CPU-only build host (`cpu-build`) | Windows validation host |
+| `linux-python-gpu` | supercomputer (`linux-gpu`), outside CI | supercomputer |
+| `windows-python-gpu` | Windows GPU validation host (`windows-gpu`, runner `gpu-a100`) | same host |
+| `matlab` | Windows GPU validation host (`windows-gpu`) | same host |
+
+The build host is CPU-only: CPU builds, CPU CI (`100`, `ci-light`), early
+debugging and CPU release-candidate preparation. It compiles no CUDA, installs
+no NVIDIA/cuDSS packages and runs no GPU or MATLAB GPU work. All Windows GPU
+builds, their CI and their release qualification run on the Windows GPU
+validation host. `release_quad done --source-sha SHA --manifest FILE` verifies
+the four receipts and their exact artifacts and writes the public lane summary
+under validation_test/esrf_three_engine/results/candidate_<source-sha-first-9>/.
+Dispatch the Release workflow on the exact tag with ci_run_id, wheel_sha256 and
+the full acceptance_commit. Its read-only gate checks the GitHub
+run/workflow/repository, tag context and peeled SHA, main reachability, the
+four-lane summary, and wheel/native hashes; the published wheel is the
+`windows-python-gpu` lane artifact. Publication uses the same artifact without
+rebuilding. Changed bytes require new receipts. Linux wheels are not published.
 Topics: overview, mcp_release, phases, simulink_candidate, optuna_candidate, preflight_gates, mcp_quality_review,
 ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
 version_pairs, ci_monitor_skill.
@@ -65,49 +77,32 @@ to PyPI. Each distribution follows its own declared verification targets:
 
 | Package           | Tag prefix              | What it ships                                     |
 |-------------------|-------------------------|---------------------------------------------------|
-| radia             | `v`                     | CPU C++ core (.pyd) + Python/pybind11 support    |
-| cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.pyd + check-vol CLI            |
+| radia             | `v`                     | C++ core (.pyd) + Python/pybind11 support, with   |
+|                   |                         | the Python GPU payload from the Windows GPU lane  |
 | radia-mcp         | `radia-mcp-v`           | MCP guidance and workflows, including mixed omega;|
 |                   |                         | Cubit MCP is distributed by cubit-mesh-export     |
-| radia-optuna      | `radia-optuna-v`        | Standalone MATLAB Optuna + lightweight MEX and    |
-|                   |                         | generic Simulink optimization support             |
 | radia-simulink | `radia-simulink-v` | Independently released mexcuda, MATLAB, LTspice and Simulink support |
 
-Packages are independently released. radia-mcp and cubit-mesh-export use
-release-dual (LAB and 100); Radia's solver QUAD covers LAB, 100, mdx1 and mdx2.
-None of hibino/mdx1/mdx2 receives MCP deployment. Compatibility is still checked
+cubit-mesh-export and radia-optuna release from their own repositories and
+lanes. Packages are independently released. radia-mcp uses release-dual
+(validation host wheel, build host editable). Compatibility is still checked
 where an affected tool uses another package:
 * radia-mcp imports radia at runtime for several tools, and a
   schema mismatch is silent until a tool crashes.
 * cubit-mesh-export owns Cubit meshing, export, and its C++ plugin binaries.
   Radia consumes the checked `.vol` boundary; it does not couple solver release
   acceptance to the exporter version.
-* Only 100号機 uses editable development installs in a dedicated local venv.
-  LAB uses a verified wheel, as do mdx1/mdx2 for the numerical solver.
-  LAB SSH uses a LAB-local source for build/validation staging because its
-  session cannot assume NAS drive mappings or share credentials.
-  A release editable acceptance points to a fixed release checkout. On 100 use its configured local/mapped drive,
-  not a self-referential UNC path when loading native extensions.
+* The build host keeps a CPU-only editable development install in a dedicated
+  venv. The validation host consumes verified artifacts; `release_quad` maintains
+  its bound normal solver runtime and a separate isolated exact-wheel QA venv.
   Before installation, verify the exact release SHA, tracked cleanliness,
   installed NGSolve/Netgen ABI against package metadata, and native hashes
   against `release_native_payloads.json`. The manifest must match the exact
   accepted wheel; a matching Python version string alone is not acceptance.
-  Explicit source-root overrides do not require a tag for the controller's
-  development version; the selected release source still passes every gate.
-  radia-mcp keeps its independent maintained-source policy, and
-  cubit-mesh-export keeps its own release-dual checkouts.
-* mdx1/mdx2 install the exact accepted `radia` wheel for solver release
-  acceptance. They do not receive Cubit or radia-mcp deployments.
-* hibino does not receive radia-mcp deployments; it remains a computation host,
-  not an MCP release-dual target.
+  A release editable acceptance points to a fixed release checkout.
+  radia-mcp keeps its independent maintained-source policy.
 Solver compatibility is checked in the owning numerical lane. It does not make
 radia-mcp part of solver Phase 9 or require lock-step package versions.
-
-`radia-optuna` is independently versioned and does not enter the Radia solver,
-Cubit, or radia-mcp deployment lanes. Its release gate downloads the exact wheel
-artifact from a successful `main` push CI run, verifies the same wheel on all
-its declared targets, and binds the CI run, source commit, package version, and
-SHA-256 before its tag, PyPI upload, and GitHub Release are authorized.
 
 ## ===
 ## mcp_release — independent MCP publication and release-dual
@@ -118,14 +113,15 @@ tag, package CI, verified wheel, and PyPI trusted-publishing job. Its wheel must
 not contain the retired `radia_mcp.cubit` namespace or `mcp-server-cubit` entry
 point. Mixed omega remains in radia-mcp.
 
-After publication, install the verified wheel on LAB and update the maintained
-editable environment on 100; verify registration plus a fresh import on both.
-Do not replace newer reviewed LAB source with an older public wheel. LAB must also confirm the
-affected live source and one harmless affected tool. Existing 100 clients may
-remain `next-launch-pending` until their normal restart; this does not block
+After publication, install the verified wheel on the validation host and update
+the maintained editable environment on the build host; verify registration plus
+a fresh import on both. Do not replace newer reviewed source with an older public
+wheel. The validation host must also confirm the affected live source and one
+harmless affected tool. Existing build-host clients may remain
+`next-launch-pending` until their normal restart; this does not block
 release completion. Immediate all-user reconnection is a separate explicit
-operation. Do not deploy radia-mcp to hibino/mdx1/mdx2, invoke the solver QUAD
-installer, restore an older tree, or couple its version to another package.
+operation. Do not deploy radia-mcp to any other host, invoke the solver
+release installer, restore an older tree, or couple its version to another package.
 
 ## ===
 ## phases — numerical solver release pipeline
@@ -137,7 +133,8 @@ the AI-readable summary; independent package lanes are excluded.
 | Phase | Action | Mandatory? | Notes |
 |------:|--------|-----------|-------|
 | Pre | `sync-main`: fetch -> twin-aware rebase (`--empty=drop` skips commits whose patches landed on origin as rebased twins) -> impact preflight -> push | when NAS main diverged from origin/main | added 2026-08-07 after the recurring 40-min manual rebase-archaeology sessions; refuses on a dirty tree, leaves genuine conflicts in place with instructions |
-| Pre | `evidence-motor [--check|--force]`: rebuild the MEX, ship the snapshot closure to HIBINO over scp, run the MATLAB generator SYNCHRONOUSLY over ssh, fetch the artifact, verify SHA pins, align the pytest test-count | whenever `packages/radia-optuna/native/optuna_mex.cpp` / `packages/radia-simulink/matlab/+radia/setup.m` / the generator changed | Windows OpenSSH reaps detached children on session exit — the run MUST stay synchronous; snapshot closure = matlab/, src/matlab/, tests/matlab/, validation_test/{radia_mcp,maglev}/, docs/maglev/demos/team28/, pyproject.toml |
+| Pre | `evidence-motor --check`: verify the motor evidence SHA pins | whenever the pinned motor sources change | CPU MEX regeneration is retired; the command refuses to regenerate |
+| Pre | `deployment-plan`: print the four lanes and the solver runtime role | anytime | read-only; never contacts a host |
 | 1 | Decide the solver minor vs patch increment | always | inspect solver changes since the last Radia tag |
 | 2 | Bump the Radia solver's own metadata/runtime version pair | always | independent distributions keep their own version pairs and release lanes |
 | **2.5** | **Pre-flight CI validation (4 gates) — ADDED 2026-05-03** | **always** | local equivalent of CI; saves 2-3 round-trips |
@@ -146,55 +143,37 @@ the AI-readable summary; independent package lanes are excluded.
 | 5 | Create the Radia solver tag | always | package tags are created only in their owning independent lane |
 | 6 | Push approved main and the solver tag | after solver gates | Radia tag CI uploads `ci-release-context` but leaves PyPI on HOLD; other packages retain independent publication gates |
 | 7 | Monitor the exact solver CI run | always | use ci-monitor skill |
-| 8 | Deploy/verify the Radia solver on its current QUAD targets | always | this phase does not install radia-mcp or cubit-mesh-export |
-| 9 | Cross-machine solver consistency probe | always | package-independent MCP state is outside this probe |
-| DoD | Re-run preflight, the controller-source check, both runtime checks, and Phase 9 without changing any runtime | always | `done`; only exit 0 authorizes GitHub Release publication. `done` requires the release source (the controller by default, or a separate checkout named by `--release-source`) to be the exact tracked-clean release SHA equal to the peeled `v<radia-version>` tag; with a separate source the controller must be tracked-clean, descend from that commit, and declare the same version. It verifies the exact wheel (RECORD hashes, not editable, no shadowed import) in LAB and in 100号機's machine-default release runtime, verifies 100号機's development-venv editable source, and refuses while NAS main != origin/main. Any later development-venv repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
+| 8 | `phase8`: deploy/verify the Radia solver runtime on the validation role | when the runtime must move | the CPU-only build host is never a target; this phase does not install radia-mcp or cubit-mesh-export |
+| 9 | `phase9`: normal editable and isolated exact-wheel QA consistency probe | after phase 8 | package-independent MCP state is outside this probe |
+| DoD | `done --source-sha SHA --manifest FILE`: verify the four lane receipts and exact artifacts, then write the public lane summary | always | read-only; does not deploy. Only exit 0 authorizes the release-owner handoff. The release source (the controller by default, or `--release-source`) must be the exact tracked-clean release SHA. Any later runtime repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
 
 ## ===
 ## simulink_candidate — independent GPU distribution boundary
 ## ===
 
-Normal CPU `radia` does not ship mexcuda, MATLAB, LTspice or Simulink.
-`simulink-candidate` and `done --simulink-package` are retired CPU routes.
+The `radia` CPU lane does not ship mexcuda, MATLAB, LTspice or Simulink
+artifacts. The retired `release_quad simulink-candidate` route has been deleted.
 Use the independent `packages/radia-simulink` build, installed-wheel acceptance
-and `radia-simulink-release.yml` publication workflow. Do not attach its artifacts
-or CI requirements to a CPU Radia release.
+and `radia-simulink-release.yml` publication workflow on the Windows GPU
+validation host; its MATLAB/Simulink and LTspice acceptance is the `matlab`
+lane receipt. Do not attach its artifacts or CI requirements to the CPU lane.
 
 The solver candidate lane never installs, uninstalls, repoints or reconnects
-radia-mcp. MCP and Cubit retain their independent release-dual lanes.
+radia-mcp. MCP and Cubit retain their independent release lanes.
 
 CPU `ci-verify` resolves exact-SHA Actions workflow ownership before filtering
 independent distribution checks. Shared and CPU checks remain mandatory,
 including `radia-native-release-build`; missing ownership metadata fails closed.
 
 ## ===
-## optuna_candidate — exact standalone wheel publication gate
+## optuna_candidate — independent radia-optuna release
 ## ===
 
-`radia-optuna` is a separate distribution even though its canonical sources
-remain in the Radia monorepo. It must not trigger either the Radia solver or
-Cubit deployment merely to publish the MATLAB Optuna component.
-
-```powershell
-python tools/release_quad.py optuna-candidate `
-  --ci-run-id <successful-main-push-CI-run> --target all
-python tools/release_quad.py optuna-done --wheel <retained-wheel-path>
-git tag -a radia-optuna-vX.Y.Z <verified-commit> -m "radia-optuna X.Y.Z"
-git push origin refs/tags/radia-optuna-vX.Y.Z
-gh workflow run release-radia-optuna.yml `
-  -f ci_run_id=<successful-main-push-CI-run> `
-  -f candidate_sha256=<verified-wheel-sha256>
-```
-
-`optuna-candidate` accepts only a successful `main` push run of the repository
-CI workflow whose `build-test` and installed-wheel MATLAB/Simulink jobs both
-succeeded. It downloads that run's `radia-optuna-wheel` artifact, reruns the
-wheel verifier, and executes the installed-wheel MATLAB/Simulink contract on
-LAB, 100号機, mdx1, and mdx2. `optuna-done` rejects a rebuilt wheel, a source
-commit other than `origin/main`, a version mismatch, or any missing machine
-result. The manual release workflow re-downloads the same CI artifact, checks
-the QUAD SHA-256, and publishes that exact file to both PyPI and the matching
-GitHub Release.
+`radia-optuna` is a separate distribution with its own repository, CI and
+release workflow. `tools/release_quad.py` has no radia-optuna commands and the
+Radia solver release never builds, installs or publishes it. Its GPU and MATLAB
+qualification follows the same host rule: CPU build on the build host, Linux GPU
+on the supercomputer, Windows GPU and MATLAB on the Windows GPU validation host.
 
 ## ===
 ## preflight_gates — impact-scoped pre-push validation
@@ -221,7 +200,7 @@ python tools/ci_preflight.py --validation           # validation collect-only
 python tools/ci_preflight.py --full --validation    # run validation_test/
 ```
 
-Routine CI mirrors this separation: development/build host owns the fast repository lane,
+Routine CI mirrors this separation: the CPU-only build host owns the fast repository lane,
 `radia-mcp` uses its change selector, and native/release validation is manual or
 tag-scoped. A release candidate advances only after its selected gates pass for
 the exact candidate SHA; a tag must not repeat unrelated package matrices.
@@ -253,13 +232,13 @@ Operational completion for radia-mcp requires its independent release-dual
 gates:
 
 * package CI, published-wheel verification, and dependency resolution,
-* a verified non-editable wheel and fresh import on LAB, plus an editable
-  development registration and fresh import on 100,
-* LAB live-source and harmless affected-tool verification.
+* a verified non-editable wheel and fresh import on the validation host, plus
+  an editable development registration and fresh import on the build host,
+* validation-host live-source and harmless affected-tool verification.
 
-Existing 100 clients can be `next-launch-pending`; they are not a release
+Existing build-host clients can be `next-launch-pending`; they are not a release
 blocker. Numerical methods still require their owning validation evidence, but
-solver QUAD, Simulink, and all-user client restart are not universal MCP
+the solver lanes, Simulink, and all-user client restart are not universal MCP
 publication gates.
 
 Fast MCP fleet regressions live under `packages/radia-mcp/tests/`, including
@@ -357,7 +336,7 @@ always verify PyPI state before choosing the next package version.
 
 Routine radia-mcp editable source updates do not replace locked native binaries
 or console launchers and therefore require no mass process termination. Reconnect
-affected clients through their supported controls; 100 clients may remain
+affected clients through their supported controls; build-host clients may remain
 `next-launch-pending` for a release-dual update.
 
 Native solver and Cubit artifacts use their owning release skills. Inspect the
@@ -375,8 +354,6 @@ Python, Cubit, MATLAB, Codex, or Claude process as a generic release phase.
 | `src/radia/__init__.py` | `__version__ = "X.Y.Z"` | runtime introspection, --version flags, tests |
 | `packages/radia-mcp/pyproject.toml` | `version = "X.Y.Z"` | radia-mcp wheel metadata |
 | `packages/radia-mcp/src/radia_mcp/__init__.py` | `__version__ = "X.Y.Z"` | runtime, --selftest --version |
-| `packages/cubit-mesh-export/pyproject.toml` | `version = "X.Y.Z"` | cubit-mesh-export wheel metadata |
-| `packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py` | `__version__ = "X.Y.Z"` | runtime, COMPAT constants |
 
 Each row is an internal pair for one independently versioned distribution. Rows
 do not have to share the same version. A mismatch within a pair

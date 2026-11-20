@@ -1,4 +1,4 @@
-"""Isolated, low-priority persistent IH mexcuda build on an explicitly admitted build host."""
+"""Isolated, low-priority persistent IH mexcuda build on the admitted Windows GPU host."""
 from pathlib import Path
 import argparse,ctypes,hashlib,json,socket,subprocess,tempfile
 

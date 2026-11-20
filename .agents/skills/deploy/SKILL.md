@@ -5,8 +5,10 @@ description: Route Radia deployment to its owning release workflow and verify th
 
 # Deploy
 
-For Radia, use `release-quad` and its four dedicated cases: build-role editable,
-validation-role editable, CPU compute build and GB200 GPU compute build. Follow
+For Radia, use `release-quad`: a release waits for the `cpu`,
+`linux-python-gpu`, `windows-python-gpu` and `matlab` lane receipts of one SHA,
+and the solver runtime is maintained on the validation role only. The CPU-only
+build host prepares CPU candidates and receives no GPU runtime. Follow
 [editable operation and isolated QA](../../../docs/operations/editable-deployment.md).
 Host-specific skill names and runtime mappings are private configuration.
 

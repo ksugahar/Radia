@@ -242,8 +242,9 @@ transfer-inclusive solve time changed from 0.40324 to 0.38472 seconds, while
 setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
 establish an end-to-end improvement. Host hierarchy construction remains the
 next acceleration target. CPU parity was verified independently; CPU timing
-was single-shot and does not establish repeated CPU/GPU speedup. These RTX
-5000 timings are diagnostic, not formal A100 performance acceptance.
+was single-shot and does not establish repeated CPU/GPU speedup. These
+historical RTX 5000 timings are diagnostic, not formal performance acceptance;
+current GPU acceptance runs only on the A100 Windows GPU validation host.
 
 ### CUDA AMS matrix generation
 

@@ -86,15 +86,13 @@ containment, and record resource observations. Idle cores, CPU-load thresholds
 and fixed owner pools are not additional admission gates. Do not stop, repin or
 overwrite another owner's jobs or runtime.
 
-If the validation-host GPU is busy, GPU execution may overflow to a free
-build-host GPU slot without another per-job grant for that routing. Count all
-existing GPU jobs: at most one per host, at most two across the two hosts;
-placing two on one host is not authorized by this rule. The build-host GPU job
-uses a separate slot and is not also counted in the six CPU-job slots. Record
-its actual host-control CPU threads/resources and avoid oversubscription. Retain the declared
+GPU execution runs only on the Windows GPU validation host, one GPU job at a
+time. It never overflows to the build host, which is CPU-only, even when the
+validation host is busy: wait for the GPU instead. Record the job's actual
+host-control CPU threads/resources and avoid oversubscription. Retain the declared
 artifact, architecture, compiler/ABI, runtime, ownership and feature scope.
 Record the actual execution role, concurrent jobs and timings. This routing
-decision does not authorize installs, configuration changes or an unverified
+rule does not authorize installs, configuration changes or an unverified
 artifact/architecture substitution. Other remote, environment, deployment and
 publication actions retain their existing authorization requirements.
 

@@ -6,9 +6,10 @@ from __future__ import annotations
 INSTALL_DEPLOY = """\
 # Radia install and deployment contract
 
-Radia uses isolated build and release artifacts. Only 100号機 has an editable
-development checkout; LAB uses verified wheels. CI and release verification
-never depend on native binaries copied from another machine.
+Radia uses isolated build and release artifacts. Only the build host has an
+editable development checkout, and it is CPU-only; the validation host uses
+verified artifacts. CI and release verification never depend on native binaries
+copied from another machine.
 
 Available topics: overview, development, ci_compute, release, mcp_release, cubit, failures.
 
@@ -16,19 +17,20 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 
 | Machine role | Primary role | Installation rule |
 |---|---|---|
-| LAB | wheel testing and operations | verified wheels |
-| development/build host | CI priority, CPU development and numerical validation | the only editable development host; isolated job environments |
-| on-demand GPU worker | optional mexcuda GPU evaluation | hash-verified artifacts; no Cubit |
+| build host | CPU builds, CPU CI (`100`, `ci-light`), early debugging, CPU release candidates | the only editable development host; CPU-only: no CUDA/nvcc/mexcuda, no NVIDIA/cuDSS packages, no GPU execution |
+| Windows GPU validation host | Windows Python GPU and CUDA MEX/MATLAB builds, their CI (`gpu-a100`) and release qualification | verified artifacts and isolated job/QA environments; no Cubit; one GPU job at a time |
+| supercomputer | Linux Python GPU build debugging and the `linux-python-gpu` lane | source builds outside CI; no Linux binary distribution |
 
-Regular GitHub Actions CI uses the `100` runner label. LAB is not a CI runner.
-CPU development, builds and numerical validation stay on the development/build
-host. Optional GPU evaluation uses the on-demand GPU worker. Isolate jobs from
-CI and user runtimes; never interrupt another session's workload.
+Regular CPU GitHub Actions CI uses the `100` and `ci-light` runner labels on
+the build host; GPU CI uses `gpu-a100` on the Windows GPU validation host. GPU
+work never overflows to the build host. Isolate jobs from CI and user runtimes;
+never interrupt another session's workload.
 
 ## development
 
-Only 100号機 uses editable installs so Python source changes are visible on
-the next import. LAB uses verified wheels for testing and operations. A running
+Only the build host uses editable installs so Python source changes are visible
+on the next import; that environment stays CPU-only. The validation host uses
+verified artifacts for testing and operations. A running
 MCP process still owns already-imported modules and registered tool objects.
 Reconnect affected clients; compatible same-root Python edits may use a
 reviewed safe reload. Root, dependency, entry-point and schema changes require
@@ -41,21 +43,24 @@ installation.
 
 ## ci_compute
 
-The development/build host owns routine CI. Native jobs create run-local virtual
+The build host owns routine CPU CI. Native jobs create run-local virtual
 environments, install exact NGSolve/Netgen pins and `mkl-devel`, and build the
 identified commit. Normal CI runs compact impact-selected regression tests.
 Heavy CPU studies belong to `validation_test/` and run in isolated job-owned
-environments with RADIA_VALIDATION_HOST_ROLE=cpu_validation. Optional mexcuda
-GPU evaluation uses the on-demand GPU worker. Save JSON, hardware and thread
-settings; local timings are diagnostic. Recover evidence and clean job scratch.
+environments with RADIA_VALIDATION_HOST_ROLE=cpu_validation. GPU builds and
+GPU validation run on the Windows GPU validation host (Windows) or the
+supercomputer (Linux, outside CI). Save JSON, hardware and thread settings;
+local timings are diagnostic. Recover evidence and clean job scratch.
 
 ## release
 
 For the Radia solver, use `tools/release_quad.py` and the `release-quad` skill. The release candidate
 must be built from one immutable commit, pass its required CI and package gates,
-and pass the two-machine `done` gate before GitHub Release publication. The
-release workflow consumes the accepted artifact for that exact commit; it does
-not rebuild from a mutable checkout or upload a developer-machine binary.
+and carry four lane receipts of that SHA (`cpu`, `linux-python-gpu`,
+`windows-python-gpu`, `matlab`) verified by `release_quad done` before GitHub
+Release publication. The release workflow consumes the accepted artifact for
+that exact commit; it does not rebuild from a mutable checkout or upload a
+developer-machine binary.
 
 This is not the radia-mcp release lane; use topic `mcp_release` for that package.
 After an interrupted release, inspect the selected source and fix forward;
@@ -65,16 +70,16 @@ native files into `site-packages`.
 ## mcp_release
 
 radia-mcp publishes independently through `radia-mcp-v<VERSION>` and its package
-CI/PyPI workflow. Its release-dual deploys a verified wheel to LAB and updates
-the editable development install on 100 only, not hibino/mdx1/mdx2. Do not run
-the solver's four-host release gate.
+CI/PyPI workflow. Its release-dual deploys a verified wheel to the validation host
+and updates the editable development install on the build host only. Do not run
+the solver's four-lane release gate.
 Mixed omega remains in radia-mcp; Cubit MCP belongs to cubit-mesh-export.
 
 Completion requires passing package checks, verified publication, a verified
-wheel and fresh import on LAB, the editable development install and fresh import
-on 100, plus LAB live source and harmless
-affected-tool verification. Existing 100 clients may remain next-launch-pending
-until their normal restart; they do not block release completion. Failed
+wheel and fresh import on the validation host, the editable development install
+and fresh import on the build host, plus validation-host live source and harmless
+affected-tool verification. Existing build-host clients may remain
+next-launch-pending until their normal restart; they do not block release completion. Failed
 installation/import still blocks deployment completion. Immediate all-user
 reconnection is a separate explicit request, not a reason to force restarts
 during every release. Never claim an unqueried client is live-verified.

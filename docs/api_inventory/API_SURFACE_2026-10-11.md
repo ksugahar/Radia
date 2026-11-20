@@ -1,5 +1,11 @@
 # Integration ownership audit — 2026-10-11
 
+> **Historical inventory (2026-10-11).** Kept as a dated record; it does not
+> describe current routing. `radia-gpu` was renamed `radia-simulink`, and the
+> build host no longer develops, builds or runs GPU work: Windows GPU builds and
+> qualification run on the Windows GPU validation host, Linux GPU on the
+> supercomputer. See [ci-gpu-topology.md](../operations/ci-gpu-topology.md).
+
 Scope: the CPU/GPU distribution boundary, not a complete Radia API inventory.
 The user selected complete ownership transfer within the existing monorepo.
 

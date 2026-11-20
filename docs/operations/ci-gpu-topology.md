@@ -6,15 +6,15 @@ The CI pool has three roles. Capability labels select hardware; they are not dis
 | --- | --- | --- |
 | CPU heavy | `self-hosted, Windows, X64, 100` | CPU builds and heavy contracts; either compatible heavy runner may execute them. |
 | Light contracts | `self-hosted, Windows, X64, ci-light` | Source-only contracts with the audited lightweight dependency closure. |
-| A100 compute | `self-hosted, Windows, X64, gpu-a100` | Nightly/manual GPU validation only. A100 40 GB; MATLAB R2026a; no compiler or builds. |
+| Windows GPU validation host | `self-hosted, Windows, X64, gpu-a100` | All Windows GPU builds (Python GPU wheel, CUDA MEX/MATLAB), their CI and release qualification. A100 40 GB; MATLAB R2026a; one GPU job at a time. |
 
-The build host compiles CUDA payloads and executes CPU checks. GPU numerical acceptance runs on A100.
+The build host is CPU-only: CPU builds, CPU CI (`100`, `ci-light`), early debugging and CPU release-candidate preparation. It compiles no CUDA, installs no NVIDIA/cuDSS packages and runs no GPU or MATLAB GPU work; the `gpu-rtx` label is retired. The Windows GPU validation host (`gpu-a100`) owns GPU builds, GPU CI and GPU qualification. Linux GPU build debugging runs on the supercomputer outside CI. A release waits for four lane receipts of one SHA: `cpu`, `linux-python-gpu`, `windows-python-gpu` and `matlab`.
 
 The GPU job audit identified these actual consumers:
 
 | Job | Before | After | Evidence in steps |
 | --- | --- | --- | --- |
-| radia-simulink.yml:cuda-mex | heavy + RTX | heavy | Compiles CUDA/MEX and seals the compute bundle. |
+| radia-simulink.yml:cuda-mex | heavy + RTX | `gpu-a100` | Compiles CUDA/MEX and seals the compute bundle on the Windows GPU host. |
 | radia-simulink-a100.yml:validate | absent | gpu-a100 | Validates the sealed bundle. |
 | `gpu-validation.yml:validate` | absent | `gpu-a100` | installed GPU/Simulink acceptance, larger CSR solves and Optuna GPU oracle driver |
 | `gpu-validation.yml:nightly-failure` | absent | `ubuntu-latest` | create/update failure issue |

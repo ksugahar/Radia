@@ -1,5 +1,9 @@
 # Three-runner CI plan (review draft, 2026-10-16)
 
+> **Superseded (2026-11-20).** This dated draft is kept as history. Its `gpu-rtx`
+> lane is retired: the build host is CPU-only and runs no GPU builds or GPU
+> jobs. Current runner roles are in [ci-gpu-topology.md](ci-gpu-topology.md).
+
 Status: approved staged plan; no blanket service authorization. Baseline: `ebb117b80` (includes
 the CPU workflow rename in PR #427). Codex implements and validates; Claude
 repository management reviews and owns GitHub integration. The user reviews

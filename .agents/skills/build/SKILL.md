@@ -7,10 +7,13 @@ description: Build Radia Python or standalone MATLAB MEX artifacts from the sele
 
 ## Select the source and environment
 
-- The development/build host owns candidate/release builds and isolated heavy
-  CPU numerical validation. Transfer reviewed source to an isolated checkout;
-  recover artifacts/provenance to durable storage. Optional GPU evaluation uses
-  hash-verified artifacts on the on-demand GPU worker; never replace user runtimes.
+- The build host is CPU-only: CPU builds, CPU CI, early debugging and CPU
+  release-candidate preparation. It compiles no CUDA/nvcc/mexcuda, installs no
+  NVIDIA/cuDSS packages and runs no GPU work. Windows GPU builds (Python GPU
+  wheel, CUDA MEX) and their CI and qualification run on the Windows GPU
+  validation host; Linux GPU build debugging runs on the supercomputer outside
+  CI. Transfer reviewed source to an isolated checkout; recover
+  artifacts/provenance to durable storage; never replace user runtimes.
 - Read the selected checkout's AGENTS.md, Build.ps1 parameters, and relevant
   CMake targets. Do not redirect a clean worktree build into the shared WIP tree.
 - Use PowerShell 7 (`pwsh`), not Windows PowerShell 5. Scratch belongs in
@@ -23,8 +26,9 @@ description: Build Radia Python or standalone MATLAB MEX artifacts from the sele
 - Inspect CMakeCache.txt before reusing a build directory: source path,
   Python, NGSolve/Netgen and MKL must match this checkout and environment.
   Do not copy a cache or native binary from another branch to make it pass.
-- Coordinate heavy compilation with active performance measurements. mdx1/mdx2
-  own CI; do not create a LAB runner or stop another task to free resources.
+- Coordinate heavy compilation with active performance measurements. Use only
+  the existing runner labels; do not create a runner or stop another task to
+  free resources.
 
 ## Choose the narrow target
 
@@ -32,8 +36,9 @@ Run from the selected repository root:
 
 ```powershell
 pwsh -NoProfile -File ./Build.ps1 -RadiaOnly
-pwsh -NoProfile -File ./Build.ps1 -CudaMexOnly
 pwsh -NoProfile -File ./Build.ps1 -AxiFemOnly
+# Windows GPU validation host only:
+pwsh -NoProfile -File ./Build.ps1 -CudaMexOnly
 ```
 
 Radia CPU execution uses Python/pybind11; GPU execution uses MATLAB mexcuda.
@@ -45,8 +50,8 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
 ## Protect development installs
 
 - Do not pass `-InstallToSitePackages` during isolated verification. Build
-  success is not authorization to repoint 100号機 editable sources or replace
-  LAB verified wheels.
+  success is not authorization to repoint editable sources or replace verified
+  wheels on any host.
 - Never bulk-kill Python, MCP, MATLAB or Cubit to unlock artifacts. Build into
   an isolated checkout and defer replacement of an in-use file.
 - Check import origin, version and native ABI in a fresh process from the
@@ -55,8 +60,8 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
   performance evidence belongs in validation_test with result JSON; do not
   launch the entire suite merely because compilation finished.
 - Record source SHA, interpreter/runtime versions, target and artifact hashes.
-  Follow release-quad for deployment; LAB uses verified wheels and only
-  100号機 uses an editable development install.
+  Follow release-quad for deployment; the build host keeps a CPU-only editable
+  development install, and the validation host consumes verified artifacts.
   MCP client reconnection is separate from file installation.
 
 ## Other distributions

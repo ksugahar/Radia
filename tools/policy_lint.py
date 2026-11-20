@@ -125,7 +125,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     '.agents/skills/api-inventory/inventory_workflow.js': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/build/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/cubit-run/skill.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
-    '.agents/skills/debug-remote-user/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/deploy/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pybind-mex-bridge/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pyside6-health/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',

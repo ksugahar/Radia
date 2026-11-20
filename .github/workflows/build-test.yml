@@ -451,7 +451,7 @@ jobs:
             Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
           } else {
             $markerExpr = 'not compute_host'
-            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain development/build host/hibino-only."
+            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests run only on their owning validation hosts, outside this CPU gate."
           }
           if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log"
