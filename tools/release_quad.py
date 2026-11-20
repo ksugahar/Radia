@@ -602,7 +602,7 @@ def _deploy_wheel(role, wheel, sha256, lock):
         removals = "".join(f"if (Test-Path -LiteralPath {_powershell_literal(path)}) "
                            f"{{ Remove-Item -LiteralPath {_powershell_literal(path)} -Force }}; "
                            for path in placed)
-        cleanup = (removals + f"Remove-Item -LiteralPath {literal}; "
+        cleanup = (removals + f"try {{ [IO.Directory]::Delete({literal}, $false) }} catch {{ exit 1 }}; "
                    f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; exit 0")
         if _ssh_pwsh(target["ssh"], cleanup):
             fail(target["label"] + ": staged wheel copies were not removed: " + staging)

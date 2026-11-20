@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import shutil
@@ -750,7 +751,8 @@ def test_deploy_wheel_owns_its_staging_and_reports_cleanup_failure(monkeypatch, 
     cleanup = dict(scripts).get("cleanup")
     if cleanup:
         assert "-Recurse" not in cleanup
-        assert cleanup.count("Remove-Item") == (1 if failure == "scp" else 3) + 1
+        assert cleanup.count("Remove-Item") == (1 if failure == "scp" else 3)
+        assert "[IO.Directory]::Delete(" in cleanup and ", $false)" in cleanup
 
 
 def test_same_wheel_retries_never_share_a_staging_directory(monkeypatch, tmp_path):
@@ -800,3 +802,29 @@ def test_real_target_identity_guard_rejects_before_installer(tmp_path, defect):
                          capture_output=True, text=True, timeout=30)
     expected = {"hostname": "Selected hostname mismatch", "python": "Selected Python mismatch"}[defect]
     assert bad.returncode != 0 and expected in bad.stderr, (bad.returncode, bad.stdout, bad.stderr)
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell 7 is required to execute the cleanup script")
+def test_cleanup_keeps_unexpected_files_and_fails_without_prompting(tmp_path):
+    """Guards: staging cleanup deletes only placed files, never prompts, fails on leftovers. Assumes: local pwsh."""
+    staging = tmp_path / "stage"
+    staging.mkdir()
+    placed = staging / "radia.whl"
+    placed.write_bytes(b"w")
+    sentinel = staging / "other-owner.txt"
+    sentinel.write_bytes(b"keep")
+    literal = release_quad._powershell_literal(str(staging))
+    script = (f"if (Test-Path -LiteralPath {release_quad._powershell_literal(str(placed))}) "
+              f"{{ Remove-Item -LiteralPath {release_quad._powershell_literal(str(placed))} -Force }}; "
+              f"try {{ [IO.Directory]::Delete({literal}, $false) }} catch {{ exit 1 }}; "
+              f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; exit 0")
+    source = inspect.getsource(release_quad._deploy_wheel)
+    assert "[IO.Directory]::Delete({literal}, $false)" in source, "production cleanup changed; update this replica"
+    proc = subprocess.run(["pwsh", "-NoProfile", "-Command", script], stdin=subprocess.DEVNULL,
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 1, (proc.returncode, proc.stdout, proc.stderr)
+    assert not placed.exists() and sentinel.read_bytes() == b"keep"
+    sentinel.unlink()
+    placed.write_bytes(b"w")
+    proc = subprocess.run(["pwsh", "-NoProfile", "-Command", script], stdin=subprocess.DEVNULL,
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0 and not staging.exists(), (proc.returncode, proc.stderr)
