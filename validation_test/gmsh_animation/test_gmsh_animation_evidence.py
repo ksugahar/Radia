@@ -15,8 +15,8 @@ def _load(name: str) -> dict:
 def test_inspection_evidence_preserves_mesh_and_displacement_contract():
     result = _load("gmsh_animation_results.json")
     assert result["schema"] == "radia.validation.gmsh_animation.inspect.v1"
-    # This is the archived calculation, not today's format acceptance oracle.
-    # Keep its original provenance; the executable inspector is checked below.
+    # Regenerated with Gmsh 5 and MSH 4.2 (2026-11-21).
+    assert result["msh"]["mesh_format"] == "4.2 0 8"
     assert result["msh"]["node_data_count"] == 21
     assert all(result["checks"].values())
     assert math.isclose(result["checks"]["final_displacement_m"], 0.15)

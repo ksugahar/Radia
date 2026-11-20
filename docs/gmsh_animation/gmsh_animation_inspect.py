@@ -33,7 +33,7 @@ def _pkg_version(name: str) -> str | None:
 def runtime_versions() -> dict:
     return {
         "python_version": sys.version.split()[0],
-        "python_executable": sys.executable,
+        "python_executable": Path(sys.executable).name,  # name only: no local paths in public evidence
         "platform": platform.platform(),
         "radia_version": _pkg_version("radia"),
     }
