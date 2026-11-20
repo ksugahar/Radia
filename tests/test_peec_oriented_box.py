@@ -262,3 +262,58 @@ def test_oblique_crossing_uses_the_composite_rule():
     reversed_plate = (plate[1], plate[0], *plate[2:])
     flipped = _matrix([bar, reversed_plate], oriented_box_order=24)
     assert flipped[0, 1] == -got[0, 1] and flipped[1, 1] == got[1, 1]
+
+
+def _plates(thick, gap, tilt=0.0):
+    """Two parallel 2 mm x 1 mm plates of thickness thick stacked along x
+    with surface gap gap (negative = overlap); the second is tilted by tilt
+    rad about y (near-parallel cross axes)."""
+    out = []
+    for x, r in ((0.0, np.eye(3)), (thick + gap, _rot([0, 1, 0], tilt))):
+        c = np.array([x, 0, 0])
+        out.append((c + r @ [0, 0, -1e-3], c + r @ [0, 0, 1e-3], 1e-3, thick, (0, 1, 0)))
+    return out
+
+
+@pytest.mark.parametrize("thick", [20e-6, 2e-6])
+def test_thin_plates_through_contact_match_the_cartesian_rule(thick):
+    """Guards: for thin, nearly parallel plates (tilt 1e-7 rad, so the SAT
+    cross axes are near-degenerate) the mutual entry through separation,
+    tolerance-scale gaps, contact and overlap matches the independent
+    aligned Cartesian volume rule in relative (2e-3) and absolute
+    (1e-6 L_ii) terms, varies continuously across contact and stays PSD.
+    Assumes: tilt 1e-7 changes the exact entry by far less than 1e-6;
+    Cartesian order 64 is converged for these plates."""
+    gaps = [5 * thick, thick, 1e-12, 0.0, -1e-12, -0.5 * thick]
+    prev = None
+    for gap in gaps:
+        ref = _matrix(_plates(thick, gap), volume_order=64)
+        got = _matrix(_plates(thick, gap, tilt=1e-7), oriented_box_order=24)
+        err = abs(got[0, 1] - ref[0, 1])
+        assert err <= 2e-3 * abs(ref[0, 1]), (thick, gap, got[0, 1], ref[0, 1])
+        assert err <= 1e-6 * ref[0, 0] or err <= 2e-3 * abs(ref[0, 1]), (thick, gap, err)
+        ev = np.linalg.eigvalsh(got)
+        assert ev[0] >= -4 * np.finfo(float).eps * ev[-1], (thick, gap, ev)
+        if prev is not None and abs(gap) <= 1e-12:
+            assert abs(got[0, 1] - prev) <= 1e-5 * abs(prev), (thick, gap, got[0, 1], prev)
+        if abs(gap) <= 1e-12:
+            prev = got[0, 1]
+
+
+def test_nested_child_cell_matches_the_cartesian_rule():
+    """Guards: a small bar wholly inside a larger one (the containment
+    shortcut of the composite rule) matches the independent Cartesian
+    volume rule within 2e-3, also after a rigid rotation, is bitwise
+    independent of insertion order and keeps |L_ij| <= sqrt(L_ii L_jj).
+    Assumes: Cartesian order 64 is converged for the nested pair."""
+    big = ((0.0, 0, -1e-3), (0.0, 0, 1e-3), 1e-3, 0.4e-3, (0, 1, 0))
+    small = ((0.05e-3, 0.1e-3, -0.3e-3), (0.05e-3, 0.1e-3, 0.4e-3), 0.3e-3, 0.1e-3, (0, 1, 0))
+    ref = _matrix([big, small], volume_order=64)
+    rot = _rot([1, 2, 3], 0.7)
+    for r in (np.eye(3), rot):
+        bars = [(r @ p0, r @ p1, w, h, r @ np.asarray(wd, float)) for p0, p1, w, h, wd in (big, small)]
+        got = _matrix(bars, oriented_box_order=24)
+        assert np.allclose(got, ref, rtol=2e-3, atol=0), (got, ref)
+        swapped = _matrix(bars[::-1], oriented_box_order=24)
+        assert swapped[0, 1] == got[0, 1] and swapped[0, 0] == got[1, 1]
+        assert got[0, 1] ** 2 <= got[0, 0] * got[1, 1], got
