@@ -208,12 +208,12 @@ RADIA_PEEC_HD inline double InnerPotential(const Frame& fn, double px, double py
 // Distance from p to the inner box surface (from outside or inside).
 RADIA_PEEC_HD inline double SurfaceDistance(const Frame& fn, const V3& p) {
     const V3 r{p.x - fn.c.x, p.y - fn.c.y, p.z - fn.c.z};
-    double out = 0.0, in = HUGE_VAL;
+    double out = 0.0, in = 0.0;
     for (int k = 0; k < 3; ++k) {
         const double q = fabs(Dot(r, fn.e[k]));
         const double o = fmax(q - fn.half[k], 0.0);
         out += o * o;
-        in = fmin(in, fn.half[k] - q);
+        in = k == 0 ? fn.half[k] - q : fmin(in, fn.half[k] - q);
     }
     return out > 0.0 ? sqrt(out) : fmax(in, 0.0);
 }
