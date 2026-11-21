@@ -411,7 +411,7 @@ def _solve_coil_fin_volume(args):
         n_layers=args.fin_n_layers, n_lanes=args.fin_n_lanes,
         n_stations=args.fin_n_stations, n_outline=args.fin_n_outline,
         lane_grading=args.fin_lane_grading, tip_lanes=args.fin_tip_lanes,
-        route=str(args.fin_route))
+        route=str(args.fin_route), prima_order=args.fin_prima_order)
     t_fin = time.perf_counter() - t0
     progress("FIN", f"L_coil={sol['L_H'] * 1e9:.3f} nH, R_coil={sol['R_ohm'] * 1e3:.4f} mΩ, "
                     f"{sol['n_branches']} bars, {sol['n_nodes']} nodes ({t_fin:.1f}s)")
@@ -429,6 +429,7 @@ def _solve_coil_fin_volume(args):
         "fin_volume_box_order": sol["box_order"],
         "fin_volume_inductance_energy": sol["inductance_energy"],
         "fin_volume_energy_receipt": sol["energy_receipt"],
+        "fin_volume_prima": sol["prima"],
         "coil_power_W": sol["coil_power_W"],
         "coil_true_residual": sol["coil_true_residual"],
     }
@@ -1988,7 +1989,7 @@ def _assemble_vacuum_output(args, coil_data):
         out["fin_sweep"] = coil_data["fin_sweep"]
         out["fin_volume_gates"] = coil_data["fin_volume_gates"]
         for key in ("fin_volume_box_order", "fin_volume_inductance_energy",
-                    "fin_volume_energy_receipt"):
+                    "fin_volume_energy_receipt", "fin_volume_prima"):
             out[key] = coil_data[key]
         out["coil_power_W"] = float(coil_data["coil_power_W"])
         out["coil_true_residual"] = coil_data["coil_true_residual"]
@@ -3017,6 +3018,10 @@ def build_argparser():
     parser.add_argument("--fin-tip-lanes", type=int, default=None,
                         help="fin-surface: cells requested on each tip arc "
                              "(default: measured)")
+    parser.add_argument("--fin-prima-order", type=int, default=None,
+                        help="fin-volume: opt-in PRIMA model of this order expanded at the "
+                             "operating frequency instead of the dense solve; its branch "
+                             "currents must pass the KCL/KVL true-residual gate")
     parser.add_argument("--fin-route", choices=("auto", "straight_prism",
                                                 "cap_march"),
                         default="auto",

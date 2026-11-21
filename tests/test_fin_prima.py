@@ -188,3 +188,28 @@ def test_prima_rejects_unsupported_input():
     indefinite = L - 2.0 * np.linalg.eigvalsh(L).max() * np.eye(len(R))
     with pytest.raises(RuntimeError, match="positive definite|negative energy"):
         prima_reduce(**{**ok, "L": indefinite, "s0": 2 * math.pi * F_OP})
+
+
+def test_solve_fin_volume_prima_matches_dense_and_gates_low_order():
+    """Guards: the opt-in ``prima_order`` route of ``solve_fin_volume``
+    recovers the dense branch currents from the PRIMA basis expanded at the
+    operating frequency, records q and its residuals, and an order too low to
+    pass the shared KCL/KVL true-residual gate raises instead of returning.
+    Assumes: the 84-branch fixture lattice; at order 24 its Krylov space is
+    complete enough to meet the 1e-6 residual limit."""
+    from radia.fin_volume import solve_fin_volume
+
+    kw = dict(frequency=F_OP, sigma=5.8e7, current_A=10.0, n_layers=1, n_lanes=8,
+              n_stations=5, lane_grading="uniform", box_order=4)
+    step = FIXTURES / "beak_fin_short.step"
+    dense = solve_fin_volume(step, **kw)
+    red = solve_fin_volume(step, prima_order=24, **kw)
+    err = np.linalg.norm(red["current"] - dense["current"]) / np.linalg.norm(dense["current"])
+    assert err < 1e-6, (err, red["prima"])
+    assert red["prima"]["s0"] == pytest.approx(2 * math.pi * F_OP)
+    assert red["coil_true_residual"]["kvl_relative"] <= 1e-6
+    assert dense["prima"] is None
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        solve_fin_volume(step, prima_order=1, **kw)
+    with pytest.raises(ValueError, match="CPU-only"):
+        solve_fin_volume(step, prima_order=4, backend="gpu", **kw)
