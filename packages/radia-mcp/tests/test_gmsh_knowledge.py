@@ -51,3 +51,23 @@ def test_gmsh_knowledge_records_cubit_mesh_export_geo_companion_contract():
     assert "A plain `case.opt` is not auto-loaded" in policy
     assert "gmsh_post_display_contract" in policy
     assert "cut-plane metadata" in policy
+
+
+def test_gmsh_update_qualification_routes_to_canonical_sources():
+    """Guards: the Gmsh 5 update workflow stays discoverable and pin-free."""
+    text = get_gmsh_documentation(" update_qualification ")
+    assert text in get_gmsh_documentation("all")
+    assert "update_qualification" in get_gmsh_documentation("unknown")
+    for contract in (
+        "docs/operations/gmsh-development-runtime.md",
+        ".agents/skills/gmsh-verify/SKILL.md",
+        "radia_mcp.gmsh.runtime", "RADIA_GMSH_PROVENANCE",
+        "gmsh_validate_msh", "gmsh_validate_geo",
+        "not a native readback", "Headless", "GUI",
+        "a Windows artifact does not qualify Linux",
+    ):
+        assert contract in text, contract
+    # The canonical guide owns URLs and hashes; this topic must not copy them.
+    assert "https://" not in text
+    import re
+    assert not re.search(r"[0-9a-f]{64}", text)
