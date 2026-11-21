@@ -81,7 +81,7 @@ def main(args):
         if cpu_res>(1e-9 if args.gamma else 1e-10):raise RuntimeError('Independent CPU solve failed true residual')
         startup=time.perf_counter();engine=matlab.engine.start_matlab('-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
-        engine.addpath(str(Path(__file__).parent),nargout=0)
+        engine.addpath(str(Path(__file__).parent),str(root/'build-cuda-mex'),nargout=0)
         engine.native_hcurl(str(vol),str(root/'build-ams-cuda'),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),float(args.gamma),nargout=0)
         native=loadmat(out/'native.mat',simplify_cells=True);model=native['model']
         actual=decoded(model['A']);actualG=decoded(model['G'])
@@ -104,6 +104,18 @@ def main(args):
         diff=np.einsum('eac,ea->ec',curl,(native['solution']-cpu)[dofs]);base=np.einsum('eac,ea->ec',curl,cpu[dofs])
         metrics['B_relative_RMS']=float(np.sqrt(np.sum(volume[:,None]*diff**2)/np.sum(volume[:,None]*base**2)))
         if metrics['B_relative_RMS']>1e-7:raise RuntimeError('Independent vector field parity failed')
+        from scipy.sparse.linalg import spsolve
+        linear_cpu=spsolve(A[free][:,free],rhs[free])
+        linear_metrics={}
+        for key,scale in (('ams1',1),('ams2',.5),('ic1',1),('ic2',.5)):
+            x=native[key]
+            diff=relative(x[free],scale*linear_cpu)
+            residual=relative((A@x)[free],scale*rhs[free])
+            linear_metrics[key]={'relative_to_cpu':diff,'true_relative_residual':residual}
+            if diff>1e-7 or residual>1e-10:
+                raise RuntimeError(f'{key}: independent CPU linear parity failed: {linear_metrics[key]}')
+        record['linear_checks']=native['linearChecks']
+        record['linear_metrics']=linear_metrics
         record['accepted']=True
     except BaseException as error:record['error']=repr(error);raise
     finally:

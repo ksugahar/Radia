@@ -30,6 +30,32 @@ report=struct('total_seconds',elapsed,'assembly',assembly,'solver',solverReport,
     'warmed_transfer_inclusive_seconds',warmed,'warmed_transfer_inclusive_median',median(warmed), ...
     'cold_production_seconds',solverReport.total_seconds, ...
     'total_seconds_definition','Validation includes a separate assembly export in addition to the production solve');
+linearAMS=radia.gpu.HCurlSystem(volPath,labels,CurrentDensity=[current 0 0]);
+linearIC=radia.gpu.HCurlICSystem(volPath,labels,CurrentDensity=[current 0 0]);
+[ams1,amsReport1]=linearAMS.solve(ReturnOnGPU=false);
+[ams2,amsReport2]=linearAMS.solve(CurrentScale=.5,ReturnOnGPU=false);
+[ams0,amsReport0]=linearAMS.solve(CurrentScale=0,ReturnOnGPU=false);
+[ic1,icReport1]=linearIC.solve(ReturnOnGPU=false);
+[ic2,icReport2]=linearIC.solve(CurrentScale=.5,ReturnOnGPU=false);
+assert(all(ams0==0)&&amsReport0.linear.true_relative_residual==0);
+assert(linearAMS.SetupInfo.ams_setup.hierarchy_built==1&& ...
+    amsReport1.linear.hierarchy_built==0&&amsReport2.linear.hierarchy_built==0&& ...
+    amsReport1.linear.hierarchy_refreshed==0&&amsReport2.linear.hierarchy_refreshed==0);
+assert(icReport1.factor_reused&&icReport2.factor_reused);
+icSetup=linearIC.SetupInfo.ic_setup;
+assert(icSetup.symbolic_download_bytes==0&&icSetup.symbolic_upload_bytes==0);
+for setup={linearAMS.SetupInfo,linearIC.SetupInfo}
+    assert(setup{1}.assembly.matrix_h2d_bytes==0&&setup{1}.assembly.matrix_d2h_bytes==0);
+end
+linearChecks=struct('ams_setup',linearAMS.SetupInfo,'ic_setup',linearIC.SetupInfo, ...
+    'ams_first',amsReport1,'ams_reuse',amsReport2,'ic_first',icReport1,'ic_reuse',icReport2);
+delete(linearAMS);delete(linearIC);
+assert(isequal(radia_cuda_ams('resident_status'),initial));
+for command=["setup","nonlinear_raw","create"]
+    rejected=false;
+    try;radia_cuda_ams(char(command));catch e;rejected=contains(e.message,'Unknown AMS command');end
+    assert(rejected);
+end
 % Bounded cases only. A larger validator must select checked HDF5 beforehand.
-save(outputPath,'solution','rhs','model','mass_values','maps','report');
+save(outputPath,'solution','rhs','model','mass_values','maps','report','linearChecks','ams1','ams2','ic1','ic2');
 end
