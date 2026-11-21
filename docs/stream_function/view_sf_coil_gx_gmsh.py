@@ -27,6 +27,7 @@ it does not import the pip gmsh Python runtime.
 Run:  python view_sf_coil_gx_gmsh.py [--mode contours|chain|step] [--no-gui]
 """
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -37,20 +38,47 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 
 
+_GMSH_EXE = None
+
+
 def _gmsh_executable():
-    """Prefer the lab standalone gmsh.exe; fall back to PATH if needed."""
-    preferred = Path(r"C:\gmsh.exe")
-    if preferred.exists():
-        return str(preferred)
-    return shutil.which("gmsh.exe") or shutil.which("gmsh")
+    """Return (resolved path, version) of the standalone Gmsh 5 executable.
+
+    The executable comes from --gmsh-exe, else GMSH_EXECUTABLE, else ``gmsh``
+    on PATH, and is resolved to an absolute file path.  ``-version`` must exit
+    with status 0 and report major 5; anything else is refused.  This checks
+    executable identity only: it does not qualify headless or GUI behaviour.
+    """
+    explicit = _GMSH_EXE or os.environ.get("GMSH_EXECUTABLE")
+    found = shutil.which(explicit or "gmsh")
+    if not found:
+        if explicit:
+            raise SystemExit(f"Gmsh executable not found: {explicit!r}")
+        return None, None
+    exe = str(Path(found).resolve())
+    try:
+        probe = subprocess.run([exe, "-version"], capture_output=True, text=True,
+                               timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"Gmsh -version failed for {exe}: {exc}") from None
+    lines = (probe.stdout.strip() or probe.stderr.strip()).splitlines()
+    version = lines[-1].strip() if lines else ""
+    if probe.returncode != 0:
+        raise SystemExit(f"Gmsh -version exited with {probe.returncode} for {exe} "
+                         f"(reported {version!r})")
+    if version.split(".")[0] != "5":
+        raise SystemExit(f"Gmsh major 5 is required: {exe} reports {version!r}")
+    return exe, version
 
 
 def _open_standalone_gmsh(display_geo):
     """Open a .geo display companion with standalone GMSH."""
-    exe = _gmsh_executable()
+    exe, version = _gmsh_executable()
     if exe is None:
-        print(f"standalone gmsh executable not found; open manually: {display_geo}")
+        print(f"standalone Gmsh 5 executable not found; open manually: {display_geo}")
         return
+    print(f"Gmsh executable: {exe} (version {version}; identity only, "
+          "headless/GUI behaviour not qualified here)")
     subprocess.run([exe, "-noconfig", str(display_geo)], check=False)
 
 
@@ -456,7 +484,12 @@ def main():
                     help="omit the host cylinder reference surface")
     ap.add_argument("--no-gui", action="store_true",
                     help="don't open the GMSH GUI (write file only)")
+    ap.add_argument("--gmsh-exe", default=None,
+                    help="standalone Gmsh 5 executable (default: "
+                         "GMSH_EXECUTABLE, then PATH)")
     args = ap.parse_args()
+    global _GMSH_EXE
+    _GMSH_EXE = args.gmsh_exe
 
     if args.mode == "step":
         if not args.step_path.exists():
