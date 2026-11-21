@@ -4,10 +4,11 @@ if nargin<5;gamma=0;end
 current=1;if gamma>0;current=20;end
 addpath(binaryPath);addpath(matlabPath);device=gpuDevice();wait(device);
 before=double(device.AvailableMemory);initial=radia_cuda_ams('resident_status');total=tic;
-[model,fem,assembly]=radia.gpu.assembleHCurl(volPath, ...
-    ["back","front","left","right","top","bottom"],Gamma=gamma,CurrentDensity=[current 0 0]);
+labels=["back","front","left","right","top","bottom"];
+[fem,assembly,model]=radia_cuda_ams_validation('assemble_hcurl',char(volPath), ...
+    cellstr(labels),'.*',1,1,[current 0 0],gamma,true);
 [solution,solverReport]=radia.gpu.solveHCurl(volPath, ...
-    ["back","front","left","right","top","bottom"],Gamma=gamma,CurrentDensity=[current 0 0],SetupThreads=4,ReturnOnGPU=false);
+    ["back","front","left","right","top","bottom"],Gamma=gamma,CurrentDensity=[current 0 0],ReturnOnGPU=false);
 rhs=gather(fem.rhs);wait(device);elapsed=toc(total);
 mass_values=gather(fem.mass.values);
 maps=struct('dofs',gather(fem.dofs),'curls',gather(fem.curls),'volume',gather(fem.volume));
@@ -17,7 +18,7 @@ warmed=zeros(3,1);
 for k=1:3
     wait(device);timer=tic;
     [repeat,~]=radia.gpu.solveHCurl(volPath, ...
-        ["back","front","left","right","top","bottom"],Gamma=gamma,CurrentDensity=[current 0 0],SetupThreads=4,ReturnOnGPU=false);
+        ["back","front","left","right","top","bottom"],Gamma=gamma,CurrentDensity=[current 0 0],ReturnOnGPU=false);
     wait(device);warmed(k)=toc(timer);
     assert(norm(repeat-solution)<=1e-10*max(norm(solution),realmin),'radia:cuda:repeat','Repeated solve changed solution');
 end

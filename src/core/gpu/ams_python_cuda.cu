@@ -2,9 +2,7 @@
 #include "snapshot.hpp"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <cusolverDn.h>
 #include <algorithm>
-#include <chrono>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -12,7 +10,6 @@
 #include <vector>
 namespace {
 #include "ams_core.cuh"
-#include "ams_refresh.cuh"
 
 struct Allocation {
     void* p=nullptr;
@@ -59,9 +56,6 @@ struct Context {
     Buffer rhs,output;
     std::unique_ptr<AMS> ams;
     std::unique_ptr<Space> amg;
-    // Python test binding: the refreshed operator values arrive from the host.
-    std::unique_ptr<Buffer> operatorValues;
-    std::unique_ptr<AMSRefresh> refresher;
     explicit Context(const Node& input):n(rows(input)),rhs(n),output(n){
         ck(cudaGetDevice(&device));
         const auto& schema=input.at("schema").string();
@@ -110,18 +104,6 @@ struct AMGAction {
 }
 namespace radia_sparse {
 void* create(const Node& node){return new Context(node);}
-RefreshInfo refresh(void* owner,const double* values,size_t count){
-    if(!owner)throw std::runtime_error("closed sparse GPU hierarchy");
-    auto& c=*static_cast<Context*>(owner);c.selected();
-    if(!c.ams)throw std::runtime_error("device refresh requires an AMS hierarchy");
-    if(count!=size_t(c.ams->a.nz))throw std::runtime_error("refresh values do not match the hierarchy fine pattern");
-    if(!c.operatorValues)c.operatorValues=std::make_unique<Buffer>(count);
-    ck(cudaMemcpy(c.operatorValues->p,values,count*sizeof(double),cudaMemcpyHostToDevice));
-    if(!c.refresher)c.refresher=std::make_unique<AMSRefresh>();
-    CSR op=c.ams->a;op.a=c.operatorValues->p;
-    auto stats=refreshAMS(*c.ams,*c.refresher,op);
-    return {stats.seconds,stats.refreshes,stats.owned_bytes,stats.coarse_rows_max};
-}
 Stats solve(void* owner,const double* b,size_t n,double* out,double tol,int limit){
     if(!owner||!std::isfinite(tol)||tol<=0||tol>1e-6||limit<1||limit>100000)
         throw std::runtime_error("invalid sparse GPU solve controls");

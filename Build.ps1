@@ -46,6 +46,7 @@ param(
     [switch]$IhCudaOnly,          # isolated persistent coupled IH CUDA gateway
     [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
     [switch]$FmmCudaOnly,         # isolated numeric Laplace FMM CUDA gateway
+    [switch]$AmsValidationOracle, # separate validation-only MEX
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CsrPythonBindings,     # optional direct Python CSR CUDA binding
@@ -114,11 +115,13 @@ if ($FieldCudaOnly) {
     return
 }
 
+if ($AmsValidationOracle -and -not $AmsCudaOnly) { throw '-AmsValidationOracle requires -AmsCudaOnly' }
 if ($AmsCudaOnly) {
     if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $InstallToSitePackages -or $Rebuild) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $amsBuildArgs = @()
+    if ($AmsValidationOracle) { $amsBuildArgs += '--validation-oracle' }
     if ($GpuBuildAdmission) { $amsBuildArgs += @('--build-admission', $GpuBuildAdmission, '--build-admission-sha256', $GpuBuildAdmissionSha256) }
     if ($RequireNativeProvenance) { $amsBuildArgs += '--require-clean-source' }
     & python (Join-Path $PSScriptRoot 'packages/radia-simulink/tools/build_ams_cuda.py') @amsBuildArgs

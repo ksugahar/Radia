@@ -10,7 +10,7 @@ switch name
     case 'ams'
         [solution,info]=radia.gpu.solveHCurl(fullfile(job,'model.vol'), ...
             ["back","front","left","right","top","bottom"],Gamma=4,CurrentDensity=[20 0 0], ...
-            SetupThreads=1,LinearTolerance=1e-12,ReturnOnGPU=false);
+            LinearTolerance=1e-12,ReturnOnGPU=false);
         values={solution};
     case {'fmm-small','fmm-large'}
         f=radia.gpu.LaplaceFMM(s.sources,s.targets,Order=s.order,LeafCapacity=s.leaf,Separation=s.separation);

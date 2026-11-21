@@ -10,7 +10,7 @@ if strcmp(backend,'ic')
     system=radia.gpu.HCurlICSystem(volPath,labels,Shift=1.05);
 else
     assert(strcmp(backend,'ams'),'radia:test:backend','Unknown backend');
-    system=radia.gpu.HCurlSystem(volPath,labels,SetupThreads=1);
+    system=radia.gpu.HCurlSystem(volPath,labels);
 end
 cleanup=onCleanup(@()delete(system));wait(g);setupSeconds=toc(timer);
 freeRetained=g.AvailableMemory;setupInfo=system.SetupInfo;

@@ -244,37 +244,6 @@ class AMS(_Resident):
     """
     def __init__(self, hierarchy, *, backend):
         super().__init__(hierarchy, backend=backend, kind="ams")
-        import numpy as np
-        snapshot = hierarchy._accelerator_snapshot()
-        self._free = np.array(snapshot["free"], dtype=bool)
-        self._reuse = bool(snapshot["reuse_hierarchy"])
-
-    def refresh(self, matrix):
-        """Refresh the resident hierarchy on the GPU for new values of ``matrix``.
-
-        ``matrix`` must have the hierarchy's fine sparsity pattern, and the
-        hierarchy must come from ``reuse_hierarchy=True``. Coarsening and
-        interpolation stay frozen, as in the CPU ``Update`` with
-        ``reuse_hierarchy``; the BC-modified operator, every Galerkin level,
-        the l1 norms and the coarsest inverse are recomputed on the GPU. This
-        Python binding uploads the operator values from the host.
-        """
-        import numpy as np
-        owner = self._require_open()
-        if not self._reuse:
-            raise ValueError("device refresh requires a reuse_hierarchy AMS hierarchy")
-        system = _csr(matrix)
-        if any(not np.array_equal(system[k], self._system[k]) for k in ("rows", "cols", "rowptr", "columns")):
-            raise ValueError("the matrix pattern differs from the GPU hierarchy snapshot")
-        info = owner.refresh(system["values"])
-        # Residual checks use the refreshed BC-modified operator, as the device does.
-        rows = np.repeat(np.arange(system["rows"]), np.diff(system["rowptr"]))
-        columns = system["columns"]
-        values = np.where(self._free[rows], np.where(self._free[columns], system["values"], 0.0),
-                          np.where(columns == rows, 1.0, 0.0))
-        values.flags.writeable = False
-        self._system["values"] = values
-        return dict(info)
 
 
 class ResidentAMG:

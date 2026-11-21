@@ -430,7 +430,7 @@ jobs:
         run: |
           & ./Build.ps1 -CudaMexOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
+          & ./Build.ps1 -AmsCudaOnly -AmsValidationOracle -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $projectionStart = [DateTime]::UtcNow
           & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance

@@ -5,30 +5,30 @@ function deviceRefresh(out,binaryPath,matlabPath)
 % hierarchy in place. Level operators and l1 norms are compared value by value;
 % the coarsest inverse is checked through PCG on the refreshed operator.
 addpath(binaryPath);addpath(matlabPath);
-g=gpuDevice();wait(g);initial=radia_cuda_ams('resident_status');
+g=gpuDevice();wait(g);initial=radia_cuda_ams_validation('resident_status');
 s=radia.gpu.readAMSExchange(fullfile(out,'input.h5'));model=s.model;
-[h1,setup]=radia.gpu.prepareAMS(model,SetupThreads=1,SetupOnGPU=false,ReuseHierarchy=true);
+[h1,setup]=prepareAMS(model,SetupThreads=1,SetupOnGPU=false,ReuseHierarchy=true);
 assert(h1.reuse_hierarchy,'Setup did not keep the reuse_hierarchy flag');
 for name=["rows","cols","rowptr","columns"]
     assert(isequal(gather(h1.A.(name)(:)),model.A.(name)(:)),'BC operator pattern differs from the input pattern');
 end
-refreshed=radia_cuda_ams('create',h1);frozen=radia_cuda_ams('create',h1);
+refreshed=radia_cuda_ams_validation('create',h1);frozen=radia_cuda_ams_validation('create',h1);
 cleanup=onCleanup(@()release([refreshed frozen]));
 n=double(h1.A.rows);free=gather(h1.free(:))~=0;b=gpuArray(sin((1:n)').*free);
 updates=s.updates;results=cell(1,numel(updates));
 for k=1:numel(updates)
     op=h1.A;op.values=gpuArray(updates{k}(:));
-    wait(g);timer=tic;info=radia_cuda_ams('refresh',refreshed,op);wait(g);wall=toc(timer);
-    device=radia_cuda_ams('resident_values',refreshed);
-    timer=tic;[reference,referenceInfo]=radia_cuda_ams('setup',model,1,false,true,updates{k}(:));cpu=toc(timer);
+    wait(g);timer=tic;info=radia_cuda_ams_validation('refresh',refreshed,op);wait(g);wall=toc(timer);
+    device=radia_cuda_ams_validation('resident_values',refreshed);
+    timer=tic;[reference,referenceInfo]=radia_cuda_ams_validation('setup',model,1,false,true,updates{k}(:));cpu=toc(timer);
     levels=compareLevels(device,reference);
     % Every route solves the same BC-modified operator that the CPU oracle exports.
     bc=h1.A;bc.values=gpuArray(reference.A.values(:));
-    oracle=radia_cuda_ams('create',upload(reference,''));
-    oracleCleanup=onCleanup(@()radia_cuda_ams('release',oracle));
-    [xr,ir]=radia_cuda_ams('solve',refreshed,bc,b,1e-10,4000,false);
-    [xo,io]=radia_cuda_ams('solve',oracle,bc,b,1e-10,4000,false);
-    [~,iFrozen]=radia_cuda_ams('solve',frozen,bc,b,1e-10,4000,false);
+    oracle=radia_cuda_ams_validation('create',upload(reference,''));
+    oracleCleanup=onCleanup(@()radia_cuda_ams_validation('release',oracle));
+    [xr,ir]=radia_cuda_ams_validation('solve',refreshed,bc,b,1e-10,4000,false);
+    [xo,io]=radia_cuda_ams_validation('solve',oracle,bc,b,1e-10,4000,false);
+    [~,iFrozen]=radia_cuda_ams_validation('solve',frozen,bc,b,1e-10,4000,false);
     assert(ir.true_relative_residual<=1e-9 && io.true_relative_residual<=1e-9,'Refreshed or oracle PCG missed the true residual gate');
     difference=gather(norm(xr-xo))/gather(norm(xo));
     results{k}=struct('update',k,'refresh',info,'refresh_wall_seconds',wall, ...
@@ -39,12 +39,12 @@ for k=1:numel(updates)
     clear oracleCleanup xr xo;
 end
 clear cleanup;wait(g);
-assert(isequal(initial,radia_cuda_ams('resident_status')),'Native owners not restored');
+assert(isequal(initial,radia_cuda_ams_validation('resident_status')),'Native owners not restored');
 result=struct('setup',setup,'updates',{results},'owners_restored',true);
 fid=fopen(fullfile(out,'gpu-result.json'),'w');assert(fid~=-1);fwrite(fid,jsonencode(result),'char');fclose(fid);
 end
 function release(handles)
-for h=handles;radia_cuda_ams('release',h);end
+for h=handles;radia_cuda_ams_validation('release',h);end
 end
 function rows=compareLevels(device,reference)
 rows=struct('space',{},'level',{},'quantity',{},'count',{},'mismatches',{},'max_abs',{},'max_relative',{},'coarse_kind',{});

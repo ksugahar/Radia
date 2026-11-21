@@ -89,6 +89,43 @@ std::unordered_map<Handle,std::unique_ptr<NonlinearState>> nonlinearContexts;
 void clearResidentContexts(){amsContexts.clear();nonlinearContexts.clear();}
 NonlinearState& nonlinearContext(const mxArray* a){auto it=nonlinearContexts.find(handleValue(a,NONLINEAR_TAG));
     if(it==nonlinearContexts.end())throw std::runtime_error("stale or released nonlinear handle");it->second->checkDevice();return *it->second;}
+struct ResidentHierarchyTiming {
+    bool built;
+    bool refreshed;
+    double seconds;
+};
+
+ResidentHierarchyTiming prepareNonlinearHierarchy(NonlinearState& c){
+    if(!c.evaluations)throw std::runtime_error("evaluate the tangent before preparing AMS");
+    Input view;
+    const auto start=std::chrono::steady_clock::now();
+    const bool built=!c.deviceAms;
+    const bool refreshed=!built&&c.amsEvaluation!=c.evaluations;
+    if(built){
+        const int vertices=integer(field(c.owner.value,"vertices"));
+        if(vertices<1)throw std::runtime_error("resident AMS needs mesh vertices");
+        const int* edges=view.get<int>(field(c.owner.value,"edge_vertices"),mxINT32_CLASS,size_t(c.n)*2);
+        if(vertices>INT_MAX/3)throw std::runtime_error("resident HCurl vertex count exceeds int32 capacity");
+        const double* coords=view.get<double>(field(c.owner.value,"coordinates"),mxDOUBLE_CLASS,size_t(vertices)*3);
+        verify_edge_vertices<<<(c.n+T-1)/T,T>>>(c.n,vertices,edges,view.validation.p);
+        verify_vec<<<(vertices*3+T-1)/T,T>>>(vertices*3,coords,false,view.validation.p);
+        view.validation.check();
+        auto hierarchy=std::make_unique<radia_fem::Ams>();
+        const radia_fem::CsrView op{c.n,c.n,c.mass.rp,c.mass.ci,c.raw.p};
+        hierarchy->build(c.amsLedger,op,c.mass.nz,c.free,c.raw.p,c.n,vertices,edges,coords,64,0.25);
+        c.deviceAms=std::move(hierarchy);
+    }else if(refreshed){
+        // If refresh fails, discard the partially updated hierarchy.
+        auto hierarchy=std::move(c.deviceAms);
+        hierarchy->refresh_values(c.amsLedger,c.raw.p);
+        c.deviceAms=std::move(hierarchy);
+    }
+    c.amsEvaluation=c.evaluations;
+    ck(cudaDeviceSynchronize());
+    const double hierarchySeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+    return {built,refreshed,hierarchySeconds};
+}
+
 bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs,const mxArray** args){
     if(command=="nonlinear_create"){
         if(nrhs!=2||nlhs!=1)throw std::runtime_error("handle=radia_cuda_ams('nonlinear_create',model)");
@@ -98,6 +135,16 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
     if(command=="nonlinear_release"){
         if(nrhs!=2||nlhs!=0)throw std::runtime_error("radia_cuda_ams('nonlinear_release',handle)");
         nonlinearContext(args[1]);nonlinearContexts.erase(handleValue(args[1],NONLINEAR_TAG));mexUnlock();return true;
+    }
+    if(command=="nonlinear_prepare_resident"){
+        if(nrhs!=2||nlhs!=1)throw std::runtime_error("info=radia_cuda_ams('nonlinear_prepare_resident',handle)");
+        const auto timing=prepareNonlinearHierarchy(nonlinearContext(args[1]));
+        const char* fields[]={"hierarchy_built","hierarchy_refreshed","hierarchy_seconds"};
+        out[0]=mxCreateStructMatrix(1,1,3,fields);
+        mxSetField(out[0],0,fields[0],mxCreateLogicalScalar(timing.built));
+        mxSetField(out[0],0,fields[1],mxCreateLogicalScalar(timing.refreshed));
+        mxSetField(out[0],0,fields[2],mxCreateDoubleScalar(timing.seconds));
+        return true;
     }
     if(command=="nonlinear_solve_resident"){
         if(nrhs!=5||nlhs!=2)
@@ -112,43 +159,24 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
         finite_vec(view,args[2],c.n,rhs);
         verify_mask<<<(c.n+T-1)/T,T>>>(c.n,c.free,rhs,view.validation.p);
         view.validation.check();
-        const auto start=std::chrono::steady_clock::now();
-        const bool built=!c.deviceAms;
-        const bool refreshed=!built&&c.amsEvaluation!=c.evaluations;
-        if(built){
-            const int vertices=integer(field(c.owner.value,"vertices"));
-            if(vertices<1)throw std::runtime_error("resident AMS needs mesh vertices");
-            const int* edges=view.get<int>(field(c.owner.value,"edge_vertices"),mxINT32_CLASS,size_t(c.n)*2);
-            if(vertices>INT_MAX/3)throw std::runtime_error("resident HCurl vertex count exceeds int32 capacity");
-            const double* coords=view.get<double>(field(c.owner.value,"coordinates"),mxDOUBLE_CLASS,size_t(vertices)*3);
-            verify_edge_vertices<<<(c.n+T-1)/T,T>>>(c.n,vertices,edges,view.validation.p);
-            verify_vec<<<(vertices*3+T-1)/T,T>>>(vertices*3,coords,false,view.validation.p);
-            view.validation.check();
-            auto hierarchy=std::make_unique<radia_fem::Ams>();
-            const radia_fem::CsrView op{c.n,c.n,c.mass.rp,c.mass.ci,c.raw.p};
-            hierarchy->build(c.amsLedger,op,c.mass.nz,c.free,c.raw.p,c.n,vertices,edges,coords,64,0.25);
-            c.deviceAms=std::move(hierarchy);
-        }else if(refreshed){
-            // If refresh fails, discard the partially updated hierarchy.
-            auto hierarchy=std::move(c.deviceAms);
-            hierarchy->refresh_values(c.amsLedger,c.raw.p);
-            c.deviceAms=std::move(hierarchy);
-        }
-        c.amsEvaluation=c.evaluations;
-        ck(cudaDeviceSynchronize());
-        const double hierarchySeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        const auto [built,refreshed,hierarchySeconds]=prepareNonlinearHierarchy(c);
         Output x(c.n);
         auto action=[&](const double* in,double* out){
             radia_fem::multiply<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,c.mass.rp,c.mass.ci,c.tangent.p,in,out);
         };
         auto precondition=[&](const double* in,double* out){c.deviceAms->apply(in,out);};
-        auto report=radia_fem::pcg(c.amsLedger,c.n,action,precondition,rhs,x.data(),tol,maxiter);
-        radia_fem::Dev<double> residual(size_t(c.n),"HCurl true residual");
-        action(x.data(),residual.p);
-        radia_fem::k_axpy<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,-1.,rhs,residual.p);
         radia_fem::Blas blas(c.amsLedger);
-        const double trueRelative=std::sqrt(blas.dot(c.n,residual.p,residual.p))/report.initial_norm;
-        if(!(trueRelative<=tol))throw std::runtime_error("resident HCurl CG failed the true relative residual check");
+        const double rhsNormSquared=blas.dot(c.n,rhs,rhs);
+        radia_fem::SolveReport report;
+        double trueRelative=0;
+        if(rhsNormSquared!=0){
+            report=radia_fem::pcg(c.amsLedger,c.n,action,precondition,rhs,x.data(),tol,maxiter);
+            radia_fem::Dev<double> residual(size_t(c.n),"HCurl true residual");
+            action(x.data(),residual.p);
+            radia_fem::k_axpy<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,-1.,rhs,residual.p);
+            trueRelative=std::sqrt(blas.dot(c.n,residual.p,residual.p))/report.initial_norm;
+            if(!(trueRelative<=tol))throw std::runtime_error("resident HCurl CG failed the true relative residual check");
+        }
         out[0]=mxGPUCreateMxArrayOnGPU(x.a);
         const char* names[]={"iterations","true_relative_residual","hierarchy_built","hierarchy_refreshed","hierarchy_seconds","gpu_peak_owned_bytes"};
         out[1]=mxCreateStructMatrix(1,1,6,names);
@@ -157,12 +185,14 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
         for(int k=0;k<6;++k)mxSetField(out[1],0,names[k],mxCreateDoubleScalar(values[k]));
         return true;
     }
+#ifdef RADIA_AMS_VALIDATION
     if(command=="nonlinear_raw"){
         if(nrhs!=2||nlhs!=1)throw std::runtime_error("values=radia_cuda_ams('nonlinear_raw',handle)");
         auto& c=nonlinearContext(args[1]);if(!c.evaluations)throw std::runtime_error("evaluate tangent before downloading values");
         out[0]=mxCreateDoubleMatrix(c.mass.nz,1,mxREAL);
         ck(cudaMemcpy(mxGetPr(out[0]),c.raw.p,size_t(c.mass.nz)*sizeof(double),cudaMemcpyDeviceToHost));return true;
     }
+#endif
     if(command=="resident_status"){
         if(nrhs!=1||nlhs!=1)throw std::runtime_error("status=radia_cuda_ams('resident_status')");
         const char* fields[]={"ams_contexts","nonlinear_contexts"};out[0]=mxCreateStructMatrix(1,1,2,fields);
