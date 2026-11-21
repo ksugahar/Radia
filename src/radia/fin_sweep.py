@@ -10,13 +10,16 @@ Pipeline
 --------
 1. ``station_outlines_from_step`` — dense (default 2048-point) outline of
    the cross-section at every station in the station's parallel-transport
-   frame, using the existing CAD extractors (``_section_faces_from_solid``
-   for general sweeps, direct z-sectioning for straight prisms).  No PEEC
-   solver is built here.
-2. ``align_station_origins`` — the CAD sampler starts each outline at the
-   boundary point nearest +u; when a fin appears that start point jumps.
-   Each station is cyclically re-registered to its predecessor so lane k
-   follows the same material line along the sweep.
+   frame: direct z-sectioning for straight prisms, otherwise the
+   terminal-to-terminal section march of :mod:`radia.fin_cap_march`
+   (leads, elbows and narrow terminal gaps included).  No PEEC solver is
+   built here.
+2. ``align_station_origins`` — the first station starts at a geometric
+   origin (:func:`radia.fin_cap_march.outline_origin`); each later outline
+   is expressed in its predecessor's frame transported onto its own
+   tangent and cyclically re-registered to the predecessor, so lane k
+   follows the same material line along the sweep whatever the local
+   in-plane frames or wire seams are.
 3. ``build_fin_graph`` — every station is analysed with
    :func:`radia.fin_section.analyze_section`; lanes are graded toward the
    detected fin tip (``lane_grading="auto"``) or uniform; the ring points
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -173,15 +177,32 @@ def align_outline_origin(reference_uv, uv):
 
 
 def align_station_origins(stations):
-    """Return stations re-registered so arc-length origins are continuous."""
+    """Return stations re-registered so lane origins follow material lines.
+
+    Station ``i`` is compared with station ``i-1`` in the predecessor's
+    (u, v) parallel transported onto station ``i``'s tangent, so frames
+    rotated independently per station do not shift the registration.  Each
+    station keeps its own frame; only its sample order is rolled.
+    """
+    from radia.fin_cap_march import transport_vector
+
     if not stations:
         return ()
     out = [stations[0]]
     for st in stations[1:]:
-        uv_aligned, _shift = align_outline_origin(out[-1].uv, st.uv)
+        prev = out[-1]
+        t0 = prev.tangent / np.linalg.norm(prev.tangent)
+        t1 = st.tangent / np.linalg.norm(st.tangent)
+        u_t = transport_vector(prev.u_hat, t0, t1)
+        u_t = u_t - float(u_t @ t1) * t1
+        u_t /= np.linalg.norm(u_t)
+        v_t = np.cross(t1, u_t)
+        q = st.uv[:, :1] * st.u_hat[None, :] + st.uv[:, 1:2] * st.v_hat[None, :]
+        common = np.column_stack([q @ u_t, q @ v_t])
+        _aligned, shift = align_outline_origin(prev.uv, common)
         out.append(StationOutline(st.index, st.centroid, st.u_hat, st.v_hat,
-                                  st.tangent, uv_aligned, st.area,
-                                  st.perimeter))
+                                  st.tangent, np.roll(st.uv, -shift, axis=0),
+                                  st.area, st.perimeter))
     return tuple(out)
 
 
@@ -189,15 +210,18 @@ def align_station_origins(stations):
 # graph construction
 # ----------------------------------------------------------------------
 
-def _lane_fraction_for_station(analysis, n_lanes, lane_grading, tip_lanes):
+def _lane_fraction_for_station(analysis, n_lanes, lane_grading, tip_lanes, lane_phase):
     if lane_grading == "auto" and analysis.fins:
         s = graded_lane_arclengths(analysis, n_lanes, tip_lanes=tip_lanes)
         return s / analysis.perimeter, True
+    if lane_phase == "anchored":  # lane 0 on the geometric outline origin
+        return np.arange(n_lanes) / n_lanes, False
     return (np.arange(n_lanes) + 0.5) / n_lanes, False
 
 
 def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
-                    tip_lanes=8, mesh_stations="all", fin_kwargs=None):
+                    tip_lanes=8, mesh_stations="all", fin_kwargs=None,
+                    lane_phase="centered"):
     """Analyse every station and build the hybrid lane/ring PEEC graph.
 
     Args:
@@ -210,11 +234,16 @@ def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
         mesh_stations: ``"all"`` (every interior station gets a ring) or an
             explicit iterable of interior station indices.
         fin_kwargs: forwarded to :func:`analyze_section`.
+        lane_phase: ``"anchored"`` puts lane 0 on the outline origin (the
+            cap-march route starts outlines at a geometric anchor);
+            ``"centered"`` offsets uniform lanes by half a spacing.
     """
     from radia.peec_fin_topology import build_hybrid_surface_topology
 
     if lane_grading not in {"uniform", "auto"}:
         raise ValueError("lane_grading must be 'uniform' or 'auto'")
+    if lane_phase not in {"centered", "anchored"}:
+        raise ValueError("lane_phase must be 'centered' or 'anchored'")
     stations = tuple(stations)
     if len(stations) < 3:
         raise ValueError("need at least three stations")
@@ -225,7 +254,7 @@ def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
         closed = _as_closed_ccw(st.uv)
         analysis = analyze_section(closed, **fin_kwargs)
         frac, graded = _lane_fraction_for_station(
-            analysis, n_lanes, lane_grading, tip_lanes)
+            analysis, n_lanes, lane_grading, tip_lanes, lane_phase)
         if np.any(np.diff(frac) <= 0):
             raise ValueError(f"station {st.index}: lane fractions not increasing")
         _s, per = outline_arclength(closed)
@@ -379,31 +408,63 @@ def _stations_from_straight_prism(solid, n_stations, n_outline,
     return tuple(stations), "step_straight_prism_sections"
 
 
-def _stations_from_section_planes(solid, n_stations, n_outline,
-                                  cad_units_per_meter):
-    from radia.coil_from_cad import (
-        _sample_face_perimeter_in_pt_frame,
-        _section_faces_from_solid,
-    )
+_CENTERLINE_CACHE = {}
 
-    sections = _section_faces_from_solid(solid, cad_units_per_meter, n_stations)
-    if sections is None:
-        raise ValueError(
-            "STEP spine sectioning failed (>50 % of stations dropped); "
-            "the swept-section route cannot build fin stations for this solid")
-    centroids_m, faces = sections
-    t, u, v = parallel_transport_frames(centroids_m)
+
+def _cap_march_centerline(step_path, solid):
+    """Dense terminal-to-terminal centreline, cached per STEP file content."""
+    import hashlib
+
+    from radia.fin_cap_march import march_centerline
+
+    digest = hashlib.sha256(Path(step_path).read_bytes()).hexdigest()
+    line = _CENTERLINE_CACHE.get(digest)
+    if line is None:
+        line = march_centerline(solid.wrapped)
+        _CENTERLINE_CACHE.clear()
+        _CENTERLINE_CACHE[digest] = line
+    return line
+
+
+def cap_march_station_outlines(outline_xyz, centroids, tangents, areas,
+                               perimeters, cad_units_per_meter=1.0):
+    """Station outlines from sampled section wires (pure numpy, any seam).
+
+    Frames come from :func:`radia.fin_cap_march.section_frames`; every
+    outline is put counter-clockwise in its frame and started at
+    :func:`radia.fin_cap_march.outline_origin` along the transported ``u``.
+    Registration (:func:`align_station_origins`) then carries the first
+    station's origin along the sweep.
+    """
+    from radia.fin_cap_march import outline_in_frame, outline_origin, section_frames
+
+    centroids = np.asarray(centroids, float)
+    tangents = np.asarray(tangents, float)
+    u, v = section_frames(centroids, tangents)
     stations = []
-    for i, face in enumerate(faces):
-        c = face.center()
-        origin = np.array([c.X, c.Y, c.Z])
-        uv = _sample_face_perimeter_in_pt_frame(face, origin, u[i], v[i], int(n_outline))
-        per = float(sum(e.length for e in face.outer_wire().edges())) / cad_units_per_meter
+    for i, xyz in enumerate(outline_xyz):
+        uv = outline_in_frame(xyz, centroids[i], u[i], v[i])
+        uv = np.roll(uv, -outline_origin(uv, np.array([1.0, 0.0])), axis=0)
         stations.append(StationOutline(
-            i, np.asarray(centroids_m[i], dtype=float), u[i], v[i], t[i],
-            uv / cad_units_per_meter,
-            float(face.area) / cad_units_per_meter**2, per))
-    return tuple(stations), "step_section_planes"
+            i, centroids[i] / cad_units_per_meter, u[i], v[i],
+            tangents[i] / np.linalg.norm(tangents[i]),
+            uv / cad_units_per_meter, float(areas[i]) / cad_units_per_meter**2,
+            float(perimeters[i]) / cad_units_per_meter))
+    return tuple(stations)
+
+
+def _stations_from_cap_march(step_path, solid, n_stations, n_outline,
+                             cad_units_per_meter):
+    from radia.fin_cap_march import sample_face_outline, station_sections
+
+    line = _cap_march_centerline(step_path, solid)
+    sections = station_sections(solid.wrapped, line, n_stations)
+    sampled = [sample_face_outline(sec[0], int(n_outline)) for sec in sections]
+    stations = cap_march_station_outlines(
+        [xyz for xyz, _ in sampled], [sec[1] for sec in sections],
+        [sec[2] for sec in sections], [sec[3] for sec in sections],
+        [per for _, per in sampled], cad_units_per_meter)
+    return stations, "step_cap_march"
 
 
 def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
@@ -411,8 +472,9 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
     """Dense per-station outlines of one STEP conductor.
 
     ``route``: ``"auto"`` picks the straight-prism sectioner for a single
-    z-extruded prism and the spine sectioner otherwise; ``"straight_prism"``
-    or ``"section_planes"`` force one.  ``cad_units_per_meter="auto"``
+    z-extruded prism and the terminal-to-terminal section march
+    (:mod:`radia.fin_cap_march`) otherwise; ``"straight_prism"`` or
+    ``"cap_march"`` force one.  ``cad_units_per_meter="auto"``
     defers to :func:`resolve_cad_units_per_meter`, which answers only when
     the STEP settles it.  Returns ``(stations, source_tag)`` with stations
     already origin-aligned.
@@ -420,8 +482,8 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
     from radia._b3d_shim import import_step
     from radia.coil_from_cad import _check_solid_extent_plausible
 
-    if route not in {"auto", "straight_prism", "section_planes"}:
-        raise ValueError("route must be auto, straight_prism or section_planes")
+    if route not in {"auto", "straight_prism", "cap_march"}:
+        raise ValueError("route must be auto, straight_prism or cap_march")
     if n_stations < 3 or n_outline < 64:
         raise ValueError("need n_stations >= 3 and n_outline >= 64")
     shape = import_step(str(step_path))
@@ -438,7 +500,7 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
     cad_units_per_meter = _check_solid_extent_plausible(
         solid, cad_units_per_meter, "station_outlines_from_step")
     if route == "auto":
-        route = "straight_prism" if _is_straight_prism(solid) else "section_planes"
+        route = "straight_prism" if _is_straight_prism(solid) else "cap_march"
     if route == "straight_prism":
         # The lightweight shim's section face exposes OCC edges in explorer
         # order, not guaranteed wire order. The established build123d path
@@ -452,8 +514,8 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
         stations, tag = _stations_from_straight_prism(
             authored_solids[0], n_stations, n_outline, cad_units_per_meter)
     else:
-        stations, tag = _stations_from_section_planes(
-            solid, n_stations, n_outline, cad_units_per_meter)
+        stations, tag = _stations_from_cap_march(
+            step_path, solid, n_stations, n_outline, cad_units_per_meter)
     return align_station_origins(stations), tag
 
 
@@ -498,7 +560,8 @@ DEFAULT_MAX_BRANCHES = 12000
 
 def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
                         route="auto", probe_stations=5, probe_outline=4096,
-                        max_lanes=256, max_branches=DEFAULT_MAX_BRANCHES):
+                        max_lanes=256, max_branches=DEFAULT_MAX_BRANCHES,
+                        n_lanes=None, n_stations=None):
     """Measure one STEP conductor and choose its fin discretisation.
 
     A cheap CAD-only pass sections the solid at ``probe_stations``
@@ -507,6 +570,10 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
     they imply.  Nothing is solved here.  Every returned number carries
     the measurement it came from so a run can be audited without
     re-deriving the rule.
+
+    ``n_lanes`` / ``n_stations`` given by the caller replace the measured
+    values before the outline size and the branch budget are derived, so
+    pinning one of them is how a caller resolves a budget refusal.
 
     Raises when the measured discretisation would exceed ``max_branches``.
     A section that both crowds its current on a small tip radius and
@@ -534,8 +601,9 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
         # fall back on the section size.  Reported, never silent.
         driver = "section size (no fin detected)"
         lane_spacing = float(np.sqrt(np.mean(areas))) / 8.0
-    n_lanes = int(np.clip(8 * math.ceil(perimeter / lane_spacing / 8),
-                          32, max_lanes))
+    measured_lanes = int(np.clip(8 * math.ceil(perimeter / lane_spacing / 8),
+                                 32, max_lanes))
+    n_lanes = measured_lanes if n_lanes is None else int(n_lanes)
     n_outline = int(np.clip(
         2 ** math.ceil(math.log2(OUTLINE_SAMPLES_PER_LANE * n_lanes)),
         1024, 16384))
@@ -552,10 +620,26 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
     area_span = float((areas.max() - areas.min()) / np.mean(areas))
     section_change = max(fin_span, area_span)
 
+    # A curved path also needs stations for its turning, which five probe
+    # sections cannot see; the cap march carries the dense centreline.
+    total_turn_deg = 0.0
+    n_from_turn = 0
+    if tag == "step_cap_march":
+        from radia._b3d_shim import import_step
+        from radia.fin_cap_march import STATION_TURN_DEG, stations_for_turning
+
+        line = _cap_march_centerline(
+            step_path, import_step(str(step_path)).solids()[0])
+        units = math.sqrt(line.cap_a.area / stations[0].area)
+        sweep_length = float(line.arclength[-1]) / units
+        total_turn_deg = line.total_turn_deg
+        n_from_turn = stations_for_turning(line)
+
     section_size = float(np.sqrt(np.mean(areas)))
     n_from_aspect = round(sweep_length / (2.0 * section_size)) + 1
     n_from_change = math.ceil(section_change / STATION_RELATIVE_CHANGE) + 1
-    n_stations = max(5, int(n_from_aspect), int(n_from_change))
+    measured_stations = max(5, int(n_from_aspect), int(n_from_change), int(n_from_turn))
+    n_stations = measured_stations if n_stations is None else int(n_stations)
 
     branches = (2 * n_stations - 3) * n_lanes
     if branches > max_branches:
@@ -589,6 +673,7 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
             "fin_probe_stations": len(tip_radii),
             "probe_stations": len(stations),
             "sweep_length_m": sweep_length,
+            "path_turn_deg": total_turn_deg,
         },
         "rule": {
             "lane_spacing_driver": driver,
@@ -598,15 +683,34 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
             "station_relative_change": STATION_RELATIVE_CHANGE,
             "stations_from_aspect": int(n_from_aspect),
             "stations_from_section_change": int(n_from_change),
+            "station_turn_deg": STATION_TURN_DEG if n_from_turn else None,
+            "stations_from_turning": int(n_from_turn),
             "estimated_branches": int(branches),
-            "clamped_lanes": n_lanes == max_lanes,
+            "clamped_lanes": measured_lanes == max_lanes,
+            "measured_lanes": measured_lanes,
+            "measured_stations": measured_stations,
+            "pinned": sorted(k for k, v in (("n_lanes", n_lanes != measured_lanes),
+                                            ("n_stations", n_stations != measured_stations)) if v),
         },
     }
 
 
+def _require_branch_budget(n_lanes, n_stations, max_branches):
+    branches = (2 * int(n_stations) - 3) * int(n_lanes)
+    if branches > max_branches:
+        raise ValueError(
+            f"the requested discretisation needs {branches} branches "
+            f"({n_lanes} lanes x {n_stations} stations), over the "
+            f"{max_branches} the dense partial-element kernel is budgeted "
+            f"for (~{16 * branches ** 2 / 2**30:.1f} GB).  Lower n_lanes or "
+            f"n_stations, or raise max_branches.")
+    return branches
+
+
 def fin_graph_from_step(step_path, *, n_lanes=None, n_stations=None,
                         n_outline=None, lane_grading=None, tip_lanes=None,
-                        cad_units_per_meter="auto", route="auto"):
+                        cad_units_per_meter="auto", route="auto",
+                        max_branches=DEFAULT_MAX_BRANCHES):
     """One call: STEP -> origin-aligned stations -> fin-graded PEEC graph.
 
     Any discretisation argument left as ``None`` is measured from the
@@ -619,10 +723,13 @@ def fin_graph_from_step(step_path, *, n_lanes=None, n_stations=None,
     auto = None
     if any(v is None for v in requested.values()):
         auto = auto_fin_resolution(
-            step_path, cad_units_per_meter=cad_units_per_meter, route=route)
+            step_path, cad_units_per_meter=cad_units_per_meter, route=route,
+            n_lanes=n_lanes, n_stations=n_stations, max_branches=max_branches)
         for key, value in requested.items():
             if value is None:
                 requested[key] = auto[key]
+    # The same budget holds whether the values were measured or all pinned.
+    _require_branch_budget(requested["n_lanes"], requested["n_stations"], max_branches)
 
     stations, tag = station_outlines_from_step(
         step_path, n_stations=requested["n_stations"],
@@ -630,7 +737,8 @@ def fin_graph_from_step(step_path, *, n_lanes=None, n_stations=None,
         cad_units_per_meter=cad_units_per_meter, route=route)
     result = build_fin_graph(stations, n_lanes=requested["n_lanes"],
                              lane_grading=requested["lane_grading"],
-                             tip_lanes=requested["tip_lanes"])
+                             tip_lanes=requested["tip_lanes"],
+                             lane_phase="anchored" if tag == "step_cap_march" else "centered")
     result.meta["cad_source"] = tag
     result.meta["step_path"] = str(step_path)
     result.meta["auto_resolution"] = auto

@@ -14,6 +14,48 @@ import math
 import numpy as np
 
 
+def coil_true_residuals(peec, z_diag, current, frequency, port_current):
+    """True residuals of the solved branch currents against the MNA equations.
+
+    The kernel solves ``Z i = -A^T V`` with ``A i`` injecting the port
+    current, where ``Z = diag(z_diag) + j w L``.  KCL is measured against the
+    fixed port current.  KVL is measured as the part of ``Z i`` outside the
+    range of ``A^T`` (the best node potentials, from the reduced graph
+    Laplacian), relative to ``||Z i||``.  Raises above the shared limit.
+    """
+    import scipy.sparse as sp
+    from scipy.sparse.linalg import splu
+
+    from radia._residual_gate import RELATIVE_LIMIT
+
+    m = len(current)
+    src = np.asarray(peec.segment_nodes[:, 0], dtype=np.int64)
+    dst = np.asarray(peec.segment_nodes[:, 1], dtype=np.int64)
+    n_nodes = int(peec.n_nodes)
+    a = sp.csr_matrix((np.r_[-np.ones(m), np.ones(m)],
+                       (np.r_[src, dst], np.r_[np.arange(m), np.arange(m)])),
+                      shape=(n_nodes, m))
+    pos, neg = (int(k) for k in peec.ports[0][:2])
+    inj = np.zeros(n_nodes, dtype=complex)
+    inj[pos], inj[neg] = -complex(port_current), complex(port_current)
+    kcl = float(np.linalg.norm(a @ current - inj)) / max(abs(port_current), 1e-300)
+
+    omega = 2 * math.pi * float(frequency)
+    z_i = np.asarray(z_diag) * current + 1j * omega * (np.asarray(peec.L) @ current)
+    keep = np.arange(n_nodes) != neg
+    ak = a[keep]
+    lu = splu((ak @ ak.T).tocsc().astype(complex))
+    v = lu.solve(-(ak @ z_i))
+    kvl = float(np.linalg.norm(z_i + ak.T @ v)) / max(float(np.linalg.norm(z_i)), 1e-300)
+    for name, value in (("KCL", kcl), ("KVL", kvl)):
+        if not math.isfinite(value) or value > RELATIVE_LIMIT:
+            raise RuntimeError(
+                f"fin-surface coil {name} true relative residual {value:.3e} "
+                f"exceeds {RELATIVE_LIMIT:g}")
+    return {"kcl_relative": kcl, "kvl_relative": kvl,
+            "limit": RELATIVE_LIMIT}
+
+
 def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=None,
                       n_stations=None, n_outline=None, lane_grading=None,
                       tip_lanes=None, cad_units_per_meter="auto",
@@ -61,6 +103,8 @@ def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=None,
         frequency, [float(current_A)], Zs=1j * r_branch), dtype=complex)
     if not np.all(np.isfinite(current)):
         raise RuntimeError("fin-surface PEEC returned non-finite branch currents")
+    residuals = coil_true_residuals(peec, (1 + 1j) * r_branch, current,
+                                    frequency, float(current_A))
     i2 = abs(current_A) ** 2
     r_total = float(np.real(np.vdot(current, r_branch * current)) / i2)
     l_external = float(np.real(np.vdot(current, peec.L @ current)) / i2)
@@ -121,6 +165,7 @@ def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=None,
     return {
         "sweep": sweep, "current": current, "widths": widths,
         "R_ohm": r_total, "L_external_H": l_external,
+        "coil_true_residual": residuals,
         "skin_depth_m": delta, "sheet_resistance_ohm": rs,
         "resolution": sweep.meta["resolution"],
         "auto_resolution": sweep.meta["auto_resolution"],

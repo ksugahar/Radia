@@ -16,11 +16,64 @@
 #include "rad_peec_matrices.h"
 #include "rad_peec_axisym.h"
 #include "rad_peec_tet.h"
+#include "rad_peec_prima.h"
 #include "rad_parallel.h"
 
 namespace py = pybind11;
 
 using namespace radia;
+
+
+//=========================================================================
+// PRIMA reduction helpers (rad_peec_prima.h)
+//=========================================================================
+namespace {
+
+using PrimaIArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+
+peec_prima::PortModelInput PrimaInput(std::vector<double> L, std::vector<double> R,
+                                      PrimaIArr branch_nodes, std::size_t n_nodes,
+                                      const std::vector<int>& port_plus,
+                                      const std::vector<int>& port_minus) {
+    if (branch_nodes.ndim() != 2 || branch_nodes.shape(1) != 2)
+        throw std::invalid_argument("branch_nodes must have shape (n_branch, 2)");
+    peec_prima::PortModelInput in;
+    in.n_branch = R.size();
+    if (static_cast<std::size_t>(branch_nodes.shape(0)) != in.n_branch)
+        throw std::invalid_argument("branch_nodes rows must equal the branch count");
+    in.L = std::move(L);
+    in.R = std::move(R);
+    in.branch_nodes.assign(branch_nodes.data(), branch_nodes.data() + branch_nodes.size());
+    in.n_nodes = n_nodes;
+    in.port_plus = port_plus;
+    in.port_minus = port_minus;
+    return in;
+}
+
+py::dict PrimaReduceToDict(const peec_prima::PortModelInput& in, std::size_t order, double s0) {
+    peec_prima::ReducedModel r;
+    {
+        py::gil_scoped_release release;
+        SuspendTaskManager suspended_workers;   // LAPACK owns the threads of the dense solve
+        r = peec_prima::Reduce(in, order, s0);
+    }
+    const auto q = static_cast<py::ssize_t>(r.q), p = static_cast<py::ssize_t>(r.n_ports);
+    const auto nf = static_cast<py::ssize_t>(r.n_full);
+    py::array_t<double> V({nf, q}), E({q, q}), G({q, q}), B({q, p});
+    std::copy(r.V.begin(), r.V.end(), V.mutable_data());
+    std::copy(r.E.begin(), r.E.end(), E.mutable_data());
+    std::copy(r.G.begin(), r.G.end(), G.mutable_data());
+    std::copy(r.B.begin(), r.B.end(), B.mutable_data());
+    py::dict d;
+    d["V"] = V; d["E"] = E; d["G"] = G; d["B"] = B;
+    d["q"] = r.q; d["n_full"] = r.n_full; d["s0"] = s0;
+    d["deflated"] = r.deflated;
+    d["max_solve_residual"] = r.max_solve_residual;
+    d["min_E_eig_over_max"] = r.min_E_eig_over_max;
+    return d;
+}
+
+}  // namespace
 
 //=========================================================================
 // Python Wrapper Classes
@@ -33,11 +86,22 @@ using namespace radia;
  */
 class PyPEECBuilder {
 public:
-    explicit PyPEECBuilder(int volume_order=0) : builder_(std::make_unique<PEECMatrixBuilder>()),
-                      matrices_built_(false) {
+    explicit PyPEECBuilder(int volume_order=0, int oriented_box_order=0)
+        : builder_(std::make_unique<PEECMatrixBuilder>()), matrices_built_(false) {
         if(volume_order) builder_->EnableVolumeKernel(volume_order);
+        if(oriented_box_order) builder_->EnableOrientedBoxKernel(oriented_box_order);
     }
+    void set_last_width_dir(double x, double y, double z) { builder_->SetLastSegmentWidthDir(x, y, z); }
     double inductance_entry(int i,int j) const { return builder_->InductanceEntry(i,j); }
+    py::dict oriented_box_trace(int i, int j) const {
+        const auto t = builder_->TraceOrientedBoxEntry(i, j);
+        py::dict d;
+        d["composite"] = t.composite; d["splits"] = t.splits; d["leaves"] = t.leaves;
+        d["straddling_leaves"] = t.straddling_leaves; d["contained_top"] = t.contained_top;
+        d["contained_descendants"] = t.contained_descendants;
+        d["cross_axes_skipped"] = t.cross_axes_skipped; d["cross_axes_evaluated"] = t.cross_axes_evaluated;
+        return d;
+    }
 
     /**
      * Add a conductor segment
@@ -1086,8 +1150,21 @@ Example:
 
         Constructs L, P, R, M_LS matrices from conductor segments.
         )doc")
-        .def(py::init<int>(), py::arg("volume_order")=0, "Explicit volume order 8..256; zero selects the original filament model")
+        .def(py::init<int, int>(), py::arg("volume_order")=0, py::arg("oriented_box_order")=0,
+             "volume_order: explicit volume order 8..256; zero selects the original filament model.  "
+             "oriented_box_order: opt-in 1..32 makes every entry, self included, the Galerkin integral of "
+             "uniform currents over oriented rectangular boxes (closed-form prism potential, Gauss outer "
+             "quadrature up to this order per axis); zero keeps the original filament model.")
+        .def("set_last_width_dir", &PyPEECBuilder::set_last_width_dir, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Cross-section width axis of the most recently added segment (oriented-box kernel only).")
         .def("inductance_entry", &PyPEECBuilder::inductance_entry, py::arg("i"), py::arg("j"))
+        .def("oriented_box_trace", &PyPEECBuilder::oriented_box_trace, py::arg("i"), py::arg("j"),
+             "Diagnostic branch counts of oriented-box entry (i, j): composite, splits, leaves, "
+             "straddling_leaves, contained_top, contained_descendants, cross_axes_skipped, "
+             "cross_axes_evaluated.  Recomputes this one entry on each call; values are unaffected.  "
+             "Counts are visits, not unique cells: the composite root is tested twice (dispatch and "
+             "traversal) and SAT stops at the first separating axis.  Self and exactly orthogonal "
+             "entries return all-zero counts.  Diagnostic only, not a stable quadrature contract.")
 
         .def("add_segment", &PyPEECBuilder::add_segment,
              py::arg("center"),
@@ -1733,6 +1810,35 @@ Example:
     // ------------------------------------------------------------------
     using DArr = py::array_t<double, py::array::c_style | py::array::forcecast>;
     using IArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+    m.def("prima_reduce",
+          [](DArr L, DArr R, IArr branch_nodes, std::size_t n_nodes, const std::vector<int>& port_plus,
+             const std::vector<int>& port_minus, std::size_t order, double s0) {
+              if (L.ndim() != 2 || L.shape(0) != L.shape(1) || R.ndim() != 1 || R.shape(0) != L.shape(0))
+                  throw std::invalid_argument("L must be (n, n) and R (n,)");
+              return PrimaReduceToDict(
+                  PrimaInput(std::vector<double>(L.data(), L.data() + L.size()),
+                             std::vector<double>(R.data(), R.data() + R.size()),
+                             branch_nodes, n_nodes, port_plus, port_minus), order, s0);
+          },
+          py::arg("L"), py::arg("R"), py::arg("branch_nodes"), py::arg("n_nodes"),
+          py::arg("port_plus"), py::arg("port_minus"), py::arg("order"), py::arg("s0") = 0.0,
+          R"doc(
+          PRIMA reduction of a dense branch port model.
+
+          L, R and the incidence (branch_nodes, n_nodes, ports) are passed
+          together so the energy and the incidence come from one model.
+          Block Arnoldi on (G + s0 E)^-1 E from (G + s0 E)^-1 B and the
+          congruence E_q = V^T E V, G_q = V^T G V, B_q = V^T B of the MNA
+          port model E = [[L,0],[0,0]], G = [[R,A^T],[-A,0]], B = [0;P]
+          (port current in, port voltage out).  Ground is port_minus[0].
+          Raises on malformed input, L not positive definite, an order
+          below the independent port start-block rank, a failed Cholesky
+          factor, a shifted solve with true residual above 1e-6, or
+          negative reduced magnetic energy.
+
+          Returns dict: V, E, G, B, q, n_full, s0, deflated,
+          max_solve_residual, min_E_eig_over_max.
+          )doc");
     m.def("tet_potential",
           [](DArr x, DArr verts) {
               if (x.size() != 3 || verts.ndim() != 2 || verts.shape(0) != 4 || verts.shape(1) != 3)

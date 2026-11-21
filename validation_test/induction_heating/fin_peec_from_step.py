@@ -56,7 +56,7 @@ def main():
     parser.add_argument("--lane-grading", choices=("uniform", "auto"),
                         default=None, help="default: measured")
     parser.add_argument("--route", choices=("auto", "straight_prism",
-                                            "section_planes"), default="auto")
+                                            "cap_march"), default="auto")
     parser.add_argument("--frequency", type=float, default=150_000.0)
     parser.add_argument("--sigma", type=float, default=5.8e7)
     parser.add_argument("--cad-units-per-meter", default="auto",
