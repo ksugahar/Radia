@@ -29,18 +29,32 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 # Perceptually ordered colour stops (viridis subset) for |J| in [0, J_max].
-_STOPS = [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
-          (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
-          (1.0, (0.993, 0.906, 0.144))]
+# The colormap table arrives in the request (``colormap_rgb``: 256 RGB rows from
+# radia_mcp/blender/colormaps.json); the worker carries no palette of its own.
+_COLORMAP_NAMES = ("viridis", "turbo", "inferno")
+_LUT = None
+_VALID_STYLES = ("standard", "studio")
+_VALID_CAMERAS = ("isometric", "top", "front", "side")
 
 
-def _cmap(t):
+def _validate_spec_options(spec):
+    style = spec.get("style", "standard")
+    if style not in _VALID_STYLES:
+        raise ValueError(f"Unknown style {style!r}; expected one of {_VALID_STYLES}")
+    camera = spec.get("camera", "isometric")
+    if camera not in _VALID_CAMERAS:
+        raise ValueError(f"Unknown camera {camera!r}; expected one of {_VALID_CAMERAS}")
+    colormap = spec.get("colormap", "viridis")
+    if colormap not in _COLORMAP_NAMES:
+        raise ValueError(f"Unknown colormap {colormap!r}; expected one of {_COLORMAP_NAMES}")
+    return style, camera, colormap
+
+
+def _cmap(t, cmap_name="viridis"):
+    if _LUT is None or _LUT[0] != cmap_name:
+        raise RuntimeError(f"no colormap table loaded for {cmap_name!r}")
     t = min(max(t, 0.0), 1.0)
-    for (a, ca), (b, cb) in zip(_STOPS, _STOPS[1:]):
-        if t <= b:
-            w = (t - a) / (b - a)
-            return tuple(ca[i] + w * (cb[i] - ca[i]) for i in range(3))
-    return _STOPS[-1][1]
+    return tuple(_LUT[1][min(int(t * 256), 255)])
 
 
 def _material(name, color, alpha=1.0, emission=0.0, metallic=0.0, rough=0.5, attr=None):
@@ -127,7 +141,7 @@ def _constant(ob):
                 k.interpolation = "CONSTANT"
 
 
-def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
+def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp, cmap_name="viridis"):
     """Flat arrows in the display plane y = y_disp, coloured by |field|.
 
     Each arrow is 7 vertices (base-left .. tip .. base-right) carrying the
@@ -155,7 +169,7 @@ def _arrows(name, ids, pts, vecs, jmax, length, width, y_disp):
         i0 = len(verts)
         verts.extend(tuple(x) for x in q)
         faces.extend([(i0, i0 + 1, i0 + 5, i0 + 6), (i0 + 2, i0 + 3, i0 + 4)])
-        c = _cmap(mag / jmax)
+        c = _cmap(mag / jmax, cmap_name)
         cols.extend([c] * 7)
         gid.extend([int(sid)] * 7)
     me.from_pydata(verts, [], faces)
@@ -182,9 +196,61 @@ def _data_points(name, ids, pts, vecs, key):
     return ob
 
 
+def _apply_studio_look(sc, lo, hi, span):
+    """Add studio floor, soft fill light, and subtle glare without altering solver data."""
+    floor_mat = _material("Studio_Floor", (0.025, 0.028, 0.036), metallic=0.05, rough=0.75)
+    cx, cz = 0.5 * (lo[0] + hi[0]), 0.5 * (lo[2] + hi[2])
+    fy = lo[1] - 0.002 * span
+    _box("Studio_Floor", (cx - 2.5 * span, fy - 0.005 * span, cz - 2.5 * span),
+         (cx + 2.5 * span, fy, cz + 2.5 * span), floor_mat)
+
+    fill_data = bpy.data.lights.new("Fill", "AREA")
+    fill_data.energy = 80.0 * (span ** 2)
+    fill_data.size = 1.6 * span
+    fill = bpy.data.objects.new("Fill", fill_data)
+    fill.location = (cx - 1.2 * span, hi[1] + 1.1 * span, cz + 0.8 * span)
+    fill.rotation_euler = _look_at((cx - fill.location[0], hi[1] - fill.location[1], cz - fill.location[2]))
+    sc.collection.objects.link(fill)
+
+    if hasattr(sc, "compositing_node_group"):
+        ng = bpy.data.node_groups.new("StudioCompositor", "CompositorNodeTree")
+        sc.compositing_node_group = ng
+        rl = ng.nodes.new("CompositorNodeRLayers")
+        glare = ng.nodes.new("CompositorNodeGlare")
+        glare.inputs["Type"].default_value = "Fog Glow"
+        glare.inputs["Quality"].default_value = "Medium"
+        glare.inputs["Threshold"].default_value = 1.2
+        glare.inputs["Strength"].default_value = 0.3
+        glare.inputs["Size"].default_value = 0.5
+        out = ng.nodes.new("NodeGroupOutput")
+        ng.interface.new_socket(name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        ng.links.new(rl.outputs["Image"], glare.inputs["Image"])
+        ng.links.new(glare.outputs["Image"], out.inputs["Image"])
+    else:
+        sc.use_nodes = True
+        tree = sc.node_tree
+        rl = tree.nodes.get("Render Layers")
+        comp = tree.nodes.get("Composite")
+        if rl and comp:
+            glare = tree.nodes.new("CompositorNodeGlare")
+            glare.glare_type = "FOG_GLOW"
+            glare.quality = "MEDIUM"
+            glare.threshold = 1.2
+            glare.mix = -0.7
+            glare.size = 6
+            tree.links.new(rl.outputs["Image"], glare.inputs["Image"])
+            tree.links.new(glare.outputs["Image"], comp.inputs["Image"])
+
+
 def write(req):
     pay = json.load(open(req["payload_path"], encoding="utf-8"))
     spec = req["spec"]
+    style, camera_preset, cmap_name = _validate_spec_options(spec)
+    global _LUT
+    rgb = req.get("colormap_rgb")
+    if not (isinstance(rgb, list) and len(rgb) == 256 and all(len(c) == 3 for c in rgb)):
+        raise ValueError("request colormap_rgb must be 256 RGB rows")
+    _LUT = (cmap_name, [tuple(float(x) for x in c) for c in rgb])
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
     n = len(pay["time_s"])
@@ -264,7 +330,13 @@ def write(req):
     sc.collection.objects.link(cam)
     sc.camera = cam
     c = Vector(((lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2))
-    cam.location = c + Vector((0.0, 0.95 * span, 1.55 * span))
+    cam_offsets = {
+        "isometric": Vector((0.0, 0.95 * span, 1.55 * span)),
+        "top": Vector((0.0, 1.75 * span, 0.05 * span)),
+        "front": Vector((0.0, 0.25 * span, 1.75 * span)),
+        "side": Vector((1.75 * span, 0.45 * span, 0.0)),
+    }
+    cam.location = c + cam_offsets[camera_preset]
     cam.rotation_euler = _look_at(c - cam.location)
     cam.data.lens = 40
     cam.data.clip_start = span * 1e-3
@@ -281,7 +353,7 @@ def write(req):
     for k in range(n):
         J = pay["vectors"][k]
         g = _arrows(f"{sym}_glyph_{k:04d}", ids, pts, J, jmax, float(spec["arrow_length_m"]),
-                    float(spec["arrow_width_m"]), y_disp)
+                    float(spec["arrow_width_m"]), y_disp, cmap_name=cmap_name)
         g.data.materials.append(glyph_mat)
         dpt = _data_points(f"{sym}_data_{k:04d}", ids, pts, J, key)
         lab = hud(_text(f"Time_{k:04d}", f"t = {pay['time_s'][k]:.3f} s   (solver step {k} of {n - 1})",
@@ -304,7 +376,7 @@ def write(req):
     for i in range(32):
         t0, t1 = i / 32, (i + 1) / 32
         seg = _box(f"Legend_{i:02d}", (0.0, 0.0, 0.0), (0.025 * hw, (t1 - t0) * 0.9 * hw * aspect, 1e-6 * hw),
-                   _material(f"Legend_{i:02d}", _cmap(0.5 * (t0 + t1)), emission=1.0))
+                   _material(f"Legend_{i:02d}", _cmap(0.5 * (t0 + t1), cmap_name), emission=1.0))
         hud(seg, 0.78, -0.45 + 0.9 * t0)
     hud(_text("Legend_min", "0", (0, 0, 0), 0.032 * hw, text_mat), 0.82, -0.46)
     hud(_text("Legend_max", f"{jmax:.3g}", (0, 0, 0), 0.032 * hw, text_mat), 0.82, 0.42)
@@ -322,6 +394,12 @@ def write(req):
     sc.view_settings.view_transform = "AgX"
 
 
+    if style == "studio":
+        _apply_studio_look(sc, lo, hi, span)
+
+    sc["radia_style"] = style
+    sc["radia_camera"] = camera_preset
+    sc["radia_colormap"] = cmap_name
     sc["radia_schema"] = pay["schema"]
     sc["radia_source"] = json.dumps(pay["provenance"])
     sc["physical_time_s"] = pay["time_s"]
@@ -420,6 +498,8 @@ def inspect(req):
     out = {"blender": bpy.app.version_string, "frame_start": sc.frame_start,
            "frame_end": sc.frame_end, "fps": sc.render.fps,
            "schema": sc.get("radia_schema"), "camera_motion": sc.get("camera_motion"),
+           "style": sc.get("radia_style"), "camera": sc.get("radia_camera"),
+           "colormap": sc.get("radia_colormap"),
            "field_key": sc.get("field_key"), "field_unit": sc.get("field_unit"),
            "field_scale": list(sc.get("field_scale", [])),
            "magnet_present": "Magnet" in bpy.data.objects,
