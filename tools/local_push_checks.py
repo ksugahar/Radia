@@ -8,7 +8,9 @@ from pathlib import Path
 import subprocess
 import sys
 
-COMPACT_TESTS = ['tests/policy', 'tests/test_ci_execution_policy.py', 'tests/test_sparsesolv_ci_contract.py']
+# Pre-push stays impact-scoped and fast; the policy pytest suite runs in the
+# shared precheck and the policy-lint CI lane, not in every push.
+LOCAL_COMMANDS = [['tools/policy_lint.py', '--quiet']]
 
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -89,14 +91,13 @@ def plan(root, base, candidate):
             findings.append({'path': path, 'line': line, 'reason': 'positive assertion requires policy-banned runtime literal; review required'})
         if path.startswith('packages/radia-mcp/tests/'):
             findings.extend(dict(path=path, **item) for item in minimal_import_findings(text))
-    return {'candidate': candidate, 'base': base, 'changed_paths': paths, 'lanes': lanes, 'local_tests': COMPACT_TESTS, 'mcp_selection': mcp, 'static_findings': findings, 'import_audit_scope': 'changed MCP tests, direct/all-scope imports only; no transitive proof', 'heavy_execution': False}
+    return {'candidate': candidate, 'base': base, 'changed_paths': paths, 'lanes': lanes, 'local_commands': LOCAL_COMMANDS, 'mcp_selection': mcp, 'static_findings': findings, 'import_audit_scope': 'changed MCP tests, direct/all-scope imports only; no transitive proof', 'heavy_execution': False}
 
 def run(root, base, candidate):
     result = plan(root, base, candidate)
     print(json.dumps(result, ensure_ascii=True), flush=True)
     if result['static_findings']: return 1
-    commands = [[sys.executable, 'tools/policy_lint.py', '--quiet'], [sys.executable, '-m', 'pytest', *COMPACT_TESTS, '-q', '-o', 'addopts=', '-p', 'no:cacheprovider']]
-    for command in commands:
+    for command in ([sys.executable, *args] for args in LOCAL_COMMANDS):
         completed = subprocess.run(command, cwd=root, timeout=180)
         if completed.returncode: return completed.returncode
     if git(root, 'rev-parse', 'HEAD') != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):

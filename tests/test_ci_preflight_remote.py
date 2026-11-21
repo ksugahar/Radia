@@ -190,3 +190,18 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
 def test_preflight_refuses_other_roles_without_transport():
     with pytest.raises(RuntimeError, match="build target"):
         _load_module().resolve_ssh_destination("validation", "")
+
+
+def test_forwarded_env_lines_pass_locations_only():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "ci_preflight_remote_fwd", Path(__file__).parents[1] / "tools/ci_preflight_remote.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    lines = module.forwarded_env_lines({
+        "RADIA_PUBLIC_NAME_RULES_FILE": "D:/rules/o'k.json",
+        "RADIA_OPTUNA_SOURCE": "  ",
+        "UNRELATED": "x",
+    })
+    assert lines == ["$env:RADIA_PUBLIC_NAME_RULES_FILE = 'D:/rules/o''k.json'"], lines
