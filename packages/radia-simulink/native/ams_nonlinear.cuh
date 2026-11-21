@@ -38,10 +38,19 @@ __global__ void project_csr(int n,const int* rp,const int* ci,const int* free,co
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
     for(int p=rp[i];p<rp[i+1];++p)values[p]=(free[i]&&free[ci[p]])?raw[p]:0;
 }
+__global__ void verify_edge_vertices(int edges,int vertices,const int* endpoints,int* invalid){
+    const int edge=blockIdx.x*blockDim.x+threadIdx.x;
+    if(edge>=edges)return;
+    const int a=endpoints[2*edge],b=endpoints[2*edge+1];
+    if(a<0||b<0||a>=vertices||b>=vertices||a==b)atomicExch(invalid,1);
+}
 struct NonlinearState {
     OwnedArray owner;Input input;CSR mass;int n,e,device;
     const int *dofs,*slots,*free;const double *curls,*volume,*rhs;double nu0,gamma;
     Buffer residual,raw,tangent,massx,energy;Blas blas;unsigned evaluations=0;
+    radia_fem::Ledger amsLedger;
+    std::unique_ptr<radia_fem::Ams> deviceAms;
+    unsigned amsEvaluation=0;
     explicit NonlinearState(const mxArray* source):owner(source),mass(device_node(field(owner.value,"mass"),input),input.validation),
         n(mass.n),e(integer(field(owner.value,"elements"))),residual(n),raw(mass.nz),tangent(mass.nz),massx(n),energy(e){
         if(word(field(owner.value,"schema"))!="radia.ams-nonlinear-tet6.v1"||mass.m!=n||e<1||e>INT_MAX/36)
@@ -89,6 +98,64 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
     if(command=="nonlinear_release"){
         if(nrhs!=2||nlhs!=0)throw std::runtime_error("radia_cuda_ams('nonlinear_release',handle)");
         nonlinearContext(args[1]);nonlinearContexts.erase(handleValue(args[1],NONLINEAR_TAG));mexUnlock();return true;
+    }
+    if(command=="nonlinear_solve_resident"){
+        if(nrhs!=5||nlhs!=2)
+            throw std::runtime_error("[x,info]=radia_cuda_ams('nonlinear_solve_resident',handle,rhs,tol,maxiter)");
+        auto& c=nonlinearContext(args[1]);
+        const double tol=scalar(args[3]);
+        const int maxiter=integer(args[4]);
+        if(!c.evaluations||!(tol>0&&tol<=1e-6)||maxiter<1||maxiter==INT_MAX)
+            throw std::runtime_error("evaluate the tangent before solving with valid CG controls");
+        Input view;
+        const double* rhs;
+        finite_vec(view,args[2],c.n,rhs);
+        verify_mask<<<(c.n+T-1)/T,T>>>(c.n,c.free,rhs,view.validation.p);
+        view.validation.check();
+        const auto start=std::chrono::steady_clock::now();
+        const bool built=!c.deviceAms;
+        const bool refreshed=!built&&c.amsEvaluation!=c.evaluations;
+        if(built){
+            const int vertices=integer(field(c.owner.value,"vertices"));
+            if(vertices<1)throw std::runtime_error("resident AMS needs mesh vertices");
+            const int* edges=view.get<int>(field(c.owner.value,"edge_vertices"),mxINT32_CLASS,size_t(c.n)*2);
+            if(vertices>INT_MAX/3)throw std::runtime_error("resident HCurl vertex count exceeds int32 capacity");
+            const double* coords=view.get<double>(field(c.owner.value,"coordinates"),mxDOUBLE_CLASS,size_t(vertices)*3);
+            verify_edge_vertices<<<(c.n+T-1)/T,T>>>(c.n,vertices,edges,view.validation.p);
+            verify_vec<<<(vertices*3+T-1)/T,T>>>(vertices*3,coords,false,view.validation.p);
+            view.validation.check();
+            auto hierarchy=std::make_unique<radia_fem::Ams>();
+            const radia_fem::CsrView op{c.n,c.n,c.mass.rp,c.mass.ci,c.raw.p};
+            hierarchy->build(c.amsLedger,op,c.mass.nz,c.free,c.raw.p,c.n,vertices,edges,coords,64,0.25);
+            c.deviceAms=std::move(hierarchy);
+        }else if(refreshed){
+            // If refresh fails, discard the partially updated hierarchy.
+            auto hierarchy=std::move(c.deviceAms);
+            hierarchy->refresh_values(c.amsLedger,c.raw.p);
+            c.deviceAms=std::move(hierarchy);
+        }
+        c.amsEvaluation=c.evaluations;
+        ck(cudaDeviceSynchronize());
+        const double hierarchySeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        Output x(c.n);
+        auto action=[&](const double* in,double* out){
+            radia_fem::multiply<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,c.mass.rp,c.mass.ci,c.tangent.p,in,out);
+        };
+        auto precondition=[&](const double* in,double* out){c.deviceAms->apply(in,out);};
+        auto report=radia_fem::pcg(c.amsLedger,c.n,action,precondition,rhs,x.data(),tol,maxiter);
+        radia_fem::Dev<double> residual(size_t(c.n),"HCurl true residual");
+        action(x.data(),residual.p);
+        radia_fem::k_axpy<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,-1.,rhs,residual.p);
+        radia_fem::Blas blas(c.amsLedger);
+        const double trueRelative=std::sqrt(blas.dot(c.n,residual.p,residual.p))/report.initial_norm;
+        if(!(trueRelative<=tol))throw std::runtime_error("resident HCurl CG failed the true relative residual check");
+        out[0]=mxGPUCreateMxArrayOnGPU(x.a);
+        const char* names[]={"iterations","true_relative_residual","hierarchy_built","hierarchy_refreshed","hierarchy_seconds","gpu_peak_owned_bytes"};
+        out[1]=mxCreateStructMatrix(1,1,6,names);
+        const double values[]={double(report.iterations),trueRelative,double(built),double(refreshed),
+                               hierarchySeconds,double(radia_fem::device_memory().peak)};
+        for(int k=0;k<6;++k)mxSetField(out[1],0,names[k],mxCreateDoubleScalar(values[k]));
+        return true;
     }
     if(command=="nonlinear_raw"){
         if(nrhs!=2||nlhs!=1)throw std::runtime_error("values=radia_cuda_ams('nonlinear_raw',handle)");

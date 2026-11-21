@@ -108,6 +108,20 @@ public:
         }
         return reports;
     }
+    // The owning Newton state keeps the same fine CSR pattern for its lifetime.
+    void refresh_values(Ledger& ledger, const double* values) {
+        const char* name = "AMS refresh";
+        k_constrain_values<<<blocks_of(n_), TH>>>(n_, a_.rowptr.p, a_.columns.p, free_, values, a_.values.p);
+        k_l1_norms<<<blocks_of(n_), TH>>>(n_, a_.rowptr.p, a_.values.p, l1_.p);
+        ck_kernels(name);
+        for (auto& space : spaces_) {
+            Csr ap = multiply_csr(ledger, a_.view(), space.p.view(), name);
+            Csr galerkin = multiply_csr(ledger, space.pt.view(), ap.view(), name);
+            k_fix_zero_rows<<<blocks_of(galerkin.n), TH>>>(galerkin.n, galerkin.rowptr.p, galerkin.columns.p, galerkin.values.p);
+            ck_kernels(name);
+            space.amg.refresh(ledger, std::move(galerkin), name);
+        }
+    }
     // The 01210 cycle of the CPU route: fine smoothing, gradient correction, the
     // three nodal corrections from one residual, gradient correction, smoothing.
     void apply(const double* rhs, double* output) {

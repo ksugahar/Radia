@@ -43,6 +43,13 @@ def main(args):
              Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     sources.append(root/'packages/radia-simulink/native/mex_error_boundary.hpp')
     sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
+    sources.extend(root / path for path in (
+        'src/core/gpu/fem/fem_amg.cuh',
+        'src/core/gpu/fem/fem_ams.cuh',
+        'src/core/gpu/fem/fem_api.hpp',
+        'src/core/gpu/fem/fem_device.cuh',
+        'src/core/gpu/fem/fem_krylov.cuh',
+    ))
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     obj=out/'snapshot.obj';binary=out/'_radia_ams_snapshot.pyd'
     python_lib=Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib'

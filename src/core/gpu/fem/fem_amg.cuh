@@ -287,6 +287,25 @@ public:
         }
         return report;
     }
+    // Preserve coarsening and interpolation; rebuild only the operator products.
+    void refresh(Ledger& ledger, Csr fine, const char* name) {
+        if (levels_.empty() || fine.n != levels_.front().a.n || fine.m != levels_.front().a.m)
+            throw std::runtime_error("device AMG: refresh dimensions differ");
+        Csr current = std::move(fine);
+        for (size_t k = 0; k < levels_.size(); ++k) {
+            AmgLevel& level = levels_[k];
+            level.a = std::move(current);
+            k_l1_norms<<<blocks_of(level.a.n), TH>>>(level.a.n, level.a.rowptr.p, level.a.values.p, level.l1.p);
+            ck_kernels(name);
+            if (k + 1 < levels_.size()) {
+                Csr ap = multiply_csr(ledger, level.a.view(), level.p.view(), name);
+                current = multiply_csr(ledger, level.r.view(), ap.view(), name);
+            }
+        }
+        AmgLevel& last = levels_.back();
+        if (last.a.n <= options_.dense_max)
+            factor_dense(ledger, last, name);
+    }
     int rows() const { return levels_.front().a.n; }
     double* input() { return levels_.front().b.p; }
     double* output() { return levels_.front().x.p; }

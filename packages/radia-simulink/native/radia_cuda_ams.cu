@@ -20,6 +20,8 @@
 #include <cstdint>
 #include "ams_fem_host.hpp"
 #include "../../../src/core/gpu/snapshot.hpp"
+#include "../../../src/core/gpu/fem/fem_ams.cuh"
+#include "../../../src/core/gpu/fem/fem_krylov.cuh"
 void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 #include "../../../src/core/gpu/ams_core.cuh"

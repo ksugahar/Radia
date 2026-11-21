@@ -91,6 +91,12 @@ def main(args):
             solution_relative=relative(native['solution'],cpu),true_relative_residual=true_residual(native['solution']))
         if not np.array_equal(model['free'],free.astype(np.int32)):raise RuntimeError('Native free DOF mask differs')
         record.update(dofs=fes.ndof,elements=mesh.ne,csr_nonzeros=A.nnz,metrics=metrics,gpu=native['report'])
+        solver = native['report']['solver']
+        residency = solver['assembly']
+        if residency['matrix_h2d_bytes'] != 0 or residency['matrix_d2h_bytes'] != 0:
+            raise RuntimeError('HCurl Newton transferred CSR data')
+        if solver['hierarchy_builds'] != 1 or (args.gamma > 0 and solver['hierarchy_refreshes'] < 1):
+            raise RuntimeError('Expected one resident AMS build and a refresh for nonlinear Newton')
         if max(metrics[k] for k in ('matrix_relative','mass_relative','gradient_relative','rhs_relative'))>1e-12:raise RuntimeError('Independent FE assembly parity failed')
         if metrics['solution_relative']>1e-7 or metrics['true_relative_residual']>(1e-9 if args.gamma else 1e-10):raise RuntimeError('Independent AMS solution/residual parity failed')
         # Compare vector curls with a volume weighted RMS, never field magnitudes.

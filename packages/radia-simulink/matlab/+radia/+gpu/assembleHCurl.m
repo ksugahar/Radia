@@ -13,8 +13,9 @@ arguments
     options.MassCoefficient (1,1) double {mustBeFinite,mustBePositive} = 1
     options.CurrentDensity (1,3) double {mustBeFinite} = [1 0 0]
     options.Gamma (1,1) double {mustBeFinite,mustBeNonnegative} = 0
+    options.ResidentSetup (1,1) logical = false
 end
 assert(isfile(volPath),'radia:cuda:vol','Checked .vol path does not exist');
 [model,fem,info]=radia_cuda_ams('assemble_hcurl',char(volPath),cellstr(boundaryLabels), ...
-    char(options.Dirichlet),options.Reluctivity,options.MassCoefficient,options.CurrentDensity,options.Gamma);
+    char(options.Dirichlet),options.Reluctivity,options.MassCoefficient,options.CurrentDensity,options.Gamma,options.ResidentSetup);
 end

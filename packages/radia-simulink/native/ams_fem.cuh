@@ -35,9 +35,28 @@ __global__ void femReduce(int n,const int* rp,const int* slots,const int* incide
         for(int b=0;b<6;++b){int k=e*36+a*6+b,s=slots[k];mass[s]+=lm[k];A[s]+=lm[k]+nu*lc[k];}}
     rhs[i]=free[i]?r:0;
 }
+__global__ void femPatternKeys(int triples,int bits,const int* dofs,uint64_t* keys){
+    const int k=blockIdx.x*blockDim.x+threadIdx.x;
+    if(k>=triples)return;
+    const int cell=k/36,a=k%36/6,b=k%6;
+    keys[k]=(uint64_t(dofs[6*cell+a])<<bits)|uint64_t(dofs[6*cell+b]);
+}
+__global__ void femPatternSlots(int nnz,const int* starts,const int* order,int* slots){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i<nnz)for(int k=starts[i];k<starts[i+1];++k)slots[order[k]]=i;
+}
+FEMArray femDeviceIndices(const int* source,size_t count){
+    mwSize n=count;
+    auto* out=mxGPUCreateGPUArray(1,&n,mxINT32_CLASS,mxREAL,MX_GPU_DO_NOT_INITIALIZE);
+    try{
+        ck(cudaMemcpy(mxGPUGetData(out),source,count*sizeof(int),cudaMemcpyDeviceToDevice));
+        auto result=femOwn(mxGPUCreateMxArrayOnGPU(out));mxGPUDestroyGPUArray(out);return result;
+    }catch(...){mxGPUDestroyGPUArray(out);throw;}
+}
 bool femCommand(const std::string& command,int nl,mxArray** out,int nr,const mxArray** in){
     if(command!="assemble_hcurl")return false;
-    if(nr!=8||nl!=3)throw std::invalid_argument("[model,fem,info]=radia_cuda_ams('assemble_hcurl',vol,labels,dirichlet,nu,mass,J,gamma)");
+    const bool resident=nr==9&&mxIsLogicalScalarTrue(in[8]);
+    if((nr!=8&&!(nr==9&&mxIsLogicalScalar(in[8])))||nl!=3)throw std::invalid_argument("[model,fem,info]=radia_cuda_ams('assemble_hcurl',vol,labels,dirichlet,nu,mass,J,gamma)");
     auto totalStart=std::chrono::steady_clock::now();
     if(!mxIsCell(in[2]))throw std::invalid_argument("Boundary label contract must be a cell array of char rows");
     std::vector<std::string> labels;for(size_t i=0;i<mxGetNumberOfElements(in[2]);++i){auto* label=mxGetCell(in[2],i);if(!label)throw std::invalid_argument("Empty boundary label cell");labels.push_back(word(label));}
@@ -62,13 +81,31 @@ bool femCommand(const std::string& command,int nl,mxArray** out,int nr,const mxA
     auto start=std::chrono::steady_clock::now();
     auto shape=femVector(s.shape,mxDOUBLE_CLASS,true),weights=femVector(s.weights,mxDOUBLE_CLASS,true);
     auto curls=femVector(s.curls,mxDOUBLE_CLASS,true),volume=femVector(s.volume,mxDOUBLE_CLASS,true);
-    auto dofs=femVector(s.dofs,mxINT32_CLASS,true),slots=femVector(s.slots,mxINT32_CLASS,true);
+    auto dofs=femVector(s.dofs,mxINT32_CLASS,true);
     auto irp=femVector(s.incident_rp,mxINT32_CLASS,true),incident=femVector(s.incident,mxINT32_CLASS,true);
-    auto free=femVector(s.free,mxINT32_CLASS,true),rp=femVector(s.rp,mxINT32_CLASS,true);
-    // ci is created only for the returned mass CSR below.
-    Buffer lm(size_t(s.e)*36),lc(size_t(s.e)*36),lr(size_t(s.e)*6),mass(nz),A(nz),rhs(s.n);
+    auto free=femVector(s.free,mxINT32_CLASS,true);
     Input view;auto dp=[&](const FEMArray& a,size_t n){return view.get<double>(a.get(),mxDOUBLE_CLASS,n);};
     auto ip=[&](const FEMArray& a,size_t n){return view.get<int>(a.get(),mxINT32_CLASS,n);};
+    FEMArray slots(nullptr,mxDestroyArray),rp(nullptr,mxDestroyArray),ci(nullptr,mxDestroyArray);
+    if(resident){
+        radia_fem::Ledger ledger;
+        const int triples=s.e*36;
+        radia_fem::Dev<uint64_t> keys(triples,"HCurl device pattern");
+        femPatternKeys<<<(triples+T-1)/T,T>>>(triples,radia_fem::bits_for(s.n),ip(dofs,s.dofs.size()),keys.p);
+        auto plan=radia_fem::make_plan(ledger,keys,triples,s.n,s.n,"HCurl device pattern");
+        if(size_t(plan.nnz)!=nz)throw std::runtime_error("HCurl device pattern count differs from topology");
+        radia_fem::Dev<int> scatter(triples,"HCurl device scatter");
+        femPatternSlots<<<(plan.nnz+T-1)/T,T>>>(plan.nnz,plan.starts.p,plan.order.p,scatter.p);
+        slots=femDeviceIndices(scatter.p,triples);
+        rp=femDeviceIndices(plan.rowptr.p,size_t(s.n)+1);
+        ci=femDeviceIndices(plan.columns.p,nz);
+        ownedBytes+=radia_fem::device_memory().peak;
+    }else{
+        slots=femVector(s.slots,mxINT32_CLASS,true);
+        rp=femVector(s.rp,mxINT32_CLASS,true);
+        ci=femVector(s.ci,mxINT32_CLASS,true);
+    }
+    Buffer lm(size_t(s.e)*36),lc(size_t(s.e)*36),lr(size_t(s.e)*6),mass(nz),A(nz),rhs(s.n);
     femLocal<<<(s.e*36+T-1)/T,T>>>(s.e,s.nq,dp(shape,s.shape.size()),dp(weights,s.weights.size()),dp(curls,s.curls.size()),dp(volume,s.volume.size()),m,j[0],j[1],j[2],lm.p,lc.p,lr.p);
     femReduce<<<(s.n+T-1)/T,T>>>(s.n,ip(rp,s.rp.size()),ip(slots,s.slots.size()),ip(irp,s.incident_rp.size()),ip(incident,s.incident.size()),ip(free,s.free.size()),lm.p,lc.p,lr.p,nu,mass.p,A.p,rhs.p);
     verify_vec<<<(int(nz)+T-1)/T,T>>>(int(nz),mass.p,false,view.validation.p);
@@ -76,28 +113,54 @@ bool femCommand(const std::string& command,int nl,mxArray** out,int nr,const mxA
     verify_vec<<<(s.n+T-1)/T,T>>>(s.n,rhs.p,false,view.validation.p);view.validation.check();ck(cudaGetLastError());ck(cudaDeviceSynchronize());
     double deviceSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
     auto model=femStruct({"schema","A","G","coordinates","free","cycle"});
+    const int nv=int(s.coordinates.size()/3);
+    if(!resident){
     femPut(model.get(),"schema",femOwn(mxCreateString("radia.ams-native-input.v1")));
     auto hostA=femOwn(mxCreateDoubleMatrix(nz,1,mxREAL));ck(cudaMemcpy(mxGetPr(hostA.get()),A.p,nz*sizeof(double),cudaMemcpyDeviceToHost));
     femPut(model.get(),"A",femCSR(s.n,s.n,s.rp,s.ci,std::move(hostA),false));
-    int nv=int(s.coordinates.size()/3);
     femPut(model.get(),"G",femCSR(s.n,nv,s.grp,s.gci,femVector(s.gvalues,mxDOUBLE_CLASS,false),false));
     auto xyz=femOwn(mxCreateDoubleMatrix(nv,3,mxREAL));std::copy(s.coordinates.begin(),s.coordinates.end(),mxGetPr(xyz.get()));
     femPut(model.get(),"coordinates",std::move(xyz));femPut(model.get(),"free",femVector(s.free,mxINT32_CLASS,false));
     femPut(model.get(),"cycle",femOwn(mxCreateDoubleScalar(1)));
-    auto fem=femStruct({"schema","mass","elements","dofs","slots","curls","volume","free","rhs","nu0","gamma"});
+    }
+    auto fem=femStruct({"schema","mass","elements","dofs","slots","curls","volume","free","rhs","nu0","gamma","vertices","edge_vertices","coordinates"});
+    if(resident){
+        std::vector<int> edge_vertices(size_t(s.n)*2);
+        std::vector<double> coordinates(size_t(nv)*3);
+        for(int i=0;i<s.n;++i){
+            const int k=s.grp[i];
+            if(s.grp[i+1]-k!=2||std::abs(s.gvalues[k])!=1.||s.gvalues[k+1]!=-s.gvalues[k])
+                throw std::runtime_error("resident HCurl AMS requires one oriented edge per gradient row");
+            const int first=s.gvalues[k]<0?k:k+1;
+            edge_vertices[2*i]=s.gci[first];edge_vertices[2*i+1]=s.gci[first==k?k+1:k];
+        }
+        for(int i=0;i<nv;++i)for(int c=0;c<3;++c)coordinates[3*i+c]=s.coordinates[i+size_t(nv)*c];
+        femPut(fem.get(),"vertices",femOwn(mxCreateDoubleScalar(nv)));
+        femPut(fem.get(),"edge_vertices",femVector(edge_vertices,mxINT32_CLASS,true));
+        femPut(fem.get(),"coordinates",femVector(coordinates,mxDOUBLE_CLASS,true));
+    }
     femPut(fem.get(),"schema",femOwn(mxCreateString("radia.ams-nonlinear-tet6.v1")));
-    femPut(fem.get(),"mass",femCSR(s.n,s.n,s.rp,s.ci,femOwn(gpuCopy(mass.p,nz)),true));
+    auto massCsr=femStruct({"rows","cols","rowptr","columns","values"});
+    femPut(massCsr.get(),"rows",femOwn(mxCreateDoubleScalar(s.n)));
+    femPut(massCsr.get(),"cols",femOwn(mxCreateDoubleScalar(s.n)));
+    femPut(massCsr.get(),"rowptr",std::move(rp));femPut(massCsr.get(),"columns",std::move(ci));
+    femPut(massCsr.get(),"values",femOwn(gpuCopy(mass.p,nz)));
+    femPut(fem.get(),"mass",std::move(massCsr));
     femPut(fem.get(),"elements",femOwn(mxCreateDoubleScalar(s.e)));femPut(fem.get(),"dofs",std::move(dofs));femPut(fem.get(),"slots",std::move(slots));
     femPut(fem.get(),"curls",std::move(curls));femPut(fem.get(),"volume",std::move(volume));femPut(fem.get(),"free",std::move(free));
     femPut(fem.get(),"rhs",femOwn(gpuCopy(rhs.p,s.n)));femPut(fem.get(),"nu0",femOwn(mxCreateDoubleScalar(nu)));femPut(fem.get(),"gamma",femOwn(mxCreateDoubleScalar(gamma)));
-    auto info=femStruct({"schema","host_basis_seconds","upload_assembly_seconds","total_seconds","gpu_peak_owned_bytes_upper_bound","upload_bytes","download_bytes","taskmanager_started","python_adapter_used","assembly"});
+    auto info=femStruct({"schema","host_basis_seconds","upload_assembly_seconds","total_seconds","gpu_peak_owned_bytes_upper_bound","upload_bytes","download_bytes","matrix_h2d_bytes","matrix_d2h_bytes","taskmanager_started","python_adapter_used","assembly"});
     femPut(info.get(),"schema",femOwn(mxCreateString("radia.hcurl-cuda-assembly.v1")));
     auto number=[&](const char* k,double x){femPut(info.get(),k,femOwn(mxCreateDoubleScalar(x)));};
     number("host_basis_seconds",hostSeconds);number("upload_assembly_seconds",deviceSeconds);
     number("total_seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-totalStart).count());
     // Includes output copies concurrently with all setup buffers, and validation flag.
     number("gpu_peak_owned_bytes_upper_bound",ownedBytes);
-    number("upload_bytes",mappedBytes+topologyBytes+(s.rp.size()+s.ci.size())*sizeof(int));number("download_bytes",nz*sizeof(double));
+    const size_t patternBytes=(s.slots.size()+s.rp.size()+s.ci.size())*sizeof(int);
+    const size_t edgeBytes=size_t(s.n)*2*sizeof(int)+s.coordinates.size()*sizeof(double);
+    number("upload_bytes",mappedBytes+topologyBytes-(resident?patternBytes:0)+(resident?edgeBytes:0));number("download_bytes",resident?0:nz*sizeof(double));
+    number("matrix_h2d_bytes",resident?0:(s.rp.size()+s.ci.size())*sizeof(int));
+    number("matrix_d2h_bytes",resident?0:nz*sizeof(double));
     femPut(info.get(),"taskmanager_started",femOwn(mxCreateLogicalScalar(false)));femPut(info.get(),"python_adapter_used",femOwn(mxCreateLogicalScalar(false)));
     femPut(info.get(),"assembly",femOwn(mxCreateString("NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction")));
     out[0]=model.release();out[1]=fem.release();out[2]=info.release();return true;
