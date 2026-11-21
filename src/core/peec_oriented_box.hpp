@@ -16,6 +16,13 @@
 #define RADIA_PEEC_HD
 #endif
 
+// The closed-form prism potential cancels eight corner terms; value-unsafe
+// floating-point optimisation (MSVC /fp:fast) collapses it to zero, so the
+// kernel is always compiled with precise semantics.
+#if defined(_MSC_VER) && !defined(__CUDACC__)
+#pragma float_control(precise, on, push)
+#endif
+
 namespace radia_peec_box {
 
 constexpr int kMaxOrder = 32;
@@ -79,21 +86,21 @@ RADIA_PEEC_HD inline double Dot(const V3& a, const V3& b) { return a.x * b.x + a
 
 // ln(u + r) without cancellation when u < 0 (q = r^2 - u^2 > 0).
 RADIA_PEEC_HD inline double LogUPlusR(double u, double r, double q) {
-    return u >= 0.0 ? log(u + r) : log(q / (r - u));
+    return u >= 0.0 ? std::log(u + r) : std::log(q / (r - u));
 }
 
 // Corner primitive F of int dV / |r| over a rectangular prism.
 RADIA_PEEC_HD inline double PrismCorner(double x, double y, double z) {
     const double x2 = x * x, y2 = y * y, z2 = z * z;
-    const double r = sqrt(x2 + y2 + z2);
+    const double r = std::sqrt(x2 + y2 + z2);
     if (r == 0.0) return 0.0;
     double t = 0.0;
     if (x != 0.0 && y != 0.0) t += x * y * LogUPlusR(z, r, x2 + y2);
     if (y != 0.0 && z != 0.0) t += y * z * LogUPlusR(x, r, y2 + z2);
     if (z != 0.0 && x != 0.0) t += z * x * LogUPlusR(y, r, z2 + x2);
-    if (x != 0.0) t -= 0.5 * x2 * atan(y * z / (x * r));
-    if (y != 0.0) t -= 0.5 * y2 * atan(z * x / (y * r));
-    if (z != 0.0) t -= 0.5 * z2 * atan(x * y / (z * r));
+    if (x != 0.0) t -= 0.5 * x2 * std::atan(y * z / (x * r));
+    if (y != 0.0) t -= 0.5 * y2 * std::atan(z * x / (y * r));
+    if (z != 0.0) t -= 0.5 * z2 * std::atan(x * y / (z * r));
     return t;
 }
 
@@ -118,10 +125,10 @@ RADIA_PEEC_HD inline Frame FrameFromBar(const V3& c, const V3& d, const V3* widt
     if (width_dir) {
         ew = *width_dir;
     } else {
-        const V3 ref = fabs(d.x) < 0.9 ? V3{1, 0, 0} : V3{0, 1, 0};
+        const V3 ref = std::fabs(d.x) < 0.9 ? V3{1, 0, 0} : V3{0, 1, 0};
         const double x = ref.y * d.z - ref.z * d.y, y = ref.z * d.x - ref.x * d.z,
                      z = ref.x * d.y - ref.y * d.x;
-        const double n = sqrt(x * x + y * y + z * z);
+        const double n = std::sqrt(x * x + y * y + z * z);
         ew = V3{x / n, y / n, z / n};
     }
     Frame f;
@@ -158,23 +165,23 @@ RADIA_PEEC_HD inline bool Straddles(const Frame& fo, const Cell& cell, const Fra
                    cw.y + a * fo.e[0].y + b * fo.e[1].y + c * fo.e[2].y - fn.c.y,
                    cw.z + a * fo.e[0].z + b * fo.e[1].z + c * fo.e[2].z - fn.c.z};
         for (int k = 0; k < 3; ++k)
-            if (fabs(Dot(p, fn.e[k])) > fn.half[k]) contained = false;
+            if (std::fabs(Dot(p, fn.e[k])) > fn.half[k]) contained = false;
     }
     if (contained) {
         if (trace) ++(cell.depth == 0 ? trace->contained_top : trace->contained_descendants);
         return false;
     }
     const double tol =
-        1e-12 * (sqrt(cell.h[0] * cell.h[0] + cell.h[1] * cell.h[1] + cell.h[2] * cell.h[2]) +
-                 sqrt(fn.half[0] * fn.half[0] + fn.half[1] * fn.half[1] + fn.half[2] * fn.half[2]));
+        1e-12 * (std::sqrt(cell.h[0] * cell.h[0] + cell.h[1] * cell.h[1] + cell.h[2] * cell.h[2]) +
+                 std::sqrt(fn.half[0] * fn.half[0] + fn.half[1] * fn.half[1] + fn.half[2] * fn.half[2]));
     const V3 d{fn.c.x - cw.x, fn.c.y - cw.y, fn.c.z - cw.z};
     auto separated = [&](const V3& ax) {
         double ra = 0.0, rb = 0.0;
         for (int k = 0; k < 3; ++k) {
-            ra += cell.h[k] * fabs(Dot(fo.e[k], ax));
-            rb += fn.half[k] * fabs(Dot(fn.e[k], ax));
+            ra += cell.h[k] * std::fabs(Dot(fo.e[k], ax));
+            rb += fn.half[k] * std::fabs(Dot(fn.e[k], ax));
         }
-        return fabs(Dot(d, ax)) >= ra + rb - tol;
+        return std::fabs(Dot(d, ax)) >= ra + rb - tol;
     };
     for (int k = 0; k < 3; ++k)
         if (separated(fo.e[k]) || separated(fn.e[k])) return false;
@@ -183,7 +190,7 @@ RADIA_PEEC_HD inline bool Straddles(const Frame& fo, const Cell& cell, const Fra
             const V3& x = fo.e[a];
             const V3& y = fn.e[b];
             const V3 z{x.y * y.z - x.z * y.y, x.z * y.x - x.x * y.z, x.x * y.y - x.y * y.x};
-            const double nz = sqrt(Dot(z, z));
+            const double nz = std::sqrt(Dot(z, z));
             if (!(nz > 1e-12)) {
                 if (trace) ++trace->cross_axes_skipped;
                 continue;
@@ -210,12 +217,12 @@ RADIA_PEEC_HD inline double SurfaceDistance(const Frame& fn, const V3& p) {
     const V3 r{p.x - fn.c.x, p.y - fn.c.y, p.z - fn.c.z};
     double out = 0.0, in = 0.0;
     for (int k = 0; k < 3; ++k) {
-        const double q = fabs(Dot(r, fn.e[k]));
-        const double o = fmax(q - fn.half[k], 0.0);
+        const double q = std::fabs(Dot(r, fn.e[k]));
+        const double o = std::fmax(q - fn.half[k], 0.0);
         out += o * o;
-        in = k == 0 ? fn.half[k] - q : fmin(in, fn.half[k] - q);
+        in = k == 0 ? fn.half[k] - q : std::fmin(in, fn.half[k] - q);
     }
-    return out > 0.0 ? sqrt(out) : fmax(in, 0.0);
+    return out > 0.0 ? std::sqrt(out) : std::fmax(in, 0.0);
 }
 
 // Canonical orientation: the 1/r integral depends on the box as a point set,
@@ -290,7 +297,7 @@ RADIA_PEEC_HD inline double Inductance(Frame fi, Frame fj, bool self, const Rule
             const bool cross = Straddles(fo, cell, fn, trace);
             if (cross && cell.depth < kSplitDepth) {
                 if (trace) ++trace->splits;
-                const double hm = fmax(cell.h[0], fmax(cell.h[1], cell.h[2]));
+                const double hm = std::fmax(cell.h[0], std::fmax(cell.h[1], cell.h[2]));
                 int axes[3], na = 0;
                 for (int k = 0; k < 3; ++k)
                     if (cell.h[k] >= 0.5 * hm) axes[na++] = k;
@@ -315,7 +322,7 @@ RADIA_PEEC_HD inline double Inductance(Frame fi, Frame fj, bool self, const Rule
                 const double ds = SurfaceDistance(fn, CellCentre(fo, cell.u));
                 if (ds > 0.0)
                     for (int k = 0; k < 3; ++k) {
-                        const double m = fmin(static_cast<double>(leaf), ceil(alpha * 2.0 * cell.h[k] / ds));
+                        const double m = std::fmin(static_cast<double>(leaf), std::ceil(alpha * 2.0 * cell.h[k] / ds));
                         n[k] = m > 1.0 ? static_cast<int>(m) : 1;
                     }
             }
@@ -325,12 +332,12 @@ RADIA_PEEC_HD inline double Inductance(Frame fi, Frame fj, bool self, const Rule
         return mu0_4pi * dot * integral / (area_o * area_n);
     }
     const double dx = fo.c.x - fn.c.x, dy = fo.c.y - fn.c.y, dz = fo.c.z - fn.c.z;
-    const double dist = sqrt(dx * dx + dy * dy + dz * dz);
+    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
     int n[3];
     for (int k = 0; k < 3; ++k) {
         const double ext = 2.0 * fo.half[k];
         double m = static_cast<double>(q.order);
-        if (!self && dist > 0.0) m = fmin(m, ceil(0.5 * q.order * ext / dist));
+        if (!self && dist > 0.0) m = std::fmin(m, std::ceil(0.5 * q.order * ext / dist));
         n[k] = m > 1.0 ? static_cast<int>(m) : 1;
     }
     const double mean = CellIntegral(fo, fn, top, n, q) / 8.0;
@@ -338,3 +345,7 @@ RADIA_PEEC_HD inline double Inductance(Frame fi, Frame fj, bool self, const Rule
 }
 
 }  // namespace radia_peec_box
+
+#if defined(_MSC_VER) && !defined(__CUDACC__)
+#pragma float_control(pop)
+#endif
