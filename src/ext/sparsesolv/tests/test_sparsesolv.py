@@ -2358,3 +2358,84 @@ class TestICPreconditionerRegression:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def _dense(matrix):
+    rows, columns, values = map(np.asarray, matrix.COO())
+    result = np.zeros((matrix.height, matrix.width))
+    np.add.at(result, (rows, columns), values)
+    return result
+
+
+def _sparse(matrix):
+    from radia.ngsolve_sparse import real_sparse_matrix_type
+
+    rows, columns = np.nonzero(matrix)
+    return real_sparse_matrix_type().CreateFromCOO(
+        rows.tolist(), columns.tolist(), matrix[rows, columns].tolist(), *matrix.shape
+    )
+
+
+def _reference_cycle(a, g, coords, b, beta_zero):
+    """Independently apply the default AMS cycle with dense pseudoinverses."""
+    diag = np.abs(a.diagonal())
+    l1 = (diag + np.abs(a).sum(axis=1)) / 2
+    l1 = np.where(l1 <= 4 * diag / 3, diag, l1)
+    pi = [(g @ coords[:, i])[:, None] * np.abs(g) / 2 for i in range(3)]
+
+    def correction(p, residual):
+        return p @ np.linalg.pinv(p.T @ a @ p, rcond=1e-12, hermitian=True) @ (p.T @ residual)
+
+    x = b / l1
+    if not beta_zero:
+        x += correction(g, b - a @ x)
+    residual = b - a @ x
+    x += sum(correction(p, residual) for p in pi)
+    if not beta_zero:
+        x += correction(g, b - a @ x)
+    return x + (b - a @ x) / l1
+
+
+@pytest.mark.parametrize("ny", [1, 2])
+@pytest.mark.parametrize("external_order", [False, True])
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_hex_ams_handles_auxiliary_nullspace(ny, external_order, beta_zero):
+    """Guards: rank-deficient directional Galerkin blocks in HEX edge spaces."""
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=ny, nz=1)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    mass = 0 if beta_zero else 1
+    form += (ng.InnerProduct(ng.curl(u), ng.curl(v)) + mass * ng.InnerProduct(u, v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.array([tuple(vertex.point) for vertex in mesh.vertices])
+    a, g = _dense(form.mat), _dense(grad)
+    system, gradient = form.mat, grad
+    if external_order:
+        order = np.random.default_rng(52).permutation(a.shape[0])
+        direction = np.where(np.arange(a.shape[0]) % 2, 1, -1)
+        a = direction[:, None] * a[np.ix_(order, order)] * direction
+        g = direction[:, None] * g[order]
+        system, gradient = _sparse(a), _sparse(g)
+
+    b = a @ np.random.default_rng(96).normal(size=a.shape[0])
+    rhs = system.CreateRowVector()
+    rhs.FV().NumPy()[:] = b
+    pre = HypreBasedAMSPreconditioner(
+        system, gradient, None, *(coords[:, i].tolist() for i in range(3)), beta_zero=beta_zero
+    )
+    first = rhs.CreateVector()
+    solution = rhs.CreateVector()
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(system, pre=pre, tol=1e-12, maxiter=100)
+        solution.data = cg * rhs
+    actual = first.FV().NumPy()
+    assert np.isfinite(actual).all()
+    np.testing.assert_allclose(actual, _reference_cycle(a, g, coords, b, beta_zero),
+                               rtol=1e-9, atol=1e-11)
+    assert np.linalg.norm(a @ solution.FV().NumPy() - b) / np.linalg.norm(b) < 1e-10

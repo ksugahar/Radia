@@ -18,6 +18,8 @@
 #include <comp.hpp>
 #include "compact_parallel.hpp"
 #include <sparsecholesky.hpp>
+#include <ng_lapack.hpp>
+#include <limits>
 #include <vector>
 #include <cmath>
 #include <random>
@@ -611,6 +613,9 @@ public:
     /// most 10 * min_coarse rows once a step keeps more than stall_ratio of its
     /// rows, and solve a coarsest level of at most dense_max rows with a dense
     /// inverse (one parallel product for both right-hand sides of DualMult).
+    // Auxiliary Galerkin operators can have a kernel even with nonzero diagonals.
+    void SetSmallCoarsePseudoinverse() { small_coarse_pseudoinverse_ = true; }
+
     void SetLeanCoarse(double stall_ratio, int dense_max) {
         stall_ratio_ = stall_ratio;
         dense_coarse_max_ = dense_max;
@@ -704,6 +709,7 @@ private:
     mutable std::vector<double> dual_level_s_;
     double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
     bool constant_nullspace_ = false;
+    bool small_coarse_pseudoinverse_ = false;
     int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
     int refresh_count_ = 0;
     bool native_galerkin_ = false;
@@ -1182,6 +1188,10 @@ private:
     /// at most dense_coarse_max_ rows, sparse Cholesky otherwise.
     void FactorCoarsest() {
         auto& c = levels_.back();
+        if (small_coarse_pseudoinverse_ && c.ndof <= 64) {
+            FactorSmallSemidefiniteCoarsest(c);
+            return;
+        }
         if (dense_coarse_max_ > 0 && c.ndof <= dense_coarse_max_) {
             // Empty rows (a coarse node without stiffness) solve to zero, as the
             // sparse factorization treats them; the rest is inverted densely. A
@@ -1252,6 +1262,39 @@ private:
             }
         }
         SparseCoarsest(c);
+    }
+
+    void FactorSmallSemidefiniteCoarsest(Level& c) {
+        const int n = c.ndof;
+        Matrix<double> a(n, n), vectors(n, n);
+        Vector<double> eigenvalues(n);
+        a = 0.0;
+        for (int i = 0; i < n; ++i) {
+            auto cols = c.A->GetRowIndices(i);
+            auto vals = c.A->GetRowValues(i);
+            for (int j = 0; j < cols.Size(); ++j)
+                a(i, cols[j]) = vals[j];
+        }
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < i; ++j)
+                a(i, j) = a(j, i) = 0.5 * (a(i, j) + a(j, i));
+        ngbla::LapackEigenValuesSymmetric(a, eigenvalues, vectors);
+
+        const double scale = L2Norm(eigenvalues);
+        const double tol = 64 * n * std::numeric_limits<double>::epsilon() * scale;
+        if (!std::isfinite(scale) || (n > 0 && eigenvalues(0) < -tol))
+            throw std::runtime_error("AMG auxiliary coarse matrix is not positive semidefinite");
+
+        // LAPACK's column eigenvectors are stored as rows in this row-major matrix.
+        c.dense_inv.assign(size_t(n) * n, 0.0);
+        for (int k = 0; k < n; ++k) {
+            if (eigenvalues(k) <= tol) continue;
+            for (int i = 0; i < n; ++i)
+                for (int j = 0; j < n; ++j)
+                    c.dense_inv[size_t(i) * n + j] +=
+                        vectors(k, i) * vectors(k, j) / eigenvalues(k);
+        }
+        c.inv = nullptr;
     }
 
     /// Sparse Cholesky of the coarsest level (kept as the factorization: storing

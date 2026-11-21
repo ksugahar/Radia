@@ -675,6 +675,7 @@ private:
                 // (the refresh path's numeric pass then runs on those patterns).
                 for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
                     if (amg) {
+                        amg->SetSmallCoarsePseudoinverse();
                         amg->SetNativeGalerkin(reuse_hierarchy_);
                         amg->SetMixedPrecision(mixed_precision_);
                         if (lean_coarse_) amg->SetLeanCoarse(0.8, 1024);
