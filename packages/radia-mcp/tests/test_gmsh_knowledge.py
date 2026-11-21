@@ -65,6 +65,8 @@ def test_gmsh_update_qualification_routes_to_canonical_sources():
         "gmsh_validate_msh", "gmsh_validate_geo",
         "not a native readback", "Headless", "GUI",
         "a Windows artifact does not qualify Linux",
+        "runtime_provenance", "wheel_sha256", "msh42_roundtrip_probe",
+        "it is not runtime provenance", "with no worker it reports none",
     ):
         assert contract in text, contract
     # The canonical guide owns URLs and hashes; this topic must not copy them.

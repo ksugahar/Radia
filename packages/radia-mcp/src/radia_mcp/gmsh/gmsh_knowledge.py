@@ -1930,11 +1930,19 @@ Update sequence (no tool installs packages or picks another runtime):
    exactly as the canonical guide states; then `radia-mcp[gmsh]` from PyPI.
 2. Retain the selected wheel; verify its SHA256 against the report; record
    provenance with `radia_mcp.gmsh.runtime --wheel ... --record ...`.
-3. Identify the target MCP runtime before claiming anything: interpreter path,
-   imported `radia_mcp` module file and distribution (editable source or
-   wheel), and the Gmsh version/wheel SHA256 reported by `gmsh_status`,
-   `gmsh_detect` and `gmsh_session_status`. Report each MCP client's live
-   source separately; reconnect it after repointing.
+3. Identify the target MCP runtime before claiming anything, from the call
+   that actually carries each identity:
+   - MCP server identity: `gmsh_status` -> `runtime_provenance` (interpreter,
+     `module_file`, distribution, editable or wheel) and `optional_deps.gmsh`.
+     It does not run native Gmsh.
+   - Native Gmsh identity: the `runtime` object of a native result, e.g.
+     `gmsh_compare_fields` on a known matching MSH 4.2 fixture pair, carrying
+     `distribution_version`, `wheel_sha256`, `gmsh_version`, `msh_version`
+     and `msh42_roundtrip_probe`; or `gmsh_session_status` -> `runtime` of a
+     worker that is already running (with no worker it reports none).
+   - `gmsh_detect` reports Gmsh version, build features and graphics only;
+     it is not runtime provenance.
+   Report each MCP client's live source separately; reconnect after repointing.
 4. Re-qualify the new build: per-writer load/field roundtrips, fixtures
    generated in the opposite direction through the API, strict MSH 4.2
    negatives, and the measured probe/plugin/rendering semantics. Record
