@@ -181,9 +181,10 @@ def _tree_gauged_free_dofs(mesh, fesA, fes, ground_bnds, contract_bnd,
                 visited.add(v)
                 tree.append(d)
                 queue.append(v)
-    if len(visited) != len(adj):
+    unreachable = adj.keys() - visited
+    if unreachable:
         raise RuntimeError(
-            f"tree gauge: {len(adj) - len(visited)} vertex nodes are not "
+            f"tree gauge: {len(unreachable)} vertex nodes are not "
             f"connected to {ground_bnds!r}; their gradients would stay singular")
     free = BitArray(fes.FreeDofs())
     for d in tree:  # A is the first component, so its DOF numbers are global
