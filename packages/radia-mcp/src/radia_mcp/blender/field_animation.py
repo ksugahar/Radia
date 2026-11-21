@@ -29,6 +29,7 @@ DEFAULT_SPEC = {
     "title": None,
     "arrow_length_m": None, "arrow_width_m": None, "glyph_stride": 1,
     "preview_steps": None, "video": True, "field_scale": "global",
+    "style": "standard", "camera": "isometric", "colormap": "viridis",
 }
 
 
@@ -37,23 +38,34 @@ DEFAULT_SPEC = {
 FIELDS = {"J_A_per_m2": ("J", "A/m^2", "conductor", "Conductor"),
           "B_T": ("B", "T", "body", "Body")}
 
-# Independent copy of the worker's colour stops (viridis subset): the rendered
-# glyph colours are checked against this, not against data read from the file.
-_STOPS = [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
-          (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
-          (1.0, (0.993, 0.906, 0.144))]
+# Independent copy of the worker's colour stops: the rendered glyph colours are
+# checked against these, not against data read from the file.
+COLORMAPS = {
+    "viridis": [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
+                (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
+                (1.0, (0.993, 0.906, 0.144))],
+    "turbo": [(0.0, (0.190, 0.072, 0.232)), (0.25, (0.158, 0.506, 0.976)),
+              (0.5, (0.388, 0.902, 0.369)), (0.75, (0.980, 0.682, 0.149)),
+              (1.0, (0.478, 0.016, 0.012))],
+    "inferno": [(0.0, (0.001, 0.000, 0.014)), (0.25, (0.258, 0.039, 0.406)),
+                (0.5, (0.578, 0.148, 0.404)), (0.75, (0.865, 0.317, 0.226)),
+                (1.0, (0.988, 0.998, 0.645))],
+}
+STYLES = ("standard", "studio")
+CAMERAS = ("isometric", "top", "front", "side")
 
 
-def expected_color(t):
+def expected_color(t, colormap="viridis"):
+    stops = COLORMAPS[colormap]
     t = min(max(float(t), 0.0), 1.0)
-    for (a, ca), (b, cb) in zip(_STOPS, _STOPS[1:]):
+    for (a, ca), (b, cb) in zip(stops, stops[1:]):
         if t <= b:
             w = (t - a) / (b - a)
             return np.array([ca[i] + w * (cb[i] - ca[i]) for i in range(3)])
-    return np.array(_STOPS[-1][1])
+    return np.array(stops[-1][1])
 
 
-def check_glyphs(pay, glyphs, k, arrow_length, offset):
+def check_glyphs(pay, glyphs, k, arrow_length, offset, colormap="viridis"):
     """Rendered arrows vs the dataset: one per nonzero in-plane J, at the sample
     (plus the declared vertical display offset), pointing along signed J,
     length and colour linear in |J| on the fixed scale."""
@@ -81,7 +93,7 @@ def check_glyphs(pay, glyphs, k, arrow_length, offset):
         worst["direction"] = max(worst["direction"], float(1.0 - np.dot((tip - base) / max(L, 1e-300), d)))
         # float32 vertices: judge length against the full-scale arrow, not a tiny one
         worst["length_rel"] = max(worst["length_rel"], abs(L - Lw) / arrow_length)
-        worst["color"] = max(worst["color"], float(np.abs(np.asarray(g["color"]) - expected_color(mag / jmax)).max()))
+        worst["color"] = max(worst["color"], float(np.abs(np.asarray(g["color"]) - expected_color(mag / jmax, colormap)).max()))
     tol = {"position_m": 1e-8, "direction": 1e-6, "length_rel": 1e-5, "color": 1e-5}
     for key, lim in tol.items():
         if worst[key] > lim:
@@ -218,6 +230,9 @@ def field_animation(dataset_path, out_dir, spec=None, timeout_s=3600):
     if unknown:
         raise ValueError(f"unknown spec keys: {sorted(unknown)}")
     s.update(spec or {})
+    for opt, allowed in (("style", STYLES), ("camera", CAMERAS), ("colormap", tuple(COLORMAPS))):
+        if s[opt] not in allowed:
+            raise ValueError(f"unknown {opt} {s[opt]!r}; expected one of {allowed}")
     py, worker, blender_version = resolve_worker()
     pay = load_dataset(dataset_path)
     J = np.asarray(pay["vectors"])
@@ -291,6 +306,10 @@ def compare(pay, back, spec, steps):
         fails.append(f"schema {back['schema']!r}")
     if back["camera_animated"] or back["camera_motion"] != "static":
         fails.append("camera is animated")
+    for opt in ("style", "camera", "colormap"):
+        want = spec.get(opt, DEFAULT_SPEC[opt])
+        if back.get(opt) != want:
+            fails.append(f"{opt} in file {back.get(opt)!r} != requested {want!r}")
     if back.get("interpolations") != ["CONSTANT"]:
         fails.append(f"keyframe interpolation {back.get('interpolations')} is not CONSTANT only")
     sym, key = pay["field"]["symbol"], pay["field"]["key"]
@@ -343,7 +362,8 @@ def compare(pay, back, spec, steps):
         else:
             if abs(alen - spec["arrow_length_m"]) > 1e-12:
                 fails.append(f"arrow length in file {alen} != requested {spec['arrow_length_m']}")
-            gfails, gworst = check_glyphs(pay, b.get("glyphs", []), k, alen, offset)
+            gfails, gworst = check_glyphs(pay, b.get("glyphs", []), k, alen, offset,
+                                          spec.get("colormap", DEFAULT_SPEC["colormap"]))
             fails.extend(gfails)
         per_step[str(k)] = {"rendered_arrows": gworst, "field_max_rel_err": jerr, "pose_center_max_err_m": perr,
                        "pose_rotation_max_err": rerr, "visible_glyphs": vis,

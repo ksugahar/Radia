@@ -113,7 +113,7 @@ def _glyphs(pay, spec, k):
         c = np.array([p[0], p[1] + OFFSET, p[2]])
         L = spec["arrow_length_m"] * min(mag / jmax, 1.0)
         out.append({"id": int(sid), "base": list(c - 0.5 * L * d), "tip": list(c + 0.5 * L * d),
-                    "color": list(fa.expected_color(mag / jmax))})
+                    "color": list(fa.expected_color(mag / jmax, spec.get("colormap", "viridis")))})
     return out
 
 
@@ -130,6 +130,8 @@ def _back(pay, spec):
     return {"frame_start": 1, "frame_end": n, "fps": spec["fps"], "schema": fa.SCHEMA,
             "arrow_length_m": spec["arrow_length_m"], "glyph_display_offset_m": OFFSET,
             "camera_animated": False, "camera_motion": "static", "n_glyph_objects": n,
+            "style": spec.get("style", "standard"), "camera": spec.get("camera", "isometric"),
+            "colormap": spec.get("colormap", "viridis"),
             "interpolations": ["CONSTANT"],
             "bbox_m": {"Conductor": [pay["region"]["box_min_m"], pay["region"]["box_max_m"]]},
             "field_key": "J_A_per_m2", "field_unit": "A/m^2", "magnet_present": True,
@@ -149,6 +151,8 @@ def test_compare_accepts_faithful_and_rejects_altered_readback(tmp_path):
             (lambda b: b.__setitem__("field_unit", "T"), "field"),
             (lambda b: b["steps"]["3"]["center_m"].__setitem__(0, 1.0), "pose"),
             (lambda b: b.__setitem__("camera_animated", True), "camera"),
+            (lambda b: b.__setitem__("colormap", "turbo"), "colormap"),
+            (lambda b: b.__setitem__("camera", "top"), "camera in file"),
             (lambda b: b["steps"]["1"].__setitem__("visible", ["J_glyph_0002"]), "visible"),
             (lambda b: b.__setitem__("fps", 24), "fps"),
             # Visible glyphs alone altered; hidden J data untouched.
@@ -212,3 +216,56 @@ def test_live_rendered_glyph_edit_is_rejected(tmp_path):
     assert v["steps"]["2"]["field_max_rel_err"] <= 1e-6
     assert not v["passed"] and any("step 2: rendered arrow direction" in f for f in v["failures"]), v["failures"]
     assert not any(f.startswith("step 0") for f in v["failures"]), v["failures"]
+
+
+def test_worker_rejects_unknown_spec_options_and_distinguishes_colormaps(monkeypatch):
+    import importlib.util
+    import sys
+    import types
+
+    for mod in ("bpy", "bmesh", "mathutils"):
+        if mod not in sys.modules:
+            stub = types.ModuleType(mod)
+            if mod == "mathutils":
+                stub.Matrix = object
+                stub.Vector = object
+            monkeypatch.setitem(sys.modules, mod, stub)
+
+    worker_path = Path(__file__).resolve().parents[1] / "tools" / "blender" / "field_animation_worker.py"
+    spec = importlib.util.spec_from_file_location("field_animation_worker_test", worker_path)
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+
+    for bad in ({"camera": "Top"}, {"colormap": "jet"}, {"style": "cinematic"}):
+        with pytest.raises(ValueError):
+            worker._validate_spec_options(bad)
+
+    assert worker._cmap(0.5, "viridis") != worker._cmap(0.5, "turbo")
+    # The wrapper's independent colour tables must match what the worker draws.
+    for name, stops in fa.COLORMAPS.items():
+        for t in (0.0, 0.1, 0.37, 0.5, 0.8, 1.0):
+            assert np.allclose(worker._cmap(t, name), fa.expected_color(t, name), atol=1e-12), (name, t)
+    assert set(worker._COLORMAPS) == set(fa.COLORMAPS)
+    assert worker._VALID_STYLES == fa.STYLES and worker._VALID_CAMERAS == fa.CAMERAS
+
+
+def test_compare_checks_colours_against_the_requested_colormap(tmp_path):
+    """Guards: a turbo render is judged with turbo colours, not the viridis default."""
+    pay = fa.load_dataset(_dataset(tmp_path / "d.h5"))
+    pay["scale_max"] = 100.0
+    turbo = {"fps": 12, "arrow_length_m": 1e-3, "colormap": "turbo"}
+    ok = fa.compare(pay, _back(pay, turbo), turbo, [0, 1, 3])
+    assert ok["passed"], ok["failures"]
+    wrong = _back(pay, {"fps": 12, "arrow_length_m": 1e-3})  # viridis colours
+    wrong["colormap"] = "turbo"
+    bad = fa.compare(pay, wrong, turbo, [0, 1, 3])
+    assert not bad["passed"] and any("color" in f for f in bad["failures"]), bad["failures"]
+
+
+@pytest.mark.parametrize("opt,value", [("style", "cinematic"), ("camera", "Top"), ("colormap", "jet")])
+def test_unknown_render_options_fail_before_blender_starts(tmp_path, monkeypatch, opt, value):
+    called = []
+    monkeypatch.setattr(fa, "resolve_worker", lambda: called.append(1))
+    with pytest.raises(ValueError, match=opt):
+        fa.field_animation(_dataset(tmp_path / "d.h5"), tmp_path / "out", {opt: value})
+    assert not called, "Blender worker was resolved for an invalid option"
