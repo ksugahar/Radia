@@ -112,9 +112,19 @@ def headers():
     import netgen
     import ngsolve
     requirements = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
+    if platform.system() == "Windows":
+        from ci_fork_wheels import LOCK, verify_installed
+
+        lock = json.loads(LOCK.read_text(encoding="utf-8"))
+        verify_installed(lock)
+    else:
+        lock = None
     for package in ("ngsolve", "netgen-mesher"):
         expected = next(r.split("==", 1)[1] for r in requirements if r.startswith(package + "=="))
-        if metadata.version(package) != expected:
+        actual = metadata.version(package)
+        if lock is not None:
+            actual = actual.split("+", 1)[0]
+        if actual != expected:
             raise RuntimeError(f"{package} must match project metadata: {expected}")
     candidates = {Path(netgen.__file__).resolve().parent / "include"}
     dist = metadata.distribution("netgen-mesher")
