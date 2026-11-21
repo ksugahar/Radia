@@ -5,15 +5,17 @@ description: Route Radia deployment to its owning release workflow and verify th
 
 # Deploy
 
-For Radia, use `release-quad` and its four dedicated cases: build-role editable,
-validation-role editable, CPU compute build and GB200 GPU compute build. Follow
-[editable operation and isolated QA](../../../docs/operations/editable-deployment.md).
+For Radia, use `release-quad`: a release waits for the `cpu`,
+`linux-python-gpu`, `windows-python-gpu` and `matlab` lane receipts of one SHA,
+and the solver runtime is maintained on the validation role only. The CPU-only
+build host prepares CPU candidates and receives no GPU runtime. Follow
+[validation-role verified-wheel deployment](../../../docs/operations/validation-wheel-deployment.md).
 Host-specific skill names and runtime mappings are private configuration.
 
-Use `verify-deploy` to confirm fresh imports, intended source and native artifact
-identity. Keep normal editable operation separate from isolated exact-wheel
-acceptance. Resolve explicit host/interpreter/source bindings before mutation;
-preserve existing environments, other packages and active jobs.
+Use `verify-deploy` to confirm fresh imports and exact wheel and native artifact
+identity. Editable installs exist only on the build host; the validation role
+receives verified wheels only. Resolve explicit host/interpreter bindings
+before mutation; preserve existing environments, other packages and active jobs.
 
 MCP follows its [independent runtime policy](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
 Cubit follows `release-cubit-mesh-export` on its licensed build role only.

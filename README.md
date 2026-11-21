@@ -16,6 +16,22 @@
   <a href="https://github.com/ksugahar/Radia/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ksugahar/Radia?style=social"></a>
 </p>
 
+Radia is an open-source electromagnetic CAE platform built on
+[NGSolve](https://ngsolve.org/). It adds open-boundary magnetics, eddy-current
+analysis, coil design, and field–circuit coupling. Use Python to run a
+calculation directly, or use MCP to let an AI assistant operate supported
+tools from geometry and meshing through result inspection. You specify the
+physical assumptions and acceptance criteria and evaluate the results.
+
+## Start here
+
+| If you want to… | Start with |
+| :--- | :--- |
+| Run a first calculation | [Compute the field of a permanent magnet in Python](#quick-start) and compare the output with the reference value. |
+| See Radia in a design problem | [Explore the active-shield coil example](docs/stream_function/application.md) to see how a stream function is used to design coil windings for a field target. |
+| Run an analysis through AI | [Set up radia-mcp](packages/radia-mcp/README.md) and start with `capability_pack_status` to discover workflows and usage tools. |
+| Check the evidence behind a method | [Read the validation guide](docs/VALIDATION_GUIDE.md) for analytical references, convergence, and the scope of each check. |
+
 <p align="center">
   <img src="docs/stream_function/demo_active_shield.png"
        alt="Active-shield coil demonstration comparing external stray fields with and without shielding"
@@ -23,66 +39,14 @@
 </p>
 <p align="center">
   <sub>Design for a field target: a stream-function active-shield demonstration.
-  This comparison is for the illustrated coil configuration, not a universal
-  shielding-performance claim.</sub>
+  The plotted fields correspond to the illustrated coil configuration.</sub>
 </p>
 
-**You set the analysis direction. AI helps operate the CAE tools.**
-
-Radia is an open-source electromagnetic CAE platform that an AI assistant can
-operate through MCP. Specify the analysis task and conditions; connected tools
-can prepare geometry, control meshing, execute supported calculations, and
-inspect results. This reduces the need to memorize each tool's commands and
-interaction sequences while keeping the model and results inspectable.
-
-Start with `radia` for CPU calculations in Python and `radia-mcp` for AI-assisted
-tool operation. The CPU solver builds on NGSolve and does not require MATLAB.
-
-**Radia's operating manual is distributed as `radia-mcp`.** Detailed usage,
-recipes, validation catalogs and tool contracts are served to your AI
-assistant through `radia-mcp`: ask it, starting with `capability_pack_status`
-and the domain usage tools it reports. This README introduces capabilities; it
-is not the manual.
-
-Radia supports two ways of working. In **AI-driven execution** (Python through
-MCP), you set the analysis plan, physical assumptions and acceptance criteria,
-and the AI assistant executes supported calculation workflows end to end;
-you evaluate the engineering conclusions. In **human–AI collaborative
-operation**, you and the assistant develop and inspect CAD and mesh artifacts
-using Coreform Cubit, and system models using masked blocks in the Radia
-Simulink library. The assistant operates Cubit in batch/nographics mode,
-with journals, checkpoints and exported artifacts supporting human inspection
-and handoff.
-
-| Start with | Use it for |
-| --- | --- |
-| `radia` | CPU electromagnetic calculations through Python, pybind11 and NGSolve |
-| [`radia-mcp`](packages/radia-mcp/README.md) | Discovering workflows and operating supported analysis tools through an AI assistant |
-| [`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export) | Optional Coreform Cubit mesh export and strict solver-mesh checks |
-
-MATLAB GPU development and other independently released packages are described
-under [Related distributions](#related-distributions).
-
-Start from supported CAD, mesh, or model data where available, instead of
-rebuilding every input. What transfers depends on the format and workflow;
-materials, sources, boundary conditions, and units still need to be checked.
-The user defines the physical assumptions, analysis plan, and acceptance criteria
-and evaluates the engineering conclusions. Radia's current positioning is
-AI-operable CAE, not autonomous design decision-making.
-
-Radia is deliberately **not** another monolithic finite-element solver. It is
-built on [NGSolve](https://ngsolve.org/), which remains the numerical
-foundation for finite-element spaces, mappings, quadrature, weak forms,
-assembly, and field evaluation. Radia adds electromagnetic methods,
-open-boundary operators, application workflows, native kernels, and
-orchestration around that foundation.
-
-> **Radia extends NGSolve; it does not compete with it.**
-
-[Python capabilities](#what-you-can-do-in-python) | [Quick start](#quick-start) |
-[Analysis with MCP](#python-and-mcp) | [Related distributions](#related-distributions) |
-[Eqnedit64](#eqnedit64) |
-[Documentation](#documentation) | [Contributing](#contributing)
+[Python capabilities](#what-you-can-do-in-python) ·
+[Interfaces](#interfaces) ·
+[Related distributions](#related-distributions) ·
+[Documentation](#documentation) ·
+[Contributing](#contributing)
 
 ## Engineering usefulness and numerical rigor
 
@@ -109,26 +73,13 @@ and adoption of an accuracy claim are separate outcomes. Review can improve a
 comparison while other authorized examples continue; it need not hold up the
 next experiment. Production validation and release requirements remain in force.
 
-## Find your next engineering workflow
+## Examples and results
 
-Use the documentation to discover capabilities and inspect results. Carry out
-CPU analysis through Python or MCP, using checked CAD and mesh artifacts.
-Human–AI collaboration through Cubit and supported MATLAB/Simulink workflows
-is also available; MATLAB/Simulink belongs to the independent
-[radia-simulink package](packages/radia-simulink/README.md).
-The executable samples live in [tests/](tests/README.md) for small usage and
-contract examples, and [validation_test/](validation_test/README.md) for physics
-and application cases with numerical evidence.
-
-[**Start here**](docs/START_HERE.md) · [**Result gallery**](docs/APPLICATION_GUIDE.md#browse-results) ·
-[**Accuracy and validation**](docs/VALIDATION_GUIDE.md)
-
-| Explore | What you will find |
-| :--- | :--- |
-| [Calculate your first field](#quick-start) | A small analytical magnet example with SI inputs and output |
-| [See geometry and results](docs/APPLICATION_GUIDE.md#browse-results) | A curved coil, motor torque and thermal response, linked to their conditions and saved calculations |
-| [Inspect the numerical evidence](docs/VALIDATION_GUIDE.md) | Analytical references, force checks, holdout comparisons and their limits |
-| [Choose an interface and get help](docs/START_HERE.md#choose-how-you-want-to-work) | Python/MCP setup, installation and reproducible issue reports |
+Browse the [result gallery](docs/APPLICATION_GUIDE.md#browse-results) for a
+curved coil, motor torque, and induction-heating power, with links to their setup and
+saved results. See [tests/](tests/README.md) for small executable usage examples
+and [validation_test/](validation_test/README.md) for physics and application
+cases with numerical evidence.
 
 ## What you can do in Python
 
@@ -361,19 +312,15 @@ through MCP. The physical model and numerical checks remain explicit.
 
 ## Capabilities
 
-### Executed feature notebooks
+### Featured notebooks
 
-These existing notebooks contain saved code outputs. Their linked derivations
-and validation records define the evidence scope; saved output is not a new
-release acceptance run.
+- [Radia and NGSolve integration](docs/ngsolve_integration/integration_basics.ipynb) — finite-element spaces and field evaluation.
+- [HDiv-MMM topology optimization](docs/hdiv_vim/isochronous_topopt.ipynb) — density adjoints and exact-void checks.
+- [Magnetic levitation](docs/maglev/maglev_showcase.ipynb) — frequency-dependent lift on a conducting sphere.
+- [Induction heating](docs/esim_spatial/esim_spatial_demo.ipynb) — frequency-dependent heating power.
 
-| Feature | Executed introduction | Method and evidence reference |
-| :--- | :--- | :--- |
-| HDiv-MMM topology optimization | [Density adjoints and exact-void checks](docs/hdiv_vim/isochronous_topopt.ipynb) | [Formulation and verification scope](docs/hdiv_vim/TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md) |
-| NGSolve integration | [Spaces and field evaluation](docs/ngsolve_integration/integration_basics.ipynb) | [NGSolve](https://ngsolve.org/) |
-| Stream-function coil design | [Regularization](docs/stream_function/regularization.ipynb) | [Stream-function methods](docs/stream_function/README.md) |
-| Spatial effective surface impedance | [ESIM demonstration](docs/esim_spatial/esim_spatial_demo.ipynb) | [ESIM formulation](docs/esim/README.md) |
-| Field visualization and trajectories | [Particle orbits](docs/gmsh_post/em_particle_orbits.ipynb) | [Gmsh post-processing](docs/gmsh_post/README.md) |
+[Browse the documentation notebooks](docs/README.md#notebook-index) by fundamentals,
+formulations and validation, and applications.
 
 ### Analytical and open-boundary magnetics
 
@@ -575,7 +522,7 @@ explicit configuration.
 | Operating system | Windows 10/11 or Windows Server, x64 |
 | Python core | 3.12 |
 | Lightweight radia-mcp | Python 3.10 or later |
-| NGSolve / Netgen | 6.2.2607 |
+| NGSolve / Netgen | 6.2.2608 |
 | radia-simulink / radia-optuna MATLAB | R2026a (yearly a release only), Windows x64; separate package requirements apply |
 | Coreform Cubit | 2026.8, optional |
 | cubit-mesh-export Python | >=3.12,<3.13 |

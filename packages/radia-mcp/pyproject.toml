@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "2.0.2"
+version = "2.0.3"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -53,6 +53,12 @@ gmsh = [
     "matplotlib>=3.8",
     "Pillow>=10.0",
 ]
+# blender_field_animation caller side: HDF5 dataset I/O and the rendered-glyph
+# checks. bpy itself lives only in the separate Blender worker interpreter.
+blender = [
+    "numpy>=1.24",
+    "h5py>=3.8",
+]
 # Solver-neutral optimization, Krylov and inverse-problem helpers
 # (radia-mcp-optimize / matrix-solvers tools).
 numeric = [
@@ -91,7 +97,7 @@ urn = [
 ]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,numeric,shape-regeneration,youtube,radia,urn]",
+    "radia-mcp[blender,build123d,cadquery,gmsh,numeric,shape-regeneration,youtube,radia,urn]",
 ]
 
 [project.urls]

@@ -164,6 +164,13 @@ industrial / laboratory uses:
 - `force_computation`    -- Maxwell stress / virtual work / time-avg <J x B>
 - `benchmarks`           -- TEAM 28, jumping-ring analytic, EML lift coeff
 
+Permanent-magnet force check: `maglev_cuboid_magnet_force_gate` compares a
+computed force between two z-magnetised, axis-aligned cuboids (Radia, FEM,
+measurement) with the Akoun-Yonnet closed form
+(`radia.analytical_formulas.cuboid_magnet_force`; IEEE Trans. Magn. 20:1962,
+1984).  The closed form is exact for rigid uniform magnets (mu_r = 1), so it
+isolates force-integration error from material modelling.
+
 ## Cross-references
 
 - `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges

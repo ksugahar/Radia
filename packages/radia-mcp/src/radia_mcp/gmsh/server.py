@@ -328,6 +328,8 @@ def gmsh_usage(topic: str = "all") -> str:
             moving-mesh movies and time-resolution acceptance),
             paraview (ParaView-filter -> gmsh-tool correspondence
             matrix with measured semantics and honest gaps)
+            update_qualification (Gmsh 5 install/update, runtime identity,
+            MSH 4.2 structural vs native readback, headless vs GUI)
 
     Args:
         topic: Documentation topic (default: "all").

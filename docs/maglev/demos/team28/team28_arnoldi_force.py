@@ -81,7 +81,8 @@ def setup(al_z=aluminium_z, p=2):
         {"Coil_1": I1 * N1 / (coil_1_w * coil_1_h),
          "Coil_2": -I2 * N2 / (coil_2_w * coil_2_h)}, default=0.0)
 
-    K = BilinearForm(nu * x * (B * dB - Bop(u) * dB + Bop(v) * B) * dx)
+    # Include the radial weight in the quadrature for the mixed term.
+    K = BilinearForm(nu * x * (B * dB - Bop(u) * dB + Bop(v) * B) * dx(bonus_intorder=2))
     Nmat = BilinearForm((v * (sig * u / x)) * dx)   # system = K + s*Nmat
     F = LinearForm((v * Jz) * dx)
     with TaskManager():

@@ -2,16 +2,15 @@
 
 Displacement animation using GMSH NodeData views with STEP geometry overlay.
 
-The saved `gmsh_animation.ipynb` is a historical calculation, not a current
-format acceptance example. Its original assets are not tracked; the archived
-record retains its original calculation date, Radia version and format under
+`gmsh_animation.ipynb` was regenerated on 2026-11-21 with Radia 5.4.3,
+NGSolve 6.2.2608 and the Gmsh 5 development build: the rotor `.msh` is MSH 4.2
+with 21 displacement `$NodeData` frames. The checked records live under
 [`validation_test/gmsh_animation`](../../validation_test/gmsh_animation/).
-It is marked stale and pins the unchanged notebook bytes. Do not infer today's
-output contract from those saved results. Current exports accept MSH 4.2 only.
-Regenerating this example awaits recovery of the original rotor assets.
+Exports accept MSH 4.2 only.
 
 `moving_body_demo.py` is the notebook-coupled generator/helper that creates the
-rotor `.vol`, GMSH `.msh`, and `.geo` companion.
+rotor `.vol`, the stator STEP and the GMSH `.msh`; the tracked `animation.geo`
+(+ `.geo.opt`) merges them and is not rewritten.
 
 `gmsh_animation_export.ipynb` is the result-saved export lesson. It opens the
 existing `animation.geo`, confirms the `animation.geo.opt` / `.msh.opt`

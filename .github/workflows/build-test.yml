@@ -142,14 +142,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $ciPython = Join-Path $venv 'Scripts\python.exe'
-          $pins = @(& $basePython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
-          if ($pins.Count -ne 2) {
-            Write-Host "::error::Expected exact ngsolve and netgen-mesher pins in pyproject.toml; got $($pins -join ', ')"
-            exit 1
-          }
           # The native release lane owns its MKL headers/import libraries in
           # the run-local venv. Do not assume a developer-machine install.
-          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir @pins mkl-devel pybind11==3.0.2 ninja
+          & $ciPython -I tools/ci_fork_wheels.py install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir mkl-devel pybind11==3.0.2 ninja
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $ngsolveRoot = (& $ciPython -c "import ngsolve,pathlib; print(pathlib.Path(ngsolve.__file__).parent)").Trim()
@@ -170,9 +167,6 @@ jobs:
           "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Netgen_DIR=$(Join-Path $netgenRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "MKLROOT=$mklRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          & $ciPython -c "import importlib.metadata as m,ngsolve,tomllib,pathlib; deps=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']; want={x.split('==',1)[0]:x.split('==',1)[1] for x in deps if x.startswith(('ngsolve==','netgen-mesher=='))}; assert ngsolve.__version__==want['ngsolve']; assert m.version('netgen-mesher')==want['netgen-mesher']; print('isolated ABI',ngsolve.__version__,m.version('netgen-mesher'))"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # ----------------------------------------------------------------
       # Install dependencies for the Radia distribution tests. Package-level
@@ -196,7 +190,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.4.0
+          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.6.0
           if ($LASTEXITCODE -ne 0) { throw "Standalone mesh checker install failed" }
           # The full release numerical contracts include STEP coil tests, so the
           # declared STEP CAD extra is installed into this same isolated venv.
@@ -218,106 +212,14 @@ jobs:
           Write-Host "build + wheel + pytest + mcp + trimesh + twine + h5py + STEP CAD installed and importable (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
-      # Patched Netgen runtime: pinned 6.2.2608 plus the pyramid apex clamp
-      # and base-edge blend. Every test in this job runs on it; the mesh
-      # checker refuses pyramid meshes on the stock library. The library lives
-      # in a per-run, per-attempt directory; the cache, keyed by the MSVC
-      # toolset, recipe and patch, only carries it through a fixed transfer
-      # directory in this job's runner scratch, which must not exist before the
-      # restore and is never deleted here. install re-verifies the receipt.
-      # ----------------------------------------------------------------
-      - name: Prepare the patched Netgen paths
-        id: netgen-overlay-paths
-        shell: pwsh
-        run: |
-          # The runner empties RUNNER_TEMP for every job, so a transfer directory present
-          # before the restore was not made by this job: refuse it rather than delete it.
-          $runnerTemp = Get-Item -LiteralPath $env:RUNNER_TEMP -Force
-          if ($runnerTemp.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$env:RUNNER_TEMP is a link; refusing the Netgen transfer" }
-          $transfer = Join-Path $runnerTemp.FullName 'radia-netgen-overlay-cache'
-          if (Test-Path -LiteralPath $transfer) { throw "$transfer exists before the restore; this job cannot prove it owns it" }
-          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          if (Test-Path -LiteralPath $overlay) { throw "$overlay already exists; this attempt's library must start empty" }
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not $vs) { throw 'VS2022 build tools are required' }
-          $toolset = (Get-Content -LiteralPath (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
-          if ($toolset -notmatch '^14\.44\.[0-9]+$') { throw "MSVC 14.44 required for the Netgen library, found $toolset" }
-          "overlay=$overlay" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "toolset=$toolset" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "vcvars=$(Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat')" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-      - name: Restore the patched Netgen library
-        id: netgen-overlay-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ runner.temp }}/radia-netgen-overlay-cache
-          key: netgen-overlay-${{ runner.os }}-msvc${{ steps.netgen-overlay-paths.outputs.toolset }}-${{ hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch') }}
-
-      - name: Stage the cached Netgen library
-        if: steps.netgen-overlay-cache.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: |
-          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-          New-Item -ItemType Directory -Path $overlay | Out-Null
-          $transfer = Get-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache') -Force
-          $entries = @(Get-ChildItem -LiteralPath $transfer.FullName -Force)
-          if (($transfer.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
-              (($entries | ForEach-Object Name | Sort-Object) -join ',') -ne 'netgen-overlay.json,nglib.dll' -or
-              @($entries | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count) {
-            throw "The restored Netgen transfer is not exactly the library and its receipt: $($entries.Name -join ', ')"
-          }
-          Copy-Item -LiteralPath (Join-Path $transfer.FullName 'nglib.dll'), (Join-Path $transfer.FullName 'netgen-overlay.json') -Destination $overlay
-
-      - name: Build the patched Netgen library
-        if: steps.netgen-overlay-cache.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
-          $vcvars = '${{ steps.netgen-overlay-paths.outputs.vcvars }}'
-          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-          $work = Join-Path $env:RUNNER_TEMP "radia-netgen-work-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $bat = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-netgen-overlay.private.cmd'
-          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
-            "`"$ciPython`" tools/netgen_overlay.py build --work `"$work`" --out `"$overlay`"",
-            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
-          & cmd.exe /d /c "`"$bat`""
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Install the patched Netgen library into the CI venv
-        shell: pwsh
-        run: |
-          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
-          & $ciPython tools/netgen_overlay.py install --overlay '${{ steps.netgen-overlay-paths.outputs.overlay }}' --python $ciPython
-          if ($LASTEXITCODE -ne 0) { throw 'Patched Netgen install failed' }
-          & $ciPython -c "from cubit_mesh_export.check import require_pyramid_netgen; require_pyramid_netgen(); print('patched Netgen pyramid runtime OK')"
-          if ($LASTEXITCODE -ne 0) { throw 'The CI venv does not evaluate pyramids with the patched Netgen' }
-
-      - name: Hand the built Netgen library to the cache
-        if: steps.netgen-overlay-cache.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $overlay = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-          $transfer = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'radia-netgen-overlay-cache')
-          Copy-Item -LiteralPath (Join-Path $overlay 'nglib.dll'), (Join-Path $overlay 'netgen-overlay.json') -Destination $transfer
-
-      - name: Save the patched Netgen library
-        if: steps.netgen-overlay-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/radia-netgen-overlay-cache
-          key: ${{ steps.netgen-overlay-cache.outputs.cache-primary-key }}
-
-      # ----------------------------------------------------------------
-      # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
-      # ----------------------------------------------------------------
       - name: Verify NGSolve
         shell: pwsh
         run: |
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          & $ciPython -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
             Write-Host "::error::NGSolve not found at $env:NGSOLVE_DIR"
-            Write-Host "Install: pip install ngsolve"
             exit 1
           }
           Write-Host "NGSolve: $env:NGSOLVE_ROOT"
@@ -549,7 +451,7 @@ jobs:
             Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
           } else {
             $markerExpr = 'not compute_host'
-            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain development/build host/hibino-only."
+            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests run only on their owning validation hosts, outside this CPU gate."
           }
           if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log"
@@ -635,12 +537,135 @@ jobs:
       # ----------------------------------------------------------------
       # Build wheel (DryRun: build + verify only, no upload)
       # ----------------------------------------------------------------
-      - name: Build and stage Radia Python GPU payload
+      - name: Build wheel
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Wheel build failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
+      # Upload native binaries as an artifact for the CD workflow to consume
+      # ----------------------------------------------------------------
+      - name: Record the CPU natives with their hashes
+        if: success()
         shell: pwsh
         run: |
-          # This tag/manual native-release dispatch authorizes only this exact
-          # checkout's compile and import-only coexistence. No resident objects or
-          # numerical solves are requested; exact-wheel acceptance is separate.
+          $natives = Join-Path $env:RUNNER_TEMP "radia-cpu-natives-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python tools/ci_cpu_natives.py record --source-dir src/radia --out $natives --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_CPU_NATIVES_DIR=$natives" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Upload native binary artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-cpu-pyd
+          path: ${{ env.RADIA_CPU_NATIVES_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Upload wheel as artifact for PyPI publishing
+      # ----------------------------------------------------------------
+      - name: Upload wheel artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-cpu-wheel
+          path: dist/*.whl
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
+      # ----------------------------------------------------------------
+      - name: Seal the patched Netgen library
+        if: success()
+        shell: pwsh
+        run: |
+          # The same library the tests ran on, copied so the seal never enters the cache.
+          $built = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
+          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-seal-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $overlay | Out-Null
+          Copy-Item -LiteralPath (Join-Path $built 'nglib.dll'), (Join-Path $built 'netgen-overlay.json') -Destination $overlay
+          python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload sealed Netgen library
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-netgen-overlay
+          path: |
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/nglib.dll
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/netgen-overlay.json
+            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # The build host stops at CPU natives. CUDA compilation and the published
+  # Windows wheel (CPU natives from build-test plus the Python GPU payload) are
+  # produced on the Windows GPU host from the same commit. Compile only: no
+  # CUDA context, no numerical solve; exact-wheel acceptance stays separate.
+  windows-gpu-wheel:
+    name: radia-native-release-gpu-wheel
+    needs: [build-test]
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Initialize runner-owned CI scratch
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          $output = Join-Path $env:RUNNER_TEMP "radia-gpu-output-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $output | Out-Null
+          "RADIA_CI_OUTPUT_DIR=$output" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - uses: actions/checkout@v4
+      - name: Require the exact commit and a clean tracked tree
+        run: |
+          python tools/check_text_line_endings.py --worktree --repair
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'Checkout is not the triggering commit' }
+          if (git status --porcelain --untracked-files=no) { throw 'Tracked tree is not clean' }
+      - name: Create the isolated wheel environment
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-gpu-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ciPython = Join-Path $venv 'Scripts/python.exe'
+          # All declared runtime dependencies: the coexistence check imports radia
+          # from this checkout next to the exact NGSolve/Netgen pins.
+          $deps = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['dependencies'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or @($deps | Where-Object { $_ -match '^(ngsolve|netgen-mesher)==' }).Count -ne 2) { throw 'Expected exact ngsolve and netgen-mesher pins' }
+          & $ciPython -I tools/ci_fork_wheels.py install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install @deps build wheel twine==6.2.0 "setuptools>=77"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Fetch the CPU natives built from this commit
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-cpu-pyd
+          path: ${{ runner.temp }}/radia-cpu-pyd-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Stage exactly the recorded CPU natives
+        run: |
+          $source = "$env:RUNNER_TEMP/radia-cpu-pyd-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python tools/ci_cpu_natives.py stage --artifact $source --dest src/radia --sha $env:GITHUB_SHA --evidence (Join-Path $env:RADIA_CI_OUTPUT_DIR 'cpu-natives.manifest.json')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and stage Radia Python GPU payload
+        run: |
+          # Compile and import-only coexistence for this exact checkout. No resident
+          # objects or numerical solves are requested; exact-wheel acceptance is separate.
           $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -680,6 +705,9 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -eq 0) { throw 'Expected exact GPU runtime metadata pins' }
           & $ciPython -m pip install --only-binary=:all: @gpuPins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The GPU runtime pins are the last dependency install of this job.
+          & $ciPython -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython tools/check_python_gpu_coexistence.py --source-commit $env:GITHUB_SHA --report (Join-Path $env:RADIA_CI_OUTPUT_DIR 'python-gpu-coexistence.json')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -692,22 +720,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Build wheel
-        if: success()
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
+      - name: Build the published wheel
         run: |
           & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun -RequirePythonGpu
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Wheel build failed"
             exit $LASTEXITCODE
           }
-
-      # ----------------------------------------------------------------
-      # Upload native binaries as an artifact for the CD workflow to consume
-      # ----------------------------------------------------------------
       - name: Upload native binary artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-pyd
@@ -715,31 +735,16 @@ jobs:
             src/radia/*.pyd
             src/radia/*.pyd.build.json
             src/radia/*.dll
-            src/radia/*.so
-            src/radia/*.dylib
-            !src/radia/*.locked-old.*
-            !src/radia/*.lockedold.*
-            !src/radia/*.pre_*.*
-            !src/radia/*.backup*.*
+          if-no-files-found: error
           retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Upload wheel as artifact for PyPI publishing
-      # ----------------------------------------------------------------
       - name: Upload wheel artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-wheel
           path: dist/*.whl
+          if-no-files-found: error
           retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Seal the same wheel for exact-SHA compute validation
-      # ----------------------------------------------------------------
       - name: Seal exact-SHA GPU wheel
-        if: success()
-        shell: pwsh
         run: |
           $sealed = Join-Path $env:RUNNER_TEMP "radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $sealed | Out-Null
@@ -749,42 +754,12 @@ jobs:
           python tools/ci_gpu_artifact.py seal $sealed --sha $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_GPU_WHEEL_DIR=$sealed" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
       - name: Upload sealed GPU wheel
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: gpu-radia-wheel
           path: |
             ${{ env.RADIA_GPU_WHEEL_DIR }}/*.whl
             ${{ env.RADIA_GPU_WHEEL_DIR }}/gpu-artifact.json
-          if-no-files-found: error
-          retention-days: 30
-
-      # ----------------------------------------------------------------
-      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
-      # ----------------------------------------------------------------
-      - name: Seal the patched Netgen library
-        if: success()
-        shell: pwsh
-        run: |
-          # The same library the tests ran on, copied so the seal never enters the cache.
-          $built = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-seal-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          New-Item -ItemType Directory -Path $overlay | Out-Null
-          Copy-Item -LiteralPath (Join-Path $built 'nglib.dll'), (Join-Path $built 'netgen-overlay.json') -Destination $overlay
-          python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Upload sealed Netgen library
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-netgen-overlay
-          path: |
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/nglib.dll
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/netgen-overlay.json
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/gpu-artifact.json
           if-no-files-found: error
           retention-days: 30

@@ -304,14 +304,14 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "with the `100` runner label" in normalized
+    assert "CPU build and CPU CI run on the build host with the `100` runner label" in normalized
     # Hosts appear by role only; the role-to-host map is private configuration.
-    assert "radia uses bound editable sources on build and validation roles" in normalized
-    assert "isolated exact-wheel QA" in normalized
-    assert "radia-mcp stays build-editable/validation-wheel" in normalized
+    assert ("Deployment follows release: radia and radia-mcp use editable development installs on the build role "
+            "and verified wheels on the validation role, never an editable install there") in normalized
+    assert "isolated exact-wheel QA" not in normalized
     assert "cubit-mesh-export is build-only" in normalized
-    assert "`100` heavy CPU jobs and every compile, CUDA included, without GPU execution" in normalized
-    assert "`gpu-a100` runs GPU acceptance on exact-SHA build-host artifacts; never compiles or gates PRs" in normalized
+    assert "The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution" in normalized
+    assert "`gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs" in normalized
     assert "retired targets stay excluded" in normalized
     assert "validation has no Cubit/cme" in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
@@ -349,8 +349,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
-    assert "Develop CPU on build (pybind11/MATLAB), Python GPU on Flow2, then MATLAB GPU on validation" in normalized
-    assert "Build owns CI/formal artifacts" in normalized
+    assert "Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation" in normalized
+    assert "Build owns CI/formal artifacts" not in normalized
     assert "Validation isolates jobs from QA/runtime; no Cubit/cme" in normalized
     assert "JMAG runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
@@ -361,10 +361,9 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional" in normalized
     assert "no admission, owner-pool, idle-core or load gates" in normalized
     assert "Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL" in normalized
-    assert "GPU jobs use a separate slot, not a CPU slot" in normalized
+    assert "GPU jobs run only on the validation host (<=1 at a time), never on the build host" in normalized
     assert "record host CPU use, avoid oversubscription" in normalized
-    assert "overflow to a free build GPU slot is pre-authorized" in normalized
-    assert "<=1 GPU job/host, <=2 across both" in normalized
+    assert "overflow to a free build GPU slot" not in normalized
     assert "Keep artifact/architecture/ABI/runtime/owner scope" in normalized
     assert "no install/config or unverified substitution" in normalized
     assert "Never stop, repin or overwrite others' jobs/runtimes" in normalized

@@ -2,10 +2,16 @@
 
 The release publisher uses the wheel from one successful `main` GPU CI run;
 it does not rebuild it. CPU `radia`, `radia-mcp`, and `radia-optuna` releases
-remain independent. Prereleases keep the installed 100 acceptance gate.
+remain independent. Every release, prerelease or stable, requires one installed
+acceptance record (`radia.gpu.installed-acceptance.v1`) for the exact wheel in
+the accepted artifact: `passed: true`, `ltspice_checked: true`, the same source,
+hash, payload manifest and version, at least two `simulink_repeated_runs` and
+`simulink_failure_cleanup: true`. A prerelease (`aN`, `bN`, `rcN`) needs only
+that record; a stable version additionally needs the qualification record below.
 
 For a stable version, commit `<version>.json` here only after independent
-review and final acceptance on 100 (Quadro RTX 5000). This record may follow the
+review and final installed acceptance on the Windows GPU validation host
+(NVIDIA A100-SXM4-40GB). This record may follow the
 accepted build commit: the release gate still requires the wheel's exact source
 commit to be an ancestor of `main`. Do not create placeholder acceptance records.
 
@@ -16,13 +22,14 @@ the same `source_commit`, `outcome: accepted`, the independent `reviewer`,
 the completed text in `report`, and an empty `unresolved_findings` list.
 Resolve findings and review the final source before accepting it.
 
-`build_host_acceptance` contains the real installed acceptance record with schema
+`windows_gpu_acceptance` contains the real installed acceptance record with schema
 `radia.gpu.installed-acceptance.v1`, the same source/hash/version, `passed: true`,
 the payload `manifest_sha256` matching the verified wheel,
-`execution_role: cuda-build-host`, the measured `device: Quadro RTX 5000`, at least two
+`ltspice_checked: true`, `execution_role: windows-gpu`, the measured
+`device: NVIDIA A100-SXM4-40GB` (whitespace-normalized exact match), at least two
 `simulink_repeated_runs`, and `simulink_failure_cleanup: true`.
 `run_installed.py` records the actual OS hostname and MATLAB GPU device,
-compute capability and total memory. Verify the build-host identity in the raw
+compute capability and total memory. Verify the validation-host identity in the raw
 operational evidence retained outside Git. Public qualification records retain
 the execution role and measured GPU fields, omitting identifying OS hostnames.
 Set `cpu_parity_checked: true` only after testing each published CUDA solver
@@ -35,7 +42,7 @@ The gate rejects empty results, nonfinite values, relative difference above
 1e-8 or true residual above 1e-6. Retain the detailed numerical, runtime,
 timing and memory evidence alongside the corresponding validation sources.
 
-100 CI and stable acceptance require `ltspice_checked: true`. A100 is optional additional validation and never blocks development or publication; preserve unverified A100 status explicitly. LTspice is not required on the NGSolve host. NGSolve
+The A100 installed acceptance is the release gate; the CPU build host compiles no CUDA and runs no GPU acceptance. Records 0.1.0 to 0.1.4 in this directory are historical: they were accepted under the earlier build-host gate and keep their original fields unchanged. NGSolve
 starts from checked `.vol` files and does not install or run Cubit. Do not
 deploy `radia-gpu` to 102. Commercial reference comparisons remain private
 and never enter qualification records or release artifacts.

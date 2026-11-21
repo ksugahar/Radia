@@ -1903,13 +1903,71 @@ windows. This recipe does not certify an experimental TEAM28 trajectory.
 """
 
 
+GMSH_UPDATE_QUALIFICATION = """
+## Gmsh 5 update and qualification workflow
+
+Canonical sources (checkout resources, not installed-wheel files):
+- `packages/radia-mcp/docs/operations/gmsh-development-runtime.md` owns the
+  installation recipe, the official development index, how the exact wheel
+  URL and SHA256 are taken from pip's `--report`, and payload provenance.
+- `.agents/skills/gmsh-verify/SKILL.md` owns the structural pre-open check of
+  `.geo`/`.msh` launch artifacts.
+This topic only routes between them; it carries no version pin, URL or hash.
+
+Two separate claims, never merged:
+1. Native runtime: an official Gmsh **5** build whose Python API and native
+   library match a recorded wheel. Evidence: `python -m radia_mcp.gmsh.runtime
+   --wheel WHEEL --record FILE`, then `RADIA_GMSH_PROVENANCE=FILE`; native tools
+   call verify_runtime_identity/qualify_runtime (major 5, default MSH 4.2, real
+   NodeData write/read probe) and fail explicitly otherwise.
+2. File format: ASCII **MSH 4.2**. Pure Python structural checks
+   (`gmsh_validate_msh`, `gmsh_validate_geo`, `verify_gmsh_output.py`) need no
+   native Gmsh. A structural pass is not a native readback: native readback
+   means the qualified Gmsh 5 runtime opened the file and returned the fields.
+
+Update sequence (no tool installs packages or picks another runtime):
+1. Install Gmsh alone from the official development index with `--report`,
+   exactly as the canonical guide states; then `radia-mcp[gmsh]` from PyPI.
+2. Retain the selected wheel; verify its SHA256 against the report; record
+   provenance with `radia_mcp.gmsh.runtime --wheel ... --record ...`.
+3. Identify the target MCP runtime before claiming anything, from the call
+   that actually carries each identity:
+   - MCP server identity: `gmsh_status` -> `runtime_provenance` (interpreter,
+     `module_file`, distribution, editable or wheel) and `optional_deps.gmsh`.
+     It does not run native Gmsh.
+   - Native Gmsh identity: the `runtime` object of a native result, e.g.
+     `gmsh_compare_fields` on a known matching MSH 4.2 fixture pair, carrying
+     `distribution_version`, `wheel_sha256`, `gmsh_version`, `msh_version`
+     and `msh42_roundtrip_probe`; or `gmsh_session_status` -> `runtime` of a
+     worker that is already running (with no worker it reports none).
+   - `gmsh_detect` reports Gmsh version, build features and graphics only;
+     it is not runtime provenance.
+   Report each MCP client's live source separately; reconnect after repointing.
+4. Re-qualify the new build: per-writer load/field roundtrips, fixtures
+   generated in the opposite direction through the API, strict MSH 4.2
+   negatives, and the measured probe/plugin/rendering semantics. Record
+   failures; never relax goldens; keep earlier evidence as dated provenance.
+5. Qualify each platform separately: a Windows artifact does not qualify Linux.
+
+Headless versus GUI qualification:
+- Headless (CI, batch, MCP over stdio): runtime identity, MSH 4.2 I/O probe,
+  structural validators, native readback and offscreen-capable checks. This is
+  the default and is what CI may claim.
+- GUI: only when `gmsh_detect` reports a real FLTK graphics context; rendering
+  and `.geo`/`.opt` launch checks run on a desktop session the operator owns.
+  A headless pass never certifies GUI rendering, and GUI automation is not a
+  CI gate.
+"""
+
+
 def get_gmsh_documentation(topic: str = "all") -> str:
     """Return GMSH usage documentation by topic.
 
     Args:
         topic: One of: all, policy, overview, cli, shortcuts, options, opt_file,
                msh_format, geo, high_order, workflow, onelab, pitfalls,
-               animation, magnetic_movies, paraview
+               animation, magnetic_movies, paraview,
+               update_qualification
 
     Returns:
         Documentation string for the requested topic.
@@ -1930,6 +1988,7 @@ def get_gmsh_documentation(topic: str = "all") -> str:
         "animation": GMSH_ANIMATION,
         "magnetic_movies": GMSH_MAGNETIC_MOVIES,
         "paraview": GMSH_PARAVIEW_PARITY,
+        "update_qualification": GMSH_UPDATE_QUALIFICATION,
     }
 
     topic = topic.lower().strip()

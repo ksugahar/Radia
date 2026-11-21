@@ -33,7 +33,8 @@ objects in MATLAB.
    already uses. Record any deliberately retained Python-only boundary.
 2. Add the MEX command, command inventory entry, strict arity/type/shape checks,
    MATLAB wrapper, and Python-to-MATLAB parity-manifest entry together.
-3. Build GPU kernels with `Build.ps1 -CudaMexOnly`; CPU solver execution stays
+3. Build GPU kernels with `Build.ps1 -CudaMexOnly` on the Windows GPU validation
+   host, never on the CPU-only build host; CPU solver execution stays
    in Python/pybind11. Do not add or rebuild the retired CPU `radia_mex` gateway. Test the staged MEX before replacing a
    loaded production binary; never work around a MATLAB file lock by weakening
    the ABI check.
@@ -48,5 +49,6 @@ objects in MATLAB.
 
 Small deterministic regressions belong in `tests/`. Multi-mesh, scale,
 manufactured-solution, and published numerical evidence belongs in
-`validation_test/` with a versioned JSON result. Long MATLAB runs execute on
-the development/build host in an isolated job; routine CI checks the artifact contract and focused fast lane.
+`validation_test/` with a versioned JSON result. Long MATLAB GPU runs execute on
+the Windows GPU validation host in an isolated job, one GPU job at a time; CPU-only
+MATLAB checks may run on the build host. Routine CI checks the artifact contract and focused fast lane.

@@ -1,4 +1,4 @@
-"""Build the isolated CUDA-only NGSolve assembled-operator bridge on an explicitly admitted build host."""
+"""Build the isolated CUDA-only NGSolve assembled-operator bridge on the admitted Windows GPU host."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -52,7 +52,7 @@ def main():
         source = sources[0]
         binary = out / 'radia_cuda_csr_pcg.mexw64'
         assert binary.is_file()
-        # Compile only: the build host creates no CUDA context; the device is recorded by the A100 run.
+        # Compile only: this build step creates no CUDA context; the device is recorded by the GPU validation run.
         record = dict(accepted=True,python_binding=python_receipt,all_source_sha256=source_hashes,build_admission=admission,toolchain=toolchain,schema='radia.cuda-mex-build.v1', hostname=socket.gethostname(),
                       source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                       binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),

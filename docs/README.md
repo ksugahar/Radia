@@ -20,20 +20,87 @@ Start with the [six selected applications](APPLICATION_GUIDE.md#browse-results).
 For convergence, formulation comparisons and research evidence, use the
 [validation study index](../validation_test/STUDY_INDEX.md).
 
+## Notebook index
+
+The documentation notebooks are listed by topic. Saved outputs illustrate the recorded runs.
+For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
+
+### Fundamentals
+
+- [Analytical formula examples (IEE Japan Part 1-9)](analytical_formulas/analytical_formulas.ipynb)
+- [AXIFEM notebooks](axifem/README.ipynb)
+- [Background fields: the `ObjBckg` callback API](background_fields/background_fields.ipynb)
+- [Cubit Mesh Export Showcase](cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
+- [GMSH Displacement Animation Artifact](gmsh_animation/gmsh_animation.ipynb) (historical output)
+- [Gmsh Animation Export](gmsh_animation/gmsh_animation_export.ipynb)
+- [EM field-line and isosurface post-processing (gmsh lane)](gmsh_post/em_fieldlines.ipynb)
+- [Post-processing gallery: one DC magnet through every verb](gmsh_post/em_post_gallery.ipynb)
+- [Radia <-> NGSolve integration basics](ngsolve_integration/integration_basics.ipynb)
+- [Radia basics -- small worked problems](simple_problems/simple_problems.ipynb)
+
+### Formulations and validation
+
+- [BEM inductance on closed surfaces: a limitation (and what to use instead)](bem_extractor/bem_inductance_limitations.ipynb)
+- [Genus-1 loop DOF: how the cohomology cut is selected](cohomology/loop_dof_cut_selection.ipynb)
+- [T-Omega magnetostatics with a gmsh-free cohomology cut](cohomology/tomega_wire.ipynb)
+- [Cubit Mesh Evaluation p-Convergence Demo](cubit_mesh_export/netgen/p_convergence_demo.ipynb)
+- [EM reference audit — the diagnostics that exonerate (or convict) a FEM cross-validation reference](electric_machine/em_reference_audit.ipynb)
+- [Electrostatics validation suite](electrostatics/electrostatics.ipynb)
+- [Equivalence source (NearFieldSource): demos](equivalence_source/demos.ipynb)
+- [C-type magnet: HDiv-MMM, reduced-A, and mixed total/reduced Omega](hdiv_vim/c_type_three_formulation_mixed_omega.ipynb)
+- [HDiv-VIM -- curved-geometry accuracy win (showcase)](hdiv_vim/hdiv_curved_showcase.ipynb)
+- [Matching total and reduced magnetic scalar potentials](hdiv_vim/mixed_omega_planar_interface.ipynb)
+- [Analytical-material-model hysteresis on the loop-free HDiv-VIM](hysteresis/hdiv_real_material.ipynb)
+- [Hysteresis models: Play & Energy validation gallery](hysteresis/hysteresis_validation.ipynb)
+- [Does the temperature rise match the supplied heat?](induction_heating/axisymmetric_p2_thermal.ipynb)
+- [ESIM induction-heating benchmark -- verified results validation](induction_heating/induction_heating_demo_showcase.ipynb)
+- [CG-Smoother Acceleration for Equilibrated Error Estimation](kelvin/Supplement/cg_smoother_demo.ipynb)
+- [Kelvin transformation: the exterior source, the twisted pullback, and A-Phi at p = 2](kelvin/kelvin_exterior_source_and_aphi.ipynb)
+- [Mesh Fusion in NGSolve -- 5-phase non-conforming coupling study](mesh_fusion/mesh_fusion.ipynb)
+- [Krylov + SIBC (with HOIBC corrections) -- verified results showcase](mixed_galerkin/mixed_galerkin_results.ipynb)
+- [Nodal Force (Eggshell) Method -- 2D EM force, three ways](nodal_force/nodal_force.ipynb)
+- [Open boundary: exact DtN and Foster diffusion memory](open_boundary/open_boundary_demo.ipynb)
+- [Dowell Surface Impedance -- Executable Companion](peec/dowell_surface_impedance_demo.ipynb)
+- [PEEC integration -- historical results showcase](peec_integration/peec_showcase.ipynb)
+- [Surface-deformation companion (executable) — bilevel optimisation](stream_function/deformation.ipynb)
+- [Regularisation companion (executable) — FE-direct `psi`](stream_function/regularization.ipynb)
+- [URN to Convolution Quadrature Bridge](universal_relaxation_network/cq_urn_bridge.ipynb)
+- [Universal Relaxation Network (URN) -- historical results showcase](universal_relaxation_network/urn_showcase.ipynb)
+
+### Applications
+
+- [Vertical edge focusing of a tilted dipole end -- measured by particle tracking](clebsch_hodograph/edge_focusing_tracking.ipynb)
+- [Excitation-invariant flux lines — same field-line shape as the drive current rises](clebsch_hodograph/excitation_invariant_field.ipynb)
+- [2D bending-magnet END in the s-y (longitudinal) plane: fringe feasibility + end-shaping design](clebsch_hodograph/hodograph_bending_sy.ipynb)
+- [2D linear hodograph: the feasibility *and* the transparency of a bending-magnet field](clebsch_hodograph/hodograph_feasibility_2d.ipynb)
+- [Clebsch Hodograph Public Demo](clebsch_hodograph/public_demo.ipynb)
+- [Inspect the field of a complex coil](complex_coil_geometry/complex_coil.ipynb)
+- [Can a reduced motor model predict torque between sampled angles?](electric_machine/angle_periodic_motor_rom.ipynb)
+- [Compare motor torque ripple and skew](electric_machine/cogging_skew_demo.ipynb)
+- [Planar HDiv-VIM for electric machines — nonlinear iron, rotation sweep, torque, eddy coupling, induction](electric_machine/planar_vim_motor.ipynb)
+- [Frequency-dependent induction-heating power](esim_spatial/esim_spatial_demo.ipynb)
+- [Bend electron trajectories with a saddle coil](gmsh_post/em_particle_orbits.ipynb)
+- [Isochronous topology optimization on HDiv-MMM: density adjoint, constrained design loop, exact-void verification](hdiv_vim/isochronous_topopt.ipynb)
+- [Isochronous topopt II -- Sculpt + HDiv-MMM shape regeneration](hdiv_vim/isochronous_topopt_shape_regen.ipynb)
+- [Frequency-dependent magnetic lift on a conducting sphere](maglev/maglev_showcase.ipynb)
+- [Constrained CAE optimization with Optuna (RF waveguide design)](optimization/optimization.ipynb)
+- [Section-optics inverse design](section_optics/section_optics_design.ipynb)
+- [A spherical winding for a target field](stream_function/theory.ipynb)
+
 ## Choose a Starting Point
 
 | What would you like to do? | Start here |
 | :--- | :--- |
-| Work with NGSolve from MATLAB | [Native mesh, space, and matrix walkthrough](../packages/radia-gpu/matlab/README.md#persistent-mesh-space-form-and-matrix-handles) |
+| Work with NGSolve from MATLAB | [Native mesh, space, and matrix walkthrough](../packages/radia-simulink/README.md) |
 | See Radia and NGSolve working together | [Integration notebook with saved results](ngsolve_integration/integration_basics.ipynb) |
 | Design coils and current sheets | [Stream-function applications](stream_function/application.md) |
 | Connect a circuit to a field workflow | [LTspice integration](ltspice/README.md) |
-| Build a MATLAB/Simulink application | [Radia library and native MEX interfaces](../packages/radia-gpu/matlab/README.md) |
+| Build a MATLAB/Simulink application | [Radia library and native MEX interfaces](../packages/radia-simulink/README.md) |
 | Explore magnetic materials and open boundaries | [HDiv-MMM](hdiv_vim/README.md) and [Kelvin transformation](kelvin/KELVIN_TRANSFORMATION.md) |
 
 The native MATLAB interface retains selected NGSolve objects in C++; it is more
 than a launcher for a Python script. Other capabilities use explicitly declared
-Python batch fallbacks. Check the [backend map](../packages/radia-gpu/matlab/python_api_parity_manifest.json)
+Python batch fallbacks. Check the [backend map](../packages/radia-simulink/matlab/python_api_parity_manifest.json)
 for the capability you need, and the
 [Python/MATLAB validation record](../validation_test/ngsolve_matlab_parity/README.md)
 for the tested cases. A demonstration is not a guarantee for every geometry,
@@ -49,7 +116,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 | Understand a capability and its demonstrated scope | This documentation and its saved notebooks |
 | Ask AI to carry out analysis operations | [MCP tools and setup](../packages/radia-mcp/README.md) |
 | Work with AI on geometry and mesh | [Cubit mesh workflow](cubit_mesh_export/README.md) |
-| Work with AI on an application model | [Radia Simulink library](../packages/radia-gpu/matlab/README.md) |
+| Work with AI on an application model | [Radia Simulink library](../packages/radia-simulink/README.md) |
 | Inspect small executable usage and contract examples | [tests/](../tests/README.md) |
 | Inspect physics, numerical and application examples with evidence | [validation_test/](../validation_test/README.md) |
 
