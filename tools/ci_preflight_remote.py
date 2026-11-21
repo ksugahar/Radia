@@ -193,6 +193,10 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   Push-Location $worktree
   try {{
+    # ssh reports the account name in a different case than path resolution;
+    # a session-owned temp root keeps pytest paths free of the account name.
+    $env:PYTEST_DEBUG_TEMPROOT = Join-Path $root ('tmp\' + [IO.Path]::GetFileName($worktree))
+    New-Item -ItemType Directory -Force -Path $env:PYTEST_DEBUG_TEMPROOT | Out-Null
     $venv = Join-Path $root 'fast-venv'
     $python = Join-Path $venv 'Scripts\\python.exe'
     if (-not (Test-Path -LiteralPath $python)) {{
@@ -219,6 +223,8 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   try {{
     if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
       if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
+      $tmp = Join-Path $root ('tmp\' + [IO.Path]::GetFileName($worktree))
+      if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }}
       if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}
     }}
   }} finally {{
