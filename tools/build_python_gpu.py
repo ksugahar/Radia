@@ -107,18 +107,11 @@ def windows_cuda_layout(cuda_root, matlab_root, nvcc_version):
     return flags, identity
 
 
-def headers():
+def headers(lock=None):
     # The installed NGSolve/Netgen ABI owns pybind headers.
     import netgen
     import ngsolve
     requirements = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
-    if platform.system() == "Windows":
-        from ci_fork_wheels import LOCK, verify_installed
-
-        lock = json.loads(LOCK.read_text(encoding="utf-8"))
-        verify_installed(lock)
-    else:
-        lock = None
     for package in ("ngsolve", "netgen-mesher"):
         expected = next(r.split("==", 1)[1] for r in requirements if r.startswith(package + "=="))
         actual = metadata.version(package)
@@ -244,7 +237,13 @@ def main():
     nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
     cuda_sdk_flags, cuda_sdk_identity = (windows_cuda_layout(cuda, args.matlab_root, nvcc_version)
                                          if windows else ([], None))
-    include = headers()
+    lock = None
+    if windows:
+        from ci_fork_wheels import LOCK, verify_installed
+
+        lock = json.loads(LOCK.read_text(encoding="utf-8"))
+        verify_installed(lock)
+    include = headers(lock)
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
         raise RuntimeError("Build output must be outside the source checkout")
