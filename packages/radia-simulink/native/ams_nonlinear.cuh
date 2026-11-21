@@ -159,7 +159,7 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
         finite_vec(view,args[2],c.n,rhs);
         verify_mask<<<(c.n+T-1)/T,T>>>(c.n,c.free,rhs,view.validation.p);
         view.validation.check();
-        const auto [built,refreshed,hierarchySeconds]=prepareNonlinearHierarchy(c);
+        const auto timing=prepareNonlinearHierarchy(c);
         Output x(c.n);
         auto action=[&](const double* in,double* out){
             radia_fem::multiply<<<radia_fem::blocks_of(c.n),radia_fem::TH>>>(c.n,c.mass.rp,c.mass.ci,c.tangent.p,in,out);
@@ -180,8 +180,8 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
         out[0]=mxGPUCreateMxArrayOnGPU(x.a);
         const char* names[]={"iterations","true_relative_residual","hierarchy_built","hierarchy_refreshed","hierarchy_seconds","gpu_peak_owned_bytes"};
         out[1]=mxCreateStructMatrix(1,1,6,names);
-        const double values[]={double(report.iterations),trueRelative,double(built),double(refreshed),
-                               hierarchySeconds,double(radia_fem::device_memory().peak)};
+        const double values[]={double(report.iterations),trueRelative,double(timing.built),double(timing.refreshed),
+                               timing.seconds,double(radia_fem::device_memory().peak)};
         for(int k=0;k<6;++k)mxSetField(out[1],0,names[k],mxCreateDoubleScalar(values[k]));
         return true;
     }
