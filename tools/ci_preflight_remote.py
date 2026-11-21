@@ -3,7 +3,7 @@
 
 GitHub Actions can only inspect commits already on GitHub. This helper closes
 that gap for ``pre-push``: it sends the candidate commit delta as a Git bundle
-to 100, checks it out in an isolated temporary worktree, and runs the
+to 100, checks it out as an owned standalone export (no registered worktree), and runs the
 deterministic fast gates there.
 
 The build validation host is reached directly over SSH, without GitHub
@@ -128,6 +128,43 @@ def remote_command(script: str, host: str) -> None:
     run([*launcher, encoded], display=[*launcher, "<script>"])
 
 
+# PowerShell helpers for the build-host candidate export.  Plain text (not an
+# f-string) so the functions can also run on their own in an isolated test.
+EXPORT_FUNCTIONS = r"""
+function Export-Candidate($git, $repo, $export, $head) {
+  # Owned standalone export of the exact candidate: objects come from the cached
+  # repository through alternates; nothing is registered as a worktree there.
+  if (Test-Path -LiteralPath $export) { throw "candidate export path already exists: $export" }
+  & $git init -q $export
+  if ($LASTEXITCODE -ne 0) { throw "git init failed for the candidate export ($LASTEXITCODE)" }
+  $script:exportOwned = $true  # created by this invocation; only then may cleanup remove it
+  $objects = [IO.Path]::GetFullPath((Join-Path (Join-Path $repo '.git') 'objects'))
+  $alternates = Join-Path (Join-Path (Join-Path (Join-Path $export '.git') 'objects') 'info') 'alternates'
+  # Git reads alternates as LF-terminated UTF-8; a CR would become part of the path.
+  [IO.File]::WriteAllText($alternates, $objects + "`n", (New-Object Text.UTF8Encoding($false)))
+  & $git -c "safe.directory=$export" -C $export update-ref refs/radia-preflight/candidate $head
+  if ($LASTEXITCODE -ne 0) { throw "candidate $head is not readable from the cached repository" }
+  & $git -c "safe.directory=$export" -c core.autocrlf=false -C $export checkout -q --detach $head
+  if ($LASTEXITCODE -ne 0) { throw "checkout of candidate $head failed ($LASTEXITCODE)" }
+  $exported = (& $git -c "safe.directory=$export" -C $export rev-parse HEAD).Trim()
+  if ($exported -ne $head) { throw "candidate export is at $exported, expected $head" }
+}
+
+function Remove-CandidateExport($root, $export) {
+  if (-not $script:exportOwned) { return }  # never remove a path this run did not create
+  if (-not (Test-Path -LiteralPath $export)) { return }
+  $item = Get-Item -LiteralPath $export -Force
+  $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'work'))
+  if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "refusing to remove candidate export outside the owned work root: $export"
+  }
+  $links = Get-ChildItem -LiteralPath $export -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop
+  if ($links) { throw "candidate export contains links, not removed: $export" }
+  Remove-Item -LiteralPath $export -Recurse -Force -ErrorAction Stop
+}
+"""
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True, help="remote SHA before the push")
@@ -168,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
         script = "\n".join(forwarded_env_lines()) + f"""
 $ErrorActionPreference = 'Stop'
+{EXPORT_FUNCTIONS}
 $git = 'C:\\Program Files\\Git\\cmd\\git.exe'
 $system_python = 'C:\\Program Files\\Python312\\python.exe'
 $root = '{remote_root}'
@@ -178,6 +216,7 @@ $ref = '{remote_ref}'
 $head = '{args.head}'
 $base = '{effective_base}'
 $lock = $null
+$script:exportOwned = $false
 try {{
   # Fail fast on overlapping preflights; the OS releases the lock on process exit.
   $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
@@ -196,9 +235,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
 }}
 & $git -C $repo fetch $bundle "${{ref}}:${{ref}}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-& $git -C $repo worktree prune
-& $git -C $repo worktree add --detach $worktree $head
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+Export-Candidate $git $repo $worktree $head
   Push-Location $worktree
   try {{
     # ssh reports the account name in a different case than path resolution;
@@ -230,7 +267,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 }} finally {{
   try {{
     if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
-      if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
+      Remove-CandidateExport $root $worktree
       $tmp = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
       if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }}
       if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}

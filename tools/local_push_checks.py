@@ -8,9 +8,11 @@ from pathlib import Path
 import subprocess
 import sys
 
-# Pre-push stays impact-scoped and fast; the policy pytest suite runs in the
-# shared precheck and the policy-lint CI lane, not in every push.
-LOCAL_COMMANDS = [['tools/policy_lint.py', '--quiet']]
+# Per-command budgets in seconds.  The shared precheck measured 255.76 s for the
+# policy tests alone, so the former fixed 180 s limit failed healthy pushes.
+COMMAND_BUDGETS_S = {'policy_lint': 600, 'compact_tests': 1500}
+
+COMPACT_TESTS = ['tests/policy', 'tests/test_ci_execution_policy.py', 'tests/test_sparsesolv_ci_contract.py']
 
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -91,14 +93,21 @@ def plan(root, base, candidate):
             findings.append({'path': path, 'line': line, 'reason': 'positive assertion requires policy-banned runtime literal; review required'})
         if path.startswith('packages/radia-mcp/tests/'):
             findings.extend(dict(path=path, **item) for item in minimal_import_findings(text))
-    return {'candidate': candidate, 'base': base, 'changed_paths': paths, 'lanes': lanes, 'local_commands': LOCAL_COMMANDS, 'mcp_selection': mcp, 'static_findings': findings, 'import_audit_scope': 'changed MCP tests, direct/all-scope imports only; no transitive proof', 'heavy_execution': False}
+    return {'candidate': candidate, 'base': base, 'changed_paths': paths, 'lanes': lanes, 'local_tests': COMPACT_TESTS, 'mcp_selection': mcp, 'static_findings': findings, 'import_audit_scope': 'changed MCP tests, direct/all-scope imports only; no transitive proof', 'heavy_execution': False}
 
 def run(root, base, candidate):
     result = plan(root, base, candidate)
     print(json.dumps(result, ensure_ascii=True), flush=True)
     if result['static_findings']: return 1
-    for command in ([sys.executable, *args] for args in LOCAL_COMMANDS):
-        completed = subprocess.run(command, cwd=root, timeout=180)
+    commands = [('policy_lint', [sys.executable, 'tools/policy_lint.py', '--quiet']),
+                ('compact_tests', [sys.executable, '-m', 'pytest', *COMPACT_TESTS, '-q', '-o', 'addopts=', '-p', 'no:cacheprovider'])]
+    for name, command in commands:
+        budget = COMMAND_BUDGETS_S[name]
+        try:
+            completed = subprocess.run(command, cwd=root, timeout=budget)
+        except subprocess.TimeoutExpired:
+            print(f'local push check {name} exceeded its {budget} s budget', file=sys.stderr, flush=True)
+            return 124
         if completed.returncode: return completed.returncode
     if git(root, 'rev-parse', 'HEAD') != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):
         raise ValueError('candidate checkout changed during local checks')
