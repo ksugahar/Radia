@@ -95,7 +95,8 @@ def test_builder_compiles_sm80_with_recorded_compute80_ptx(tmp_path, monkeypatch
     monkeypatch.setattr(builder, "check_toolchain", lambda root, *a: (root / "bin/nvcc.exe", "release 12.8, V12.8.61", "MSVC14.44"))
     sdk = tmp_path / "headers"; (sdk / "pybind11").mkdir(parents=True)
     (sdk / "pybind11/header.h").write_text("fixture")
-    monkeypatch.setattr(builder, "headers", lambda: sdk)
+    monkeypatch.setattr(builder, "verify_windows_fork", lambda: {})
+    monkeypatch.setattr(builder, "headers", lambda _: sdk)
     commands = []
     def execute(cmd, out, label, saved):
         commands.append(list(map(str, cmd)))

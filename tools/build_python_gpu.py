@@ -107,6 +107,14 @@ def windows_cuda_layout(cuda_root, matlab_root, nvcc_version):
     return flags, identity
 
 
+def verify_windows_fork():
+    from ci_fork_wheels import LOCK, verify_installed
+
+    lock = json.loads(LOCK.read_text(encoding="utf-8"))
+    verify_installed(lock)
+    return lock
+
+
 def headers(lock=None):
     # The installed NGSolve/Netgen ABI owns pybind headers.
     import netgen
@@ -237,12 +245,7 @@ def main():
     nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
     cuda_sdk_flags, cuda_sdk_identity = (windows_cuda_layout(cuda, args.matlab_root, nvcc_version)
                                          if windows else ([], None))
-    lock = None
-    if windows:
-        from ci_fork_wheels import LOCK, verify_installed
-
-        lock = json.loads(LOCK.read_text(encoding="utf-8"))
-        verify_installed(lock)
+    lock = verify_windows_fork() if windows else None
     include = headers(lock)
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
