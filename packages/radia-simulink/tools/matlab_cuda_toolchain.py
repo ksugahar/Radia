@@ -12,6 +12,7 @@ from vs2022_toolchain import discover_vs, compiler_bin
 # Declared task envelopes, not caller-selected resource overrides. Enforcement
 # remains with the external owned Job Object; values here bind its receipt.
 _BUILD_TASK_LIMITS = {
+    'hcurl-ams': {'cpu_count': 4, 'job_commit_bytes': 16 * 2**30, 'wall_seconds': 900},
     'hdiv-mmm': {'cpu_count': 4, 'job_commit_bytes': 16 * 2**30, 'wall_seconds': 900},
     'ih': {'cpu_count': 4, 'job_commit_bytes': 8 * 2**30, 'wall_seconds': 1800},
 }
@@ -43,7 +44,8 @@ def require_build_admission(root, lane, path, expected_sha256):
             or set(declared_limits) != set(limits)
             or any(type(declared_limits[key]) is not int or declared_limits[key] != value
                    for key, value in limits.items())
-            or ((task == 'ih') != (lane == 'ih'))):
+            or ((task == 'ih') != (lane == 'ih'))
+            or (task == 'hcurl-ams' and lane != 'ams')):
         raise RuntimeError('GPU build task/resource admission mismatch')
     commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
     if subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True).strip():
