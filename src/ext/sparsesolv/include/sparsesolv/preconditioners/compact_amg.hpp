@@ -614,7 +614,7 @@ public:
     /// rows, and solve a coarsest level of at most dense_max rows with a dense
     /// inverse (one parallel product for both right-hand sides of DualMult).
     // Auxiliary Galerkin operators can have a kernel even with nonzero diagonals.
-    void SetCoarsePseudoinverse() { coarse_pseudoinverse_ = true; }
+    void SetCoarsePseudoinverse(int max_rows) { coarse_pseudoinverse_max_ = max_rows; }
 
     void SetLeanCoarse(double stall_ratio, int dense_max) {
         stall_ratio_ = stall_ratio;
@@ -709,7 +709,7 @@ private:
     mutable std::vector<double> dual_level_s_;
     double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
     bool constant_nullspace_ = false;
-    bool coarse_pseudoinverse_ = false;
+    int coarse_pseudoinverse_max_ = 0;
     int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
     int refresh_count_ = 0;
     bool native_galerkin_ = false;
@@ -1188,7 +1188,7 @@ private:
     /// at most dense_coarse_max_ rows, sparse Cholesky otherwise.
     void FactorCoarsest() {
         auto& c = levels_.back();
-        if (coarse_pseudoinverse_ && c.ndof <= min_coarse_) {
+        if (coarse_pseudoinverse_max_ > 0 && c.ndof <= coarse_pseudoinverse_max_) {
             FactorSemidefiniteCoarsest(c);
             return;
         }
