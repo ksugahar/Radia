@@ -36,6 +36,9 @@ Example producer: docs/maglev/demos/rotating_magnet_eddy_animation_export.py
   is written on screen and in the scene properties.
 - Nothing uncomputed is added: no field lines, sparks, levitation or extra motion.
 
+## Caller setup
+- pip install "radia-mcp[blender]" (NumPy and h5py for the MCP process).
+
 ## Worker setup (optional, outside the wheel)
 - Python 3.13 venv with bpy: pip install -r packages/radia-mcp/tools/blender/requirement.txt
 - RADIA_BLENDER_PYTHON = that interpreter.  It is started with -I -B.
