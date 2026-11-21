@@ -41,10 +41,20 @@ struct Output {
     int n_null = 0;
     double max_abs_L = 0.0;
     double z_true_residual = 0.0;     // ||Z I - A^T V|| / ||A^T V|| on the device
+    double kcl_true_residual = 0.0;   // ||A I - J|| / ||J|| on the device
     double t_assemble_s = 0.0, t_energy_s = 0.0, t_factor_s = 0.0, t_solve_s = 0.0;
     std::size_t bytes_to_device = 0, bytes_to_host = 0;
 };
 
+struct GateResult {
+    bool cholesky = false;
+    double min_eig_over_max = 0.0;
+    int n_null = 0;
+    double max_abs_L = 0.0;
+};
+
 Output solve_host(const Input& in);
+// The device energy gate on a host-supplied symmetric matrix (test entry; uploads one matrix).
+GateResult energy_gate_host(const double* L_column_major, int m);
 
 }  // namespace radia_peec_fin

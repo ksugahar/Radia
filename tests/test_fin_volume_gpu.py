@@ -34,6 +34,8 @@ def test_gpu_matches_cpu_on_identical_bars(pair):
     meta = gpu["gpu"]
     assert gpu["backend"] == "gpu" and meta["backend"] == "gpu", meta
     assert meta["true_relative_residual"] <= 1e-6, meta
+    assert meta["kcl_relative_residual"] <= 1e-6, meta
+    assert gpu["true_residual"]["kcl_relative"] == meta["kcl_relative_residual"], gpu["true_residual"]
     for key in ("R_ohm", "L_H"):
         assert abs(gpu[key] - cpu[key]) <= 1e-9 * abs(cpu[key]), (key, gpu[key], cpu[key])
     di = np.linalg.norm(gpu["current"] - cpu["current"]) / np.linalg.norm(cpu["current"])
@@ -55,3 +57,31 @@ def test_backend_is_explicit():
 
     with pytest.raises(ValueError, match="backend must be"):
         solve_fin_volume(FIXTURES / "beak_fin_short.step", backend="auto", **KW)
+
+
+def _gate():
+    if os.environ.get("RADIA_PEEC_FIN_GPU_TEST") != "1":
+        pytest.skip("Optional GPU lane requires RADIA_PEEC_FIN_GPU_TEST=1")
+    from radia.gpu import _native
+
+    return _native("_peec_fin_cuda").energy_gate
+
+
+def test_device_energy_gate_branches():
+    """Guards: the device gate admits SPD L by Cholesky, admits a PSD L with
+    an exact null space through the checked spectrum, and raises on negative
+    energy instead of using unchecked eigenvalues.
+    Assumes: small dense symmetric controls with known spectra."""
+    gate = _gate()
+    rng = np.random.default_rng(7)
+    q, _ = np.linalg.qr(rng.standard_normal((12, 12)))
+    spd = (q * np.linspace(1.0, 2.0, 12)) @ q.T
+    g = gate(np.ascontiguousarray(spd))
+    assert g["cholesky"] and g["n_null"] == 0, g
+    psd = (q * np.r_[-1e-16, -1e-16, np.linspace(1.0, 2.0, 10)]) @ q.T  # null to roundoff
+    g = gate(np.ascontiguousarray(0.5 * (psd + psd.T)))
+    assert not g["cholesky"] and g["n_null"] == 2, g
+    assert abs(g["min_eig_over_max"]) <= 12 * np.finfo(float).eps, g
+    neg = (q * np.r_[-1e-3, np.linspace(1.0, 2.0, 11)]) @ q.T
+    with pytest.raises(RuntimeError, match="negative energy"):
+        gate(np.ascontiguousarray(0.5 * (neg + neg.T)))

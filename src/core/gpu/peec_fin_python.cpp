@@ -54,9 +54,11 @@ static py::tuple solve(Array<double> center, Array<double> direction, Array<doub
     std::copy(o.voltage.begin(), o.voltage.end(), V.mutable_data());
     py::dict meta;
     meta["backend"] = "gpu"; meta["precision"] = "float64";
-    meta["matrix_residency"] = "L and Z assembled, gated, factorised and solved on the device";
+    meta["matrix_residency"] = "L and Z assembled, gated, factorised and solved on the device; "
+                               "only status words, spectrum extremes and counts, I and V return";
     meta["cholesky"] = o.cholesky; meta["min_eig_over_max"] = o.min_eig_over_max; meta["n_null"] = o.n_null;
     meta["max_abs_L"] = o.max_abs_L; meta["true_relative_residual"] = o.z_true_residual;
+    meta["kcl_relative_residual"] = o.kcl_true_residual;
     meta["IRI"] = o.current_R_current; meta["ILI"] = o.current_L_current;
     meta["t_assemble_s"] = o.t_assemble_s; meta["t_energy_s"] = o.t_energy_s;
     meta["t_factor_s"] = o.t_factor_s; meta["t_solve_s"] = o.t_solve_s;
@@ -64,7 +66,25 @@ static py::tuple solve(Array<double> center, Array<double> direction, Array<doub
     return py::make_tuple(I, V, meta);
 }
 
+static py::dict energy_gate(Array<double> L) {
+    if (L.ndim() != 2 || L.shape(0) != L.shape(1) || L.shape(0) <= 0) throw py::value_error("L must be square");
+    const int m = int(L.shape(0));
+    std::vector<double> col(L.data(), L.data() + std::size_t(m) * m);  // symmetric: row == column major
+    for (double x : col) if (!std::isfinite(x)) throw py::value_error("L: non-finite entry");
+    radia_peec_fin::GateResult g;
+    {
+        py::gil_scoped_release release;
+        g = radia_peec_fin::energy_gate_host(col.data(), m);
+    }
+    py::dict d;
+    d["cholesky"] = g.cholesky; d["min_eig_over_max"] = g.min_eig_over_max;
+    d["n_null"] = g.n_null; d["max_abs_L"] = g.max_abs_L;
+    return d;
+}
+
 PYBIND11_MODULE(_peec_fin_cuda, m) {
+    m.def("energy_gate", &energy_gate, py::arg("L").noconvert(),
+          "Device energy gate on a symmetric matrix (test entry)");
     m.doc() = "Device-resident fin PEEC port solve; no import-time CUDA calls";
     m.def("solve", &solve, py::arg("center").noconvert(), py::arg("direction").noconvert(),
           py::arg("width_dir").noconvert(), py::arg("has_width_dir").noconvert(), py::arg("length").noconvert(),

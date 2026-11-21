@@ -523,6 +523,9 @@ def solve_fin_volume_gpu(lattice, *, frequency, sigma, current_A, box_order=BOX_
     return {"lattice": lattice, "current": np.asarray(current), "R_ohm": r_total, "L_H": l_total,
             "port_voltage_V": complex(voltage[node_map[plus]]), "gpu": dict(meta),
             "box_order": int(box_order), "coil_power_W": 0.5 * r_total * i2,
+            "true_residual": {"kvl_relative": float(meta["true_relative_residual"]),
+                              "kcl_relative": float(meta["kcl_relative_residual"]),
+                              "limit": 1e-6},
             "skin_depth_m": delta, "n_branches": int(len(lattice.branches)),
             "n_nodes": int(n_nodes), "paths": paths, "I_fil": np.asarray(current),
             "backend": "gpu"}
