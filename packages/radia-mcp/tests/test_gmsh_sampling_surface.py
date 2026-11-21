@@ -138,3 +138,86 @@ def test_native_gmsh_reproduces_affine_field_at_non_node_points(tmp_path, permut
     err = np.abs(V - expected).max() / scale
     assert err < 1e-12, f"max rel error {err:.3e}; got {V.tolist()} expected {expected.tolist()}"
     assert summary["gmsh_runtime"]["msh42_roundtrip_probe"] is True
+
+
+def test_output_never_replaces_the_source_or_an_existing_file(tmp_path):
+    """Guards: --out equal to, linked to, or beside an existing file never truncates it."""
+    src = tmp_path / "s.h5"
+    _source(src)
+    before = ss._sha256(src)
+    with pytest.raises(ValueError, match="source record"):
+        ss.resample(src, src, QUERY, QUERY_IDS)
+    with pytest.raises(ValueError, match="source record"):
+        ss.resample(src, tmp_path / "." / "s.h5", QUERY, QUERY_IDS)
+    try:
+        os.link(src, tmp_path / "hard.h5")
+    except OSError:
+        pass
+    else:
+        with pytest.raises(ValueError, match="same file"):
+            ss.resample(src, tmp_path / "hard.h5", QUERY, QUERY_IDS)
+    other = tmp_path / "other.h5"
+    other.write_bytes(b"unrelated")
+    with pytest.raises(FileExistsError):
+        ss.resample(src, other, QUERY, QUERY_IDS)
+    assert other.read_bytes() == b"unrelated"
+    assert ss._sha256(src) == before, "source record changed"
+
+
+def test_empty_selection_is_a_clear_value_error(tmp_path):
+    src = tmp_path / "s.h5"
+    _source(src)
+    with pytest.raises(ValueError, match="no solver steps"):
+        ss.resample(src, tmp_path / "o.h5", QUERY, QUERY_IDS, steps=[])
+    with pytest.raises(ValueError, match="no query points"):
+        ss.resample(src, tmp_path / "o.h5", np.empty((0, 3)), np.empty(0, int))
+
+
+@pytest.mark.parametrize("defect", ["nonfinite", "missing_point", "missing_step"])
+def test_malformed_native_values_are_rejected_before_writing(tmp_path, monkeypatch, defect):
+    from radia_mcp.gmsh import _gmsh_subprocess
+    steps = [0, 2, 5]
+
+    def fake(script, args, **kwargs):
+        values = [[[1.0, -2.0, 3.0] for _ in QUERY] for _ in steps]
+        if defect == "nonfinite":
+            values[1][2][0] = float("nan")
+        elif defect == "missing_point":
+            values[0].pop()
+        else:
+            values.pop()
+        return {"ok": True, "times": TIMES[steps].tolist(),
+                "values": values, "distances": [[0.0] * len(r) for r in values],
+                "runtime": {"wheel_sha256": "0" * 64}}
+
+    monkeypatch.setattr(_gmsh_subprocess, "run_gmsh_json_subprocess", fake)
+    src = tmp_path / "s.h5"
+    _source(src)
+    with pytest.raises(RuntimeError, match="shape|non-finite"):
+        ss.resample(src, tmp_path / "o.h5", QUERY, QUERY_IDS, steps=steps)
+    assert not (tmp_path / "o.h5").exists()
+    assert not list(tmp_path.glob(".o.h5.*.tmp")), "temporary output left behind"
+
+
+def test_publish_does_not_replace_an_output_created_meanwhile(tmp_path, monkeypatch):
+    """Guards: publishing is exclusive even if the output appears after the up-front check."""
+    from radia_mcp.gmsh import _gmsh_subprocess
+    steps = [0, 2]
+    monkeypatch.setattr(_gmsh_subprocess, "run_gmsh_json_subprocess", lambda *a, **k: {
+        "ok": True, "times": TIMES[steps].tolist(),
+        "values": [[[1.0, -2.0, 3.0] for _ in QUERY] for _ in steps],
+        "distances": [[0.0] * len(QUERY) for _ in steps], "runtime": {}})
+    out = tmp_path / "o.h5"
+    real = ss._write_output
+
+    def write_then_race(*args):
+        real(*args)
+        out.write_bytes(b"created by someone else")
+
+    monkeypatch.setattr(ss, "_write_output", write_then_race)
+    src = tmp_path / "s.h5"
+    _source(src)
+    with pytest.raises(FileExistsError):
+        ss.resample(src, out, QUERY, QUERY_IDS, steps=steps)
+    assert out.read_bytes() == b"created by someone else"
+    assert not list(tmp_path.glob(".o.h5.*.tmp")), "temporary output left behind"

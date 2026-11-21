@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -154,10 +155,35 @@ finally:
 '''
 
 
+def _check_output_target(source_h5, out_h5):
+    """Refuse an output that is, or could replace, the source or another file."""
+    src, out = Path(source_h5), Path(out_h5)
+    if not src.is_file():
+        raise FileNotFoundError(f"source record {src} does not exist")
+    if out.exists() or out.is_symlink():
+        if out.exists() and os.path.samefile(src, out):
+            raise ValueError(f"output {out} is the source record (same file); refusing to overwrite it")
+        raise FileExistsError(f"output {out} already exists; choose a new path")
+    if out.resolve() == src.resolve():
+        raise ValueError(f"output {out} resolves to the source record {src}")
+    if not out.parent.is_dir():
+        raise FileNotFoundError(f"output directory {out.parent} does not exist")
+
+
+def _publish_exclusive(tmp, out):
+    """Make ``tmp`` visible as ``out`` only if ``out`` does not exist yet."""
+    try:
+        os.link(tmp, out)          # fails with FileExistsError if out appeared meanwhile
+    finally:
+        os.unlink(tmp)
+
+
 def check_query_points(points, ids, query, rel_tol=1e-9):
     """Raise unless every query point is strictly inside the planar grid."""
     normal, axes, (u, w, c0), _ = grid_association(points, ids)
     q = np.asarray(query, float)
+    if q.size == 0:
+        raise ValueError("no query points selected")
     if q.ndim != 2 or q.shape[1] != 3 or not np.all(np.isfinite(q)):
         raise ValueError(f"query points must be finite (q, 3), got {q.shape}")
     scale = max(u[-1] - u[0], w[-1] - w[0])
@@ -176,11 +202,16 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
              workdir=None, timeout_s=600.0):
     """Resample /field/J_A_per_m2 of ``source_h5`` at query points via Gmsh 5.
 
-    ``source_h5`` is only read.  Returns a summary dict; raises on any
-    association, time, field, runtime or probe failure.
+    ``source_h5`` is only read; its SHA-256 is taken before and after reading
+    and again before publishing.  ``out_h5`` must be a new path: the record is
+    written to a temporary file in the same directory and published only if
+    ``out_h5`` still does not exist.  Returns a summary dict; raises on any
+    target, association, time, field, runtime or probe failure.
     """
     import h5py
     from radia_mcp.gmsh._gmsh_subprocess import run_gmsh_json_subprocess
+    _check_output_target(source_h5, out_h5)
+    source_sha = _sha256(source_h5)
     with h5py.File(source_h5, "r") as f:
         schema = f.attrs.get("schema")
         schema = schema.decode() if isinstance(schema, bytes) else schema
@@ -203,11 +234,17 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
                                       "conductor/box_min_m", "conductor/box_max_m") if k in f}
         conductor_attrs = dict(f["conductor"].attrs) if "conductor" in f else {}
         src_attrs = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in f.attrs.items()}
+    if _sha256(source_h5) != source_sha:
+        raise RuntimeError("source record changed while it was being read")
     steps = list(range(len(t))) if steps is None else [int(s) for s in steps]
+    if not steps:
+        raise ValueError("no solver steps selected")
     if sorted(set(steps)) != steps or steps[0] < 0 or steps[-1] >= len(t) or len(steps) < 2:
         raise ValueError(f"steps must be >= 2 increasing indices into time_s, got {steps}")
     q = np.asarray(query_points, float)
     qid = np.asarray(query_ids, dtype=np.int64)
+    if q.size == 0 or qid.size == 0:
+        raise ValueError("no query points selected")
     if len(qid) != len(q) or len(np.unique(qid)) != len(qid):
         raise ValueError("query ids must be unique, one per query point")
     check_query_points(pts, ids, q)
@@ -223,18 +260,55 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
         if not res.get("ok"):
             raise RuntimeError(f"Gmsh probe failed: {res.get('error')}")
         msh_sha = _sha256(msh)
+    V = _native_values(res, len(steps), len(q))
     times = np.asarray(res["times"], float)
     if not np.allclose(times, t[steps], rtol=1e-14, atol=0):
         raise RuntimeError(f"Gmsh step times {times.tolist()} differ from source {t[steps].tolist()}")
-    bad = [(s, j) for s, row in enumerate(res["values"]) for j, v in enumerate(row) if len(v) != 3]
-    if bad:
-        raise RuntimeError(f"{len(bad)} probes found no element (first step/point {bad[0]})")
     dist = np.asarray(res["distances"], float)
     if np.any(dist != 0.0):
         raise RuntimeError(f"probe returned non-exact matches (max distance {dist.max():.3e})")
-    V = np.asarray(res["values"], float)
     runtime = res["runtime"]
-    with h5py.File(out_h5, "w") as g:
+    out_h5 = Path(out_h5)
+    fd, tmp = tempfile.mkstemp(prefix=f".{out_h5.name}.", suffix=".tmp", dir=out_h5.parent)
+    os.close(fd)
+    try:
+        _write_output(h5py, tmp, src_attrs, source_h5, source_sha, msh_sha, grid, runtime,
+                      t, steps, copy, conductor_attrs, qid, q, V)
+        if _sha256(source_h5) != source_sha:
+            raise RuntimeError("source record changed during resampling")
+        _publish_exclusive(tmp, out_h5)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return {"out_h5": str(out_h5), "out_sha256": _sha256(out_h5), "steps": steps,
+            "n_query": len(q), "grid": grid, "surface_msh_sha256": msh_sha,
+            "source_h5_sha256": source_sha, "gmsh_runtime": runtime}
+
+
+def _native_values(res, n_steps, n_points):
+    """Return the probe values as a finite (steps, points, 3) array or raise."""
+    values, times, dist = res.get("values"), res.get("times"), res.get("distances")
+    expected = (n_steps, n_points, 3)
+    if not (isinstance(values, list) and isinstance(times, list) and isinstance(dist, list)
+            and len(values) == len(times) == len(dist) == n_steps
+            and all(isinstance(r, list) and len(r) == n_points for r in values)
+            and all(isinstance(r, list) and len(r) == n_points for r in dist)):
+        raise RuntimeError(f"Gmsh values do not have shape {expected}")
+    bad = [(s, j) for s, row in enumerate(values) for j, v in enumerate(row)
+           if not (isinstance(v, list) and len(v) == 3)]
+    if bad:
+        raise RuntimeError(f"{len(bad)} probes found no element or not 3 components "
+                           f"(first step/point {bad[0]}); expected shape {expected}")
+    V = np.asarray(values, float)
+    if not np.all(np.isfinite(V)):
+        raise RuntimeError("Gmsh values contain non-finite entries")
+    return V
+
+
+def _write_output(h5py, path, src_attrs, source_h5, source_sha, msh_sha, grid, runtime,
+                  t, steps, copy, conductor_attrs, qid, q, V):
+    with h5py.File(path, "w") as g:
         for k, v in src_attrs.items():
             g.attrs[f"source_{k}"] = v
         g.attrs.update({
@@ -243,7 +317,7 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
             "reference_status": src_attrs.get("reference_status", ""),
             "derivation": "Gmsh 5 resampling of the source record on its declared sampling surface",
             "interpolation_association": ASSOCIATION, "limits": LIMITS,
-            "source_h5": Path(source_h5).name, "source_h5_sha256": _sha256(source_h5),
+            "source_h5": Path(source_h5).name, "source_h5_sha256": source_sha,
             "surface_msh_sha256": msh_sha, "surface_msh_format": "ASCII MSH 4.2",
             "surface_grid": json.dumps(grid),
             "probe": "gmsh.view.probe(step=s, numComp=3, distanceMax=0, dim=2)",
@@ -265,6 +339,3 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
         g["samples/id"] = qid
         g["samples/point_m"] = q
         g["field/J_A_per_m2"] = V
-    return {"out_h5": str(out_h5), "out_sha256": _sha256(out_h5), "steps": steps,
-            "n_query": len(q), "grid": grid, "surface_msh_sha256": msh_sha,
-            "source_h5_sha256": _sha256(source_h5), "gmsh_runtime": runtime}

@@ -63,7 +63,8 @@ def main():
     report = {**summary, "seconds_resample": seconds, "shape": list(V.shape), "unit": "A/m^2",
               "oracle": "NumPy Quad4 cell-centre value (mean of the four corners)",
               "max_abs_J_A_per_m2": scale, "max_rel_error_vs_oracle": err}
-    Path(a.out).with_suffix(".json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    with open(Path(a.out).with_suffix(".json"), "x", encoding="utf-8") as stream:  # never replace
+        stream.write(json.dumps(report, indent=2))
     print(json.dumps({k: report[k] for k in ("out_sha256", "shape", "max_rel_error_vs_oracle",
                                              "seconds_resample")}))
     if not err < 1e-12:
