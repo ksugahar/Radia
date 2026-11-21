@@ -47,7 +47,7 @@ STEP ─ fin_sweep.fin_graph_from_step ─ assemble_experimental_fin_peec ─ �
 ```
 --coil-solver fin-surface --coil-step coil.step
 --fin-n-lanes 64  --fin-n-stations 20  --fin-lane-grading {auto,uniform}
---fin-tip-lanes 8 --fin-route {auto,straight_prism,section_planes}
+--fin-tip-lanes 8 --fin-route {auto,straight_prism,cap_march}
 ```
 
 `--peec-*` は `fin-surface` に効かない（近接反復・Dowell/Bessel は使わない）。

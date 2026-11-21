@@ -82,6 +82,11 @@ struct PEECSegment {
     int nhinc;              // Height subdivisions (default: 1 = no subdivision)
     int parent_segment;     // Parent segment index (-1 if not a sub-filament)
 
+    // Optional cross-section width axis (unit, perpendicular to direction);
+    // used only by the opt-in oriented-box kernel.
+    TVector3d width_dir;
+    bool has_width_dir = false;
+
     PEECSegment()
         : length(0), width(0), height(0), sigma(5.8e7),
           cross_section_type(CrossSectionType::RECTANGULAR),
@@ -222,6 +227,26 @@ public:
     PEECMatrixBuilder();
     ~PEECMatrixBuilder();
     void EnableVolumeKernel(int quadrature_order);
+
+    /**
+     * @brief Opt-in oriented-box kernel for every entry, self included.
+     *
+     * Each bar carries a uniform current density over its oriented
+     * rectangular box (length x width x height in its own frame).  Every
+     * entry is the same Galerkin integral
+     *   L_ij = mu0/(4 pi) (d_i . d_j) / (A_i A_j) int_i int_j dV dV' / |r - r'|,
+     * with the inner integral in closed form (potential of a uniform
+     * rectangular prism) and the outer one by tensor Gauss-Legendre over the
+     * smaller box: ceil(max_order/2 * extent / centre distance) points per
+     * axis, between 1 and ``max_order`` (1..32).  L is the Gram matrix of
+     * the box currents under the positive-definite 1/r kernel for any
+     * orientation and for touching or overlapping support.  0 (default)
+     * keeps the original filament model.  Select before adding geometry.
+     */
+    void EnableOrientedBoxKernel(int max_order);
+
+    /// Width axis of the most recently added segment (see PEECSegment::width_dir).
+    void SetLastSegmentWidthDir(double x, double y, double z);
 
     // ========== Input geometry ==========
 
@@ -399,8 +424,24 @@ public:
      */
     double InductanceEntry(int i, int j) const;
 
+    /// Branch counts of one oriented-box entry (diagnostic; no effect on values).
+    struct OrientedBoxTrace {
+        bool composite = false;          ///< top-level outer box straddles the inner box surface
+        long long splits = 0;            ///< cells bisected
+        long long leaves = 0;            ///< composite leaf cells integrated
+        long long straddling_leaves = 0; ///< leaves still crossing the surface (depth limit)
+        long long contained_top = 0;     ///< corner containment at depth 0
+        long long contained_descendants = 0;  ///< corner containment at depth > 0
+        long long cross_axes_skipped = 0;     ///< SAT edge-cross axes below the norm cutoff
+        long long cross_axes_evaluated = 0;   ///< SAT edge-cross axes tested
+    };
+    /// Recompute entry (i, j) of the oriented-box kernel and return its branch counts.
+    OrientedBoxTrace TraceOrientedBoxEntry(int i, int j) const;
+
 private:
     std::shared_ptr<const VolumeGreenRule> volume_rule_;
+    int box_max_order_ = 0;
+    std::vector<double> box_rule_x_, box_rule_w_;  // Gauss rules n = 1..order packed for radia_peec_box::Rules
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
@@ -438,6 +479,10 @@ private:
     double MutualInductanceRectBar(const PEECSegment& seg_i,
                                     const PEECSegment& seg_j,
                                     int n_gauss = 3) const;
+
+    /** Oriented-box Galerkin entry (see EnableOrientedBoxKernel). */
+    double OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
+                                 bool self, OrientedBoxTrace* trace = nullptr) const;
 
     // Compute self-potential coefficient (disk approximation)
     double SelfPotential(const PEECNode& node) const;

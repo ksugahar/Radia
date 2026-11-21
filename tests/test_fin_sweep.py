@@ -275,6 +275,38 @@ def test_auto_resolution_refuses_to_exceed_the_branch_budget():
                             max_branches=2000)
 
 
+def test_branch_budget_is_judged_on_the_pinned_discretisation():
+    """Guards: a caller who pins lanes/stations under the budget is not
+    refused for the measured (unpinned) discretisation, and a pinned
+    discretisation over the budget is still refused.
+    Assumes: the measured tapered-fin discretisation exceeds 2000 branches."""
+    from radia.fin_sweep import auto_fin_resolution
+
+    step = FIXTURES / "beak_fin_tapered.step"
+    pinned = auto_fin_resolution(step, max_branches=2000, n_lanes=32,
+                                 n_stations=9)
+    assert pinned["n_lanes"] == 32 and pinned["n_stations"] == 9
+    assert pinned["rule"]["estimated_branches"] == (2 * 9 - 3) * 32, pinned["rule"]
+    assert pinned["rule"]["measured_lanes"] * (
+        2 * pinned["rule"]["measured_stations"] - 3) > 2000, pinned["rule"]
+    assert pinned["rule"]["pinned"] == ["n_lanes", "n_stations"], pinned["rule"]
+    with pytest.raises(ValueError, match="branches"):
+        auto_fin_resolution(step, max_branches=2000, n_lanes=256, n_stations=9)
+
+
+def test_branch_budget_holds_when_every_value_is_pinned():
+    """Guards: fin_graph_from_step refuses an all-explicit discretisation
+    over the branch budget before building the graph (no auto pass runs).
+    Assumes: 160 lanes x 40 stations = 12320 branches > the 12000 default."""
+    from radia.fin_sweep import DEFAULT_MAX_BRANCHES, fin_graph_from_step
+
+    assert (2 * 40 - 3) * 160 == 12320 > DEFAULT_MAX_BRANCHES
+    with pytest.raises(ValueError, match="12320 branches"):
+        fin_graph_from_step(FIXTURES / "beak_fin_short.step", n_lanes=160,
+                            n_stations=40, n_outline=64, lane_grading="uniform",
+                            tip_lanes=2)
+
+
 def test_fin_graph_from_step_needs_only_the_file_and_records_its_choice():
     from radia.fin_sweep import fin_graph_from_step
 

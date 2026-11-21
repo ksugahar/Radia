@@ -8,12 +8,14 @@
 
 #include "rad_peec_matrices.h"
 #include "rad_bicgstab.h"
+#include "peec_oriented_box.hpp"
 #include <cmath>
 #include <algorithm>
 #include <set>
 #include <queue>
 #include <limits>
 #include <stdexcept>
+#include <array>
 
 #include "rad_parallel.h"
 
@@ -135,6 +137,31 @@ PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0), eps_r_(1.0) {}
 void PEECMatrixBuilder::EnableVolumeKernel(int order) {
     if (!segments_.empty()) throw std::logic_error("Select volume kernel before adding geometry");
     volume_rule_ = std::make_shared<VolumeGreenRule>(order);
+}
+
+void PEECMatrixBuilder::EnableOrientedBoxKernel(int max_order) {
+    if (!segments_.empty()) throw std::logic_error("Select the oriented-box kernel before adding geometry");
+    if (max_order < 0 || max_order > 32)
+        throw std::invalid_argument("oriented-box kernel order must be 0 (off) or 1..32");
+    if (max_order > 0 && volume_rule_)
+        throw std::logic_error("the oriented-box kernel and the Cartesian volume kernel are exclusive");
+    box_max_order_ = max_order;
+    const std::size_t packed = static_cast<std::size_t>(max_order) * (max_order + 1) / 2;
+    box_rule_x_.assign(packed, 0.0);
+    box_rule_w_.assign(packed, 0.0);
+    radia_peec_box::GaussRules(max_order, box_rule_x_.data(), box_rule_w_.data());
+}
+
+void PEECMatrixBuilder::SetLastSegmentWidthDir(double x, double y, double z) {
+    if (segments_.empty()) throw std::logic_error("no segment to set a width axis on");
+    PEECSegment& seg = segments_.back();
+    const TVector3d& d = seg.direction;
+    const double dot = x * d.x + y * d.y + z * d.z;
+    const double wx = x - dot * d.x, wy = y - dot * d.y, wz = z - dot * d.z;
+    const double n = std::sqrt(wx * wx + wy * wy + wz * wz);
+    if (!(n > 1e-9)) throw std::invalid_argument("width axis is parallel to the segment");
+    seg.width_dir = TVector3d(wx / n, wy / n, wz / n);
+    seg.has_width_dir = true;
 }
 
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
@@ -571,6 +598,7 @@ double PEECMatrixBuilder::InductanceEntry(int i, int j) const {
         };
         return volume_rule_->Inductance(box(a),box(b));
     }
+    if (box_max_order_ > 0) return OrientedBoxInductance(a, b, i == j);
     if (i == j) return SelfInductance(a);
     const double dot=a.direction.x*b.direction.x+a.direction.y*b.direction.y+a.direction.z*b.direction.z;
     const bool same_parent=a.parent_segment>=0 && a.parent_segment==b.parent_segment;
@@ -1000,6 +1028,46 @@ double PEECMatrixBuilder::MutualInductanceRectBar(
     }
 
     return M_sum / w_sum;
+}
+
+namespace {
+namespace pb = radia_peec_box;
+pb::Frame MakeBoxFrame(const PEECSegment& s) {
+    if (s.cross_section_type != CrossSectionType::RECTANGULAR || !(s.width > 0.0) ||
+        !(s.height > 0.0) || !(s.length > 0.0))
+        throw std::invalid_argument(
+            "oriented-box kernel requires rectangular bars with positive length, width and height");
+    const pb::V3 w{s.width_dir.x, s.width_dir.y, s.width_dir.z};
+    return pb::FrameFromBar({s.center.x, s.center.y, s.center.z},
+                            {s.direction.x, s.direction.y, s.direction.z},
+                            s.has_width_dir ? &w : nullptr, s.length, s.width, s.height);
+}
+}  // namespace
+
+PEECMatrixBuilder::OrientedBoxTrace PEECMatrixBuilder::TraceOrientedBoxEntry(int i, int j) const {
+    if (box_max_order_ <= 0) throw std::invalid_argument("oriented-box trace requires the oriented-box kernel");
+    const int n = static_cast<int>(segments_.size());
+    if (i < 0 || j < 0 || i >= n || j >= n) throw std::out_of_range("oriented-box trace: segment index");
+    OrientedBoxTrace t;
+    OrientedBoxInductance(segments_[i], segments_[j], i == j, &t);
+    return t;
+}
+
+double PEECMatrixBuilder::OrientedBoxInductance(const PEECSegment& seg_i, const PEECSegment& seg_j,
+                                                bool self, OrientedBoxTrace* trace) const {
+    const pb::Rules rules{box_rule_x_.data(), box_rule_w_.data(), box_max_order_};
+    if (!trace) return pb::Inductance(MakeBoxFrame(seg_i), MakeBoxFrame(seg_j), self, rules, nullptr);
+    pb::Trace t;
+    const double v = pb::Inductance(MakeBoxFrame(seg_i), MakeBoxFrame(seg_j), self, rules, &t);
+    trace->composite = t.composite;
+    trace->splits += t.splits;
+    trace->leaves += t.leaves;
+    trace->straddling_leaves += t.straddling_leaves;
+    trace->contained_top += t.contained_top;
+    trace->contained_descendants += t.contained_descendants;
+    trace->cross_axes_skipped += t.cross_axes_skipped;
+    trace->cross_axes_evaluated += t.cross_axes_evaluated;
+    return v;
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,

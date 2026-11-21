@@ -154,3 +154,25 @@ def test_beak_polygon_keeps_tip_lane_and_transverse_redistribution():
 def test_no_mesh_at_terminals_or_outside(stations):
     with pytest.raises(ValueError, match="interior"):
         build_hybrid_surface_topology(_rings(), stations)
+
+
+def test_coil_true_residuals_accept_the_exact_split_and_reject_others():
+    """Guards: the fin-surface coil solve is checked against its own MNA
+    equations; a wrong current split (KVL) and the all-zero output of a
+    failed factorisation (KCL) both raise.
+    Assumes: two parallel branches between the port nodes, no mutual L."""
+    from types import SimpleNamespace
+
+    from radia.fin_surface_solver import coil_true_residuals
+
+    peec = SimpleNamespace(segment_nodes=np.array([[0, 1], [0, 1]]), n_nodes=2,
+                           ports=[(0, 1)], L=np.zeros((2, 2)))
+    z = np.array([1.0 + 2.0j, 3.0 - 0.5j])
+    total = 2.0
+    exact = total * np.array([z[1], z[0]]) / (z[0] + z[1])
+    got = coil_true_residuals(peec, z, exact, 1e3, total)
+    assert got["kcl_relative"] < 1e-14 and got["kvl_relative"] < 1e-14, got
+    with pytest.raises(RuntimeError, match="KVL"):
+        coil_true_residuals(peec, z, exact + np.array([1e-3, -1e-3]), 1e3, total)
+    with pytest.raises(RuntimeError, match="KCL"):
+        coil_true_residuals(peec, z, np.zeros(2, dtype=complex), 1e3, total)

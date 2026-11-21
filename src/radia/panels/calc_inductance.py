@@ -384,6 +384,53 @@ def _solve_coil_fin_surface(args):
         "fin_sweep": meta,
         "fin_metrics": sol["stations"],
         "fin_n_branches": sol["n_branches"],
+        "coil_true_residual": sol["coil_true_residual"],
+    }
+
+
+# ======================================================================
+# Coil solver: fin-volume (unreduced volume-lattice PEEC from STEP)
+# ======================================================================
+def _solve_coil_fin_volume(args):
+    """Experimental unreduced volume-lattice PEEC coil (radia.fin_volume).
+
+    Same coil_data contract as ``_solve_coil_fin_surface``: every lattice
+    bar is one two-point polyline with its own complex current.  The coil
+    carries DC bar resistance and partial inductance only (no surface
+    impedance); weak coupling only.
+    """
+    from radia.fin_volume import solve_fin_volume
+
+    progress("FIN", f"STEP -> volume-lattice PEEC (n_lanes={args.fin_n_lanes}, "
+                    f"n_layers={args.fin_n_layers}, n_stations={args.fin_n_stations}, "
+                    f"route={args.fin_route})")
+    t0 = time.perf_counter()
+    sol = solve_fin_volume(
+        args.coil_step, frequency=float(args.frequency),
+        sigma=float(args.coil_sigma), current_A=float(args.current),
+        n_layers=args.fin_n_layers, n_lanes=args.fin_n_lanes,
+        n_stations=args.fin_n_stations, n_outline=args.fin_n_outline,
+        lane_grading=args.fin_lane_grading, tip_lanes=args.fin_tip_lanes,
+        route=str(args.fin_route))
+    t_fin = time.perf_counter() - t0
+    progress("FIN", f"L_coil={sol['L_H'] * 1e9:.3f} nH, R_coil={sol['R_ohm'] * 1e3:.4f} mΩ, "
+                    f"{sol['n_branches']} bars, {sol['n_nodes']} nodes ({t_fin:.1f}s)")
+    return {
+        "source_type": "filament",
+        "L_coil": sol["L_H"], "R_coil": sol["R_ohm"],
+        "paths": sol["paths"], "I_fil": sol["I_fil"],
+        "n_filaments": len(sol["paths"]),
+        "t_coil_topology_s": t_fin, "t_coil_solve_s": 0.0,
+        "cross_section_kind": "fin-volume",
+        "internal_impedance_model": "volume-lattice-dc-bars",
+        "fin_sweep": dict(sol["sweep"].meta),
+        "fin_n_branches": sol["n_branches"],
+        "fin_volume_gates": sol["lattice"].gates,
+        "fin_volume_box_order": sol["box_order"],
+        "fin_volume_inductance_energy": sol["inductance_energy"],
+        "fin_volume_energy_receipt": sol["energy_receipt"],
+        "coil_power_W": sol["coil_power_W"],
+        "coil_true_residual": sol["coil_true_residual"],
     }
 
 
@@ -1811,6 +1858,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_basis_order": int(basis_order),
         "wp_vol_curve_order": int(vol_curve_order),
         "wp_gmres_info": int(info),
+        "wp_linear_residual_rel": res_bem.get("linear_residual_rel"),
+        "wp_linear_residual_limit": res_bem.get("linear_residual_limit"),
         "Z_s_wp_real": Z_s_real_out,
         "Z_s_wp_imag": Z_s_imag_out,
         "skin_depth_wp_mm": None if panel_zs_file else float(delta_wp * 1e3),
@@ -1932,6 +1981,17 @@ def _assemble_vacuum_output(args, coil_data):
         out["fin_n_branches"] = int(coil_data["fin_n_branches"])
         out["fin_sweep"] = coil_data["fin_sweep"]
         out["fin_metrics"] = coil_data["fin_metrics"]
+        out["coil_true_residual"] = coil_data["coil_true_residual"]
+    elif args.coil_solver == "fin-volume":
+        out["n_filaments"] = int(coil_data["n_filaments"])
+        out["fin_n_branches"] = int(coil_data["fin_n_branches"])
+        out["fin_sweep"] = coil_data["fin_sweep"]
+        out["fin_volume_gates"] = coil_data["fin_volume_gates"]
+        for key in ("fin_volume_box_order", "fin_volume_inductance_energy",
+                    "fin_volume_energy_receipt"):
+            out[key] = coil_data[key]
+        out["coil_power_W"] = float(coil_data["coil_power_W"])
+        out["coil_true_residual"] = coil_data["coil_true_residual"]
     else:
         out["coil_mesh_nv"] = int(coil_data["coil_mesh_nv"])
         out["coil_mesh_n_tris"] = int(coil_data["coil_mesh_n_tris"])
@@ -2014,6 +2074,8 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["wp_basis_order"] = int(wp_data.get("wp_basis_order", 1))
     out["wp_vol_curve_order"] = int(wp_data.get("wp_vol_curve_order", 1))
     out["wp_gmres_info"] = wp_data["wp_gmres_info"]
+    out["wp_linear_residual_rel"] = wp_data["wp_linear_residual_rel"]
+    out["wp_linear_residual_limit"] = wp_data["wp_linear_residual_limit"]
     out["Z_s_wp_real"] = wp_data["Z_s_wp_real"]
     out["Z_s_wp_imag"] = wp_data["Z_s_wp_imag"]
     out["skin_depth_wp_mm"] = wp_data["skin_depth_wp_mm"]
@@ -2758,7 +2820,7 @@ def run_inductance(args):
     # Coil-input format must match coil-solver:
     #   peec  -> --coil-step (CAD geometry, filaments derived)
     #   bem-a -> --coil-vol  (pre-meshed surface, no on-the-fly OCC re-mesh)
-    if args.coil_solver in ("peec", "fin-surface") and not args.coil_step:
+    if args.coil_solver in ("peec", "fin-surface", "fin-volume") and not args.coil_step:
         return {"status": "error",
                 "error": f"--coil-step is required for --coil-solver {args.coil_solver}"}
     if args.coil_solver == "bem-a" and not args.coil_vol:
@@ -2856,6 +2918,8 @@ def run_inductance(args):
             coil_data = _solve_coil_peec(args)
         elif args.coil_solver == "fin-surface":
             coil_data = _solve_coil_fin_surface(args)
+        elif args.coil_solver == "fin-volume":
+            coil_data = _solve_coil_fin_volume(args)
         elif args.coil_solver == "bem-a":
             coil_data = _solve_coil_bem_a(args)
         else:
@@ -2922,11 +2986,16 @@ def build_argparser():
                              "--coil-solver bem-a; must contain "
                              "'source'/'sink' boundary labels)")
     parser.add_argument("--coil-solver", required=True,
-                        choices=["peec", "bem-a", "fin-surface"],
+                        choices=["peec", "bem-a", "fin-surface", "fin-volume"],
                         help="peec: PEEC perimeter filaments from STEP (fast). "
                              "bem-a: Weggler EFIE on RWG, reads pre-meshed .vol. "
                              "fin-surface: fin-graded surface PEEC from STEP "
-                             "(radia.fin_sweep; weak coupling only).")
+                             "(radia.fin_sweep; weak coupling only).  "
+                             "fin-volume: experimental unreduced volume-lattice "
+                             "PEEC from STEP (radia.fin_volume; weak only).")
+    parser.add_argument("--fin-n-layers", type=int, default=None,
+                        help="fin-volume: concentric lattice rings per section "
+                             "(graded to the surface; required for fin-volume)")
 
     # ----- fin-surface-specific args -----
     parser.add_argument("--fin-n-lanes", type=int, default=None,
@@ -2949,7 +3018,7 @@ def build_argparser():
                         help="fin-surface: cells requested on each tip arc "
                              "(default: measured)")
     parser.add_argument("--fin-route", choices=("auto", "straight_prism",
-                                                "section_planes"),
+                                                "cap_march"),
                         default="auto",
                         help="fin-surface: STEP sectioning route")
 

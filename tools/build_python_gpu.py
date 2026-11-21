@@ -26,11 +26,14 @@ SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
            "csr_pcg_python_cuda.cu", "ams_amg_kernels.cuh", "resident_amg_host.hpp",
            "resident_amg_cuda.cu", "resident_amg_python.cpp", "snapshot.hpp",
            "ams_core.cuh")
-SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu")
+# Radia-only GPU inputs: not shared with the radia-simulink MEX builds.
+SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu", "peec_fin_host.hpp",
+                            "peec_fin_python.cpp", "peec_fin_cuda.cu", "../peec_oriented_box.hpp")
 COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
               ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
               ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
-              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"))
+              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"),
+              ("_peec_fin_cuda", "peec_fin_python.cpp", "peec_fin_cuda.cu"))
 
 
 def sha(path):
@@ -238,7 +241,7 @@ def main():
     if out == ROOT or ROOT in out.parents:
         raise RuntimeError("Build output must be outside the source checkout")
     out.mkdir(parents=True, exist_ok=False)
-    source_hashes = {str((CORE / name).relative_to(ROOT)).replace("\\", "/"): sha(CORE / name) for name in SOURCES}
+    source_hashes = {(CORE / name).resolve().relative_to(ROOT.resolve()).as_posix(): sha(CORE / name) for name in SOURCES}
     # HDiv sources have one owner and are also consumed by the MEX gateways.
     source_hashes.update(hdiv_source_hashes())
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
@@ -273,6 +276,8 @@ def main():
                        cuda / "lib/x64/cudart.lib"]
             if module in ("_gpu_resident_amg", "_gpu_ams"):
                 command += [cuda / "lib/x64/cublas.lib"]
+            if module == "_peec_fin_cuda":
+                command += [cuda / "lib/x64/cublas.lib", cuda / "lib/x64/cusolver.lib"]
         else:
             # Link against exact pip runtime files; never embed a site-toolkit rpath.
             spec = __import__("importlib.util", fromlist=["util"])
@@ -285,6 +290,8 @@ def main():
                        libraries["libcudart.so.12"]["path"]]
             if module in ("_gpu_resident_amg", "_gpu_ams"):
                 command += [libraries["libcublas.so.12"]["path"]]
+            if module == "_peec_fin_cuda":
+                command += [libraries["libcublas.so.12"]["path"], libraries["libcusolver.so.11"]["path"]]
         if module != "_hdiv_cuda":
             execute(command, out, module + "-host", commands)
         if identity() != commit or any(sha(ROOT / name) != digest for name, digest in source_hashes.items()):
