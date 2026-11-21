@@ -51,11 +51,17 @@ def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
     return aliases[host]
 
 
-def run(command: list[str], *, cwd: Path | None = None) -> None:
-    """Run a command while preserving its output for the pre-push caller."""
+def run(command: list[str], *, cwd: Path | None = None,
+        display: list[str] | None = None) -> None:
+    """Run a command while preserving its output for the pre-push caller.
+
+    ``display`` replaces the argv in failure diagnostics when it holds data
+    that must not reach logs.
+    """
     completed = subprocess.run(command, cwd=cwd, text=True)
     if completed.returncode:
-        raise RuntimeError(f"command failed ({completed.returncode}): {' '.join(command)}")
+        shown = ' '.join(command if display is None else display)
+        raise RuntimeError(f"command failed ({completed.returncode}): {shown}")
 
 
 def git_output(*args: str) -> str:
@@ -116,8 +122,10 @@ def forwarded_env_lines(environ=os.environ) -> list[str]:
 
 def remote_command(script: str, host: str) -> None:
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    run(["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-EncodedCommand", encoded])
+    launcher = ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-EncodedCommand"]
+    # The encoded script carries forwarded private locations; never echo it.
+    run([*launcher, encoded], display=[*launcher, "<script>"])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -195,7 +203,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   try {{
     # ssh reports the account name in a different case than path resolution;
     # a session-owned temp root keeps pytest paths free of the account name.
-    $env:PYTEST_DEBUG_TEMPROOT = Join-Path $root ('tmp\' + [IO.Path]::GetFileName($worktree))
+    $env:PYTEST_DEBUG_TEMPROOT = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
     New-Item -ItemType Directory -Force -Path $env:PYTEST_DEBUG_TEMPROOT | Out-Null
     $venv = Join-Path $root 'fast-venv'
     $python = Join-Path $venv 'Scripts\\python.exe'
@@ -223,7 +231,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   try {{
     if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
       if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
-      $tmp = Join-Path $root ('tmp\' + [IO.Path]::GetFileName($worktree))
+      $tmp = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
       if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }}
       if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}
     }}
