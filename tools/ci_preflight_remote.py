@@ -96,6 +96,24 @@ def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     return effective_base
 
 
+FORWARDED_ENV = ("RADIA_PUBLIC_NAME_RULES_FILE", "RADIA_OPTUNA_SOURCE")
+
+
+def forwarded_env_lines(environ=os.environ) -> list[str]:
+    """Pass private-policy and pinned-source locations to the remote preflight.
+
+    Only locations are forwarded, never file contents; a missing path fails
+    loudly on the remote side like a missing local setting does.
+    """
+    lines = []
+    for name in FORWARDED_ENV:
+        value = environ.get(name, "").strip()
+        if value:
+            quoted = value.replace("'", "''")
+            lines.append(f"$env:{name} = '{quoted}'")
+    return lines
+
+
 def remote_command(script: str, host: str) -> None:
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
     run(["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -140,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             run(["scp", str(bundle), f"{ssh_destination}:{remote_bundle.replace(chr(92), '/')}"])
 
-        script = f"""
+        script = "\n".join(forwarded_env_lines()) + f"""
 $ErrorActionPreference = 'Stop'
 $git = 'C:\\Program Files\\Git\\cmd\\git.exe'
 $system_python = 'C:\\Program Files\\Python312\\python.exe'
