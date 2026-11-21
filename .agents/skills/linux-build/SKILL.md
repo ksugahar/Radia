@@ -20,7 +20,9 @@ exact source revision being tested.
   count within the allocated resources.
 - Match NGSolve and Netgen to the selected checkout's pyproject.toml. On x86_64
   the guide assumes an already reviewed MKL dependency environment. The
-  repository has no hash-locked recipe for preparing it. Stop if the required
+  repository has no hash-locked recipe for preparing it. On aarch64, prepare
+  NGSolve/Netgen with OCC, NumPy and SciPy against the same NVPL provider
+  before building Radia. Stop if the required
   provider or ABI cannot be established. Follow the guide's architecture
   commands and inspect the relevant flags with python tools/build_linux.py --help.
 
@@ -29,9 +31,11 @@ exact source revision being tested.
 Run the build on the target, import the rebuilt extensions in a fresh Python
 process, and run the relevant numerical checks from the guide. Record source
 revision, architecture, dependency versions, compiler, provider and check
-results. Report skipped checks explicitly.
+results. Report skipped checks explicitly. Keep linux-build.json and any
+.so.build.json sidecars private because they can include site-specific paths
+(for example, in ldd output). The sidecars require --require-clean-source.
 
-The earlier 6.2.2607 trial does not establish support for 6.2.2608 or another
-site stack. Verify each target environment before describing it as supported.
+The earlier trial described in the guide does not establish support for the
+versions pinned in the selected checkout's pyproject.toml or for another site stack. Verify each target environment before describing it as supported.
 This skill covers CPU source builds. GPU builds and Linux wheel publication
 are outside this procedure.
