@@ -42,7 +42,8 @@ def _compute(route, p):
              else ng.HCurl(mesh, order=2, complex=True, dirichlet=".*"))
     coefficients = route.Coefficients(stiff=1 / mu, mass_im=omega * sigma, stiff_aux=1 / mu, mass_aux=omega * sigma)
     g = ng.GridFunction(space)
-    g.Set(boundary_A, definedon=mesh.Boundaries(".*"))
+    with ng.TaskManager():
+        g.Set(boundary_A, definedon=mesh.Boundaries(".*"))
     lift = np.array(g.vec.FV().NumPy(), copy=True)
     result = route.solve_hcurl(space, coefficients, np.zeros(space.ndof, dtype=complex), Backend="gpu", lift=lift,
                                bonus=(2 * p + 2, 2 * p + 2, 0), tolerance=1e-11, cycles=4)
@@ -50,7 +51,8 @@ def _compute(route, p):
     assert np.array_equal(result["solution"][~free], lift[~free]), "the Dirichlet lift changed"
     g.vec.FV().NumPy()[:] = result["solution"]
     J = -1j * omega * sigma * g
-    power = float(ng.Integrate(ng.InnerProduct(J, J).real, mesh, order=2 * p + 12)) / (2 * sigma)
+    with ng.TaskManager():
+        power = float(ng.Integrate(ng.InnerProduct(J, J).real, mesh, order=2 * p + 12)) / (2 * sigma)
     return power, result
 
 

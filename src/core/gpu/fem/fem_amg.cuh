@@ -211,9 +211,25 @@ __global__ void k_component_kernel(int n, const int* rp, const double* av, const
     }
     if (!(fabs(sum) <= 1e-10 * scale)) atomicExch(kernel + label[i], 0);
 }
-__global__ void k_kernel_seeds(int n, int constant_kernel, const int* label, const int* kernel, int* seed) {
+__global__ void k_row_numbers(int n, int* number) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) seed[i] = label[i] == i && (constant_kernel || kernel[i]);
+    if (i < n) number[i] = i;
+}
+// The stiffest row of each component, ties to the lowest number, whatever the order of the threads.
+__global__ void k_component_stiffest(int n, const int* label, const double* diag, int* stiffest) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    int* slot = stiffest + label[i];
+    int current = *slot;
+    while (diag[i] > diag[current] || (diag[i] == diag[current] && i < current)) {
+        const int seen = atomicCAS(slot, current, i);
+        if (seen == current) break;
+        current = seen;
+    }
+}
+__global__ void k_kernel_seeds(int n, int constant_kernel, const int* label, const int* kernel, const int* stiffest, int* seed) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) seed[i] = stiffest[label[i]] == i && (constant_kernel || kernel[label[i]]);
 }
 __global__ void k_verify_dense(long long count, const double* a, int* bad) {
     const long long i = (long long)(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -252,7 +268,8 @@ public:
             if (level + 1 >= options.max_levels || l.a.n <= options.min_coarse) break;
             int coarse_rows = 0;
             Csr p = coarsen(ledger, l.a, options.theta, coarse_rows, name);
-            if (coarse_rows == 0 || coarse_rows >= l.a.n) break;
+            // One row holds only the constant: in a kernel block its value is rounding, with a huge inverse.
+            if (coarse_rows < 2 || coarse_rows >= l.a.n) break;
             if (options.stall > 0 && l.a.n <= options.min_coarse * 10 && coarse_rows > options.stall * l.a.n) break;
             Csr r = transpose(ledger, p.view(), p.nnz, name);
             Csr ap = multiply_csr(ledger, l.a.view(), p.view(), name);
@@ -350,11 +367,11 @@ private:
         dense_.allocate(size_t(count), name);
         Dev<double> diag(size_t(n), name), row(size_t(n), name), column(size_t(n), name);
         Dev<int> pinned(1, name), bad(1, name);
-        Dev<int> seed = kernel_seeds(ledger, l, name);
         pinned.zero();
         bad.zero();
         k_dense_clear<<<blocks_of(count), TH>>>(count, dense_.p);
         k_dense_fill<<<blocks_of(n), TH>>>(n, l.a.rowptr.p, l.a.columns.p, l.a.values.p, dense_.p, diag.p);
+        Dev<int> seed = kernel_seeds(ledger, l, diag.p, name);
         for (int k = 0; k < n; ++k) {
             k_gj_snapshot<<<blocks_of(n), TH>>>(n, k, dense_.p, row.p, column.p);
             k_gj_sweep<<<blocks_of(count), TH>>>(n, k, options_.pin_limit, seed.p, row.p, column.p, diag.p, dense_.p, pinned.p);
@@ -367,11 +384,13 @@ private:
     // One unknown of each kernel component stays zero before the elimination starts. The rest of
     // that component is then positive definite; left to the last pivot, the kernel leaves a rounding
     // value of either sign whose inverse spoils the whole coarse level. A component is a kernel when
-    // the operator annihilates constants by construction or when each of its rows sums to zero; the
-    // lowest row number is the seed, which is the rule of the CPU coarse factorization.
-    Dev<int> kernel_seeds(Ledger& ledger, const AmgLevel& l, const char* name) const {
+    // the operator annihilates constants by construction or when each of its rows sums to zero.
+    // The stiffest row is the seed: on a soft row, a stiff block keeps the constant at the soft scale,
+    // and the inverse loses that block's detail in rounding. The CPU coarse factorization takes the
+    // lowest row with sparse Cholesky behind it; the device has no such fallback.
+    Dev<int> kernel_seeds(Ledger& ledger, const AmgLevel& l, const double* diag, const char* name) const {
         const int n = l.a.n, blocks = blocks_of(n);
-        Dev<int> label(size_t(n), name), next(size_t(n), name), kernel(size_t(n), name), seed(size_t(n), name), changed(1, name);
+        Dev<int> label(size_t(n), name), next(size_t(n), name), kernel(size_t(n), name), stiffest(size_t(n), name), seed(size_t(n), name), changed(1, name);
         k_label_init<<<blocks, TH>>>(n, label.p, kernel.p);
         for (int sweep = 0; sweep <= n; ++sweep) {
             changed.zero();
@@ -380,7 +399,9 @@ private:
             if (read_scalar(ledger, changed.p) == 0) break;
         }
         k_component_kernel<<<blocks, TH>>>(n, l.a.rowptr.p, l.a.values.p, label.p, kernel.p);
-        k_kernel_seeds<<<blocks, TH>>>(n, options_.constant_kernel ? 1 : 0, label.p, kernel.p, seed.p);
+        k_row_numbers<<<blocks, TH>>>(n, stiffest.p);
+        k_component_stiffest<<<blocks, TH>>>(n, label.p, diag, stiffest.p);
+        k_kernel_seeds<<<blocks, TH>>>(n, options_.constant_kernel ? 1 : 0, label.p, kernel.p, stiffest.p, seed.p);
         ck_kernels(name);
         return seed;
     }

@@ -218,6 +218,23 @@ void System::probe_preconditioner(const double* x_re, const double* x_im, double
     }
 }
 
+std::pair<int, int> System::ams_transfer_shape() const {
+    if (!impl_->ams) throw std::runtime_error("FEM device route: the AMS transfers exist after setup_ams");
+    return {impl_->ams->rows(), impl_->ams->columns()};
+}
+
+void System::probe_ams_transfer(int space, bool transpose, const double* x, double* y) {
+    Impl& m = *impl_;
+    if (!m.ams) throw std::runtime_error("FEM device route: the AMS transfers exist after setup_ams");
+    if (space < 0 || space > 3) throw std::runtime_error("FEM device route: no AMS space " + std::to_string(space));
+    const size_t in_size = size_t(transpose ? m.ams->rows() : m.ams->columns()), out_size = size_t(transpose ? m.ams->columns() : m.ams->rows());
+    Dev<double> in = upload(m.ledger, "probe.input", x, in_size);
+    Dev<double> out(out_size, "probe");
+    m.ams->transfer(space, transpose, in.p, out.p);
+    ck_kernels("probe AMS transfer");
+    download(m.ledger, "probe.output", out.p, y, out_size);
+}
+
 SolveReport System::solve(const double* rhs_re, const double* rhs_im, const double* lift_re, const double* lift_im,
                           double tolerance, int max_iterations, double relative_limit, double* x_re, double* x_im) {
     Impl& m = *impl_;

@@ -4,9 +4,12 @@ Guards: the device tangent and its preconditioner stay consistent with the CPU l
 the host-evaluated point tensor and its update on every Newton step, for the production entry
 ``solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(..., Backend="gpu")``.
 Assumes: the nonlinear residual stays the same host quadrature in both routes, so identical stopping
-tests hold on identical inputs. SOLUTION_REL is a PROPOSED detector; the CPU direct solve is the
-reference, not validation of the formulation. The linear matching-trace case keeps the tolerances of
-the CPU iterative solve in ``test_kelvin_mixed_omega.py``.
+tests hold on identical inputs. SOLUTION_REL on B and FIRST_STEP_REL on the residual after the first
+Newton step are PROPOSED detectors; the CPU direct solve is the reference, not validation of the
+formulation. A tangent that is only close still reaches the same B, a first step apart: a secant tensor
+lands 32 % away, the device tangent 3e-8. The raw potential vector is not compared: two direct CPU runs
+of this entry differ by about 2e-5 in the vector and 3e-16 in B. The linear matching-trace case keeps
+the tolerances of the CPU iterative solve in ``test_kelvin_mixed_omega.py``.
 """
 import importlib.util
 import os
@@ -20,7 +23,7 @@ ng = pytest.importorskip("ngsolve")
 from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin as solve
 
 SOLUTION_REL = 1e-6
-ITERATION_LIMIT = 8
+FIRST_STEP_REL = 1e-6
 
 pytestmark = pytest.mark.skipif(not os.environ.get("RADIA_FEM_NATIVE_TEST_DIR"), reason="the FEM device native lane is not selected")
 
@@ -100,11 +103,16 @@ def test_device_tangent_reaches_the_cpu_newton_solution(case, order):
     assert device["backend"] == "gpu", f"backend {device['backend']}, expected gpu"
     stats = device["nonlinear_stats"]
     assert stats["converged"], f"device Newton stopped: {stats}"
-    assert len(stats["history"]) <= reference["nonlinear_stats"]["iterations"] + ITERATION_LIMIT, (
-        f"device Newton took {len(stats['history'])} steps, CPU {reference['nonlinear_stats']['iterations']}")
-    expected = reference["solution"].vec.FV().NumPy()
-    error = np.linalg.norm(device["solution"].vec.FV().NumPy() - expected) / np.linalg.norm(expected)
-    assert error <= SOLUTION_REL, f"device Newton solution off by {error}, limit {SOLUTION_REL}"
+    actual_step = stats["history"][0]["residual_relative"]
+    expected_step = reference["nonlinear_stats"]["history"][0]["residual_relative"]
+    first_step = abs(actual_step - expected_step) / expected_step
+    assert first_step <= FIRST_STEP_REL, (
+        f"residual after the first Newton step {actual_step}, CPU {expected_step}, relative {first_step}, limit {FIRST_STEP_REL}")
+    mesh = case[0]
+    difference = device["B_cf"] - reference["B_cf"]
+    error = np.sqrt(ng.Integrate(ng.InnerProduct(difference, difference), mesh, order=2 * order + 2)
+                    / ng.Integrate(ng.InnerProduct(reference["B_cf"], reference["B_cf"]), mesh, order=2 * order + 2))
+    assert error <= SOLUTION_REL, f"device Newton B off by {error}, limit {SOLUTION_REL}"
     assert stats["backend"] == "gpu", f"tangent backend {stats['backend']}, expected gpu"
     families = {row["payload"].split(".")[0] for row in stats["device_report"]["ledger"]}
     assert families <= {"mesh", "table", "coef", "rhs", "lift", "result", "scalar", "probe"}, f"ledger families {families}"

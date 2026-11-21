@@ -126,6 +126,14 @@ public:
         ck_kernels("AMS apply");
     }
 
+    int rows() const { return n_; }
+    int columns() const { return spaces_[0].p.m; }
+    // The gradient (space 0) or an interpolation (space 1 to 3) or its transpose on a device vector.
+    void transfer(int space, bool transpose, const double* x, double* y) const {
+        const Csr& p = transpose ? spaces_[space].pt : spaces_[space].p;
+        multiply<<<blocks_of(p.n), TH>>>(p.n, p.rowptr.p, p.columns.p, p.values.p, x, y);
+    }
+
 private:
     void residual() {
         multiply_residual<<<blocks_of(n_), TH>>>(n_, a_.rowptr.p, a_.columns.p, a_.values.p, x_.p, b_.p, r_.p);

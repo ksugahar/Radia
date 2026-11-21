@@ -368,6 +368,10 @@ class DeviceSystem:
         y_re, y_im = self.native.probe_preconditioner(parts[0], parts[1])
         return y_re + 1j * y_im if self.complex_values else y_re
 
+    def ams_transfer(self, space, x, *, transpose=False):
+        """The device AMS gradient (space 0) or interpolation (1, 2, 3 for x, y, z), or its transpose, on a probe vector."""
+        return self.native.probe_ams_transfer(int(space), bool(transpose), np.ascontiguousarray(x, dtype=np.float64))
+
     def ledger(self):
         rows = self.native.ledger()
         forbidden = [r for r in rows if not r["payload"].startswith(PERMITTED_PAYLOADS)]

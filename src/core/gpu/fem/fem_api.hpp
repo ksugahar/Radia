@@ -91,6 +91,10 @@ public:
     // real part, 1 for the imaginary part and 2 for the auxiliary real operator.
     void probe_action(int which, const double* x, double* y);
     void probe_preconditioner(const double* x_re, const double* x_im, double* y_re, double* y_im);
+    // The AMS gradient (space 0) or interpolation (space 1 to 3 for x, y, z), or its transpose, on a host
+    // probe vector. Shape is rows then columns of the operator; both need ``setup_ams`` first.
+    std::pair<int, int> ams_transfer_shape() const;
+    void probe_ams_transfer(int space, bool transpose, const double* x, double* y);
     int nonzeros() const;
 
     SolveReport solve(const double* rhs_re, const double* rhs_im, const double* lift_re, const double* lift_im,

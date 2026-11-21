@@ -86,9 +86,10 @@ def _check_space(route, fes, real_fes, coefficients):
     system = route.DeviceSystem(fes, coefficients, bonus=BONUS)
     assert system.native.nonzeros() > 0
     reference = route.cpu_form(fes, coefficients, bonus=BONUS)
-    reference.Assemble()
     auxiliary = route.cpu_form(real_fes, coefficients, bonus=BONUS, part="aux")
-    auxiliary.Assemble()
+    with ng.TaskManager():
+        reference.Assemble()
+        auxiliary.Assemble()
     generator = np.random.default_rng(7)
     for _ in range(2):
         x = generator.standard_normal(fes.ndof)

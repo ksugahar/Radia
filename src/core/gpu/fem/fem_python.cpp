@@ -176,6 +176,19 @@ public:
         }
         return py::make_tuple(y_re, y_im);
     }
+    py::array_t<double> probe_ams_transfer(int space, bool transpose, const py::array& x) {
+        const std::pair<int, int> shape = system_->ams_transfer_shape();
+        Arrays arrays;
+        const double* in = arrays.get<double>(x, transpose ? shape.first : shape.second, "x");
+        if (!in) throw py::value_error("probe input is required");
+        py::array_t<double> y = vector_of(transpose ? shape.second : shape.first);
+        double* out = y.mutable_data();
+        {
+            py::gil_scoped_release release;
+            system_->probe_ams_transfer(space, transpose, in, out);
+        }
+        return y;
+    }
     py::dict solve(const py::array& rhs_re, const py::object& rhs_im, const py::object& lift_re, const py::object& lift_im,
                    double tolerance, int max_iterations, double relative_limit) {
         Arrays arrays;
@@ -246,6 +259,7 @@ PYBIND11_MODULE(_fem_cuda, m) {
         .def("update_tensors", &PySystem::update_tensors)
         .def("probe_action", &PySystem::probe_action)
         .def("probe_preconditioner", &PySystem::probe_preconditioner)
+        .def("probe_ams_transfer", &PySystem::probe_ams_transfer)
         .def("solve", &PySystem::solve)
         .def("ledger", &PySystem::ledger)
         .def("nonzeros", &PySystem::nonzeros)

@@ -6,7 +6,9 @@
 #include <cublas_v2.h>
 #include <cmath>
 #include <complex>
+#include <cstdio>
 #include <functional>
+#include <string>
 #include "fem_api.hpp"
 #include "fem_device.cuh"
 
@@ -58,6 +60,13 @@ private:
 using RealAction = std::function<void(const double*, double*)>;
 using ComplexAction = std::function<void(const double*, const double*, double*, double*)>;
 
+inline std::string not_converged(const char* method, int max_iterations, double relative, double tolerance) {
+    char text[128];
+    std::snprintf(text, sizeof text, "device %s did not converge in %d iterations: relative residual %.3e, requested %.3e", method, max_iterations, relative,
+                  tolerance);
+    return text;
+}
+
 inline SolveReport pcg(Ledger& ledger, int n, const RealAction& A, const RealAction& M, const double* b, double* x,
                        double tolerance, int max_iterations) {
     Blas blas(ledger);
@@ -92,8 +101,7 @@ inline SolveReport pcg(Ledger& ledger, int n, const RealAction& A, const RealAct
         k_xpay<<<blocks, TH>>>(n, rho_next / rho, z.p, p.p);
         rho = rho_next;
     }
-    throw std::runtime_error("device CG did not converge in " + std::to_string(max_iterations) + " iterations: relative residual "
-                             + std::to_string(report.final_norm / b_norm) + ", requested " + std::to_string(tolerance));
+    throw std::runtime_error(not_converged("CG", max_iterations, report.final_norm / b_norm, tolerance));
 }
 
 inline SolveReport cocr(Ledger& ledger, int n, const ComplexAction& A, const ComplexAction& M, const double* br, const double* bi,
@@ -139,8 +147,7 @@ inline SolveReport cocr(Ledger& ledger, int n, const ComplexAction& A, const Com
         k_cxpay<<<blocks, TH>>>(n, beta.real(), beta.imag(), sr.p, si.p, qr.p, qi.p);
         rho = rho_next;
     }
-    throw std::runtime_error("device COCR did not converge in " + std::to_string(max_iterations) + " iterations: relative residual "
-                             + std::to_string(report.final_norm / b_norm) + ", requested " + std::to_string(tolerance));
+    throw std::runtime_error(not_converged("COCR", max_iterations, report.final_norm / b_norm, tolerance));
 }
 
 }  // namespace radia_fem

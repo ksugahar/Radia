@@ -7,7 +7,9 @@ preconditioner on the device from mesh arrays: AMS at p=1 and BDDC over AMS at p
 
 The bored_workpiece README gates FEM against its BEM power at 2 %, and its FEM power balance at
 1e-5. Those values are read from validate.LIMITS, unchanged; no approval ID for them was found, so
-this script reports them as the case's gates, not as an adopted criterion. FIELD_REL and POWER_REL
+this script reports them as the case's gates, not as an adopted criterion. That case evaluates its
+balance at p=2, so it is gated at p=2 here; at p=1 sparse Cholesky itself gives 4e-5, so the balance is
+recorded and the source work is compared with sparse Cholesky. FIELD_REL and POWER_REL
 are PROPOSED detectors. The air carries only the small gauge mass, so the gradient part of A is weakly
 determined and the raw vector difference is recorded, not gated: the comparison uses the curl in the
 air and the tangential trace on the surface. Writes one JSON. Timings are diagnostic. Usage:
@@ -181,18 +183,21 @@ def run_case(case, kelvin, text, work):
     g_cpu.vec.FV().NumPy()[:] = reference
     power_cpu_same_formula = surface_power(g_cpu, mesh, sibc, omega, Z_s)
     source_work = float(.5 * omega * np.vdot(data["field"], rhs).imag)
+    source_work_cpu = float(.5 * omega * np.vdot(reference, rhs).imag)
     power_entry, power_cpu = float(entry["P_total"]), float(reference_file["P_total"])
     limits = case.LIMITS
     gates = {"true_residual": {"actual": device["true_residual"], "bound": limits["true_residual"], "pass": device["true_residual"] <= limits["true_residual"]},
-             "fem_power_balance": {"actual": abs(source_work / power - 1), "bound": limits["fem_power_balance"], "pass": abs(source_work / power - 1) <= limits["fem_power_balance"]},
              "bem_fem_power": {"actual": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W, "bound": limits["bem_fem_power"], "pass": abs(power_entry - BEM_FINEST_W) / BEM_FINEST_W <= limits["bem_fem_power"]},
              "curl_field_vs_sparsecholesky_proposed": {"actual": field_difference, "bound": FIELD_REL, "pass": field_difference <= FIELD_REL},
              "surface_trace_vs_sparsecholesky_proposed": {"actual": trace_difference, "bound": FIELD_REL, "pass": trace_difference <= FIELD_REL},
-             "power_vs_cpu_route_proposed": {"actual": abs(power_entry - power_cpu) / power_cpu, "bound": POWER_REL, "pass": abs(power_entry - power_cpu) / power_cpu <= POWER_REL}}
+             "power_vs_cpu_route_proposed": {"actual": abs(power_entry - power_cpu) / power_cpu, "bound": POWER_REL, "pass": abs(power_entry - power_cpu) / power_cpu <= POWER_REL},
+             "source_work_vs_sparsecholesky_proposed": {"actual": abs(source_work / source_work_cpu - 1), "bound": POWER_REL, "pass": abs(source_work / source_work_cpu - 1) <= POWER_REL}}
+    if order == 2:
+        gates["fem_power_balance"] = {"actual": abs(source_work / power - 1), "bound": limits["fem_power_balance"], "pass": abs(source_work / power - 1) <= limits["fem_power_balance"]}
     return {"case": text, "maxh_sibc_m": h, "order": order, "ndof": int(fes.ndof), "elements": int(mesh.ne), "device_iterations": device["iterations"], "true_residual": device["true_residual"],
             "preconditioner": device["preconditioner"], "krylov": "COCR", "coarse_cycles": kelvin.BDDC_AMS_COARSE_CYCLES if order > 1 else None, "raw_vector_difference_vs_sparsecholesky_recorded": difference,
             "curl_field_difference_vs_sparsecholesky": field_difference, "surface_trace_difference_vs_sparsecholesky": trace_difference,
-            "power_W": power_entry, "power_field_formula_W": power, "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": power_cpu, "source_work_W": source_work, "bem_finest_W": BEM_FINEST_W,
+            "power_W": power_entry, "power_field_formula_W": power, "power_cpu_same_formula_W": power_cpu_same_formula, "power_cpu_route_W": power_cpu, "source_work_W": source_work, "source_work_cpu_W": source_work_cpu, "fem_power_balance_recorded": abs(source_work / power - 1), "fem_power_balance_sparsecholesky_recorded": abs(source_work_cpu / power_cpu_same_formula - 1), "bem_finest_W": BEM_FINEST_W,
             "gates": gates, "hierarchy": device["hierarchy"], "nonzeros": device["nonzeros"], "device": device["device"], "device_peak_bytes": device["device_peak_bytes"], "ledger": device["ledger"],
             "timing_diagnostic": {**device["timing_diagnostic"], "production_entry_seconds": device_seconds, "cpu_route_seconds": float(reference_file["seconds"])}}
 
