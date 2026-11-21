@@ -2396,7 +2396,7 @@ def _reference_cycle(a, g, coords, b, beta_zero):
     return x + (b - a @ x) / l1
 
 
-@pytest.mark.parametrize("ny", [1, 2])
+@pytest.mark.parametrize("ny", [1, 2, 4, 8, 16])
 @pytest.mark.parametrize("external_order", [False, True])
 @pytest.mark.parametrize("beta_zero", [False, True])
 def test_hex_ams_handles_auxiliary_nullspace(ny, external_order, beta_zero):
