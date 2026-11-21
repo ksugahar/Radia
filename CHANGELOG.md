@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.4.6
+
+- Add the experimental PEEC fin-coil workflow for STEP inputs. Workpiece
+  heating accuracy is unqualified. PRIMA is available for evaluation and
+  remains outside production qualification.
+
+
 ## 5.4.5 - 2026-11-13
 
 - Evaluate CPU energy-Newton Armijo steps using the direct energy change
