@@ -110,3 +110,27 @@ def test_station_targets_reject_features_closer_than_two_thirds_spacing():
 
     with pytest.raises(MarchError, match="closer than 2h/3"):
         station_targets(_fin_line(40.0, 41.0), 16)
+
+
+def _rounded_rect(n=1024, a=3.0e-3, b=2.0e-3, r=0.4e-3, rot=0.0):
+    t = np.linspace(0.0, 2 * np.pi, 4096, endpoint=False)
+    c, s = np.cos(t), np.sin(t)
+    p = np.column_stack([np.sign(c) * (a - r), np.sign(s) * (b - r)]) + r * np.column_stack([c, s])
+    seg = np.linalg.norm(np.diff(np.vstack([p, p[:1]]), axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    q = np.linspace(0.0, cum[-1], n, endpoint=False)
+    uv = np.column_stack([np.interp(q, cum, np.append(p[:, k], p[0, k])) for k in range(2)])
+    k0 = np.cos(rot), np.sin(rot)
+    return uv @ np.array([[k0[0], k0[1]], [-k0[1], k0[0]]])
+
+
+@pytest.mark.parametrize("rot", [0.0, 0.3, 1.1, 2.5])
+def test_outline_origin_is_a_corner_in_any_frame(rot):
+    """Guards: the lane origin is a section corner whatever in-plane frame the
+    station got (a frame-tied origin let uniform lanes skip every corner, R -7 %)."""
+    from radia.fin_cap_march import outline_corner_start
+
+    uv = _rounded_rect(rot=rot)
+    p = uv[outline_corner_start(uv)]
+    radius = np.linalg.norm(uv, axis=1).max()
+    assert np.linalg.norm(p) >= 0.995 * radius  # arc ends sit at 0.985, (np.linalg.norm(p), radius)

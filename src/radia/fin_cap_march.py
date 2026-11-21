@@ -500,8 +500,44 @@ def sample_face_outline(fw, origin, u_hat, v_hat, n):
     signed = float(np.sum(uv[:, 0] * np.roll(uv[:, 1], -1) - uv[:, 1] * np.roll(uv[:, 0], -1)))
     if signed < 0.0:
         uv = uv[::-1].copy()
-    start = int(np.argmax(uv[:, 0] - 1e-9 * np.abs(uv[:, 1])))
-    return np.roll(uv, -start, axis=0), float(total)
+    return np.roll(uv, -outline_corner_start(uv), axis=0), float(total)
+
+
+def outline_corner_start(uv):
+    """Sample index of the outline's sharpest corner (frame-independent origin).
+
+    The lanes are laid from this origin, so a lane sits on a corner whatever
+    in-plane frame the station received; an origin tied to the frame (the
+    max-u point) let the uniform lane phase skip every corner of a rounded
+    section depending on the station count.  A corner is a run of samples
+    turning faster than half the peak rate (a fillet arc turns uniformly);
+    its sharpness is the run's total turn and its origin the run's middle.
+    Corners within 5 % of the sharpest are tied and the max-u one is taken.
+    """
+    uv = np.asarray(uv, float)
+    n = len(uv)
+    e = np.roll(uv, -1, axis=0) - uv
+    a = np.arctan2(e[:, 1], e[:, 0])
+    turn = np.abs(np.angle(np.exp(1j * (a - np.roll(a, 1)))))
+    w = max(1, n // 256)
+    kern = np.ones(2 * w + 1) / (2 * w + 1)
+    rate = np.convolve(np.concatenate([turn[-w:], turn, turn[:w]]), kern, mode="valid")
+    hot = rate >= 0.5 * rate.max()
+    if rate.max() <= 0.0 or hot.all():
+        raise MarchError("section outline has no corner to anchor the lanes")
+    k0 = int(np.argmin(hot))  # start scanning at a cold sample
+    runs, cur = [], []
+    for k in range(k0, k0 + n):
+        if hot[k % n]:
+            cur.append(k)
+        elif cur:
+            runs.append(cur); cur = []
+    if cur:
+        runs.append(cur)
+    total = np.array([turn[np.asarray(r) % n].sum() for r in runs])
+    mids = np.array([r[len(r) // 2] % n for r in runs])
+    cand = mids[total >= 0.95 * total.max()]
+    return int(cand[np.argmax(uv[cand, 0])])
 
 
 def section_frames(points, tangents):

@@ -195,7 +195,7 @@ def _lane_fraction_for_station(analysis, n_lanes, lane_grading, tip_lanes):
     if lane_grading == "auto" and analysis.fins:
         s = graded_lane_arclengths(analysis, n_lanes, tip_lanes=tip_lanes)
         return s / analysis.perimeter, True
-    return (np.arange(n_lanes) + 0.5) / n_lanes, False
+    return np.arange(n_lanes) / n_lanes, False  # lane 0 on the outline origin (a corner)
 
 
 def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
