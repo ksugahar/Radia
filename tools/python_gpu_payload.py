@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import shutil
 
-MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda")
+MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda", "_fem_cuda")
 WINDOWS_ARCHITECTURES = ("80",)
 # Windows modules also embed compute_80 PTX; Linux sm_100 modules embed none.
 WINDOWS_PTX_ARCHITECTURES = ("80",)
