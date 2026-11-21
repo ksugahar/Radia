@@ -133,6 +133,8 @@ def test_bad_csr_fails_before_loading_cuda(gpu, monkeypatch, change):
 def test_hierarchy_snapshot_lifetime_apply_and_solve(gpu, monkeypatch, kind):
     system = gpu._csr(Matrix())
     snapshot = dict(schema="radia." + kind + "-accelerator.v1", A=system)
+    if kind == "ams":
+        snapshot.update(free=np.ones(2, dtype=bool), reuse_hierarchy=False)
     calls = []
     class Native:
         def apply(self, b):

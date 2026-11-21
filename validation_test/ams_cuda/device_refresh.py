@@ -40,7 +40,8 @@ def main(args):
     eng = None
     try:
         ng.SetNumThreads(1)
-        mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh))
+        with ng.TaskManager():
+            mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh))
         fes = ng.HCurl(mesh, order=1, nograds=True, dirichlet='.*'); u, v = fes.TnT()
         free = np.asarray(list(fes.FreeDofs()), dtype=bool)
         if not (64 <= free.sum() and fes.ndof < 50000):
@@ -60,7 +61,8 @@ def main(args):
                         rowptr=np.array(rowptr, dtype=np.int32, copy=True),
                         columns=np.array(columns, dtype=np.int32, copy=True), values=np.array(values, copy=True))
 
-        matrices = [csr(assemble(*c)) for c in coefficients]
+        with ng.TaskManager():
+            matrices = [csr(assemble(*c)) for c in coefficients]
         for m in matrices[1:]:
             if not (np.array_equal(m['rowptr'], matrices[0]['rowptr']) and np.array_equal(m['columns'], matrices[0]['columns'])):
                 raise RuntimeError('Update operators must keep the first sparsity pattern')

@@ -2038,6 +2038,18 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "src/core/gpu/ams_refresh.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Device AMS hierarchy refresh consumed by the Python and MEX builders."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/core/gpu/snapshot.hpp",
       "owners": [
         "radia",
@@ -2913,6 +2925,7 @@
             "src/core/gpu/resident_amg_host.hpp",
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
+            "src/core/gpu/ams_refresh.cuh",
             "src/core/gpu/snapshot.hpp",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
@@ -3049,6 +3062,7 @@
             "src/core/gpu/resident_amg_host.hpp",
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
+            "src/core/gpu/ams_refresh.cuh",
             "src/core/gpu/snapshot.hpp",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
