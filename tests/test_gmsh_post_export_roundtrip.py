@@ -133,14 +133,10 @@ def test_volume_element_orientation_tet_hex_prism():
         _assert_positive_jacobians(out, expect_vol=1.0)
 
 
-def test_volume_element_orientation_pyramid():
-    """An asymmetric hand-built PYR5/PYR14 export has positive Jacobians
-    and the exact cone volume (locks the identity corner permutation and
-    the frustum-bijection reference transform)."""
+def _pyramid_netgen_mesh():
     from netgen.csg import Pnt
     from netgen.meshing import Element2D, Element3D, FaceDescriptor, MeshPoint
     from netgen.meshing import Mesh as NgMesh
-    from ngsolve import Mesh
 
     m = NgMesh(dim=3)
     pts = [(0, 0, 0), (1.2, 0, 0), (1.1, 1.3, 0), (0, 1, 0),
@@ -152,6 +148,16 @@ def test_volume_element_orientation_pyramid():
     m.Add(Element2D(1, [pids[3], pids[2], pids[1], pids[0]]))
     for a, b in ((0, 1), (1, 2), (2, 3), (3, 0)):
         m.Add(Element2D(1, [pids[a], pids[b], pids[4]]))
+    return m
+
+
+def test_volume_element_orientation_pyramid():
+    """An asymmetric hand-built PYR5/PYR14 export has positive Jacobians
+    and the exact cone volume (locks the identity corner permutation and
+    the frustum-bijection reference transform)."""
+    from ngsolve import Mesh
+
+    m = _pyramid_netgen_mesh()
     base_area = 1.33  # shoelace of the planar z=0 quad
     for order, tag in ((1, "pyr1"), (2, "pyr2")):
         mesh = Mesh(m)
@@ -346,6 +352,43 @@ def test_element_node_data_keeps_both_interface_traces():
                     err_msg=f"{name}: element {elem} ({mat})")
                 sides.add(mat)
         assert found == {"F": {"sphere", "air"}, "F_air": {"air"}}, found
+    finally:
+        gmsh.finalize()
+
+
+@pytest.mark.parametrize(("family", "element_type", "node_count"), [
+    ("prism", 13, 18),
+    ("pyramid", 14, 14),
+])
+def test_quadratic_element_node_data_roundtrip(
+        tmp_path, family, element_type, node_count):
+    """Guards: quadratic prism and pyramid fields retain all element nodes."""
+    if family == "prism":
+        mesh = MakeStructured3DMesh(nx=1, ny=1, nz=1, mapping=_shear,
+                                    hexes=False, prism=True)
+    else:
+        mesh = ng.Mesh(_pyramid_netgen_mesh())
+    curve_mesh(mesh, 2)
+    post = GmshPostExport(mesh)
+    post.add_vector_field("position", CF((x, y, z)), element_nodes=True)
+    path = str(tmp_path / f"{family}.msh")
+    post.write(path)
+
+    gmsh.initialize()
+    try:
+        gmsh.open(path)
+        view, = gmsh.view.getTags()
+        kind, tags, values, _, components = gmsh.view.getModelData(view, 0)
+        assert (kind, components) == ("ElementNodeData", 3)
+        assert set(tags) == set(gmsh.model.mesh.getElementsByType(element_type)[0])
+        assert len(tags) == mesh.ne
+        for tag, samples in zip(tags, values, strict=True):
+            actual_type, nodes, _, _ = gmsh.model.mesh.getElement(int(tag))
+            assert (actual_type, len(nodes)) == (element_type, node_count)
+            coordinates = [gmsh.model.mesh.getNode(int(node))[0] for node in nodes]
+            # The pyramid apex is sampled just inside its singular reference point.
+            np.testing.assert_allclose(np.asarray(samples).reshape(-1, 3),
+                                       coordinates, atol=2e-10, rtol=0)
     finally:
         gmsh.finalize()
 
