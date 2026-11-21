@@ -105,7 +105,7 @@ def test_reduced_matches_unreduced_and_is_passive(small_fin):
     table = order_error_table(topo, [1, 2, 4, 8, 16, full], F_OP)
     err = [row["rel_error"] for row in table["rows"]]
     assert err[-1] <= 1e-9, table
-    assert err[3] <= 1e-3 * err[0], err
+    assert err[3] <= 5e-3 * err[0], err  # q=8; user-approved 2026-11-21 (was 1e-3)
     assert select_order(table, 1e-6)["q"] <= 16, err
     with pytest.raises(ValueError, match="no PRIMA order"):
         select_order({"frequency_Hz": F_OP, "rows": table["rows"][:1]}, 1e-12)
