@@ -28,6 +28,7 @@ switch kind
         f=jsondecode(fileread(fullfile(inputsDir,'projection-reference.json')));
         f.mesh=fullfile(inputsDir,'curved-sphere.vol');action=@()projectionStep(f);
     case 'ams'
+        addpath(fullfile(fileparts(fileparts(mfilename('fullpath'))),'ams_cuda'));
         f=jsondecode(fileread(fullfile(inputsDir,'ams-independent-cpu.json')));m=f.model;
         m.A.rowptr=int32(m.A.rowptr);m.A.columns=int32(m.A.columns);
         m.G.rowptr=int32(m.G.rowptr);m.G.columns=int32(m.G.columns);m.free=int32(m.free);
