@@ -164,6 +164,43 @@ def test_output_never_replaces_the_source_or_an_existing_file(tmp_path):
     assert ss._sha256(src) == before, "source record changed"
 
 
+def test_workdir_scratch_never_touches_existing_files(tmp_path, monkeypatch):
+    """Guards: scratch goes to a fresh subdirectory of workdir; existing files there
+    (the source named like a scratch file, a hard link to it, unrelated files) survive."""
+    from radia_mcp.gmsh import _gmsh_subprocess
+    steps = [0, 2]
+    seen = {}
+
+    def fake(script, args, **kwargs):
+        seen["args"] = list(args)
+        return {"ok": True, "times": TIMES[steps].tolist(),
+                "values": [[[1.0, -2.0, 3.0] for _ in QUERY] for _ in steps],
+                "distances": [[0.0] * len(QUERY) for _ in steps], "runtime": {}}
+
+    monkeypatch.setattr(_gmsh_subprocess, "run_gmsh_json_subprocess", fake)
+    work = tmp_path / "work"
+    work.mkdir()
+    src = work / "sampling_surface.msh"          # HDF5 source under a scratch name
+    _source(src)
+    before = ss._sha256(src)
+    try:
+        os.link(src, work / "probe_request.json")
+    except OSError:
+        (work / "probe_request.json").write_bytes(b"unrelated request")
+    (work / "keep.txt").write_bytes(b"unrelated")
+    existing = {p.name: p.read_bytes() for p in work.iterdir()}
+    ss.resample(src, tmp_path / "o.h5", QUERY, QUERY_IDS, steps=steps, workdir=work)
+    assert ss._sha256(src) == before, "source record changed"
+    assert {p.name: p.read_bytes() for p in work.iterdir()} == existing, \
+        f"workdir changed: {sorted(p.name for p in work.iterdir())}"
+    scratch = {os.path.dirname(a) for a in seen["args"]}
+    assert len(scratch) == 1 and os.path.dirname(scratch.pop()) == str(work), seen["args"]
+    with pytest.raises(NotADirectoryError):
+        ss.resample(src, tmp_path / "o2.h5", QUERY, QUERY_IDS, steps=steps,
+                    workdir=tmp_path / "missing")
+    assert not (tmp_path / "missing").exists() and not (tmp_path / "o2.h5").exists()
+
+
 def test_empty_selection_is_a_clear_value_error(tmp_path):
     src = tmp_path / "s.h5"
     _source(src)

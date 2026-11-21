@@ -46,6 +46,11 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--steps", default="all", help="comma list of step indices or 'all'")
     a = ap.parse_args()
+    report_path = Path(a.out).with_suffix(".json")
+    if Path(a.out).suffix.lower() == ".json":
+        raise SystemExit(f"--out {a.out} ends in .json; the report would take that name")
+    if report_path.exists():
+        raise SystemExit(f"report {report_path} already exists; choose a new --out")
     with h5py.File(a.source, "r") as f:
         pts, ids, J, n = f["samples/point_m"][()], f["samples/id"][()], f["field/J_A_per_m2"][()], len(f["time_s"])
     steps = list(range(n)) if a.steps == "all" else [int(s) for s in a.steps.split(",")]
@@ -63,7 +68,7 @@ def main():
     report = {**summary, "seconds_resample": seconds, "shape": list(V.shape), "unit": "A/m^2",
               "oracle": "NumPy Quad4 cell-centre value (mean of the four corners)",
               "max_abs_J_A_per_m2": scale, "max_rel_error_vs_oracle": err}
-    with open(Path(a.out).with_suffix(".json"), "x", encoding="utf-8") as stream:  # never replace
+    with open(report_path, "x", encoding="utf-8") as stream:  # never replace
         stream.write(json.dumps(report, indent=2))
     print(json.dumps({k: report[k] for k in ("out_sha256", "shape", "max_rel_error_vs_oracle",
                                              "seconds_resample")}))

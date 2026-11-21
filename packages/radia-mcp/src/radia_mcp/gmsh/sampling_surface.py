@@ -205,7 +205,9 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
     ``source_h5`` is only read; its SHA-256 is taken before and after reading
     and again before publishing.  ``out_h5`` must be a new path: the record is
     written to a temporary file in the same directory and published only if
-    ``out_h5`` still does not exist.  Returns a summary dict; raises on any
+    ``out_h5`` still does not exist.  ``workdir``, if given, must be an
+    existing directory; scratch files go to a new unique subdirectory of it
+    that is removed afterwards.  Returns a summary dict; raises on any
     target, association, time, field, runtime or probe failure.
     """
     import h5py
@@ -248,9 +250,12 @@ def resample(source_h5, out_h5, query_points, query_ids, *, steps=None,
     if len(qid) != len(q) or len(np.unique(qid)) != len(qid):
         raise ValueError("query ids must be unique, one per query point")
     check_query_points(pts, ids, q)
-    with tempfile.TemporaryDirectory(prefix="radia_surface_") as tmp:
-        work = Path(workdir or tmp)
-        work.mkdir(parents=True, exist_ok=True)
+    if workdir is not None and not Path(workdir).is_dir():
+        raise NotADirectoryError(f"workdir {workdir!s} is not an existing directory")
+    # Scratch always lives in a fresh, job-owned directory (under workdir when
+    # given), so existing files there, including the source, are never opened.
+    with tempfile.TemporaryDirectory(prefix="radia_surface_", dir=workdir) as tmp:
+        work = Path(tmp)
         msh = work / "sampling_surface.msh"
         grid = write_surface_msh(msh, pts, ids, t, J, steps)
         req = work / "probe_request.json"
