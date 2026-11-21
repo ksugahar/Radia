@@ -14,10 +14,12 @@ Pipeline
    terminal-to-terminal section march of :mod:`radia.fin_cap_march`
    (leads, elbows and narrow terminal gaps included).  No PEEC solver is
    built here.
-2. ``align_station_origins`` — the CAD sampler starts each outline at the
-   boundary point nearest +u; when a fin appears that start point jumps.
-   Each station is cyclically re-registered to its predecessor so lane k
-   follows the same material line along the sweep.
+2. ``align_station_origins`` — the first station starts at a geometric
+   origin (:func:`radia.fin_cap_march.outline_origin`); each later outline
+   is expressed in its predecessor's frame transported onto its own
+   tangent and cyclically re-registered to the predecessor, so lane k
+   follows the same material line along the sweep whatever the local
+   in-plane frames or wire seams are.
 3. ``build_fin_graph`` — every station is analysed with
    :func:`radia.fin_section.analyze_section`; lanes are graded toward the
    detected fin tip (``lane_grading="auto"``) or uniform; the ring points
@@ -175,15 +177,32 @@ def align_outline_origin(reference_uv, uv):
 
 
 def align_station_origins(stations):
-    """Return stations re-registered so arc-length origins are continuous."""
+    """Return stations re-registered so lane origins follow material lines.
+
+    Station ``i`` is compared with station ``i-1`` in the predecessor's
+    (u, v) parallel transported onto station ``i``'s tangent, so frames
+    rotated independently per station do not shift the registration.  Each
+    station keeps its own frame; only its sample order is rolled.
+    """
+    from radia.fin_cap_march import transport_vector
+
     if not stations:
         return ()
     out = [stations[0]]
     for st in stations[1:]:
-        uv_aligned, _shift = align_outline_origin(out[-1].uv, st.uv)
+        prev = out[-1]
+        t0 = prev.tangent / np.linalg.norm(prev.tangent)
+        t1 = st.tangent / np.linalg.norm(st.tangent)
+        u_t = transport_vector(prev.u_hat, t0, t1)
+        u_t = u_t - float(u_t @ t1) * t1
+        u_t /= np.linalg.norm(u_t)
+        v_t = np.cross(t1, u_t)
+        q = st.uv[:, :1] * st.u_hat[None, :] + st.uv[:, 1:2] * st.v_hat[None, :]
+        common = np.column_stack([q @ u_t, q @ v_t])
+        _aligned, shift = align_outline_origin(prev.uv, common)
         out.append(StationOutline(st.index, st.centroid, st.u_hat, st.v_hat,
-                                  st.tangent, uv_aligned, st.area,
-                                  st.perimeter))
+                                  st.tangent, np.roll(st.uv, -shift, axis=0),
+                                  st.area, st.perimeter))
     return tuple(out)
 
 
@@ -407,37 +426,45 @@ def _cap_march_centerline(step_path, solid):
     return line
 
 
-def path_plane_normal(points):
-    """Unit normal of the best-fit plane of the station centroids, sign fixed
-    by its largest component: a 3-D lane anchor independent of the frames."""
-    pts = np.asarray(points, float)
-    _s, _sv, vt = np.linalg.svd(pts - pts.mean(axis=0), full_matrices=False)
-    nrm = vt[-1]
-    return -nrm if nrm[np.argmax(np.abs(nrm))] < 0 else nrm
+def cap_march_station_outlines(outline_xyz, centroids, tangents, areas,
+                               perimeters, cad_units_per_meter=1.0):
+    """Station outlines from sampled section wires (pure numpy, any seam).
+
+    Frames come from :func:`radia.fin_cap_march.section_frames`; every
+    outline is put counter-clockwise in its frame and started at
+    :func:`radia.fin_cap_march.outline_origin` along the transported ``u``.
+    Registration (:func:`align_station_origins`) then carries the first
+    station's origin along the sweep.
+    """
+    from radia.fin_cap_march import outline_in_frame, outline_origin, section_frames
+
+    centroids = np.asarray(centroids, float)
+    tangents = np.asarray(tangents, float)
+    u, v = section_frames(centroids, tangents)
+    stations = []
+    for i, xyz in enumerate(outline_xyz):
+        uv = outline_in_frame(xyz, centroids[i], u[i], v[i])
+        uv = np.roll(uv, -outline_origin(uv, np.array([1.0, 0.0])), axis=0)
+        stations.append(StationOutline(
+            i, centroids[i] / cad_units_per_meter, u[i], v[i],
+            tangents[i] / np.linalg.norm(tangents[i]),
+            uv / cad_units_per_meter, float(areas[i]) / cad_units_per_meter**2,
+            float(perimeters[i]) / cad_units_per_meter))
+    return tuple(stations)
 
 
 def _stations_from_cap_march(step_path, solid, n_stations, n_outline,
                              cad_units_per_meter):
-    from radia.fin_cap_march import (
-        sample_face_outline,
-        section_frames,
-        station_sections,
-    )
+    from radia.fin_cap_march import sample_face_outline, station_sections
 
     line = _cap_march_centerline(step_path, solid)
     sections = station_sections(solid.wrapped, line, n_stations)
-    centroids = np.array([sec[1] for sec in sections])
-    tangents = np.array([sec[2] for sec in sections])
-    u, v = section_frames(centroids, tangents)
-    anchor = path_plane_normal(centroids)
-    stations = []
-    for i, (face, centroid, tangent, area) in enumerate(sections):
-        uv, perimeter = sample_face_outline(face, centroid, u[i], v[i], int(n_outline), anchor)
-        stations.append(StationOutline(
-            i, centroid / cad_units_per_meter, u[i], v[i], tangent,
-            uv / cad_units_per_meter, float(area) / cad_units_per_meter**2,
-            perimeter / cad_units_per_meter))
-    return tuple(stations), "step_cap_march"
+    sampled = [sample_face_outline(sec[0], int(n_outline)) for sec in sections]
+    stations = cap_march_station_outlines(
+        [xyz for xyz, _ in sampled], [sec[1] for sec in sections],
+        [sec[2] for sec in sections], [sec[3] for sec in sections],
+        [per for _, per in sampled], cad_units_per_meter)
+    return stations, "step_cap_march"
 
 
 def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,

@@ -478,9 +478,13 @@ def march_centerline(solid_w) -> Centerline:
 # stations
 # ----------------------------------------------------------------------
 
-def sample_face_outline(fw, origin, u_hat, v_hat, n, anchor):
-    """(n, 2) CCW equal-arc-length samples of a face's outer wire in (u, v),
-    starting at :func:`outline_origin` for the 3-D ``anchor`` direction."""
+def sample_face_outline(fw, n):
+    """(n, 3) equal-arc-length samples of a face's outer wire and its length.
+
+    The start point is wherever OCC puts the wire seam; orientation and the
+    lane origin are fixed afterwards by :func:`outline_in_frame` and
+    :func:`outline_origin`, which do not depend on the seam.
+    """
     from OCP.BRepAdaptor import BRepAdaptor_CompCurve
     from OCP.BRepTools import BRepTools
     from OCP.GCPnts import GCPnts_AbscissaPoint, GCPnts_UniformAbscissa
@@ -496,13 +500,16 @@ def sample_face_outline(fw, origin, u_hat, v_hat, n, anchor):
     for k in range(n):
         q = curve.Value(ua.Parameter(k + 1))
         xyz[k] = (q.X(), q.Y(), q.Z())
-    d = xyz - origin
+    return xyz, float(total)
+
+
+def outline_in_frame(xyz, origin, u_hat, v_hat):
+    """(n, 2) outline in the station (u, v), counter-clockwise about
+    ``t = u x v``; the sample order is otherwise kept."""
+    d = np.asarray(xyz, float) - np.asarray(origin, float)
     uv = np.column_stack([d @ u_hat, d @ v_hat])
     signed = float(np.sum(uv[:, 0] * np.roll(uv[:, 1], -1) - uv[:, 1] * np.roll(uv[:, 0], -1)))
-    if signed < 0.0:
-        uv = uv[::-1].copy()
-    ref = np.array([float(np.dot(anchor, u_hat)), float(np.dot(anchor, v_hat))])
-    return np.roll(uv, -outline_origin(uv, ref), axis=0), float(total)
+    return uv[::-1].copy() if signed < 0.0 else uv
 
 
 #: A run of fast turning counts as a corner when it turns at least this much.
@@ -510,15 +517,21 @@ CORNER_MIN_TURN = math.pi / 6
 
 
 def outline_origin(uv, ref):
-    """Sample index where the lanes start: geometric, independent of the frame.
+    """Sample index where the lanes start, independent of seam and frame.
 
-    ``ref`` is a fixed 3-D direction (the path-plane normal) expressed in the
-    station's (u, v); it rotates with the outline, so the choice does not
-    depend on the in-plane frame.  A corner is a run of samples turning
-    faster than half the peak rate with total turn >= ``CORNER_MIN_TURN``;
-    its origin is the run's middle.  With corners, the origin is the corner
-    (within 5 % of the sharpest) farthest along ``ref``; smooth outlines
-    (a circle) use the point farthest along ``ref``.  An origin tied to the
+    ``ref`` is a transverse reference direction in the station's (u, v)
+    (the transported ``u``, i.e. ``(1, 0)``, on the production route); it
+    rotates with the outline, so the choice does not depend on how the
+    in-plane frame or the wire seam were chosen.  A corner is a run of
+    samples turning faster than half the peak rate with total turn >=
+    ``CORNER_MIN_TURN``; its origin is the run's middle.  Candidates are the
+    corners within 5 % of the sharpest, or every sample of a smooth outline.
+    The winner is farthest along ``ref``; candidates within two sample
+    spacings of that reach are tied and resolved by the reach along
+    ``ref`` rotated +90 degrees (counter-clockwise, the outline's own
+    orientation), so an exact mirror tie is never decided by sample order.
+    A smooth outline's flat tie resolves to the middle of the flat run.  A
+    tie that both directions leave open raises.  An origin tied to the
     frame (the max-u point) let uniform lanes skip every corner of a rounded
     section depending on the station count.
     """
@@ -528,9 +541,12 @@ def outline_origin(uv, ref):
     if not np.linalg.norm(ref) >= 0.5:
         raise MarchError("lane anchor direction is nearly along the station tangent")
     ref = ref / np.linalg.norm(ref)
+    ref2 = np.array([-ref[1], ref[0]])
     centre = uv.mean(axis=0)
     reach = (uv - centre) @ ref
+    reach2 = (uv - centre) @ ref2
     e = np.roll(uv, -1, axis=0) - uv
+    tol = 2.0 * float(np.mean(np.linalg.norm(e, axis=1)))
     a = np.arctan2(e[:, 1], e[:, 0])
     turn = np.abs(np.angle(np.exp(1j * (a - np.roll(a, 1)))))
     w = max(1, n // 256)
@@ -552,7 +568,11 @@ def outline_origin(uv, ref):
         if total.max() >= CORNER_MIN_TURN:
             mids = np.array([r[len(r) // 2] for r in runs])
             cand = mids[total >= 0.95 * total.max()]
-            return int(cand[np.argmax(reach[cand])])
+            cand = cand[reach[cand] >= reach[cand].max() - tol]
+            cand = cand[reach2[cand] >= reach2[cand].max() - tol]
+            if len(cand) > 1:
+                raise MarchError("lane origin is ambiguous: corners tie in both reference directions")
+            return int(cand[0])
     # Smooth outline: farthest point along ref (middle of a flat tie).
     tie = np.flatnonzero(reach >= reach.max() - 1e-9 * np.ptp(reach))
     if len(tie) > 1 and tie[-1] - tie[0] != len(tie) - 1:  # tie wraps the seam
@@ -560,29 +580,50 @@ def outline_origin(uv, ref):
     return int(tie[len(tie) // 2] % n)
 
 
-def section_frames(points, tangents):
-    """(u, v) per station, orthogonal to each station tangent.
+def transport_vector(vec, t_from, t_to):
+    """Rotate ``vec`` by the minimal rotation taking unit ``t_from`` to
+    ``t_to`` (parallel transport across one station step)."""
+    axis = np.cross(t_from, t_to)
+    s = float(np.linalg.norm(axis))
+    d = float(np.clip(np.dot(t_from, t_to), -1.0, 1.0))
+    if s < 1e-12:
+        if d < 0.0:
+            raise MarchError("the sweep reverses direction between two stations")
+        return np.array(vec, float)
+    axis = axis / s
+    ang = math.atan2(s, d)
+    return (vec * math.cos(ang) + np.cross(axis, vec) * math.sin(ang)
+            + axis * float(axis @ vec) * (1.0 - math.cos(ang)))
 
-    A coplanar path (all leads and rings in one plane) uses u = the path
-    plane normal, so the frame never twists; otherwise u is parallel
-    transported.  v = t x u in both cases.
+
+def section_frames(points, tangents):
+    """(u, v) per station, orthogonal to each station tangent, without twist.
+
+    ``u`` starts from the least-variance direction of the station centroids
+    (the plane normal of a coplanar path; the next principal direction when
+    that one is nearly along the first tangent) and is parallel transported
+    by the minimal rotation between neighbouring tangents, so it stays
+    transverse on non-planar paths and leads parallel to that seed.  On a
+    coplanar path the transported normal stays the plane normal.  There is
+    no planarity threshold, so the frame does not switch with the station
+    placement.  ``v = t x u``.
     """
     pts = np.asarray(points, float)
     t = np.asarray(tangents, float)
-    centered = pts - pts.mean(axis=0)
-    _s, sv, vt = np.linalg.svd(centered, full_matrices=False)
-    if sv[-1] <= 1e-6 * max(sv[0], 1e-300):
-        seed = vt[-1]
-        if seed[np.argmax(np.abs(seed))] < 0:
-            seed = -seed
-        u = seed[None, :] - (t @ seed)[:, None] * t
-    else:
-        u = np.empty_like(t)
-        seed = np.array([0.0, 0.0, 1.0]) if abs(t[0, 2]) < 0.9 else np.array([1.0, 0.0, 0.0])
-        u[0] = seed - (seed @ t[0]) * t[0]
-        for i in range(1, len(t)):
-            u[i] = u[i - 1] - (u[i - 1] @ t[i]) * t[i]
-    u /= np.linalg.norm(u, axis=1)[:, None]
+    t = t / np.linalg.norm(t, axis=1)[:, None]
+    _s, _sv, vt = np.linalg.svd(pts - pts.mean(axis=0), full_matrices=True)
+    for seed in (vt[-1], vt[-2], vt[0]):
+        u0 = seed - float(seed @ t[0]) * t[0]
+        if np.linalg.norm(u0) >= 0.5:
+            break
+    if u0[np.argmax(np.abs(u0))] < 0:
+        u0 = -u0
+    u = np.empty_like(t)
+    u[0] = u0 / np.linalg.norm(u0)
+    for i in range(1, len(t)):
+        ui = transport_vector(u[i - 1], t[i - 1], t[i])
+        ui = ui - float(ui @ t[i]) * t[i]
+        u[i] = ui / np.linalg.norm(ui)
     return u, np.cross(t, u)
 
 
