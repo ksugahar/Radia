@@ -19,6 +19,14 @@ The script is intentionally minimal: ``gmsh.initialize(['-noconfig'])``
 skips ``%APPDATA%\\gmsh-options`` so only the exact companion option file
 controls display settings. Prefer ``case.geo`` + ``case.geo.opt`` for the
 normal launch path; ``case.msh`` + ``case.msh.opt`` is raw inspection.
+
+The launcher checks only that the imported Gmsh Python runtime reports major
+version 5; any other major is refused before a file is opened.  It logs the
+runtime identity (version, Python module, native library) and, when
+``RADIA_GMSH_PROVENANCE`` is set, that path as given.  The provenance record is
+neither read nor verified here, so a logged path is not evidence of an official
+or qualified build; qualification is documented by radia-mcp
+(``gmsh_usage("update_qualification")``).  Radia core does not import radia-mcp.
 """
 
 from __future__ import annotations
@@ -45,6 +53,23 @@ def _import_panel_log():
         return panel_log, panel_log_exception
     except Exception:
         return (lambda _msg: None), (lambda _prefix="": None)
+
+
+def _gmsh5_identity(gmsh):
+    """Return the runtime identity; raise if it is not Gmsh major 5.
+
+    ``provenance_record`` is the unverified RADIA_GMSH_PROVENANCE path.
+    """
+    version = str(getattr(gmsh, "__version__", ""))
+    identity = {
+        "gmsh_version": version,
+        "module": os.path.abspath(getattr(gmsh, "__file__", "") or ""),
+        "native_library": str(getattr(gmsh, "libpath", "")),
+        "provenance_record": os.environ.get("RADIA_GMSH_PROVENANCE", ""),
+    }
+    if version.split(".")[0] != "5":
+        raise RuntimeError(f"Gmsh major 5 is required, found {version!r}: {identity}")
+    return identity
 
 
 def main(argv):
@@ -88,6 +113,13 @@ def main(argv):
     except ImportError:
         panel_log_exception("open_gmsh.py: gmsh import failed")
         return 4
+
+    try:
+        identity = _gmsh5_identity(gmsh)
+    except RuntimeError:
+        panel_log_exception("open_gmsh.py: unsupported Gmsh runtime")
+        return 6
+    panel_log(f"open_gmsh.py: runtime {identity}")
 
     try:
         gmsh.initialize(["-noconfig"])
