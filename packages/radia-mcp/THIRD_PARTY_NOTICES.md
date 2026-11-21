@@ -16,6 +16,16 @@ packages. Their installed distributions provide their own license texts.
 Optional extras select the workflows below; development extras provide checks
 and documentation tools. This inventory does not relicense dependencies.
 
+## Bundled data
+
+| Data | Authors | License | Location |
+| --- | --- | --- | --- |
+| Viridis, Inferno colormap tables (256 entries) | Nathaniel J. Smith, Stefan van der Walt (Viridis also Eric Firing), BIDS/colormap | CC0-1.0 | `src/radia_mcp/blender/colormaps.json` |
+| Turbo colormap table (256 entries) | Anton Mikhailov, Copyright 2019 Google LLC | Apache-2.0 | `src/radia_mcp/blender/colormaps.json` |
+
+The tables were copied from matplotlib 3.11.2 `_cm_listed.py` (SHA-256 recorded in
+the JSON); values are unchanged.
+
 ## Declared Python dependencies
 
 | Distribution | Dependency | Selected use / extra |

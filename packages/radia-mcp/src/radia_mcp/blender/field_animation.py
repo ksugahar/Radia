@@ -38,31 +38,19 @@ DEFAULT_SPEC = {
 FIELDS = {"J_A_per_m2": ("J", "A/m^2", "conductor", "Conductor"),
           "B_T": ("B", "T", "body", "Body")}
 
-# Independent copy of the worker's colour stops: the rendered glyph colours are
-# checked against these, not against data read from the file.
-COLORMAPS = {
-    "viridis": [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
-                (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
-                (1.0, (0.993, 0.906, 0.144))],
-    "turbo": [(0.0, (0.190, 0.072, 0.232)), (0.25, (0.158, 0.506, 0.976)),
-              (0.5, (0.388, 0.902, 0.369)), (0.75, (0.980, 0.682, 0.149)),
-              (1.0, (0.478, 0.016, 0.012))],
-    "inferno": [(0.0, (0.001, 0.000, 0.014)), (0.25, (0.258, 0.039, 0.406)),
-                (0.5, (0.578, 0.148, 0.404)), (0.75, (0.865, 0.317, 0.226)),
-                (1.0, (0.988, 0.998, 0.645))],
-}
+# Canonical 256-entry colormap tables (package data, see colormaps.json for the
+# pinned upstream source, authors and licenses).  The wrapper sends the selected
+# table to the worker; tests check the table and the lookup against upstream.
+COLORMAP_LUT = json.loads((Path(__file__).with_name("colormaps.json")).read_text(encoding="utf-8"))
+COLORMAPS = {k: v["rgb"] for k, v in COLORMAP_LUT["maps"].items()}
 STYLES = ("standard", "studio")
 CAMERAS = ("isometric", "top", "front", "side")
 
 
 def expected_color(t, colormap="viridis"):
-    stops = COLORMAPS[colormap]
+    """Lookup convention of colormaps.json: 256 equal bins, no interpolation."""
     t = min(max(float(t), 0.0), 1.0)
-    for (a, ca), (b, cb) in zip(stops, stops[1:]):
-        if t <= b:
-            w = (t - a) / (b - a)
-            return np.array([ca[i] + w * (cb[i] - ca[i]) for i in range(3)])
-    return np.array(stops[-1][1])
+    return np.array(COLORMAPS[colormap][min(int(t * 256), 255)])
 
 
 def check_glyphs(pay, glyphs, k, arrow_length, offset, colormap="viridis"):
@@ -264,6 +252,7 @@ def field_animation(dataset_path, out_dir, spec=None, timeout_s=3600):
         pp = Path(wd) / "payload.json"
         pp.write_text(json.dumps(pay), encoding="utf-8")
         wreq = {"payload_path": str(pp), "spec": s,
+                "colormap_rgb": COLORMAPS[s["colormap"]],
                 "blend_path": str(out / f"{stem}.blend"),
                 "preview_pattern": str(out / f"{stem}_step{{step:04d}}.png"),
                 "video_path": str(out / f"{stem}.mp4") if s["video"] else None}

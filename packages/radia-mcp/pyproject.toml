@@ -112,6 +112,7 @@ radia-acoustic-fembem-mcp-config = "radia_mcp.acoustic_fembem.integration:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"radia_mcp.blender" = ["colormaps.json"]
 "radia_mcp.ih" = ["prompts/*.md"]
 "radia_mcp.peec" = ["prompts/*.md"]
 "radia_mcp.matlab" = [

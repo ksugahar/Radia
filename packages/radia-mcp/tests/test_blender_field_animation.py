@@ -240,12 +240,14 @@ def test_worker_rejects_unknown_spec_options_and_distinguishes_colormaps(monkeyp
         with pytest.raises(ValueError):
             worker._validate_spec_options(bad)
 
-    assert worker._cmap(0.5, "viridis") != worker._cmap(0.5, "turbo")
-    # The wrapper's independent colour tables must match what the worker draws.
-    for name, stops in fa.COLORMAPS.items():
+    with pytest.raises(RuntimeError):  # no table from the request: fail, no built-in palette
+        worker._cmap(0.5, "viridis")
+    assert set(worker._COLORMAP_NAMES) == set(fa.COLORMAPS)
+    # The worker draws exactly the table the wrapper sends, with the same lookup.
+    for name, rgb in fa.COLORMAPS.items():
+        worker._LUT = (name, [tuple(c) for c in rgb])
         for t in (0.0, 0.1, 0.37, 0.5, 0.8, 1.0):
-            assert np.allclose(worker._cmap(t, name), fa.expected_color(t, name), atol=1e-12), (name, t)
-    assert set(worker._COLORMAPS) == set(fa.COLORMAPS)
+            assert np.allclose(worker._cmap(t, name), fa.expected_color(t, name), atol=0), (name, t)
     assert worker._VALID_STYLES == fa.STYLES and worker._VALID_CAMERAS == fa.CAMERAS
 
 
@@ -269,3 +271,24 @@ def test_unknown_render_options_fail_before_blender_starts(tmp_path, monkeypatch
     with pytest.raises(ValueError, match=opt):
         fa.field_animation(_dataset(tmp_path / "d.h5"), tmp_path / "out", {opt: value})
     assert not called, "Blender worker was resolved for an invalid option"
+
+
+def test_colormap_tables_match_upstream_samples():
+    """Guards: viridis/turbo/inferno equal the pinned upstream 256-entry tables and
+    the declared lookup (256 bins, no interpolation) at bin edges and interiors.
+    Assumes: matplotlib's ListedColormap(N=256) is the independent oracle."""
+    mpl = pytest.importorskip("matplotlib")
+    lut = fa.COLORMAP_LUT
+    assert lut["schema"] == "radia.colormap-lut.v1"
+    assert {k: v["license"] for k, v in lut["maps"].items()} == {
+        "viridis": "CC0-1.0", "inferno": "CC0-1.0", "turbo": "Apache-2.0"}
+    ts = np.concatenate([np.linspace(0.0, 1.0, 1001), np.arange(257) / 256.0,
+                         np.arange(256) / 256.0 - 1e-9, [-0.2, 1.3]])
+    for name in fa.COLORMAPS:
+        assert len(fa.COLORMAPS[name]) == 256
+        ref = mpl.colormaps[name]
+        assert ref.N == 256
+        for t in ts:
+            want = np.asarray(ref(float(np.clip(t, 0.0, 1.0)))[:3])
+            got = fa.expected_color(t, name)
+            assert np.array_equal(got, want), (name, t, got, want)

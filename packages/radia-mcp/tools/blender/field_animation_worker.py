@@ -29,29 +29,10 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 # Perceptually ordered colour stops (viridis subset) for |J| in [0, J_max].
-_STOPS = [(0.0, (0.267, 0.005, 0.329)), (0.25, (0.229, 0.322, 0.546)),
-          (0.5, (0.128, 0.567, 0.551)), (0.75, (0.369, 0.789, 0.383)),
-          (1.0, (0.993, 0.906, 0.144))]
-
-
-_COLORMAPS = {
-    "viridis": _STOPS,
-    "turbo": [
-        (0.0, (0.190, 0.072, 0.232)),
-        (0.25, (0.158, 0.506, 0.976)),
-        (0.5, (0.388, 0.902, 0.369)),
-        (0.75, (0.980, 0.682, 0.149)),
-        (1.0, (0.478, 0.016, 0.012)),
-    ],
-    "inferno": [
-        (0.0, (0.001, 0.000, 0.014)),
-        (0.25, (0.258, 0.039, 0.406)),
-        (0.5, (0.578, 0.148, 0.404)),
-        (0.75, (0.865, 0.317, 0.226)),
-        (1.0, (0.988, 0.998, 0.645)),
-    ],
-}
-
+# The colormap table arrives in the request (``colormap_rgb``: 256 RGB rows from
+# radia_mcp/blender/colormaps.json); the worker carries no palette of its own.
+_COLORMAP_NAMES = ("viridis", "turbo", "inferno")
+_LUT = None
 _VALID_STYLES = ("standard", "studio")
 _VALID_CAMERAS = ("isometric", "top", "front", "side")
 
@@ -64,21 +45,16 @@ def _validate_spec_options(spec):
     if camera not in _VALID_CAMERAS:
         raise ValueError(f"Unknown camera {camera!r}; expected one of {_VALID_CAMERAS}")
     colormap = spec.get("colormap", "viridis")
-    if colormap not in _COLORMAPS:
-        raise ValueError(f"Unknown colormap {colormap!r}; expected one of {tuple(_COLORMAPS)}")
+    if colormap not in _COLORMAP_NAMES:
+        raise ValueError(f"Unknown colormap {colormap!r}; expected one of {_COLORMAP_NAMES}")
     return style, camera, colormap
 
 
 def _cmap(t, cmap_name="viridis"):
-    if cmap_name not in _COLORMAPS:
-        raise ValueError(f"Unknown colormap {cmap_name!r}; expected one of {tuple(_COLORMAPS)}")
-    stops = _COLORMAPS[cmap_name]
+    if _LUT is None or _LUT[0] != cmap_name:
+        raise RuntimeError(f"no colormap table loaded for {cmap_name!r}")
     t = min(max(t, 0.0), 1.0)
-    for (a, ca), (b, cb) in zip(stops, stops[1:]):
-        if t <= b:
-            w = (t - a) / (b - a)
-            return tuple(ca[i] + w * (cb[i] - ca[i]) for i in range(3))
-    return stops[-1][1]
+    return tuple(_LUT[1][min(int(t * 256), 255)])
 
 
 def _material(name, color, alpha=1.0, emission=0.0, metallic=0.0, rough=0.5, attr=None):
@@ -270,6 +246,11 @@ def write(req):
     pay = json.load(open(req["payload_path"], encoding="utf-8"))
     spec = req["spec"]
     style, camera_preset, cmap_name = _validate_spec_options(spec)
+    global _LUT
+    rgb = req.get("colormap_rgb")
+    if not (isinstance(rgb, list) and len(rgb) == 256 and all(len(c) == 3 for c in rgb)):
+        raise ValueError("request colormap_rgb must be 256 RGB rows")
+    _LUT = (cmap_name, [tuple(float(x) for x in c) for c in rgb])
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
     n = len(pay["time_s"])
