@@ -86,7 +86,7 @@ struct Resident {
 }  // namespace radia_gpu_ams_python
 PYBIND11_MODULE(_gpu_ams,m){
     using Resident = radia_gpu_ams_python::Resident;
-    m.doc()="Radia-owned FP64 AMG/AMS cycles; no MATLAB or NGSolve ABI";
+    m.doc()="Radia-owned FP64 AMG cycles; no MATLAB or NGSolve ABI";
     py::class_<Resident>(m,"Resident")
         .def(py::init<py::dict>())
         .def("close",&Resident::close)

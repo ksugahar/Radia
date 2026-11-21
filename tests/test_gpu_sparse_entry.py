@@ -1,4 +1,4 @@
-"""Guards: explicit dispatch, original residuals and owned AMG/AMS lifetimes.
+"""Guards: explicit dispatch, original residuals and owned AMG lifetimes.
 Assumes: native execution is mocked; these are API contracts, not GPU accuracy evidence.
 """
 import importlib.util
@@ -129,10 +129,9 @@ def test_bad_csr_fails_before_loading_cuda(gpu, monkeypatch, change):
         gpu.solve_spd(matrix, Vector([1., 2.]), backend="gpu")
 
 
-@pytest.mark.parametrize("kind", ["amg", "ams"])
-def test_hierarchy_snapshot_lifetime_apply_and_solve(gpu, monkeypatch, kind):
+def test_hierarchy_snapshot_lifetime_apply_and_solve(gpu, monkeypatch):
     system = gpu._csr(Matrix())
-    snapshot = dict(schema="radia." + kind + "-accelerator.v1", A=system)
+    snapshot = dict(schema="radia.amg-accelerator.v1", A=system)
     calls = []
     class Native:
         def apply(self, b):
@@ -144,8 +143,7 @@ def test_hierarchy_snapshot_lifetime_apply_and_solve(gpu, monkeypatch, kind):
         def close(self): calls.append("close")
     monkeypatch.setattr(gpu, "_native", lambda name: SimpleNamespace(Resident=lambda data: Native()))
     hierarchy = SimpleNamespace(_accelerator_snapshot=lambda: snapshot)
-    cls = gpu.AMG if kind == "amg" else gpu.AMS
-    with cls(hierarchy, backend="gpu") as owner:
+    with gpu.AMG(hierarchy, backend="gpu") as owner:
         system["values"][:] = 99.  # Host snapshot ownership must be independent.
         applied, info = owner.apply(np.array([1., 2.]))
         np.testing.assert_array_equal(applied, [2., 4.])

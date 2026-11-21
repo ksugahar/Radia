@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from numbers import Integral, Real
 
-__all__ = ["solve_spd", "AMG", "AMS", "ResidentAMG"]
+__all__ = ["solve_spd", "AMG", "ResidentAMG"]
 
 
 def _controls(tolerance, max_iterations):
@@ -135,7 +135,7 @@ def solve_spd(matrix, rhs, *, backend, tolerance=1e-10, max_iterations=10000,
     """Solve a real SPD NGSolve matrix with an explicitly selected backend.
 
     CPU uses NGSolve sparsecholesky under the caller's TaskManager ownership.
-    GPU uses Jacobi-PCG or an explicitly prepared AMG/AMS hierarchy. A failed
+    GPU uses Jacobi-PCG or an explicitly prepared AMG hierarchy. A failed
     GPU request raises. Preconditioners are bound to their snapshot operator.
     """
     if backend not in ("cpu", "gpu"):
@@ -155,7 +155,7 @@ def solve_spd(matrix, rhs, *, backend, tolerance=1e-10, max_iterations=10000,
         result = (x.FV().NumPy(), dict(backend="cpu", solver="NGSolve sparsecholesky"))
     elif preconditioner is not None:
         if not isinstance(preconditioner, _Resident):
-            raise TypeError("preconditioner must be a Radia GPU AMG or AMS owner")
+            raise TypeError("preconditioner must be a Radia GPU AMG owner")
         import numpy as np
         if any(not np.array_equal(system[k], preconditioner._system[k])
                for k in ("rows", "cols", "rowptr", "columns", "values")):
@@ -181,7 +181,7 @@ def solve_spd(matrix, rhs, *, backend, tolerance=1e-10, max_iterations=10000,
 class _Resident:
     def __init__(self, hierarchy, *, backend, kind):
         if backend != "gpu":
-            raise ValueError("AMG/AMS requires explicit backend='gpu'")
+            raise ValueError("AMG requires explicit backend='gpu'")
         self._owner = None
         snapshot = hierarchy._accelerator_snapshot()
         if snapshot.get("schema") != "radia." + kind + "-accelerator.v1":
@@ -234,16 +234,6 @@ class AMG(_Resident):
     """Upload an already constructed Radia CompactAMG hierarchy to CUDA."""
     def __init__(self, hierarchy, *, backend):
         super().__init__(hierarchy, backend=backend, kind="amg")
-
-
-class AMS(_Resident):
-    """Upload an already constructed real FP64 Radia AMS hierarchy to CUDA.
-
-    Only the existing AMS cycles 1 and 7 are supported. NGSolve still owns
-    FE setup and orientation. This interface does not introduce HDiv-MMM.
-    """
-    def __init__(self, hierarchy, *, backend):
-        super().__init__(hierarchy, backend=backend, kind="ams")
 
 
 class ResidentAMG:
