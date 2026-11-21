@@ -1,50 +1,37 @@
 #!/usr/bin/env python
-"""release_quad.py — CPU numerical Radia solver two-machine gate.
+"""release_quad.py — Radia release candidate verification and verified-wheel deployment.
 
 Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
 have caused real outages (2026-04-14 incident series).
 
+The build host keeps the only editable development installs; the validation
+role runs verified wheels only. No command here installs an editable source.
+
 Usage:
     python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_quad.py phase8 [--target validation|100|all]
-        Install the bound Radia source editable on either operating role,
-        with metadata-pinned GPU dependencies and same-source native payloads.
-        Exact-wheel QA runs in separate explicitly configured environments.
-        Never change radia-mcp or cubit-mesh-export.
+    python tools/release_quad.py deployment-plan
+        Read-only: print the four release lanes (build and validation roles)
+        and the solver runtime role. Never contacts a host.
 
-    python tools/release_quad.py phase8e
-        Reject the retired compute refresh route without contacting a host.
+    python tools/release_quad.py phase8 --source-sha SHA --manifest FILE [--target validation]
+        Install the exact release wheel of the published lane into the
+        validation role's normal runtime. The wheel's SHA-256 must match the
+        verified candidate receipts before and after staging; a fresh process
+        then checks non-editable registration, import origin, RECORD hashes
+        bound to the candidate wheel, metadata-pinned NGSolve/Netgen and GPU
+        runtime pins, and pip check. The CPU-only build host is never a
+        target. Never change radia-mcp or cubit-mesh-export.
 
     python tools/release_quad.py phase9
-        Cross-machine consistency probe. Final gate.
+        Read-only verified-wheel runtime consistency probe.
 
-
-    python tools/release_quad.py all
-        phase8 -> phase9 with all preconditions enforced.
-
-        Both normal roles require explicit host, Python, source and release
-        commit bindings; isolated QA interpreters are configured separately.
-
-    python tools/release_quad.py done [--release-source <path>]
-        Require the CPU solver release gate. The release source is the controller (which must then
-        sit at the tag) or a separate exact-tag checkout; with the latter the
-        controller must be a tracked-clean descendant declaring the same
-        version. No runtime is changed.
-
-    python tools/release_quad.py verify-editable
-        Read-only: verify both bound normal editable installations.
-
-    python tools/release_quad.py repoint --host <role> --package radia --source <path> --reason "..."
-        Explicitly update one bound normal Radia source and verify it before
-        recording intent. --record-current adopts an already verified pointer.
-        Updates are forward-only; no process is stopped or package uninstalled.
-
-    python tools/release_quad.py restore-editable
-        Removed. The development tier has no default target; use repoint
-        with a reason (policy P02, 2026-09-11).
+    python tools/release_quad.py done --source-sha SHA --manifest FILE [--release-source PATH] [--public-summary FILE]
+    python tools/release_quad.py all --source-sha SHA --manifest FILE [--release-source PATH]
+        Verify four candidate lanes and their exact-source, exact-artifact
+        acceptance evidence for release-owner handoff. Does not deploy.
 
 
 Exit codes:
@@ -52,7 +39,6 @@ Exit codes:
     2   precondition failure (skip detected)
     3   action failure (external command)
     4   verification mismatch
-    5   unverified: no recorded editable intent and no explicit expectation
 """
 
 from __future__ import annotations
@@ -63,34 +49,15 @@ import hashlib
 import importlib.util
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import tomllib
-import zipfile
-from datetime import datetime, timezone
-from importlib import metadata as importlib_metadata
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-from urllib.request import url2pathname
-
-
-def _load_editable_intent():
-    """Load tools/editable_intent.py beside this file; its text is shipped to remotes."""
-    source_path = Path(__file__).resolve().parent / "editable_intent.py"
-    spec = importlib.util.spec_from_file_location("radia_editable_intent", source_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module, source_path.read_text(encoding="utf-8")
-
-
-editable_intent, _EDITABLE_INTENT_SOURCE = _load_editable_intent()
 
 
 def gh_get(path):
@@ -129,43 +96,30 @@ if GIT_EXE is None:
     raise RuntimeError("Git is required by tools/release_quad.py")
 
 REPO = Path(__file__).resolve().parent.parent
-EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
-# The three repository packages installed editable on the development tier.
-EDITABLE_PACKAGES = ("radia", "cubit-mesh-export", "radia-mcp")
-# Resolve 100号機 through the machine SSH configuration.  Its LAN address may
-# change between lab network segments, while the supported host alias remains
-# stable and carries the correct user/key settings.
-SSH_100 = "100"
-# 100号機's editable lives only in this dedicated development venv, separate
-# from the machine's release runtime (host policy, 2026-10-04).
-MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
-SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
+# The solver runtime installs the "[gpu]" extra and verifies GPU payloads, so
+# it runs only on the validation role. The CPU-only build host prepares CPU
+# candidates; it is neither a deployment nor an acceptance target.
 _KNOWN_SOLVER_TARGETS = {
     "validation": ("validation", None, None),
-    "100": ("build", SSH_100, "python"),
 }
-# The promotion gate imports the same tuple, so the machines that produce
-# release evidence and the machines the gate demands evidence from cannot
-# drift apart again.  release_acceptance.py is the single owner of the list.
+# Exact-wheel release acceptance runs only on the validation role
+# (release_acceptance.py owns that list). SOLVER_TARGETS are the explicit
+# runtime-maintenance targets.
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
-    from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
+    import release_acceptance as _release_acceptance
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
-    RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
+    _release_acceptance = _acceptance_module
 
-SOLVER_TARGETS = {host: _KNOWN_SOLVER_TARGETS[host]
-                    for host in RELEASE_ACCEPTANCE_HOSTS}
+SOLVER_TARGETS = dict(_KNOWN_SOLVER_TARGETS)
 
-assert tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
-    "release_quad targets and the release acceptance hosts have drifted")
-# The promotion gate checks each stored row label against the same table.
-assert {key: row[0] for key, row in SOLVER_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
-    "Simulink target labels and the release acceptance host labels have drifted")
+assert set(RELEASE_ACCEPTANCE_HOSTS) <= set(SOLVER_TARGETS), (
+    "release acceptance names a role release_quad cannot reach")
 
 
 VALIDATION_SSH_ENV = "RADIA_RELEASE_SSH_VALIDATION"
@@ -200,61 +154,26 @@ def _absolute_windows_path(value, setting, *, python=False):
     return value
 
 
-def _editable_target(role):
+def _wheel_target(role):
+    """Resolve the role's normal verified-wheel runtime from private configuration."""
     label, ssh, python = _solver_target(role)
-    suffix = role.upper()
-    hostname = os.environ.get("RADIA_RELEASE_HOSTNAME_" + suffix, "")
+    setting = "RADIA_RELEASE_HOSTNAME_" + role.upper()
+    hostname = os.environ.get(setting, "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", hostname):
-        raise ValueError("RADIA_RELEASE_HOSTNAME_" + suffix + " must pin the actual target hostname")
-    source_env = "RADIA_RELEASE_EDITABLE_REPO_" + suffix
-    source = _absolute_windows_path(os.environ.get(source_env, ""), source_env)
-    commit = os.environ.get("RADIA_RELEASE_EDITABLE_COMMIT_" + suffix, "")
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise ValueError("RADIA_RELEASE_EDITABLE_COMMIT_" + suffix + " must pin the source commit")
-    aliases = json.loads(os.environ.get("RADIA_RELEASE_EDITABLE_PATH_ALIASES_" + suffix, "[]"))
-    if not isinstance(aliases, list) or any(not isinstance(pair, list) or len(pair) != 2
-            or not all(isinstance(x, str) and x for x in pair) for pair in aliases):
-        raise ValueError("Private editable path aliases must be JSON prefix pairs")
-    binding = dict(schema=editable_intent.BINDING_SCHEMA, role=label, hostname=hostname,
-                   python=python, sources={"radia": dict(source=source, commit=commit)})
-    return dict(role=role, label=label, ssh=ssh, python=python, source=source,
-                commit=commit, binding=binding, aliases=aliases)
+        raise ValueError(setting + " must pin the actual target hostname")
+    return dict(role=role, label=label, ssh=ssh, python=python, hostname=hostname)
 
 
-def _solver_qa_target(role):
-    target = _editable_target(role)
-    setting = "RADIA_RELEASE_QA_PYTHON_" + role.upper()
-    python = _absolute_windows_path(os.environ.get(setting, ""), setting, python=True)
-    import ntpath
-    if ntpath.normcase(ntpath.normpath(python)) == ntpath.normcase(ntpath.normpath(target["python"])):
-        raise ValueError(setting + " must be separate from the normal editable runtime")
-    return target["label"], target["ssh"], python
-
-
-def _target_check_code(target, *, python=None, source=True, qa=False):
-    """Read-only checks run in the actual target interpreter before mutation."""
-    values = dict(hostname=target["binding"]["hostname"], python=python or target["python"], normal_python=target["python"],
-                  source=target["source"], commit=target["commit"], check_source=source, qa=qa)
+def _target_check_code(target):
+    """Read-only identity checks run in the actual target interpreter before mutation."""
+    values = dict(hostname=target["hostname"], python=target["python"])
     token = base64.b64encode(json.dumps(values).encode()).decode("ascii")
-    return '''import base64,json,os,pathlib,platform,subprocess,sys
+    return '''import base64,json,os,pathlib,platform,sys
 t=json.loads(base64.b64decode("TOKEN"))
 if platform.node().casefold()!=t["hostname"].casefold(): raise SystemExit("Selected hostname mismatch")
 expected=pathlib.Path(t["python"]).resolve()
 if "windowsapps" in [p.casefold() for p in expected.parts]: raise SystemExit("WindowsApps runtime refused")
 if os.path.normcase(os.path.realpath(sys.executable))!=os.path.normcase(str(expected)): raise SystemExit("Selected Python mismatch")
-if t["qa"]:
- if sys.prefix==sys.base_prefix: raise SystemExit("Exact-wheel QA requires an isolated venv")
- normal_prefix=subprocess.check_output([t["normal_python"],"-I","-c","import sys;print(sys.prefix)"],text=True).strip()
- if pathlib.Path(normal_prefix).resolve()==pathlib.Path(sys.prefix).resolve(): raise SystemExit("QA and normal runtimes share one environment")
-if t["check_source"]:
- root=pathlib.Path(t["source"]).resolve(strict=True)
- cmd=["git","-c","safe.directory="+root.as_posix(),"-C",str(root)]
- head=subprocess.check_output(cmd+["rev-parse","HEAD"],text=True).strip().lower()
- if head!=t["commit"]: raise SystemExit("Selected source commit mismatch")
- dirty=subprocess.check_output(cmd+["status","--porcelain","--untracked-files=no"],text=True)
- if dirty.strip(): raise SystemExit("Selected source has tracked changes")
- import tomllib
- if tomllib.loads((root/"pyproject.toml").read_text(encoding="utf-8"))["project"]["name"]!="radia": raise SystemExit("Selected source is not Radia")
 '''.replace("TOKEN", token)
 
 
@@ -262,19 +181,21 @@ def _ps_python(command):
     return "& " + " ".join(_powershell_literal(str(word)) for word in command)
 
 
-def _target_check_powershell(target, *, python=None, source=True, qa=False):
-    python = python or target["python"]
-    code = _target_check_code(target, python=python, source=source, qa=qa)
-    token = base64.b64encode(code.encode()).decode("ascii")
+def _ssh_pwsh(ssh, script):
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    return run(["ssh", ssh, "pwsh", "-NoProfile", "-EncodedCommand", encoded], check=False).returncode
+
+
+def _target_check_powershell(target):
+    python = target["python"]
+    token = base64.b64encode(_target_check_code(target).encode()).decode("ascii")
     return (_runtime_guard_powershell(python) +
             _ps_python([python, "-I", "-c", f"import base64;exec(base64.b64decode('{token}'))"]) +
             "\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n")
 
 
-def _check_remote_target(target, *, python=None, source=True, qa=False):
-    script = _target_check_powershell(target, python=python, source=source, qa=qa) + "exit $LASTEXITCODE"
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    return run(["ssh", target["ssh"], "pwsh", "-NoProfile", "-EncodedCommand", encoded], check=False).returncode
+def _check_remote_target(target):
+    return _ssh_pwsh(target["ssh"], _target_check_powershell(target) + "exit $LASTEXITCODE")
 
 
 def _powershell_literal(value):
@@ -290,14 +211,6 @@ def _runtime_guard_powershell(python_path):
     return (f"if (-not (Test-Path -LiteralPath {literal} -PathType Leaf)) {{ throw 'Selected Python is missing' }}\n"
             f"& {literal} -c \"import base64; exec(base64.b64decode('{token}'))\"\n"
             "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n")
-
-
-SIMULINK_TARGETS = {"100": SOLVER_TARGETS["100"]}
-
-
-def _editable_repo_100():
-    """Return the explicitly selected build-role source, never a historic path."""
-    return _editable_target("100")["source"]
 
 
 def _radia_version() -> str:
@@ -319,14 +232,15 @@ def _release_head():
 
 
 def cmd_deployment_plan(args):
-    """Read-only normal editable routing; QA runtimes remain separate."""
-    plans = []
-    for role in SOLVER_TARGETS:
-        target = _editable_target(role)
-        plans.append(dict(host=role, solver_runtime="editable", python=target["python"],
-                          source=target["source"], source_commit=target["commit"],
-                          solver_action="verify-and-install-radia-gpu", isolated_wheel_qa_required=True))
-    print(json.dumps(plans, indent=2))
+    """Read-only: the four release lanes and the solver runtime role; no host access."""
+    plan = dict(
+        lanes=[dict(lane=name, build_role=build, validation_role=validation)
+               for name, (build, validation) in _release_acceptance.RELEASE_LANES.items()],
+        published_wheel_lane=_release_acceptance.PUBLISHED_WHEEL_LANE,
+        solver_runtime_roles=list(SOLVER_TARGETS),
+        acceptance_roles=list(RELEASE_ACCEPTANCE_HOSTS),
+    )
+    print(json.dumps(plan, indent=2))
     return 0
 
 
@@ -407,38 +321,6 @@ def _solver_hdf5_requirement() -> str:
     return requirements[0]
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _simulink_manifest(package: Path) -> dict:
-    verifier = REPO / "tools/verify_simulink_release.py"
-    result = subprocess.run(
-        [sys.executable, str(verifier), str(package), "--manifest-only"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
-    with zipfile.ZipFile(package) as bundle:
-        return json.loads(bundle.read("manifest.json"))
-
-
-def _simulink_state_path(package_sha256: str) -> Path:
-    return SIMULINK_GATE_ROOT / f"simulink-{package_sha256}.json"
-
-
-def _simulink_mex_sha256(manifest: dict) -> str:
-    matches = [row.get("sha256") for row in manifest.get("files", [])
-               if row.get("path") == "packages/radia-simulink/matlab/radia_mex.mexw64"]
-    if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
-        raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
-    return matches[0].lower()
-
-
 def _release_tag_commit(version: object) -> str | None:
     """Return the peeled commit for the public ``v<version>`` tag, if any."""
     if not isinstance(version, str) or not version.strip():
@@ -466,234 +348,6 @@ def _verify_head_release_tag() -> int:
         )
         return 4
     ok(f"release commit is anchored at v{version} ({head[:12]})")
-    return 0
-
-
-def _simulink_candidate_commit_is_release_anchored(
-        manifest: dict, head: str) -> tuple[bool, str]:
-    """Accept an exact tagged candidate when release-tooling later advances main.
-
-    The archive bytes are built and tested from the tagged release source.  The
-    definition-of-done controller can acquire a later release-only repair, so
-    requiring the archive commit to equal the controller's ``HEAD`` would reject
-    the already-tested public artifact.  A candidate is therefore accepted only
-    when its commit is the peeled ``v<version>`` tag and remains an ancestor of
-    the controller commit.
-    """
-    commit = manifest.get("commit")
-    version = manifest.get("radia_version") or manifest.get("version")
-    if not isinstance(commit, str) or not commit.strip():
-        return False, "Simulink manifest has no source commit"
-    commit = commit.strip().lower()
-    tag_commit = _release_tag_commit(version)
-    if tag_commit is None:
-        return False, f"Simulink manifest version {version!r} has no v<version> release tag"
-    if commit != tag_commit:
-        return False, "Simulink manifest commit does not match its peeled release tag"
-    ancestry = _git("merge-base", "--is-ancestor", commit, head, check=False)
-    if ancestry.returncode != 0:
-        return False, "Simulink tagged commit is not an ancestor of the release controller HEAD"
-    return True, f"Simulink candidate is anchored at v{version} ({commit[:12]})"
-
-
-def _write_simulink_state(path: Path, state: dict, target: str) -> None:
-    """Merge only the completed target under a process lock, then publish atomically."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Keep this lock file: unlinking it could split concurrent writers' locks.
-    with path.with_suffix(path.suffix + '.lock').open('a+b') as lock:
-        deadline = time.monotonic() + 30
-        while True:
-            try:
-                if os.name == 'nt':
-                    import msvcrt
-                    lock.seek(0)
-                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError(f'Timed out locking candidate state: {path}')
-                time.sleep(0.05)
-        temporary = None
-        try:
-            previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-            if previous:
-                for field in ('schema', 'package_sha256', 'wheel_sha256', 'commit',
-                              'ci_run_id', 'mex_sha256'):
-                    if previous.get(field) != state.get(field):
-                        raise ValueError(f'Candidate state identity mismatch: {field}')
-            merged = {**state, 'targets': {**previous.get('targets', {})}}
-            merged['targets'][target] = state['targets'][target]
-            with tempfile.NamedTemporaryFile(
-                    mode='w', encoding='utf-8', dir=path.parent,
-                    prefix=path.name + '.', suffix='.tmp', delete=False) as output:
-                temporary = Path(output.name)
-                json.dump(merged, output, indent=2)
-                output.write('\n')
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, path)
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
-            if os.name == 'nt':
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-
-
-def _run_ssh_powershell(host: str, script: str, timeout: int):
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    command = ["ssh", "-v", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-               host, "pwsh", "-NoProfile",
-               "-EncodedCommand", encoded]
-    # Use a file rather than inherited output pipes: Windows SSH/Engine
-    # descendants can keep a pipe open after the command has exited.
-    with tempfile.TemporaryDirectory(prefix="radia-ssh-", dir=tempfile.gettempdir()) as scratch:
-        with (Path(scratch) / "output.log").open("w+b") as output:
-            result = subprocess.run(command, stdin=subprocess.DEVNULL,
-                                    stdout=output, stderr=subprocess.STDOUT,
-                                    timeout=timeout)
-            output.seek(0)
-            return subprocess.CompletedProcess(
-                command, result.returncode,
-                output.read().decode("utf-8", errors="replace"), "")
-
-
-def _engine_sessions(args, requested: list[str]) -> dict[str, str] | None:
-    """Per-target Engine names or com:PID selectors; None after a bad pair."""
-    sessions = {}
-    for entry in getattr(args, "engine_session", None) or []:
-        key, separator, name = entry.partition("=")
-        if not separator or key not in requested or not name.strip() or key in sessions:
-            fail("engine sessions must be unique selected-target=shared-name pairs")
-            return None
-        sessions[key] = name.strip()
-    return sessions
-
-
-def _local_com_target_error(key: str, session: str | None) -> str | None:
-    """COM borrows the chosen host's desktop, never another host's session."""
-    if not session or not session.startswith("com:"):
-        return None
-    if not re.fullmatch(r"com:[1-9][0-9]*", session):
-        return "COM session must be com:<positive PID>"
-    expected = os.environ.get("RADIA_ACCEPTANCE_HOSTNAME_" + key.upper(), "").strip().lower()
-    if not expected or platform.node().strip().lower() != expected:
-        return f"Run COM acceptance locally in the selected {key} desktop logon"
-    return None
-
-
-def _run_simulink_candidate_target(
-        key: str, package: Path, package_sha256: str,
-        success_marker: str, engine_session: str | None = None,
-        python_executable: str | None = None) -> tuple[bool, str]:
-    if key not in SIMULINK_TARGETS:
-        return False, "unsupported Simulink target"
-    label, host, python_command = SIMULINK_TARGETS[key]
-    if engine_session and engine_session.startswith("com:"):
-        error = _local_com_target_error(key, engine_session)
-        if error:
-            return False, error
-        host = None
-    if python_executable:
-        # The verifier hands its own interpreter to MATLAB as RADIA_PYTHON_EXECUTABLE.
-        python_command = "'" + python_executable.replace("'", "''") + "'"
-    verifier = REPO / "tools/verify_simulink_release.py"
-    if host is None:
-        command = [
-            python_executable or sys.executable, str(verifier), str(package),
-            "--matlab", MATLAB_EXE,
-        ]
-        if engine_session:
-            command.extend(["--engine-session", engine_session])
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-    else:
-        remote_root_posix = f"C:/temp/radia-release-quad/{package_sha256[:16]}"
-        remote_root_windows = remote_root_posix.replace("/", "\\")
-        prepare = f"New-Item -ItemType Directory -Force -Path '{remote_root_windows}' | Out-Null\n"
-        created = _run_ssh_powershell(host, prepare, timeout=60)
-        if created.returncode != 0:
-            return False, created.stderr.strip() or created.stdout.strip()
-        remote_package = f"{remote_root_posix}/{package.name}"
-        remote_verifier = f"{remote_root_posix}/{verifier.name}"
-        for source, destination in (
-                (package, remote_package), (verifier, remote_verifier)):
-            copied = subprocess.run(
-                ["scp", str(source), f"{host}:{destination}"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=180,
-            )
-            if copied.returncode != 0:
-                return False, copied.stderr.strip() or copied.stdout.strip()
-        session_option = (
-            " --engine-session '" + engine_session.replace("'", "''") + "'"
-            if engine_session else "")
-        invocation = (
-            f"& {python_command} '{remote_verifier}' '{remote_package}' "
-            f"--matlab '{MATLAB_EXE}'{session_option}\nexit $LASTEXITCODE\n"
-        )
-        result = _run_ssh_powershell(host, invocation, timeout=420)
-    output = ((result.stdout or "") + (result.stderr or "")).strip()
-    if result.returncode != 0:
-        return False, output
-    if success_marker not in output or '"status": "passed"' not in output:
-        return False, f"{label} did not emit both release success markers:\n{output}"
-    return True, output
-
-
-def cmd_simulink_candidate(args):
-    """Reject the retired CPU MEX release route."""
-    fail("CPU MEX releases are unsupported; use the independent radia-simulink release workflow.")
-    return 4
-
-
-def _verify_simulink_candidate_state(package_arg: str) -> int:
-    package = Path(package_arg).resolve()
-    try:
-        manifest = _simulink_manifest(package)
-        package_sha256 = _sha256_file(package)
-        mex_sha256 = _simulink_mex_sha256(manifest)
-    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
-        fail(f"invalid Simulink candidate: {error}")
-        return 2
-    state_path = _simulink_state_path(package_sha256)
-    if not state_path.is_file():
-        fail("Simulink candidate has no release-quad state. Run "
-             "`release_quad simulink-candidate --package <zip> --target all`.")
-        return 4
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    if state.get("package_sha256") != package_sha256 or \
-            state.get("commit") != manifest.get("commit") or \
-            state.get("mex_sha256") != mex_sha256:
-        fail("Simulink candidate state does not match the supplied archive")
-        return 4
-    missing = [key for key in SIMULINK_TARGETS
-               if state.get("targets", {}).get(key, {}).get("status") != "passed"
-               or state.get("targets", {}).get(key, {}).get("mex_sha256") != mex_sha256]
-    if missing:
-        fail(f"Simulink candidate has not passed: {', '.join(missing)}")
-        return 4
-    head = _release_head()
-    anchored, message = _simulink_candidate_commit_is_release_anchored(
-        manifest, head)
-    if not anchored:
-        fail(message)
-        return 4
-    info(message)
-    ok("supplied Simulink candidate passed on the build target")
     return 0
 
 
@@ -756,294 +410,233 @@ if os.name == "nt":
 '''
 
 
-def _solver_install_guard_powershell(python_command="python"):
-    encoded = base64.b64encode(SOLVER_INSTALL_GUARD.encode("utf-8")).decode("ascii")
-    return (f'{python_command} -c "import base64; exec(base64.b64decode(\'{encoded}\'))"\n'
-            'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n')
+def _wheel_runtime_probe_code(version, label, wheel=None):
+    """Target-side check: non-editable wheel metadata, import origin and RECORD.
 
-
-EDITABLE_RELEASE_VERIFY = r'''import hashlib, importlib.metadata as md, importlib.util, json, pathlib, sys, sysconfig
-repo = pathlib.Path(sys.argv[1]).resolve()
-expected_commit, expected_ngsolve, expected_netgen = sys.argv[2:5]
-preinstall = len(sys.argv) > 5 and sys.argv[5] == "preinstall"
-package = repo / "src" / "radia"
-manifest_path = package / "release_native_payloads.json"
-if not manifest_path.is_file():
-    raise SystemExit(f"missing exact-wheel native manifest: {manifest_path}")
-manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-if manifest.get("schema") != "radia.release-native-payloads.v1":
-    raise SystemExit("invalid exact-wheel native manifest schema")
-if manifest.get("source_commit", "").lower() != expected_commit:
-    raise SystemExit("native manifest source commit differs from the release tag")
-files = manifest.get("files")
-if not isinstance(files, dict):
-    raise SystemExit("native manifest files must be an object")
-actual = {p.name: p for pattern in ("*.pyd", "*.dll") for p in package.glob(pattern)}
-required = {"_radia_pybind.pyd", "axifem.pyd", "peec_matrices.pyd", "sparsesolv_ngsolve.pyd", "radia_motor_rom.dll"}
-if not required <= files.keys():
-    raise SystemExit("native manifest omits required NGSolve ABI payloads")
-if set(actual) != set(files):
-    raise SystemExit(f"native payload set differs: actual={sorted(actual)} expected={sorted(files)}")
-for name, path in actual.items():
-    lowered = name.lower()
-    if name == "c" + "ln_core.pyd" or "locked-old" in lowered or ".pre_" in lowered:
-        raise SystemExit(f"retired native payload remains import-visible: {name}")
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    if files[name] != digest:
-        raise SystemExit(f"native payload hash differs for {name}")
-    if name in required and path.suffix == ".pyd":
-        provenance = json.loads(pathlib.Path(str(path) + ".build.json").read_text(encoding="utf-8"))
-        if (provenance.get("schema") != "radia.native-build-provenance.v1"
-                or provenance.get("source_commit") != expected_commit
-                or provenance.get("source_dirty") is not False
-                or provenance.get("binary_name") != name
-                or provenance.get("binary_sha256") != digest
-                or provenance.get("binary_bytes") != path.stat().st_size):
-            raise SystemExit(f"native source provenance differs for {name}")
-spec = importlib.util.spec_from_file_location("radia_gpu_payload_check", repo / "tools/python_gpu_payload.py")
-payload = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(payload)
-for module in payload.MODULES:
-    name = module + sysconfig.get_config_var("EXT_SUFFIX")
-    binary = package / name
-    receipt = json.loads(pathlib.Path(str(binary) + ".build.json").read_text(encoding="utf-8"))
-    payload.verify_payload(name, binary.read_bytes(), receipt, expected_commit)
-if not preinstall:
-    if md.version("ngsolve") != expected_ngsolve or md.version("netgen-mesher") != expected_netgen:
-        raise SystemExit("installed NGSolve/Netgen differs from package metadata pins")
-    import ngsolve, radia
-    if ngsolve.__version__ != expected_ngsolve:
-        raise SystemExit("loaded NGSolve differs from package metadata pin")
-    distribution = md.distribution("radia")
-    import tomllib
-    expected_version = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    if distribution.version != expected_version or radia.__version__ != expected_version:
-        raise SystemExit("editable metadata/import version differs from bound source")
-    registration = json.loads(distribution.read_text("direct_url.json") or "{}")
-    if registration.get("dir_info", {}).get("editable") is not True:
-        raise SystemExit("normal runtime is not registered editable")
-    if repo not in pathlib.Path(radia.__file__).resolve().parents:
-        raise SystemExit(f"radia imported outside fixed release checkout: {radia.__file__}")
-    from radia._cuda_runtime import _pins
-    for name, version in _pins().items():
-        if md.version(name) != version:
-            raise SystemExit("GPU runtime metadata pin mismatch: " + name)
-print(json.dumps({"source_commit": expected_commit, "native_sha256": files}, sort_keys=True))
-'''
-
-
-def _editable_release_verify_command(repo, expected_sha, python_command="python", *, preinstall=False):
-    pins = _solver_dependency_pins()
-    encoded = base64.b64encode(EDITABLE_RELEASE_VERIFY.encode("utf-8")).decode("ascii")
-    command = [python_command, "-I", "-c", f"import base64; exec(base64.b64decode('{encoded}'))",
-               repo, expected_sha, pins["ngsolve"], pins["netgen-mesher"]]
-    return command + (["preinstall"] if preinstall else [])
-
-
-def _solver_abi_probe_command(python_command="python"):
-    pins = _solver_dependency_pins()
-    code = ("import importlib.metadata as m,ngsolve;"
-            f"assert ngsolve.__version__ == '{pins['ngsolve']}';"
-            f"assert m.version('netgen-mesher') == '{pins['netgen-mesher']}'")
-    return [python_command, "-c", code]
-
-
-def _verify_final_pip_checks() -> int:
-    """Check both normal editable and separate exact-wheel QA runtimes."""
-    targets = [_editable_target(role) for role in SOLVER_TARGETS]
-    checks = [(t["ssh"], t["python"]) for t in targets]
-    checks += [(host, python) for _, host, python in (_solver_qa_target(role) for role in SOLVER_TARGETS)]
-    for host, python in checks:
-        script = _runtime_guard_powershell(python) + f"& {_powershell_literal(python)} -I -m pip check; exit $LASTEXITCODE"
-        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-        if run(["ssh", host, "pwsh", "-NoProfile", "-EncodedCommand", encoded], check=False).returncode:
-            fail("pip check failed in a normal or isolated QA runtime")
-            return 4
-    return 0
-
-
-def _verify_qa_wheel(role):
-    """Exact-wheel qualification is isolated from normal editable operation."""
-    target = _editable_target(role)
-    label, host, python = _solver_qa_target(role)
-    if _check_remote_target(target, python=python, source=False, qa=True):
-        return 4
-    return _verify_wheel_runtime(host, label + " QA", python_path=python, isolated=True)
-
-
-def _wheel_runtime_probe_code(version, label):
-    """Build the target-side check for wheel metadata, import origin and RECORD."""
-    return """import base64, hashlib, importlib.metadata as m, json, pathlib, sysconfig
-import radia
+    With ``wheel`` (the staged, hash-verified candidate file), every hashed
+    entry of the wheel's own RECORD must equal the installed RECORD hash, so
+    the runtime is bound to the exact candidate rather than to its version.
+    """
+    return """import base64, csv, hashlib, importlib.metadata as m, io, json, pathlib, sysconfig, zipfile
 version = VERSION_PLACEHOLDER
+wheel = WHEEL_PLACEHOLDER
 d = m.distribution('radia')
+assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LABEL_PLACEHOLDER must use a verified wheel, not an editable install'
+import radia
 assert d.version == version and radia.__version__ == version, 'Radia version mismatch'
-assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LABEL_PLACEHOLDER must use a wheel'
 origin = pathlib.Path(radia.__file__).resolve()
 assert origin == pathlib.Path(d.locate_file('radia/__init__.py')).resolve(), 'Shadowed Radia import'
 install_paths = sysconfig.get_paths()
 wheel_roots = [pathlib.Path(install_paths[key]).resolve() for key in ('purelib', 'platlib')]
 assert any(origin.is_relative_to(root) for root in wheel_roots), 'Radia wheel must be under site-packages'
 assert d.files, 'Missing wheel RECORD'
-checked = 0
+installed = {}
 for f in d.files:
     if f.hash is not None:
         digest = hashlib.new(f.hash.mode, pathlib.Path(d.locate_file(f)).read_bytes()).digest()
         actual = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
         assert actual == f.hash.value, 'Wheel payload mismatch: ' + str(f)
-        checked += 1
-assert checked, 'Empty wheel hash manifest'
-print('LABEL_PLACEHOLDER wheel verified:', version, checked)
-""".replace("VERSION_PLACEHOLDER", repr(version)).replace("LABEL_PLACEHOLDER", label)
+        installed[str(f).replace(chr(92), '/')] = f.hash.mode + '=' + f.hash.value
+assert installed, 'Empty wheel hash manifest'
+if wheel is not None:
+    with zipfile.ZipFile(wheel) as archive:
+        records = [n for n in archive.namelist() if n.endswith('.dist-info/RECORD')]
+        assert len(records) == 1, 'Candidate wheel has no unique RECORD'
+        rows = list(csv.reader(io.TextIOWrapper(archive.open(records[0]), encoding='utf-8')))
+    expected = {r[0]: r[1] for r in rows if len(r) >= 2 and r[1] and '.data/' not in r[0]}
+    differs = sorted(path for path, value in expected.items() if installed.get(path) != value)
+    assert expected and not differs, 'Installed files differ from the candidate wheel: ' + ', '.join(differs[:5])
+print('LABEL_PLACEHOLDER wheel verified:', version, len(installed))
+""".replace("VERSION_PLACEHOLDER", repr(version)).replace(
+        "WHEEL_PLACEHOLDER", repr(wheel)).replace("LABEL_PLACEHOLDER", label)
 
 
-def _verify_wheel_runtime(ssh_host, label, *, python_path, isolated=True):
-    """Verify the explicitly selected QA Python; never select a PATH runtime."""
-    _absolute_windows_path(python_path, "QA Python", python=True)
-    code = _wheel_runtime_probe_code(_radia_version(), label)
-    if isolated:
-        code = "import sys\nif sys.prefix == sys.base_prefix: raise SystemExit('QA runtime must be isolated')\n" + code
-    encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
-    invocation = '& ' + _powershell_literal(python_path)
-    guard = _runtime_guard_powershell(python_path)
-    script = guard + f'{invocation} -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
-    encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-    result = run(['ssh', ssh_host, 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
-    if result.returncode != 0:
-        fail(f"{label} does not hold the verified Radia {_radia_version()} wheel")
-        return 4
-    return 0
+def _load_fork_wheels_module():
+    spec = importlib.util.spec_from_file_location(
+        "radia_ci_fork_wheels", Path(__file__).resolve().with_name("ci_fork_wheels.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def _deploy_validation():
-    return _deploy_editable_role("validation")
+_fork_wheels = _load_fork_wheels_module()
 
 
-# Remote editable-deploy refusals, all before any install.  The guards write to
-# stderr and exit: Write-Error under ErrorActionPreference Stop would end the
-# script with exit 1 before the documented code.
-SOURCE_SHA_MISMATCH_EXIT = 41
-SOURCE_DIRTY_EXIT = 42
-DEV_VENV_MISSING_EXIT = 43
+def _fork_wheel_lock(source_sha):
+    """The NGSolve/Netgen fork wheel lock of the exact deployment source commit."""
+    result = _git("show", f"{source_sha}:tools/ci_fork_wheels.json", check=False)
+    if result.returncode:
+        raise ValueError("The release source has no tools/ci_fork_wheels.json fork wheel lock")
+    lock = json.loads(result.stdout)
+    pins = _solver_dependency_pins()
+    if set(lock.get("wheels", {})) != {"ngsolve", "netgen-mesher"} or not lock.get("dlls"):
+        raise ValueError("The fork wheel lock must name ngsolve, netgen-mesher and their DLL hashes")
+    for name, wheel in lock["wheels"].items():
+        if wheel["version"].split("+", 1)[0] != pins[name] or "+radia." not in wheel["version"]:
+            raise ValueError(f"Fork wheel {name} {wheel['version']} is not a radia build of the {pins[name]} pin")
+        if not re.fullmatch(r"[0-9a-f]{64}", wheel["sha256"]) or "/" in wheel["filename"]:
+            raise ValueError(f"Invalid fork wheel lock entry: {name}")
+    return lock
 
 
-def _dev_venv_guard_powershell(python_path):
-    """Exit DEV_VENV_MISSING_EXIT before any install when the venv is absent."""
-    literal = python_path.replace("'", "''")
-    return (f"if (-not (Test-Path -LiteralPath '{literal}' -PathType Leaf)) {{\n"
-            f"  [Console]::Error.WriteLine('Development venv interpreter is missing: {literal}')\n"
-            f"  exit {DEV_VENV_MISSING_EXIT}\n"
-            "}\n")
+def _fetch_fork_wheels(lock, directory):
+    """Download the locked fork wheels and verify their SHA-256 before staging."""
+    from urllib.request import urlopen
+    paths = []
+    for wheel in lock["wheels"].values():
+        path = Path(directory) / wheel["filename"]
+        with urlopen(wheel["url"], timeout=120) as response, path.open("wb") as output:
+            shutil.copyfileobj(response, output)
+        if _fork_wheels.digest(path) != wheel["sha256"]:
+            raise ValueError(f"Incorrect fork wheel SHA-256: {wheel['filename']}")
+        paths.append(path)
+    return paths
 
 
-def _verify_live_editable(target):
-    script = _target_check_powershell(target)
-    script += _ps_python(_editable_release_verify_command(target["source"], target["commit"], target["python"]))
-    script += "\nexit $LASTEXITCODE"
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    return run(["ssh", target["ssh"], "pwsh", "-NoProfile", "-EncodedCommand", encoded], check=False).returncode
+def _solver_pin_check_code(lock):
+    """Target-side check: the exact locked fork pair (version, location, DLLs) and GPU pins."""
+    import inspect
+    return ("import hashlib, importlib.metadata, importlib.util, json, sys\n"
+            "from pathlib import Path\n"
+            + inspect.getsource(_fork_wheels.digest) + "\n"
+            + inspect.getsource(_fork_wheels.verify_installed) + "\n"
+            + f"verify_installed(json.loads({json.dumps(lock)!r}))\n"
+            + """from radia._cuda_runtime import _pins
+for name, pin in _pins().items():
+    assert importlib.metadata.version(name) == pin, 'GPU runtime metadata pin mismatch: ' + name
+""")
 
 
-def _deploy_editable_role(role, reason=None):
-    """One guarded normal Radia installation; exact-wheel QA is independent."""
-    target = _editable_target(role)
+def _release_wheel(manifest, source_sha):
+    """Return the one radia wheel of the published lane, re-hashed after receipt checks."""
+    validated = _verify_candidate_receipts(manifest, source_sha)
+    base = manifest.resolve().parent
+    prefix = "radia-" + _radia_version() + "-"
+    wheels = [(rel, digest) for rel, digest in validated[_release_acceptance.PUBLISHED_WHEEL_LANE].items()
+              if rel.endswith(".whl") and rel.rsplit("/", 1)[-1].startswith(prefix)]
+    if len(wheels) != 1:
+        raise ValueError(f"Expected exactly one {prefix}*.whl in the published lane, found {len(wheels)}")
+    rel, digest = wheels[0]
+    path = (base / rel).resolve()
+    if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+        raise ValueError(f"SHA-256 mismatch for {rel}")
+    return path, digest
+
+
+def _wheel_install_program(target, staged, lock):
+    """Hash-check every staged wheel, install the exact set, then verify in a fresh process.
+
+    ``staged`` maps remote path -> SHA-256; the first entry is the Radia wheel,
+    the rest are the locked NGSolve/Netgen fork wheels.
+    """
+    python = target["python"]
+    paths = list(staged)
+    wheel, forks = paths[0], paths[1:]
+    # Resolve the [gpu] extra with the fork wheels supplied, so stock NGSolve/Netgen
+    # are never selected; then force the exact files without dependency resolution.
+    dependencies = [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
+                    wheel + "[gpu]", *forks]
+    exact = [python, "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
+             "--force-reinstall", "--no-deps", *forks, wheel]
+    # This process may predate the install; only a fresh target interpreter certifies it.
+    verify = [python, "-I", "-c", _target_check_code(target)
+              + _wheel_runtime_probe_code(_radia_version(), target["label"], wheel)
+              + _solver_pin_check_code(lock)]
+    check = [python, "-I", "-m", "pip", "check"]
+    hashes = "".join(
+        f"with open({path!r},'rb') as staged: staged_sha256=hashlib.sha256(staged.read()).hexdigest()\n"
+        f"if staged_sha256!={digest!r}: raise SystemExit('Staged wheel SHA-256 differs from the release candidate: ' + {path!r})\n"
+        for path, digest in staged.items())
+    return ("import hashlib,subprocess\n" + _target_check_code(target) + hashes +
+            "exec(" + repr(SOLVER_INSTALL_GUARD) + ")\n" +
+            "".join(f"subprocess.run({command!r},check=True)\n"
+                    for command in (dependencies, exact, verify, check)))
+
+
+def _deploy_wheel(role, wheel, sha256, lock):
+    """Stage, install and verify the exact wheels in a job-owned directory, then remove only its files."""
+    import uuid
+    import zlib
+    target = _wheel_target(role)
     if _check_remote_target(target):
         return 3
-    python = target["python"]
-    # Compression is transport only: avoid the Windows command-line limit while
-    # executing the same inspectable checks, not a different install route.
-    import zlib
-    program = _editable_install_program(target)
-    token = base64.b64encode(zlib.compress(program.encode("utf-8"))).decode("ascii")
-    invocation = [python, "-I", "-c", f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{token}')))"]
-    script = _runtime_guard_powershell(python) + _ps_python(invocation) + "\nexit $LASTEXITCODE"
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    if len(encoded) > 28000:
-        raise ValueError("Editable installer exceeds the Windows command-line transport budget")
-    if run(["ssh", target["ssh"], "pwsh", "-NoProfile", "-EncodedCommand", encoded], check=False).returncode:
-        fail(target["label"] + " editable installation/ABI/native/pip verification failed")
+    staging = f"C:/temp/radia-release-wheel-{sha256[:12]}-{uuid.uuid4().hex}"
+    literal = _powershell_literal(staging)
+    # Exclusive creation: an existing path is never adopted or cleaned.
+    if _ssh_pwsh(target["ssh"], f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; "
+                 f"New-Item -ItemType Directory -Path {literal} -ErrorAction Stop | Out-Null; exit 0"):
+        fail(target["label"] + ": could not exclusively create the wheel staging directory")
         return 3
-    rc = _record_release_intent_remote(role, reason)
-    return rc or _verify_role_editable(role)
-
-
-def _editable_install_program(target):
-    """Check before pip, then verify new editable registration at fresh startup."""
-    pins = _solver_dependency_pins()
-    args = ["native-check", target["source"], target["commit"], pins["ngsolve"], pins["netgen-mesher"]]
-    install = [target["python"], "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:", "-e", target["source"] + "[gpu]"]
-    check = [target["python"], "-I", "-m", "pip", "check"]
-    # This process predates pip's new .pth registration and may have imported
-    # the previous source. Only a fresh target interpreter may certify it.
-    postinstall = ("import sys\nsys.argv=" + repr(args) + "\n" +
-                   _target_check_code(target) + "\n" + EDITABLE_RELEASE_VERIFY)
-    verify = [target["python"], "-I", "-c", postinstall]
-    return ("import subprocess,sys\n" +
-            "target_check=" + repr(_target_check_code(target)) + "\n" +
-            "native_check=" + repr(EDITABLE_RELEASE_VERIFY) + "\n" +
-            "native_args=" + repr(args) + "\n" +
-            "def verify_native(preinstall):\n"
-            " old=sys.argv\n"
-            " sys.argv=native_args+(['preinstall'] if preinstall else [])\n"
-            " try: exec(native_check, {'__name__':'__native_payload_check__'})\n"
-            " finally: sys.argv=old\n"
-            "exec(target_check)\nverify_native(True)\n" +
-            "exec(" + repr(SOLVER_INSTALL_GUARD) + ")\n" +
-            "subprocess.run(" + repr(install) + ",check=True)\n" +
-            "subprocess.run(" + repr(verify) + ",check=True)\n" +
-            "subprocess.run(" + repr(check) + ",check=True)\n")
-
-
-def _deploy_100():
-    return _deploy_editable_role("100")
-
-
-def _deploy_mdx(host):
-    """Reject every retired refresh route before runtime or network changes."""
-    fail("Retired compute deployment routes are disabled")
-    return 2
+    placed = []
+    rc = 0
+    try:
+        with tempfile.TemporaryDirectory(prefix="radia-fork-wheels-") as scratch:
+            sources = [(wheel, sha256)] + [
+                (path, lock["wheels"][name]["sha256"])
+                for name, path in zip(lock["wheels"], _fetch_fork_wheels(lock, scratch))]
+            staged = {}
+            for source, digest in sources:
+                remote = staging + "/" + source.name
+                placed.append(remote)
+                if run(["scp", "-o", "BatchMode=yes", str(source), f"{target['ssh']}:{remote}"],
+                       check=False).returncode:
+                    fail(target["label"] + ": wheel transfer failed")
+                    rc = 3
+                    break
+                staged[remote] = digest
+        if rc == 0:
+            # Compression is transport only: avoid the Windows command-line limit
+            # while executing the same inspectable checks.
+            program = _wheel_install_program(target, staged, lock)
+            token = base64.b64encode(zlib.compress(program.encode("utf-8"))).decode("ascii")
+            invocation = [target["python"], "-I", "-c",
+                          f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{token}')))"]
+            script = _runtime_guard_powershell(target["python"]) + _ps_python(invocation) + "\nexit $LASTEXITCODE"
+            if len(base64.b64encode(script.encode("utf-16le"))) > 28000:
+                raise ValueError("Wheel installer exceeds the Windows command-line transport budget")
+            if _ssh_pwsh(target["ssh"], script):
+                fail(target["label"] + " wheel hash/installation/ABI/pip verification failed")
+                rc = 3
+    finally:
+        # Remove only the files this invocation placed, then the (now empty) directory.
+        removals = "".join(f"if (Test-Path -LiteralPath {_powershell_literal(path)}) "
+                           f"{{ Remove-Item -LiteralPath {_powershell_literal(path)} -Force }}; "
+                           for path in placed)
+        cleanup = (removals + f"try {{ [IO.Directory]::Delete({literal}, $false) }} catch {{ exit 1 }}; "
+                   f"if (Test-Path -LiteralPath {literal}) {{ exit 1 }}; exit 0")
+        if _ssh_pwsh(target["ssh"], cleanup):
+            fail(target["label"] + ": staged wheel copies were not removed: " + staging)
+            rc = rc or 3
+    if rc == 0:
+        ok(f"{target['label']} holds the verified Radia wheel {wheel.name} ({sha256[:12]}) "
+           "and the locked NGSolve/Netgen fork pair")
+    return rc
 
 
 def cmd_phase8(args):
-    """Deploy and verify the Radia solver on selected QUAD targets."""
-    targets = [t.strip().lower() for t in (args.target or "validation,100").split(",")]
-    if any(t not in (*SOLVER_TARGETS, "all") for t in targets):
-        fail("unsupported solver target")
+    """Install and verify the exact release wheel on the validation role."""
+    role = (args.target or "validation").strip().lower()
+    if role not in SOLVER_TARGETS:
+        fail("unsupported solver target; the CPU-only build host is never a deployment target")
         return 2
-    selected = list(SOLVER_TARGETS) if "all" in targets else list(dict.fromkeys(targets))
-    resolved = [_editable_target(role) for role in selected]
-    expected = _release_head()
-    if any(target["commit"] != expected for target in resolved):
-        raise ValueError("Normal editable source bindings must match the exact release tag")
+    _wheel_target(role)
+    source_sha = args.source_sha
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha or ""):
+        fail("A full lowercase source SHA is required")
+        return 4
+    if source_sha != _release_head():
+        fail("The candidate source SHA differs from the exact release tag")
+        return 4
     rc = cmd_preflight(args)
     if rc != 0:
         return rc
-    for t in targets:
-        if t == "validation":
-            rc = _deploy_validation()
-            if rc != 0:
-                return rc
-        elif t == "100":
-            rc = _deploy_100()
-            if rc != 0:
-                return rc
-        elif t == "all":
-            rc = _deploy_validation()
-            if rc != 0:
-                return rc
-            rc = _deploy_100()
-            if rc != 0:
-                return rc
-        else:
-            fail(f"unknown target: {t!r}")
-            return 2
-    return 0
-
-
-def cmd_phase8e(args):
-    """Reject the retired optional compute refresh command."""
-    fail("Retired compute refresh is disabled; release targets are validation and 100")
-    return 2
+    try:
+        wheel, digest = _release_wheel(Path(args.manifest), source_sha)
+        lock = _fork_wheel_lock(source_sha)
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        fail(f"Release candidate wheel failed verification: {exc}")
+        return 4
+    return _deploy_wheel(role, wheel, digest, lock)
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, importlib.metadata as md, os
@@ -1076,23 +669,12 @@ for r in ["panels/calc_inductance.py",
 '''
 
 
-def _normal_probe_prefix(target):
-    token = base64.b64encode(target["source"].encode()).decode("ascii")
-    return _target_check_code(target) + '''import base64,importlib.metadata as md,json,pathlib
+def _wheel_probe_prefix(target):
+    return _target_check_code(target) + '''import importlib.metadata as md,json,pathlib
 d=md.distribution("radia")
-if json.loads(d.read_text("direct_url.json") or "{}").get("dir_info",{}).get("editable") is not True: raise SystemExit("Normal runtime must be editable")
+if json.loads(d.read_text("direct_url.json") or "{}").get("dir_info",{}).get("editable",False): raise SystemExit("The validation runtime must hold the verified wheel, not an editable install")
 import radia
-expected=pathlib.Path(base64.b64decode("TOKEN").decode()).resolve()/"src"/"radia"
-if pathlib.Path(radia.__file__).resolve().parent!=expected: raise SystemExit("Normal runtime import differs from source binding")
-'''.replace("TOKEN", token)
-
-
-def _qa_probe_prefix(target, python):
-    return _target_check_code(target, python=python, source=False, qa=True) + '''import importlib.metadata as md,json,pathlib
-d=md.distribution("radia")
-if json.loads(d.read_text("direct_url.json") or "{}").get("dir_info",{}).get("editable",False): raise SystemExit("QA runtime must contain the exact wheel")
-import radia
-if pathlib.Path(radia.__file__).resolve()!=pathlib.Path(d.locate_file("radia/__init__.py")).resolve(): raise SystemExit("QA wheel import is shadowed")
+if pathlib.Path(radia.__file__).resolve()!=pathlib.Path(d.locate_file("radia/__init__.py")).resolve(): raise SystemExit("Wheel import is shadowed")
 '''
 
 
@@ -1140,8 +722,7 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     """Run the probe on a target (cmd_prefix is the python invocation).
 
     probe_src defaults to the consumer probe (hashes the installed wheel
-    files).  Normal editable probes check actual working files after exact-source guards.
-    Isolated QA probes check installed wheel files with explicit runtime guards.
+    files) after the explicit runtime identity guards.
     """
     try:
         p = _run_script_with_file_output(cmd_prefix, probe_src, timeout=120)
@@ -1204,28 +785,28 @@ def _parse_phase9_probe(label, output):
 
 
 def cmd_phase9(args):
-    """Cross-machine consistency probe."""
+    """Verified-wheel runtime consistency probe."""
     # Resolve every private binding before probing any target.
-    normal = [_editable_target(role) for role in SOLVER_TARGETS]
-    qa = [_solver_qa_target(role) for role in SOLVER_TARGETS]
-    targets = []
-    for target, (label, host, python) in zip(normal, qa):
-        targets.append((label + " QA", ["ssh", host, _powershell_literal(python), "-"],
-                        _qa_probe_prefix(target, python) + CROSS_MACHINE_PROBE))
-        targets.append((label, ["ssh", target["ssh"], _powershell_literal(target["python"]), "-"],
-                        _normal_probe_prefix(target) + CROSS_MACHINE_PROBE))
-    step("Phase 9: normal editable and isolated exact-wheel QA consistency")
+    targets = [_wheel_target(role) for role in SOLVER_TARGETS]
+    expected = _radia_version()
+    step("Phase 9: verified-wheel runtime consistency")
     outputs = []
-    for label, cmd_prefix, probe_src in targets:
-        out = _probe(label, cmd_prefix, probe_src)
+    for target in targets:
+        label = target["label"]
+        out = _probe(label, ["ssh", target["ssh"], _powershell_literal(target["python"]), "-"],
+                     _wheel_probe_prefix(target) + CROSS_MACHINE_PROBE)
         if not out:
             fail(f"could not collect probe data from {label}")
             return 4
         try:
-            outputs.append((label, _parse_phase9_probe(label, out)))
+            rows = _parse_phase9_probe(label, out)
         except ValueError as exc:
             fail(str(exc))
             return 4
+        if rows["VER radia"] != expected:
+            fail(f"{label} runs Radia {rows['VER radia']}, not the release {expected}")
+            return 4
+        outputs.append((label, rows))
 
     if not outputs:
         fail("could not collect probe data from any machine")
@@ -1249,23 +830,16 @@ def cmd_phase9(args):
 
     if drift:
         print("")
-        fail(f"{drift} field(s) drift across machines — release NOT done.")
+        fail(f"{drift} field(s) drift across runtimes — release NOT done.")
         return 4
     print("")
-    ok("all fields match across validation / 100号機 — release verified.")
+    ok("all fields match across the verified-wheel runtimes — release verified.")
     return 0
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 validation+100, phase9)."""
-    rc = cmd_phase8(argparse.Namespace(target="validation,100"))
-    if rc != 0: return rc
-    return cmd_phase9(args)
-
-
-def _remote_100_editable_packages():
-    root = _editable_repo_100()
-    return [("radia", root)]
+    """Verify release candidates without deploying them."""
+    return cmd_done(args)
 
 
 def _verify_release_controller(controller, release_sha, version):
@@ -1344,188 +918,6 @@ def _verify_local_release_source(repo, expected_sha):
         return 4
     ok(f"release source is exact and clean ({got_sha[:10]})")
     return 0
-
-
-_PATH_ALIASES = ()  # Private namespace mappings are operator configuration.
-
-def _norm_path(p):
-    """Lower-case + forward-slashes + strip trailing slash so a UNC and
-    a drive-letter form of the same NAS path compare equal."""
-    p = (p or "").replace("\\", "/").rstrip("/").lower()
-    # Normalize equivalent configured path spellings.
-    aliases = json.loads(os.environ.get("RADIA_RELEASE_CONTROLLER_PATH_ALIASES", "[]"))
-    for alias, canonical in (*_PATH_ALIASES, *aliases):
-        p = p.replace(alias, canonical)
-    return p
-
-
-def _pip_show(pkg):
-    """Return parsed dict from `pip show <pkg>`, or None if not
-    installed.  Keys are lower-cased; values are stripped strings."""
-    try:
-        dist = importlib_metadata.distribution(pkg)
-    except importlib_metadata.PackageNotFoundError:
-        return None
-
-    d = {
-        "version": dist.version,
-        "location": str(dist.locate_file("")),
-    }
-    direct_url = dist.read_text("direct_url.json")
-    if direct_url:
-        try:
-            data = json.loads(direct_url)
-        except json.JSONDecodeError:
-            data = {}
-        if data.get("dir_info", {}).get("editable") and data.get("url"):
-            parsed = urlparse(data["url"])
-            if parsed.scheme == "file":
-                path = url2pathname(parsed.path)
-                if parsed.netloc:
-                    path = f"//{parsed.netloc}{path}"
-                elif os.name == "nt" and path.startswith("/") and len(path) > 2 and path[2] == ":":
-                    path = path[1:]
-                d["editable project location"] = path
-            else:
-                d["editable project location"] = data["url"]
-    return d
-
-
-_EDITABLE_IMPORT_MODULES = {
-    "radia": "radia",
-}
-
-
-def _fresh_import_origin(pkg):
-    """Return a package's imported __file__ from a fresh Python process."""
-    module = _EDITABLE_IMPORT_MODULES.get(pkg)
-    if not module:
-        return None
-    probe = (
-        "import importlib; "
-        f"m=importlib.import_module({module!r}); "
-        "print(m.__file__ or '')"
-    )
-    result = run([sys.executable, "-c", probe], capture=True, check=False)
-    if result.returncode != 0:
-        return ""
-    return (result.stdout or "").strip()
-
-
-# tools/editable_intent.py is piped to the remote interpreter as a script, so
-# 100号機 runs the same verification and repoint code. Arguments travel
-# as one base64 JSON token so the remote shell cannot re-split them.
-REMOTE_EDITABLE_VERIFY = _EDITABLE_INTENT_SOURCE
-
-
-def _remote_editable_intent(target, argv, timeout=900):
-    """Ship one bound Radia intent command with explicit Python and namespace."""
-    rc = _check_remote_target(target)
-    if rc:
-        return rc, None, "Target identity/source check failed before staging the intent helper"
-    options = ["--json", "--path-aliases", json.dumps(target["aliases"]),
-               "--target-binding", json.dumps(target["binding"]), *argv]
-    token = base64.b64encode(json.dumps(options).encode("utf-8")).decode("ascii")
-    proc = _run_script_with_file_output(
-        ["ssh", target["ssh"], _powershell_literal(target["python"]), "-", "--argv-b64", token],
-        REMOTE_EDITABLE_VERIFY, timeout=timeout)
-    text = (proc.stdout or "").strip()
-    report = None
-    if "{" in text:
-        try:
-            report = json.loads(text[text.index("{"):])
-        except ValueError:
-            pass
-    if proc.stderr and proc.stderr.strip():
-        text += ("\n" if text else "") + proc.stderr.strip()
-    return proc.returncode, report, text
-
-
-def _verify_role_editable(role, report=None):
-    target = _editable_target(role)
-    if _verify_live_editable(target):
-        return 1
-    argv = ["verify", "--package", "radia", "--expect", "radia=" + target["source"]]
-    rc, result, text = _remote_editable_intent(target, argv)
-    if result is None:
-        fail(target["label"] + " editable verification returned no report")
-        if report is not None:report.update(drift=1, unverified=0)
-        return 1
-    print(editable_intent.format_verify(result))
-    counts = result.get("counts", {})
-    drift, unverified = int(counts.get("drift", 0)), int(counts.get("unverified", 0))
-    if report is not None:report.update(drift=drift, unverified=unverified, ok=int(counts.get("match", 0)))
-    return drift + unverified + int(rc != 0 and not (drift or unverified))
-
-
-def cmd_verify_editable(args):
-    """Verify both normal editable roles; isolated QA has its own wheel checks."""
-    for role in SOLVER_TARGETS:_editable_target(role)
-    return 0 if sum(_verify_role_editable(role) for role in SOLVER_TARGETS) == 0 else 1
-
-
-def _record_release_intent_remote(role, reason=None):
-    target = _editable_target(role)
-    argv = ["repoint", "--record-current", "--package", "radia", "--reason",
-            reason or "verified normal editable deployment " + target["commit"], "--via", "release controller"]
-    rc, result, text = _remote_editable_intent(target, argv)
-    if result is not None:print(editable_intent.format_action(result))
-    elif text:print(text)
-    return rc
-
-
-def _done_release_source(args):
-    """The checkout `done` verifies as the exact release source.
-
-    By default that is the controller itself, which must then sit at the tag.
-    ``--release-source`` names a separate exact-tag checkout so a later,
-    repaired tooling controller can run `done`; validation intent never selects it.
-    """
-    selected = getattr(args, "release_source", None)
-    return str(Path(selected).resolve()) if selected else str(REPO)
-
-
-def cmd_repoint(args):
-    """Explicit, bound Radia update on either supported normal operating role."""
-    role = (getattr(args, "host", None) or "100").strip().lower()
-    if role not in SOLVER_TARGETS:
-        fail("Unsupported editable target role")
-        return 2
-    if getattr(args, "rollback", False):
-        fail("Editable updates are forward-only")
-        return 2
-    if not getattr(args, "reason", ""):
-        fail("--reason is required for an explicit source move")
-        return 2
-    packages = list(getattr(args, "package", None) or ["radia"])
-    if packages != ["radia"]:
-        fail("This solver controller updates radia only")
-        return 2
-    target = _editable_target(role)
-    sources = list(getattr(args, "source", None) or [])
-    adopt = getattr(args, "record_current", False)
-    if (adopt and sources) or (not adopt and sources != [target["source"]]):
-        fail("Source arguments must match the explicit target binding")
-        return 2
-    if getattr(args, "dry_run", False):
-        print(json.dumps(dict(role=role, binding=target["binding"], mode="editable",
-                             install=[target["python"], "-m", "pip", "install", "-e", target["source"] + "[gpu]"]), indent=2))
-        return 0
-    if adopt:
-        if _verify_live_editable(target):return 4
-        return _record_release_intent_remote(role, args.reason) or _verify_role_editable(role)
-    return _deploy_editable_role(role, args.reason)
-
-
-def cmd_restore_editable(args):
-    """Removed: the development tier has no default source to restore."""
-    fail("restore-editable was removed (policy P02, 2026-09-11): no canonical target "
-         "is assumed, nothing is uninstalled and no process is stopped.")
-    print("  If the installed pointer is the intended one, record it:")
-    print('    python tools/release_quad.py repoint --record-current --reason "<why>"')
-    print("  To move one package explicitly:")
-    print('    python tools/release_quad.py repoint --package <name> --source <path> --reason "<why>"')
-    return 2
 
 
 # ============================================================
@@ -1734,79 +1126,45 @@ def _run_retired_standalone_pyside_guard():
     return 0
 
 
+RELEASE_LANES = _release_acceptance.RELEASE_LANES
+REQUIRED_VALIDATION_CHECKS = _release_acceptance.REQUIRED_VALIDATION_CHECKS
+
+
+def _verify_candidate_receipts(manifest, source_sha):
+    base = manifest.resolve().parent
+
+    def read(rel):
+        path = (base / rel).resolve()
+        if not path.is_relative_to(base) or not path.is_file():
+            raise ValueError(f"Missing file or path outside receipt directory: {rel}")
+        return path.read_bytes()
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    return _release_acceptance.verify_lane_receipts(data, source_sha, read)
+
+
 def cmd_done(args):
-    """Verify both normal editable roles and their isolated exact-wheel QA runtimes.
-
-    Exact-tag, native/source and cross-role checks remain mandatory. Independent
-    distributions retain their own release gates.
-    """
-    step("Definition-of-done check "
-         "(preflight + editable tier + phase9 + retired standalone panel guard)")
-    rc = cmd_preflight(args)
-    if rc != 0:
-        fail("preflight failed — repo state not release-ready.")
-        return rc
-
-    release_sha = _release_head()
-    release_source = _done_release_source(args)
-    if _norm_path(release_source) != _norm_path(str(REPO)):
-        rc = _verify_release_controller(REPO, release_sha, _radia_version())
-        if rc != 0:
-            fail("release controller is not a clean descendant of the release commit.")
-            return rc
-    rc = _verify_local_release_source(release_source, release_sha)
-    if rc != 0:
-        fail("release source is not the exact clean release SHA.")
-        return rc
-
-
-    rc = _verify_head_release_tag()
-    if rc != 0:
-        fail("release HEAD is not anchored by its declared Radia version tag.")
-        return rc
-
-    if any(_editable_target(role)["commit"] != release_sha for role in SOLVER_TARGETS):
-        fail("Normal editable source bindings do not match the exact release tag")
+    """Verify the fixed source and artifacts for release-owner handoff."""
+    source_sha = args.source_sha
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        fail("A full lowercase source SHA is required")
         return 4
-    drift = sum(_verify_qa_wheel(role) + _verify_role_editable(role) for role in SOLVER_TARGETS)
-    if drift > 0:
-        fail(f"{drift} runtime-tier check(s) drifted.  "
-             "Run the printed recovery commands, then re-run "
-             "`release_quad done`.")
-        return 1
-
-    rc = cmd_phase9(args)
-    if rc != 0:
-        fail("phase9 drift detected — at least one machine is out of sync.")
+    rc = _verify_local_release_source(str(Path(args.release_source or REPO).resolve()), source_sha)
+    if rc:
         return rc
-
-    rc = _run_retired_standalone_pyside_guard()
-    if rc != 0:
-        fail("retired standalone PySide panel surface reappeared. Remove it, then re-run "
-             "`release_quad done`.")
-        return rc
-
-    rc = _check_main_synced(hard=True)
-    if rc != 0:
-        fail("NAS main diverged from origin/main — sync before calling the "
-             "release done (this is the root cause of the recurring "
-             "rebase-conflict sessions).")
-        return rc
-
-    if getattr(args, "simulink_package", None):
-        fail("MATLAB/Simulink artifacts belong to radia-simulink, not the CPU Radia release.")
+    try:
+        validated = _verify_candidate_receipts(Path(args.manifest), source_sha)
+        summary = getattr(args, "public_summary", None)
+        if summary:
+            data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+            Path(summary).write_text(json.dumps(
+                _release_acceptance.lane_summary(data, validated), indent=2) + "\n", encoding="utf-8")
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        fail(f"Release candidate evidence failed: {exc}")
         return 4
-
-    rc = _verify_final_pip_checks()
-    if rc != 0:
-        return rc
-
-    print("")
-    ok("Windows role checks passed. The four-case wrapper still requires its CPU/GPU compute-build receipts. "
-       "both normal operating roles use their bound editable source, isolated QA runtimes hold the verified wheel, "
-       "and the retired standalone PySide panel surface is absent. "
-       "The recorded editable intent names this release source; move it later "
-       "only with an explicit `release_quad repoint --reason`.")
+    ok(f"All four artifact lanes verified for {source_sha}; ready for release-owner review.")
+    if summary:
+        info(f"Public lane summary for the acceptance commit: {summary}")
     return 0
 
 
@@ -1932,20 +1290,6 @@ _MOTOR_ACCEPTANCE_TESTS = (
     "tests/mcp_integration/test_annular_motor_dual_lane_artifact.py",
     "tests/mcp_integration/test_matlab_source_contract.py",
 )
-# Complete root-relative closure the HIBINO run needs (learned 2026-08-07:
-# missing pyproject.toml / maglev data / team28 docs each cost one round trip).
-_MOTOR_SNAPSHOT_ROOTS = (
-    "matlab",
-    "src/matlab",
-    "tests/matlab",
-    "validation_test/radia_mcp",
-    "validation_test/maglev",
-    "docs/maglev/demos/team28",
-)
-_MOTOR_SNAPSHOT_FILES = ("pyproject.toml",)
-_HIBINO_DEST = r"C:\temp\radia_motor_evidence_quad"
-
-
 def _motor_text_sha(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -2008,81 +1352,21 @@ def _motor_acceptance(run_fn=None):
 # CLI
 # ============================================================
 
-def cmd_temp_shadows(args):
-    # cmd_done reaches this from callers that never put tools/ on sys.path.
-    _tools_dir = str(Path(__file__).resolve().parent)
-    if _tools_dir not in sys.path:
-        sys.path.insert(0, _tools_dir)
-    from release_temp_shadows import inspect_shadows
-    if getattr(args, "apply", False):
-        merged = run(["git", "-c", f"safe.directory={REPO.as_posix()}",
-                      "merge-base", "--is-ancestor", "7ffda79d3", "origin/main"],
-                     check=False, capture=True)
-        if merged.returncode:
-            fail("Kelvin source commits are not confirmed in origin/main; refusing cleanup")
-            return 2
-    results = inspect_shadows(apply=getattr(args, "apply", False))
-    print(json.dumps(results, indent=2))
-    return 0 if all(record.get("passed") for record in results.values()) else 2
-
-
 def main():
     p = argparse.ArgumentParser(prog="release_quad",
-                                 description="Verify normal editable deployment and isolated exact-wheel release QA.")
+                                 description="Verify release candidates and deploy verified wheels to the validation role.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
+    sub.add_parser("deployment-plan",
+                    help="print the four release lanes and the solver runtime role (read-only)")
     s8 = sub.add_parser("phase8",
-                         help="deploy and verify the Radia solver on validation / 100号機")
-    s8.add_argument("--target", default="validation,100",
-                     help="comma list: validation, 100, all (default validation,100)")
-    sub.add_parser("phase8e",
-                    help="retired compute refresh; always rejected")
+                         help="install and verify the exact release wheel on the validation role")
+    s8.add_argument("--target", choices=tuple(SOLVER_TARGETS), default="validation")
+    s8.add_argument("--source-sha", required=True, help="full release source commit SHA")
+    s8.add_argument("--manifest", required=True, help="candidate evidence manifest JSON")
     sub.add_parser("phase9",
-                    help="cross-machine consistency probe")
-    ss = sub.add_parser(
-        "simulink-candidate",
-        help="verify one extracted Simulink package on the build target")
-    ss.add_argument("--package", required=True,
-                    help="path to an IH preview or full Radia Simulink ZIP")
-    ss.add_argument("--target", default="all",
-                    help="comma list: 100, all")
-    ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
-                    help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable)")
-    ss.add_argument("--python", action="append", metavar="HOST=PATH",
-                    help="candidate interpreter on this target, which runs the verifier and "
-                         "becomes MATLAB's RADIA_PYTHON_EXECUTABLE (repeatable); it must "
-                         "provide the package's radia release")
-
-
-    sub.add_parser("all",
-                    help="phase8 -> phase9 in one shot")
-    sub.add_parser("verify-editable",
-                    help="verify validation's fixed Radia wheel and 100号機's development editable")
-    rp = sub.add_parser(
-        "repoint",
-        help=("explicit editable move: record previous pointer, pip install -e, "
-              "verify, record intent (no process stop, no uninstall)"))
-    rp.add_argument("--host", default="100",
-                    help="100 only; editable installs are not allowed on validation")
-    rp.add_argument("--package", action="append", default=[],
-                    help="package name (repeatable)")
-    rp.add_argument("--source", action="append", default=[],
-                    help=("source tree for the package in the same position, "
-                          "spelled in the target host's own path namespace"))
-    rp.add_argument("--reason", default="", help="recorded reason for the move")
-    rp.add_argument("--via", default="release_quad repoint", help="recorded_via label")
-    rp.add_argument("--record-current", action="store_true",
-                    help="adopt the installed pointers as the recorded intent (no pip)")
-    rp.add_argument("--rollback", action="store_true",
-                    help="reinstall the previous pointer kept in the record")
-    rp.add_argument("--dry-run", action="store_true", help="plan only")
-    rp.add_argument("--require-pushed", action="store_true",
-                    help=("refuse a source commit no remote ref contains "
-                          "(formal handoff / completion evidence only)"))
-    sub.add_parser(
-        "restore-editable",
-        help="removed: no default development source; use repoint with a reason")
+                    help="read-only verified-wheel runtime consistency probe")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: CI-green gate for the commit the existing "
                          "v<version> tag names (requires the tag)")
@@ -2091,38 +1375,25 @@ def main():
     sm.add_argument("--no-push", action="store_true",
                     help="stop after the rebase (prep-only)")
     em = sub.add_parser("evidence-motor",
-                        help="regenerate the motor MEX evidence artifact on HIBINO")
+                        help="check the motor evidence SHA pins; CPU MEX regeneration is retired")
     em.add_argument("--check", action="store_true",
                     help="verify the SHA pins only (fast, no MATLAB)")
     em.add_argument("--force", action="store_true",
                     help="regenerate even when the pins are current")
-    done = sub.add_parser(
-        "done",
-        help="non-mutating definition-of-done: exact source + phase9 + guards")
-    done.add_argument(
-        "--simulink-package",
-        help="also require a matching two-machine Simulink candidate pass")
-    done.add_argument(
-        "--release-source",
-        help="separate exact-tag checkout to verify as the release source; the "
-             "controller running `done` must then be a tracked-clean descendant of "
-             "the release commit declaring the same version (default: the "
-             "controller itself, which must sit at the tag)")
-
-    shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
-    shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")
+    for name in ("done", "all"):
+        handoff = sub.add_parser(name, help="verify exact candidate receipts for release handoff")
+        handoff.add_argument("--source-sha", required=True, help="full fixed source commit SHA")
+        handoff.add_argument("--manifest", required=True, help="candidate evidence manifest JSON")
+        handoff.add_argument("--release-source", help="clean candidate checkout (default: controller checkout)")
+        handoff.add_argument("--public-summary",
+                             help="write the public four-lane summary that the publish gate reads")
     args = p.parse_args()
     handler = {
         "preflight":        cmd_preflight,
-        "temp-shadows":     cmd_temp_shadows,
+        "deployment-plan":  cmd_deployment_plan,
         "phase8":           cmd_phase8,
-        "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
-        "simulink-candidate": cmd_simulink_candidate,
         "all":              cmd_all,
-        "verify-editable":  cmd_verify_editable,
-        "repoint":          cmd_repoint,
-        "restore-editable": cmd_restore_editable,
         "ci-verify":        cmd_ci_verify,
         "sync-main":        cmd_sync_main,
         "evidence-motor":   cmd_evidence_motor,

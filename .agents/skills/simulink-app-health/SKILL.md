@@ -44,8 +44,11 @@ Use the official MATLAB MCP Server for MATLAB checks:
    `radia_application_sfun`. Verify IH is a masked subsystem with separate
    `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun` native blocks, closed
    temperature feedback, and no Python fallback.
-5. For an IH preview release, run the extracted-package verifier through
-   `release_quad simulink-candidate --target 100` on the build target. CPU validation stays on the development/build host; optional GPU evaluation is separate. Retired execution targets are excluded.
+5. For an IH preview release, follow the independent `radia-simulink` release
+   workflow: the CUDA MEX is built, checked and qualified on the Windows GPU
+   validation host (`gpu-a100`) and recorded as the `matlab` lane receipt. The
+   CPU-only build host runs no MATLAB GPU work; the retired
+   `release_quad simulink-candidate` route no longer exists.
 
 ## Artifact Contract
 

@@ -1931,9 +1931,9 @@ def release_workflow(topic: str = "") -> str:
 
     Topics:
       overview               -- distribution ownership and verification targets
-      mcp_release            -- radia-mcp publish and validation runtime/100 release-dual
+      mcp_release            -- radia-mcp publish and validation-host/build-host release-dual
       phases                 -- numerical solver release pipeline
-      simulink_candidate     -- exact-ZIP four-machine publication gate
+      simulink_candidate     -- independent radia-simulink (matlab lane) boundary
       preflight_gates        -- Phase 2.5 4-gate pre-push validation
       ci_failure_modes       -- known CI failures + cause + fix table
       recovery               -- when CI on a tag fails AFTER push

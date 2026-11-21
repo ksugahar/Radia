@@ -126,12 +126,21 @@ def test_phi_current_is_orthogonal_to_all_mesh_gradients(ring):
     region = ring.Materials("drive|return")
     load = ng.LinearForm(space)
     load += ng.InnerProduct(current, ng.grad(w)) * ng.dx(definedon=region)
-    scale = ng.LinearForm(space)
-    scale += ng.Norm(current) * ng.Norm(ng.grad(w)) * ng.dx(definedon=region)
+    basis = ng.GridFunction(space)
+    integrand = ng.Norm(current) * ng.Norm(ng.grad(basis))
+    scales = np.empty(space.ndof)
     with ng.TaskManager():
         load.Assemble()
-        scale.Assemble()
-    assert np.linalg.norm(load.vec.FV().NumPy()) < 1e-11 * np.linalg.norm(scale.vec.FV().NumPy())
+        # The gradient norm is nonlinear in a test proxy. Evaluate it on
+        # each unit basis function before integrating the positive scale.
+        basis.vec[:] = 0.0
+        for i in range(space.ndof):
+            basis.vec[i] = 1.0
+            scales[i] = ng.Integrate(integrand, ring, definedon=region)
+            basis.vec[i] = 0.0
+    scale = np.linalg.norm(scales)
+    assert np.isfinite(scale) and scale > 0.0
+    assert np.linalg.norm(load.vec.FV().NumPy()) < 1e-11 * scale
 
 
 def test_phi_and_mixed_currents_converge_to_one_distribution():

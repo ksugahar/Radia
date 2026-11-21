@@ -18,7 +18,7 @@ COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push')]
 SIMULINK_BUNDLE = [('radia-simulink.yml', 'gpu-simulink-validation-bundle', '&event=push')]
 BUNDLE = 'radia-simulink-gpu-bundle.zip'
 # Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
-RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', ''), ('build-test.yml', 'gpu-netgen-overlay', '')]
+RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', '')]
 
 
 def digest(path):
@@ -26,8 +26,8 @@ def digest(path):
 
 
 def payload(directory):
-    """One wheel, the patched Netgen library of tools/netgen_overlay.py, or one compute bundle."""
-    return list(directory.glob('*.whl')) + list(directory.glob('nglib.dll')) + list(directory.glob(BUNDLE))
+    """One wheel, or one compute bundle."""
+    return list(directory.glob('*.whl')) + list(directory.glob(BUNDLE))
 
 
 def bundle(directory, root, temp, entries):

@@ -4330,7 +4330,8 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
         a += 1j * omega * sigma * r * Az * dA * dx
         a += -1j * omega * sigma * Vc * dA * dx(driven_region)
         a += -1j * omega * sigma * Az * dV * dx(driven_region)
-        a += 1j * omega * sigma * (1.0 / r) * Vc * dV * dx(driven_region)
+        # NumberSpace alone gives a low default order for the nonpolynomial 1/r term.
+        a += 1j * omega * sigma * (1.0 / r) * Vc * dV * dx(driven_region, bonus_intorder=4)
         f = LinearForm(fes)
         if Jr is not None:
             f += Jr * r * dA * dx

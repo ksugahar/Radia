@@ -169,15 +169,14 @@ def test_public_export_preserves_numbers_and_passes_privacy_policy():
             assert not lint.public_runtime_identity_hits(prefix + "/" + name, content)
         proofs.append(public_a["private_runtime_verification"])
     gate.verify_private_batch(proofs)
-    assert proofs[0]["machine_token"] != proofs[1]["machine_token"]
 
 
 def test_public_export_rejects_historical_machine_for_current_role():
-    a, f, xml, identity = private_current_evidence("100")
+    a, f, xml, identity = private_current_evidence("validation")
     tree = ET.fromstring(xml)
     tree.find(".//testsuite").set("hostname", "other-machine")
     with pytest.raises(ValueError, match="Wrong acceptance host"):
-        gate.prepare_public_host(a, f, ET.tostring(tree), identity, "100", b"x" * 32)
+        gate.prepare_public_host(a, f, ET.tostring(tree), identity, "validation", b"x" * 32)
 
 
 @pytest.mark.parametrize("changed", ["acceptance", "full6", "focused", "unverified", "missing"])
@@ -200,17 +199,16 @@ def test_public_gate_rejects_changed_or_unverified_export(changed):
         gate.verify_host(a, f, xml, identity, "validation", public=True)
 
 
-@pytest.mark.parametrize("changed", ["machine_token", "verification_batch", "missing_role"])
-def test_public_gate_requires_distinct_machines_in_one_complete_batch(changed):
+@pytest.mark.parametrize("changed", ["build_role", "missing_role"])
+def test_public_gate_requires_exactly_the_acceptance_roles(changed):
+    """Guards: the CPU build role cannot stand in for, or add to, validation acceptance."""
     proofs = []
     for host in gate.RELEASE_ACCEPTANCE_HOSTS:
         a, f, xml, identity = private_current_evidence(host)
         a, _, _ = gate.prepare_public_host(a, f, xml, identity, host, b"x" * 32)
         proofs.append(a["private_runtime_verification"])
-    if changed == "machine_token":
-        proofs[1][changed] = proofs[0][changed]
-    elif changed == "verification_batch":
-        proofs[1][changed] = "a" * 64
+    if changed == "build_role":
+        proofs.append(dict(proofs[0], execution_role="build", machine_token="b" * 64))
     else:
         proofs.pop()
     with pytest.raises(ValueError):
@@ -317,7 +315,7 @@ def test_public_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["passed"] and report["execution_roles"] == ["validation", "build"]
+    assert report["passed"] and report["execution_roles"] == ["validation"]
 
 
 def test_exact_wheel_end_to_end(tmp_path):
@@ -339,7 +337,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert commit == "b" * 40
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
-        # Synthetic two-host API fixture, not a claim of machine acceptance.
+        # Synthetic API fixture, not a claim of machine acceptance.
         a, f, x, _ = evidence()
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
@@ -353,7 +351,7 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["validation", "100"] and report["passed"]
+    assert report["hosts"] == ["validation"] and report["passed"]
     for missing_host in report["hosts"]:
         def incomplete(path, commit):
             if path.split("/")[-2] == missing_host:
@@ -376,8 +374,8 @@ def test_exact_wheel_end_to_end(tmp_path):
         data = read_file(path, commit)
         if path.endswith("focused.xml"):
             tree = ET.fromstring(data)
-            host = path.split("/")[-2]
-            tree.find(".//testsuite").set("hostname", "validation-machine" if host == "validation" else "other-machine")
+            # A machine that formerly held the role is not the current acceptance host.
+            tree.find(".//testsuite").set("hostname", "retired-validation-machine")
             return ET.tostring(tree)
         return data
     api.file = old_fleet
@@ -435,31 +433,6 @@ def test_old_success_cannot_hide_a_failed_ci_rerun():
         gate.verify_run(api, 9, "b" * 40)
 
 
-def application_proof():
-    return {"schema": "radia.release-quad.simulink-candidate.v1", "version": "5.1.0",
-            "commit": "a"*40, "package_sha256": "b"*64, "mex_sha256": "c"*64,
-            "targets": {host: {"label": gate.RELEASE_ACCEPTANCE_HOST_LABELS[host],
-                              "status": "passed", "mex_sha256": "c"*64,
-                              "verified_at_utc": "2026-09-30T00:00:00Z"}
-                        for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
-
-
-def test_application_acceptance_requires_two_exact_mex_results():
-    identity = {"source_commit": "a"*40, "version": "5.1.0"}
-    gate.verify_application_acceptance(application_proof(), identity)
-    for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
-                     "wrong_label"):
-        proof = application_proof()
-        if mutation == "missing_host": del proof["targets"]["validation"]
-        elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
-        elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
-        elif mutation == "wrong_mex": proof["targets"]["validation"]["mex_sha256"] = "d"*64
-        elif mutation == "wrong_source": proof["commit"] = "e"*40
-        else: del proof["targets"]["validation"]["verified_at_utc"]
-        with pytest.raises(ValueError):
-            gate.verify_application_acceptance(proof, identity)
-
-
 def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path):
     wheel_dir = tmp_path / "wheel"
     wheel_dir.mkdir()
@@ -515,7 +488,7 @@ def test_actual_publication_identity_rejects_non_tag_or_missing_identity(key, va
         gate.publication_identity(api, env)
 
 
-@pytest.mark.parametrize("change", [None, "attempt", "wheel", "native", "source", "acceptance", "producer"])
+@pytest.mark.parametrize("change", [None, "attempt", "wheel", "native", "source", "acceptance", "producer", "lanes"])
 def test_approved_publication_rechecks_attempt_and_exact_artifacts(tmp_path, change):
     api, env = _publication_attempt()
     wheel_dir, native_dir = tmp_path / "dist", tmp_path / "native"
@@ -529,8 +502,10 @@ def test_approved_publication_rechecks_attempt_and_exact_artifacts(tmp_path, cha
     report = dict(passed=True, publication=gate.publication_identity(api, env),
                   source_commit="a" * 40, version="5.3.1", ci_run=9,
                   acceptance_commit="b" * 40, wheel_sha256=expected,
-                  native_bundle=gate.native_bundle(wheel_dir, native_dir))
+                  native_bundle=gate.native_bundle(wheel_dir, native_dir),
+                  release_lanes={gate.PUBLISHED_WHEEL_LANE: {wheel.name: expected}})
     if change == "attempt": env["GITHUB_RUN_ATTEMPT"] = "2"
+    if change == "lanes": report["release_lanes"] = {gate.PUBLISHED_WHEEL_LANE: {wheel.name: "0" * 64}}
     if change == "wheel":
         # Keep the ZIP and native bytes valid: only the approved whole-wheel
         # hash, rather than BadZipFile or a native mismatch, must reject it.
@@ -559,6 +534,8 @@ def test_publication_cli_binds_before_and_after_approval(tmp_path, monkeypatch):
     with zipfile.ZipFile(wheel, "w") as archive: archive.writestr("radia/_radia_pybind.pyd", b"accepted")
     (native_dir / "_radia_pybind.pyd").write_bytes(b"accepted")
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    monkeypatch.setattr(gate, "verify_release_lanes",
+                        lambda api, run, commit, digest: {gate.PUBLISHED_WHEEL_LANE: {"radia.whl": digest}})
     monkeypatch.setattr(gate, "verify_artifact", lambda *args: dict(passed=True, source_commit="a" * 40, version="5.3.1", ci_run=9, acceptance_commit="b" * 40, wheel_sha256=digest))
     args = ["gate", "--repo", api.repo, "--run-id", "9", "--acceptance-commit", "b" * 40, "--wheel-sha256", digest,
             "--wheel-dir", str(wheel_dir), "--context-dir", str(tmp_path), "--native-dir", str(native_dir), "--output", str(tmp_path / "promotion.json")]
@@ -604,3 +581,56 @@ def test_publication_accepts_only_the_windows_wheel(tmp_path, name):
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
     with pytest.raises(ValueError, match="Unexpected wheel"):
         gate.verify_artifact(None, None, None, wheel.parent, tmp_path, digest)
+
+
+def gate_acceptance():
+    import importlib.util as util
+    spec = util.spec_from_file_location("release_acceptance_for_test", ROOT / "tools/release_acceptance.py")
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _lane_summary(source, wheel_hash):
+    """Synthetic public four-lane summary (not machine evidence)."""
+    shared = gate_acceptance()
+    lanes = {}
+    for name, (build_role, validation_role) in shared.RELEASE_LANES.items():
+        digest = wheel_hash if name == gate.PUBLISHED_WHEEL_LANE else hashlib.sha256(name.encode()).hexdigest()
+        lanes[name] = {"build_role": build_role, "validation_role": validation_role, "passed": True,
+                       "checks": sorted(shared.REQUIRED_VALIDATION_CHECKS.get(name, ())),
+                       "artifact_sha256": {name + ".whl": digest}}
+    return {"schema": shared.RELEASE_LANES_SUMMARY_SCHEMA, "source_sha": source,
+            "native_ci_passed": True, "lanes": lanes}
+
+
+@pytest.mark.parametrize("defect", [None, "missing", "other-source", "missing-lane", "role",
+                                    "failed", "missing-check", "ci", "other-wheel", "bad-hash"])
+def test_publication_requires_the_four_lane_summary_for_the_published_wheel(defect):
+    """Guards: publishing needs the committed four-lane summary binding this wheel."""
+    source, commit = "a" * 40, "b" * 40
+    wheel_hash = hashlib.sha256(b"published wheel").hexdigest()
+    summary = _lane_summary(source, wheel_hash)
+    lanes = summary["lanes"]
+    if defect == "other-source": summary["source_sha"] = "c" * 40
+    if defect == "missing-lane": del lanes["linux-python-gpu"]
+    if defect == "role": lanes["windows-python-gpu"]["build_role"] = "cpu-build"
+    if defect == "failed": lanes["cpu"]["passed"] = False
+    if defect == "missing-check": lanes["matlab"]["checks"] = ["simulink_acceptance"]
+    if defect == "ci": summary["native_ci_passed"] = False
+    if defect == "bad-hash": lanes["cpu"]["artifact_sha256"] = {"cpu.whl": "x"}
+
+    class API:
+        def file(self, path, at):
+            assert at == commit and path == gate.release_lanes_path(source)
+            if defect == "missing":
+                raise ValueError("Acceptance must be a tracked non-executable regular file")
+            return json.dumps(summary).encode()
+
+    expected = "d" * 64 if defect == "other-wheel" else wheel_hash
+    run = {"head_sha": source, "id": 9}
+    if defect is None:
+        assert set(gate.verify_release_lanes(API(), run, commit, expected)) == set(gate_acceptance().RELEASE_LANES)
+    else:
+        with pytest.raises(ValueError):
+            gate.verify_release_lanes(API(), run, commit, expected)

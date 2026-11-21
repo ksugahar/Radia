@@ -45,7 +45,7 @@ def test_changed_release_tool_selects_its_regressions():
     paths, _ = runner.load_profile('fast-contracts')
     selected = runner.select_impact_tests(paths, ['tools/release_quad.py'])
     assert 'tests/test_release_quad_state.py' in selected
-    assert 'tests/test_release_quad_editable_source.py' in selected
+    assert 'tests/test_release_quad_deploy.py' in selected
     assert len(selected) == len(set(selected))
 
 

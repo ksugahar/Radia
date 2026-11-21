@@ -401,15 +401,32 @@ class EddyCurrentFEMBEM:
             [Projector(self._fes_h1.FreeDofs(), True), None],
             [None, Projector(self._fes_l2.FreeDofs(), True)],
         ])
-        auxiliary = GMRes(A=lhs @ pre, b=rhs, pre=identity,
-                          tol=0, reltol=1e-10, maxsteps=500,
+        right_preconditioned = lhs @ pre
+        relative_tolerance = 1e-10
+        auxiliary = GMRes(A=right_preconditioned, b=rhs, pre=identity,
+                          tol=None, reltol=relative_tolerance, maxsteps=500,
                           printrates=printrates)
         sol = rhs.CreateVector()
         sol.data = pre * auxiliary
         from ngsolve import Norm
         residual = rhs.CreateVector()
         residual.data = rhs - lhs * sol
-        self.true_relative_residual = float(Norm(residual) / max(Norm(rhs), 1e-300))
+        rhs_norm = max(Norm(rhs), 1e-300)
+        true_residual = float(Norm(residual) / rhs_norm)
+        # The residual estimated during GMRES may drift from the assembled
+        # system residual. Use that explicitly recomputed residual for one
+        # correction and retain the correction only when it improves the solve.
+        if np.isfinite(true_residual) and true_residual > relative_tolerance:
+            correction = GMRes(A=right_preconditioned, b=residual, pre=identity,
+                               tol=None, reltol=relative_tolerance, maxsteps=500,
+                               printrates=printrates)
+            trial = rhs.CreateVector()
+            trial.data = sol + pre * correction
+            residual.data = rhs - lhs * trial
+            trial_residual = float(Norm(residual) / rhs_norm)
+            if np.isfinite(trial_residual) and trial_residual < true_residual:
+                sol, true_residual = trial, trial_residual
+        self.true_relative_residual = true_residual
         if (not np.isfinite(self.true_relative_residual)
                 or self.true_relative_residual > RELATIVE_LIMIT):
             raise RuntimeError(

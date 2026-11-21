@@ -1,8 +1,9 @@
 # PEEC-BEM precision qualification
 
-RTX 5000 development will evaluate FP32 and mixed precision. The A100 path
-retains FP64; A100 is not started, connected to or operated for this work.
-Hardware selects a candidate, not numerical acceptance. FP64 remains the
+FP32 and mixed precision were first explored on the build host's former
+RTX 5000 (historical; the build host no longer runs GPU work). Any further
+precision evaluation runs on the A100 Windows GPU validation host, whose path
+retains FP64. Hardware selects a candidate, not numerical acceptance. FP64 remains the
 reference and the current released precision until the complete physical case
 passes the gates below.
 

@@ -1,4 +1,4 @@
-"""Stage the experimental RadFld cloud CUDA module on the designated build host."""
+"""Stage the experimental RadFld cloud CUDA module on the admitted Windows GPU host."""
 from pathlib import Path
 import argparse
 import hashlib

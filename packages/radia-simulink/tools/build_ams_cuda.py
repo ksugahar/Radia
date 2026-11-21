@@ -1,4 +1,4 @@
-"""Build the experimental AMS bridge through Build.ps1 -AmsCudaOnly on an explicitly admitted build host."""
+"""Build the experimental AMS bridge through Build.ps1 -AmsCudaOnly on the admitted Windows GPU host."""
 from pathlib import Path
 import argparse
 import hashlib
