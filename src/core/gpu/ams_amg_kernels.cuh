@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-#pragma once
 // Shared AMS/CompactAMG device primitives. No MATLAB or Python ABI.
-// Include inside the adapter's kernel namespace after CUDA headers.
+// Include once per adapter namespace after CUDA headers. The AMS MEX also
+// includes these definitions in the device FEM namespace in the same TU.
 // Keep row reduction, smoothing, coarse factor and warp dependency order intact.
 __global__ void verify_csr(int n,int m,int nz,const int* rp,const int* ci,const double* a,int* err) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;
