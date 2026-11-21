@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-21
+
+- Add the Gmsh 5 update and qualification workflow to
+  `gmsh_usage` as `update_qualification` (PR #646).
+
 - Move the document tools out of radia-mcp into a separate repository: the
   pdf, doc-convert, md2html, document-meta, research-project, paper-writing,
   grant-writing, poster, bibliography, chart2d, literature-index, figure and
