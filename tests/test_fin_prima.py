@@ -213,3 +213,6 @@ def test_solve_fin_volume_prima_matches_dense_and_gates_low_order():
         solve_fin_volume(step, prima_order=1, **kw)
     with pytest.raises(ValueError, match="CPU-only"):
         solve_fin_volume(step, prima_order=4, backend="gpu", **kw)
+    for bad in (14.5, True, 0):
+        with pytest.raises(ValueError, match="positive integer"):
+            solve_fin_volume(step, prima_order=bad, **kw)

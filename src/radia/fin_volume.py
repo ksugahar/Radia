@@ -24,6 +24,7 @@ non-parallel bars.  No reduction is applied here.
 from __future__ import annotations
 
 import math
+import numbers
 import time
 from types import SimpleNamespace
 from dataclasses import dataclass, field
@@ -428,7 +429,9 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
         return out
     if backend != "cpu":
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
-    if prima_order is not None and int(prima_order) < 1:
+    if prima_order is not None and (isinstance(prima_order, bool)
+                                    or not isinstance(prima_order, numbers.Integral)
+                                    or prima_order < 1):
         raise ValueError(f"prima_order must be a positive integer, got {prima_order!r}")
     sweep, lat, _builder, topo, energy = assemble_fin_volume(
         step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
