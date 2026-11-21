@@ -45,7 +45,7 @@ def require_build_admission(root, lane, path, expected_sha256):
             or any(type(declared_limits[key]) is not int or declared_limits[key] != value
                    for key, value in limits.items())
             or ((task == 'ih') != (lane == 'ih'))
-            or (task == 'hcurl-ams' and lane != 'ams')):
+            or (task == 'hcurl-ams' and lane not in ('ams', 'csr-ic'))):
         raise RuntimeError('GPU build task/resource admission mismatch')
     commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
     if subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True).strip():
