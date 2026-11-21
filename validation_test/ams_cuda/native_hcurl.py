@@ -125,7 +125,7 @@ def main(args):
             if isinstance(value,np.generic):return value.item()
             raise TypeError(type(value).__name__)
         (out/'result.json').write_text(json.dumps(record,indent=2,default=encode)+'\n',encoding='utf-8')
-        print(json.dumps({k:v for k,v in record.items() if k not in ('build','gpu')},indent=2),flush=True)
+        print(json.dumps({k:v for k,v in record.items() if k not in ('build','gpu')},indent=2,default=encode),flush=True)
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--maxh',type=float,default=.35);p.add_argument('--gamma',type=float,default=0);main(p.parse_args())
