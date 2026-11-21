@@ -17,7 +17,8 @@ def main(args):
     from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     import netgen
     import matlab.engine
-    package=Path(__file__).resolve().parents[1]
+    script=Path(__file__).resolve()
+    package=script.parents[1]
     root=package.parents[1]
     commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
@@ -40,9 +41,9 @@ def main(args):
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp',
-             Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
+             script.with_name('matlab_cuda_toolchain.py'),script.with_name('vs2022_toolchain.py'),script,root/'Build.ps1']
     sources.append(root/'packages/radia-simulink/native/mex_error_boundary.hpp')
-    sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
+    sources.append(script.with_name('check_mex_error_boundaries.py'))
     sources.extend(root / path for path in (
         'src/core/gpu/fem/fem_amg.cuh',
         'src/core/gpu/fem/fem_ams.cuh',
