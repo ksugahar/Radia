@@ -173,9 +173,9 @@ def test_a100_is_compute_only_and_never_a_pr_gate():
     assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')
 
 
-def test_simulink_build_host_compiles_and_the_a100_only_executes():
+def test_simulink_cuda_build_compiles_only_and_the_acceptance_job_executes():
     build = yaml.safe_load((ROOT / '.github/workflows/radia-simulink.yml').read_text(encoding='utf-8'))['jobs']['cuda-mex']
-    assert build['runs-on'] == ['self-hosted', 'Windows', 'X64', '100']
+    assert build['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], build['runs-on']
     built = chr(10).join(step.get('run', '') for step in build['steps'])
     for executed in ('run_device_boundary.py', 'run_poisson.py', 'ams_cuda/run.py', 'fmm_physics.py', 'ic_cuda/run.py', 'run_installed.py', 'nonlinear_resident.py'):
         assert executed not in built, executed
@@ -205,58 +205,21 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     assert 'ci_gpu_artifact.py fetch gpu-input --radia --sha ${{ github.sha }}' in commands
     assert 'run_installed.py --source-commit ${{ github.sha }}' in commands
     assert '--require-gpu A100' in commands
-    assert 'netgen_overlay.py install --overlay gpu-input/gpu-netgen-overlay' in commands
-    assert '--netgen-overlay gpu-input/gpu-netgen-overlay' in commands
+    assert 'ci_fork_wheels.py install' in commands
+    assert 'netgen_overlay.py' not in commands
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     native = yaml.safe_load((ROOT / '.github/workflows/build-test.yml').read_text(encoding='utf-8'))
-    steps = native['jobs']['build-test']['steps']
-    upload = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
-    assert 'ci_gpu_artifact.py seal' in steps[upload - 1]['run']
-    overlay = next(i for i, step in enumerate(steps) if step.get('with', {}).get('name') == 'gpu-netgen-overlay')
-    assert 'ci_gpu_artifact.py seal' in steps[overlay - 1]['run']
-    # The sealed library is the one every test of the job ran on: built (or restored) and
-    # installed into the CI venv before the build and tests, never rebuilt for the seal.
-    names = [step.get('name', '') for step in steps]
-    built = names.index('Build the patched Netgen library')
-    installed = names.index('Install the patched Netgen library into the CI venv')
-    assert 'netgen_overlay.py build' in steps[built]['run'], steps[built]
-    assert 'netgen_overlay.py install' in steps[installed]['run'], steps[installed]
-    assert built < installed < names.index('Build with MSVC + MKL') < overlay - 1, names
-    assert 'netgen_overlay.py build' not in steps[overlay - 1]['run'], steps[overlay - 1]
+    gpu_steps = native['jobs']['windows-gpu-wheel']['steps']
+    upload = next(i for i, step in enumerate(gpu_steps) if step.get('with', {}).get('name') == 'gpu-radia-wheel')
+    assert 'ci_gpu_artifact.py seal' in gpu_steps[upload - 1]['run']
 
 
 @pytest.mark.parametrize('workflow, job', [('build-test.yml', 'build-test'), ('sparsesolv.yml', 'ams-regression')])
-def test_netgen_library_is_run_exclusive_and_cache_bound_to_its_toolchain(workflow, job):
-    """Guards: each attempt builds or stages the Netgen library into its own empty directory;
-    the cache transfer directory must be absent before the restore (never deleted), must hold exactly
-    the library and its receipt, and is keyed by MSVC toolset, recipe and patch."""
+def test_windows_native_ci_installs_locked_fork_before_build(workflow, job):
     steps = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8'))['jobs'][job]['steps']
-    names = [step.get('name', '') for step in steps]
-    order = ['Prepare the patched Netgen paths', 'Restore the patched Netgen library', 'Stage the cached Netgen library',
-             'Build the patched Netgen library', 'Install the patched Netgen library into the CI venv',
-             'Hand the built Netgen library to the cache', 'Save the patched Netgen library']
-    positions = [names.index(name) for name in order]
-    assert positions == sorted(positions), list(zip(order, positions))
-    prepare, restore, stage, build, install, hand, save = (steps[i] for i in positions)
-    assert '"radia-netgen-overlay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"' in prepare['run']
-    assert 'already exists' in prepare['run'] and 'cannot prove it owns it' in prepare['run']
-    assert 'ReparsePoint' in prepare['run'] and 'ReparsePoint' in stage['run'] and "'netgen-overlay.json,nglib.dll'" in stage['run']
-    assert 'Remove-Item' not in prepare['run'] + stage['run'] + hand['run'], 'the transfer directory is refused, never deleted'
-    assert "Microsoft.VCToolsVersion.default.txt" in prepare['run'] and '14\\.44' in prepare['run']
-    transfer = '${{ runner.temp }}/radia-netgen-overlay-cache'
-    assert restore['uses'] == 'actions/cache/restore@v4' and restore['with']['path'] == transfer
-    assert 'msvc${{ steps.netgen-overlay-paths.outputs.toolset }}' in restore['with']['key']
-    assert "hashFiles('tools/netgen_overlay.py', 'tools/patches/netgen-pyramid.patch')" in restore['with']['key']
-    assert save['uses'] == 'actions/cache/save@v4' and save['with']['path'] == transfer
-    assert save['with']['key'] == '${{ steps.netgen-overlay-cache.outputs.cache-primary-key }}'
-    assert "cache-hit == 'true'" in stage['if'] and "cache-hit != 'true'" in build['if']
-    assert "cache-hit != 'true'" in hand['if'] and "cache-hit != 'true'" in save['if']
-    run_dir = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-    for step in (stage, build, install, hand):
-        assert run_dir in step['run'], step['name']
-    assert '--out `"$overlay`"' in build['run'] and f"--overlay '{run_dir}'" in install['run']
-    text = (ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8')
-    assert "'radia-netgen-overlay')" not in text and '/radia-netgen-overlay\n' not in text
+    commands = "\n".join(step.get('run', '') for step in steps)
+    assert 'ci_fork_wheels.py install' in commands
+    assert 'netgen_overlay.py' not in commands
 
 
 def _hdiv_lane():
@@ -389,3 +352,35 @@ def test_other_json_inputs_are_not_blanket_exempted(tree):
     path.write_text('{"value":2}', encoding="utf-8")
     with pytest.raises(ValueError, match="closure changed"):
         routing.validate(root, manifest)
+
+
+def test_cuda_compilation_runs_only_on_the_windows_gpu_host():
+    """Guards: the CPU build host compiles no CUDA. The native release job builds CPU
+    natives on the build host; the Python GPU payload, the published wheel and the
+    MATLAB CUDA MEX are produced on the Windows GPU host from the same commit."""
+    workflows = ROOT / '.github/workflows'
+    native = yaml.safe_load((workflows / 'build-test.yml').read_text(encoding='utf-8'))['jobs']
+    cpu, gpu = native['build-test'], native['windows-gpu-wheel']
+    assert cpu['runs-on'] == ['self-hosted', 'Windows', 'X64', '100'], cpu['runs-on']
+    assert gpu['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], gpu['runs-on']
+    assert gpu['needs'] == ['build-test'], gpu['needs']
+    cpu_runs = chr(10).join(step.get('run', '') for step in cpu['steps'])
+    gpu_runs = chr(10).join(step.get('run', '') for step in gpu['steps'])
+    for token in ('build_python_gpu.py', 'nvcc', '-RequirePythonGpu', 'ci_gpu_artifact.py seal $sealed'):
+        assert token not in cpu_runs, token
+    for token in ('build_python_gpu.py', '-RequirePythonGpu', 'check_python_gpu_coexistence.py'):
+        assert token in gpu_runs, token
+    cpu_uploads = {step['with']['name'] for step in cpu['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')}
+    gpu_uploads = {step['with']['name'] for step in gpu['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')}
+    assert {'radia-cpu-pyd', 'radia-cpu-wheel'} <= cpu_uploads and not {'radia-pyd', 'radia-wheel', 'gpu-radia-wheel'} & cpu_uploads
+    assert {'radia-pyd', 'radia-wheel', 'gpu-radia-wheel'} <= gpu_uploads, gpu_uploads
+    fetch = next(step for step in gpu['steps'] if step.get('uses', '').startswith('actions/download-artifact@'))
+    assert fetch['with']['name'] == 'radia-cpu-pyd', fetch
+    simulink = yaml.safe_load((workflows / 'radia-simulink.yml').read_text(encoding='utf-8'))['jobs']['cuda-mex']
+    assert simulink['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100'], simulink['runs-on']
+    for path in workflows.glob('*.yml'):
+        for name, job in (yaml.safe_load(path.read_text(encoding='utf-8')).get('jobs') or {}).items():
+            labels = job.get('runs-on')
+            if isinstance(labels, list) and '100' in labels:
+                runs = chr(10).join(step.get('run', '') for step in job.get('steps', []))
+                assert not any(t in runs for t in ('nvcc', 'build_python_gpu.py', '-CudaMexOnly', 'mexcuda(')), f'{path.name}:{name}'

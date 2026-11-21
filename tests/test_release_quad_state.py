@@ -1,10 +1,5 @@
 import importlib.util
-import base64
-import json
-import subprocess
-import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -12,79 +7,6 @@ TOOL = Path(__file__).resolve().parents[1] / 'tools' / 'release_quad.py'
 SPEC = importlib.util.spec_from_file_location('release_quad_state', TOOL)
 module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
-
-
-def state(**targets):
-    return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash',
-            'mex_sha256': 'b' * 64, 'targets': targets}
-
-
-@pytest.mark.parametrize("key,controller,allowed", [("100", "build-machine", True), ("100", "other-machine", False)])
-def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp_path, key, controller, allowed):
-    calls = []
-    monkeypatch.setenv("RADIA_ACCEPTANCE_HOSTNAME_100", "build-machine")
-    monkeypatch.setattr(module.platform, "node", lambda: controller)
-    def run(command, **kwargs):
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, 'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}', "")
-    monkeypatch.setattr(module.subprocess, "run", run)
-    passed, _ = module._run_simulink_candidate_target(key, tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK", "com:123")
-    assert passed is allowed
-    assert len(calls) == int(allowed)
-    for command in calls:
-        assert command[0] not in ("ssh", "scp")
-        assert "com:123" in command
-
-
-def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeypatch):
-    scripts = []
-
-    def run(command, **kwargs):
-        assert 'input' not in kwargs
-        assert kwargs['timeout'] > 0
-        if command[0] == 'ssh':
-            assert '-Command' not in command
-            assert command[-2] == '-EncodedCommand'
-            decoded = base64.b64decode(command[-1]).decode('utf-16le')
-            assert kwargs['stdin'] == subprocess.DEVNULL
-            assert kwargs['stderr'] == subprocess.STDOUT
-            assert 'capture_output' not in kwargs
-            kwargs['stdout'].write(b'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}')
-            scripts.append(decoded)
-        return subprocess.CompletedProcess(command, 0,
-            'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}', '')
-
-    monkeypatch.setattr(module.subprocess, 'run', run)
-    passed, _ = module._run_simulink_candidate_target(
-        '100', tmp_path/'candidate.zip', 'a'*64,
-        'RADIA_SIMULINK_RELEASE_OK', 'MATLAB_13544')
-    assert passed
-    assert len(scripts) == 2
-    assert 'New-Item' in scripts[0]
-    assert "--engine-session 'MATLAB_13544'" in scripts[1]
-    assert 'exit $LASTEXITCODE' in scripts[1]
-
-
-def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
-    scripts = []
-
-    def run(command, **kwargs):
-        if command[0] == 'ssh':
-            scripts.append(base64.b64decode(command[-1]).decode('utf-16le'))
-            kwargs['stdout'].write(b'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}')
-        return subprocess.CompletedProcess(command, 0, '', '')
-
-    monkeypatch.setattr(module.subprocess, 'run', run)
-    python = r"C:\temp\candidate's venv\Scripts\python.exe"
-    passed, _ = module._run_simulink_candidate_target(
-        '100', tmp_path/'candidate.zip', 'a'*64, 'RADIA_SIMULINK_RELEASE_OK',
-        python_executable=python)
-    assert passed
-    assert scripts[1].startswith("& 'C:\\temp\\candidate''s venv\\Scripts\\python.exe' ")
-
-
-
-
 
 
 @pytest.mark.parametrize('matched', [True, False])
@@ -101,18 +23,18 @@ def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     assert bool(checked_main) == matched
 
 
-def test_compute_host_installer_passes_metadata_pins_to_native_checks(monkeypatch):
-    """Guards: dependency identity precedes installation. Assumes: synthetic pins, no remote action."""
-    import ast
-    monkeypatch.setattr(module, "_solver_dependency_pins",
-                        lambda: {"ngsolve": "sentinel-ng", "netgen-mesher": "sentinel-netgen"})
-    tree = ast.parse(module._editable_install_program(
-        {"source": "C:/Sources/test", "commit": "a" * 40,
-         "python": "C:/Runtime/python.exe", "binding": {"hostname": "test"}}))
-    args = next(ast.literal_eval(node.value) for node in tree.body
-                if isinstance(node, ast.Assign) and node.targets[0].id == "native_args")
-    assert args == ["native-check", "C:/Sources/test", "a" * 40,
-                    "sentinel-ng", "sentinel-netgen"]
+def test_wheel_installer_verifies_the_locked_fork_pair_after_install(monkeypatch):
+    """Guards: the fresh-process check embeds the exact fork lock. Assumes: no remote action."""
+    import json
+    lock = json.loads((TOOL.parent / "ci_fork_wheels.json").read_text(encoding="utf-8"))
+    code = module._solver_pin_check_code(lock)
+    assert "def verify_installed" in code and "from radia._cuda_runtime import _pins" in code
+    assert lock["wheels"]["ngsolve"]["version"] in code
+    monkeypatch.setattr(module, "_radia_version", lambda: "9.9.9")
+    program = module._wheel_install_program(
+        {"python": "C:/Runtime/python.exe", "hostname": "test", "label": "validation"},
+        {"C:/temp/x/radia-9.9.9-py3-none-any.whl": "f" * 64}, lock)
+    assert "verify_installed" in program
 
 
 def test_solver_dependency_versions_come_from_exact_metadata_pins():
@@ -122,68 +44,8 @@ def test_solver_dependency_versions_come_from_exact_metadata_pins():
     }
 
 
-def test_stale_snapshot_does_not_erase_another_host(tmp_path):
-    path = tmp_path / 'state.json'
-    module._write_simulink_state(path, state(validation={'status': 'passed'}), 'validation')
-    stale = state(**{'validation': {'status': 'passed'}, '100': {'status': 'passed'}})
-    module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
-    module._write_simulink_state(path, stale, '100')
-    assert json.loads(path.read_text())['targets'] == {
-        'validation': {'status': 'failed'}, '100': {'status': 'passed'}}
-
-
-def test_identity_mismatch_preserves_evidence(tmp_path):
-    path = tmp_path / 'state.json'
-    original = state(validation={'status': 'passed'})
-    module._write_simulink_state(path, original, 'validation')
-    changed = {**original, 'commit': 'b'}
-    with pytest.raises(ValueError, match='identity mismatch'):
-        module._write_simulink_state(path, changed, 'validation')
-    assert json.loads(path.read_text()) == original
-
-
-def test_replace_failure_keeps_valid_json_and_releases_lock(tmp_path, monkeypatch):
-    path = tmp_path / 'state.json'
-    original = state(validation={'status': 'passed'})
-    module._write_simulink_state(path, original, 'validation')
-    with monkeypatch.context() as patch:
-        def fail(*args):
-            raise OSError('replace failed')
-        patch.setattr(module.os, 'replace', fail)
-        with pytest.raises(OSError, match='replace failed'):
-            module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
-    assert json.loads(path.read_text()) == original
-    assert not list(tmp_path.glob('*.tmp'))
-    module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
-    assert json.loads(path.read_text())['targets']['validation']['status'] == 'failed'
-
-
-def test_independent_processes_preserve_both_targets(tmp_path):
-    code = '''
-import importlib.util, pathlib, sys
-spec = importlib.util.spec_from_file_location('candidate', sys.argv[1])
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
-for index in range(10):
-    m._write_simulink_state(pathlib.Path(sys.argv[2]),
-        {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash',
-         'targets': {sys.argv[3]: {'iteration': index}}}, sys.argv[3])
-'''
-    path = tmp_path / 'state.json'
-    workers = []
-    try:
-        for host in ('100', 'validation'):
-            workers.append(subprocess.Popen([sys.executable, '-c', code, str(TOOL), str(path), host]))
-        for worker in workers:
-            assert worker.wait(timeout=60) == 0
-    finally:
-        for worker in workers:
-            if worker.poll() is None:
-                worker.kill()
-                worker.wait()
-    assert json.loads(path.read_text())['targets'] == {
-        '100': {'iteration': 9}, 'validation': {'iteration': 9}}
-
-
-def test_cpu_mex_release_route_is_retired():
-    assert module.cmd_simulink_candidate(SimpleNamespace()) == 4
+def test_retired_simulink_candidate_route_is_absent():
+    """Guards: the retired CPU MEX candidate route stays deleted; radia-simulink owns its release."""
+    for name in ("cmd_simulink_candidate", "_run_simulink_candidate_target",
+                 "_verify_simulink_candidate_state", "_write_simulink_state", "SIMULINK_TARGETS"):
+        assert not hasattr(module, name), name

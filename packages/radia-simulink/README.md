@@ -105,20 +105,18 @@ deployment/packaging acceptance is separate from numerical candidate validation.
 Optional
 `radia-simulink[coupling]` installs Radia for workflows that explicitly need it.
 The Windows x64 binary contains sm_80 code and compute_80 PTX.
-Develop and build `radia-simulink` on 100. Required release acceptance compares each
-published CUDA solver against Python/NGSolve on 100 (Quadro RTX 5000), and
+CPU development and CPU-only checks run on the CPU build host, which compiles no
+CUDA. The CUDA MEX, the HDiv device module and the installed wheel are built on
+the Windows A100 GPU host from the same commit. Required release acceptance
+compares each published CUDA solver against Python/NGSolve on that A100 host and
 requires an independent review of the exact source. Record source/runtime
-versions, artifact hashes and machine-readable results. A100 validation and
-scaling are optional additional evidence, not publication requirements.
-Formal GPU timing uses the on-demand A100 host when idle; 100 timings are diagnostic.
-RTX 5000 installation acceptance does not certify A100 scaling.
-Cubit mesh export is tested separately on 100. NGSolve validation
+versions, artifact hashes and machine-readable results; timings are diagnostic.
+Cubit mesh export is tested separately on the CPU build host. NGSolve validation
 starts by checking and loading an exported `.vol` with its versioned label
 contract; it does not require Cubit on the NGSolve host.
 
-Deployment targets are 100 (build and RTX 5000 acceptance) and A100, excluding
-102. The 102 host tests `radia` and `radia-mcp` without installing `radia-simulink`.
-A100 is optional and never blocks development or publication. It is not always running: record its acceptance as pending while offline,
+The deployment target is the Windows A100 host. The A100 host is not always
+running: record its acceptance as pending while offline,
 then validate the same artifact hash when available. Do not treat an offline
 target as a successful test.
 
@@ -141,7 +139,7 @@ their own licenses. This distribution includes Radia integration code only.
 
 ## Build and release
 
-Build on 100 from a clean exact commit with `Build.ps1 -CudaMexOnly
+Build on the Windows A100 GPU host from a clean exact commit with `Build.ps1 -CudaMexOnly
 -RequireNativeProvenance` and `Build.ps1 -AmsCudaOnly
 -RequireNativeProvenance`, then run `python -m build --wheel` in this directory.
 mexcuda compilation and GPU execution never use NGSolve `TaskManager`.
@@ -166,11 +164,11 @@ Canonical CUDA and MATLAB sources live in this package, under `native/` and
 Use only the resulting verified wheel for deployment and PyPI publication.
 The initial alpha requires independent review before a stable release.
 
-`radia-simulink.yml` builds and accepts the installed wheel on the build host.
+`radia-simulink.yml` builds the installed wheel on the Windows A100 GPU host.
 `radia-simulink-release.yml` publishes that successful main CI artifact without
 rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
 Stable versions additionally require the exact-source independent review and
-same-wheel 100 RTX 5000/CPU parity record described in
+same-wheel A100/CPU parity record described in
 [`validation_test/radia_simulink/releases`](../../validation_test/radia_simulink/releases/README.md).
 Every CUDA module in the wheel needs independent CPU parity. CSR-PCG, AMS and
 the HDiv material solve also require an original-equation true residual. FMM
@@ -244,8 +242,9 @@ transfer-inclusive solve time changed from 0.40324 to 0.38472 seconds, while
 setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
 establish an end-to-end improvement. Host hierarchy construction remains the
 next acceleration target. CPU parity was verified independently; CPU timing
-was single-shot and does not establish repeated CPU/GPU speedup. These RTX
-5000 timings are diagnostic, not formal A100 performance acceptance.
+was single-shot and does not establish repeated CPU/GPU speedup. These
+historical RTX 5000 timings are diagnostic, not formal performance acceptance;
+current GPU acceptance runs only on the A100 Windows GPU validation host.
 
 ### CUDA AMS matrix generation
 
@@ -268,7 +267,7 @@ matrix-generation paths in ABBA order, excluding backend warmups. Full time
 includes host setup, device generation transfers, hierarchy upload, solve and
 solution download. Setup memory records the exact maximum concurrently owned
 CUDA allocation bytes; solve memory records a live allocation delta, not a
-whole-process peak. RTX 5000/100 measurements remain diagnostic.
+whole-process peak.
 
 The clean candidate `73b33291d` passed bitwise comparison of every hierarchy
 array and sparsecholesky factor against the independent CPU oracle. The

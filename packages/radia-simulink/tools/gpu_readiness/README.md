@@ -1,10 +1,10 @@
 # Manual runner readiness
 
 The manager dispatches `gpu-runner-readiness.yml` once on an admitted idle GPU.
-It has no push, PR or schedule trigger. `target` selects only existing `gpu-a100`
-or `gpu-rtx`; this does not approve or add shared functional/availability labels.
-Before dispatch the manager supplies secret `GPU_READINESS_A100` (or later
-`GPU_READINESS_RTX`), a JSON object with string fields `runner_root`,
+It has no push, PR or schedule trigger. `target` selects only the existing
+`gpu-a100` label; this does not approve or add shared functional/availability labels.
+Before dispatch the manager supplies secret `GPU_READINESS_A100`, a JSON object
+with string fields `runner_root`,
 `expected_sid`, `expected_runner_name`, `matlab_root`, `python`, `expected_gpu`.
 These identify the existing runner, authenticated account, R2026a installation,
 already Engine-capable interpreter and GPU. Missing configuration fails. The

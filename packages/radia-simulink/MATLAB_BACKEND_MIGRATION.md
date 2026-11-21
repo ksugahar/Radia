@@ -19,8 +19,10 @@ an acceleration backend rather than the definition of the entire interface.
 - Native projection uses NGSolve `SetValues` on the mexcuda host. This proves
   that CPU host FE operations can exist in the MATLAB native bridge; it does
   not prove that all legacy Mesh/space/form commands or CPU solvers exist.
-- RTX numerical acceptance and A100 measurements apply to their recorded
-  binaries and cases, not arbitrary installed MATLAB paths or every API.
+- Historical RTX numerical acceptance and current A100 (Windows GPU validation
+  host) acceptance and measurements apply to their recorded binaries and cases,
+  not arbitrary installed MATLAB paths or every API. The build host no longer
+  runs GPU work, so new GPU acceptance is A100 only.
 - A legacy `radia:mex:Retired` failure is not evidence that every CUDA entry
   point fails, nor evidence that native MATLAB FE assembly has been restored.
 
@@ -66,7 +68,8 @@ host code with mexcuda does not establish that capability.
    The user explicitly rejects backward compatibility: no compatibility wheel,
    aliases, forwarding imports, old-name CLI or silent migration/fallback.
 5. Validate a clean installation of the new name, actual import/MATLAB paths
-   and hashes, CPU-only operation, Python GPU and MATLAB RTX execution,
+   and hashes, CPU-only operation, Python GPU and MATLAB GPU execution on the
+   Windows GPU validation host (A100),
    Simulink save/reopen/repeat/error release. Historical immutable releases
    and numerical evidence remain historical records, not supported aliases.
 

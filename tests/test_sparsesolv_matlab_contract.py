@@ -94,10 +94,10 @@ def test_gpu_ci_has_its_own_build_and_true_residual_acceptance():
     assert all(step.get("id") != "matlab-impact" for step in steps)
     assert "MatlabMexOnly" not in str(steps)
     job = gpu["jobs"]["cuda-mex"]
-    assert job["runs-on"] == ["self-hosted", "Windows", "X64", "100"]
+    assert job["runs-on"] == ["self-hosted", "Windows", "X64", "gpu-a100"], job["runs-on"]
     build = "\n".join(step.get("run", "") for step in job["steps"])
     assert "-CudaMexOnly -RequireNativeProvenance" in build
-    # The build host compiles only; the true-residual acceptance runs on the A100.
+    # The CUDA build job compiles only; the true-residual acceptance job executes.
     assert "run_poisson.py" not in build
     a100 = yaml.safe_load((ROOT/".github/workflows/radia-simulink-a100.yml").read_text())
     job = a100["jobs"]["validate"]

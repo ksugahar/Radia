@@ -2783,13 +2783,16 @@ commits/tags distribution-specific, and use the checked release orchestrator:
 python tools/ci_preflight.py
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild -Test
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build_Wheel.ps1 -DryRun
-python tools/release_quad.py all
-python tools/release_quad.py done --simulink-package <exact-versioned-zip>
+python tools/release_quad.py done --source-sha <full-sha> --manifest <candidate-json> --release-source <clean-checkout>
 ```
 
-Use the `ci-monitor` skill or `gh run view` to inspect the exact SHA/tag run.
-Only a successful `release_quad.py done` for the same commit and retained
-artifacts authorizes GitHub Release publication.
+Freeze the CPU candidate source and dependencies before starting the Linux
+Python GPU and Windows Python GPU/MATLAB builds. The GPU builds may run in
+parallel. Collect each lane's acceptance receipts before handoff. Use `ci-monitor` or `gh run view` to inspect the exact source CI.
+The candidate manifest binds all four lanes to the same commit and verified
+artifacts. A successful receipt check is required for handoff. The release owner
+publishes through each distribution's workflow after approval; deployment is
+separate.
 
 ## Wheel Build Details (Build_Wheel.ps1)
 

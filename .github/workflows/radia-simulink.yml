@@ -340,9 +340,10 @@ jobs:
   cuda-mex:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.gpu_required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    # Compile and package only; GPU execution runs on the A100 from the sealed bundle
+    # MATLAB lane build on the Windows GPU host; the CPU build host compiles no CUDA.
+    # Compile and package only; GPU execution runs from the sealed bundle
     # (radia-simulink-a100.yml). This job creates no CUDA context.
-    runs-on: [self-hosted, Windows, X64, "100"]
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
     timeout-minutes: 100
     env:
       RADIA_GPU_CI_BUILD: "1"
