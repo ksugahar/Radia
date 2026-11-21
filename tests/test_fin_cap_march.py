@@ -124,13 +124,47 @@ def _rounded_rect(n=1024, a=3.0e-3, b=2.0e-3, r=0.4e-3, rot=0.0):
     return uv @ np.array([[k0[0], k0[1]], [-k0[1], k0[0]]])
 
 
-@pytest.mark.parametrize("rot", [0.0, 0.3, 1.1, 2.5])
-def test_outline_origin_is_a_corner_in_any_frame(rot):
-    """Guards: the lane origin is a section corner whatever in-plane frame the
-    station got (a frame-tied origin let uniform lanes skip every corner, R -7 %)."""
-    from radia.fin_cap_march import outline_corner_start
+def _rect(n=1024, a=3.0e-3, b=1.0e-3):
+    q = np.linspace(0.0, 4 * (a + b), n, endpoint=False)  # perimeter of half-widths a, b
+    corners = np.array([[a, -b], [a, b], [-a, b], [-a, -b], [a, -b]])
+    seg = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(corners, axis=0), axis=1))]
+    return np.column_stack([np.interp(q, seg, corners[:, k]) for k in range(2)])
 
-    uv = _rounded_rect(rot=rot)
-    p = uv[outline_corner_start(uv)]
-    radius = np.linalg.norm(uv, axis=1).max()
-    assert np.linalg.norm(p) >= 0.995 * radius  # arc ends sit at 0.985, (np.linalg.norm(p), radius)
+
+def _rot(theta):
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, s], [-s, c]])
+
+
+@pytest.mark.parametrize("shape", ["rounded", "sharp_3_to_1", "circle"])
+def test_outline_origin_is_frame_invariant(shape):
+    """Guards: the lane origin is the same physical sample under any in-plane
+    frame rotation when the anchor direction rotates with the outline (the
+    old max-u origin chose different corners for 0/90/180/270 degrees), a
+    corner for cornered sections and the farthest point along the anchor for
+    smooth ones (a circle is accepted, not rejected)."""
+    from radia.fin_cap_march import outline_origin
+
+    if shape == "circle":
+        t = np.linspace(0, 2 * np.pi, 1024, endpoint=False)
+        uv = 2e-3 * np.column_stack([np.cos(t), np.sin(t)])
+    else:
+        uv = _rounded_rect() if shape == "rounded" else _rect()
+    ref = np.array([0.6, 0.8])
+    picks = [outline_origin(uv @ _rot(th), ref @ _rot(th))
+             for th in (0.0, np.pi / 2, np.pi, 1.5 * np.pi, 0.37)]
+    assert len(set(picks)) == 1, picks
+    p = uv[picks[0]] - uv.mean(axis=0)
+    r = np.linalg.norm(uv - uv.mean(axis=0), axis=1)
+    if shape == "circle":
+        assert np.dot(p / np.linalg.norm(p), ref) >= 0.999, p
+    else:
+        assert np.linalg.norm(p) >= 0.995 * r.max(), (np.linalg.norm(p), r.max())
+
+
+def test_outline_origin_rejects_anchor_along_tangent():
+    """Guards: an anchor with no in-plane component fails loudly."""
+    from radia.fin_cap_march import MarchError, outline_origin
+
+    with pytest.raises(MarchError, match="nearly along the station tangent"):
+        outline_origin(_rect(), np.array([0.1, 0.1]))

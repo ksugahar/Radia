@@ -191,15 +191,18 @@ def align_station_origins(stations):
 # graph construction
 # ----------------------------------------------------------------------
 
-def _lane_fraction_for_station(analysis, n_lanes, lane_grading, tip_lanes):
+def _lane_fraction_for_station(analysis, n_lanes, lane_grading, tip_lanes, lane_phase):
     if lane_grading == "auto" and analysis.fins:
         s = graded_lane_arclengths(analysis, n_lanes, tip_lanes=tip_lanes)
         return s / analysis.perimeter, True
-    return np.arange(n_lanes) / n_lanes, False  # lane 0 on the outline origin (a corner)
+    if lane_phase == "anchored":  # lane 0 on the geometric outline origin
+        return np.arange(n_lanes) / n_lanes, False
+    return (np.arange(n_lanes) + 0.5) / n_lanes, False
 
 
 def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
-                    tip_lanes=8, mesh_stations="all", fin_kwargs=None):
+                    tip_lanes=8, mesh_stations="all", fin_kwargs=None,
+                    lane_phase="centered"):
     """Analyse every station and build the hybrid lane/ring PEEC graph.
 
     Args:
@@ -212,11 +215,16 @@ def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
         mesh_stations: ``"all"`` (every interior station gets a ring) or an
             explicit iterable of interior station indices.
         fin_kwargs: forwarded to :func:`analyze_section`.
+        lane_phase: ``"anchored"`` puts lane 0 on the outline origin (the
+            cap-march route starts outlines at a geometric anchor);
+            ``"centered"`` offsets uniform lanes by half a spacing.
     """
     from radia.peec_fin_topology import build_hybrid_surface_topology
 
     if lane_grading not in {"uniform", "auto"}:
         raise ValueError("lane_grading must be 'uniform' or 'auto'")
+    if lane_phase not in {"centered", "anchored"}:
+        raise ValueError("lane_phase must be 'centered' or 'anchored'")
     stations = tuple(stations)
     if len(stations) < 3:
         raise ValueError("need at least three stations")
@@ -227,7 +235,7 @@ def build_fin_graph(stations, *, n_lanes=64, lane_grading="auto",
         closed = _as_closed_ccw(st.uv)
         analysis = analyze_section(closed, **fin_kwargs)
         frac, graded = _lane_fraction_for_station(
-            analysis, n_lanes, lane_grading, tip_lanes)
+            analysis, n_lanes, lane_grading, tip_lanes, lane_phase)
         if np.any(np.diff(frac) <= 0):
             raise ValueError(f"station {st.index}: lane fractions not increasing")
         _s, per = outline_arclength(closed)
@@ -399,6 +407,15 @@ def _cap_march_centerline(step_path, solid):
     return line
 
 
+def path_plane_normal(points):
+    """Unit normal of the best-fit plane of the station centroids, sign fixed
+    by its largest component: a 3-D lane anchor independent of the frames."""
+    pts = np.asarray(points, float)
+    _s, _sv, vt = np.linalg.svd(pts - pts.mean(axis=0), full_matrices=False)
+    nrm = vt[-1]
+    return -nrm if nrm[np.argmax(np.abs(nrm))] < 0 else nrm
+
+
 def _stations_from_cap_march(step_path, solid, n_stations, n_outline,
                              cad_units_per_meter):
     from radia.fin_cap_march import (
@@ -412,9 +429,10 @@ def _stations_from_cap_march(step_path, solid, n_stations, n_outline,
     centroids = np.array([sec[1] for sec in sections])
     tangents = np.array([sec[2] for sec in sections])
     u, v = section_frames(centroids, tangents)
+    anchor = path_plane_normal(centroids)
     stations = []
     for i, (face, centroid, tangent, area) in enumerate(sections):
-        uv, perimeter = sample_face_outline(face, centroid, u[i], v[i], int(n_outline))
+        uv, perimeter = sample_face_outline(face, centroid, u[i], v[i], int(n_outline), anchor)
         stations.append(StationOutline(
             i, centroid / cad_units_per_meter, u[i], v[i], tangent,
             uv / cad_units_per_meter, float(area) / cad_units_per_meter**2,
@@ -692,7 +710,8 @@ def fin_graph_from_step(step_path, *, n_lanes=None, n_stations=None,
         cad_units_per_meter=cad_units_per_meter, route=route)
     result = build_fin_graph(stations, n_lanes=requested["n_lanes"],
                              lane_grading=requested["lane_grading"],
-                             tip_lanes=requested["tip_lanes"])
+                             tip_lanes=requested["tip_lanes"],
+                             lane_phase="anchored" if tag == "step_cap_march" else "centered")
     result.meta["cad_source"] = tag
     result.meta["step_path"] = str(step_path)
     result.meta["auto_resolution"] = auto

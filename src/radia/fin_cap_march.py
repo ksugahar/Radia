@@ -478,8 +478,9 @@ def march_centerline(solid_w) -> Centerline:
 # stations
 # ----------------------------------------------------------------------
 
-def sample_face_outline(fw, origin, u_hat, v_hat, n):
-    """(n, 2) CCW equal-arc-length samples of a face's outer wire in (u, v)."""
+def sample_face_outline(fw, origin, u_hat, v_hat, n, anchor):
+    """(n, 2) CCW equal-arc-length samples of a face's outer wire in (u, v),
+    starting at :func:`outline_origin` for the 3-D ``anchor`` direction."""
     from OCP.BRepAdaptor import BRepAdaptor_CompCurve
     from OCP.BRepTools import BRepTools
     from OCP.GCPnts import GCPnts_AbscissaPoint, GCPnts_UniformAbscissa
@@ -500,22 +501,35 @@ def sample_face_outline(fw, origin, u_hat, v_hat, n):
     signed = float(np.sum(uv[:, 0] * np.roll(uv[:, 1], -1) - uv[:, 1] * np.roll(uv[:, 0], -1)))
     if signed < 0.0:
         uv = uv[::-1].copy()
-    return np.roll(uv, -outline_corner_start(uv), axis=0), float(total)
+    ref = np.array([float(np.dot(anchor, u_hat)), float(np.dot(anchor, v_hat))])
+    return np.roll(uv, -outline_origin(uv, ref), axis=0), float(total)
 
 
-def outline_corner_start(uv):
-    """Sample index of the outline's sharpest corner (frame-independent origin).
+#: A run of fast turning counts as a corner when it turns at least this much.
+CORNER_MIN_TURN = math.pi / 6
 
-    The lanes are laid from this origin, so a lane sits on a corner whatever
-    in-plane frame the station received; an origin tied to the frame (the
-    max-u point) let the uniform lane phase skip every corner of a rounded
-    section depending on the station count.  A corner is a run of samples
-    turning faster than half the peak rate (a fillet arc turns uniformly);
-    its sharpness is the run's total turn and its origin the run's middle.
-    Corners within 5 % of the sharpest are tied and the max-u one is taken.
+
+def outline_origin(uv, ref):
+    """Sample index where the lanes start: geometric, independent of the frame.
+
+    ``ref`` is a fixed 3-D direction (the path-plane normal) expressed in the
+    station's (u, v); it rotates with the outline, so the choice does not
+    depend on the in-plane frame.  A corner is a run of samples turning
+    faster than half the peak rate with total turn >= ``CORNER_MIN_TURN``;
+    its origin is the run's middle.  With corners, the origin is the corner
+    (within 5 % of the sharpest) farthest along ``ref``; smooth outlines
+    (a circle) use the point farthest along ``ref``.  An origin tied to the
+    frame (the max-u point) let uniform lanes skip every corner of a rounded
+    section depending on the station count.
     """
     uv = np.asarray(uv, float)
     n = len(uv)
+    ref = np.asarray(ref, float)
+    if not np.linalg.norm(ref) >= 0.5:
+        raise MarchError("lane anchor direction is nearly along the station tangent")
+    ref = ref / np.linalg.norm(ref)
+    centre = uv.mean(axis=0)
+    reach = (uv - centre) @ ref
     e = np.roll(uv, -1, axis=0) - uv
     a = np.arctan2(e[:, 1], e[:, 0])
     turn = np.abs(np.angle(np.exp(1j * (a - np.roll(a, 1)))))
@@ -523,21 +537,27 @@ def outline_corner_start(uv):
     kern = np.ones(2 * w + 1) / (2 * w + 1)
     rate = np.convolve(np.concatenate([turn[-w:], turn, turn[:w]]), kern, mode="valid")
     hot = rate >= 0.5 * rate.max()
-    if rate.max() <= 0.0 or hot.all():
-        raise MarchError("section outline has no corner to anchor the lanes")
-    k0 = int(np.argmin(hot))  # start scanning at a cold sample
-    runs, cur = [], []
-    for k in range(k0, k0 + n):
-        if hot[k % n]:
-            cur.append(k)
-        elif cur:
-            runs.append(cur); cur = []
-    if cur:
-        runs.append(cur)
-    total = np.array([turn[np.asarray(r) % n].sum() for r in runs])
-    mids = np.array([r[len(r) // 2] % n for r in runs])
-    cand = mids[total >= 0.95 * total.max()]
-    return int(cand[np.argmax(uv[cand, 0])])
+    if rate.max() > 0.0 and not hot.all():
+        k0 = int(np.argmin(hot))  # scan from a cold sample
+        runs, cur = [], []
+        for k in range(k0, k0 + n):
+            if hot[k % n]:
+                cur.append(k % n)
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        total = np.array([turn[r].sum() for r in runs])
+        if total.max() >= CORNER_MIN_TURN:
+            mids = np.array([r[len(r) // 2] for r in runs])
+            cand = mids[total >= 0.95 * total.max()]
+            return int(cand[np.argmax(reach[cand])])
+    # Smooth outline: farthest point along ref (middle of a flat tie).
+    tie = np.flatnonzero(reach >= reach.max() - 1e-9 * np.ptp(reach))
+    if len(tie) > 1 and tie[-1] - tie[0] != len(tie) - 1:  # tie wraps the seam
+        tie = np.concatenate([tie[tie >= n // 2], tie[tie < n // 2] + n])
+    return int(tie[len(tie) // 2] % n)
 
 
 def section_frames(points, tangents):
