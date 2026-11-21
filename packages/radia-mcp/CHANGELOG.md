@@ -11,6 +11,12 @@ crystallized as its own package.
 
 - Add the Gmsh 5 update and qualification workflow to
   `gmsh_usage` as `update_qualification` (PR #646).
+- Add headless Blender animation for magnetic flux density and eddy-current
+  density, with independent readback of the rendered glyphs (PR #641).
+- Add motor and maglev analytic comparison gates for the slotless SPM air-gap
+  field and cuboid magnet force. These tools require a Radia runtime that
+  provides the corresponding analytic formulas (PR #642).
+## [2.0.2] - 2026-10-08
 
 - Move the document tools out of radia-mcp into a separate repository: the
   pdf, doc-convert, md2html, document-meta, research-project, paper-writing,
@@ -44,8 +50,6 @@ crystallized as its own package.
   NGSolve MCP server. Lazy native-module imports can otherwise stall while the
   transport waits for its next request. Preserve SDK framing and dispatch,
   restore stdin on exit, and leave other transports and platforms unchanged.
-
-## [2.0.2] - 2026-10-08
 
 - Guide supported large real lowest-order H(curl) analyses through
   `solve_p1_linear` or `solve_p1_newton` with AMS-PCG, preserving each API's
