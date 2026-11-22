@@ -213,6 +213,73 @@ def test_solve_fin_volume_prima_matches_dense_and_gates_low_order():
         solve_fin_volume(step, prima_order=1, **kw)
     with pytest.raises(ValueError, match="CPU-only"):
         solve_fin_volume(step, prima_order=4, backend="gpu", **kw)
-    for bad in (14.5, True, 0):
+
+
+def test_fin_prima_sweep_builds_once_and_gates_each_frequency(monkeypatch):
+    """Guards: one assembly and basis, correct restored currents, and fail-loud gating."""
+    from radia import fin_volume, peec_matrices
+
+    step = FIXTURES / "beak_fin_short.step"
+    points = (2 * F_OP, F_OP / 2, F_OP)
+    kw = dict(sigma=5.8e7, current_A=10., n_layers=1, n_lanes=8,
+              n_stations=5, lane_grading="uniform", box_order=4)
+    dense = [fin_volume.solve_fin_volume(step, frequency=f, **kw) for f in points]
+    assembled = fin_volume.assemble_fin_volume
+    reduce = peec_matrices.prima_reduce
+    calls = {"assembly": 0, "basis": 0}
+
+    def count_assembly(*args, **kwargs):
+        calls["assembly"] += 1
+        return assembled(*args, **kwargs)
+
+    def count_basis(*args, **kwargs):
+        calls["basis"] += 1
+        return reduce(*args, **kwargs)
+
+    monkeypatch.setattr(fin_volume, "assemble_fin_volume", count_assembly)
+    monkeypatch.setattr(peec_matrices, "prima_reduce", count_basis)
+    sweep = fin_volume.solve_fin_volume_prima_sweep(
+        step, frequencies=points, expansion_frequency=F_OP, prima_order=24, **kw)
+    assert calls == {"assembly": 1, "basis": 1}
+    assert len(sweep["points"]) == len(points)
+    assert [p["frequency_hz"] for p in sweep["points"]] == list(points)
+    for point, reference in zip(sweep["points"], dense):
+        result = point["solution"]
+        error = np.linalg.norm(result["I_fil"] - reference["I_fil"]) / np.linalg.norm(reference["I_fil"])
+        assert error <= 1e-6, (point["frequency_hz"], error)
+        assert max(result["coil_true_residual"][k] for k in ("kcl_relative", "kvl_relative")) <= 1e-6
+        assert result["prima"]["s0"] == pytest.approx(2 * math.pi * F_OP)
+
+    for invalid in (14.5, True, "14"):
         with pytest.raises(ValueError, match="positive integer"):
-            solve_fin_volume(step, prima_order=bad, **kw)
+            fin_volume.solve_fin_volume_prima_sweep(
+                step, frequencies=points, expansion_frequency=F_OP, prima_order=invalid, **kw)
+    assert calls == {"assembly": 1, "basis": 1}
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        fin_volume.solve_fin_volume_prima_sweep(
+            step, frequencies=points, expansion_frequency=F_OP, prima_order=1, **kw)
+
+
+
+def test_fin_prima_sweep_rejects_a_later_residual_failure(monkeypatch):
+    """Guards: an invalid restored current at the second point aborts the sweep."""
+    from radia import fin_volume
+
+    points = (F_OP, 2 * F_OP, F_OP / 2)
+    evaluate = fin_volume._evaluate_fin_prima
+    evaluated = []
+
+    def restore_with_second_point_failure(reduced, branch_count, frequency, current_A):
+        current, info = evaluate(reduced, branch_count, frequency, current_A)
+        evaluated.append(frequency)
+        if frequency == points[1]:
+            current = np.zeros_like(current)
+        return current, info
+
+    monkeypatch.setattr(fin_volume, "_evaluate_fin_prima", restore_with_second_point_failure)
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        fin_volume.solve_fin_volume_prima_sweep(
+            FIXTURES / "beak_fin_short.step", frequencies=points,
+            expansion_frequency=F_OP, prima_order=24, sigma=5.8e7, current_A=10.0,
+            n_layers=1, n_lanes=8, n_stations=5, lane_grading="uniform", box_order=4)
+    assert evaluated == list(points[:2])
