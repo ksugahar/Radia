@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 LONGITUDINAL, CIRCUMFERENTIAL, RADIAL = 0, 1, 2
-BOX_ORDER = 24  # spectrum converged on fin_beak 24x6 s27: order 24 vs 32 min eig within 1 %
+BOX_ORDER = 16  # fin_beak 24x6 s25 vs order 24: R -0.014 %, L +0.043 %, P_wp -0.001 %, 4.2x faster L; order 12 fails the energy gate
 
 
 @dataclass(frozen=True)
