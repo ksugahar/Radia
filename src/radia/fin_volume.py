@@ -24,6 +24,9 @@ non-parallel bars.  No reduction is applied here.
 from __future__ import annotations
 
 import math
+import numbers
+import time
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -385,8 +388,8 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
                      tip_lanes=None, exponent=2.0, route="auto",
                      cad_units_per_meter="auto", max_branches=None,
-                     box_order=BOX_ORDER, backend="cpu"):
-    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+                     box_order=BOX_ORDER, backend="cpu", prima_order=None):
+    """STEP -> volume-lattice PEEC branch currents (peak phasors).
 
     ``backend`` selects the route explicitly: ``"cpu"`` builds L with the
     C++ builder and solves on the host; ``"gpu"`` assembles, gates and
@@ -398,6 +401,14 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     the lattice).  Filament mutuals make the lattice L indefinite: the
     transverse bars are short, wide plates.  Before the solve, L must pass
     :func:`require_energy_admissible`.
+
+    ``prima_order`` (CPU only, opt-in) replaces the dense solve by a PRIMA
+    model of that order expanded at ``s0 = 2 pi frequency``
+    (:func:`radia.peec_matrices.prima_reduce`).  The branch currents are
+    recovered from the projection basis and must pass the same KCL/KVL true
+    residual gate as the unreduced solve, or the call raises.  The order is
+    the caller's choice: it is accepted only through that gate, never
+    selected or raised here.
     """
     from radia.fin_surface_solver import coil_true_residuals
     from radia.peec_topology import PEECCircuitSolver
@@ -405,6 +416,8 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     if frequency <= 0 or sigma <= 0:
         raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
     if backend == "gpu":
+        if prima_order is not None:
+            raise ValueError("prima_order is CPU-only; the GPU route has no PRIMA reduction")
         sweep, lat = fin_volume_lattice(
             step_path, n_layers=n_layers, n_lanes=n_lanes, n_stations=n_stations,
             n_outline=n_outline, lane_grading=lane_grading, tip_lanes=tip_lanes,
@@ -416,17 +429,29 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
         return out
     if backend != "cpu":
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
+    if prima_order is not None and (isinstance(prima_order, bool)
+                                    or not isinstance(prima_order, numbers.Integral)
+                                    or prima_order < 1):
+        raise ValueError(f"prima_order must be a positive integer, got {prima_order!r}")
     sweep, lat, _builder, topo, energy = assemble_fin_volume(
         step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
         n_stations=n_stations, n_outline=n_outline, lane_grading=lane_grading,
         tip_lanes=tip_lanes, exponent=exponent, route=route,
         cad_units_per_meter=cad_units_per_meter, max_branches=max_branches,
         box_order=box_order)
-    peec = PEECCircuitSolver(topo)
-
-    r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc, dtype=float)
-    current = np.asarray(peec.compute_branch_currents(frequency, [float(current_A)]),
-                         dtype=complex)
+    prima = None
+    if prima_order is None:
+        peec = PEECCircuitSolver(topo)
+        r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc,
+                              dtype=float)
+        current = np.asarray(peec.compute_branch_currents(frequency, [float(current_A)]),
+                             dtype=complex)
+    else:
+        current, prima = _prima_branch_currents(topo, int(prima_order), frequency,
+                                                float(current_A))
+        r_branch = np.asarray(topo["R"], dtype=float)
+        peec = SimpleNamespace(segment_nodes=np.asarray(lat.branches), n_nodes=len(lat.nodes),
+                               ports=topo["ports"], L=np.asarray(topo["L"]))
     residuals = coil_true_residuals(peec, r_branch.astype(complex), current,
                                     frequency, float(current_A))
     i2 = abs(current_A) ** 2
@@ -440,7 +465,30 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
             "energy_receipt": energy_receipt(topo["L"], lat.branches, current),
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
-            "paths": paths, "I_fil": current, "backend": "cpu"}
+            "paths": paths, "I_fil": current, "backend": "cpu", "prima": prima}
+
+
+def _prima_branch_currents(topo, order, frequency, current_A):
+    """Branch currents of the PRIMA model expanded at the operating frequency."""
+    from radia.peec_matrices import prima_reduce
+
+    s0 = 2 * math.pi * float(frequency)
+    plus, minus = (int(k) for k in topo["ports"][0][:2])
+    branches = np.ascontiguousarray(np.asarray(topo["segment_nodes"], dtype=np.int32))
+    t0 = time.perf_counter()
+    red = prima_reduce(np.asarray(topo["L"], dtype=float), np.asarray(topo["R"], dtype=float),
+                       branches, int(topo["n_nodes"]), [plus], [minus], order, s0)
+    t_reduce = time.perf_counter() - t0
+    G, E, B, V = (np.asarray(red[k], dtype=float) for k in ("G", "E", "B", "V"))
+    t0 = time.perf_counter()
+    xq = np.linalg.solve(G + 2j * math.pi * float(frequency) * E, B[:, 0] * current_A)
+    current = V[:len(branches)] @ xq
+    t_eval = time.perf_counter() - t0
+    return current, {"order": order, "q": int(red["q"]), "s0": s0,
+                     "deflated": list(red["deflated"]),
+                     "max_solve_residual": float(red["max_solve_residual"]),
+                     "min_E_eig_over_max": float(red["min_E_eig_over_max"]),
+                     "t_reduce_s": t_reduce, "t_eval_s": t_eval}
 
 
 def bar_geometry(lattice):
