@@ -2578,3 +2578,50 @@ def test_ams_tridiagonal_line_matches_psd_pseudoinverse(shift):
     np.testing.assert_allclose(matrix @ actual, compatible, rtol=1e-10, atol=1e-10)
     if not banded:
         assert abs(sum(actual)) < 1e-9
+
+
+def _curl_hex_system(nx, ny, nz):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return form, grad, coords
+
+
+def test_ams_line_max_length_admits_full_257_node_lines():
+    """Guards: a raised cap reaches the 257-node axial path through the banded solve."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _curl_hex_system(256, 2, 2)
+    args = (form.mat, grad, None, *coords.T.tolist())
+    lengths = {}
+    for cap in (256, 257):
+        pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True,
+                                          line_max_length=cap)
+        parts = [part for axis in pre.line_partitions for part in axis]
+        profile = pre.line_setup_profile
+        lengths[cap] = max(map(len, parts))
+        assert all(blocks == banded for blocks, banded, _ in profile), (cap, profile)
+        assert all(sorted(set(p)) == sorted(p) for p in parts)
+    assert lengths == {256: 256, 257: 257}, lengths
+
+
+def test_ams_line_options_fail_loudly_without_their_prerequisites():
+    """Guards: diagnostic line options never apply silently or out of range."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _curl_hex_system(8, 2, 2)
+    args = (form.mat, grad, None, *coords.T.tolist())
+    for kwargs in (dict(line_rank_ties=True, auto_line_smoothing=True),
+                   dict(line_max_length=300),
+                   dict(line_max_length=8, auto_line_smoothing=True),
+                   dict(line_max_length=2048, auto_line_smoothing=True)):
+        with pytest.raises((ValueError, RuntimeError)):
+            HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)

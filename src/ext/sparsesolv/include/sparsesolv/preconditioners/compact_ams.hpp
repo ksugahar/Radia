@@ -100,7 +100,8 @@ public:
                bool smoothing_only_rows = false,
                bool lean_coarse = false,
                std::array<std::vector<double>, 3> edge_vectors = {},
-               bool auto_line_smoothing = false, std::vector<int> pmis_rank = {})
+               bool auto_line_smoothing = false, std::vector<int> pmis_rank = {},
+               int line_max_length = 256, bool line_rank_ties = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
@@ -108,7 +109,8 @@ public:
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
           reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
           smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse),
-          edge_vectors_(std::move(edge_vectors)), auto_line_smoothing_(auto_line_smoothing), pmis_rank_(std::move(pmis_rank))
+          edge_vectors_(std::move(edge_vectors)), auto_line_smoothing_(auto_line_smoothing), pmis_rank_(std::move(pmis_rank)),
+          line_max_length_(line_max_length), line_rank_ties_(line_rank_ties)
     {
         RequireSerialSetup();
         if (!pmis_rank_.empty()) {
@@ -119,6 +121,10 @@ public:
             for (int i=0; i<ndof_h1_; ++i)
                 if (sorted[i]!=i) throw std::invalid_argument("PMIS ranks must be a permutation");
         }
+        if (line_rank_ties_ && pmis_rank_.empty())
+            throw std::invalid_argument("line_rank_ties requires pmis_rank");
+        if ((line_max_length_ != 256 || line_rank_ties_) && !auto_line_smoothing_)
+            throw std::invalid_argument("line_max_length and line_rank_ties require auto_line_smoothing");
         if (auto_line_smoothing_ && (!beta_zero_ || reuse_hierarchy_ || mixed_precision_ || subspace_solver_ != 0))
             throw std::invalid_argument("auto_line_smoothing requires curl-only default AMG without hierarchy reuse or mixed precision");
         if (mixed_precision_ && !beta_zero_)
@@ -374,6 +380,8 @@ private:
     const bool lean_coarse_;
     const bool auto_line_smoothing_;
     const std::vector<int> pmis_rank_;
+    const int line_max_length_;
+    const bool line_rank_ties_;
     // Optional physical edge vectors (x, y, z per row of G). Empty: G * coord.
     // A periodic G has representative vertex columns, so G * coord would give
     // the vector across the period on edges touching the periodic faces.
@@ -697,7 +705,11 @@ private:
                         std::sort(neighbors.begin(),neighbors.end());
                         neighbors.erase(std::unique(neighbors.begin(),neighbors.end()),neighbors.end());
                     }
-                    for (const auto& amg : {amg_Pix,amg_Piy,amg_Piz}) amg->SetLineTopology(edges);
+                    for (const auto& amg : {amg_Pix,amg_Piy,amg_Piz}) {
+                        amg->SetLineTopology(edges);
+                        amg->SetLineMaxLength(line_max_length_);
+                        amg->SetLineRankTies(line_rank_ties_);
+                    }
                 }
                 // reuse_hierarchy: coarse matrices from the native Galerkin product
                 // (the refresh path's numeric pass then runs on those patterns).

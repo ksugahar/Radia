@@ -638,17 +638,32 @@ public:
     using NodalEdges = std::vector<std::vector<int>>;
     void SetLineTopology(shared_ptr<const NodalEdges> edges) { line_topology_ = std::move(edges); }
     void SetPMISRank(const std::vector<int>& rank) { pmis_rank_=rank; }
+    /// Diagnostic line-construction controls (defaults keep the 256-node cap and
+    /// input-order ties). Rank ties order exactly equal link strengths by the
+    /// PMIS node ranks of their endpoints, independent of the input numbering.
+    static constexpr int kLineCapacity = 1024;
+    void SetLineMaxLength(int length) {
+        if (length < 16 || length > kLineCapacity)
+            throw std::invalid_argument("line max length must be in [16, 1024]");
+        line_max_ = length;
+    }
+    void SetLineRankTies(bool enabled) { line_rank_ties_ = enabled; }
     const auto& CoarsePriorityIds() const { return coarse_ids_; }
     int LineBlocks() const { return int(line_blocks_.size()); }
     auto LineProfile() const { return line_profile_; }
     int BandedLineBlocks() const { return banded_lines_; }
+    std::vector<std::vector<int>> LinePartitions() const {
+        std::vector<std::vector<int>> result;
+        for (const auto& block : line_blocks_) result.push_back(block.nodes);
+        return result;
+    }
 
     // Diagnostic hook for checking the same factor and apply kernels as the smoother.
     static auto ProbeTridiagonalLine(const std::vector<double>& diag,
                                     const std::vector<double>& off,
                                     const std::vector<double>& rhs) {
         const size_t n=diag.size();
-        if (n == 0 || n > 256 || off.size()!=n || rhs.size()!=n || off.front()!=0)
+        if (n == 0 || n > size_t(kLineCapacity) || off.size()!=n || rhs.size()!=n || off.front()!=0)
             throw std::invalid_argument("invalid tridiagonal diagnostic dimensions");
         Matrix<double> matrix(n,n);
         matrix=0.0;
@@ -774,6 +789,8 @@ private:
     std::vector<LineBlock> line_blocks_;
     std::vector<int> line_id_;
     double line_weight_ = 0.5;
+    int line_max_ = 256;
+    bool line_rank_ties_ = false;
     std::array<double,4> line_profile_{};
     int banded_lines_ = 0;
     bool constant_nullspace_ = false;
@@ -1559,8 +1576,17 @@ private:
                 if (i < j) links.push_back({i,j,-vals[k]});
             }
         }
+        if (line_rank_ties_ && int(pmis_rank_.size()) != n)
+            throw std::invalid_argument("line rank ties require PMIS ranks for every node");
+        const auto tie_key=[&](const Link& l) {
+            const int ra=pmis_rank_[l.a], rb=pmis_rank_[l.b];
+            return std::make_pair(std::min(ra,rb),std::max(ra,rb));
+        };
         std::stable_sort(links.begin(), links.end(),
-                         [](const Link& a,const Link& b) { return a.weight > b.weight; });
+                         [&](const Link& a,const Link& b) {
+                             if (a.weight != b.weight || !line_rank_ties_) return a.weight > b.weight;
+                             return tie_key(a) < tie_key(b);
+                         });
         std::vector<int> parent(n), degree(n), size(n,1);
         std::vector<std::array<int,2>> path(n,{-1,-1});
         for (int i = 0; i < n; ++i) parent[i]=i;
@@ -1576,7 +1602,7 @@ private:
                 w < 0.6 * std::max(strongest[a][0], strongest[b][0]) ||
                 w <= 1.5 * std::max(strongest[a][2], strongest[b][2])) continue;
             const int ra=root(a), rb=root(b);
-            if (ra == rb || size[ra]+size[rb] > 256) continue;
+            if (ra == rb || size[ra]+size[rb] > line_max_) continue;
             parent[rb]=ra;
             size[ra]+=size[rb];
             path[a][degree[a]++]=b;
@@ -1706,7 +1732,7 @@ private:
             const auto& block=line_blocks_[bidx];
             const size_t n=block.nodes.size();
             if (!block.pivots.empty()) {
-                std::array<double,256> work;
+                std::array<double,kLineCapacity> work;
                 for (size_t i=0; i<n; ++i) work[i]=r[block.nodes[i]];
                 SolvePositiveLine(block,work.data());
                 for (size_t i=0; i<n; ++i) {
