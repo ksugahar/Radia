@@ -168,7 +168,8 @@ Mx amg(const ngla::CompactAMG& a) {
     });return result;
 }
 Mx snapshot(const ngla::HypreBasedAMS& a) {
-    auto out=structure({"schema","A","l1","cycle_type","num_smooth","correction_weight","beta_zero","free","spaces"});
+    auto out=structure({"schema","A","l1","cycle_type","num_smooth","correction_weight","beta_zero","reuse_hierarchy","free","spaces"});
+    put(out.get(),"reuse_hierarchy",own(mxCreateLogicalScalar(a.GetReuseHierarchy())));
     put(out.get(),"schema",text("radia.ams-accelerator.v1"));put(out.get(),"A",csr(a.GetAbc()));
     auto& l1=a.GetL1Norms();put(out.get(),"l1",mxvector(l1.data(),l1.size(),mxDOUBLE_CLASS));
     put(out.get(),"cycle_type",number(a.GetCycleType()));put(out.get(),"num_smooth",number(a.GetNumSmooth()));
@@ -189,9 +190,18 @@ Mx snapshot(const ngla::HypreBasedAMS& a) {
 }
 // This entry is linked into the CUDA gateway, never distributed as CPU MEX.
 void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
-    if((nrhs!=3&&nrhs!=4)||nlhs!=2)throw std::runtime_error("[snapshot,info]=radia_cuda_ams('setup',model,threads[,gpu_generation])");
-    if(nrhs==4&&!mxIsLogicalScalar(input[3]))throw std::runtime_error("Logical gpu_generation required");
-    const bool gpu_generation=nrhs==4&&mxIsLogicalScalarTrue(input[3]);
+    if(nrhs<3||nrhs>6||nlhs!=2)throw std::runtime_error(
+        "[snapshot,info]=radia_cuda_ams('setup',model,threads[,gpu_generation[,reuse_hierarchy[,cpu_update_values]]])");
+    if(nrhs>=4&&!mxIsLogicalScalar(input[3]))throw std::runtime_error("Logical gpu_generation required");
+    if(nrhs>=5&&!mxIsLogicalScalar(input[4]))throw std::runtime_error("Logical reuse_hierarchy required");
+    const bool gpu_generation=nrhs>=4&&mxIsLogicalScalarTrue(input[3]);
+    const bool reuse_hierarchy=nrhs>=5&&mxIsLogicalScalarTrue(input[4]);
+    // reuse_hierarchy builds its products with the native Galerkin pass; the CUDA
+    // generation callback only serves the restrict path.
+    if(gpu_generation&&reuse_hierarchy)throw std::runtime_error("gpu_generation and reuse_hierarchy are exclusive");
+    // CPU oracle for the device refresh: HypreBasedAMS::Update with new values on
+    // the unchanged pattern, exported as the refreshed snapshot.
+    if(nrhs==6&&!reuse_hierarchy)throw std::runtime_error("cpu_update_values requires reuse_hierarchy");
     const mxArray* model=input[1];
     if(word(field(model,"schema"))!="radia.ams-native-input.v1")throw std::runtime_error("Unsupported input schema");
     int threads=dimension(input[2]);
@@ -217,7 +227,16 @@ void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
         double cycle_value=scalar(field(model,"cycle"));if(cycle_value!=1&&cycle_value!=7)throw std::runtime_error("Unsupported AMS cycle");
         GPUGeneration gpu(gpu_generation);
         auto start=std::chrono::steady_clock::now();
-        ngla::HypreBasedAMS ams(a,g,free,coords[0],coords[1],coords[2],int(cycle_value));
+        ngla::HypreBasedAMS ams(a,g,free,coords[0],coords[1],coords[2],int(cycle_value),
+                                1,0.25,0,1.0,0,false,reuse_hierarchy);
+        if(nrhs==6){
+            auto* update=values<double>(input[5],mxDOUBLE_CLASS,a->NZE());
+            auto next=std::make_shared<ngla::SparseMatrix<double>>(*a);
+            auto target=next->AsVector().FVDouble();
+            for(size_t k=0;k<a->NZE();++k){if(!std::isfinite(update[k]))throw std::runtime_error("Nonfinite cpu_update_values");target[k]=update[k];}
+            ams.Update(next);
+            if(ams.GetHierarchyRefreshes()!=1)throw std::runtime_error("CPU AMS update did not refresh the frozen hierarchy");
+        }
         double setup_s=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
         start=std::chrono::steady_clock::now();auto result=snapshot(ams);
         double export_s=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();

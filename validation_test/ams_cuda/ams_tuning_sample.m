@@ -6,12 +6,12 @@ addpath(matlabPath);addpath(binaryPath,'-begin');g=gpuDevice;wait(g);
 initial=radia_cuda_ams('resident_status');labels=["back","front","left","right","top","bottom"];
 before=g.AvailableMemory;timer=tic;
 [nonlinear,nonlinearInfo]=radia.gpu.solveHCurl(fullfile(job,'model.vol'),labels, ...
-    Gamma=4,CurrentDensity=[20 0 0],SetupThreads=1,LinearTolerance=1e-12,ReturnOnGPU=false);
+    Gamma=4,CurrentDensity=[20 0 0],LinearTolerance=1e-12,ReturnOnGPU=false);
 wait(g);nonlinearSeconds=toc(timer);timer=tic;
 [linear,linearInfo]=radia.gpu.solveHCurl(fullfile(job,'model.vol'),labels, ...
-    Gamma=0,CurrentDensity=[1 0 0],SetupThreads=1,LinearTolerance=1e-12,ReturnOnGPU=false);
+    Gamma=0,CurrentDensity=[1 0 0],LinearTolerance=1e-12,ReturnOnGPU=false);
 wait(g);linearSeconds=toc(timer);timer=tic;
-system=radia.gpu.HCurlSystem(fullfile(job,'model.vol'),labels,SetupThreads=1);
+system=radia.gpu.HCurlSystem(fullfile(job,'model.vol'),labels);
 clean=onCleanup(@()delete(system));wait(g);preparedSeconds=toc(timer);
 retainedBefore=g.AvailableMemory;scales=[1 2 .5 1 0 1];reuse=zeros(numel(linear),numel(scales));
 reuseSeconds=zeros(numel(scales),1);reuseInfo=cell(numel(scales),1);

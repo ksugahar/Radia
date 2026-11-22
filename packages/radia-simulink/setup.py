@@ -163,7 +163,7 @@ class build_py(_build_py):
         (package/'ic-build.json').write_text(json.dumps(public_ic,indent=2)+'\n')
         shutil.copy2(ams_binary, staged / ams_binary.name)
         expected.add("matlab/" + ams_binary.name)
-        for name in ("readAMSExchange.m", "amsPCG.m"):
+        for name in ("readAMSExchange.m",):
             target = staged / "+radia/+gpu" / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(PACKAGE / "matlab/+radia/+gpu" / name, target)

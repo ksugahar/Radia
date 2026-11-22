@@ -58,15 +58,6 @@
       "cpu_fallback": false
     },
     {
-      "id": "ams-experimental",
-      "scope": "Experimental real FP64 lowest-order HCurl AMS cycles 1/7; MATLAB-owned native setup and CUDA application/PCG. Not ICCG or HDiv-MMM certification.",
-      "source": "packages/radia-simulink/native/radia_cuda_ams.cu",
-      "matlab": "packages/radia-simulink/matlab/+radia/+gpu/prepareAMS.m",
-      "validation": "validation_test/ams_cuda/native_setup_validation.py",
-      "cpu_reference": "Python/pybind11 shared HypreBasedAMS, independent solve and true-residual validation",
-      "cpu_fallback": false
-    },
-    {
       "id": "native-hcurl-newton-ams",
       "scope": "Experimental affine tetrahedral lowest-order HCurl assembly and positive-gauge nonlinear solve; explicit homogeneous coefficients",
       "source": "packages/radia-simulink/native/ams_fem.cuh",

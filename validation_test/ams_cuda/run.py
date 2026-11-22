@@ -63,6 +63,9 @@ def main(args):
         'execution_mode':'cpu-only' if args.cpu_only else 'cpu-gpu-parity','accepted':False}
     if not args.cpu_only:
         record['gpu_binary_sha256']=file_sha256(gpu_dir/'radia_cuda_ams.mexw64')
+        oracle=binary/'radia_cuda_ams_validation.mexw64'
+        if file_sha256(oracle)!=record['build']['sha256']['build-ams-cuda/radia_cuda_ams_validation.mexw64']:
+            raise RuntimeError('AMS validation MEX hash mismatch')
     result_path=out/'result.json'
     eng=None
     try:
@@ -75,7 +78,7 @@ def main(args):
                 str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
             record['versions']['matlabengine']=md.version('matlabengine')
             timer=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
-            eng.addpath(str(Path(__file__).parent),nargout=0)
+            eng.addpath(str(Path(__file__).parent),str(binary),nargout=0)
         for h in args.maxh:
             for cycle in (1,7):
                 print(f'AMS maxh={h} cycle={cycle}',flush=True)

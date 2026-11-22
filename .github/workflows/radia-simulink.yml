@@ -14,6 +14,12 @@ on:
       - 'src/core/gpu/resident_amg_host.hpp'
       - 'src/core/gpu/resident_amg_python.cpp'
       - 'src/core/gpu/ams_core.cuh'
+      - 'src/core/gpu/ams_refresh.cuh'
+      - 'src/core/gpu/fem/fem_amg.cuh'
+      - 'src/core/gpu/fem/fem_ams.cuh'
+      - 'src/core/gpu/fem/fem_api.hpp'
+      - 'src/core/gpu/fem/fem_device.cuh'
+      - 'src/core/gpu/fem/fem_krylov.cuh'
       - 'src/core/gpu/snapshot.hpp'
       - 'validation_test/radia_simulink/**/*.py'
       - 'validation_test/radia_simulink/**/*.m'
@@ -146,6 +152,12 @@ on:
       - 'src/core/gpu/resident_amg_host.hpp'
       - 'src/core/gpu/resident_amg_python.cpp'
       - 'src/core/gpu/ams_core.cuh'
+      - 'src/core/gpu/ams_refresh.cuh'
+      - 'src/core/gpu/fem/fem_amg.cuh'
+      - 'src/core/gpu/fem/fem_ams.cuh'
+      - 'src/core/gpu/fem/fem_api.hpp'
+      - 'src/core/gpu/fem/fem_device.cuh'
+      - 'src/core/gpu/fem/fem_krylov.cuh'
       - 'src/core/gpu/snapshot.hpp'
       - 'validation_test/radia_simulink/**/*.py'
       - 'validation_test/radia_simulink/**/*.m'
@@ -374,6 +386,11 @@ jobs:
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
           & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The Python GPU build links the locked fork SDK, not the public FE pins.
+          & $python -I tools/ci_fork_wheels.py install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Python GPU calls admit only the exact pip CUDA runtime named in the
           # radia metadata. The checkout is imported via PYTHONPATH; only its
           # PEP 517 metadata is registered in this run-local venv (no build).
@@ -418,7 +435,7 @@ jobs:
         run: |
           & ./Build.ps1 -CudaMexOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
+          & ./Build.ps1 -AmsCudaOnly -AmsValidationOracle -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $projectionStart = [DateTime]::UtcNow
           & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance

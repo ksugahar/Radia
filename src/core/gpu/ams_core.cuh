@@ -126,10 +126,10 @@ struct Space {
     void add(const double* residual,double alpha,double* output){pt.mult(residual,levels[0]->b.p);cycle(0);p.add(levels[0]->x.p,alpha,output);}
 };
 struct AMS {
-    CSR a;const double* l1;const int* free;int smooth,cycle,gradient;double omega;
+    CSR a;const double* l1;const int* free;int smooth,cycle,gradient;double omega;bool reuse;
     std::vector<std::unique_ptr<Space>> spaces;Buffer b,x,r,tmp;
     AMS(const Node& v,Flag& validation):a(v.at("A"),validation),smooth(v.at("num_smooth").integer()),cycle(v.at("cycle_type").integer()),
-        gradient(0),omega(v.at("correction_weight").real()),b(a.n),x(a.n),r(a.n),tmp(a.n){
+        gradient(0),omega(v.at("correction_weight").real()),reuse(v.at("reuse_hierarchy").flag()),b(a.n),x(a.n),r(a.n),tmp(a.n){
         if(v.at("schema").string()!="radia.ams-accelerator.v1"||a.n!=a.m||smooth<1||(cycle!=1&&cycle!=7))throw std::runtime_error("unsupported AMS snapshot");
         gradient=!v.at("beta_zero").flag();
         finite_vec(validation,v.at("l1"),a.n,l1,true);free=v.at("free").data<int>(Node::integers,a.n);

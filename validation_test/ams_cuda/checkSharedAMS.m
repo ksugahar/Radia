@@ -4,10 +4,10 @@ assert(repeats>=100 && repeats==fix(repeats));addpath(binaryPath);addpath(matlab
 g=gpuDevice();wait(g);assert(g.AvailableMemory>=32*1024^3);
 process=System.Diagnostics.Process.GetCurrentProcess();processCleanup=onCleanup(@()process.Dispose());
 assert(~isfile(fullfile(out,'memory-samples.jsonl')));
-initial=radia_cuda_ams('resident_status');s=radia.gpu.readAMSExchange(fullfile(out,'input.h5'));
-total=tic;setupTimer=tic;[hierarchy,setup]=radia.gpu.prepareAMS(s.model,SetupThreads=1);
+initial=radia_cuda_ams_validation('resident_status');s=radia.gpu.readAMSExchange(fullfile(out,'input.h5'));
+total=tic;setupTimer=tic;[hierarchy,setup]=prepareAMS(s.model,SetupThreads=1);
 levels=cellfun(@(space)numel(space.levels),hierarchy.spaces);assert(max(levels)>=2,'Multilevel AMG not exercised');
-b=gpuArray(s.rhs(:));ctx=radia.gpu.AMSContext(hierarchy);cleanup=onCleanup(@()delete(ctx));wait(g);setupSeconds=toc(setupTimer);
+b=gpuArray(s.rhs(:));ctx=AMSContext(hierarchy);cleanup=onCleanup(@()delete(ctx));wait(g);setupSeconds=toc(setupTimer);
 solutions=zeros(numel(s.rhs),2);infos=cell(1,2);seconds=zeros(1,2);
 for j=1:2
     timer=tic;[x,info]=ctx.solve(hierarchy.A,b,1e-11,4000,j==2);wait(g);seconds(j)=toc(timer);
@@ -30,7 +30,7 @@ radia.gpu.writeHDivH5(fullfile(out,'solutions.h5'), ...
     struct('units','SI','labels',{{'unit-cube'}},'warmup',5,'measured',repeats));
 assert(fit(1)<=64*1024 && delta<=1024^2,'Host memory plateau failed');
 assert(max(device(end-24:end))-min(device(end-24:end))<=1024^2,'Device plateau failed');
-clear cleanup;clear hierarchy b;wait(g);assert(isequal(initial,radia_cuda_ams('resident_status')),'Native owners not restored');
+clear cleanup;clear hierarchy b;wait(g);assert(isequal(initial,radia_cuda_ams_validation('resident_status')),'Native owners not restored');
 result=struct('accepted',true,'setup',setup,'setup_and_upload_seconds',setupSeconds,'solve_seconds',seconds,'total_seconds',toc(total), ...
  'infos',{infos},'levels',levels,'warmup_solves',5,'repeat_solves',repeats,'host_samples',host,'device_free_samples',device, ...
  'private_counter','Windows Process.PrivateMemorySize64','final25_host_slope',fit(1),'final25_host_delta',delta,'owners_restored',true);

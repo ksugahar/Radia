@@ -17,7 +17,7 @@ import sys
 import sysconfig
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = ('_gpu_csr', '_gpu_resident_amg', '_gpu_ams', '_hdiv_cuda')
+MODULES = ('_gpu_csr', '_gpu_resident_amg', '_gpu_ams', '_hdiv_cuda', '_fem_cuda')
 
 
 def sha(path):

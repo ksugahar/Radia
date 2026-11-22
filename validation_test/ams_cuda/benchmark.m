@@ -8,7 +8,7 @@ addpath(matlabDir);
 readTimer=tic;d=radia.gpu.readAMSExchange(inputPath);readSeconds=toc(readTimer);
 nativeSetupSeconds=0;nativeSetupInfo=struct();hierarchyMaxRelativeDifference=0;
 if nargin>=5
-    timer=tic;[native,nativeSetupInfo]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,Upload=false,SetupOnGPU=setupOnGPU);nativeSetupSeconds=toc(timer);
+    timer=tic;[native,nativeSetupInfo]=prepareAMS(d.model,SetupThreads=setupThreads,Upload=false,SetupOnGPU=setupOnGPU);nativeSetupSeconds=toc(timer);
     hierarchyMaxRelativeDifference=compare_hierarchy(d.snapshot,native);d.snapshot=native;
 end
 g=gpuDevice();
@@ -21,22 +21,22 @@ rhs=gpuArray(d.rhs);
 wait(g);
 uploadSeconds=toc(transfer);
 wait(g); timer=tic;
-[first,info]=radia_cuda_ams(s,rhs,1e-9,2000,false,useGraph);
+[first,info]=radia_cuda_ams_validation(s,rhs,1e-9,2000,false,useGraph);
 wait(g); coldSeconds=toc(timer);
 probeErrors=zeros(size(d.probes,1),1);
 for k=1:size(d.probes,1)
-    [actual,~]=radia_cuda_ams(s,gpuArray(d.probes(k,:)'),1e-9,2000,true);
+    [actual,~]=radia_cuda_ams_validation(s,gpuArray(d.probes(k,:)'),1e-9,2000,true);
     actual=gather(actual);
     expected=d.expected(k,:)';
     probeErrors(k)=norm(actual-expected)/max(norm(expected),realmin);
 end
 times=zeros(5,1);
 for k=1:5
-    timer=tic; [x,info]=radia_cuda_ams(s,rhs,1e-9,2000,false,useGraph);wait(g);times(k)=toc(timer);
+    timer=tic; [x,info]=radia_cuda_ams_validation(s,rhs,1e-9,2000,false,useGraph);wait(g);times(k)=toc(timer);
 end
 timer=tic;
 s2=upload(d.snapshot,'');b2=gpuArray(d.rhs);
-[x2,~]=radia_cuda_ams(s2,b2,1e-9,2000,false,useGraph);
+[x2,~]=radia_cuda_ams_validation(s2,b2,1e-9,2000,false,useGraph);
 inclusiveSolution=gather(x2);wait(g);inclusiveSeconds=toc(timer);
 solution=gather(x);
 memoryBytes=before-g.AvailableMemory;
@@ -46,9 +46,9 @@ memoryBytes=before-g.AvailableMemory;
 zeroRhs=zeros(size(rhs),'like',rhs);
 zeroRhsTimes=zeros(6,1);applyOnlyTimes=zeros(6,1);
 for k=1:6
-    timer=tic;[z,zeroInfo]=radia_cuda_ams(s,zeroRhs,1e-9,2000,false,useGraph);wait(g);zeroRhsTimes(k)=toc(timer);
+    timer=tic;[z,zeroInfo]=radia_cuda_ams_validation(s,zeroRhs,1e-9,2000,false,useGraph);wait(g);zeroRhsTimes(k)=toc(timer);
     assert(zeroInfo.iterations==0,'Zero RHS unexpectedly ran PCG iterations');
-    timer=tic;[applied,~]=radia_cuda_ams(s,rhs,1e-9,2000,true);wait(g);applyOnlyTimes(k)=toc(timer);
+    timer=tic;[applied,~]=radia_cuda_ams_validation(s,rhs,1e-9,2000,true);wait(g);applyOnlyTimes(k)=toc(timer);
 end
 zeroRhsWarmMedianSeconds=median(zeroRhsTimes(2:end));
 applyOnlyWarmMedianSeconds=median(applyOnlyTimes(2:end));
@@ -70,8 +70,8 @@ pipelineSeconds=NaN;pipelineMemoryBytes=NaN;pipelineSolution=[];pipelineSetup=st
 if nargin>=5
     clear s s2 rhs b2 x x2 first zeroRhs applied z;
     wait(g);pipelineBefore=g.AvailableMemory;timer=tic;
-    [pipelineHierarchy,pipelineSetup]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,SetupOnGPU=setupOnGPU);
-    [pipelineX,pipelineInfo]=radia.gpu.amsPCG(pipelineHierarchy,gpuArray(d.rhs),1e-9,2000,false,useGraph);
+    [pipelineHierarchy,pipelineSetup]=prepareAMS(d.model,SetupThreads=setupThreads,SetupOnGPU=setupOnGPU);
+    [pipelineX,pipelineInfo]=amsPCG(pipelineHierarchy,gpuArray(d.rhs),1e-9,2000,false,useGraph);
     pipelineSolution=gather(pipelineX);wait(g);pipelineSeconds=toc(timer);
     pipelineMemoryBytes=pipelineBefore-g.AvailableMemory;
 end
@@ -148,23 +148,23 @@ checks.wrong_rhs_shape=reject(@()invoke(s,b(1:end-1),1e-9,2000));
 checks.invalid_tolerance=reject(@()invoke(s,b,0,2000));
 bad=s;bad.l1(:)=realmin('double');largeRhs=realmax('double')*ones(size(b),'like',b);
 checks.apply_overflow=reject(@()invoke(bad,largeRhs,1e-9,2000,true));
-[applied,applyInfo]=radia_cuda_ams(s,b,1e-9,2000,true);
+[applied,applyInfo]=radia_cuda_ams_validation(s,b,1e-9,2000,true);
 checks.apply_status=all(isfinite(gather(applied))) && ~applyInfo.residual_checked ...
     && isnan(applyInfo.true_relative_residual);
 bad=s;bad.spaces{1}.levels{end}.coarse.order(1)=int32(s.A.rows);
 checks.invalid_coarse_order=reject(@()invoke(bad,b,1e-9,2000));
 bad=s;bad.spaces{1}.levels{end}.coarse.rowptr(end)=int32(-1);
 checks.invalid_coarse_rowptr=reject(@()invoke(bad,b,1e-9,2000));
-[z,info]=radia_cuda_ams(s,zeros(size(b),'like',b),1e-9,2000,false);
+[z,info]=radia_cuda_ams_validation(s,zeros(size(b),'like',b),1e-9,2000,false);
 checks.zero_rhs=gather(norm(z))==0 && info.iterations==0;
 clear radia_cuda_ams;
-[x,info]=radia_cuda_ams(s,b,1e-9,2000,false);
+[x,info]=radia_cuda_ams_validation(s,b,1e-9,2000,false);
 checks.clear_reload=all(isfinite(gather(x))) && info.residual_checked && info.true_relative_residual<=1e-9;
 assert(all(structfun(@(x)logical(x),checks)),'AMS gateway checks failed');
 end
 function invoke(s,b,tol,iterations,applyOnly)
 if nargin<5;applyOnly=false;end
-[~,~]=radia_cuda_ams(s,b,tol,iterations,applyOnly);
+[~,~]=radia_cuda_ams_validation(s,b,tol,iterations,applyOnly);
 end
 function yes=reject(f)
 yes=false;
@@ -210,5 +210,5 @@ checks.wrong_gradient_shape=reject(@()setup_invoke(bad,1));
 assert(all(structfun(@(x)x,checks)),'Native AMS input rejection failed');
 end
 function setup_invoke(model,threads)
-[~,~]=radia_cuda_ams('setup',model,threads);
+[~,~]=radia_cuda_ams_validation('setup',model,threads);
 end

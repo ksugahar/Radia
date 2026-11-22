@@ -3,7 +3,7 @@ function profile_ic(volPath,payload,icPath,output)
 addpath(payload);addpath(icPath,'-begin');g=gpuDevice;wait(g);
 labels=["back","front","left","right","top","bottom"];
 timer=tic;
-[~,fem,assembly]=radia.gpu.assembleHCurl(volPath,labels,Gamma=0);
+[fem,assembly]=radia.gpu.assembleHCurl(volPath,labels,Gamma=0);
 source=radia_cuda_ams('nonlinear_create',fem);
 sourceCleanup=onCleanup(@()radia_cuda_ams('nonlinear_release',source));
 [~,values,~]=radia_cuda_ams('nonlinear_evaluate',source,zeros(size(fem.rhs),'like',fem.rhs));

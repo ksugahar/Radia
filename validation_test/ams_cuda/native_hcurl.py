@@ -81,7 +81,7 @@ def main(args):
         if cpu_res>(1e-9 if args.gamma else 1e-10):raise RuntimeError('Independent CPU solve failed true residual')
         startup=time.perf_counter();engine=matlab.engine.start_matlab('-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
-        engine.addpath(str(Path(__file__).parent),nargout=0)
+        engine.addpath(str(Path(__file__).parent),str(root/'build-cuda-mex'),nargout=0)
         engine.native_hcurl(str(vol),str(root/'build-ams-cuda'),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),float(args.gamma),nargout=0)
         native=loadmat(out/'native.mat',simplify_cells=True);model=native['model']
         actual=decoded(model['A']);actualG=decoded(model['G'])
@@ -91,6 +91,12 @@ def main(args):
             solution_relative=relative(native['solution'],cpu),true_relative_residual=true_residual(native['solution']))
         if not np.array_equal(model['free'],free.astype(np.int32)):raise RuntimeError('Native free DOF mask differs')
         record.update(dofs=fes.ndof,elements=mesh.ne,csr_nonzeros=A.nnz,metrics=metrics,gpu=native['report'])
+        solver = native['report']['solver']
+        residency = solver['assembly']
+        if residency['matrix_h2d_bytes'] != 0 or residency['matrix_d2h_bytes'] != 0:
+            raise RuntimeError('HCurl Newton transferred CSR data')
+        if solver['hierarchy_builds'] != 1 or (args.gamma > 0 and solver['hierarchy_refreshes'] < 1):
+            raise RuntimeError('Expected one resident AMS build and a refresh for nonlinear Newton')
         if max(metrics[k] for k in ('matrix_relative','mass_relative','gradient_relative','rhs_relative'))>1e-12:raise RuntimeError('Independent FE assembly parity failed')
         if metrics['solution_relative']>1e-7 or metrics['true_relative_residual']>(1e-9 if args.gamma else 1e-10):raise RuntimeError('Independent AMS solution/residual parity failed')
         # Compare vector curls with a volume weighted RMS, never field magnitudes.
@@ -98,6 +104,18 @@ def main(args):
         diff=np.einsum('eac,ea->ec',curl,(native['solution']-cpu)[dofs]);base=np.einsum('eac,ea->ec',curl,cpu[dofs])
         metrics['B_relative_RMS']=float(np.sqrt(np.sum(volume[:,None]*diff**2)/np.sum(volume[:,None]*base**2)))
         if metrics['B_relative_RMS']>1e-7:raise RuntimeError('Independent vector field parity failed')
+        from scipy.sparse.linalg import spsolve
+        linear_cpu=spsolve(A[free][:,free],rhs[free])
+        linear_metrics={}
+        for key,scale in (('ams1',1),('ams2',.5),('ic1',1),('ic2',.5)):
+            x=native[key]
+            diff=relative(x[free],scale*linear_cpu)
+            residual=relative((A@x)[free],scale*rhs[free])
+            linear_metrics[key]={'relative_to_cpu':diff,'true_relative_residual':residual}
+            if diff>1e-7 or residual>1e-10:
+                raise RuntimeError(f'{key}: independent CPU linear parity failed: {linear_metrics[key]}')
+        record['linear_checks']=native['linearChecks']
+        record['linear_metrics']=linear_metrics
         record['accepted']=True
     except BaseException as error:record['error']=repr(error);raise
     finally:
@@ -107,7 +125,7 @@ def main(args):
             if isinstance(value,np.generic):return value.item()
             raise TypeError(type(value).__name__)
         (out/'result.json').write_text(json.dumps(record,indent=2,default=encode)+'\n',encoding='utf-8')
-        print(json.dumps({k:v for k,v in record.items() if k not in ('build','gpu')},indent=2),flush=True)
+        print(json.dumps({k:v for k,v in record.items() if k not in ('build','gpu')},indent=2,default=encode),flush=True)
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--maxh',type=float,default=.35);p.add_argument('--gamma',type=float,default=0);main(p.parse_args())

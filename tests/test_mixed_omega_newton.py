@@ -221,3 +221,14 @@ def test_matching_trace_rejects_a_missing_point_gauge(case):
     with pytest.raises(ValueError, match="requires a gauge"):
         run(case, order=2, condense_matching_trace=True, linear_solver='cg',
             dirichlet_bbbnd='missing')
+
+
+@pytest.mark.parametrize('options, message', [
+    ({'Backend': 'tpu'}, 'Backend must be'),
+    ({'Backend': 'gpu', 'condense_matching_trace': False, 'linear_solver': 'cg'}, 'needs condense_matching_trace'),
+    ({'Backend': 'gpu', 'condense_matching_trace': True, 'linear_solver': 'direct'}, 'needs condense_matching_trace'),
+])
+def test_device_backend_raises_instead_of_substituting_a_route(options, message):
+    with pytest.raises(ValueError, match=message):
+        solve(None, None, None, 1.0, (0.0, 0.0, 0.0), bh_table=None, nonlinear_materials=(), reduced_materials=(),
+              total_materials=(), interface_boundary='interface', **options)

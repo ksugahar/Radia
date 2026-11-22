@@ -25,7 +25,7 @@ HDIV = CORE / "hdiv"
 SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
            "csr_pcg_python_cuda.cu", "ams_amg_kernels.cuh", "resident_amg_host.hpp",
            "resident_amg_cuda.cu", "resident_amg_python.cpp", "snapshot.hpp",
-           "ams_core.cuh")
+           "ams_core.cuh", "ams_refresh.cuh")
 # Radia-only GPU inputs: not shared with the radia-simulink MEX builds.
 SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu", "peec_fin_host.hpp",
                             "peec_fin_python.cpp", "peec_fin_cuda.cu", "../peec_oriented_box.hpp")
@@ -33,6 +33,7 @@ COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
               ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
               ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
               ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"),
+              ("_fem_cuda", "fem/fem_python.cpp", "fem/fem_python_cuda.cu"),
               ("_peec_fin_cuda", "peec_fin_python.cpp", "peec_fin_cuda.cu"))
 
 
@@ -109,14 +110,25 @@ def windows_cuda_layout(cuda_root, matlab_root, nvcc_version):
     return flags, identity
 
 
-def headers():
+def verify_windows_fork():
+    from ci_fork_wheels import LOCK, verify_installed
+
+    lock = json.loads(LOCK.read_text(encoding="utf-8"))
+    verify_installed(lock)
+    return lock
+
+
+def headers(lock=None):
     # The installed NGSolve/Netgen ABI owns pybind headers.
     import netgen
     import ngsolve
     requirements = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
     for package in ("ngsolve", "netgen-mesher"):
         expected = next(r.split("==", 1)[1] for r in requirements if r.startswith(package + "=="))
-        if metadata.version(package) != expected:
+        actual = metadata.version(package)
+        if lock is not None:
+            actual = actual.split("+", 1)[0]
+        if actual != expected:
             raise RuntimeError(f"{package} must match project metadata: {expected}")
     candidates = {Path(netgen.__file__).resolve().parent / "include"}
     dist = metadata.distribution("netgen-mesher")
@@ -236,7 +248,8 @@ def main():
     nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
     cuda_sdk_flags, cuda_sdk_identity = (windows_cuda_layout(cuda, args.matlab_root, nvcc_version)
                                          if windows else ([], None))
-    include = headers()
+    lock = verify_windows_fork() if windows else None
+    include = headers(lock)
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
         raise RuntimeError("Build output must be outside the source checkout")
@@ -244,6 +257,8 @@ def main():
     source_hashes = {(CORE / name).resolve().relative_to(ROOT.resolve()).as_posix(): sha(CORE / name) for name in SOURCES}
     # HDiv sources have one owner and are also consumed by the MEX gateways.
     source_hashes.update(hdiv_source_hashes())
+    source_hashes.update({p.relative_to(ROOT).as_posix(): sha(p) for p in (CORE / "fem").rglob("*") if p.is_file()})
+    source_hashes["src/core/gpu/ams_amg_kernels.cuh"] = sha(CORE / "ams_amg_kernels.cuh")
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
     header_hashes = {p.relative_to(include).as_posix(): sha(p) for p in (include / "pybind11").rglob("*") if p.is_file()}
     commands = []
@@ -262,6 +277,8 @@ def main():
             cuda_command += ["-Xcompiler", "/MD"]
         if module == "_hdiv_cuda":
             cuda_command += ["--fmad=false", "-I" + str(ROOT / "src/core")]
+        if module == "_fem_cuda":
+            cuda_command += ["--fmad=false"]
         if not windows:
             cuda_command += ["-Xcompiler", "-fPIC"]
         execute(cuda_command, out, module + "-cuda", commands)
@@ -274,8 +291,10 @@ def main():
                        "/link", "/OUT:" + str(binary), "/IMPLIB:" + str(out / (module + ".lib")),
                        Path(sys.base_prefix) / "libs" / f"python{sys.version_info.major}{sys.version_info.minor}.lib",
                        cuda / "lib/x64/cudart.lib"]
-            if module in ("_gpu_resident_amg", "_gpu_ams"):
+            if module in ("_gpu_resident_amg", "_gpu_ams", "_fem_cuda"):
                 command += [cuda / "lib/x64/cublas.lib"]
+            if module == "_gpu_ams":
+                command += [cuda / "lib/x64/cusolver.lib"]
             if module == "_peec_fin_cuda":
                 command += [cuda / "lib/x64/cublas.lib", cuda / "lib/x64/cusolver.lib"]
         else:
@@ -288,8 +307,10 @@ def main():
             command = [args.host_compiler, "-shared", "-fPIC", "-O2", "-std=c++20", "-I" + str(include),
                        "-I" + sysconfig.get_path("include"), CORE / cpp, obj, "-o", binary,
                        libraries["libcudart.so.12"]["path"]]
-            if module in ("_gpu_resident_amg", "_gpu_ams"):
+            if module in ("_gpu_resident_amg", "_gpu_ams", "_fem_cuda"):
                 command += [libraries["libcublas.so.12"]["path"]]
+            if module == "_gpu_ams":
+                command += [libraries["libcusolver.so.11"]["path"]]
             if module == "_peec_fin_cuda":
                 command += [libraries["libcublas.so.12"]["path"], libraries["libcusolver.so.11"]["path"]]
         if module != "_hdiv_cuda":

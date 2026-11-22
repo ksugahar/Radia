@@ -6,22 +6,28 @@ classdef AMSContext < handle
     end
     methods
         function self=AMSContext(hierarchy)
-            self.NativeHandle=radia_cuda_ams('create',hierarchy);
+            self.NativeHandle=radia_cuda_ams_validation('create',hierarchy);
         end
         function update(self,hierarchy)
             assert(self.NativeHandle~=0,'radia:cuda:released','AMS context is released');
-            radia_cuda_ams('update',self.NativeHandle,hierarchy);
+            radia_cuda_ams_validation('update',self.NativeHandle,hierarchy);
+        end
+        function info=refresh(self,operator)
+            %REFRESH Recompute the hierarchy values on the GPU for operator (same fine pattern).
+            % Requires a ReuseHierarchy setup; coarsening and interpolation stay frozen.
+            assert(self.NativeHandle~=0,'radia:cuda:released','AMS context is released');
+            info=radia_cuda_ams_validation('refresh',self.NativeHandle,operator);
         end
         function [x,info]=solve(self,operator,rhs,tolerance,maxIterations,useGraph)
             if nargin<4;tolerance=1e-9;end
             if nargin<5;maxIterations=2000;end
             if nargin<6;useGraph=true;end
             assert(self.NativeHandle~=0,'radia:cuda:released','AMS context is released');
-            [x,info]=radia_cuda_ams('solve',self.NativeHandle,operator,rhs,tolerance,maxIterations,useGraph);
+            [x,info]=radia_cuda_ams_validation('solve',self.NativeHandle,operator,rhs,tolerance,maxIterations,useGraph);
         end
         function delete(self)
             if self.NativeHandle~=0
-                radia_cuda_ams('release',self.NativeHandle);
+                radia_cuda_ams_validation('release',self.NativeHandle);
                 self.NativeHandle=uint64(0);
             end
         end

@@ -2,14 +2,16 @@ function [hierarchy,info] = prepareAMS(model,options)
 %PREPAREAMS Construct AMS within mexcuda; no Python adapter or snapshot input.
 % model: radia.ams-native-input.v1, A/G int32 CSR, coordinates (vertices x 3),
 % free int32 mask, and cycle (1 or 7). NGSolve owns FE orientation/assembly.
-% By default returns caller-owned GPU arrays ready for radia.gpu.amsPCG.
+% By default returns caller-owned GPU arrays ready for amsPCG.
 arguments
     model (1,1) struct
     options.SetupThreads (1,1) double {mustBeInteger,mustBeInRange(options.SetupThreads,1,64)} = 1
     options.Upload (1,1) logical = true
     options.SetupOnGPU (1,1) logical = true
+    % Frozen coarsening/interpolation that AMSContext.refresh updates on the device.
+    options.ReuseHierarchy (1,1) logical = false
 end
-[hierarchy,info]=radia_cuda_ams('setup',model,options.SetupThreads,options.SetupOnGPU);
+[hierarchy,info]=radia_cuda_ams_validation('setup',model,options.SetupThreads,options.SetupOnGPU,options.ReuseHierarchy);
 info.upload_seconds=0;
 if options.Upload
     device=gpuDevice();

@@ -15,8 +15,8 @@ if nargin<6;useGraph=false;end
 assert(exist('radia_cuda_ams','file')==3,'radia:gpu:missingAMS', ...
     'AMS CUDA MEX is missing; build/install the matching radia-simulink artifact');
 if nargin>=7
-    [solution,info]=radia_cuda_ams(snapshot,rhs,tolerance,maxIterations,applyOnly,useGraph,currentOperator);
+    [solution,info]=radia_cuda_ams_validation(snapshot,rhs,tolerance,maxIterations,applyOnly,useGraph,currentOperator);
 else
-    [solution,info]=radia_cuda_ams(snapshot,rhs,tolerance,maxIterations,applyOnly,useGraph);
+    [solution,info]=radia_cuda_ams_validation(snapshot,rhs,tolerance,maxIterations,applyOnly,useGraph);
 end
 end

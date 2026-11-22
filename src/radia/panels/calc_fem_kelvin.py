@@ -167,6 +167,30 @@ def _kelvin_gradient_gauge(fes, mesh):
     return free, count
 
 
+def _solve_device(fes, mesh, nu_dict, reg, shift_eps, omega, robin, sibc_bnd, rhs_vec, solver, tolerance, max_iterations):
+    """The same system built and solved on the device: the form, AMS or BDDC, and COCR.
+
+    NGSolve supplies DOF numbers, reference tabulations and the assembled right-hand
+    side; no CPU matrix exists on this path. The auxiliary form is that of the CPU AMS
+    route, including its |omega| air mass; it conditions the solve only.
+    """
+    from radia import fem_gpu
+
+    stiff = {}
+    for name, value in nu_dict.items():
+        if not isinstance(value, (int, float)):
+            raise ValueError(f"the device route needs a constant reluctivity; material {name} has a spatial coefficient")
+        stiff[name] = float(value)
+    trace = {sibc_bnd: complex(robin)} if sibc_bnd else {}
+    coefficients = fem_gpu.Coefficients(
+        stiff=stiff, stiff_aux=stiff, mass=reg * NU_0, mass_aux=(shift_eps + abs(omega)) * NU_0,
+        trace={name: value.real for name, value in trace.items()}, trace_im={name: value.imag for name, value in trace.items()},
+        trace_aux={name: abs(value) for name, value in trace.items()})
+    system = fem_gpu.DeviceSystem(fes, coefficients, bonus=(4, 0, 0))
+    system.setup(solver, cycles=BDDC_AMS_COARSE_CYCLES if solver == "bddc" else None)
+    return system.solve(np.array(rhs_vec.FV().NumPy(), copy=True), tolerance=tolerance, max_iterations=max_iterations)
+
+
 def _element_line_quadrature(mesh, start, direction, nodes, weights, *, max_evaluations=100000):
     """Partition a filament at element transitions before Gaussian integration.
 
@@ -219,7 +243,7 @@ def solve_fem(vol_file="", fes_order=1,
               peec_nhinc=1,
               peec_n_peri=0,
               esim_per_panel=False,
-              filaments=None, esim_cell_controls=None):
+              filaments=None, esim_cell_controls=None, Backend="cpu"):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -255,6 +279,8 @@ def solve_fem(vol_file="", fes_order=1,
     _validate_mode_contracts(
         solver=solver, formulation=formulation, max_iter=max_iter,
         esim_per_panel=esim_per_panel)
+    if Backend not in ("cpu", "gpu"):
+        raise ValueError(f"Backend must be 'cpu' or 'gpu', got {Backend!r}")
     if mat is None:
         mat = EMMaterial.from_name("steel")
     sigma = mat.sigma
@@ -361,6 +387,8 @@ def solve_fem(vol_file="", fes_order=1,
             solver = "ams" if fes_order == 1 else "bddc"
         _log(f"SOLVER:auto -> {solver} (fes_order={fes_order}, periodic "
              f"Kelvin={bool(has_kelvin_periodic)})")
+    if Backend == "gpu" and (solver not in ("ams", "bddc") or formulation != "total"):
+        raise ValueError(f"Backend='gpu' builds AMS or BDDC on the device for the total formulation; got solver={solver!r}, formulation={formulation!r}")
     _validate_mode_contracts(
         solver=solver, formulation=formulation, max_iter=max_iter,
         esim_per_panel=esim_per_panel,
@@ -748,6 +776,7 @@ def solve_fem(vol_file="", fes_order=1,
         A_wp = 4 * math.pi * half_thickness ** 2
 
     # Karl iteration
+    device_report = None
     gfu = GridFunction(fes)
     history = []
     karl_converged = False
@@ -823,7 +852,14 @@ def solve_fem(vol_file="", fes_order=1,
         krylov_maxiter = None
 
         # Solver-specific setup
-        if solver == "ams":
+        if Backend == "gpu":
+            device_report = _solve_device(
+                fes, mesh, nu_dict, reg, shift_eps, omega, robin, sibc_bnd if has_wp else "", rhs_vec, solver,
+                1e-8 if solver == "ams" else 1e-10, 500)
+            gfu.vec.FV().NumPy()[:] = device_report.pop("solution")
+            krylov_iterations.append(int(device_report["iterations"]))
+            _log(f"DEVICE:{solver} COCR iters={device_report['iterations']}")
+        elif solver == "ams":
             # Compact AMS preconditioner + COCR solver (AC eddy-current).
             # Reference: validation_test/sparsesolv/hiruma/bench_compact_ams.py
             #
@@ -1036,74 +1072,79 @@ def solve_fem(vol_file="", fes_order=1,
                         direct_free, inverse="sparsecholesky")
                     gfu.vec.data = direct_inverse * rhs_vec
 
-        # Every route is checked on the assembled system. Reaching the limit
-        # is an error unless the true residual already meets the contract;
-        # iterative refinement (the same preconditioned solve applied to the
-        # true residual) is allowed for a bounded number of steps, each of
-        # which must converge, and all steps are recorded.
-        solver_label = {"ams": "AMS", "bddc": "BDDC+AMS", "iccg": "ICCG"}.get(
-            solver, "SparseCholesky")
-        residual = rhs_vec.CreateVector()
-        residual.data = rhs_vec - a_bf.mat * gfu.vec
-        free = np.asarray(list(fes.FreeDofs()), dtype=bool)
-        rhs_free_norm = max(float(np.linalg.norm(rhs_vec.FV().NumPy()[free])),
-                            1e-300)
-        relative_residual = float(
-            np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
-        if solver in {"ams", "bddc"}:
-            if (krylov_iterations[-1] >= krylov_maxiter
-                    and not (np.isfinite(relative_residual)
-                             and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT)):
-                return {"error": (
-                    f"{solver_label}: COCR did not converge in "
-                    f"{krylov_maxiter} iterations (true relative residual "
-                    f"{relative_residual:.3e})")}
-            while (np.isfinite(relative_residual)
-                   and relative_residual > LINEAR_TRUE_RESIDUAL_LIMIT
-                   and len(residual_history) < MAX_RESIDUAL_CORRECTIONS):
-                residual_history.append(relative_residual)
-                correction_norm = float(
-                    np.linalg.norm(residual.FV().NumPy()[free]))
-                correction_rhs = rhs_vec.CreateVector()
-                correction_rhs.data = (1.0 / correction_norm) * residual
-                with TaskManager():
-                    gfu.vec.data += correction_norm * (cocr * correction_rhs)
-                krylov_iterations.append(int(cocr.iterations))
-                residual.data = rhs_vec - a_bf.mat * gfu.vec
-                relative_residual = float(
-                    np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
+        if Backend == "gpu":
+            # The device solve raises above the limit; its true residual is computed on the device form.
+            relative_residual = float(device_report["true_residual"])
+            solver_label = f"Device {solver}"
+        else:
+            # Every route is checked on the assembled system. Reaching the limit
+            # is an error unless the true residual already meets the contract;
+            # iterative refinement (the same preconditioned solve applied to the
+            # true residual) is allowed for a bounded number of steps, each of
+            # which must converge, and all steps are recorded.
+            solver_label = {"ams": "AMS", "bddc": "BDDC+AMS", "iccg": "ICCG"}.get(
+                solver, "SparseCholesky")
+            residual = rhs_vec.CreateVector()
+            residual.data = rhs_vec - a_bf.mat * gfu.vec
+            free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+            rhs_free_norm = max(float(np.linalg.norm(rhs_vec.FV().NumPy()[free])),
+                                1e-300)
+            relative_residual = float(
+                np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
+            if solver in {"ams", "bddc"}:
                 if (krylov_iterations[-1] >= krylov_maxiter
                         and not (np.isfinite(relative_residual)
                                  and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT)):
                     return {"error": (
-                        f"{solver_label}: residual correction "
-                        f"{len(residual_history)} did not converge in "
-                        f"{krylov_maxiter} iterations")}
+                        f"{solver_label}: COCR did not converge in "
+                        f"{krylov_maxiter} iterations (true relative residual "
+                        f"{relative_residual:.3e})")}
+                while (np.isfinite(relative_residual)
+                       and relative_residual > LINEAR_TRUE_RESIDUAL_LIMIT
+                       and len(residual_history) < MAX_RESIDUAL_CORRECTIONS):
+                    residual_history.append(relative_residual)
+                    correction_norm = float(
+                        np.linalg.norm(residual.FV().NumPy()[free]))
+                    correction_rhs = rhs_vec.CreateVector()
+                    correction_rhs.data = (1.0 / correction_norm) * residual
+                    with TaskManager():
+                        gfu.vec.data += correction_norm * (cocr * correction_rhs)
+                    krylov_iterations.append(int(cocr.iterations))
+                    residual.data = rhs_vec - a_bf.mat * gfu.vec
+                    relative_residual = float(
+                        np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
+                    if (krylov_iterations[-1] >= krylov_maxiter
+                            and not (np.isfinite(relative_residual)
+                                     and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT)):
+                        return {"error": (
+                            f"{solver_label}: residual correction "
+                            f"{len(residual_history)} did not converge in "
+                            f"{krylov_maxiter} iterations")}
 
-                _log(f"{solver_label} true-residual correction "
-                     f"{len(residual_history)}: {relative_residual:.3e}")
-        if solver == "sparsecholesky":
-            # Improve the same factorization's roundoff error without changing
-            # the operator, gauge or acceptance threshold (also for scattered A).
-            while (np.isfinite(relative_residual)
-                   and relative_residual > LINEAR_TRUE_RESIDUAL_LIMIT
-                   and len(residual_history) < MAX_RESIDUAL_CORRECTIONS):
-                residual_history.append(relative_residual)
-                with TaskManager():
-                    gfu.vec.data += direct_inverse * residual
-                residual.data = rhs_vec - a_bf.mat * gfu.vec
-                relative_residual = float(
-                    np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
-        if not (np.isfinite(relative_residual)
-                and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT):
-            return {"error": (
-                f"{solver_label}: true relative residual "
-                f"{relative_residual:.3e} exceeds "
-                f"{LINEAR_TRUE_RESIDUAL_LIMIT:.0e} after "
-                f"{len(residual_history)} corrections")}
-        _log(f"{solver_label}:true relative residual={relative_residual:.3e} "
-             f"(iterations {krylov_iterations}, corrections "
-             f"{len(residual_history)})")
+                    _log(f"{solver_label} true-residual correction "
+                         f"{len(residual_history)}: {relative_residual:.3e}")
+            if solver == "sparsecholesky":
+                # Improve the same factorization's roundoff error without changing
+                # the operator, gauge or acceptance threshold (also for scattered A).
+                while (np.isfinite(relative_residual)
+                       and relative_residual > LINEAR_TRUE_RESIDUAL_LIMIT
+                       and len(residual_history) < MAX_RESIDUAL_CORRECTIONS):
+                    residual_history.append(relative_residual)
+                    with TaskManager():
+                        gfu.vec.data += direct_inverse * residual
+                    residual.data = rhs_vec - a_bf.mat * gfu.vec
+                    relative_residual = float(
+                        np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
+            if not (np.isfinite(relative_residual)
+                    and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT):
+                return {"error": (
+                    f"{solver_label}: true relative residual "
+                    f"{relative_residual:.3e} exceeds "
+                    f"{LINEAR_TRUE_RESIDUAL_LIMIT:.0e} after "
+                    f"{len(residual_history)} corrections")}
+            _log(f"{solver_label}:true relative residual={relative_residual:.3e} "
+                 f"(iterations {krylov_iterations}, corrections "
+                 f"{len(residual_history)})")
 
         t_solve_iter = time.perf_counter() - t0_iter
 
@@ -1624,6 +1665,8 @@ def solve_fem(vol_file="", fes_order=1,
         "linear_true_relative_residual": relative_residual,
         "linear_true_residual_limit": LINEAR_TRUE_RESIDUAL_LIMIT,
         "linear_krylov_iterations": krylov_iterations,
+        "backend": Backend,
+        "device_report": device_report,
         "linear_residual_corrections": len(residual_history),
         "linear_residual_before_corrections": residual_history,
         "bddc_ams_coarse_cycles": (BDDC_AMS_COARSE_CYCLES if solver == "bddc" else None),
@@ -1723,6 +1766,8 @@ def build_argparser():
                         help="auto: ams for fes-order=1, bddc otherwise. "
                              "sparsecholesky (direct), bddc (iterative), "
                              "iccg (shifted IC+CG), ams (Compact AMS+COCR)")
+    parser.add_argument("--backend", default="cpu", choices=["cpu", "gpu"],
+                        help="gpu builds the form and AMS or BDDC on the device; no fallback")
     parser.add_argument("--reg", type=float, default=1e-6,
                         help="Gauge regularization (add reg*nu0*u*v*dx)")
     parser.add_argument("--shift-eps", type=float, default=1e-6,
@@ -1818,6 +1863,7 @@ def main():
             peec_n_peri=args.peec_n_peri,
             esim_per_panel=args.esim_per_panel,
             esim_cell_controls=depth_controls(args),
+            Backend=args.backend,
         )
 
     calc_main(run, parser)
