@@ -459,3 +459,14 @@ execution or remote calls. The 81-file light closure, discovered import set,
 workflow, requirements, profile budget, and runner declaration are unchanged.
 Substituting the two pre-change blobs reproduces the previous seal. The current
 closure digest is 762a760879bd3ab95af4cf4f831912924cc7cc9a1e77145ae2e12dcbc4321a42.
+
+## Exact-SHA pre-push export
+
+The exact-SHA pre-push change touches four files in the executable closure:
+tools/pre_push_check.py, tools/local_push_checks.py,
+tests/test_pre_push_check.py and tests/test_local_push_checks.py. Their new
+imports are standard library modules and pytest only. The tests drive the hook
+with mocked commands, so there is no native execution and no remote calls. The
+81-file light closure, workflow, requirements, profile budget and runner
+declaration are unchanged. Putting the four pre-change blobs back reproduces the
+previous seal. The current closure digest is 74383c9a7131a6bb0e97665724ce050615837c82c621ce756a1aeca18adedd2f.
