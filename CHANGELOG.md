@@ -5,6 +5,9 @@
 - Add the experimental PEEC fin-coil workflow for STEP inputs. Workpiece
   heating accuracy is unqualified. PRIMA is available for evaluation and
   remains outside production qualification.
+- Use quadrature order 16 by default for the fin-volume oriented-box
+  integrals. The energy gate, residual criteria and branch limit are
+  unchanged.
 - Keep HCurl matrices, the AMS hierarchy and the IC symbolic setup resident
   on the GPU. Python GPU AMS no longer uploads a hierarchy built on the CPU.
 - Check the actual set of unvisited vertices in the coil-mesh tree-gauge
