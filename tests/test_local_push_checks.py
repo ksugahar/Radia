@@ -17,10 +17,8 @@ def test_mcp_cpu_dependency_and_unresolved_dynamic_fail_closed():
     assert m.minimal_import_findings("importlib.import_module('radia.api')")
     assert m.minimal_import_findings("fixture = 'import radia'\nimport numpy") == []
 
-def test_pre_push_runs_no_pytest_suite():
-    commands = [' '.join(args) for args in m.LOCAL_COMMANDS]
-    assert commands == ['tools/policy_lint.py --quiet'], commands
-    assert not any('pytest' in c for c in commands), commands
+def test_compact_no_native_execution():
+    assert m.COMPACT_TESTS == ['tests/policy', 'tests/test_ci_execution_policy.py', 'tests/test_sparsesolv_ci_contract.py']
 
 def test_exact_candidate_rejects_mutable_head(tmp_path, monkeypatch):
     monkeypatch.setattr(m, 'git', lambda *args: 'another-sha')
