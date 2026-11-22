@@ -273,7 +273,7 @@ def test_download_forbidden_reports_download_context(run_export):
 
 
 def test_export_tool_declares_positive_integer_limits():
-    [tool] = asyncio.run(server.mcp.list_tools())
+    [tool] = [t for t in asyncio.run(server.mcp.list_tools()) if t.name == "onshape_export_cad"]
     for name in ("max_download_bytes", "poll_timeout_s"):
         argument = tool.inputSchema["properties"][name]
         assert argument["type"] == "integer"

@@ -35,7 +35,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["build123d_api", "build123d_run", "execute_build123d",
                             "build123d_render_views", "build123d_diff_shapes",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit", "gmsh-mcp", "radia-ngsolve"],
+        "related": ["cubit", "gmsh-mcp", "radia-ngsolve", "onshape-research-mcp"],
         "tags": ["cad"],
     },
     "onshape-research-mcp": {

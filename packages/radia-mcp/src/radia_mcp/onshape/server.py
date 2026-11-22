@@ -15,6 +15,8 @@ from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from mcp.server.fastmcp import FastMCP
+
+from radia_mcp.common import register_status_tool
 from pydantic import Field
 
 
@@ -263,6 +265,16 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
         return _error(stage, "Unexpected Onshape response.")
 
 
+register_status_tool(
+    mcp,
+    server_name="onshape-research-mcp", tool_name="onshape_status",
+    description="Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
+    subpackage="radia_mcp.onshape",
+    related_servers=["build123d-mcp"],
+    optional_deps=["build123d"],
+)
+
+
 def main():
     import argparse
     import asyncio
@@ -271,7 +283,7 @@ def main():
     parser.add_argument("--selftest", action="store_true", help="Check local tool registration without network.")
     if parser.parse_args().selftest:
         tools = asyncio.run(mcp.list_tools())
-        if {tool.name for tool in tools} != {"onshape_export_cad"}:
+        if {tool.name for tool in tools} != {"onshape_export_cad", "onshape_status"}:
             raise SystemExit("Unexpected Onshape research tool catalog")
         print("Onshape research tool registration passed")
         return
