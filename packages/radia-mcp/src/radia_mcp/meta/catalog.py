@@ -32,9 +32,17 @@ CATALOG: dict[str, dict[str, Any]] = {
     "build123d-mcp": {
         "subpackage": "radia_mcp.build123d",
         "description": "build123d STEP authoring (CAD-as-code) + Cubit interop",
-        "primary_tools": ["build123d_api", "execute_build123d",
+        "primary_tools": ["build123d_api", "build123d_run", "execute_build123d",
+                            "build123d_render_views", "build123d_diff_shapes",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit", "gmsh-mcp", "radia-ngsolve"],
+        "related": ["cubit", "gmsh-mcp", "radia-ngsolve", "onshape-research-mcp"],
+        "tags": ["cad"],
+    },
+    "onshape-research-mcp": {
+        "subpackage": "radia_mcp.onshape",
+        "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
+        "primary_tools": ["onshape_export_cad"],
+        "related": ["build123d-mcp"],
         "tags": ["cad"],
     },
     "gmsh-mcp": {
