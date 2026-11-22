@@ -250,7 +250,7 @@ def test_fin_prima_sweep_builds_once_and_gates_each_frequency(monkeypatch):
         assert max(result["coil_true_residual"][k] for k in ("kcl_relative", "kvl_relative")) <= 1e-6
         assert result["prima"]["s0"] == pytest.approx(2 * math.pi * F_OP)
 
-    for invalid in (14.5, True, "14"):
+    for invalid in (14.5, True, 0, -3, "14"):
         with pytest.raises(ValueError, match="positive integer"):
             fin_volume.solve_fin_volume_prima_sweep(
                 step, frequencies=points, expansion_frequency=F_OP, prima_order=invalid, **kw)
