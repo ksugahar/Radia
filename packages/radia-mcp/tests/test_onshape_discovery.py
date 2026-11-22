@@ -11,6 +11,7 @@ import pytest
 from radia_mcp.onshape import server
 
 
+HOST = "cad.onshape.com"
 DID, WID, VID, EID, MID = (digit * 24 for digit in "abcde")
 BASE = f"https://cad.onshape.com/documents/{DID}"
 
@@ -37,7 +38,7 @@ def test_parse_tab_url_without_credentials_or_network(monkeypatch, kind, ref, im
 
 @pytest.mark.parametrize("url", [
     f"https://cad.onshape.com.evil.test/documents/{DID}/v/{VID}",
-    f"https://user@cad.onshape.com/documents/{DID}/v/{VID}",
+    f"https://user@{HOST}/documents/{DID}/v/{VID}",  # userinfo is rejected
     f"http://cad.onshape.com/documents/{DID}/v/{VID}",
     f"{BASE}/v/{VID}?configuration=A&configuration=B",
     f"{BASE}/v/{VID}/e/invalid",
