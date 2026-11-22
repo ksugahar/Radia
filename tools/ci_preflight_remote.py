@@ -162,6 +162,28 @@ function Remove-CandidateExport($root, $export) {
   if ($links) { throw "candidate export contains links, not removed: $export" }
   Remove-Item -LiteralPath $export -Recurse -Force -ErrorAction Stop
 }
+
+function New-PytestRoot($root, $path) {
+  # Per-run pytest scratch: refuse an existing path, record ownership on creation.
+  if (Test-Path -LiteralPath $path) { throw "pytest temp root already exists: $path" }
+  New-Item -ItemType Directory -Path $path -ErrorAction Stop | Out-Null
+  $script:pytestRootOwned = $true
+}
+
+function Remove-PytestRoot($root, $path) {
+  if (-not $script:pytestRootOwned) { return }  # never remove a path this run did not create
+  if (-not (Test-Path -LiteralPath $path)) { return }
+  $item = Get-Item -LiteralPath $path -Force
+  $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'tmp'))
+  if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "refusing to remove pytest temp root outside the owned tmp root: $path"
+  }
+  # pytest leaves its own "current" links; unlink them without following.
+  Get-ChildItem -LiteralPath $path -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop |
+    Sort-Object { $_.FullName.Length } -Descending |
+    ForEach-Object { if ($_.PSIsContainer) { [IO.Directory]::Delete($_.FullName, $false) } else { [IO.File]::Delete($_.FullName) } }
+  Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+}
 """
 
 
@@ -217,6 +239,8 @@ $head = '{args.head}'
 $base = '{effective_base}'
 $lock = $null
 $script:exportOwned = $false
+$script:pytestRootOwned = $false
+$pytestRoot = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
 try {{
   # Fail fast on overlapping preflights; the OS releases the lock on process exit.
   $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
@@ -240,8 +264,9 @@ Export-Candidate $git $repo $worktree $head
   try {{
     # ssh reports the account name in a different case than path resolution;
     # a session-owned temp root keeps pytest paths free of the account name.
-    $env:PYTEST_DEBUG_TEMPROOT = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
-    New-Item -ItemType Directory -Force -Path $env:PYTEST_DEBUG_TEMPROOT | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'tmp') | Out-Null
+    New-PytestRoot $root $pytestRoot
+    $env:PYTEST_DEBUG_TEMPROOT = $pytestRoot
     $venv = Join-Path $root 'fast-venv'
     $python = Join-Path $venv 'Scripts\\python.exe'
     if (-not (Test-Path -LiteralPath $python)) {{
@@ -268,8 +293,7 @@ Export-Candidate $git $repo $worktree $head
   try {{
     if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
       Remove-CandidateExport $root $worktree
-      $tmp = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
-      if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }}
+      Remove-PytestRoot $root $pytestRoot
       if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}
     }}
   }} finally {{

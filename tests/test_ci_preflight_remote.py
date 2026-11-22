@@ -291,3 +291,49 @@ def test_failed_remote_launch_does_not_disclose_encoded_script(monkeypatch):
     message = str(excinfo.value)
     assert "failed (1)" in message, message
     assert marker not in message and encoded not in message, message
+
+
+def _run_pytest_root(tmp_path, root, path, body, env):
+    import shutil
+    pwsh = shutil.which('pwsh')
+    if not pwsh:
+        pytest.skip('pwsh is required for the generated-PowerShell pytest-root test')
+    module = _load_module()
+    script = (module.EXPORT_FUNCTIONS + "\n$ErrorActionPreference = 'Stop'\n$script:pytestRootOwned = $false\n"
+              f"try {{\n  New-PytestRoot '{root}' '{path}'\n{body}\n}} finally {{\n"
+              f"  Remove-PytestRoot '{root}' '{path}'\n}}\n")
+    file = tmp_path / 'pytest_root.ps1'
+    file.write_text(script, encoding='utf-8')
+    return subprocess.run([pwsh, '-NoProfile', '-File', str(file)], capture_output=True, text=True,
+                          encoding='utf-8', errors='replace', timeout=120, env=env)
+
+
+def test_pytest_root_never_removes_a_preexisting_path(tmp_path):
+    """Guards: per-run pytest scratch that existed before this run is refused and kept."""
+    import os
+    root = tmp_path / 'root'
+    path = root / 'tmp' / 'run1'
+    path.mkdir(parents=True)
+    sentinel = path / 'sentinel.txt'
+    sentinel.write_text('keep', encoding='utf-8')
+    result = _run_pytest_root(tmp_path, root, path, '', dict(os.environ))
+    assert result.returncode != 0, result.stdout
+    assert 'already exists' in result.stderr, result.stderr
+    assert sentinel.read_text(encoding='utf-8') == 'keep'
+
+
+def test_pytest_root_created_by_run_is_removed_without_following_links(tmp_path):
+    """Guards: an owned pytest root is removed; a junction inside is unlinked, its target kept."""
+    import os
+    root = tmp_path / 'root'
+    (root / 'tmp').mkdir(parents=True)
+    path = root / 'tmp' / 'run1'
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'keep.txt').write_text('keep', encoding='utf-8')
+    body = (f"  New-Item -ItemType Junction -Path '{path / 'current'}' -Target '{outside}' | Out-Null\n"
+            f"  Set-Content -LiteralPath '{path / 'a.txt'}' -Value x\n")
+    result = _run_pytest_root(tmp_path, root, path, body, dict(os.environ))
+    assert result.returncode == 0, result.stderr
+    assert not path.exists()
+    assert (outside / 'keep.txt').read_text(encoding='utf-8') == 'keep'
