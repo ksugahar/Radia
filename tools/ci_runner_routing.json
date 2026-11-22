@@ -214,7 +214,7 @@
         "validation_test/induction_heating/fin_return_principle.py",
         "tools/check_ninja_msvc_deps.py"
       ],
-      "audit_sha256": "b8a8c5b153413858da768a94eff4556f9bdbfad01b7b373e1220598f503bfe82",
+      "audit_sha256": "2c8cbade5e9e5173a21eb0a0dbe20d680268039dbd0b57e2c2b34e36e4d37868",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
