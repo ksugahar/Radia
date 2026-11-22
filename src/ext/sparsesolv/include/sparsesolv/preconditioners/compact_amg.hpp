@@ -431,10 +431,13 @@ public:
         levels_.push_back(std::move(lev0));
 
         std::vector<int> ranks=pmis_rank_;
+        // Rank-derived priorities are exact and portable across standard libraries;
+        // std::uniform_real_distribution output is implementation-defined.
+        if (!ranks.empty() && int(ranks.size()) != levels_.front().ndof)
+            throw std::invalid_argument("PMIS rank size does not match the AMG level");
         std::vector<double> priorities(ranks.size());
-        std::mt19937 pmis_rng(42);
-        std::uniform_real_distribution<double> pmis_dist(0.,1.);
-        for (double& value : priorities) value=pmis_dist(pmis_rng);
+        for (size_t r=0; r<priorities.size(); ++r)
+            priorities[r]=(double(r)+0.5)/double(priorities.size());
         coarse_ids_.clear();
         line_blocks_.clear();
         line_id_.clear();

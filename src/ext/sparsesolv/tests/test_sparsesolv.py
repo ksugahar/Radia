@@ -2580,6 +2580,58 @@ def test_ams_tridiagonal_line_matches_psd_pseudoinverse(shift):
         assert abs(sum(actual)) < 1e-9
 
 
+def _stable_pmis_hex(nx, ny, nz):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return form, grad, coords
+
+
+def test_ams_stable_pmis_coarse_ids_are_pinned_across_platforms():
+    """Guards: rank-derived PMIS priorities use no implementation-defined distribution.
+
+    Assumes: the 12x10x8 hex curl-curl hierarchy; the pinned digest is a code lock, not
+    an accuracy oracle, and must match on every standard library.
+    """
+    import hashlib
+    import json
+    from radia.ngsolve_sparse import stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _stable_pmis_hex(12, 10, 8)
+    pre = HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist(),
+                                      beta_zero=True, pmis_rank=stable_pmis_rank(coords))
+    ids = pre.pmis_coarse_ids
+    sizes = [[len(level) for level in axis] for axis in ids]
+    digest = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+    assert (sizes, digest) == (
+        [[342], [412], [245]],
+        "95559446051c434e90de81f72bf43b61323e5ee63cdb124ac81574856232db7f",
+    ), (sizes, digest)
+
+
+@pytest.mark.parametrize("bad", ["short", "duplicate"])
+def test_ams_stable_pmis_rejects_invalid_ranks(bad):
+    """Guards: a wrong-size or non-permutation rank fails loudly."""
+    from radia.ngsolve_sparse import stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _stable_pmis_hex(4, 4, 4)
+    rank = stable_pmis_rank(coords)
+    rank = rank[:-1] if bad == "short" else [rank[0]] + rank[:-1]
+    with pytest.raises((ValueError, RuntimeError)):
+        HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist(),
+                                    beta_zero=True, pmis_rank=rank)
+
+
 def _curl_hex_system(nx, ny, nz):
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh

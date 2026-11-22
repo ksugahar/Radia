@@ -42,8 +42,10 @@ def stable_pmis_rank(coordinates, *, fine_axis=None):
     """Return fixed PMIS ranks in the input H1 node order.
 
     Pass the returned list as pmis_rank to the real CPU AMS constructor.
-    For an axis-aligned stretched mesh, specify its finely subdivided axis as
-    0, 1, or 2. Use the default XYZ order for an unstructured mesh.
+    The ranks are a fixed pseudo-random relabelling of a canonical coordinate
+    order, so they depend only on node positions, not on the input numbering.
+    fine_axis only selects that canonical lexicographic order (0, 1, 2 or the
+    default XYZ); it does not impose a geometric sweep direction.
     """
     import numpy as np
 
