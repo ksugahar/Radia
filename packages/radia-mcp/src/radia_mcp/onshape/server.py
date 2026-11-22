@@ -20,6 +20,7 @@ from pydantic import Field
 
 from radia_mcp.common import register_status_tool
 
+from .assembly import inspect_assembly
 from .discovery import ID as _ID, ORIGIN as _ORIGIN, discover, parse_document_url
 from .parameters import UnknownConfigurationParameters, read_parameters
 from .shaded_views import ViewName, render_shaded_views
@@ -270,6 +271,41 @@ async def onshape_render_shaded_views(
 
 
 @mcp.tool()
+async def onshape_inspect_assembly(
+    document_id: str,
+    element_id: str,
+    version_id: str,
+    element_type: Literal["assembly"],
+    configuration: str = "",
+    max_part_requests: Annotated[int, Field(strict=True, gt=0, le=100)] = 32,
+) -> dict:
+    """Read fixed-version assembly structure, mates and mass properties.
+
+    Pass discovery export_args for an assembly. Part occurrences carry the
+    top-level row-major transform (translation in m), volume in mm³ and
+    transformed centroid in mm. Part properties use each source microversion
+    and its effective configuration. Repeated sources reuse one GET per call.
+    Missing or budget-limited part properties are explicitly unresolved.
+    Match occurrences to STEP labels explicitly when comparing measurements.
+    """
+    import anyio
+
+    if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
+        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+    if element_type != "assembly" or type(max_part_requests) is not int or not 1 <= max_part_requests <= 100:
+        return _error("input", "Provide an assembly and a part request limit from 1 through 100.")
+    source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
+              "element_type": element_type, "configuration": configuration}
+
+    def action(request):
+        result = inspect_assembly(request, document_id, element_id, version_id,
+                                  configuration, max_part_requests)
+        return {**source, **result}
+
+    return await anyio.to_thread.run_sync(_read_onshape, "assembly", action)
+
+
+@mcp.tool()
 async def onshape_export_cad(
     document_id: str,
     element_id: str,
@@ -451,7 +487,8 @@ def main():
     if parser.parse_args().selftest:
         tools = asyncio.run(mcp.list_tools())
         if {tool.name for tool in tools} != {"onshape_export_cad", "onshape_discover", "onshape_read_parameters",
-                                           "onshape_render_shaded_views", "onshape_status"}:
+                                           "onshape_render_shaded_views", "onshape_inspect_assembly",
+                                           "onshape_status"}:
             raise SystemExit("Unexpected Onshape research tool catalog")
         print("Onshape research tool registration passed")
         return

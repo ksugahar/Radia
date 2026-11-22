@@ -4944,6 +4944,7 @@ def _inspect_step_readback(path: str) -> str:
             "solid_count": len(pairs),
             "solids": [
                 {"id": solid_id, "label": label, "volume_mm3": solid.volume,
+                 "centroid_mm": list(solid.center()),
                  **_bbox_fields_b3d(solid.bounding_box())}
                 for solid_id, (label, solid) in enumerate(pairs, 1)
             ],
