@@ -53,3 +53,23 @@ def test_panel_acceleration_rejected_on_unsupported_path_before_coil(monkeypatch
     assert result['status'] == 'error'
     expected = 'ESIM is unsupported' if '--coupling-mode' in extra else 'requires weak P1 per-panel ESIM'
     assert expected in result['error']
+
+@pytest.mark.parametrize(("solver", "input_flag", "entry"), [
+    ("peec", "--coil-step", "_solve_coil_peec"),
+    ("bem-a", "--coil-vol", "_solve_coil_bem_a"),
+    ("fin-surface", "--coil-step", "_solve_coil_fin_surface"),
+])
+def test_prima_order_rejected_before_non_fin_volume_solve(monkeypatch, solver, input_flag, entry):
+    """Guards: explicit PRIMA requests are rejected before an incompatible coil solve."""
+    args = calc_inductance.build_argparser().parse_args([
+        "--coil-solver", solver, "--frequency", "222000", input_flag, "not-read",
+        "--fin-prima-order", "14",
+    ])
+
+    def unexpected_solve(*args, **kwargs):
+        pytest.fail(f"{solver} solve started with a PRIMA request")
+
+    monkeypatch.setattr(calc_inductance, entry, unexpected_solve)
+    result = calc_inductance.run_inductance(args)
+    assert result["status"] == "error"
+    assert "--fin-prima-order requires --coil-solver fin-volume" in result["error"]

@@ -2800,6 +2800,10 @@ def _export_coil_msh_viz(args, coil_data):
 # ======================================================================
 def run_inductance(args):
     """Top-level orchestrator.  Returns dict; calc_main wraps to JSON."""
+    if getattr(args, "fin_prima_order", None) is not None and args.coil_solver != "fin-volume":
+        return {"status": "error",
+                "error": "--fin-prima-order requires --coil-solver fin-volume"}
+
     import radia  # noqa: F401  (DLL path setup for subprocess context)
     from ngsolve import TaskManager
 
