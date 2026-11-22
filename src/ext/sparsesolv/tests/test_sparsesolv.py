@@ -2552,3 +2552,29 @@ def test_ams_stable_pmis_keeps_coarse_points_under_permutation(mesh_case):
     )
     assert all(levels for levels in base.pmis_coarse_ids)
     assert permuted.pmis_coarse_ids == base.pmis_coarse_ids
+
+
+@pytest.mark.parametrize("shift", [0.25, 0.0, 1e-14], ids=["spd", "singular", "near_singular"])
+def test_ams_tridiagonal_line_matches_psd_pseudoinverse(shift):
+    """Guards: the line LDL apply and rank-deficient fallback give the PSD reference."""
+    from radia.sparsesolv_ngsolve import _probe_tridiagonal_line
+
+    n = 23
+    diagonal = np.full(n, 2.0)
+    diagonal[[0, -1]] = 1.0
+    diagonal += shift
+    off = np.full(n, -1.0)
+    off[0] = 0.0
+    rhs = np.random.default_rng(123).normal(size=n) + 1.0
+    matrix = np.diag(diagonal) + np.diag(off[1:], 1) + np.diag(off[1:], -1)
+    banded, actual, dense = _probe_tridiagonal_line(
+        diagonal.tolist(), off.tolist(), rhs.tolist()
+    )
+    assert banded == (shift == 0.25)
+    expected = np.linalg.pinv(matrix, hermitian=True, rcond=1e-12) @ rhs
+    np.testing.assert_allclose(actual, dense, rtol=1e-11, atol=1e-10)
+    np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=1e-10)
+    compatible = rhs if banded else rhs - rhs.mean()
+    np.testing.assert_allclose(matrix @ actual, compatible, rtol=1e-10, atol=1e-10)
+    if not banded:
+        assert abs(sum(actual)) < 1e-9

@@ -1374,6 +1374,8 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     .def("Evaluate", &LowestOrderCurlResidual::Evaluate, py::arg("x"), py::arg("source_mean"),
          py::arg("grid"), py::arg("nu"), py::arg("dhdb"), py::arg("load"), py::arg("residual"));
 
+  m.def("_probe_tridiagonal_line", &CompactAMG::ProbeTridiagonalLine);
+
   m.def("HypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
        shared_ptr<BaseMatrix> grad_mat,

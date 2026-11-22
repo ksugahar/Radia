@@ -29,6 +29,7 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <tuple>
 
 namespace ngla {
 
@@ -435,6 +436,10 @@ public:
         std::uniform_real_distribution<double> pmis_dist(0.,1.);
         for (double& value : priorities) value=pmis_dist(pmis_rng);
         coarse_ids_.clear();
+        line_blocks_.clear();
+        line_id_.clear();
+        line_profile_.fill(0.0);
+        banded_lines_=0;
         // Build hierarchy
         for (int l = 0; l < max_levels_ - 1; l++) {
             auto& cur = levels_[l];
@@ -637,6 +642,30 @@ public:
     int LineBlocks() const { return int(line_blocks_.size()); }
     auto LineProfile() const { return line_profile_; }
     int BandedLineBlocks() const { return banded_lines_; }
+
+    // Diagnostic hook for checking the same factor and apply kernels as the smoother.
+    static auto ProbeTridiagonalLine(const std::vector<double>& diag,
+                                    const std::vector<double>& off,
+                                    const std::vector<double>& rhs) {
+        const size_t n=diag.size();
+        if (n == 0 || n > 256 || off.size()!=n || rhs.size()!=n || off.front()!=0)
+            throw std::invalid_argument("invalid tridiagonal diagnostic dimensions");
+        Matrix<double> matrix(n,n);
+        matrix=0.0;
+        for (size_t i=0; i<n; ++i) {
+            matrix(i,i)=diag[i];
+            if (i) matrix(i-1,i)=matrix(i,i-1)=off[i];
+        }
+        auto inverse=SemidefiniteInverse(matrix);
+        std::vector<double> dense(n);
+        for (size_t i=0; i<n; ++i)
+            for (size_t j=0; j<n; ++j) dense[i]+=inverse[i*n+j]*rhs[j];
+        LineBlock block;
+        const bool banded=FactorPositiveLine(diag,off,block);
+        auto solution=banded ? rhs : dense;
+        if (banded) SolvePositiveLine(block,solution.data());
+        return std::make_tuple(banded,std::move(solution),std::move(dense));
+    }
 
     void SetCoarsePseudoinverse(int max_rows) { coarse_pseudoinverse_max_ = max_rows; }
 
@@ -1484,6 +1513,25 @@ private:
         return true;
     }
 
+    static bool FactorPositiveLine(const std::vector<double>& diag,
+                                   const std::vector<double>& off, LineBlock& block) {
+        double norm=0;
+        for (size_t i=0; i<diag.size(); ++i)
+            norm=std::hypot(norm,std::hypot(diag[i],std::sqrt(2.0)*off[i]));
+        const double guard=64*diag.size()*std::numeric_limits<double>::epsilon()*norm;
+        return std::isfinite(norm) && norm>0 &&
+               TridiagonalLDL(diag,off,4*guard,guard,block.pivots,block.lower) &&
+               TridiagonalLDL(diag,off,0,guard,block.pivots,block.lower);
+    }
+
+    static void SolvePositiveLine(const LineBlock& block, double* work) {
+        const size_t n=block.pivots.size();
+        for (size_t i=1; i<n; ++i) work[i]-=block.lower[i]*work[i-1];
+        work[n-1]/=block.pivots[n-1];
+        for (size_t i=n-1; i>0; --i)
+            work[i-1]=work[i-1]/block.pivots[i-1]-block.lower[i]*work[i];
+    }
+
     void BuildLines() {
         auto stamp=std::chrono::steady_clock::now();
         auto phase=[&](int idx) {
@@ -1554,7 +1602,10 @@ private:
         // auxiliary block. Sparse incidental chains leave point Jacobi intact.
         const int covered=int(std::count_if(line_id_.begin(),line_id_.end(),
                                             [](int i){return i>=0;}));
-        if (2*covered < n) line_blocks_.clear();
+        if (2*covered < n) {
+            line_blocks_.clear();
+            line_id_.assign(n,-1);
+        }
         if (!line_blocks_.empty()) {
             for (auto& block : line_blocks_) {
                 const auto endpoint=std::find_if(block.nodes.begin(),block.nodes.end(),
@@ -1598,7 +1649,6 @@ private:
             {
                 std::vector<double> diag(m), off(m);
                 bool tridiagonal=true;
-                double norm=0;
                 for (int k=0; k<m; ++k) {
                     const int i=block.nodes[k];
                     auto cols=A.GetRowIndices(i);
@@ -1612,15 +1662,8 @@ private:
                         else tridiagonal=false;
                     }
                 }
-                for (int k=0; k<m; ++k)
-                    norm=std::hypot(norm,std::hypot(diag[k],std::sqrt(2.0)*off[k]));
                 phase(2);
-                // Certify a positive spectral gap beyond the dense pseudoinverse cutoff.
-                // Any singular, nearly singular, or wider-band block uses the old PSD path.
-                const double guard=64*m*std::numeric_limits<double>::epsilon()*norm;
-                if (tridiagonal && std::isfinite(norm) && norm>0 &&
-                    TridiagonalLDL(diag,off,4*guard,guard,block.pivots,block.lower) &&
-                    TridiagonalLDL(diag,off,0,guard,block.pivots,block.lower)) {
+                if (tridiagonal && FactorPositiveLine(diag,off,block)) {
                     ++banded_lines_;
                     phase(3);
                     continue;
@@ -1664,11 +1707,8 @@ private:
             const size_t n=block.nodes.size();
             if (!block.pivots.empty()) {
                 std::array<double,256> work;
-                work[0]=r[block.nodes[0]];
-                for (size_t i=1; i<n; ++i) work[i]=r[block.nodes[i]]-block.lower[i]*work[i-1];
-                work[n-1]/=block.pivots[n-1];
-                for (size_t i=n-1; i>0; --i)
-                    work[i-1]=work[i-1]/block.pivots[i-1]-block.lower[i]*work[i];
+                for (size_t i=0; i<n; ++i) work[i]=r[block.nodes[i]];
+                SolvePositiveLine(block,work.data());
                 for (size_t i=0; i<n; ++i) {
                     const int row=block.nodes[i];
                     if (initially_zero) out[row]=line_weight_*work[i];
