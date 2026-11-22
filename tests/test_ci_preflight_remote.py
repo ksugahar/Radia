@@ -337,3 +337,34 @@ def test_pytest_root_created_by_run_is_removed_without_following_links(tmp_path)
     assert result.returncode == 0, result.stderr
     assert not path.exists()
     assert (outside / 'keep.txt').read_text(encoding='utf-8') == 'keep'
+
+
+def test_pytest_root_refuses_a_junction_parent(tmp_path):
+    """Guards: a junction at the shared tmp parent is refused before creation; target untouched."""
+    import os
+    root = tmp_path / 'root'
+    root.mkdir()
+    target = tmp_path / 'junction-target'
+    target.mkdir()
+    (target / 'sentinel.txt').write_text('keep', encoding='utf-8')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', str(root / 'tmp'), str(target)], check=True,
+                   capture_output=True)
+    result = _run_pytest_root(tmp_path, root, root / 'tmp' / 'run1', '', dict(os.environ))
+    assert result.returncode != 0, result.stdout
+    assert 'reparse-point parent' in result.stderr, result.stderr
+    assert sorted(p.name for p in target.iterdir()) == ['sentinel.txt']
+
+
+def test_generated_export_refuses_a_junction_work_parent(tmp_path):
+    """Guards: a junction at the work parent is refused before git init; target untouched."""
+    pwsh, git, env, root, repo, head = _pwsh_export_fixture(tmp_path)
+    (root / 'work').rmdir()
+    target = tmp_path / 'work-target'
+    target.mkdir()
+    (target / 'sentinel.txt').write_text('keep', encoding='utf-8')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', str(root / 'work'), str(target)], check=True,
+                   capture_output=True)
+    result = _run_export(tmp_path, pwsh, git, env, root, repo, head, root / 'work' / 'run1')
+    assert result.returncode != 0
+    assert 'reparse-point parent' in result.stderr, result.stderr
+    assert sorted(p.name for p in target.iterdir()) == ['sentinel.txt']

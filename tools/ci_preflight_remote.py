@@ -131,9 +131,25 @@ def remote_command(script: str, host: str) -> None:
 # PowerShell helpers for the build-host candidate export.  Plain text (not an
 # f-string) so the functions can also run on their own in an isolated test.
 EXPORT_FUNCTIONS = r"""
+function Assert-PlainParent($path) {
+  # The owned parent (work or tmp) and the preflight root above it must be real
+  # directories: a junction there would redirect creation and cleanup elsewhere.
+  $dir = Split-Path -Parent ([IO.Path]::GetFullPath($path))
+  foreach ($level in 1..2) {
+    if (Test-Path -LiteralPath $dir) {
+      $item = Get-Item -LiteralPath $dir -Force
+      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "refusing a reparse-point parent for owned scratch: $dir"
+      }
+    }
+    $dir = Split-Path -Parent $dir
+  }
+}
+
 function Export-Candidate($git, $repo, $export, $head) {
   # Owned standalone export of the exact candidate: objects come from the cached
   # repository through alternates; nothing is registered as a worktree there.
+  Assert-PlainParent $export
   if (Test-Path -LiteralPath $export) { throw "candidate export path already exists: $export" }
   & $git init -q $export
   if ($LASTEXITCODE -ne 0) { throw "git init failed for the candidate export ($LASTEXITCODE)" }
@@ -153,6 +169,7 @@ function Export-Candidate($git, $repo, $export, $head) {
 function Remove-CandidateExport($root, $export) {
   if (-not $script:exportOwned) { return }  # never remove a path this run did not create
   if (-not (Test-Path -LiteralPath $export)) { return }
+  Assert-PlainParent $export
   $item = Get-Item -LiteralPath $export -Force
   $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'work'))
   if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -165,6 +182,7 @@ function Remove-CandidateExport($root, $export) {
 
 function New-PytestRoot($root, $path) {
   # Per-run pytest scratch: refuse an existing path, record ownership on creation.
+  Assert-PlainParent $path
   if (Test-Path -LiteralPath $path) { throw "pytest temp root already exists: $path" }
   New-Item -ItemType Directory -Path $path -ErrorAction Stop | Out-Null
   $script:pytestRootOwned = $true
@@ -173,6 +191,7 @@ function New-PytestRoot($root, $path) {
 function Remove-PytestRoot($root, $path) {
   if (-not $script:pytestRootOwned) { return }  # never remove a path this run did not create
   if (-not (Test-Path -LiteralPath $path)) { return }
+  Assert-PlainParent $path
   $item = Get-Item -LiteralPath $path -Force
   $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'tmp'))
   if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
