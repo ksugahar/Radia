@@ -579,34 +579,6 @@ jobs:
           path: dist/*.whl
           retention-days: 7
 
-      # ----------------------------------------------------------------
-      # The HDiv installed-wheel lane runs on pinned Netgen plus one patch
-      # ----------------------------------------------------------------
-      - name: Seal the patched Netgen library
-        if: success()
-        shell: pwsh
-        run: |
-          # The same library the tests ran on, copied so the seal never enters the cache.
-          $built = '${{ steps.netgen-overlay-paths.outputs.overlay }}'
-          $overlay = Join-Path $env:RUNNER_TEMP "radia-netgen-seal-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          New-Item -ItemType Directory -Path $overlay | Out-Null
-          Copy-Item -LiteralPath (Join-Path $built 'nglib.dll'), (Join-Path $built 'netgen-overlay.json') -Destination $overlay
-          python tools/ci_gpu_artifact.py seal $overlay --sha $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "RADIA_NETGEN_OVERLAY_DIR=$overlay" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Upload sealed Netgen library
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-netgen-overlay
-          path: |
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/nglib.dll
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/netgen-overlay.json
-            ${{ env.RADIA_NETGEN_OVERLAY_DIR }}/gpu-artifact.json
-          if-no-files-found: error
-          retention-days: 30
-
   # The build host stops at CPU natives. CUDA compilation and the published
   # Windows wheel (CPU natives from build-test plus the Python GPU payload) are
   # produced on the Windows GPU host from the same commit. Compile only: no
