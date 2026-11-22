@@ -2439,3 +2439,37 @@ def test_hex_ams_handles_auxiliary_nullspace(ny, external_order, beta_zero):
     np.testing.assert_allclose(actual, _reference_cycle(a, g, coords, b, beta_zero),
                                rtol=1e-9, atol=1e-11)
     assert np.linalg.norm(a @ solution.FV().NumPy() - b) / np.linalg.norm(b) < 1e-10
+
+
+def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=96, nz=1)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    rhs, first, solution = (form.mat.CreateRowVector() for _ in range(3))
+    seed = rhs.CreateVector()
+    seed.FV().NumPy()[:] = np.random.default_rng(42).standard_normal(len(seed))
+    rhs.data = form.mat * seed
+    args = (form.mat, grad, None, *(coords[:, i].tolist() for i in range(3)))
+    with pytest.raises(ValueError, match="auto_line_smoothing requires"):
+        HypreBasedAMSPreconditioner(*args, auto_line_smoothing=True)
+    pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True)
+    hierarchy = pre.auxiliary_hierarchy
+    assert hierarchy["x"][1] and hierarchy["z"][1]
+    assert all(len(hierarchy[axis][0]) > 1 for axis in "xz")
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
+        solution.data = cg * rhs
+    assert np.isfinite(first.FV().NumPy()).all()
+    residual = rhs.CreateVector()
+    residual.data = form.mat * solution - rhs
+    assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10

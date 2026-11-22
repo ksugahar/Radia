@@ -507,6 +507,7 @@ public:
         auto& coarsest = levels_.back();
         auto t_factor = std::chrono::steady_clock::now();
         if (coarsest.ndof <= min_coarse_ * 10) FactorCoarsest();
+        if (line_topology_ && levels_.size() > 1) BuildLines();
         // else: just use smoother at coarsest level too
         setup_phase_s_[6] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t_factor).count();
 
@@ -614,6 +615,10 @@ public:
     /// rows, and solve a coarsest level of at most dense_max rows with a dense
     /// inverse (one parallel product for both right-hand sides of DualMult).
     // Auxiliary Galerkin operators can have a kernel even with nonzero diagonals.
+    using NodalEdges = std::vector<std::vector<int>>;
+    void SetLineTopology(shared_ptr<const NodalEdges> edges) { line_topology_ = std::move(edges); }
+    int LineBlocks() const { return int(line_blocks_.size()); }
+
     void SetCoarsePseudoinverse(int max_rows) { coarse_pseudoinverse_max_ = max_rows; }
 
     void SetLeanCoarse(double stall_ratio, int dense_max) {
@@ -683,6 +688,8 @@ public:
     // Read-only numeric snapshot for explicit accelerator adapters. Setup,
     // coarsening and Galerkin assembly remain owned by this implementation.
     template <class Visitor> void VisitAcceleratorLevels(Visitor&& visit) const {
+        if (line_topology_)
+            throw std::runtime_error("AMS accelerator snapshot does not support CPU line smoothing");
         if (mixed_precision_)
             throw std::runtime_error("AMS accelerator snapshot requires FP64 levels");
         for (size_t i = 0; i < levels_.size(); ++i) {
@@ -708,6 +715,14 @@ private:
     mutable int setup_workers_ = 0;
     mutable std::vector<double> dual_level_s_;
     double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
+    shared_ptr<const NodalEdges> line_topology_;
+    struct LineBlock {
+        std::vector<int> nodes;
+        std::vector<double> inverse;
+    };
+    std::vector<LineBlock> line_blocks_;
+    std::vector<int> line_id_;
+    double line_weight_ = 0.5;
     bool constant_nullspace_ = false;
     int coarse_pseudoinverse_max_ = 0;
     int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
@@ -1266,8 +1281,7 @@ private:
 
     void FactorSemidefiniteCoarsest(Level& c) {
         const int n = c.ndof;
-        Matrix<double> a(n, n), vectors(n, n);
-        Vector<double> eigenvalues(n);
+        Matrix<double> a(n, n);
         a = 0.0;
         for (int i = 0; i < n; ++i) {
             auto cols = c.A->GetRowIndices(i);
@@ -1275,6 +1289,14 @@ private:
             for (int j = 0; j < cols.Size(); ++j)
                 a(i, cols[j]) = vals[j];
         }
+        c.dense_inv = SemidefiniteInverse(a);
+        c.inv = nullptr;
+    }
+
+    static std::vector<double> SemidefiniteInverse(Matrix<double>& a) {
+        const int n = a.Height();
+        Matrix<double> vectors(n,n);
+        Vector<double> eigenvalues(n);
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < i; ++j)
                 a(i, j) = a(j, i) = 0.5 * (a(i, j) + a(j, i));
@@ -1286,15 +1308,15 @@ private:
             throw std::runtime_error("AMG auxiliary coarse matrix is not positive semidefinite");
 
         // LAPACK's column eigenvectors are stored as rows in this row-major matrix.
-        c.dense_inv.assign(size_t(n) * n, 0.0);
+        std::vector<double> inverse(size_t(n) * n, 0.0);
         for (int k = 0; k < n; ++k) {
             if (eigenvalues(k) <= tol) continue;
             for (int i = 0; i < n; ++i)
                 for (int j = 0; j < n; ++j)
-                    c.dense_inv[size_t(i) * n + j] +=
+                    inverse[size_t(i) * n + j] +=
                         vectors(k, i) * vectors(k, j) / eigenvalues(k);
         }
-        c.inv = nullptr;
+        return inverse;
     }
 
     /// Sparse Cholesky of the coarsest level (kept as the factorization: storing
@@ -1410,8 +1432,131 @@ private:
     }
 
     /// l1-Jacobi sweep: x += r / l1_norm (fully parallel, no data dependency)
+    void BuildLines() {
+        const auto& A = *levels_.front().A;
+        const int n = A.Height();
+        std::vector<double> strongest(n);
+        struct Link { int a,b; double weight; };
+        std::vector<Link> links;
+        for (int i = 0; i < n; ++i) {
+            auto cols = A.GetRowIndices(i);
+            auto vals = A.GetRowValues(i);
+            for (int k = 0; k < cols.Size(); ++k) {
+                const int j = cols[k];
+                const auto& neighbors = (*line_topology_)[i];
+                if (j == i || vals[k] >= 0 ||
+                    !std::binary_search(neighbors.begin(), neighbors.end(), j)) continue;
+                strongest[i] = std::max(strongest[i], -vals[k]);
+                if (i < j) links.push_back({i,j,-vals[k]});
+            }
+        }
+        std::stable_sort(links.begin(), links.end(),
+                         [](const Link& a,const Link& b) { return a.weight > b.weight; });
+        std::vector<int> parent(n), degree(n), size(n,1);
+        for (int i = 0; i < n; ++i) parent[i]=i;
+        auto root = [&](int i) {
+            while (parent[i] != i) {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            return i;
+        };
+        for (const auto& [a,b,w] : links) {
+            if (degree[a] == 2 || degree[b] == 2 ||
+                w < 0.6 * std::max(strongest[a], strongest[b])) continue;
+            const int ra=root(a), rb=root(b);
+            if (ra == rb || size[ra]+size[rb] > 256) continue;
+            parent[rb]=ra;
+            size[ra]+=size[rb];
+            ++degree[a];
+            ++degree[b];
+        }
+        line_blocks_.clear();
+        line_id_.assign(n,-1);
+        std::vector<int> block_for_root(n,-1), positions(n,-1);
+        for (int i = 0; i < n; ++i) {
+            const int r=root(i);
+            if (size[r] < 16) continue;
+            int& id = block_for_root[r];
+            if (id < 0) {
+                id=int(line_blocks_.size());
+                line_blocks_.emplace_back();
+            }
+            auto& nodes=line_blocks_[id].nodes;
+            positions[i]=int(nodes.size());
+            nodes.push_back(i);
+            line_id_[i]=id;
+        }
+        if (line_blocks_.empty()) return;
+        // For a PSD matrix, normalized off-diagonal block norms are at most one.
+        // Bound the block-Jacobi spectrum by maximum block adjacency (self included).
+        std::vector<std::vector<int>> adjacent(line_blocks_.size()+n);
+        for (int i = 0; i < n; ++i) {
+            const int bi=line_id_[i] >= 0 ? line_id_[i] : int(line_blocks_.size())+i;
+            auto cols=A.GetRowIndices(i);
+            auto vals=A.GetRowValues(i);
+            for (int k=0; k<cols.Size(); ++k) {
+                const int j=cols[k];
+                if (vals[k] == 0) continue;
+                const int bj=line_id_[j] >= 0 ? line_id_[j] : int(line_blocks_.size())+j;
+                adjacent[bi].push_back(bj);
+            }
+        }
+        int max_neighbors=1;
+        for (auto& ids : adjacent) {
+            std::sort(ids.begin(),ids.end());
+            max_neighbors=std::max(max_neighbors,int(std::unique(ids.begin(),ids.end())-ids.begin()));
+        }
+        line_weight_=std::min(0.5,1.9/max_neighbors);
+        for (auto& block : line_blocks_) {
+            const int m=int(block.nodes.size());
+            Matrix<double> dense(m,m);
+            dense=0.0;
+            for (int k=0; k<m; ++k) {
+                const int i=block.nodes[k];
+                auto cols=A.GetRowIndices(i);
+                auto vals=A.GetRowValues(i);
+                for (int j=0; j<cols.Size(); ++j)
+                    if (line_id_[cols[j]] == line_id_[i]) dense(k,positions[cols[j]])=vals[j];
+            }
+            block.inverse=SemidefiniteInverse(dense);
+        }
+    }
+
+    void ApplyLineSmoother(const BaseVector& b, BaseVector& x, bool initially_zero) const {
+        const auto& lev=levels_.front();
+        const BaseVector* rhs=&b;
+        if (!initially_zero) {
+            LevelResidual(lev,b,x,*lev.residual);
+            rhs=lev.residual.get();
+        }
+        auto r=rhs->FVDouble();
+        auto out=x.FVDouble();
+        CompactParallelFor(lev.ndof,[&](size_t i) {
+            if (line_id_[i] >= 0) return;
+            const double delta=line_weight_*r[i]/lev.l1_norms[i];
+            if (initially_zero) out[i]=delta;
+            else out[i]+=delta;
+        });
+        CompactParallelFor(line_blocks_.size(),[&](size_t bidx) {
+            const auto& block=line_blocks_[bidx];
+            const size_t n=block.nodes.size();
+            for (size_t i=0; i<n; ++i) {
+                double value=0;
+                for (size_t j=0; j<n; ++j) value+=block.inverse[i*n+j]*r[block.nodes[j]];
+                const int row=block.nodes[i];
+                if (initially_zero) out[row]=line_weight_*value;
+                else out[row]+=line_weight_*value;
+            }
+        });
+    }
+
     void L1JacobiSmooth(int level, const BaseVector& b, BaseVector& x,
                         bool initially_zero = false) const {
+        if (level == 0 && !line_blocks_.empty()) {
+            ApplyLineSmoother(b,x,initially_zero);
+            return;
+        }
         auto& lev = levels_[level];
         if (initially_zero) {
             // Every real V-cycle starts from zero, including coarse corrections.

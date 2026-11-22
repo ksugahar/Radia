@@ -1030,6 +1030,21 @@ inline void ExportHypreBasedAMS(py::module& m) {
       .def("_accelerator_snapshot", &AcceleratorAMS,
            "Owned real FP64 hierarchy snapshot; does not execute CUDA.")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
+      .def_property_readonly("auto_line_smoothing", &HypreBasedAMS::GetAutoLineSmoothing)
+      .def_property_readonly("auxiliary_hierarchy", [](const HypreBasedAMS& ams) {
+        py::dict result;
+        const char* names[] = {"x", "y", "z"};
+        int i = 0;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()}) {
+          if (amg) {
+            std::vector<int> rows;
+            for (const auto& level : amg->DualLevelProfile()) rows.push_back(int(level[0]));
+            result[names[i]] = py::make_tuple(rows, amg->LineBlocks());
+          }
+          ++i;
+        }
+        return result;
+      })
       .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
       .def_property_readonly("mixed_precision", &HypreBasedAMS::GetMixedPrecision)
       .def_property_readonly("hierarchy_refreshes", &HypreBasedAMS::GetHierarchyRefreshes,
@@ -1360,7 +1375,8 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
        int num_smooth,
        bool beta_zero,
        bool reuse_hierarchy,
-       bool mixed_precision) -> shared_ptr<HypreBasedAMS>
+       bool mixed_precision,
+       bool auto_line_smoothing) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -1383,7 +1399,8 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
-          reuse_hierarchy, mixed_precision);
+          reuse_hierarchy, mixed_precision, false, false,
+          std::array<std::vector<double>,3>{}, auto_line_smoothing);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -1398,6 +1415,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     py::arg("beta_zero") = false,
     py::arg("reuse_hierarchy") = false,
     py::arg("mixed_precision") = false,
+    py::arg("auto_line_smoothing") = false,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -1433,6 +1451,9 @@ reuse_hierarchy : bool
   Update() keeps the AMG coarsening and interpolation of the first build and
   refreshes only the Galerkin coarse matrices (frozen interpolation), for a
   sequence of matrices on one sparsity pattern, e.g. Newton (default=False).
+auto_line_smoothing : bool
+  Enable CPU line smoothing on the finest coarsened nodal blocks (default=False).
+  Requires beta_zero and excludes mixed precision and hierarchy reuse.
 mixed_precision : bool
   The residual products inside the cycle (fine level and every AMG level) read
   float32 copies of the matrix values; vectors and sums stay double. The
