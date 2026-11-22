@@ -618,6 +618,8 @@ public:
     using NodalEdges = std::vector<std::vector<int>>;
     void SetLineTopology(shared_ptr<const NodalEdges> edges) { line_topology_ = std::move(edges); }
     int LineBlocks() const { return int(line_blocks_.size()); }
+    auto LineProfile() const { return line_profile_; }
+    int BandedLineBlocks() const { return banded_lines_; }
 
     void SetCoarsePseudoinverse(int max_rows) { coarse_pseudoinverse_max_ = max_rows; }
 
@@ -719,10 +721,13 @@ private:
     struct LineBlock {
         std::vector<int> nodes;
         std::vector<double> inverse;
+        std::vector<double> pivots, lower;
     };
     std::vector<LineBlock> line_blocks_;
     std::vector<int> line_id_;
     double line_weight_ = 0.5;
+    std::array<double,4> line_profile_{};
+    int banded_lines_ = 0;
     bool constant_nullspace_ = false;
     int coarse_pseudoinverse_max_ = 0;
     int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
@@ -1432,10 +1437,34 @@ private:
     }
 
     /// l1-Jacobi sweep: x += r / l1_norm (fully parallel, no data dependency)
+    static bool TridiagonalLDL(const std::vector<double>& diag,
+                              const std::vector<double>& off, double shift,
+                              double guard, std::vector<double>& pivots,
+                              std::vector<double>& lower) {
+        pivots.resize(diag.size());
+        lower.assign(diag.size(),0.0);
+        for (size_t i=0; i<diag.size(); ++i) {
+            double pivot=diag[i]-shift;
+            if (i) {
+                lower[i]=off[i]/pivots[i-1];
+                pivot-=lower[i]*off[i];
+            }
+            if (!std::isfinite(pivot) || pivot <= guard) return false;
+            pivots[i]=pivot;
+        }
+        return true;
+    }
+
     void BuildLines() {
+        auto stamp=std::chrono::steady_clock::now();
+        auto phase=[&](int idx) {
+            const auto end=std::chrono::steady_clock::now();
+            line_profile_[idx]+=std::chrono::duration<double>(end-stamp).count();
+            stamp=end;
+        };
         const auto& A = *levels_.front().A;
         const int n = A.Height();
-        std::vector<double> strongest(n);
+        std::vector<std::array<double,3>> strongest(n);
         struct Link { int a,b; double weight; };
         std::vector<Link> links;
         for (int i = 0; i < n; ++i) {
@@ -1446,13 +1475,17 @@ private:
                 const auto& neighbors = (*line_topology_)[i];
                 if (j == i || vals[k] >= 0 ||
                     !std::binary_search(neighbors.begin(), neighbors.end(), j)) continue;
-                strongest[i] = std::max(strongest[i], -vals[k]);
+                auto& top=strongest[i];
+                double candidate=-vals[k];
+                for (auto& w : top)
+                    if (candidate>w) std::swap(candidate,w);
                 if (i < j) links.push_back({i,j,-vals[k]});
             }
         }
         std::stable_sort(links.begin(), links.end(),
                          [](const Link& a,const Link& b) { return a.weight > b.weight; });
         std::vector<int> parent(n), degree(n), size(n,1);
+        std::vector<std::array<int,2>> path(n,{-1,-1});
         for (int i = 0; i < n; ++i) parent[i]=i;
         auto root = [&](int i) {
             while (parent[i] != i) {
@@ -1463,13 +1496,14 @@ private:
         };
         for (const auto& [a,b,w] : links) {
             if (degree[a] == 2 || degree[b] == 2 ||
-                w < 0.6 * std::max(strongest[a], strongest[b])) continue;
+                w < 0.6 * std::max(strongest[a][0], strongest[b][0]) ||
+                w <= 1.5 * std::max(strongest[a][2], strongest[b][2])) continue;
             const int ra=root(a), rb=root(b);
             if (ra == rb || size[ra]+size[rb] > 256) continue;
             parent[rb]=ra;
             size[ra]+=size[rb];
-            ++degree[a];
-            ++degree[b];
+            path[a][degree[a]++]=b;
+            path[b][degree[b]++]=a;
         }
         line_blocks_.clear();
         line_id_.assign(n,-1);
@@ -1487,6 +1521,27 @@ private:
             nodes.push_back(i);
             line_id_[i]=id;
         }
+        // Require mesh-scale coverage before changing the relaxation of this
+        // auxiliary block. Sparse incidental chains leave point Jacobi intact.
+        const int covered=int(std::count_if(line_id_.begin(),line_id_.end(),
+                                            [](int i){return i>=0;}));
+        if (2*covered < n) line_blocks_.clear();
+        if (!line_blocks_.empty()) {
+            for (auto& block : line_blocks_) {
+                const auto endpoint=std::find_if(block.nodes.begin(),block.nodes.end(),
+                                                  [&](int i){return degree[i]==1;});
+                const int first=*endpoint;
+                int prev=-1, node=first;
+                for (int k=0; k<int(block.nodes.size()); ++k) {
+                    block.nodes[k]=node;
+                    positions[node]=k;
+                    const int next=path[node][0]==prev ? path[node][1] : path[node][0];
+                    prev=node;
+                    node=next;
+                }
+            }
+        }
+        phase(0);
         if (line_blocks_.empty()) return;
         // For a PSD matrix, normalized off-diagonal block norms are at most one.
         // Bound the block-Jacobi spectrum by maximum block adjacency (self included).
@@ -1508,8 +1563,43 @@ private:
             max_neighbors=std::max(max_neighbors,int(std::unique(ids.begin(),ids.end())-ids.begin()));
         }
         line_weight_=std::min(0.5,1.9/max_neighbors);
+        phase(1);
         for (auto& block : line_blocks_) {
             const int m=int(block.nodes.size());
+            {
+                std::vector<double> diag(m), off(m);
+                bool tridiagonal=true;
+                double norm=0;
+                for (int k=0; k<m; ++k) {
+                    const int i=block.nodes[k];
+                    auto cols=A.GetRowIndices(i);
+                    auto vals=A.GetRowValues(i);
+                    for (int j=0; j<cols.Size(); ++j) {
+                        if (line_id_[cols[j]] != line_id_[i] || vals[j] == 0) continue;
+                        const int q=positions[cols[j]];
+                        if (q==k) diag[k]=vals[j];
+                        else if (q==k-1) off[k]+=0.5*vals[j];
+                        else if (q==k+1) off[q]+=0.5*vals[j];
+                        else tridiagonal=false;
+                    }
+                }
+                for (int k=0; k<m; ++k)
+                    norm=std::hypot(norm,std::hypot(diag[k],std::sqrt(2.0)*off[k]));
+                phase(2);
+                // Certify a positive spectral gap beyond the dense pseudoinverse cutoff.
+                // Any singular, nearly singular, or wider-band block uses the old PSD path.
+                const double guard=64*m*std::numeric_limits<double>::epsilon()*norm;
+                if (tridiagonal && std::isfinite(norm) && norm>0 &&
+                    TridiagonalLDL(diag,off,4*guard,guard,block.pivots,block.lower) &&
+                    TridiagonalLDL(diag,off,0,guard,block.pivots,block.lower)) {
+                    ++banded_lines_;
+                    phase(3);
+                    continue;
+                }
+                block.pivots.clear();
+                block.lower.clear();
+                phase(3);
+            }
             Matrix<double> dense(m,m);
             dense=0.0;
             for (int k=0; k<m; ++k) {
@@ -1519,7 +1609,9 @@ private:
                 for (int j=0; j<cols.Size(); ++j)
                     if (line_id_[cols[j]] == line_id_[i]) dense(k,positions[cols[j]])=vals[j];
             }
+            phase(2);
             block.inverse=SemidefiniteInverse(dense);
+            phase(3);
         }
     }
 
@@ -1541,6 +1633,20 @@ private:
         CompactParallelFor(line_blocks_.size(),[&](size_t bidx) {
             const auto& block=line_blocks_[bidx];
             const size_t n=block.nodes.size();
+            if (!block.pivots.empty()) {
+                std::array<double,256> work;
+                work[0]=r[block.nodes[0]];
+                for (size_t i=1; i<n; ++i) work[i]=r[block.nodes[i]]-block.lower[i]*work[i-1];
+                work[n-1]/=block.pivots[n-1];
+                for (size_t i=n-1; i>0; --i)
+                    work[i-1]=work[i-1]/block.pivots[i-1]-block.lower[i]*work[i];
+                for (size_t i=0; i<n; ++i) {
+                    const int row=block.nodes[i];
+                    if (initially_zero) out[row]=line_weight_*work[i];
+                    else out[row]+=line_weight_*work[i];
+                }
+                return;
+            }
             for (size_t i=0; i<n; ++i) {
                 double value=0;
                 for (size_t j=0; j<n; ++j) value+=block.inverse[i*n+j]*r[block.nodes[j]];

@@ -2464,6 +2464,8 @@ def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
     pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True)
     hierarchy = pre.auxiliary_hierarchy
     assert hierarchy["x"][1] and hierarchy["z"][1]
+    assert all(pre.line_setup_profile[axis][1] == hierarchy[name][1]
+               for axis, name in ((0, "x"), (2, "z")))
     assert all(len(hierarchy[axis][0]) > 1 for axis in "xz")
     with ng.TaskManager():
         first.data = pre * rhs
@@ -2473,3 +2475,28 @@ def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
     residual = rhs.CreateVector()
     residual.data = form.mat * solution - rhs
     assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10
+
+
+def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
+    import ngsolve as ng
+    from netgen.csg import unit_cube
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.12))
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    args = (form.mat, grad, None, *(coords[:, i].tolist() for i in range(3)))
+    point = HypreBasedAMSPreconditioner(*args, beta_zero=True)
+    auto = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True)
+    assert all(len(levels) > 1 and count == 0 for levels, count in auto.auxiliary_hierarchy.values())
+    rhs, expected, actual = (form.mat.CreateRowVector() for _ in range(3))
+    rhs.FV().NumPy()[:] = np.random.default_rng(121).standard_normal(space.ndof)
+    with ng.TaskManager():
+        expected.data = point * rhs
+        actual.data = auto * rhs
+    np.testing.assert_allclose(actual.FV().NumPy(), expected.FV().NumPy(), rtol=1e-12, atol=1e-13)

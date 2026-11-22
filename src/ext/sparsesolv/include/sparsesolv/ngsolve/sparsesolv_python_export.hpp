@@ -1031,6 +1031,12 @@ inline void ExportHypreBasedAMS(py::module& m) {
            "Owned real FP64 hierarchy snapshot; does not execute CUDA.")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
       .def_property_readonly("auto_line_smoothing", &HypreBasedAMS::GetAutoLineSmoothing)
+      .def_property_readonly("line_setup_profile", [](const HypreBasedAMS& ams) {
+        py::list result;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
+          if (amg) result.append(py::make_tuple(amg->LineBlocks(), amg->BandedLineBlocks(), amg->LineProfile()));
+        return result;
+      })
       .def_property_readonly("auxiliary_hierarchy", [](const HypreBasedAMS& ams) {
         py::dict result;
         const char* names[] = {"x", "y", "z"};
