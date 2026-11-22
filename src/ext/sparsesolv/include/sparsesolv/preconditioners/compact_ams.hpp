@@ -100,7 +100,7 @@ public:
                bool smoothing_only_rows = false,
                bool lean_coarse = false,
                std::array<std::vector<double>, 3> edge_vectors = {},
-               bool auto_line_smoothing = false)
+               bool auto_line_smoothing = false, std::vector<int> pmis_rank = {})
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
@@ -108,9 +108,17 @@ public:
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
           reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
           smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse),
-          edge_vectors_(std::move(edge_vectors)), auto_line_smoothing_(auto_line_smoothing)
+          edge_vectors_(std::move(edge_vectors)), auto_line_smoothing_(auto_line_smoothing), pmis_rank_(std::move(pmis_rank))
     {
         RequireSerialSetup();
+        if (!pmis_rank_.empty()) {
+            if (int(pmis_rank_.size())!=ndof_h1_)
+                throw std::invalid_argument("PMIS rank size does not match H1");
+            auto sorted=pmis_rank_;
+            std::sort(sorted.begin(),sorted.end());
+            for (int i=0; i<ndof_h1_; ++i)
+                if (sorted[i]!=i) throw std::invalid_argument("PMIS ranks must be a permutation");
+        }
         if (auto_line_smoothing_ && (!beta_zero_ || reuse_hierarchy_ || mixed_precision_ || subspace_solver_ != 0))
             throw std::invalid_argument("auto_line_smoothing requires curl-only default AMG without hierarchy reuse or mixed precision");
         if (mixed_precision_ && !beta_zero_)
@@ -365,6 +373,7 @@ private:
     // level with a dense inverse (CompactAMG::SetLeanCoarse).
     const bool lean_coarse_;
     const bool auto_line_smoothing_;
+    const std::vector<int> pmis_rank_;
     // Optional physical edge vectors (x, y, z per row of G). Empty: G * coord.
     // A periodic G has representative vertex columns, so G * coord would give
     // the vector across the period on edges touching the periodic faces.
@@ -696,6 +705,7 @@ private:
                     if (amg) {
                         // Curl-only blocks are semidefinite on normal terminal levels.
                         amg->SetCoarsePseudoinverse(beta_zero_ ? min_coarse_aux : 64);
+                        amg->SetPMISRank(pmis_rank_);
                         amg->SetNativeGalerkin(reuse_hierarchy_);
                         amg->SetMixedPrecision(mixed_precision_);
                         if (lean_coarse_) amg->SetLeanCoarse(0.8, 1024);

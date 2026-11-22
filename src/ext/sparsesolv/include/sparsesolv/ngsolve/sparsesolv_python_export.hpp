@@ -1031,6 +1031,12 @@ inline void ExportHypreBasedAMS(py::module& m) {
            "Owned real FP64 hierarchy snapshot; does not execute CUDA.")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
       .def_property_readonly("auto_line_smoothing", &HypreBasedAMS::GetAutoLineSmoothing)
+      .def_property_readonly("pmis_coarse_ids", [](const HypreBasedAMS& ams) {
+        py::list result;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
+          if (amg) result.append(amg->CoarsePriorityIds());
+        return result;
+      })
       .def_property_readonly("line_setup_profile", [](const HypreBasedAMS& ams) {
         py::list result;
         for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
@@ -1382,7 +1388,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
        bool beta_zero,
        bool reuse_hierarchy,
        bool mixed_precision,
-       bool auto_line_smoothing) -> shared_ptr<HypreBasedAMS>
+       bool auto_line_smoothing, std::vector<int> pmis_rank) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -1406,7 +1412,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
           reuse_hierarchy, mixed_precision, false, false,
-          std::array<std::vector<double>,3>{}, auto_line_smoothing);
+          std::array<std::vector<double>,3>{}, auto_line_smoothing, std::move(pmis_rank));
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -1422,6 +1428,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     py::arg("reuse_hierarchy") = false,
     py::arg("mixed_precision") = false,
     py::arg("auto_line_smoothing") = false,
+    py::arg("pmis_rank") = std::vector<int>{},
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -1457,6 +1464,10 @@ reuse_hierarchy : bool
   Update() keeps the AMG coarsening and interpolation of the first build and
   refreshes only the Galerkin coarse matrices (frozen interpolation), for a
   sequence of matrices on one sparsity pattern, e.g. Newton (default=False).
+pmis_rank : list of int
+  Optional H1-node ranks from radia.ngsolve_sparse.stable_pmis_rank.
+  These ranks fix both PMIS priorities and scan order without permuting the matrix.
+  Coarse points retain their fine-level ranks. An empty list uses the default PMIS.
 auto_line_smoothing : bool
   Enable CPU line smoothing on the finest coarsened nodal blocks (default=False).
   Requires beta_zero and excludes mixed precision and hierarchy reuse.

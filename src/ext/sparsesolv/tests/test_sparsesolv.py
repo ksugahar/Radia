@@ -2500,3 +2500,55 @@ def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
         expected.data = point * rhs
         actual.data = auto * rhs
     np.testing.assert_allclose(actual.FV().NumPy(), expected.FV().NumPy(), rtol=1e-12, atol=1e-13)
+
+
+@pytest.mark.parametrize("mesh_case", [(128, 2, 2), (2, 128, 2), (2, 2, 128), None])
+def test_ams_stable_pmis_keeps_coarse_points_under_permutation(mesh_case):
+    """Guards: fixed physical-node ranks and scan order survive DoF renumbering."""
+    import ngsolve as ng
+    from netgen.csg import unit_cube
+    from ngsolve.meshes import MakeStructured3DMesh
+    from scipy.sparse import csr_matrix
+    from radia.ngsolve_sparse import real_sparse_matrix_type, stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    if mesh_case is None:
+        mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.12))
+        fine_axis = None
+    else:
+        nx, ny, nz = mesh_case
+        mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+        fine_axis = mesh_case.index(128)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    gradient, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+
+    def csr(mat):
+        i, j, values = map(np.asarray, mat.COO())
+        return csr_matrix((values, (i, j)), shape=(mat.height, mat.width))
+
+    def native(mat):
+        coo = mat.tocoo()
+        return real_sparse_matrix_type().CreateFromCOO(
+            coo.row.tolist(), coo.col.tolist(), coo.data.tolist(), *coo.shape
+        )
+
+    system, grad = csr(form.mat), csr(gradient)
+    rng = np.random.default_rng(6641)
+    e, n = rng.permutation(system.shape[0]), rng.permutation(len(coords))
+    rank = stable_pmis_rank(coords, fine_axis=fine_axis)
+    permuted_rank = stable_pmis_rank(coords[n], fine_axis=fine_axis)
+    assert permuted_rank == np.asarray(rank)[n].tolist()
+    base = HypreBasedAMSPreconditioner(
+        native(system), native(grad), None, *coords.T.tolist(), beta_zero=True, pmis_rank=rank
+    )
+    permuted = HypreBasedAMSPreconditioner(
+        native(system[e][:, e]), native(grad[e][:, n]), None, *coords[n].T.tolist(),
+        beta_zero=True, pmis_rank=permuted_rank
+    )
+    assert all(levels for levels in base.pmis_coarse_ids)
+    assert permuted.pmis_coarse_ids == base.pmis_coarse_ids

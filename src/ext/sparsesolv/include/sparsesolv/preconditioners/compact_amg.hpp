@@ -429,6 +429,12 @@ public:
         AllocWorkVectors(lev0);
         levels_.push_back(std::move(lev0));
 
+        std::vector<int> ranks=pmis_rank_;
+        std::vector<double> priorities(ranks.size());
+        std::mt19937 pmis_rng(42);
+        std::uniform_real_distribution<double> pmis_dist(0.,1.);
+        for (double& value : priorities) value=pmis_dist(pmis_rng);
+        coarse_ids_.clear();
         // Build hierarchy
         for (int l = 0; l < max_levels_ - 1; l++) {
             auto& cur = levels_[l];
@@ -442,7 +448,7 @@ public:
             phase(0);
 
             // 2. PMIS coarsening
-            std::vector<int> cf_marker = CoarsenPMIS(S);
+            std::vector<int> cf_marker = CoarsenPMIS(S,ranks,priorities);
             phase(1);
 
             // Count C-points
@@ -494,6 +500,15 @@ public:
             phase(4);
             if (!next_lev.A) break;
 
+            if (!ranks.empty()) {
+                std::vector<int> next;
+                for (int i=0; i<cur.ndof; ++i)
+                    if (cf_marker[i]==1) next.push_back(ranks[i]);
+                ranks=std::move(next);
+                auto sorted=ranks;
+                std::sort(sorted.begin(),sorted.end());
+                coarse_ids_.push_back(std::move(sorted));
+            }
             next_lev.ndof = nc;
             ComputeL1Norms(*next_lev.A, next_lev.l1_norms);
             AllocWorkVectors(next_lev);
@@ -617,6 +632,8 @@ public:
     // Auxiliary Galerkin operators can have a kernel even with nonzero diagonals.
     using NodalEdges = std::vector<std::vector<int>>;
     void SetLineTopology(shared_ptr<const NodalEdges> edges) { line_topology_ = std::move(edges); }
+    void SetPMISRank(const std::vector<int>& rank) { pmis_rank_=rank; }
+    const auto& CoarsePriorityIds() const { return coarse_ids_; }
     int LineBlocks() const { return int(line_blocks_.size()); }
     auto LineProfile() const { return line_profile_; }
     int BandedLineBlocks() const { return banded_lines_; }
@@ -717,6 +734,8 @@ private:
     mutable int setup_workers_ = 0;
     mutable std::vector<double> dual_level_s_;
     double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
+    std::vector<int> pmis_rank_;
+    std::vector<std::vector<int>> coarse_ids_;
     shared_ptr<const NodalEdges> line_topology_;
     struct LineBlock {
         std::vector<int> nodes;
@@ -912,7 +931,8 @@ private:
     // PMIS Coarsening (Parallel Maximal Independent Set)
     // =====================================================================
     // Returns cf_marker: 1 = C-point, 0 = F-point
-    std::vector<int> CoarsenPMIS(const CSRGraph& S) const {
+    std::vector<int> CoarsenPMIS(const CSRGraph& S,const std::vector<int>& ranks,
+                                 const std::vector<double>& priorities) const {
         int n = S.n;
         std::vector<int> cf(n, -1);  // -1 = undecided
 
@@ -926,7 +946,15 @@ private:
         std::uniform_real_distribution<double> dist(0.0, 1.0);
 
         for (int i = 0; i < n; i++) {
-            measure[i] = (double)St.NumNeighbors(i) + dist(rng);
+            measure[i] = (double)St.NumNeighbors(i) +
+                         (ranks.empty() ? dist(rng) : priorities[ranks[i]]);
+        }
+
+        std::vector<int> scan;
+        if (!ranks.empty()) {
+            scan.resize(n);
+            for (int i=0; i<n; ++i) scan[i]=i;
+            std::sort(scan.begin(),scan.end(),[&](int a,int b){return ranks[a]<ranks[b];});
         }
 
         // PMIS iterations
@@ -935,7 +963,8 @@ private:
 
             // Phase 1: Mark new C-points (local maxima among undecided)
             std::vector<int> new_c;
-            for (int i = 0; i < n; i++) {
+            for (int pos=0; pos<n; ++pos) {
+                const int i=scan.empty() ? pos : scan[pos];
                 if (cf[i] != -1) continue;  // already decided
 
                 bool is_max = true;
