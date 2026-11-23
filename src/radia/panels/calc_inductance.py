@@ -1359,7 +1359,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     if esim_solver is not None and args.esim_per_panel:
         from radia.esim_panel_evaluator import PanelESIMEvaluator
         panel_evaluator = PanelESIMEvaluator(
-            esim_solver, mode=getattr(args, 'esim_panel_evaluator', 'table'),
+            esim_solver, mode=(getattr(args, 'esim_panel_evaluator', None) or 'table'),
             interpolation_tol=float(args.esim_tol) / 10,
             max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
     def surface_z():
@@ -2147,7 +2147,7 @@ def _strong_panel_esim(args, mesh, solve_em, *, field_scale):
     cell = material.create_esim_solver(args.frequency, args.half_thickness,
                                       geometry='cylinder', **depth_controls(args))
     seed = complex(require_esim_converged(cell.solve(5.), 'Strong ESIM seed')['Z'])
-    evaluator = PanelESIMEvaluator(cell, mode=getattr(args, 'esim_panel_evaluator', 'table'),
+    evaluator = PanelESIMEvaluator(cell, mode=(getattr(args, 'esim_panel_evaluator', None) or 'table'),
         interpolation_tol=float(args.esim_tol)/10,
         max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
     z, state, diagnostics = solve_panel_esim(evaluator, solve_em,
@@ -2884,7 +2884,11 @@ def run_inductance(args):
         return {'status': 'error', 'error':
                 '--esim-per-panel requires --impedance-model esim; '
                 'use --panel-zs-file for specified panel Zs.'}
-    if args.esim_per_panel and getattr(args, 'esim_panel_evaluator', 'table') != 'direct' and (
+    panel_evaluator = getattr(args, 'esim_panel_evaluator', None)
+    if panel_evaluator is not None and not args.esim_per_panel:
+        return {'status': 'error', 'error':
+                '--esim-panel-evaluator requires --esim-per-panel; it has no effect on uniform ESIM or SIBC.'}
+    if args.esim_per_panel and (panel_evaluator or 'table') != 'direct' and (
             args.impedance_model != 'esim'
             or int(args.h1_order) != 1
             or args.coil_only or not args.vol):
@@ -3155,8 +3159,8 @@ def build_argparser():
                              "the solved per-panel peak H_t; supports intree-dense "
                              "and HACApK on genus-0 workpieces. Adaptive table evaluation "
                              "is the default. Genus-1 and strong coupling require a supported P1 body path.")
-    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='table',
-                        help='Per-panel outer ESIM evaluation: adaptive log-H linear table (default) or direct reference. '
+    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default=None,
+                        help='Per-panel outer ESIM evaluation (requires --esim-per-panel): adaptive log-H linear table (default) or direct reference. '
                              'All panels are still directly certified at the final accepted field.')
     parser.add_argument('--esim-table-max-cells', type=int, default=4096,
                         help='Maximum direct cells used to construct the adaptive table; fail loud on exhaustion.')
