@@ -40,7 +40,8 @@
     "src/radia/panels/calc_inductance.py": [
       "tests/test_panel_esim_complete_state.py",
       "tests/test_bem_strong_panel_impedance.py",
-      "tests/test_bem_loop_panel_impedance.py"
+      "tests/test_bem_loop_panel_impedance.py",
+      "tests/test_calc_inductance_cli.py"
     ],
     "src/radia/esim_panel_evaluator.py": [
       "tests/test_panel_esim_complete_state.py",
@@ -439,6 +440,9 @@
     "src/radia/volume_fin.py": [
       "tests/test_volume_fin_contract.py"
     ],
+    "src/radia/fin_volume.py": [
+      "tests/test_fin_prima.py"
+    ],
     "src/radia/fin_observables.py": [
       "tests/test_volume_fin_contract.py"
     ],
@@ -581,9 +585,11 @@
         "tests/test_envelope_stop_core.py",
         "tests/test_axisym_measure_contract.py",
         "tests/test_calc_fem_kelvin_fail_loud.py",
+        "tests/test_calc_inductance_cli.py",
         "tests/test_sibc_corner_patch.py",
         "tests/test_boundary_material_adjacency.py",
         "tests/test_coil_axis_closed_form.py",
+        "tests/test_fin_prima.py",
         "tests/test_mixed_omega_newton.py",
         "tests/test_direct_residual_gate.py",
         "tests/test_cohomology_cut_linear_residual.py",
