@@ -1084,7 +1084,9 @@ inline void ExportHypreBasedAMS(py::module& m) {
            "Rebuild preconditioner with current matrix values (geometry preserved).")
       .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&ComplexHypreBasedAMS::Update),
            py::arg("new_a_real"),
-           "Update with a new real auxiliary matrix, then rebuild.");
+           "Update with a new real auxiliary matrix, then rebuild.")
+      .def_property_readonly("real", &ComplexHypreBasedAMS::RealShared,
+           "The real AMS built on the auxiliary matrix (shared by Re and Im).");
 
   m.def("CompactAMGPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
@@ -1509,7 +1511,9 @@ mixed_precision : bool
        int print_level,
        double correction_weight,
        int subspace_solver,
-       int num_smooth) -> shared_ptr<ComplexHypreBasedAMS>
+       int num_smooth,
+       bool auto_line_smoothing,
+       int line_max_length) -> shared_ptr<ComplexHypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(a_real_mat);
       if (!sp_mat)
@@ -1538,7 +1542,8 @@ mixed_precision : bool
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           ndof, cycle_type, print_level, correction_weight,
-          subspace_solver, num_smooth);
+          subspace_solver, num_smooth, false, false,
+          std::array<std::vector<double>, 3>{}, auto_line_smoothing, line_max_length);
     },
     py::arg("a_real_mat"),
     py::arg("grad_mat"),
@@ -1552,6 +1557,8 @@ mixed_precision : bool
     py::arg("correction_weight") = 1.0,
     py::arg("subspace_solver") = 0,
     py::arg("num_smooth") = 1,
+    py::arg("auto_line_smoothing") = false,
+    py::arg("line_max_length") = 256,
     R"raw_string(
 Complex Compact AMS preconditioner with TaskManager Re/Im parallelism.
 
@@ -1584,6 +1591,16 @@ cycle_type : int
   AMS cycle type (1=01210, 7=0201020, default=1).
 print_level : int
   Verbosity (0=silent, default=0).
+auto_line_smoothing : bool
+  Opt-in topology line smoothing on the finest level of the three nodal
+  auxiliary AMGs (Pi^T H Pi of the real auxiliary H), as in the real AMS,
+  with the gradient correction kept. Re and Im get the same symmetric line
+  smoother, so the preconditioner stays complex symmetric for COCR. Requires
+  subspace_solver=0. Detected lines and fallbacks: .real.line_setup_profile
+  (default=False).
+line_max_length : int
+  Diagnostic cap on merged line length, 16..1024 (default=256). Requires
+  auto_line_smoothing.
 )raw_string");
 
   RegisterAMSWirebasket();

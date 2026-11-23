@@ -101,7 +101,8 @@ public:
                bool lean_coarse = false,
                std::array<std::vector<double>, 3> edge_vectors = {},
                bool auto_line_smoothing = false, std::vector<int> pmis_rank = {},
-               int line_max_length = 256, bool line_rank_ties = false)
+               int line_max_length = 256, bool line_rank_ties = false,
+               bool lines_with_gradient = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
@@ -125,7 +126,10 @@ public:
             throw std::invalid_argument("line_rank_ties requires pmis_rank");
         if ((line_max_length_ != 256 || line_rank_ties_) && !auto_line_smoothing_)
             throw std::invalid_argument("line_max_length and line_rank_ties require auto_line_smoothing");
-        if (auto_line_smoothing_ && (!beta_zero_ || reuse_hierarchy_ || mixed_precision_ || subspace_solver_ != 0))
+        // lines_with_gradient: the complex path's real auxiliary H = K + omega M_sigma + eps M
+        // keeps the gradient correction; lines act only on the SPD Pi^T H Pi blocks.
+        if (auto_line_smoothing_ && ((!beta_zero_ && !lines_with_gradient) || reuse_hierarchy_
+                                     || mixed_precision_ || subspace_solver_ != 0))
             throw std::invalid_argument("auto_line_smoothing requires curl-only default AMG without hierarchy reuse or mixed precision");
         if (mixed_precision_ && !beta_zero_)
             throw std::invalid_argument("HypreBasedAMS: mixed_precision requires beta_zero (float32 matrix values "

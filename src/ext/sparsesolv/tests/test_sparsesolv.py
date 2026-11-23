@@ -2685,3 +2685,91 @@ def test_ams_line_options_fail_loudly_without_their_prerequisites():
                    dict(line_max_length=2048, auto_line_smoothing=True)):
         with pytest.raises((ValueError, RuntimeError)):
             HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)
+
+
+def _complex_hex_system(nx, ny, nz):
+    """K + i M on a structured hex mesh, with the real auxiliary K + M."""
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    forms = []
+    for is_complex in (True, False):
+        space = ng.HCurl(mesh, order=0, complex=is_complex)
+        u, v = space.TnT()
+        form = ng.BilinearForm(space)
+        form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        form += (1j if is_complex else 1.0) * ng.InnerProduct(u, v) * ng.dx
+        form.Assemble()
+        forms.append(form)
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return forms[0], forms[1], grad, coords
+
+
+def _complex_apply(pre, system, x):
+    import ngsolve as ng
+
+    rhs, out = system.mat.CreateRowVector(), system.mat.CreateRowVector()
+    rhs.FV().NumPy()[:] = x
+    with ng.TaskManager():
+        out.data = pre * rhs
+    return out.FV().NumPy().copy()
+
+
+def test_complex_ams_line_smoothing_is_opt_in():
+    """Guards: complex AMS keeps point Jacobi unless line smoothing is requested.
+
+    Assumes: separately built hierarchies agree to rounding only (LAPACK coarse
+    inverse), so implicit default and explicit off are compared at 1e-10 normwise.
+    """
+    from radia.sparsesolv_ngsolve import ComplexHypreBasedAMSPreconditioner
+
+    system, aux, grad, coords = _complex_hex_system(64, 4, 4)
+    args = (aux.mat, grad, None, *coords.T.tolist())
+    implicit = ComplexHypreBasedAMSPreconditioner(*args)
+    explicit = ComplexHypreBasedAMSPreconditioner(*args, auto_line_smoothing=False)
+    assert not implicit.real.auto_line_smoothing and not explicit.real.auto_line_smoothing
+    assert all(blocks == 0 for blocks, _, _ in implicit.real.line_setup_profile)
+    rng = np.random.default_rng(124)
+    x = rng.standard_normal(system.space.ndof) + 1j * rng.standard_normal(system.space.ndof)
+    a, b = _complex_apply(implicit, system, x), _complex_apply(explicit, system, x)
+    relative = np.linalg.norm(a - b) / np.linalg.norm(b)
+    assert relative <= 1e-10, f"relative difference {relative:.3e} exceeds 1e-10"
+    for kwargs in (dict(line_max_length=300), dict(auto_line_smoothing=True, subspace_solver=1)):
+        with pytest.raises((ValueError, RuntimeError)):
+            ComplexHypreBasedAMSPreconditioner(*args, **kwargs)
+
+
+def test_complex_ams_line_smoothing_selects_lines_and_stays_complex_symmetric():
+    """Guards: opt-in complex lines are built, change the apply, keep P^T = P and converge."""
+    import ngsolve as ng
+    from radia.sparsesolv_ngsolve import COCRSolver, ComplexHypreBasedAMSPreconditioner
+
+    system, aux, grad, coords = _complex_hex_system(64, 4, 4)
+    args = (aux.mat, grad, None, *coords.T.tolist())
+    point = ComplexHypreBasedAMSPreconditioner(*args)
+    line = ComplexHypreBasedAMSPreconditioner(*args, auto_line_smoothing=True)
+    assert line.real.auto_line_smoothing
+    profile = line.real.line_setup_profile
+    assert sum(blocks for blocks, _, _ in profile) > 0, profile
+    n = system.space.ndof
+    rng = np.random.default_rng(125)
+    x = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    y = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    px, py = _complex_apply(line, system, x), _complex_apply(line, system, y)
+    assert np.isfinite(px).all()
+    change = np.linalg.norm(px - _complex_apply(point, system, x)) / np.linalg.norm(px)
+    assert change > 1e-6, f"line apply equals point apply ({change:.3e})"
+    # Complex symmetric (bilinear, no conjugate): y^T P x = x^T P y.
+    asymmetry = abs(y @ px - x @ py) / (np.linalg.norm(y) * np.linalg.norm(px))
+    assert asymmetry < 1e-12, f"complex asymmetry {asymmetry:.3e}"
+    b = system.mat.CreateRowVector()
+    b.FV().NumPy()[:] = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    solution = system.mat.CreateRowVector()
+    solver = COCRSolver(system.mat, line, maxiter=300, tol=1e-10)
+    with ng.TaskManager():
+        solution.data = solver * b
+    r = b.CreateVector()
+    r.data = b - system.mat * solution
+    assert ng.Norm(r) / ng.Norm(b) < 1e-8, (solver.iterations, ng.Norm(r) / ng.Norm(b))
