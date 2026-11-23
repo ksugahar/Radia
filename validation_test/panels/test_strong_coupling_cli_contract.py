@@ -160,7 +160,7 @@ def test_panel_evaluator_default_and_reference(mode):
              '--vol','w.vol','--sigma','5.8e6']
     if mode: options += ['--esim-panel-evaluator',mode]
     ns=ci.build_argparser().parse_args(options)
-    assert ns.esim_panel_evaluator == (mode or 'table')
+    assert ns.esim_panel_evaluator == mode
 
 
 def test_default_table_does_not_reject_scalar_sibc_before_coil(monkeypatch):
