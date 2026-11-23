@@ -2685,3 +2685,39 @@ def test_ams_line_options_fail_loudly_without_their_prerequisites():
                    dict(line_max_length=2048, auto_line_smoothing=True)):
         with pytest.raises((ValueError, RuntimeError)):
             HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)
+
+
+def test_ams_singular_single_level_auxiliary_coarse_is_finite():
+    """Guards: a single-level auxiliary AMG whose Galerkin block is singular stays finite.
+
+    Assumes: on structured hexahedra the Pi blocks Pi^T (K + M) Pi have an alternating
+    nodal kernel, and a 16x2x2 mesh (153 vertices) gives one AMG level above the
+    64-row pseudo-inverse cap of the gradient-corrected AMS, so its coarsest level
+    reaches sparse Cholesky. Before the range check this apply was all NaN.
+    """
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=16, ny=2, nz=2)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += (ng.InnerProduct(ng.curl(u), ng.curl(v)) + ng.InnerProduct(u, v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    pre = HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist())
+    assert not pre.beta_zero
+    rhs, first, solution = (form.mat.CreateRowVector() for _ in range(3))
+    rhs.FV().NumPy()[:] = np.random.default_rng(126).standard_normal(space.ndof)
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-10, maxiter=200)
+        solution.data = cg * rhs
+    applied = first.FV().NumPy()
+    assert np.isfinite(applied).all(), f"{np.isnan(applied).sum()} of {applied.size} entries are NaN"
+    residual = rhs.CreateVector()
+    residual.data = rhs - form.mat * solution
+    relative = ng.Norm(residual) / ng.Norm(rhs)
+    assert relative < 1e-8, (cg.iterations, relative)
