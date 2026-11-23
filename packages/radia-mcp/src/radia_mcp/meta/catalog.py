@@ -32,9 +32,17 @@ CATALOG: dict[str, dict[str, Any]] = {
     "build123d-mcp": {
         "subpackage": "radia_mcp.build123d",
         "description": "build123d STEP authoring (CAD-as-code) + Cubit interop",
-        "primary_tools": ["build123d_api", "execute_build123d",
+        "primary_tools": ["build123d_api", "build123d_run", "execute_build123d",
+                            "build123d_render_views", "build123d_diff_shapes",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit", "gmsh-mcp", "radia-ngsolve"],
+        "related": ["cubit-mcp", "gmsh-mcp", "radia-ngsolve"],
+        "tags": ["cad"],
+    },
+    "onshape-mcp": {
+        "subpackage": "radia_mcp.onshape",
+        "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
+        "primary_tools": ["onshape_export_cad"],
+        "related": ["build123d-mcp"],
         "tags": ["cad"],
     },
     "gmsh-mcp": {
@@ -46,7 +54,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                           "gmsh_render",
                           "gmsh_write_post_launch_artifact",
                           "gmsh_usage", "gmsh_reference"],
-        "related": ["blender-mcp", "build123d-mcp", "cubit", "radia-ngsolve"],
+        "related": ["blender-mcp", "build123d-mcp", "cubit-mcp", "radia-ngsolve"],
         "audit_command": "radia-mcp serve gmsh-mcp --selftest --audit-repo",
         "tags": ["mesh"],
     },
@@ -70,7 +78,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "bem",
             "build123d-mcp",
-            "cubit",
+            "cubit-mcp",
             "fem",
             "force",
             "gmsh-mcp",
@@ -483,7 +491,7 @@ CATALOG: dict[str, dict[str, Any]] = {
 # policy (different repos, different conventions).
 # ============================================================
 EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
-    "cubit": {
+    "cubit-mcp": {
         "pypi": "cubit-mesh-export",
         "github": "https://github.com/ksugahar/cubit-mesh-export",
         "install": "pip install cubit-mesh-export",
@@ -519,7 +527,7 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
             "matlab-mcp-lab",
         ],
     },
-    "elf": {
+    "elf-magic-mcp": {
         "pypi": "mcp-server-elf",
         "github": "https://github.com/ksugahar/mcp-server-elf",
         "install": "pip install mcp-server-elf",
