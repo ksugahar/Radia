@@ -1226,8 +1226,12 @@ def gmsh_equal_flux_seeds(msh_path: str, origin: list, e_xi: list, e_eta: list,
     flux coordinates, signed total and target cell flux, orientation,
     placement residuals, an independent Gauss check of the cell fluxes
     (quadrature_order=0 skips it) and provenance. trace=True feeds the
-    seeds to the 3D streamline tracer (trace_options: its keyword
-    arguments). Fails on a sign-changing, zero or out-of-data patch.
+    seeds to the 3D streamline tracer with the same view and time_step.
+    trace_options may set step_size, max_steps, both_directions,
+    adaptive, closure, max_turn_deg, arrows_every, return_points,
+    out_file and timeout_s; any other key (including view, time_step or
+    seeds) is rejected. Fails on a sign-changing, zero or out-of-data
+    patch.
 
     Args:
         msh_path: .msh with a 3-component B view in tesla.
@@ -1237,11 +1241,11 @@ def gmsh_equal_flux_seeds(msh_path: str, origin: list, e_xi: list, e_eta: list,
         n_u: Seeds per flux row.
         n_v: Flux rows.
         table_nodes: Table samples per chart direction.
-        view_name: Vector view (default: first).
-        time_step: View step.
+        view_name: Vector view for probing and tracing (default: first).
+        time_step: View step for probing and tracing.
         quadrature_order: Gauss order of the cell-flux check (0 = off).
         trace: Trace field lines from the seeds.
-        trace_options: Keyword arguments for the tracer.
+        trace_options: Allowed tracer keywords (see above).
     """
     from .equal_flux import equal_flux_seeds_on_plane
 

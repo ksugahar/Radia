@@ -16,6 +16,12 @@ import numpy as np
 
 from .post_process import _check_input, probe_field, streamlines
 
+# Tracer keywords a caller may set. The adapter owns path, seeds, view and
+# time_step so that placement and tracing read the same view and step.
+TRACE_OPTIONS = frozenset({"step_size", "max_steps", "both_directions", "adaptive",
+                           "closure", "max_turn_deg", "arrows_every", "return_points",
+                           "out_file", "timeout_s"})
+
 
 def _probe_b(path: Path, view, time_step: int, timeout_s: float):
     def field(points):
@@ -45,10 +51,21 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
                               trace: bool = False, trace_options: dict | None = None,
                               timeout_s: float = 300.0) -> dict[str, Any]:
     """Seed the patch origin + xi e_xi + eta e_eta, xi, eta in [0, 1], with
-    n_u * n_v equal-flux seeds of the probed B view (SI: m, T, Wb)."""
+    n_u * n_v equal-flux seeds of the probed B view (SI: m, T, Wb).
+
+    view None selects the first view (index 0) for both probing and tracing.
+    trace_options may hold only TRACE_OPTIONS keys; others are rejected
+    before any probing.
+    """
     err = _check_input(path)
     if err:
         return err
+    options = dict(trace_options or {})
+    bad = sorted(set(options) - TRACE_OPTIONS)
+    if bad:
+        return {"ok": False, "error": f"unsupported trace_options {bad}; "
+                                      f"allowed: {sorted(TRACE_OPTIONS)}"}
+    view = 0 if view is None else view
     try:
         from radia.flux_seeding import cell_flux_quadrature, equal_flux_seeds, planar_patch
     except ImportError as exc:
@@ -95,6 +112,6 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
     }
     if trace:
         traced = streamlines(path, seeds=seeds.points_m.tolist(), view=view,
-                             time_step=int(time_step), **(trace_options or {}))
+                             time_step=int(time_step), **options)
         result["trace"] = traced
     return result

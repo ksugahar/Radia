@@ -66,3 +66,39 @@ def test_patch_outside_the_data_fails_loudly(tmp_path):
         _msh(tmp_path), [0.2, 0.2, 0.0], E_XI, E_ETA, n_u=2, n_v=2, table_nodes=3)
     assert result["ok"] is False
     assert "outside the field data" in result["error"]
+
+
+def _two_view_msh(tmp_path):
+    """B with steps 0 and 1 (step 1 doubles Bz), then an unrelated one-step view."""
+    rows = lambda k: [(i, [0.0, 0.0, k * float(bz(np.asarray(p, float)))]) for i, p in _P.items()]
+    other = [(i, [1.0]) for i in _P]
+    path = tmp_path / "two_views.msh"
+    path.write_text(_CUBE + field_section("NodeData", "B", 3, rows(1), step=0)
+                    + field_section("NodeData", "B", 3, rows(2), time=1.0, step=1)
+                    + field_section("NodeData", "other", 1, other), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("view", [None, 0, "B"])
+def test_one_view_and_step_serve_probe_and_trace(tmp_path, view):
+    """Guards: implicit and named views resolve once; step 1 of B is used throughout."""
+    result = equal_flux_seeds_on_plane(
+        _two_view_msh(tmp_path), ORIGIN, E_XI, E_ETA, n_u=2, n_v=2, table_nodes=3,
+        view=view, time_step=1, quadrature_order=0, trace=True,
+        trace_options={"step_size": 0.05, "max_steps": 40})
+    assert result["ok"] is True, result.get("error")
+    assert result["total_flux_Wb"] == pytest.approx(2 * 0.64)
+    assert result["provenance"]["view"] == (0 if view is None else view)
+    assert result["trace"]["ok"] is True, result["trace"].get("error")
+    assert len(result["trace"]["lines"]) == 4
+
+
+@pytest.mark.parametrize("key", ["view", "time_step", "seeds", "seed_start", "unknown"])
+def test_reserved_and_unknown_trace_options_are_rejected_first(tmp_path, key):
+    """Guards: reserved or unknown tracer keys fail before any probing."""
+    missing = tmp_path / "absent_field.msh"
+    missing.write_text(_CUBE, encoding="utf-8")  # no view: probing would fail differently
+    result = equal_flux_seeds_on_plane(
+        missing, ORIGIN, E_XI, E_ETA, n_u=2, n_v=2, trace=True, trace_options={key: 0})
+    assert result["ok"] is False
+    assert "unsupported trace_options" in result["error"] and key in result["error"]
