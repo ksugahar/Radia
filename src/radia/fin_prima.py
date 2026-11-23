@@ -25,6 +25,141 @@ import numpy as np
 from radia.prima_export import DescriptorPortModel
 
 
+def _uniform_field_emf_columns(lattice):
+    """Return the branch RHS coefficients of s H for exp(+j omega t).
+
+    Each bar path includes short legs to its circuit nodes. At collapsed
+    terminals these nodes are the station centroids. The legs make a change
+    of coordinate origin a discrete voltage gradient at the circuit nodes.
+    Columns correspond to Hx, Hy and Hz in A/m. Coordinates are in metres.
+    """
+    nodes = np.asarray(lattice.nodes, dtype=float)
+    branches = np.asarray(lattice.branches)
+    bars = np.asarray(lattice.branch_xyz, dtype=float)
+    start, end = nodes[branches[:, 0]], nodes[branches[:, 1]]
+    p0, p1 = bars[:, 0], bars[:, 1]
+    area = np.cross(start, p0) + np.cross(p0, p1) + np.cross(p1, end)
+    # A = mu0 (H cross r) / 2; the impressed voltage is -s integral(A dl).
+    return -(2e-7 * math.pi) * area
+
+
+
+def _reduce_uniform_field(topo, lattice, order, s0):
+    """Build a split current/potential basis for one port and three field axes."""
+    from scipy import linalg
+    from scipy.sparse import csr_matrix
+
+    L, R = np.asarray(topo["L"]), np.asarray(topo["R"])
+    branches = np.asarray(lattice.branches)
+    count, nodes = len(branches), len(lattice.nodes)
+    plus, minus = topo["ports"][0][:2]
+    indices = np.arange(count)
+    incidence = csr_matrix((np.r_[-np.ones(count), np.ones(count)],
+                            (branches.T.ravel(), np.tile(indices, 2))),
+                           shape=(nodes, count))
+    keep = np.arange(nodes) != minus
+    A = incidence[keep]
+    source = np.zeros(nodes)
+    # With destination-minus-source incidence, positive port current leaves the plus node.
+    source[plus], source[minus] = -1., 1.
+    flux = _uniform_field_emf_columns(lattice)
+
+    # Solve the real shifted saddle system by eliminating branch current.
+    if order >= count + nodes - 1:
+        raise ValueError("uniform-field PRIMA order must be below the full state dimension")
+    linalg.cholesky(L, check_finite=True)
+    K = np.array(L, order="F", copy=True)
+    K *= s0
+    K[indices, indices] += R
+    factor = linalg.cho_factor(K, overwrite_a=True)
+    lift = linalg.cho_solve(factor, A.T.toarray())
+    schur = linalg.cho_factor(A @ lift, overwrite_a=True)
+
+    def shifted_solve(branch_rhs, node_rhs):
+        current = linalg.cho_solve(factor, branch_rhs)
+        potential = linalg.cho_solve(schur, node_rhs - A @ current)
+        return np.r_[current + lift @ potential, potential]
+
+    basis = np.zeros((count + nodes - 1, order))
+    rank = 0
+    deflated = 0
+
+    def append(vector):
+        nonlocal rank, deflated
+        norm = linalg.norm(vector)
+        active = basis[:, :rank]
+        for _ in range(2):
+            vector -= active @ (active.T @ vector)
+        remainder = linalg.norm(vector)
+        if remainder <= 1e-10 * norm:
+            deflated += 1
+        elif rank == order:
+            raise ValueError("PRIMA order is below the independent field start-block rank")
+        else:
+            basis[:, rank] = vector / remainder
+            rank += 1
+
+    zero_node = np.zeros(nodes - 1)
+    append(shifted_solve(np.zeros(count), source[keep]))
+    for column in flux.T:
+        append(shifted_solve(column, zero_node))
+    index = 0
+    while index < rank < order:
+        append(shifted_solve(L @ basis[:count, index], zero_node))
+        index += 1
+
+    def range_basis(matrix):
+        vectors, singular, _ = linalg.svd(matrix, full_matrices=False)
+        return vectors[:, singular > singular[0] * 1e-10]
+
+    potential = range_basis(basis[count:, :rank])
+    current = range_basis(np.column_stack((range_basis(basis[:count, :rank]),
+                                           A.T @ potential)))
+    coupling = potential.T @ (A @ current)
+    m, n = current.shape[1], potential.shape[1]
+    G = np.block([[current.T @ (R[:, None] * current), -coupling.T],
+                  [coupling, np.zeros((n, n))]])
+    E = np.zeros_like(G)
+    E[:m, :m] = current.T @ (L @ current)
+    B = np.zeros((m + n, 4))
+    B[m:, 0] = potential.T @ source[keep]
+    B[:m, 1:] = current.T @ flux
+    return (G, E, B, current, potential, incidence, source, flux,
+            {"q": m + n, "arnoldi_rank": rank, "deflated": deflated, "s0": s0})
+
+
+def _evaluate_uniform_field(model, topo, frequency, drive):
+    """Lift and gate each input and the combined drive."""
+    G, E, B, current, potential, incidence, source, flux, info = model
+    s = 2j * math.pi * frequency
+    rhs = B.astype(complex)
+    rhs[:, 1:] *= s
+    # Evaluate all four inputs, including zero columns, then the physical drive.
+    scales = np.where(np.abs(drive) > 0, np.abs(drive), 1.)
+    rhs *= scales
+    responses = np.linalg.solve(G + s * E, rhs)
+    combined = responses @ (drive / scales)
+    lifted = np.column_stack((responses, combined))
+    m = current.shape[1]
+    currents = current @ lifted[:m]
+    voltages = np.zeros((len(source), 5), dtype=complex)
+    minus = topo["ports"][0][1]
+    voltages[np.arange(len(source)) != minus] = potential @ lifted[m:]
+    drives = np.column_stack((np.diag(scales), drive))
+    injection = source[:, None] * drives[0]
+    voltage = incidence.T @ voltages + s * flux @ drives[1:]
+    kcl_error = np.linalg.norm(incidence @ currents - injection, axis=0)
+    current_scale = np.where(drives[0] != 0, np.linalg.norm(injection, axis=0),
+                             np.linalg.norm(currents, axis=0))
+    kvl_error = np.linalg.norm(np.asarray(topo["R"])[:, None] * currents
+                               + s * (np.asarray(topo["L"]) @ currents) - voltage, axis=0)
+    tiny = np.finfo(float).tiny
+    kcl = kcl_error / np.maximum(current_scale, tiny)
+    kvl = kvl_error / np.maximum(np.linalg.norm(voltage, axis=0), tiny)
+    if not np.all((kcl <= 1e-6) & (kvl <= 1e-6)):
+        raise RuntimeError(f"{frequency:g} Hz uniform-field PRIMA failed true KCL/KVL: {kcl=}, {kvl=}")
+    return currents[:, -1], dict(info, kcl_relative=kcl, kvl_relative=kvl)
+
 def _ports(topology):
     ports = list(topology["ports"])
     if not ports:

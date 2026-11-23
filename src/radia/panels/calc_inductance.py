@@ -1003,7 +1003,7 @@ def _loop_regime(alpha_deg):
 _PHI_INC_POISSON_MAX_RESIDUAL = 0.10
 
 
-def _phi_inc_poisson(args, coil_data, wp_mesh, obs):
+def _phi_inc_poisson(args, coil_data, wp_mesh, obs, *, uniform_field=None):
     """phi_inc via surface-Poisson projection of the exact vertex H_inc.
 
     Evaluates the incident H at the workpiece vertices with the coil
@@ -1039,13 +1039,15 @@ def _phi_inc_poisson(args, coil_data, wp_mesh, obs):
         raise RuntimeError(
             f"unknown coil source_type {coil_data['source_type']!r}")
 
+    if uniform_field is not None:
+        H += uniform_field
     tris = np.array([[v.nr for v in el.vertices]
                      for el in wp_mesh.Elements(BND)], dtype=np.int64)
     return compute_phi_inc_surface_poisson(
         obs, tris, H, max_grad_residual=_PHI_INC_POISSON_MAX_RESIDUAL)
 
 
-def _solve_workpiece_weak_coupled(args, coil_data):
+def _solve_workpiece_weak_coupled(args, coil_data, *, uniform_field=None):
     """Workpiece BEM-SIBC + Telegen ΔL using whichever coil source exists.
 
     Branches on coil_data["source_type"] for both phi_inc bridge and
@@ -1128,6 +1130,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     panel_zs_file = getattr(args, 'panel_zs_file', '')
     if panel_zs_file and wp_genus not in (0, 1):
         raise ValueError('Specified panel Zs supports genus-0 or one supported flux-linked handle')
+    if uniform_field is not None and wp_genus != 0:
+        raise ValueError("uniform-field heating requires a genus-zero workpiece")
     _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
 
     # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
@@ -1257,7 +1261,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # gradient).  Early guards in run_inductance restrict this to
         # the weak-coupled P1 nodal path.
         phi_inc, phi_inc_grad_residual = _phi_inc_poisson(
-            args, coil_data, wp_mesh, obs)
+            args, coil_data, wp_mesh, obs, uniform_field=uniform_field)
         progress("BEM",
             f"surface-Poisson psi: grad-consistency residual "
             f"{phi_inc_grad_residual:.1%} "
@@ -1602,6 +1606,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             coil_data["paths"], coil_data["I_fil"],
             wp_centroids_arr, wp_areas_arr, wp_norms_arr, wp_phi_avg_arr,
             I_port=args.current)
+        if uniform_field is not None:
+            normal_B = (4e-7 * math.pi) * (wp_norms_arr @ uniform_field)
+            delta_L_complex += np.dot(wp_phi_avg_arr, wp_areas_arr * normal_B) / args.current**2
     else:  # surface
         coil_J_complex = (complex(args.current)
                            * coil_data["coil_J_per_tri"]).astype(complex)
@@ -2798,6 +2805,53 @@ def _export_coil_msh_viz(args, coil_data):
 # ======================================================================
 # Top-level dispatch
 # ======================================================================
+def run_fin_volume_prima_heating_sweep(args, *, frequencies, expansion_frequency,
+                                       uniform_field_A_per_m, output_dir):
+    """Run a shared-basis four-input sweep with direct weak SIBC excitation.
+
+    Uses the normal induction arguments and writes separate field artifacts
+    per input frequency. The uniform field is a real peak vector in A/m
+    phased with the electrical drive.
+    """
+    from argparse import Namespace
+    from pathlib import Path
+
+    from ngsolve import TaskManager
+    from radia.fin_volume import solve_fin_volume_prima_sweep
+
+    if (args.coil_solver != "fin-volume" or args.coupling_mode != "weak"
+            or args.impedance_model != "sibc" or args.h1_order != 1
+            or getattr(args, "panel_zs_file", "") or getattr(args, "esim_per_panel", False)
+            or not args.vol or args.wp_loop_dof == "on"):
+        raise ValueError("uniform-field heating requires fin-volume with weak scalar P1 SIBC")
+    field = np.asarray(uniform_field_A_per_m)
+    if (field.shape != (3,) or not np.isrealobj(field)
+            or not np.all(np.isfinite(field))):
+        raise ValueError("uniform_field_A_per_m needs three finite real Cartesian components")
+
+    with TaskManager():
+        sweep = solve_fin_volume_prima_sweep(
+            args.coil_step, frequencies=frequencies, expansion_frequency=expansion_frequency,
+            prima_order=args.fin_prima_order, sigma=args.coil_sigma,
+            current_A=args.current, n_layers=args.fin_n_layers, n_lanes=args.fin_n_lanes,
+            n_stations=args.fin_n_stations, n_outline=args.fin_n_outline,
+            lane_grading=args.fin_lane_grading, tip_lanes=args.fin_tip_lanes,
+            route=args.fin_route, uniform_field_A_per_m=field)
+        paths = [[(tuple(p0), tuple(p1))] for p0, p1 in sweep["lattice"].branch_xyz]
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        for i, point in enumerate(sweep["points"]):
+            wp_args = Namespace(**vars(args))
+            wp_args.frequency = point["frequency_hz"]
+            wp_args.msh_output = str(output / f"point-{i}.msh")
+            coil_data = dict(source_type="filament", paths=paths,
+                             I_fil=point["solution"]["I_fil"], n_filaments=len(paths))
+            began = time.perf_counter()
+            point["workpiece"] = _solve_workpiece_weak_coupled(
+                wp_args, coil_data, uniform_field=field)
+            point["workpiece_s"] = time.perf_counter() - began
+    return sweep
+
 def run_inductance(args):
     """Top-level orchestrator.  Returns dict; calc_main wraps to JSON."""
     if getattr(args, "fin_prima_order", None) is not None and args.coil_solver != "fin-volume":
