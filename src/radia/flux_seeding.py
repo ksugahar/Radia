@@ -52,7 +52,10 @@ def equal_flux_seeds(
     the pulled-back magnetic flux form, B dot (X_s cross X_v). Supply a
     one-to-one oriented chart and a field of one sign on the patch.
     Sign and non-vanishing are checked at the sampled interior points.
-    The coefficient may vanish at chart boundaries.
+    The coefficient may vanish on the s boundaries and at isolated
+    boundary points. A v slice on which it vanishes identically, such as
+    a v boundary with no normal flux, has no strictly monotone cumulative
+    flux and is rejected.
 
     Integrate in s with the trapezoidal rule and set u=0 at s_reference.
     The sampled cumulative integral is piecewise linear in s and v. A
