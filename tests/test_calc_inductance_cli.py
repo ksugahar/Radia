@@ -25,7 +25,7 @@ def test_strong_esim_rejected_before_coil_solve(monkeypatch):
                         lambda *_: (_ for _ in ()).throw(AssertionError('coil accessed')))
     result = calc_inductance.run_inductance(args)
     assert result['status'] == 'error'
-    assert 'ESIM is unsupported' in result['error']
+    assert 'Strong nonlinear ESIM requires --esim-per-panel' in result['error']
 
 
 def test_sibc_esim_per_panel_rejected_before_coil_solve(monkeypatch):
@@ -40,9 +40,11 @@ def test_sibc_esim_per_panel_rejected_before_coil_solve(monkeypatch):
     assert '--esim-per-panel requires --impedance-model esim' in result['error']
 
 
-@pytest.mark.parametrize('extra', [[], ['--esim-per-panel', '--h1-order', '2'],
-                                  ['--esim-per-panel', '--coupling-mode', 'strong']])
-def test_panel_acceleration_rejected_on_unsupported_path_before_coil(monkeypatch, extra):
+@pytest.mark.parametrize('extra, expected', [
+    (['--esim-per-panel', '--h1-order', '2'], 'requires P1 per-panel ESIM'),
+    (['--esim-per-panel', '--coupling-mode', 'strong'], 'Strong per-panel ESIM requires a B-H file'),
+])
+def test_panel_acceleration_rejected_on_unsupported_path_before_coil(monkeypatch, extra, expected):
     args = calc_inductance.build_argparser().parse_args([
         '--coil-solver', 'peec', '--frequency', '1000', '--sigma', '5.8e7',
         '--coil-step', 'not-read.step', '--vol', 'not-read.vol',
@@ -51,7 +53,6 @@ def test_panel_acceleration_rejected_on_unsupported_path_before_coil(monkeypatch
                         lambda *_: (_ for _ in ()).throw(AssertionError('coil accessed')))
     result = calc_inductance.run_inductance(args)
     assert result['status'] == 'error'
-    expected = 'ESIM is unsupported' if '--coupling-mode' in extra else 'requires weak P1 per-panel ESIM'
     assert expected in result['error']
 
 @pytest.mark.parametrize(("solver", "input_flag", "entry"), [
