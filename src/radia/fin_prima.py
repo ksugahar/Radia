@@ -60,7 +60,8 @@ def _reduce_uniform_field(topo, lattice, order, s0):
     keep = np.arange(nodes) != minus
     A = incidence[keep]
     source = np.zeros(nodes)
-    source[plus], source[minus] = 1., -1.
+    # With destination-minus-source incidence, positive port current leaves the plus node.
+    source[plus], source[minus] = -1., 1.
     flux = _uniform_field_emf_columns(lattice)
 
     # Solve the real shifted saddle system by eliminating branch current.

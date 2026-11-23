@@ -321,7 +321,8 @@ def test_uniform_field_emf_obeys_faraday_and_terminal_gauge():
 
 
 
-def test_uniform_field_sweep_matches_dense_mna(monkeypatch):
+@pytest.mark.parametrize("field_free", [False, True], ids=["mixed", "field-free"])
+def test_uniform_field_sweep_matches_dense_mna(monkeypatch, field_free):
     """Guards: a single basis handles the four inputs and gates lifted currents."""
     from types import SimpleNamespace
 
@@ -334,7 +335,8 @@ def test_uniform_field_sweep_matches_dense_mna(monkeypatch):
     factor = rng.normal(size=(6, 6))
     L = 1e-6 * (factor.T @ factor + np.eye(6))
     R = np.linspace(.1, .2, 6)
-    topology = {"L": L, "R": R, "ports": [(1, 0)]}
+    topology = {"L": L, "R": R, "ports": [(1, 0)],
+                "segment_nodes": branches, "n_nodes": len(nodes)}
     calls = []
 
     def assemble(*args, **kwargs):
@@ -342,7 +344,7 @@ def test_uniform_field_sweep_matches_dense_mna(monkeypatch):
         return None, lat, None, topology, {}
 
     monkeypatch.setattr(fin_volume, "assemble_fin_volume", assemble)
-    field = np.array([.2 + .4j, -.9, .6])
+    field = np.zeros(3) if field_free else np.array([.2 + .4j, -.9, .6])
     drive = 1.5
     frequencies = (F_OP / 2, F_OP, 2 * F_OP)
     trial = fin_volume.solve_fin_volume_prima_sweep(
@@ -352,16 +354,23 @@ def test_uniform_field_sweep_matches_dense_mna(monkeypatch):
     assert calls == [12000]
     assert tuple(p["frequency_hz"] for p in trial["points"]) == frequencies
 
-    # Independently assemble grounded MNA and rectangular-loop Faraday sources.
+    if field_free:
+        legacy_basis = fin_volume._build_fin_prima(topology, 8, F_OP)
+
+    # Independently assemble grounded MNA and straight-segment Faraday sources.
     incidence = (np.eye(4)[branches[:, 1]] - np.eye(4)[branches[:, 0]]).T[1:]
     flux_rhs = np.r_[np.zeros(3), -2e-7 * np.pi * field[[2, 1, 0]] * [1, -1, 1]]
     for point in trial["points"]:
         s = 2j * np.pi * point["frequency_hz"]
         matrix = np.block([[np.diag(R) + s * L, -incidence.T],
                            [incidence, np.zeros((3, 3))]])
-        reference = np.linalg.solve(matrix, np.r_[s * flux_rhs, drive, 0., 0.])[:6]
+        reference = np.linalg.solve(matrix, np.r_[s * flux_rhs, -drive, 0., 0.])[:6]
         result = point["solution"]
         np.testing.assert_allclose(result["I_fil"], reference, rtol=1e-6, atol=1e-10)
+        if field_free:
+            legacy, _ = fin_volume._evaluate_fin_prima(
+                legacy_basis, len(branches), point["frequency_hz"], drive)
+            np.testing.assert_allclose(result["I_fil"], legacy, rtol=1e-6, atol=1e-10)
         assert max(result["prima"]["kcl_relative"]) <= 1e-6
         assert max(result["prima"]["kvl_relative"]) <= 1e-6
         assert result["coil_power_W"] == pytest.approx(.5 * np.vdot(reference, R * reference).real)
