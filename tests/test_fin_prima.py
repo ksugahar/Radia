@@ -283,3 +283,85 @@ def test_fin_prima_sweep_rejects_a_later_residual_failure(monkeypatch):
             expansion_frequency=F_OP, prima_order=24, sigma=5.8e7, current_A=10.0,
             n_layers=1, n_lanes=8, n_stations=5, lane_grading="uniform", box_order=4)
     assert evaluated == list(points[:2])
+
+
+
+def test_uniform_field_emf_obeys_faraday_and_terminal_gauge():
+    """Guards: directed flux, three field axes and collapsed-terminal closure."""
+    from types import SimpleNamespace
+
+    from radia.fin_prima import _uniform_field_emf_columns
+
+    # Orthogonal loop edges of length 2 m and 3 m.
+    corners = np.array([[0., 0., 0.], [1.2, 1.6, 0.], [1.2, 1.6, 3.], [0., 0., 3.]])
+    branches = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+    bars = corners[branches]
+    nodes = corners.copy()
+    nodes[0] = [0.2, 0.3, 0.4]
+    model = SimpleNamespace(nodes=nodes, branches=branches, branch_xyz=bars)
+    emf = _uniform_field_emf_columns(model)
+    expected_area = np.array([4.8, -3.6, 0.])
+    np.testing.assert_allclose(emf.sum(axis=0), -4e-7 * np.pi * expected_area,
+                               rtol=1e-13, atol=1e-19)
+    shift = np.array([2., -4., 8.])
+    shifted = SimpleNamespace(nodes=nodes + shift, branches=branches,
+                              branch_xyz=bars + shift)
+    shifted_emf = _uniform_field_emf_columns(shifted)
+    node_step = nodes[branches[:, 1]] - nodes[branches[:, 0]]
+    np.testing.assert_allclose(shifted_emf - emf,
+                               -2e-7 * np.pi * np.cross(shift, node_step),
+                               rtol=1e-13, atol=1e-19)
+    omega = 2 * np.pi * F_OP
+    impedance = 2.0 + 1j * omega * 8e-6
+    drives = np.column_stack((np.eye(3), [0.4, -0.9, 0.6]))
+    expected = -1j * omega * 4e-7 * np.pi * (expected_area @ drives) / impedance
+    for columns in (emf, shifted_emf):
+        current = 1j * omega * (columns.sum(axis=0) @ drives) / impedance
+        np.testing.assert_allclose(current, expected, rtol=1e-13, atol=1e-14)
+
+
+
+def test_uniform_field_sweep_matches_dense_mna(monkeypatch):
+    """Guards: a single basis handles the four inputs and gates lifted currents."""
+    from types import SimpleNamespace
+
+    from radia import fin_volume
+
+    nodes = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
+    branches = np.array([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
+    lat = SimpleNamespace(nodes=nodes, branches=branches, branch_xyz=nodes[branches])
+    rng = np.random.default_rng(3)
+    factor = rng.normal(size=(6, 6))
+    L = 1e-6 * (factor.T @ factor + np.eye(6))
+    R = np.linspace(.1, .2, 6)
+    topology = {"L": L, "R": R, "ports": [(1, 0)]}
+    calls = []
+
+    def assemble(*args, **kwargs):
+        calls.append(kwargs["max_branches"])
+        return None, lat, None, topology, {}
+
+    monkeypatch.setattr(fin_volume, "assemble_fin_volume", assemble)
+    field = np.array([.2 + .4j, -.9, .6])
+    drive = 1.5
+    frequencies = (F_OP / 2, F_OP, 2 * F_OP)
+    trial = fin_volume.solve_fin_volume_prima_sweep(
+        None, frequencies=frequencies, expansion_frequency=F_OP, prima_order=8,
+        sigma=5.8e7, current_A=drive, n_layers=1, n_lanes=8, n_stations=5,
+        max_branches=13000, uniform_field_A_per_m=field)
+    assert calls == [12000]
+    assert tuple(p["frequency_hz"] for p in trial["points"]) == frequencies
+
+    # Independently assemble grounded MNA and rectangular-loop Faraday sources.
+    incidence = (np.eye(4)[branches[:, 1]] - np.eye(4)[branches[:, 0]]).T[1:]
+    flux_rhs = np.r_[np.zeros(3), -2e-7 * np.pi * field[[2, 1, 0]] * [1, -1, 1]]
+    for point in trial["points"]:
+        s = 2j * np.pi * point["frequency_hz"]
+        matrix = np.block([[np.diag(R) + s * L, -incidence.T],
+                           [incidence, np.zeros((3, 3))]])
+        reference = np.linalg.solve(matrix, np.r_[s * flux_rhs, drive, 0., 0.])[:6]
+        result = point["solution"]
+        np.testing.assert_allclose(result["I_fil"], reference, rtol=1e-6, atol=1e-10)
+        assert max(result["prima"]["kcl_relative"]) <= 1e-6
+        assert max(result["prima"]["kvl_relative"]) <= 1e-6
+        assert result["coil_power_W"] == pytest.approx(.5 * np.vdot(reference, R * reference).real)
