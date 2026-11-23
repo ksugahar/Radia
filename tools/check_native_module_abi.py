@@ -60,12 +60,18 @@ def _probe_in_process(module_name: str, source_root: Path) -> dict[str, str]:
     }
 
 
+# Operational bound, not an acceptance criterion: the first import of a freshly
+# linked module in a new CI venv measured 27.9-48.2 s on the build host, so
+# 30 s cut off loads that succeed. A timeout still fails the check.
+PROBE_TIMEOUT_SECONDS = 90.0
+
+
 def probe_module(
     module_name: str,
     source_root: Path,
     *,
     python_executable: str = sys.executable,
-    timeout: float = 30.0,
+    timeout: float = PROBE_TIMEOUT_SECONDS,
 ) -> dict[str, str]:
     """Import one module in an isolated interpreter and return its inventory."""
     command = [
