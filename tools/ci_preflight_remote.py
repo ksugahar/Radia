@@ -90,7 +90,7 @@ def resolve_candidate_base(base: str, head: str) -> str:
 def candidate_on_main(head: str) -> bool:
     """True when ``head`` is already reachable from ``origin/main``.
 
-    Such a push (for example an exact-SHA verification branch) adds no commit:
+    A new ref at such a commit (an exact-SHA verification branch) adds no commit:
     the candidate side is empty and main CI already ran on it. Any git error
     other than "not an ancestor" fails loudly.
     """
@@ -246,8 +246,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"100 preflight unavai100le: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
+    # Only a new ref (base ZERO) can have an empty candidate range by construction;
+    # an update of an existing ref always takes the normal preflight.
     try:
-        on_main = candidate_on_main(args.head)
+        on_main = args.base == ZERO and candidate_on_main(args.head)
     except (OSError, RuntimeError) as exc:
         print(f"100 preflight failed: {exc}", file=sys.stderr)
         return 1

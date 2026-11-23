@@ -85,6 +85,21 @@ def test_push_of_a_commit_already_on_main_skips_without_bundle(monkeypatch, tmp_
     assert 'Preflight skipped' in capsys.readouterr().out
 
 
+def test_existing_ref_update_to_a_main_commit_keeps_normal_preflight(monkeypatch, tmp_path):
+    """Guards: the skip applies only to a new ref; an existing ref update still bundles."""
+    repo, base, head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    calls = []
+    def stop(*args):
+        calls.append(args)
+        raise RuntimeError('bundle reached')
+    monkeypatch.setattr(module, 'create_bundle', stop)
+    assert module.main(['--base', head, '--head', base]) == 1
+    assert len(calls) == 1 and calls[0][:2] == (head, base)
+
+
 def test_unknown_candidate_ancestry_fails_loudly(tmp_path):
     repo, _base, _head = _main_and_feature(tmp_path)
     module = _load_module()

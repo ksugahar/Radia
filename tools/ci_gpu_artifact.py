@@ -119,7 +119,7 @@ def request(route):
 
 
 def newest_main_sha():
-    # Artifact listing is newest-first and paginated; only unexpired push/main
+    # Artifact listing is newest-first and paginated; only unexpired main
     # artifacts qualify. Commit order below determines newest main ancestry.
     available = {}
     page = 1
