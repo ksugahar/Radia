@@ -2478,6 +2478,12 @@ def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
 
 
 def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
+    """Guards: without detected lines, opt-in line smoothing keeps the point-Jacobi apply.
+
+    Assumes: two separately built hierarchies agree only to rounding, because the
+    semidefinite coarse inverse uses LAPACK, whose bitwise output can depend on memory
+    alignment. Any line smoother would change the apply by far more than 1e-10.
+    """
     import ngsolve as ng
     from netgen.csg import unit_cube
     from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
@@ -2499,7 +2505,9 @@ def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
     with ng.TaskManager():
         expected.data = point * rhs
         actual.data = auto * rhs
-    np.testing.assert_allclose(actual.FV().NumPy(), expected.FV().NumPy(), rtol=1e-12, atol=1e-13)
+    actual_np, expected_np = actual.FV().NumPy(), expected.FV().NumPy()
+    relative = np.linalg.norm(actual_np - expected_np) / np.linalg.norm(expected_np)
+    assert relative <= 1e-10, f"relative difference {relative:.3e} exceeds 1e-10"
 
 
 @pytest.mark.parametrize("mesh_case", [(128, 2, 2), (2, 128, 2), (2, 2, 128), None])
