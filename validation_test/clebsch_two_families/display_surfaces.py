@@ -19,7 +19,7 @@ Written: <out>.msh (MSH 4.2 ASCII, for Gmsh) and <out>.json.
   ElementData "family_label" and "local_leakage |Bh.n|/|Bh|" at quad centres
              (display only; the integrated leakage is in the JSON)
 
-Usage: python display_surfaces.py --out C:/temp/job/display [--config 2x1x1:6]
+Usage: python display_surfaces.py --out display [--config 2x1x1:6]
 """
 import argparse
 import hashlib
@@ -229,7 +229,8 @@ def main():
     res = {"script": os.path.basename(__file__),
            "script_sha256": hashlib.sha256(open(os.path.abspath(__file__), "rb").read()).hexdigest(),
            "two_families_sha256": hashlib.sha256(open(tf.__file__, "rb").read()).hexdigest(),
-           "args": vars(a), "config": {"n_x": nx, "n_y": ny, "n_z": nz, "order": k},
+           "args": {**vars(a), "out": os.path.basename(a.out)},
+           "config": {"n_x": nx, "n_y": ny, "n_z": nz, "order": k},
            "versions": {"ngsolve": ngs.__version__, "numpy": np.__version__, "python": platform.python_version()},
            "input_field": "B_h = curl(A_h), A_h in HCurl(order k), copied into HDiv(order k); no H, no constitutive law",
            "projection": pdiag, "patch_flux": patch, "surfaces": surf_rec,
