@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import importlib.metadata
+import json
 import importlib.util
 import sys
 import tomllib
@@ -32,6 +33,7 @@ from radia.mesh_curve import straight_curve_order
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED_VERSION = "6.2.2608"
+FORK_LOCK = json.loads((ROOT / "tools" / "ci_fork_wheels.json").read_text(encoding="utf-8"))
 
 
 def _dependencies(path: Path) -> set[str]:
@@ -41,7 +43,12 @@ def _dependencies(path: Path) -> set[str]:
 
 def test_ngsolve_netgen_runtime_matches_radia_exact_package_pins():
     assert ng.__version__ == PINNED_VERSION
-    assert importlib.metadata.version("netgen-mesher") == PINNED_VERSION
+    # The runtime is the locked fork build: its local version segment names
+    # the fork commit, and the public metadata pin stays on the base release.
+    for name, wheel in FORK_LOCK["wheels"].items():
+        installed = importlib.metadata.version(name)
+        assert installed == wheel["version"], (name, installed, wheel["version"])
+        assert installed.split("+", 1)[0] == PINNED_VERSION, (name, installed)
 
     radia_dependencies = _dependencies(ROOT / "pyproject.toml")
     expected = {
@@ -82,7 +89,8 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
     assert "RADIA_CI_VENV=" in workflow
     assert "NGSOLVE_DIR=" in workflow
     assert "Netgen_DIR=" in workflow
-    assert "ngsolve.__version__==want['ngsolve']" in workflow
+    assert "tools/ci_fork_wheels.py install" in workflow
+    assert "tools/ci_fork_wheels.py verify" in workflow
     assert "Get-Command git -ErrorAction Stop" in workflow
     assert "RADIA_CI_GIT_DIR=$gitDir" in workflow
     assert '$env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"' in workflow

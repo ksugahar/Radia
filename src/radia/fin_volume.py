@@ -24,12 +24,15 @@ non-parallel bars.  No reduction is applied here.
 from __future__ import annotations
 
 import math
+import operator
+import time
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 
 import numpy as np
 
 LONGITUDINAL, CIRCUMFERENTIAL, RADIAL = 0, 1, 2
-BOX_ORDER = 24  # spectrum converged on fin_beak 24x6 s27: order 24 vs 32 min eig within 1 %
+BOX_ORDER = 16  # fin_beak 24x6 s25 vs order 24: R -0.014 %, L +0.043 %, P_wp -0.001 %, 4.2x faster L; order 12 fails the energy gate
 
 
 @dataclass(frozen=True)
@@ -385,8 +388,8 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
                      n_lanes, n_stations, n_outline=None, lane_grading=None,
                      tip_lanes=None, exponent=2.0, route="auto",
                      cad_units_per_meter="auto", max_branches=None,
-                     box_order=BOX_ORDER, backend="cpu"):
-    """STEP -> unreduced volume-lattice PEEC branch currents (peak phasors).
+                     box_order=BOX_ORDER, backend="cpu", prima_order=None):
+    """STEP -> volume-lattice PEEC branch currents (peak phasors).
 
     ``backend`` selects the route explicitly: ``"cpu"`` builds L with the
     C++ builder and solves on the host; ``"gpu"`` assembles, gates and
@@ -398,13 +401,20 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
     the lattice).  Filament mutuals make the lattice L indefinite: the
     transverse bars are short, wide plates.  Before the solve, L must pass
     :func:`require_energy_admissible`.
-    """
-    from radia.fin_surface_solver import coil_true_residuals
-    from radia.peec_topology import PEECCircuitSolver
 
+    ``prima_order`` (CPU only, opt-in) replaces the dense solve by a PRIMA
+    model of that order expanded at ``s0 = 2 pi frequency``
+    (:func:`radia.peec_matrices.prima_reduce`).  The branch currents are
+    recovered from the projection basis and must pass the same KCL/KVL true
+    residual gate as the unreduced solve, or the call raises.  The order is
+    the caller's choice: it is accepted only through that gate, never
+    selected or raised here.
+    """
     if frequency <= 0 or sigma <= 0:
         raise ValueError("fin-volume needs frequency > 0 and sigma > 0")
     if backend == "gpu":
+        if prima_order is not None:
+            raise ValueError("prima_order is CPU-only; the GPU route has no PRIMA reduction")
         sweep, lat = fin_volume_lattice(
             step_path, n_layers=n_layers, n_lanes=n_lanes, n_stations=n_stations,
             n_outline=n_outline, lane_grading=lane_grading, tip_lanes=tip_lanes,
@@ -416,17 +426,81 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
         return out
     if backend != "cpu":
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
+    if prima_order is not None:
+        prima_order = _validate_prima_order(prima_order)
     sweep, lat, _builder, topo, energy = assemble_fin_volume(
         step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
         n_stations=n_stations, n_outline=n_outline, lane_grading=lane_grading,
         tip_lanes=tip_lanes, exponent=exponent, route=route,
         cad_units_per_meter=cad_units_per_meter, max_branches=max_branches,
         box_order=box_order)
-    peec = PEECCircuitSolver(topo)
+    reduced = None if prima_order is None else _build_fin_prima(topo, prima_order, frequency)
+    return _solve_assembled_fin_volume(sweep, lat, topo, energy, frequency=frequency,
+                                       sigma=sigma, current_A=current_A, box_order=box_order,
+                                       reduced=reduced)
 
-    r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc, dtype=float)
-    current = np.asarray(peec.compute_branch_currents(frequency, [float(current_A)]),
-                         dtype=complex)
+
+def solve_fin_volume_prima_sweep(step_path, *, frequencies, expansion_frequency,
+                                 prima_order, sigma, current_A, n_layers,
+                                 n_lanes, n_stations, n_outline=None, lane_grading=None,
+                                 tip_lanes=None, exponent=2.0, route="auto",
+                                 cad_units_per_meter="auto", max_branches=None,
+                                 box_order=BOX_ORDER):
+    """Return CPU fin-volume results in input order, using a single PRIMA basis.
+
+    Frequencies and the caller-selected real expansion frequency are in Hz.
+    Each restored current must pass the full-order KCL/KVL gate. Any failed
+    point raises, and no partial sweep is returned. Setup times are reported
+    once. The caller owns the TaskManager region, as for the single solve.
+    """
+    order = _validate_prima_order(prima_order)
+    points = tuple(float(f) for f in frequencies)
+    center = float(expansion_frequency)
+    if not points or any(not math.isfinite(f) or f <= 0 for f in (*points, center)):
+        raise ValueError("PRIMA sweep needs finite positive frequencies and expansion_frequency")
+    if not math.isfinite(sigma) or sigma <= 0:
+        raise ValueError("PRIMA sweep needs finite positive sigma")
+    if not math.isfinite(current_A) or current_A == 0:
+        raise ValueError("PRIMA sweep needs finite nonzero current_A")
+    start = time.perf_counter()
+    sweep, lat, _, topo, energy = assemble_fin_volume(
+        step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
+        n_stations=n_stations, n_outline=n_outline, lane_grading=lane_grading,
+        tip_lanes=tip_lanes, exponent=exponent, route=route,
+        cad_units_per_meter=cad_units_per_meter, max_branches=max_branches,
+        box_order=box_order)
+    assembly_s = time.perf_counter() - start
+    reduced = _build_fin_prima(topo, order, center)
+    points_out = []
+    for frequency in points:
+        start = time.perf_counter()
+        result = _solve_assembled_fin_volume(
+            sweep, lat, topo, energy, frequency=frequency, sigma=sigma,
+            current_A=current_A, box_order=box_order, reduced=reduced)
+        result["prima"].pop("t_reduce_s")
+        points_out.append(dict(frequency_hz=frequency, solve_s=time.perf_counter() - start,
+                               solution=result))
+    return dict(assembly_s=assembly_s, basis_s=reduced[1]["t_reduce_s"], points=points_out)
+
+
+def _solve_assembled_fin_volume(sweep, lat, topo, energy, *, frequency, sigma,
+                                current_A, box_order, reduced):
+    from radia.fin_surface_solver import coil_true_residuals
+    from radia.peec_topology import PEECCircuitSolver
+
+    prima = None
+    if reduced is None:
+        peec = PEECCircuitSolver(topo)
+        r_branch = np.asarray(np.diag(peec.R_dc) if peec.R_dc.ndim == 2 else peec.R_dc,
+                              dtype=float)
+        current = np.asarray(peec.compute_branch_currents(frequency, [float(current_A)]),
+                             dtype=complex)
+    else:
+        current, prima = _evaluate_fin_prima(reduced, len(lat.branches), frequency,
+                                             float(current_A))
+        r_branch = np.asarray(topo["R"], dtype=float)
+        peec = SimpleNamespace(segment_nodes=np.asarray(lat.branches), n_nodes=len(lat.nodes),
+                               ports=topo["ports"], L=np.asarray(topo["L"]))
     residuals = coil_true_residuals(peec, r_branch.astype(complex), current,
                                     frequency, float(current_A))
     i2 = abs(current_A) ** 2
@@ -440,7 +514,44 @@ def solve_fin_volume(step_path, *, frequency, sigma, current_A, n_layers,
             "energy_receipt": energy_receipt(topo["L"], lat.branches, current),
             "coil_power_W": 0.5 * r_total * i2, "skin_depth_m": delta,
             "n_branches": int(len(lat.branches)), "n_nodes": int(len(lat.nodes)),
-            "paths": paths, "I_fil": current, "backend": "cpu"}
+            "paths": paths, "I_fil": current, "backend": "cpu", "prima": prima}
+
+
+def _validate_prima_order(value):
+    if not isinstance(value, (bool, np.bool_)):
+        try:
+            order = operator.index(value)
+        except TypeError:
+            pass
+        else:
+            if order > 0:
+                return order
+    raise ValueError(f"prima_order must be a positive integer, got {value!r}")
+
+
+def _build_fin_prima(topo, order, expansion_frequency):
+    from radia.peec_matrices import prima_reduce
+
+    s0 = 2 * math.pi * float(expansion_frequency)
+    plus, minus = (int(k) for k in topo["ports"][0][:2])
+    branches = np.ascontiguousarray(topo["segment_nodes"], dtype=np.int32)
+    start = time.perf_counter()
+    red = prima_reduce(np.asarray(topo["L"], dtype=float), np.asarray(topo["R"], dtype=float),
+                       branches, int(topo["n_nodes"]), [plus], [minus], order, s0)
+    return red, {"order": order, "q": int(red["q"]), "s0": s0,
+                 "deflated": list(red["deflated"]),
+                 "max_solve_residual": float(red["max_solve_residual"]),
+                 "min_E_eig_over_max": float(red["min_E_eig_over_max"]),
+                 "t_reduce_s": time.perf_counter() - start}
+
+
+def _evaluate_fin_prima(reduced, branch_count, frequency, current_A):
+    red, info = reduced
+    G, E, B, V = (np.asarray(red[k], dtype=float) for k in ("G", "E", "B", "V"))
+    start = time.perf_counter()
+    xq = np.linalg.solve(G + 2j * math.pi * frequency * E, B[:, 0] * current_A)
+    current = V[:branch_count] @ xq
+    return current, dict(info, t_eval_s=time.perf_counter() - start)
 
 
 def bar_geometry(lattice):
