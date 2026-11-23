@@ -1,6 +1,9 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "tools/check_native_module_abi.py": [
+      "tests/test_native_module_abi.py"
+    ],
     "tools/build_linux.py": [
       "tests/test_linux_build.py",
       "tests/test_blas_provider_contract.py"

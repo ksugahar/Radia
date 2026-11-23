@@ -103,9 +103,13 @@ def test_native_release_keeps_generated_context_outside_source_tree():
     assert memory["with"]["path"] == (
         "${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json"
     )
-    assert "src/radia/*.pyd.build.json" in (
-        steps["Upload native binary artifact"]["with"]["path"]
-    )
+    record = steps["Record the CPU natives with their hashes"]["run"]
+    assert 'Join-Path $env:RUNNER_TEMP "radia-cpu-natives-' in record, record
+    assert "ci_cpu_natives.py record --source-dir src/radia --out $natives" in record, record
+    assert '"RADIA_CPU_NATIVES_DIR=$natives" | Out-File $env:GITHUB_ENV' in record, record
+    actual_path = steps["Upload native binary artifact"]["with"]["path"]
+    expected_path = "${{ env.RADIA_CPU_NATIVES_DIR }}"
+    assert actual_path == expected_path, (actual_path, expected_path)
     for key, value in {
         "OMP_NUM_THREADS": "8", "NGS_NUM_THREADS": "8",
         "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
