@@ -51,6 +51,48 @@ def test_new_remote_branch_uses_main_merge_base(tmp_path):
     assert module.resolve_candidate_base(module.ZERO, head) == base
 
 
+def _main_and_feature(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "ci@example.invalid")
+    _git(repo, "config", "user.name", "CI Test")
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "base.txt")
+    _git(repo, "commit", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    (repo / "feature.txt").write_text("feature\n", encoding="utf-8")
+    _git(repo, "add", "feature.txt")
+    _git(repo, "commit", "-m", "feature")
+    return repo, base, _git(repo, "rev-parse", "HEAD")
+
+
+def test_push_of_a_commit_already_on_main_skips_without_bundle(monkeypatch, tmp_path, capsys):
+    """Guards: an exact-SHA verification branch push does not crash on an empty bundle.
+    Assumes: origin/main already passed main CI for that commit."""
+    repo, base, head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    assert module.candidate_on_main(base) is True
+    assert module.candidate_on_main(head) is False
+    def forbidden(*args, **kwargs):
+        pytest.fail('A commit already on main needs no bundle or transport')
+    monkeypatch.setattr(module, 'create_bundle', forbidden)
+    monkeypatch.setattr(module, 'run', forbidden)
+    assert module.main(['--base', module.ZERO, '--head', base]) == 0
+    assert 'Preflight skipped' in capsys.readouterr().out
+
+
+def test_unknown_candidate_ancestry_fails_loudly(tmp_path):
+    repo, _base, _head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    with pytest.raises(RuntimeError, match='cannot test candidate ancestry'):
+        module.candidate_on_main('f' * 40)
+
+
 @pytest.mark.parametrize('mapping,host,expected', [
     ('', '100', '100'),
     ('100=compute', '100', 'compute'),
@@ -78,6 +120,7 @@ def _mock_candidate(monkeypatch, module, tmp_path):
     monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
     monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw: pytest.fail('Preflight must not query GitHub runner inventory'))
     monkeypatch.setattr(module, 'create_bundle', lambda *a: 'a' * 40)
+    monkeypatch.setattr(module, 'candidate_on_main', lambda head: False)
     real_tempdir = module.tempfile.TemporaryDirectory
     monkeypatch.setattr(module.tempfile, 'TemporaryDirectory', lambda **kw:
         real_tempdir(dir=tmp_path))
