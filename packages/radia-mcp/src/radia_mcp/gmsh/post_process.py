@@ -402,11 +402,14 @@ try:
             detect_closure = bool(cfg.get("closure", True))
             angle_max = _math.radians(float(cfg.get("max_turn_deg", 10.0)))
             max_steps = int(cfg.get("max_steps", 400))
-            n_seeds = max(1, int(cfg.get("n_seeds", 10)))
-            s0, s1 = cfg["seed_start"], cfg["seed_end"]
-            seeds = [[s0[k] + (s1[k] - s0[k]) *
-                      (i / (n_seeds - 1) if n_seeds > 1 else 0.0)
-                      for k in range(3)] for i in range(n_seeds)]
+            if cfg.get("seeds") is not None:
+                seeds = [list(map(float, q)) for q in cfg["seeds"]]
+            else:
+                n_seeds = max(1, int(cfg.get("n_seeds", 10)))
+                s0, s1 = cfg["seed_start"], cfg["seed_end"]
+                seeds = [[s0[k] + (s1[k] - s0[k]) *
+                          (i / (n_seeds - 1) if n_seeds > 1 else 0.0)
+                          for k in range(3)] for i in range(n_seeds)]
             both = bool(cfg.get("both_directions", True))
 
             def _sample(q):
@@ -1791,8 +1794,9 @@ def harmonic_to_time(path: str | Path, *, view: str | int | None = None,
                      timeout_s)
 
 
-def streamlines(path: str | Path, seed_start: list[float],
-                seed_end: list[float], *, n_seeds: int = 10,
+def streamlines(path: str | Path, seed_start: list[float] | None = None,
+                seed_end: list[float] | None = None, *, n_seeds: int = 10,
+                seeds: list[list[float]] | None = None,
                 view: str | int | None = None,
                 step_size: float | None = None, max_steps: int = 400,
                 both_directions: bool = True, time_step: int = 0,
@@ -1802,6 +1806,9 @@ def streamlines(path: str | Path, seed_start: list[float],
                 out_file: str | Path | None = None,
                 timeout_s: float = 600.0) -> dict[str, Any]:
     """Trace field lines of a vector view from seeds on a line segment.
+
+    Pass an explicit ``seeds`` list of [x, y, z] points instead of the
+    segment to trace from precomputed seeds, such as equal-flux seeds.
 
     Probe-driven arc-length RK4 with curvature ADAPTIVITY (step_size =
     bbox diagonal / 200 by default and is the MAXIMUM step; it halves
@@ -1818,8 +1825,19 @@ def streamlines(path: str | Path, seed_start: list[float],
     if err:
         return err
     try:
-        s0 = _finite_vector(seed_start, "seed_start", 3)
-        s1 = _finite_vector(seed_end, "seed_end", 3)
+        if seeds is not None:
+            if seed_start is not None or seed_end is not None:
+                raise ValueError("pass either seeds or seed_start/seed_end")
+            clean_seeds = [_finite_vector(q, "seeds", 3) for q in seeds]
+            if not clean_seeds:
+                raise ValueError("seeds must contain at least one point")
+            s0 = s1 = None
+        else:
+            if seed_start is None or seed_end is None:
+                raise ValueError("seed_start and seed_end are required without seeds")
+            clean_seeds = None
+            s0 = _finite_vector(seed_start, "seed_start", 3)
+            s1 = _finite_vector(seed_end, "seed_end", 3)
         clean_step = (None if step_size is None else
                       _finite_float(step_size, "step_size"))
         clean_turn = _finite_float(max_turn_deg, "max_turn_deg")
@@ -1840,6 +1858,7 @@ def streamlines(path: str | Path, seed_start: list[float],
         return {"ok": False, "error": "time_step must be non-negative"}
     return _run_post({"op": "streamlines", "path": str(path), "view": view,
                       "seed_start": s0, "seed_end": s1,
+                      "seeds": clean_seeds,
                       "n_seeds": int(n_seeds),
                       "step_size": clean_step,
                       "max_steps": int(max_steps),
