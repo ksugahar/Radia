@@ -99,7 +99,9 @@ public:
                bool mixed_precision = false,
                bool smoothing_only_rows = false,
                bool lean_coarse = false,
-               std::array<std::vector<double>, 3> edge_vectors = {})
+               std::array<std::vector<double>, 3> edge_vectors = {},
+               bool auto_line_smoothing = false, std::vector<int> pmis_rank = {},
+               int line_max_length = 256, bool line_rank_ties = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
@@ -107,9 +109,24 @@ public:
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
           reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
           smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse),
-          edge_vectors_(std::move(edge_vectors))
+          edge_vectors_(std::move(edge_vectors)), auto_line_smoothing_(auto_line_smoothing), pmis_rank_(std::move(pmis_rank)),
+          line_max_length_(line_max_length), line_rank_ties_(line_rank_ties)
     {
         RequireSerialSetup();
+        if (!pmis_rank_.empty()) {
+            if (int(pmis_rank_.size())!=ndof_h1_)
+                throw std::invalid_argument("PMIS rank size does not match H1");
+            auto sorted=pmis_rank_;
+            std::sort(sorted.begin(),sorted.end());
+            for (int i=0; i<ndof_h1_; ++i)
+                if (sorted[i]!=i) throw std::invalid_argument("PMIS ranks must be a permutation");
+        }
+        if (line_rank_ties_ && pmis_rank_.empty())
+            throw std::invalid_argument("line_rank_ties requires pmis_rank");
+        if ((line_max_length_ != 256 || line_rank_ties_) && !auto_line_smoothing_)
+            throw std::invalid_argument("line_max_length and line_rank_ties require auto_line_smoothing");
+        if (auto_line_smoothing_ && (!beta_zero_ || reuse_hierarchy_ || mixed_precision_ || subspace_solver_ != 0))
+            throw std::invalid_argument("auto_line_smoothing requires curl-only default AMG without hierarchy reuse or mixed precision");
         if (mixed_precision_ && !beta_zero_)
             throw std::invalid_argument("HypreBasedAMS: mixed_precision requires beta_zero (float32 matrix values "
                 "lose the gauge-scale gradient components that the G correction amplifies)");
@@ -216,6 +233,7 @@ public:
     bool GetBetaZero() const { return beta_zero_; }
     bool GetReuseHierarchy() const { return reuse_hierarchy_; }
     bool GetMixedPrecision() const { return mixed_precision_; }
+    bool GetAutoLineSmoothing() const { return auto_line_smoothing_; }
     /// Pi_x/y/z (and their transposes) share one pattern: one pass serves all three.
     bool GetPiFused() const { return pi_fused_; }
     int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
@@ -360,6 +378,10 @@ private:
     // Auxiliary AMGs stop coarsening where it stalls and solve a small coarsest
     // level with a dense inverse (CompactAMG::SetLeanCoarse).
     const bool lean_coarse_;
+    const bool auto_line_smoothing_;
+    const std::vector<int> pmis_rank_;
+    const int line_max_length_;
+    const bool line_rank_ties_;
     // Optional physical edge vectors (x, y, z per row of G). Empty: G * coord.
     // A periodic G has representative vertex columns, so G * coord would give
     // the vector across the period on edges touching the periodic faces.
@@ -671,10 +693,31 @@ private:
                 amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
                 amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
                 amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                if (auto_line_smoothing_) {
+                    auto edges = make_shared<CompactAMG::NodalEdges>(ndof_h1_);
+                    for (int e=0; e<grad_->Height(); ++e) {
+                        auto cols=grad_->GetRowIndices(e);
+                        if (cols.Size()!=2 || (freedofs_ && !freedofs_->Test(e))) continue;
+                        (*edges)[cols[0]].push_back(cols[1]);
+                        (*edges)[cols[1]].push_back(cols[0]);
+                    }
+                    for (auto& neighbors : *edges) {
+                        std::sort(neighbors.begin(),neighbors.end());
+                        neighbors.erase(std::unique(neighbors.begin(),neighbors.end()),neighbors.end());
+                    }
+                    for (const auto& amg : {amg_Pix,amg_Piy,amg_Piz}) {
+                        amg->SetLineTopology(edges);
+                        amg->SetLineMaxLength(line_max_length_);
+                        amg->SetLineRankTies(line_rank_ties_);
+                    }
+                }
                 // reuse_hierarchy: coarse matrices from the native Galerkin product
                 // (the refresh path's numeric pass then runs on those patterns).
                 for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
                     if (amg) {
+                        // Curl-only blocks are semidefinite on normal terminal levels.
+                        amg->SetCoarsePseudoinverse(beta_zero_ ? min_coarse_aux : 64);
+                        amg->SetPMISRank(pmis_rank_);
                         amg->SetNativeGalerkin(reuse_hierarchy_);
                         amg->SetMixedPrecision(mixed_precision_);
                         if (lean_coarse_) amg->SetLeanCoarse(0.8, 1024);

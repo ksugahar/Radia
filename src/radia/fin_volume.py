@@ -445,13 +445,15 @@ def solve_fin_volume_prima_sweep(step_path, *, frequencies, expansion_frequency,
                                  n_lanes, n_stations, n_outline=None, lane_grading=None,
                                  tip_lanes=None, exponent=2.0, route="auto",
                                  cad_units_per_meter="auto", max_branches=None,
-                                 box_order=BOX_ORDER):
+                                 box_order=BOX_ORDER, uniform_field_A_per_m=None):
     """Return CPU fin-volume results in input order, using a single PRIMA basis.
 
     Frequencies and the caller-selected real expansion frequency are in Hz.
     Each restored current must pass the full-order KCL/KVL gate. Any failed
     point raises, and no partial sweep is returned. Setup times are reported
-    once. The caller owns the TaskManager region, as for the single solve.
+    once. An optional uniform field supplies Cartesian peak phasors in A/m.
+    In that mode each input and the combined drive are gated at every point.
+    The returned coil loss includes both excitations. The caller owns the TaskManager region, as for the single solve.
     """
     order = _validate_prima_order(prima_order)
     points = tuple(float(f) for f in frequencies)
@@ -462,6 +464,17 @@ def solve_fin_volume_prima_sweep(step_path, *, frequencies, expansion_frequency,
         raise ValueError("PRIMA sweep needs finite positive sigma")
     if not math.isfinite(current_A) or current_A == 0:
         raise ValueError("PRIMA sweep needs finite nonzero current_A")
+    drive = None
+    if uniform_field_A_per_m is not None:
+        field = np.asarray(uniform_field_A_per_m, dtype=complex)
+        if field.shape != (3,) or not np.all(np.isfinite(field)):
+            raise ValueError("uniform_field_A_per_m needs three finite Cartesian components")
+        drive = np.r_[current_A, field]
+        from radia.fin_sweep import DEFAULT_MAX_BRANCHES
+
+        if max_branches is None:
+            max_branches = DEFAULT_MAX_BRANCHES
+        max_branches = min(DEFAULT_MAX_BRANCHES, max_branches)
     start = time.perf_counter()
     sweep, lat, _, topo, energy = assemble_fin_volume(
         step_path, sigma=sigma, n_layers=n_layers, n_lanes=n_lanes,
@@ -470,6 +483,24 @@ def solve_fin_volume_prima_sweep(step_path, *, frequencies, expansion_frequency,
         cad_units_per_meter=cad_units_per_meter, max_branches=max_branches,
         box_order=box_order)
     assembly_s = time.perf_counter() - start
+    if drive is not None:
+        from radia.fin_prima import _evaluate_uniform_field, _reduce_uniform_field
+
+        start = time.perf_counter()
+        reduced = _reduce_uniform_field(topo, lat, order, 2 * math.pi * center)
+        basis_s = time.perf_counter() - start
+        points_out = []
+        for frequency in points:
+            start = time.perf_counter()
+            current, info = _evaluate_uniform_field(reduced, topo, frequency, drive)
+            result = dict(I_fil=current, coil_power_W=0.5 * float(
+                np.vdot(current, np.asarray(topo["R"]) * current).real),
+                prima=info)
+            points_out.append(dict(frequency_hz=frequency,
+                                   solve_s=time.perf_counter() - start, solution=result))
+        return dict(assembly_s=assembly_s, basis_s=basis_s, points=points_out,
+                    sweep=sweep, lattice=lat, inductance_energy=energy)
+
     reduced = _build_fin_prima(topo, order, center)
     points_out = []
     for frequency in points:

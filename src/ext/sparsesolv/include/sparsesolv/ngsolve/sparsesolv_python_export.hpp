@@ -1030,6 +1030,39 @@ inline void ExportHypreBasedAMS(py::module& m) {
       .def("_accelerator_snapshot", &AcceleratorAMS,
            "Owned real FP64 hierarchy snapshot; does not execute CUDA.")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
+      .def_property_readonly("auto_line_smoothing", &HypreBasedAMS::GetAutoLineSmoothing)
+      .def_property_readonly("pmis_coarse_ids", [](const HypreBasedAMS& ams) {
+        py::list result;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
+          if (amg) result.append(amg->CoarsePriorityIds());
+        return result;
+      })
+      .def_property_readonly("line_partitions", [](const HypreBasedAMS& ams) {
+        py::list result;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
+          if (amg) result.append(amg->LinePartitions());
+        return result;
+      })
+      .def_property_readonly("line_setup_profile", [](const HypreBasedAMS& ams) {
+        py::list result;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()})
+          if (amg) result.append(py::make_tuple(amg->LineBlocks(), amg->BandedLineBlocks(), amg->LineProfile()));
+        return result;
+      })
+      .def_property_readonly("auxiliary_hierarchy", [](const HypreBasedAMS& ams) {
+        py::dict result;
+        const char* names[] = {"x", "y", "z"};
+        int i = 0;
+        for (auto* amg : {ams.GetBPixAsAMG(), ams.GetBPiyAsAMG(), ams.GetBPizAsAMG()}) {
+          if (amg) {
+            std::vector<int> rows;
+            for (const auto& level : amg->DualLevelProfile()) rows.push_back(int(level[0]));
+            result[names[i]] = py::make_tuple(rows, amg->LineBlocks());
+          }
+          ++i;
+        }
+        return result;
+      })
       .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
       .def_property_readonly("mixed_precision", &HypreBasedAMS::GetMixedPrecision)
       .def_property_readonly("hierarchy_refreshes", &HypreBasedAMS::GetHierarchyRefreshes,
@@ -1347,6 +1380,8 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     .def("Evaluate", &LowestOrderCurlResidual::Evaluate, py::arg("x"), py::arg("source_mean"),
          py::arg("grid"), py::arg("nu"), py::arg("dhdb"), py::arg("load"), py::arg("residual"));
 
+  m.def("_probe_tridiagonal_line", &CompactAMG::ProbeTridiagonalLine);
+
   m.def("HypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
        shared_ptr<BaseMatrix> grad_mat,
@@ -1360,7 +1395,9 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
        int num_smooth,
        bool beta_zero,
        bool reuse_hierarchy,
-       bool mixed_precision) -> shared_ptr<HypreBasedAMS>
+       bool mixed_precision,
+       bool auto_line_smoothing, std::vector<int> pmis_rank,
+       int line_max_length, bool line_rank_ties) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -1383,7 +1420,9 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
-          reuse_hierarchy, mixed_precision);
+          reuse_hierarchy, mixed_precision, false, false,
+          std::array<std::vector<double>,3>{}, auto_line_smoothing, std::move(pmis_rank),
+          line_max_length, line_rank_ties);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -1398,6 +1437,10 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     py::arg("beta_zero") = false,
     py::arg("reuse_hierarchy") = false,
     py::arg("mixed_precision") = false,
+    py::arg("auto_line_smoothing") = false,
+    py::arg("pmis_rank") = std::vector<int>{},
+    py::arg("line_max_length") = 256,
+    py::arg("line_rank_ties") = false,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -1433,6 +1476,18 @@ reuse_hierarchy : bool
   Update() keeps the AMG coarsening and interpolation of the first build and
   refreshes only the Galerkin coarse matrices (frozen interpolation), for a
   sequence of matrices on one sparsity pattern, e.g. Newton (default=False).
+pmis_rank : list of int
+  Optional H1-node ranks from radia.ngsolve_sparse.stable_pmis_rank.
+  These ranks fix both PMIS priorities and scan order without permuting the matrix.
+  Coarse points retain their fine-level ranks. An empty list uses the default PMIS.
+line_max_length : int
+  Diagnostic cap on merged line length, 16..1024 (default=256). Requires auto_line_smoothing.
+line_rank_ties : bool
+  Diagnostic: order exactly equal link strengths by pmis_rank endpoint ranks instead of
+  input order (default=False). Requires pmis_rank and auto_line_smoothing.
+auto_line_smoothing : bool
+  Enable CPU line smoothing on the finest coarsened nodal blocks (default=False).
+  Requires beta_zero and excludes mixed precision and hierarchy reuse.
 mixed_precision : bool
   The residual products inside the cycle (fine level and every AMG level) read
   float32 copies of the matrix values; vectors and sums stay double. The
