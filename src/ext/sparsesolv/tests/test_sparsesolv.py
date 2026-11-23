@@ -2358,3 +2358,330 @@ class TestICPreconditionerRegression:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def _dense(matrix):
+    rows, columns, values = map(np.asarray, matrix.COO())
+    result = np.zeros((matrix.height, matrix.width))
+    np.add.at(result, (rows, columns), values)
+    return result
+
+
+def _sparse(matrix):
+    from radia.ngsolve_sparse import real_sparse_matrix_type
+
+    rows, columns = np.nonzero(matrix)
+    return real_sparse_matrix_type().CreateFromCOO(
+        rows.tolist(), columns.tolist(), matrix[rows, columns].tolist(), *matrix.shape
+    )
+
+
+def _reference_cycle(a, g, coords, b, beta_zero):
+    """Independently apply the default AMS cycle with dense pseudoinverses."""
+    diag = np.abs(a.diagonal())
+    l1 = (diag + np.abs(a).sum(axis=1)) / 2
+    l1 = np.where(l1 <= 4 * diag / 3, diag, l1)
+    pi = [(g @ coords[:, i])[:, None] * np.abs(g) / 2 for i in range(3)]
+
+    def correction(p, residual):
+        return p @ np.linalg.pinv(p.T @ a @ p, rcond=1e-12, hermitian=True) @ (p.T @ residual)
+
+    x = b / l1
+    if not beta_zero:
+        x += correction(g, b - a @ x)
+    residual = b - a @ x
+    x += sum(correction(p, residual) for p in pi)
+    if not beta_zero:
+        x += correction(g, b - a @ x)
+    return x + (b - a @ x) / l1
+
+
+@pytest.mark.parametrize("ny,beta_zero", [(1, False), (2, False), (1, True), (2, True),
+                                          (4, True), (8, True), (16, True)])
+@pytest.mark.parametrize("external_order", [False, True])
+def test_hex_ams_handles_auxiliary_nullspace(ny, external_order, beta_zero):
+    """Guards: rank-deficient directional Galerkin blocks in HEX edge spaces."""
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=ny, nz=1)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    mass = 0 if beta_zero else 1
+    form += (ng.InnerProduct(ng.curl(u), ng.curl(v)) + mass * ng.InnerProduct(u, v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.array([tuple(vertex.point) for vertex in mesh.vertices])
+    a, g = _dense(form.mat), _dense(grad)
+    system, gradient = form.mat, grad
+    if external_order:
+        order = np.random.default_rng(52).permutation(a.shape[0])
+        direction = np.where(np.arange(a.shape[0]) % 2, 1, -1)
+        a = direction[:, None] * a[np.ix_(order, order)] * direction
+        g = direction[:, None] * g[order]
+        system, gradient = _sparse(a), _sparse(g)
+
+    b = a @ np.random.default_rng(96).normal(size=a.shape[0])
+    rhs = system.CreateRowVector()
+    rhs.FV().NumPy()[:] = b
+    pre = HypreBasedAMSPreconditioner(
+        system, gradient, None, *(coords[:, i].tolist() for i in range(3)), beta_zero=beta_zero
+    )
+    first = rhs.CreateVector()
+    solution = rhs.CreateVector()
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(system, pre=pre, tol=1e-12, maxiter=100)
+        solution.data = cg * rhs
+    actual = first.FV().NumPy()
+    assert np.isfinite(actual).all()
+    np.testing.assert_allclose(actual, _reference_cycle(a, g, coords, b, beta_zero),
+                               rtol=1e-9, atol=1e-11)
+    assert np.linalg.norm(a @ solution.FV().NumPy() - b) / np.linalg.norm(b) < 1e-10
+
+
+def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=96, nz=1)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    rhs, first, solution = (form.mat.CreateRowVector() for _ in range(3))
+    seed = rhs.CreateVector()
+    seed.FV().NumPy()[:] = np.random.default_rng(42).standard_normal(len(seed))
+    rhs.data = form.mat * seed
+    args = (form.mat, grad, None, *(coords[:, i].tolist() for i in range(3)))
+    with pytest.raises(ValueError, match="auto_line_smoothing requires"):
+        HypreBasedAMSPreconditioner(*args, auto_line_smoothing=True)
+    pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True)
+    hierarchy = pre.auxiliary_hierarchy
+    assert hierarchy["x"][1] and hierarchy["z"][1]
+    assert all(pre.line_setup_profile[axis][1] == hierarchy[name][1]
+               for axis, name in ((0, "x"), (2, "z")))
+    assert all(len(hierarchy[axis][0]) > 1 for axis in "xz")
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
+        solution.data = cg * rhs
+    assert np.isfinite(first.FV().NumPy()).all()
+    residual = rhs.CreateVector()
+    residual.data = form.mat * solution - rhs
+    assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10
+
+
+def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
+    """Guards: without detected lines, opt-in line smoothing keeps the point-Jacobi apply.
+
+    Assumes: two separately built hierarchies agree only to rounding, because the
+    semidefinite coarse inverse uses LAPACK, whose bitwise output can depend on memory
+    alignment. Any line smoother would change the apply by far more than 1e-10.
+    """
+    import ngsolve as ng
+    from netgen.csg import unit_cube
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.12))
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    args = (form.mat, grad, None, *(coords[:, i].tolist() for i in range(3)))
+    point = HypreBasedAMSPreconditioner(*args, beta_zero=True)
+    auto = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True)
+    assert all(len(levels) > 1 and count == 0 for levels, count in auto.auxiliary_hierarchy.values())
+    rhs, expected, actual = (form.mat.CreateRowVector() for _ in range(3))
+    rhs.FV().NumPy()[:] = np.random.default_rng(121).standard_normal(space.ndof)
+    with ng.TaskManager():
+        expected.data = point * rhs
+        actual.data = auto * rhs
+    actual_np, expected_np = actual.FV().NumPy(), expected.FV().NumPy()
+    relative = np.linalg.norm(actual_np - expected_np) / np.linalg.norm(expected_np)
+    assert relative <= 1e-10, f"relative difference {relative:.3e} exceeds 1e-10"
+
+
+@pytest.mark.parametrize("mesh_case", [(128, 2, 2), (2, 128, 2), (2, 2, 128), None])
+def test_ams_stable_pmis_keeps_coarse_points_under_permutation(mesh_case):
+    """Guards: fixed physical-node ranks and scan order survive DoF renumbering."""
+    import ngsolve as ng
+    from netgen.csg import unit_cube
+    from ngsolve.meshes import MakeStructured3DMesh
+    from scipy.sparse import csr_matrix
+    from radia.ngsolve_sparse import real_sparse_matrix_type, stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    if mesh_case is None:
+        mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.12))
+        fine_axis = None
+    else:
+        nx, ny, nz = mesh_case
+        mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+        fine_axis = mesh_case.index(128)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    gradient, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+
+    def csr(mat):
+        i, j, values = map(np.asarray, mat.COO())
+        return csr_matrix((values, (i, j)), shape=(mat.height, mat.width))
+
+    def native(mat):
+        coo = mat.tocoo()
+        return real_sparse_matrix_type().CreateFromCOO(
+            coo.row.tolist(), coo.col.tolist(), coo.data.tolist(), *coo.shape
+        )
+
+    system, grad = csr(form.mat), csr(gradient)
+    rng = np.random.default_rng(6641)
+    e, n = rng.permutation(system.shape[0]), rng.permutation(len(coords))
+    rank = stable_pmis_rank(coords, fine_axis=fine_axis)
+    permuted_rank = stable_pmis_rank(coords[n], fine_axis=fine_axis)
+    assert permuted_rank == np.asarray(rank)[n].tolist()
+    base = HypreBasedAMSPreconditioner(
+        native(system), native(grad), None, *coords.T.tolist(), beta_zero=True, pmis_rank=rank
+    )
+    permuted = HypreBasedAMSPreconditioner(
+        native(system[e][:, e]), native(grad[e][:, n]), None, *coords[n].T.tolist(),
+        beta_zero=True, pmis_rank=permuted_rank
+    )
+    assert all(levels for levels in base.pmis_coarse_ids)
+    assert permuted.pmis_coarse_ids == base.pmis_coarse_ids
+
+
+@pytest.mark.parametrize("shift", [0.25, 0.0, 1e-14], ids=["spd", "singular", "near_singular"])
+def test_ams_tridiagonal_line_matches_psd_pseudoinverse(shift):
+    """Guards: the line LDL apply and rank-deficient fallback give the PSD reference."""
+    from radia.sparsesolv_ngsolve import _probe_tridiagonal_line
+
+    n = 23
+    diagonal = np.full(n, 2.0)
+    diagonal[[0, -1]] = 1.0
+    diagonal += shift
+    off = np.full(n, -1.0)
+    off[0] = 0.0
+    rhs = np.random.default_rng(123).normal(size=n) + 1.0
+    matrix = np.diag(diagonal) + np.diag(off[1:], 1) + np.diag(off[1:], -1)
+    banded, actual, dense = _probe_tridiagonal_line(
+        diagonal.tolist(), off.tolist(), rhs.tolist()
+    )
+    assert banded == (shift == 0.25)
+    expected = np.linalg.pinv(matrix, hermitian=True, rcond=1e-12) @ rhs
+    np.testing.assert_allclose(actual, dense, rtol=1e-11, atol=1e-10)
+    np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=1e-10)
+    compatible = rhs if banded else rhs - rhs.mean()
+    np.testing.assert_allclose(matrix @ actual, compatible, rtol=1e-10, atol=1e-10)
+    if not banded:
+        assert abs(sum(actual)) < 1e-9
+
+
+def _stable_pmis_hex(nx, ny, nz):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return form, grad, coords
+
+
+def test_ams_stable_pmis_coarse_ids_are_pinned_across_platforms():
+    """Guards: rank-derived PMIS priorities use no implementation-defined distribution.
+
+    Assumes: the 12x10x8 hex curl-curl hierarchy; the pinned digest is a code lock, not
+    an accuracy oracle, and must match on every standard library.
+    """
+    import hashlib
+    import json
+    from radia.ngsolve_sparse import stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _stable_pmis_hex(12, 10, 8)
+    pre = HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist(),
+                                      beta_zero=True, pmis_rank=stable_pmis_rank(coords))
+    ids = pre.pmis_coarse_ids
+    sizes = [[len(level) for level in axis] for axis in ids]
+    digest = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+    assert (sizes, digest) == (
+        [[342], [412], [245]],
+        "95559446051c434e90de81f72bf43b61323e5ee63cdb124ac81574856232db7f",
+    ), (sizes, digest)
+
+
+@pytest.mark.parametrize("bad", ["short", "duplicate"])
+def test_ams_stable_pmis_rejects_invalid_ranks(bad):
+    """Guards: a wrong-size or non-permutation rank fails loudly."""
+    from radia.ngsolve_sparse import stable_pmis_rank
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _stable_pmis_hex(4, 4, 4)
+    rank = stable_pmis_rank(coords)
+    rank = rank[:-1] if bad == "short" else [rank[0]] + rank[:-1]
+    with pytest.raises((ValueError, RuntimeError)):
+        HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist(),
+                                    beta_zero=True, pmis_rank=rank)
+
+
+def _curl_hex_system(nx, ny, nz):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return form, grad, coords
+
+
+def test_ams_line_max_length_admits_full_257_node_lines():
+    """Guards: a raised cap reaches the 257-node axial path through the banded solve."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _curl_hex_system(256, 2, 2)
+    args = (form.mat, grad, None, *coords.T.tolist())
+    lengths = {}
+    for cap in (256, 257):
+        pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True,
+                                          line_max_length=cap)
+        parts = [part for axis in pre.line_partitions for part in axis]
+        profile = pre.line_setup_profile
+        lengths[cap] = max(map(len, parts))
+        assert all(blocks == banded for blocks, banded, _ in profile), (cap, profile)
+        assert all(sorted(set(p)) == sorted(p) for p in parts)
+    assert lengths == {256: 256, 257: 257}, lengths
+
+
+def test_ams_line_options_fail_loudly_without_their_prerequisites():
+    """Guards: diagnostic line options never apply silently or out of range."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    form, grad, coords = _curl_hex_system(8, 2, 2)
+    args = (form.mat, grad, None, *coords.T.tolist())
+    for kwargs in (dict(line_rank_ties=True, auto_line_smoothing=True),
+                   dict(line_max_length=300),
+                   dict(line_max_length=8, auto_line_smoothing=True),
+                   dict(line_max_length=2048, auto_line_smoothing=True)):
+        with pytest.raises((ValueError, RuntimeError)):
+            HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)

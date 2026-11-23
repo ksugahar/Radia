@@ -36,3 +36,32 @@ def real_sparse_matrix_type(*, symmetric=False):
         raise RuntimeError(
             "cannot resolve NGSolve real-double sparse matrix type "
             f"(symmetric={symmetric})") from error
+
+
+def stable_pmis_rank(coordinates, *, fine_axis=None):
+    """Return fixed PMIS ranks in the input H1 node order.
+
+    Pass the returned list as pmis_rank to the real CPU AMS constructor.
+    The ranks are a fixed pseudo-random relabelling of a canonical coordinate
+    order, so they depend only on node positions, not on the input numbering.
+    fine_axis only selects that canonical lexicographic order (0, 1, 2 or the
+    default XYZ); it does not impose a geometric sweep direction.
+    """
+    import numpy as np
+
+    points = np.asarray(coordinates, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
+        raise ValueError("coordinates must be a finite array of shape (n, 3)")
+    if fine_axis is None:
+        axes = (0, 1, 2)
+    elif isinstance(fine_axis, (int, np.integer)) and fine_axis in (0, 1, 2):
+        axes = ((fine_axis + 2) % 3, fine_axis, (fine_axis + 1) % 3)
+    else:
+        raise ValueError("fine_axis must be 0, 1, 2, or None")
+    order = np.lexsort(tuple(points[:, i] for i in reversed(axes)))
+    if np.any(np.all(points[order[1:]] == points[order[:-1]], axis=1)):
+        raise ValueError("stable PMIS ranks require distinct coordinates")
+    order = order[np.random.default_rng(6641).permutation(len(order))]
+    rank = np.empty(len(order), dtype=np.intp)
+    rank[order] = np.arange(len(order))
+    return rank.tolist()
