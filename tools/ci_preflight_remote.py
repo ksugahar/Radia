@@ -87,6 +87,30 @@ def resolve_candidate_base(base: str, head: str) -> str:
     raise RuntimeError("cannot resolve origin/main or main for a new branch push")
 
 
+def candidate_on_main(head: str) -> bool:
+    """True when ``head`` is already reachable from ``origin/main``.
+
+    A new ref at such a commit (an exact-SHA verification branch) adds no commit:
+    the candidate side is empty and main CI already ran on it. Any git error
+    other than "not an ancestor" fails loudly.
+    """
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    if probe.returncode:
+        return False
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", head, "origin/main"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    raise RuntimeError(f"cannot test candidate ancestry: {completed.stderr.strip()}")
+
+
 def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     """Create a bundle containing exactly the candidate side of the push."""
     effective_base = resolve_candidate_base(base, head)
@@ -222,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"100 preflight unavai100le: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
+    # Only a new ref (base ZERO) can have an empty candidate range by construction;
+    # an update of an existing ref always takes the normal preflight.
+    try:
+        on_main = args.base == ZERO and candidate_on_main(args.head)
+    except (OSError, RuntimeError) as exc:
+        print(f"100 preflight failed: {exc}", file=sys.stderr)
+        return 1
+    if on_main:
+        print(f"Preflight skipped: {args.head} is already on origin/main; the push adds no commit")
+        return 0
 
     run_id = uuid.uuid4().hex
     remote_root = r"C:\temp\radia-preflight"
