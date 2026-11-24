@@ -34,11 +34,21 @@ def positive_literal_conflicts(text, pattern, edited_lines=None):
                         result.append(node.lineno)
     return result
 
-def minimal_import_findings(text):
-    """Conservative all-scope direct imports, not a claim of transitive proof."""
+def minimal_import_findings(text, edited_lines=None):
+    """Conservative all-scope direct imports, not a claim of transitive proof.
+
+    When edited_lines is given, statically named imports count only if they touch an
+    edited line, like positive_literal_conflicts.  Unresolved dynamic imports stay
+    file-wide: an edit elsewhere can change the name they import.
+    """
     tree = ast.parse(text)
     findings = []
     for node in ast.walk(tree):
+        if edited_lines is not None and isinstance(node, (ast.Import, ast.ImportFrom, ast.Call)) and not edited_lines.intersection(range(node.lineno, node.end_lineno + 1)):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                continue
         modules = []
         if isinstance(node, ast.Import): modules = [a.name for a in node.names]
         if isinstance(node, ast.ImportFrom): modules = [node.module or '']
@@ -92,7 +102,7 @@ def plan(root, base, candidate):
         for line in positive_literal_conflicts(text, policy.PUBLIC_RUNTIME_IDENTITY, added_lines):
             findings.append({'path': path, 'line': line, 'reason': 'positive assertion requires policy-banned runtime literal; review required'})
         if path.startswith('packages/radia-mcp/tests/'):
-            findings.extend(dict(path=path, **item) for item in minimal_import_findings(text))
+            findings.extend(dict(path=path, **item) for item in minimal_import_findings(text, added_lines))
     return {'candidate': candidate, 'base': base, 'changed_paths': paths, 'lanes': lanes, 'local_tests': COMPACT_TESTS, 'mcp_selection': mcp, 'static_findings': findings, 'import_audit_scope': 'changed MCP tests, direct/all-scope imports only; no transitive proof', 'heavy_execution': False}
 
 def run(root, base, candidate):

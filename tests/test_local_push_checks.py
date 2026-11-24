@@ -73,3 +73,16 @@ def test_multiline_conflict_edit_on_literal_line_is_detected():
     pattern = re.compile('forbidden')
     assert m.positive_literal_conflicts(source, pattern, {2}) == [1]
     assert m.positive_literal_conflicts(source, pattern, {8}) == []
+
+def test_import_audit_scopes_static_imports_to_edited_lines():
+    source = "import importlib\nfrom radia import api\nmod = importlib.import_module('radia.api')\n"
+    assert sorted(f['line'] for f in m.minimal_import_findings(source)) == [2, 3]
+    assert [f['line'] for f in m.minimal_import_findings(source, {2})] == [2]
+    assert [f['line'] for f in m.minimal_import_findings(source, {3})] == [3]
+    assert m.minimal_import_findings(source, {1}) == []
+
+def test_unresolved_dynamic_import_stays_file_wide():
+    # Only the assignment changes; the unchanged call now imports the CPU package.
+    source = "import importlib\nname = 'radia'\nmod = importlib.import_module(name)\n"
+    assert [f['line'] for f in m.minimal_import_findings(source, {2})] == [3]
+    assert [f['line'] for f in m.minimal_import_findings("mod = importlib.import_module(f'pkg.{x}')\n", set())] == [1]
