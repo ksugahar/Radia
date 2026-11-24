@@ -739,7 +739,7 @@ register_status_tool(
         "solver-independent sample integration, and validation guidance"
     ),
     subpackage="radia_mcp.force",
-    related_servers=["motor", "maglev", "differential-forms", "radia-ngsolve"],
+    related_servers=["motor", "maglev", "differential-forms", "radia-mcp.ngsolve"],
     optional_deps=["radia"],
 )
 

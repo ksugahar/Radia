@@ -871,7 +871,7 @@ register_status_tool(
     server_name='fem',
     description='FEM formulations theory layer (A-Omega / T-Omega / H / Reduced / Darwin, edge / HO / XFEM / IGA / DG, gauging + Kelvin, MSFEM, Schur...',
     subpackage='radia_mcp.fem',
-    related_servers=["radia-ngsolve", "bem", "differential-forms"],
+    related_servers=["radia-mcp.ngsolve", "bem", "differential-forms"],
 )
 
 apply_tool_contract(

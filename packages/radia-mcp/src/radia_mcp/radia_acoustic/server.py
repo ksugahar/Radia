@@ -29,7 +29,7 @@ def radia_acoustic_cq_grid(num_time: int, time_step: float, sound_speed: float =
     """Build and validate Lubich CQ Laplace/complex-wavenumber grids."""
     return json.dumps(_cq(num_time=num_time,time_step=time_step,sound_speed=sound_speed,method=method), indent=2)
 
-register_status_tool(mcp,server_name="radia-acoustic",description="Production NGSolve/ngsolve.bem acoustics, FSI, and convolution quadrature",subpackage="radia_mcp.radia_acoustic",related_servers=["radia-ngsolve","bem"])
+register_status_tool(mcp,server_name="radia-acoustic",description="Production NGSolve/ngsolve.bem acoustics, FSI, and convolution quadrature",subpackage="radia_mcp.radia_acoustic",related_servers=["radia-mcp.ngsolve","bem"])
 def main():
     if "--selftest" in sys.argv:
         assert _cq(num_time=16,time_step=.1)["ok"] and _fsi(wavenumber=2.0)["ok"]

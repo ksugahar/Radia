@@ -223,7 +223,7 @@ register_status_tool(
     server_name='matrix-solvers',
     description='Sparse solver theory + decision tree: Krylov (CG/BiCGSTAB/GMRES/COCG/COCR/IDR), preconditioners (AMG, Hiptmair-Xu AMS), Biro-Preis A-V,...',
     subpackage='radia_mcp.matrix_solvers',
-    related_servers=["radia-ngsolve", "fem"],
+    related_servers=["radia-mcp.ngsolve", "fem"],
 )
 
 

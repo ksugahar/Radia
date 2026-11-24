@@ -47,7 +47,7 @@ register_status_tool(
     "ngsolve-mcp.dtn",
     "Dirichlet-to-Neumann (DtN) open-boundary operator and coarse-mesh coupling for NGSolve.",
     "radia_mcp.dtn",
-    related_servers=["radia-ngsolve", "fem", "ngsolve-mcp.kelvin"],
+    related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.kelvin"],
 )
 
 

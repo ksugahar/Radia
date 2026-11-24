@@ -47,7 +47,7 @@ register_status_tool(
     "ngsolve-mcp.kelvin",
     "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia.",
     "radia_mcp.kelvin",
-    related_servers=["radia-ngsolve", "fem", "ngsolve-mcp.gauging"],
+    related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging"],
 )
 
 

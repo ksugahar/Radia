@@ -129,7 +129,7 @@ register_status_tool(
                 'psi, regularisation / folded-Tikhonov Pareto front, '
                 'single-stroke chain, sheet-metal levers',
     subpackage='radia_mcp.streamfunction',
-    related_servers=["radia-ngsolve", "bayesian-opt",
+    related_servers=["radia-mcp.ngsolve", "bayesian-opt",
                      "electromagnet", "peec"],
     optional_deps=["radia", "ngsolve"],
 )
