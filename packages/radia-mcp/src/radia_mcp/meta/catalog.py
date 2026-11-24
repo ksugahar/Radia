@@ -59,6 +59,13 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [],
         "tags": ["fem"],
     },
+    "ngsolve-mcp.weak-form": {
+        "subpackage": "radia_mcp.weak_form",
+        "description": "NGSolve weak-form variational formulations (HCurl/HDiv/H1, BilinearForm, SymbolicBFI)",
+        "primary_tools": ["weak_form_usage"],
+        "related": [],
+        "tags": ["fem"],
+    },
     "onshape-mcp": {
         "subpackage": "radia_mcp.onshape",
         "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",

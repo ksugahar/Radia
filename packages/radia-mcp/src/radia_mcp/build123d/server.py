@@ -5193,6 +5193,7 @@ _B3D_READONLY_HINTS = (
     "_failures", "_suggest", "_reference", "_crosscheck", "_contract",
     "_manifest", "_handoff", "_package", "_probe", "_doctor", "_status",
     "lint_", "inspect_", "_inspect", "generate_", "_catalog",
+    "build123d_diff_shapes", "build123d_run", "build123d_render_views",
 )
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations_common(
