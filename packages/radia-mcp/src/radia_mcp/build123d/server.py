@@ -5162,7 +5162,7 @@ register_status_tool(
     server_name='build123d-mcp', tool_name='build123d_status',
     description='build123d STEP authoring (CAD-as-code) + Cubit interop',
     subpackage='radia_mcp.build123d',
-    related_servers=["cubit"],
+    related_servers=["cubit-mcp"],
     optional_deps=["build123d"],
 )
 
