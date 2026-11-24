@@ -40,7 +40,7 @@ from radia_mcp.common import register_status_tool
 
 from . import tools as _tools
 
-mcp = FastMCP("radia-mcp-mathematica")
+mcp = FastMCP("radia-mcp.mathematica")
 
 
 # ============================================================
@@ -66,7 +66,7 @@ for _name in dir(_tools):
 
 register_status_tool(
     mcp,
-    server_name='radia-mcp-mathematica',
+    server_name='radia-mcp.mathematica',
     description='Mathematica recipes: vector calc, Kelvin transform, symbolic Maxwell, evaluation pipeline',
     subpackage='radia_mcp.mathematica',
     related_servers=["differential-forms", "radia-mcp.ngsolve"],

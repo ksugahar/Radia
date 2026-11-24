@@ -43,8 +43,8 @@ from radia_mcp.meta import catalog
 # Served keys run through the single `radia-mcp serve <key>` command; pack
 # member domains have no command of their own and run their module selftest.
 _SLOW_SERVERS = {
-    "radia-ngsolve": 120,           # PDF index + radia knowledge load
-    "radia-mcp-mathematica": 90,    # wolframscript probe
+    "radia-mcp.ngsolve": 120,         # PDF index + radia knowledge load
+    "radia-mcp.mathematica": 90,   # wolframscript probe
 }
 
 SERVERS = sorted(catalog.CATALOG.keys())
