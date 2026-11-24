@@ -15,7 +15,7 @@ radia-ngsolve             # stdio server
 ```
 
 ```
-> radia_ngsolve_status()
+> radia_mcp.ngsolve_status()
 > radia_ngsolve_topics()             # 30 topics
 > kelvin_transformation(topic="bem-fem-hybrid")
 > analytical_formulas(topic="cuboid_average_field")
@@ -34,7 +34,7 @@ radia-ngsolve             # stdio server
 | **Mesh + I/O** | `netgen_workflow`, `vol_format_inspect`, `vol_file_lint` |
 | **lint / QA** | `radia_ngsolve_lint` |
 
-Run `radia_ngsolve_status()` for the live list.
+Run `radia_mcp.ngsolve_status()` for the live list.
 
 ## Killer topic: `analytical_formulas` (★)
 
@@ -60,7 +60,7 @@ This server uses `import radia` in 4 places inside knowledge module
 function bodies (not at module top). That means:
 
 - `import radia_mcp.radia_ngsolve.server` ✅ works without radia
-- `radia_ngsolve_status()` ✅ works without radia
+- `radia_mcp.ngsolve_status()` ✅ works without radia
 - `radia_ngsolve_usage(topic="kelvin")` ✅ works (text only)
 - Anything that exec's example code requires `pip install radia-mcp[radia]`
 
