@@ -1606,22 +1606,28 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
 
 
 
-_validation.install()
-
-@mcp.tool()
-def motor_back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: dict) -> dict:
+@_validation.tool()
+def motor_back_emf_cross_lane_gate(first_lane_json: str, second_lane_json: str, tolerances_json: str) -> str:
     """Compare signed abc linkage and derived EMF over one uniform electrical period.
 
-    Each lane supplies pole_pairs, mechanical_angles_deg or times_s, speed_rpm,
+    Each lane JSON supplies pole_pairs, mechanical_angles_deg or times_s, matching speed_rpm,
     electrical_offset_deg, phase_flux_wb (N by 3), stack_basis (per_metre or
     total), stack_length_m, linkage_polarity (positive_winding or negative_winding),
     model_dimension (2d or 3d), and emf_method (central_difference_of_linkage,
     backward_difference_native, or reported_emf). The latter two require
-    phase_emf_v. Optional flags are drop_duplicate_endpoint and already_scaled.
+    phase_emf_v. Optional flags are drop_duplicate_endpoint and already_scaled
+    (the submitted total was converted from per-metre using stack_length_m).
     emf_polarity is generator (default) or terminal_drop. Tolerances are
     grid_deg_e, amplitude_relative, phase_deg_e, rms_relative, and thd_absolute.
     """
-    return build_back_emf_cross_lane_gate(first_lane, second_lane, tolerances)
+    try:
+        first, second, tolerances = map(json.loads, (first_lane_json, second_lane_json, tolerances_json))
+    except json.JSONDecodeError as exc:
+        return json.dumps({'status': 'invalid_input', 'checks': {'json_inputs': False}, 'error': str(exc)})
+    return json.dumps(build_back_emf_cross_lane_gate(first, second, tolerances), allow_nan=False)
+
+
+_validation.install()
 
 
 register_status_tool(

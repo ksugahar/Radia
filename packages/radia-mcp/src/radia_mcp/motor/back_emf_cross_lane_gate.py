@@ -156,13 +156,34 @@ def _diagnose_phase(first, second, tolerance):
     return False, bool(inverted_error < direct_error and inverted_error <= tolerance)
 
 
+def _native_amplitude_check(native, central, method, step, tolerance):
+    central_factor = math.sin(step) / step
+    if method == 'backward_difference_native':
+        native_factor = math.sin(step / 2) / (step / 2)
+    elif method == 'reported_emf':
+        native_factor = 1.0
+    else:
+        native_factor = central_factor
+    corrected = [value * central_factor / native_factor for value in native]
+    before = [(b - a) / max(a, b) for a, b in zip(central, native)]
+    after = [(b - a) / max(a, b) for a, b in zip(central, corrected)]
+    return {
+        'input_emf_amplitude_relative_before': before,
+        'input_emf_amplitude_relative_after': after,
+        'input_emf_amplitude_before_pass': all(abs(value) <= tolerance for value in before),
+        'input_emf_amplitude_correction_factor': central_factor / native_factor,
+    }, all(abs(value) <= tolerance for value in after)
+
+
 def back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: dict) -> dict:
     """Gate per-metre abc linkage and generator EMF on a shared electrical grid.
 
     Supply electrical_offset_deg, speed_rpm, stack_length_m, stack_basis,
     linkage_polarity, model_dimension and emf_method for each lane. For times,
     mechanical zero is at time zero and the electrical offset sets the reference.
-    Native/reported methods require phase_emf_v on the input sample grid.
+    Lane speeds must match exactly. Native/reported methods require phase_emf_v
+    on the input sample grid. Set already_scaled only when a per-metre export
+    was multiplied by stack_length_m before submission as a total.
     The main comparison uses periodic central differences for both lanes.
     """
     checks = {}
@@ -180,6 +201,12 @@ def back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: di
             if max(poles) == 2 * min(poles):
                 findings.append('pole_count_vs_pole_pairs_ambiguity')
             raise ValueError('pole_pairs differ')
+        checks[stage] = True
+        stage = 'speed_rpm'
+        speeds = [_positive(lane['speed_rpm'], 'speed_rpm') for lane in (first_lane, second_lane)]
+        if speeds[0] != speeds[1]:
+            findings.append('speed_differs')
+            raise ValueError('speed_rpm differ')
         checks[stage] = True
         stage = 'stack_normalization'
         scaled = [_flag(lane, 'already_scaled') for lane in (first_lane, second_lane)]
@@ -206,8 +233,17 @@ def back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: di
         polarity_matches = first_lane['linkage_polarity'] == second_lane['linkage_polarity']
         if acb:
             findings.append('phase_order_abc_vs_acb')
-        if inverted or not polarity_matches:
-            findings.append('phase_linkage_sign_inversion' if inverted else 'linkage_polarity_convention_differs')
+        if inverted:
+            findings.append('phase_linkage_sign_inversion')
+        if not polarity_matches:
+            findings.append('linkage_polarity_convention_differs')
+        if not detail['linkage']['amplitude']['pass']:
+            ratios = [b / a for a, b in zip(flux[0]['amplitude'], flux[1]['amplitude'])]
+            candidates = [float(lane['stack_length_m']) for lane in (first_lane, second_lane)]
+            candidates += [1 / length for length in candidates]
+            if any(all(abs(ratio - scale) / max(ratio, scale) <= limits['amplitude_relative']
+                       for ratio in ratios) for scale in candidates):
+                findings.append('stack_scaling_suspected')
         checks['phase_order'] = not acb
         checks['linkage_polarity'] = polarity_matches and not inverted
         for name, comparison in detail.items():
@@ -219,14 +255,21 @@ def back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: di
             lane_report = {'emf_sample_shift_s': shift, 'emf_sample_shift_deg_e': offset,
                            'dropped_duplicate_endpoint': dropped, 'per_metre_factor': factor}
             if voltage is not None:
-                native = _metrics(voltage, angles[0])['phase_deg_e']
-                before = [_wrap(x - y) for x, y in zip(native, emf[index]['phase_deg_e'])]
+                native = _metrics(voltage, angles[0])
+                before = [_wrap(x - y) for x, y in zip(native['phase_deg_e'], emf[index]['phase_deg_e'])]
                 after = [_wrap(value - offset) for value in before]
                 passed = all(abs(value) <= limits['phase_deg_e'] for value in after)
                 lane_report.update(input_emf_phase_before_deg_e=before,
                                    input_emf_phase_after_deg_e=after,
                                    input_emf_phase_before_pass=all(abs(value) <= limits['phase_deg_e'] for value in before))
                 checks[f'{stage}_{index + 1}'] = passed
+                method = (first_lane, second_lane)[index]['emf_method']
+                amplitude_report, amplitude_pass = _native_amplitude_check(
+                    native['amplitude'], emf[index]['amplitude'], method, math.tau / len(angles),
+                    limits['amplitude_relative'],
+                )
+                lane_report.update(amplitude_report)
+                checks[f'input_emf_amplitude_{index + 1}'] = amplitude_pass
             result['lanes'].append(lane_report)
         if first_lane['model_dimension'] != second_lane['model_dimension']:
             findings.append('model_difference_declared_required')

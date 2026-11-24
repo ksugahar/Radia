@@ -3,6 +3,7 @@
 Assumes: uniformly sampled synthetic periodic three-phase linkage signals.
 """
 
+import json
 import math
 
 import numpy as np
@@ -106,13 +107,17 @@ def test_backward_difference_voltage_applies_half_step():
     dt = 60 / (900 * 3 * len(flux))
     second.update(emf_method='backward_difference_native', emf_polarity='terminal_drop',
                   phase_emf_v=((flux - np.roll(flux, 1, axis=0)) / dt).tolist())
-    result = back_emf_cross_lane_gate(first, second, LIMITS)
+    limits = {**LIMITS, 'amplitude_relative': 0.001}
+    result = back_emf_cross_lane_gate(first, second, limits)
     lane = result['lanes'][1]
     assert result['status'] == 'pass'
     assert not lane['input_emf_phase_before_pass']
     assert result['checks']['input_emf_phase_2']
     assert lane['emf_sample_shift_s'] == pytest.approx(-dt / 2)
     assert lane['emf_sample_shift_deg_e'] == pytest.approx(-3.75)
+    assert not lane['input_emf_amplitude_before_pass']
+    assert result['checks']['input_emf_amplitude_2']
+    assert lane['input_emf_amplitude_correction_factor'] == pytest.approx(math.cos(math.pi / len(flux)))
     second['emf_method'] = 'reported_emf'
     assert back_emf_cross_lane_gate(first, second, LIMITS)['status'] == 'mismatch'
 
@@ -148,3 +153,67 @@ def test_dimensionality_declares_model_difference_and_grid_offset_is_checked():
     result = back_emf_cross_lane_gate(first, second, LIMITS)
     assert result['status'] == 'invalid_input'
     assert result['checks']['common_electrical_grid'] is False
+
+
+def test_reported_voltage_factor_and_double_amplitude():
+    """Guards: accurate-phase reported voltage can still fail amplitude.
+
+    Assumes: reported voltage is the analytic derivative of sinusoidal linkage.
+    """
+    first, second = _lane(), _lane()
+    theta = np.radians(3 * np.asarray(second['mechanical_angles_deg']))[:, None]
+    phase = theta + np.radians([0, -120, 120])
+    voltage = 0.08 * math.tau * 45 * np.sin(phase)
+    second.update(emf_method='reported_emf', phase_emf_v=voltage.tolist())
+    limits = {**LIMITS, 'amplitude_relative': 0.001}
+    result = back_emf_cross_lane_gate(first, second, limits)
+    assert result['status'] == 'pass'
+    assert not result['lanes'][1]['input_emf_amplitude_before_pass']
+    second['phase_emf_v'] = (2 * voltage).tolist()
+    result = back_emf_cross_lane_gate(first, second, limits)
+    assert result['status'] == 'mismatch'
+    assert result['checks']['input_emf_phase_2']
+    assert not result['checks']['input_emf_amplitude_2']
+
+
+def test_speed_mismatch_and_stack_scaling_diagnosis():
+    """Guards: mismatched speeds and suspected stack mistakes are named.
+
+    Assumes: per-metre values are compared at a common constant speed.
+    """
+    first, second = _lane(), _lane()
+    second['speed_rpm'] *= 2
+    result = back_emf_cross_lane_gate(first, second, LIMITS)
+    assert result['status'] == 'invalid_input'
+    assert not result['checks']['speed_rpm']
+    assert 'speed_differs' in result['findings']
+    second['speed_rpm'] = first['speed_rpm']
+    second['phase_flux_wb'] = (np.asarray(second['phase_flux_wb']) * second['stack_length_m']).tolist()
+    assert 'stack_scaling_suspected' in back_emf_cross_lane_gate(first, second, LIMITS)['findings']
+
+
+def test_label_and_data_inversion_are_both_reported():
+    """Guards: declared polarity changes do not hide inverted data.
+
+    Assumes: the lane signals are exact negatives over a common grid.
+    """
+    first, second = _lane(), _lane()
+    second['linkage_polarity'] = 'negative_winding'
+    second['phase_flux_wb'] = (-np.asarray(second['phase_flux_wb'])).tolist()
+    result = back_emf_cross_lane_gate(first, second, LIMITS)
+    assert {'phase_linkage_sign_inversion', 'linkage_polarity_convention_differs'} <= set(result['findings'])
+
+
+def test_tool_uses_named_validation_group_and_json_strings():
+    """Guards: the MCP adapter uses JSON strings and the validation registry.
+
+    Assumes: the server has installed its validation tools at import time.
+    """
+    from radia_mcp.motor import server
+
+    lane = json.dumps(_lane())
+    command = 'motor_back_emf_cross_lane_gate'
+    handler = getattr(server, command)
+    assert server._validation._entries[command].function is handler
+    assert json.loads(handler(lane, lane, json.dumps(LIMITS)))['status'] == 'pass'
+    assert json.loads(handler('{', lane, json.dumps(LIMITS)))['status'] == 'invalid_input'
