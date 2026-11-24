@@ -74,6 +74,7 @@ from .force_covariance import force_rotation_covariance_gate as build_force_rota
 from radia_mcp.common.lazy_call import lazy_callable
 build_force_report_method_metadata_gate = lazy_callable(".force_report_gate", "force_report_method_metadata_gate", __package__)
 build_phase_flux_park_alignment_gate = lazy_callable(".phase_flux_park_gate", "phase_flux_park_alignment_gate", __package__)
+build_back_emf_cross_lane_gate = lazy_callable(".back_emf_cross_lane_gate", "back_emf_cross_lane_gate", __package__)
 build_ipm_two_run_ldlq_gate = lazy_callable(".two_run_ldlq_gate", "ipm_two_run_ldlq_gate", __package__)
 build_periodic_torque_sampling_gate = lazy_callable(".periodic_torque_sampling_gate", "periodic_torque_sampling_gate", __package__)
 build_rotating_circuit_transient_gate = lazy_callable(".rotating_circuit_transient_gate", "rotating_circuit_transient_gate", __package__)
@@ -1606,6 +1607,22 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
 
 
 _validation.install()
+
+@mcp.tool()
+def motor_back_emf_cross_lane_gate(first_lane: dict, second_lane: dict, tolerances: dict) -> dict:
+    """Compare signed abc linkage and derived EMF over one uniform electrical period.
+
+    Each lane supplies pole_pairs, mechanical_angles_deg or times_s, speed_rpm,
+    electrical_offset_deg, phase_flux_wb (N by 3), stack_basis (per_metre or
+    total), stack_length_m, linkage_polarity (positive_winding or negative_winding),
+    model_dimension (2d or 3d), and emf_method (central_difference_of_linkage,
+    backward_difference_native, or reported_emf). The latter two require
+    phase_emf_v. Optional flags are drop_duplicate_endpoint and already_scaled.
+    emf_polarity is generator (default) or terminal_drop. Tolerances are
+    grid_deg_e, amplitude_relative, phase_deg_e, rms_relative, and thd_absolute.
+    """
+    return build_back_emf_cross_lane_gate(first_lane, second_lane, tolerances)
+
 
 register_status_tool(
     mcp,
