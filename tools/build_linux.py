@@ -33,7 +33,9 @@ def check_versions(root=ROOT):
                            if r.startswith(name + "=="))
         expected = requirement.split("==", 1)[1]
         actual = importlib.metadata.version(name)
-        if actual != expected:
+        # PEP 440: "==X" admits local builds "X+label" (the Radia fork wheels);
+        # the full installed version, label included, is recorded.
+        if actual.split("+", 1)[0] != expected:
             raise RuntimeError(f"{name}: installed {actual}, required {expected}; use a fresh job venv")
         versions[name] = actual
     return versions

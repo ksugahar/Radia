@@ -27,6 +27,11 @@ def test_versions_use_package_metadata_and_reject_mismatch(monkeypatch):
     pins["netgen-mesher"] = "6.2.2607"
     with pytest.raises(RuntimeError, match="netgen-mesher: installed 6.2.2607, required 6.2.2608"):
         builder.check_versions()
+    pins["netgen-mesher"] = "6.2.2608+radia.5a3ae730b.cuda"
+    assert builder.check_versions()["netgen-mesher"] == "6.2.2608+radia.5a3ae730b.cuda"
+    pins["netgen-mesher"] = "6.2.2607+radia.5a3ae730b.cuda"
+    with pytest.raises(RuntimeError, match=r"installed 6.2.2607\+radia"):
+        builder.check_versions()
 
 
 @pytest.mark.parametrize("failure", ["missing-compiler", "configure", "build", "import", None])
