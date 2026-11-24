@@ -73,3 +73,10 @@ def test_multiline_conflict_edit_on_literal_line_is_detected():
     pattern = re.compile('forbidden')
     assert m.positive_literal_conflicts(source, pattern, {2}) == [1]
     assert m.positive_literal_conflicts(source, pattern, {8}) == []
+
+def test_import_audit_ignores_unchanged_lines_in_edited_file():
+    source = "import importlib\nmod = importlib.import_module(f'pkg.{name}')\nfrom radia import api\n"
+    assert sorted(f['line'] for f in m.minimal_import_findings(source)) == [2, 3]
+    assert [f['line'] for f in m.minimal_import_findings(source, {3})] == [3]
+    assert m.minimal_import_findings(source, {1}) == []
+    assert [f['line'] for f in m.minimal_import_findings(source, {2})] == [2]
