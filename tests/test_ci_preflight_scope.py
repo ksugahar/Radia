@@ -56,7 +56,7 @@ def test_meta_catalog_loads_with_package_relative_imports():
 
     catalog = module._load_meta_catalog()
 
-    assert "radia-mcp-meta" in catalog
+    assert "radia-mcp.meta" in catalog
 
 
 def test_lab_unc_remap_supports_synthetic_current_and_historical_routes(monkeypatch):
