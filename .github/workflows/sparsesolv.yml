@@ -817,6 +817,18 @@ jobs:
           python tools/run_test_tier.py --profile sparsesolv --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
+      - name: Run anisotropic HEX AMS with eight NGSolve workers
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.ams_required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+          RADIA_TEST_NGSOLVE_THREADS: '8'
+          OMP_NUM_THREADS: '8'
+          NGS_NUM_THREADS: '8'
+        run: |
+          python -c "import os, ngsolve as ng, pytest; ng.SetNumThreads(int(os.environ['RADIA_TEST_NGSOLVE_THREADS'])); raise SystemExit(pytest.main(['-q', '-s', 'src/ext/sparsesolv/tests/test_sparsesolv.py::test_ams_auto_line_smoothing_detects_anisotropic_hex_lines']))"
+          exit $LASTEXITCODE
+
       - name: Run required NGSolve numerical contracts
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.python_required == 'true'
         shell: pwsh

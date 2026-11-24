@@ -276,6 +276,7 @@ public:
             else
                 CompactParallelFor(ndof_hc_, [&](size_t i) { dst[i] = src[i]; });
         }
+        ProjectGradientKernel(b0);
         t_bc_ += elapsed();
 
         if (cycle_type_ == 7) {
@@ -295,6 +296,7 @@ public:
             NodalCorrect(b0, w); t_nodal_ += elapsed();
             GradientCorrect(b0, w); t_grad_ += elapsed();
             FinalSmoothInto(b0, w, x); t_smooth_ += elapsed();
+            ProjectGradientKernel(x); t_bc_ += elapsed();
             mult_count_++;
             PrintMultBreakdown();
             return;
@@ -306,6 +308,8 @@ public:
             GradientCorrect(b0, x); t_grad_ += elapsed();
             FineSmooth(b0, x); t_smooth_ += elapsed();
         }
+
+        ProjectGradientKernel(x);
 
         // Zero constrained DOFs in output
         if (freedofs_) {
@@ -409,6 +413,10 @@ private:
     shared_ptr<SparseMatrix<double>> grad_t_;  // G^T
     shared_ptr<SparseMatrix<double>> A_G_;     // G^T * A * G
     shared_ptr<BaseMatrix> B_G_;               // Solver for A_G (AMG or direct)
+    bool project_gradient_ = false;
+    shared_ptr<SparseMatrix<double>> gradient_gram_;
+    shared_ptr<BaseMatrix> gradient_gram_inverse_;
+    mutable std::unique_ptr<VVector<double>> projection_rhs_, projection_potential_;
 
     // Nodal subspace (component-wise Pix, Piy, Piz)
     shared_ptr<SparseMatrix<double>> Pix_, Piy_, Piz_;
@@ -459,7 +467,6 @@ private:
 
         // Phase 3: Work vector allocation (one-time)
         AllocateWorkVectors();
-
         // Correction weight
         if (correction_weight_ <= 0.0)
             correction_weight_ = 1.0;
@@ -471,6 +478,52 @@ private:
             std::cout << "\n  HypreBasedAMS setup complete: "
                       << std::chrono::duration<double>(t_end - t_total).count()
                       << "s total" << std::endl;
+    }
+
+    void SetupGradientProjection() {
+        const int n = ndof_h1_;
+        Array<int> row, col;
+        Array<double> value;
+        auto active = make_shared<BitArray>(n);
+        active->Set();
+        std::vector<int> parent(n);
+        for (int i = 0; i < n; ++i) parent[i] = i;
+        auto root = [&](int i) {
+            while (parent[i] != i) {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            return i;
+        };
+        for (int e = 0; e < ndof_hc_; ++e) {
+            auto ids = grad_->GetRowIndices(e);
+            auto weights = grad_->GetRowValues(e);
+            if (ids.Size() == 0) continue;
+            if (ids.Size() != 2 || weights[0] == 0.0 || weights[0] != -weights[1])
+                throw std::invalid_argument("AMS gradient projection requires edge incidence rows");
+            parent[root(ids[0])] = root(ids[1]);
+            for (int i = 0; i < 2; ++i)
+                for (int j = 0; j < 2; ++j) {
+                    row.Append(ids[i]);
+                    col.Append(ids[j]);
+                    value.Append(weights[i] * weights[j]);
+                }
+        }
+        if (row.Size() == 0) return;
+        for (int i = 0; i < n; ++i)
+            if (root(i) == i) active->Clear(i);
+        gradient_gram_ = SparseMatrix<double>::CreateFromCOO(row, col, value, n, n);
+        gradient_gram_->SetInverseType("sparsecholesky");
+        gradient_gram_inverse_ = gradient_gram_->InverseMatrix(active);
+        projection_rhs_ = std::make_unique<VVector<double>>(n);
+        projection_potential_ = std::make_unique<VVector<double>>(n);
+    }
+
+    void ProjectGradientKernel(BaseVector& v) const {
+        if (!project_gradient_ || !gradient_gram_inverse_) return;
+        grad_t_->Mult(v, *projection_rhs_);
+        DeterministicCoarseSolve(*gradient_gram_inverse_, *projection_rhs_, *projection_potential_);
+        grad_->MultAdd(-1.0, *projection_potential_, v);
     }
 
     // =====================================================================
@@ -772,6 +825,13 @@ private:
             B_Pix_ = amg_Pix;
             B_Piy_ = amg_Piy;
             B_Piz_ = amg_Piz;
+            // Preserve point smoothing when detection finds no lines. In
+            // the unconstrained curl-only line path, project both sides of
+            // AMS onto the complement of the discrete gradient range.
+            project_gradient_ = beta_zero_ && auto_line_smoothing_ && !freedofs_
+                && (amg_Pix->LineBlocks() || amg_Piy->LineBlocks() || amg_Piz->LineBlocks());
+            if (project_gradient_ && !gradient_gram_inverse_)
+                SetupGradientProjection();
         }
 
         // 5. Float mirror and truncated l1 norms for the fine-grid smoother,

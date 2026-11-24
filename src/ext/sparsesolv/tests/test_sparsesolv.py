@@ -2442,6 +2442,7 @@ def test_hex_ams_handles_auxiliary_nullspace(ny, external_order, beta_zero):
 
 
 def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
+    import os
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
     from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
@@ -2468,13 +2469,25 @@ def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
                for axis, name in ((0, "x"), (2, "z")))
     assert all(len(hierarchy[axis][0]) > 1 for axis in "xz")
     with ng.TaskManager():
+        workers = ng.GetNumThreads()
+        requested = os.environ.get("RADIA_TEST_NGSOLVE_THREADS")
+        if requested is not None:
+            assert workers == int(requested)
         first.data = pre * rhs
         cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
         solution.data = cg * rhs
     assert np.isfinite(first.FV().NumPy()).all()
+    projected_gradient = grad.CreateColVector()
+    projected_gradient.data = grad.T * first
+    assert ng.Norm(projected_gradient) < 1e-10 * ng.Norm(first)
     residual = rhs.CreateVector()
     residual.data = form.mat * solution - rhs
-    assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10
+    relative_residual = ng.Norm(residual) / ng.Norm(rhs)
+    print(f"anisotropic HEX: OMP_NUM_THREADS={os.environ.get('OMP_NUM_THREADS')}, "
+          f"NGS_NUM_THREADS={os.environ.get('NGS_NUM_THREADS')}, "
+          f"TaskManager workers={workers}, setup workers observed={pre.setup_workers}, "
+          f"iterations={cg.iterations}, true relative residual={relative_residual:.16g}")
+    assert relative_residual < 1e-10
 
 
 def test_ams_auto_line_smoothing_leaves_isotropic_tet_on_point_jacobi():
