@@ -194,15 +194,19 @@ def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
     assert '.bundle' in scripts[-1]
 
 
-@pytest.mark.parametrize('busy', ['idle', 'heavy', 'light', 'locked'])
+@pytest.mark.parametrize('busy', ['idle', 'heavy', 'heavy-clears', 'light', 'locked',
+                                  'lock-clears', 'lock-ioerror'])
 def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_path, busy):
-    """Guards: the preflight waits for the lock and heavy runner jobs, ignores the
-    light runner, gives up at its deadline and always cleans its upload.
+    """Guards: the preflight waits for the lock and heavy runner jobs until they
+    clear, ignores the light runner, gives up at its deadline, fails at once on
+    a lock I/O error that is not a sharing violation, and always cleans its upload.
     Assumes: pwsh is on PATH for the execution half (skipped otherwise)."""
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
-    # A zero deadline makes the waits observable without sleeping.
-    monkeypatch.setattr(module, 'RUNNER_WAIT_SECONDS', 0)
+    # A zero deadline makes the give-up path observable without sleeping; the
+    # clearing cases need a real window that a 1 s poll can cross.
+    clears = busy in ('heavy-clears', 'lock-clears', 'lock-ioerror')
+    monkeypatch.setattr(module, 'RUNNER_WAIT_SECONDS', 20 if clears else 0)
     monkeypatch.setattr(module, 'RUNNER_POLL_SECONDS', 1)
     scripts = []
     monkeypatch.setattr(module, 'remote_command', lambda script, host: scripts.append(script))
@@ -237,23 +241,49 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
         bundle.parent.mkdir(parents=True, exist_ok=True)
         bundle.write_bytes(b'partial upload')
         # Never depend on the host runner (including the one executing this test).
+        heavy = r"[pscustomobject]@{ Id = 123; Path = 'C:\actions-runner\bin\Runner.Worker.exe' }"
         process_result = {
             'idle': "$null",
-            'heavy': r"[pscustomobject]@{ Id = 123; Path = 'C:\actions-runner\bin\Runner.Worker.exe' }",
+            'heavy': heavy,
+            # Busy on the first poll only, then the job finishes.
+            'heavy-clears': f"$(if (($script:polls += 1) -le 1) {{ {heavy} }} else {{ $null }})",
             'light': r"[pscustomobject]@{ Id = 124; Path = 'C:\actions-runner-light\bin\Runner.Worker.exe' }",
             'locked': "$null",
+            'lock-clears': "$null",
+            'lock-ioerror': "$null",
         }[busy]
         isolated = (
+            "$script:polls = 0\n"
             "function Get-Process { param($Name, $ErrorAction) "
             f"return {process_result} " + "}\n" + isolated
         )
+        lock_path = str(tmp_path / 'preflight.lock')
         if busy == 'locked':
             # Another preflight in this same process holds the exclusive lock.
-            lock_path = str(tmp_path / 'preflight.lock')
             isolated = (
                 f"$held = [IO.File]::Open('{lock_path}', 'OpenOrCreate', 'ReadWrite', 'None')\n"
                 + isolated
             )
+        elif busy == 'lock-clears':
+            # A separate process holds the lock briefly, then exits.
+            ready = tmp_path / 'holder.ready'
+            holder = tmp_path / 'holder.ps1'
+            holder.write_text(
+                f"$h = [IO.File]::Open('{lock_path}', 'OpenOrCreate', 'ReadWrite', 'None')\n"
+                f"New-Item -ItemType File -Path '{ready}' | Out-Null\n"
+                "Start-Sleep -Seconds 2\n$h.Dispose()\n", encoding='utf-8')
+            isolated = (
+                f"Start-Process -FilePath '{pwsh}' -ArgumentList '-NoProfile','-File','{holder}' "
+                "-WindowStyle Hidden | Out-Null\n"
+                f"while (-not (Test-Path -LiteralPath '{ready}')) {{ Start-Sleep -Milliseconds 100 }}\n"
+                + isolated
+            )
+        elif busy == 'lock-ioerror':
+            # A missing parent is a permanent I/O error, not another preflight.
+            missing = tmp_path / 'missing-dir' / 'preflight.lock'
+            target = "(Join-Path $root 'preflight.lock')"
+            assert isolated.count(target) == 1
+            isolated = isolated.replace(target, f"'{missing}'")
         file.write_text(isolated, encoding='utf-8')
         # pwsh writes its failure text in the console code page (cp932 on a
         # Japanese Windows), so a strict utf-8 decode raised inside the reader
@@ -267,8 +297,17 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
             'heavy': 'build runner is occupied after 0 s',
             'light': 'Git is unavailable',
             'locked': 'another preflight still holds the lock after 0 s',
+            'heavy-clears': 'Git is unavailable',
+            'lock-clears': 'Git is unavailable',
+            'lock-ioerror': 'Could not find a part of the path',
         }[busy]
         assert expected in result.stderr, (busy, expected, result.stderr[-2000:])
+        noted = {'heavy-clears': 'waiting for the build runner job to finish',
+                 'lock-clears': 'waiting for another preflight to finish'}.get(busy)
+        if noted:
+            assert noted in result.stderr, (busy, noted, result.stderr[-2000:])
+        if busy == 'lock-ioerror':
+            assert 'another preflight' not in result.stderr, result.stderr[-2000:]
         assert not bundle.exists()
 
 

@@ -127,7 +127,11 @@ def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
 
 
 # The preflight waits this long in total for another preflight's lock and for
-# heavy build-runner jobs to finish, polling at the given interval.
+# heavy build-runner jobs to finish, polling at the given interval.  The bound
+# covers only these waits, not the preflight itself, and it cannot keep the
+# parent `git push` SSH connection to the forge alive: a long hook can pass and
+# the push still end with exit 141, so long waits need a command-scoped
+# keepalive such as GIT_SSH_COMMAND='ssh -o ServerAliveInterval=20'.
 RUNNER_WAIT_SECONDS = 2700
 RUNNER_POLL_SECONDS = 30
 LIGHT_RUNNER_ROOT = r"C:\actions-runner-light"
@@ -309,6 +313,10 @@ try {{
       $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
         [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     }} catch [IO.IOException] {{
+      # Only sharing/lock violations (Win32 32/33) mean another preflight holds
+      # the lock; any other I/O error is permanent and must fail at once.
+      $win32 = $_.Exception.HResult -band 0xFFFF
+      if ($win32 -ne 32 -and $win32 -ne 33) {{ throw }}
       if ([DateTime]::UtcNow -ge $deadline) {{
         throw 'another preflight still holds the lock after {RUNNER_WAIT_SECONDS} s'
       }}
