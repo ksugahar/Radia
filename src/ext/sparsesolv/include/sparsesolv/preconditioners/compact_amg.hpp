@@ -650,6 +650,14 @@ public:
             throw std::invalid_argument("line max length must be in [16, 1024]");
         line_max_ = length;
     }
+    /// Shortest merged line kept as a block (default 16). A thin layer resolved by
+    /// n cells gives lines of about n+1 nodes, so 16 leaves layers under 15 cells on
+    /// point Jacobi. The 50 % coverage rule still applies.
+    void SetLineMinLength(int length) {
+        if (length < 4 || length > kLineCapacity)
+            throw std::invalid_argument("line min length must be in [4, 1024]");
+        line_min_ = length;
+    }
     void SetLineRankTies(bool enabled) { line_rank_ties_ = enabled; }
     const auto& CoarsePriorityIds() const { return coarse_ids_; }
     int LineBlocks() const { return int(line_blocks_.size()); }
@@ -793,6 +801,7 @@ private:
     std::vector<int> line_id_;
     double line_weight_ = 0.5;
     int line_max_ = 256;
+    int line_min_ = 16;
     bool line_rank_ties_ = false;
     std::array<double,4> line_profile_{};
     int banded_lines_ = 0;
@@ -1643,7 +1652,7 @@ private:
         std::vector<int> block_for_root(n,-1), positions(n,-1);
         for (int i = 0; i < n; ++i) {
             const int r=root(i);
-            if (size[r] < 16) continue;
+            if (size[r] < line_min_) continue;
             int& id = block_for_root[r];
             if (id < 0) {
                 id=int(line_blocks_.size());
