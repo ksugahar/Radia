@@ -13,6 +13,18 @@ This allows:
   3. Carrying eddy-current / flux state from the previous step by permuting
      the previous solution vector along the pitch mapping without re-meshing.
 
+Applicability contract. The solved space is every DOF of K and M (Dirichlet
+rows must already be eliminated by the caller); A must be symmetric positive
+definite on that whole space. "amg" targets scalar SPD operators. "ams" targets
+a lowest-order HCurl system whose K is the curl-curl part, so K @ gradient
+vanishes, and whose M/dt term makes A definite on the gradient kernel.
+Rejected before any preconditioner is built: asymmetry, a nonpositive diagonal,
+and for "ams" a gradient that K does not annihilate. These screens are
+necessary, not sufficient: an indefinite A can pass them. It is then rejected
+during the step, when PCG breaks down (r.z <= 0 or p.Ap <= 0) or does not
+converge, and that step is not counted. A small residual is not evidence of
+definiteness; the caller owns the SPD property.
+
 Inputs are real and finite; anything else raises instead of being cast. Every
 step checks its true relative residual against the shared limit and counts
 only steps that passed.
@@ -35,6 +47,8 @@ _SYMMETRY_TOLERANCE = 1e-12
 # margin for the independent recheck in step().
 _PCG_TOLERANCE = 0.5 * RELATIVE_LIMIT
 _PRECONDITIONERS = ("amg", "ams")
+# Relative ||K G|| allowed for "ams": zero in exact arithmetic for a curl-curl K.
+_GRADIENT_KERNEL_TOLERANCE = 1e-10
 
 
 def _native_matrix(matrix: csc_matrix):
@@ -156,6 +170,12 @@ class PeriodicStepReuseSolver:
             coordinates = coordinates.astype(np.float64)
             if not np.all(np.isfinite(coordinates)):
                 raise ValueError("coordinates must be finite")
+            kernel = float(np.linalg.norm((K @ gradient).data))
+            kernel_scale = float(np.linalg.norm(K.data)) * float(np.linalg.norm(gradient.data))
+            if not kernel <= _GRADIENT_KERNEL_TOLERANCE * kernel_scale:
+                raise ValueError(
+                    f"'ams' requires K @ gradient = 0 (curl-curl K, discrete gradient); "
+                    f"||K G|| = {kernel:.3e}, ||K|| ||G|| = {kernel_scale:.3e}")
 
         self.n = n
         self.dt = float(dt)

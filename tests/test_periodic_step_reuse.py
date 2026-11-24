@@ -4,9 +4,10 @@ Guards: one Radia SparseSolv preconditioner (Compact AMG or Compact AMS)
 constructed once and reused by native PCG; exact pitch-step eddy-current state
 permutation against an independent dense per-step solve; signed permutations;
 per-step true residual; loud PCG non-convergence and indefinite breakdown;
+rejection of an AMS gradient that the curl-curl K does not annihilate;
 loud rejection of non-integer, non-finite or complex inputs and of a missing or
 mismatched preconditioner choice, without counting a failed step.
-Assumes: linear SPD A = K + M/dt; a periodic scalar DOF ring for AMG and a
+Assumes: linear SPD A = K + M/dt on all DOFs; a periodic scalar DOF ring for AMG and a
 lowest-order HCurl curl-curl + mass system on a small cube mesh for AMS.
 """
 
@@ -50,19 +51,23 @@ def _hcurl_cube_system():
                           shape=(native.height, native.width))
 
     gradient = scipy_matrix(LowestOrderGradient(fes))
-    coordinates = np.asarray(mesh.ngmesh.Coordinates())
+    coordinates = np.array(mesh.ngmesh.Coordinates(), dtype=np.float64, copy=True)  # outlive the mesh
     return scipy_matrix(stiffness.mat), scipy_matrix(mass.mat), gradient, coordinates
 
 
 def _counting_builder(monkeypatch):
+    # Count the native SparseSolv constructor calls themselves.
+    import radia.sparsesolv_ngsolve as sparsesolv
+
     constructions = []
-    real_builder = periodic_step_reuse._build_preconditioner
+    for kind, name in (("amg", "CompactAMGPreconditioner"), ("ams", "CompactAMSPreconditioner")):
+        native_constructor = getattr(sparsesolv, name)
 
-    def counting(kind, native, gradient, coordinates):
-        constructions.append(kind)
-        return real_builder(kind, native, gradient, coordinates)
+        def counting(*args, _kind=kind, _native=native_constructor, **kwargs):
+            constructions.append(_kind)
+            return _native(*args, **kwargs)
 
-    monkeypatch.setattr(periodic_step_reuse, "_build_preconditioner", counting)
+        monkeypatch.setattr(sparsesolv, name, counting)
     return constructions
 
 
@@ -124,6 +129,17 @@ def test_ams_matches_dense_reference_with_single_preconditioner(monkeypatch):
     with pytest.raises(RuntimeError, match="did not converge"):
         starved.step(rng.standard_normal(n))
     assert starved.steps_solved == 0, f"actual={starved.steps_solved}, expected=0"
+
+
+def test_ams_rejects_gradient_not_annihilated_by_k(monkeypatch):
+    K, M, gradient, coordinates = _hcurl_cube_system()
+    corrupted = gradient.copy()
+    corrupted.data[0] *= 2.0
+    constructions = _counting_builder(monkeypatch)
+    with pytest.raises(ValueError, match="K @ gradient = 0"):
+        PeriodicStepReuseSolver(K, M, dt=0.1, perm=np.arange(K.shape[0]), preconditioner="ams",
+                                gradient=corrupted, coordinates=coordinates)
+    assert constructions == [], f"actual constructions={constructions}, expected none"
 
 
 def test_rejects_invalid_construction():
