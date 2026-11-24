@@ -6,8 +6,8 @@ ecosystem. Use this server as the FIRST stop when you don't know
 which other server to call.
 
 Usage:
-    radia-mcp-meta              # stdio
-    radia-mcp-meta --selftest   # self-test
+    python -m radia_mcp.maintenance serve radia-mcp.meta              # stdio
+    python -m radia_mcp.maintenance serve radia-mcp.meta --selftest   # self-test
 """
 
 import copy
@@ -25,7 +25,7 @@ from radia_mcp.common.mcp_contract import validate_solver_artifact_identity
 from . import bug_patterns, catalog, operations
 from .knowledge.tests_design import get_tests_design_guide
 
-mcp = FastMCP("radia-mcp-meta")
+mcp = FastMCP("radia-mcp.meta")
 
 _HEALTH_CACHE: dict | None = None
 _HEALTH_CACHE_AT = 0.0
@@ -90,7 +90,7 @@ def radia_mcp_overview(full: bool = False) -> dict:
 def radia_mcp_naming_conventions() -> dict:
     """Return the canonical naming contract used by every bundled MCP server."""
     return {
-        "client_key": "<product>-mcp[-<pack>] (hyphens only), equal to the catalog key",
+        "client_key": "radia-mcp.<name> (dots for sub-servers/packs), equal to the catalog key",
         "python": "radia_mcp.<python_module>",
         "command": "radia-mcp serve <catalog-key>",
         "catalog_key": "<catalog-key>",
@@ -438,7 +438,7 @@ def bug_patterns_stats() -> dict:
 
 register_status_tool(
     mcp,
-    server_name="radia-mcp-meta", tool_name='radia_meta_status',
+    server_name="radia-mcp.meta", tool_name='radia_meta_status',
     description="Cross-server catalog of all radia_mcp.* servers "
                 "(★ recommended first call when picking a tool)",
     subpackage="radia_mcp.meta",

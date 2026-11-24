@@ -14,7 +14,7 @@ def test_single_command_serves_every_hyphenated_catalog_key():
     assert servers == [], servers
     assert project["project"]["scripts"]["radia-mcp"] == "radia_mcp.maintenance:main"
     for entry in catalog.list_all():
-        assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", entry["name"]), entry["name"]
+        assert re.fullmatch(r"[a-z0-9]+([.-][a-z0-9]+)*", entry["name"]), entry["name"]
         assert entry["python_name"] == entry["subpackage"]
         if entry.get("kind") == "domain":
             assert "command" not in entry, entry["name"]

@@ -2682,6 +2682,177 @@ def test_ams_line_options_fail_loudly_without_their_prerequisites():
     for kwargs in (dict(line_rank_ties=True, auto_line_smoothing=True),
                    dict(line_max_length=300),
                    dict(line_max_length=8, auto_line_smoothing=True),
-                   dict(line_max_length=2048, auto_line_smoothing=True)):
+                   dict(line_max_length=2048, auto_line_smoothing=True),
+                   dict(line_min_length=8),
+                   dict(line_min_length=3, auto_line_smoothing=True),
+                   dict(line_min_length=64, line_max_length=32, auto_line_smoothing=True)):
         with pytest.raises((ValueError, RuntimeError)):
             HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)
+
+
+def test_ams_line_min_length_admits_lines_of_a_thin_layer():
+    """Guards: a layer of 8 flat cells between isotropic cells gives 9-node lines,
+    kept with line_min_length=8 and dropped by the default 16, with CG still converging.
+    """
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    def zmap(s):  # 4 cells of 0.25, 8 cells of 0.01, 4 cells of 0.25
+        k = 16 * s
+        return 0.25 * k if k <= 4 else 1.0 + 0.01 * (k - 4) if k <= 12 else 1.08 + 0.25 * (k - 12)
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=8, ny=8, nz=16,
+                                mapping=lambda x, y, z: (x, y, zmap(z)))
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    args = (form.mat, grad, None, *coords.T.tolist())
+    rhs = form.mat.CreateRowVector()
+    seed = rhs.CreateVector()
+    seed.FV().NumPy()[:] = np.random.default_rng(7).standard_normal(len(seed))
+    rhs.data = form.mat * seed
+    lengths = {}
+    for minimum in (16, 8):
+        pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True,
+                                          line_min_length=minimum)
+        parts = [part for axis in pre.line_partitions for part in axis]
+        lengths[minimum] = sorted({len(part) for part in parts})
+        assert all(blocks == banded for blocks, banded, _ in pre.line_setup_profile)
+        solution = rhs.CreateVector()
+        with ng.TaskManager():
+            cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
+            solution.data = cg * rhs
+        residual = rhs.CreateVector()
+        residual.data = form.mat * solution - rhs
+        assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10, minimum
+    assert lengths[16] == [], lengths
+    assert lengths[8] and min(lengths[8]) >= 8 and max(lengths[8]) < 16, lengths
+
+
+def _complex_hex_system(nx, ny, nz):
+    """K + i M on a structured hex mesh, with the real auxiliary K + M."""
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
+    forms = []
+    for is_complex in (True, False):
+        space = ng.HCurl(mesh, order=0, complex=is_complex)
+        u, v = space.TnT()
+        form = ng.BilinearForm(space)
+        form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        form += (1j if is_complex else 1.0) * ng.InnerProduct(u, v) * ng.dx
+        form.Assemble()
+        forms.append(form)
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    return forms[0], forms[1], grad, coords
+
+
+def _complex_apply(pre, system, x):
+    import ngsolve as ng
+
+    rhs, out = system.mat.CreateRowVector(), system.mat.CreateRowVector()
+    rhs.FV().NumPy()[:] = x
+    with ng.TaskManager():
+        out.data = pre * rhs
+    return out.FV().NumPy().copy()
+
+
+def test_complex_ams_line_smoothing_is_opt_in():
+    """Guards: complex AMS keeps point Jacobi unless line smoothing is requested.
+
+    Assumes: separately built hierarchies agree to rounding only (LAPACK coarse
+    inverse), so implicit default and explicit off are compared at 1e-10 normwise.
+    """
+    from radia.sparsesolv_ngsolve import ComplexHypreBasedAMSPreconditioner
+
+    system, aux, grad, coords = _complex_hex_system(64, 4, 4)
+    args = (aux.mat, grad, None, *coords.T.tolist())
+    implicit = ComplexHypreBasedAMSPreconditioner(*args)
+    explicit = ComplexHypreBasedAMSPreconditioner(*args, auto_line_smoothing=False)
+    assert not implicit.real.auto_line_smoothing and not explicit.real.auto_line_smoothing
+    assert all(blocks == 0 for blocks, _, _ in implicit.real.line_setup_profile)
+    rng = np.random.default_rng(124)
+    x = rng.standard_normal(system.space.ndof) + 1j * rng.standard_normal(system.space.ndof)
+    a, b = _complex_apply(implicit, system, x), _complex_apply(explicit, system, x)
+    relative = np.linalg.norm(a - b) / np.linalg.norm(b)
+    assert relative <= 1e-10, f"relative difference {relative:.3e} exceeds 1e-10"
+    for kwargs in (dict(line_max_length=300), dict(auto_line_smoothing=True, subspace_solver=1)):
+        with pytest.raises((ValueError, RuntimeError)):
+            ComplexHypreBasedAMSPreconditioner(*args, **kwargs)
+
+
+def test_complex_ams_line_smoothing_selects_lines_and_stays_complex_symmetric():
+    """Guards: opt-in complex lines are built, change the apply, keep P^T = P and converge."""
+    import ngsolve as ng
+    from radia.sparsesolv_ngsolve import COCRSolver, ComplexHypreBasedAMSPreconditioner
+
+    system, aux, grad, coords = _complex_hex_system(64, 4, 4)
+    args = (aux.mat, grad, None, *coords.T.tolist())
+    point = ComplexHypreBasedAMSPreconditioner(*args)
+    line = ComplexHypreBasedAMSPreconditioner(*args, auto_line_smoothing=True)
+    assert line.real.auto_line_smoothing
+    profile = line.real.line_setup_profile
+    assert sum(blocks for blocks, _, _ in profile) > 0, profile
+    n = system.space.ndof
+    rng = np.random.default_rng(125)
+    x = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    y = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    px, py = _complex_apply(line, system, x), _complex_apply(line, system, y)
+    assert np.isfinite(px).all()
+    change = np.linalg.norm(px - _complex_apply(point, system, x)) / np.linalg.norm(px)
+    assert change > 1e-6, f"line apply equals point apply ({change:.3e})"
+    # Complex symmetric (bilinear, no conjugate): y^T P x = x^T P y.
+    asymmetry = abs(y @ px - x @ py) / (np.linalg.norm(y) * np.linalg.norm(px))
+    assert asymmetry < 1e-12, f"complex asymmetry {asymmetry:.3e}"
+    b = system.mat.CreateRowVector()
+    b.FV().NumPy()[:] = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+    solution = system.mat.CreateRowVector()
+    solver = COCRSolver(system.mat, line, maxiter=300, tol=1e-10)
+    with ng.TaskManager():
+        solution.data = solver * b
+    r = b.CreateVector()
+    r.data = b - system.mat * solution
+    assert ng.Norm(r) / ng.Norm(b) < 1e-8, (solver.iterations, ng.Norm(r) / ng.Norm(b))
+
+
+def test_ams_singular_single_level_auxiliary_coarse_is_finite():
+    """Guards: a single-level auxiliary AMG whose Galerkin block is singular stays finite.
+
+    Assumes: on structured hexahedra the Pi blocks Pi^T (K + M) Pi have an alternating
+    nodal kernel, and a 16x2x2 mesh (153 vertices) gives one AMG level above the
+    64-row pseudo-inverse cap of the gradient-corrected AMS, so its coarsest level
+    reaches sparse Cholesky. Before the range check this apply was all NaN.
+    """
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=16, ny=2, nz=2)
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += (ng.InnerProduct(ng.curl(u), ng.curl(v)) + ng.InnerProduct(u, v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    pre = HypreBasedAMSPreconditioner(form.mat, grad, None, *coords.T.tolist())
+    assert not pre.beta_zero
+    rhs, first, solution = (form.mat.CreateRowVector() for _ in range(3))
+    rhs.FV().NumPy()[:] = np.random.default_rng(126).standard_normal(space.ndof)
+    with ng.TaskManager():
+        first.data = pre * rhs
+        cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-10, maxiter=200)
+        solution.data = cg * rhs
+    applied = first.FV().NumPy()
+    assert np.isfinite(applied).all(), f"{np.isnan(applied).sum()} of {applied.size} entries are NaN"
+    residual = rhs.CreateVector()
+    residual.data = rhs - form.mat * solution
+    relative = ng.Norm(residual) / ng.Norm(rhs)
+    assert relative < 1e-8, (cg.iterations, relative)

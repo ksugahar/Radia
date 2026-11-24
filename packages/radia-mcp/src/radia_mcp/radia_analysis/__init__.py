@@ -1,1 +1,1 @@
-"""radia-mcp-analysis capability pack."""
+"""radia-mcp.analysis capability pack."""

@@ -39,7 +39,7 @@ def test_selector_is_package_relative_without_a_repository(monkeypatch, tmp_path
 
 def test_internal_optimization_domain_selects_its_existing_pack():
     plan = SELECTOR.build_plan(["packages/radia-mcp/src/radia_mcp/optimization/diagnostics.py"])
-    assert plan["server_selftests"] == ["radia-mcp-optimize"]
+    assert plan["server_selftests"] == ["radia-mcp.optimize"]
     assert "tests/test_optimization_foundation.py" in plan["package_tests"]
 
 
@@ -72,7 +72,7 @@ def test_large_server_registration_change_stays_on_contract_lane():
     plan = SELECTOR.build_plan(
         ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/server.py"]
     )
-    assert plan["server_selftests"] == ["radia-mcp-analysis"]
+    assert plan["server_selftests"] == ["radia-mcp.analysis"]
     assert "tests/test_radia_ngsolve_mcp_contract.py" in plan["package_tests"]
     assert "tests/test_force_coenergy_gate.py" not in plan["package_tests"]
     assert len(plan["package_tests"]) < 20
@@ -83,7 +83,7 @@ def test_common_change_selftests_every_server_without_selecting_every_test():
         ["packages/radia-mcp/src/radia_mcp/common/status.py"]
     )
     assert plan["server_selftests"] == sorted(k for k, v in SELECTOR._catalog().items() if v.get("entry_point"))
-    assert "radia-mcp-meta" in plan["server_selftests"]
+    assert "radia-mcp.meta" in plan["server_selftests"]
     assert any(
         selector.startswith("tests/test_meta_health.py::")
         for selector in plan["package_tests"]
@@ -176,7 +176,7 @@ def test_cli_accepts_large_changed_file_list_over_stdin():
 def test_shared_domain_selects_every_pack_that_contains_it():
     plan = SELECTOR.build_plan(["packages/radia-mcp/src/radia_mcp/force/server.py"])
     assert plan["server_selftests"] == [
-        "radia-mcp-analysis", "radia-mcp-ih", "radia-mcp-maglev"]
+        "radia-mcp.analysis", "radia-mcp.ih", "radia-mcp.maglev"]
 
 
 def test_pack_runtime_change_selects_every_pack():

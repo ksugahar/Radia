@@ -131,7 +131,7 @@ def test_admm_rejects_invalid_or_unsupported_evidence(changes):
 
 def test_composed_tools_expose_structured_readonly_results():
     async def check():
-        pack = await CapabilityServer("radia-mcp-optimize", "search").initialize()
+        pack = await CapabilityServer("radia-mcp.optimize", "search").initialize()
         for name,args,status in [
             ("optimization_proximal_gradient_audit",prox_args(),"first_order_candidate"),
             ("optimization_admm_consensus_audit",admm_args(),"residuals_small"),
@@ -142,6 +142,6 @@ def test_composed_tools_expose_structured_readonly_results():
             result = await source.call_tool(name,args)
             assert result[1]["status"] == status
             assert result[1]["optimality_certified"] is False
-        learning = await CapabilityServer("radia-mcp-learning", "all").initialize()
+        learning = await CapabilityServer("radia-mcp.learning", "all").initialize()
         assert "optimization_admm_consensus_audit" not in learning.tools
     asyncio.run(check())

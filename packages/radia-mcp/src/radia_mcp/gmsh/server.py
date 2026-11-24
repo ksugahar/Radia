@@ -2727,7 +2727,7 @@ register_status_tool(
                 'verbs (derive/threshold/mirror/resample/CSV) + '
                 'post-display launch artifacts + visualization policy lint',
     subpackage='radia_mcp.gmsh',
-    related_servers=["cubit"],
+    related_servers=["cubit-mcp"],
     optional_deps=["gmsh"],
     audit_command="radia-mcp serve gmsh-mcp --selftest --audit-repo",
 )

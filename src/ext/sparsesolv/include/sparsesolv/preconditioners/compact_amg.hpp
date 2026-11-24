@@ -650,6 +650,14 @@ public:
             throw std::invalid_argument("line max length must be in [16, 1024]");
         line_max_ = length;
     }
+    /// Shortest merged line kept as a block (default 16). A thin layer resolved by
+    /// n cells gives lines of about n+1 nodes, so 16 leaves layers under 15 cells on
+    /// point Jacobi. The 50 % coverage rule still applies.
+    void SetLineMinLength(int length) {
+        if (length < 4 || length > kLineCapacity)
+            throw std::invalid_argument("line min length must be in [4, 1024]");
+        line_min_ = length;
+    }
     void SetLineRankTies(bool enabled) { line_rank_ties_ = enabled; }
     const auto& CoarsePriorityIds() const { return coarse_ids_; }
     int LineBlocks() const { return int(line_blocks_.size()); }
@@ -793,6 +801,7 @@ private:
     std::vector<int> line_id_;
     double line_weight_ = 0.5;
     int line_max_ = 256;
+    int line_min_ = 16;
     bool line_rank_ties_ = false;
     std::array<double,4> line_profile_{};
     int banded_lines_ = 0;
@@ -1348,7 +1357,7 @@ private:
                 for (int k = 0; k < m; k++) { dx += (yt(k) - xt(k)) * (yt(k) - xt(k)); nx += xt(k) * xt(k); }
                 if (!inverted || !(dx <= 1e-12 * nx)) {
                     // Not reproduced (a nearly singular level): sparse Cholesky.
-                    SparseCoarsest(c);
+                    CheckedSparseCoarsest(c);
                     return;
                 }
                 c.dense_inv.assign(size_t(n) * n, 0.0);
@@ -1359,7 +1368,34 @@ private:
                 return;
             }
         }
+        CheckedSparseCoarsest(c);
+    }
+
+    /// Sparse Cholesky of the coarsest level, checked on one right-hand side in
+    /// its range (b = A x_t). Auxiliary Galerkin blocks can be exactly singular
+    /// beyond the constant kernel (structured hexahedra: Pi has an alternating
+    /// nodal kernel), and a factorization of such a level returns NaN or a
+    /// garbage solve. A failed check switches a level of at most
+    /// kSemidefiniteFallbackMax rows to the semidefinite pseudo-inverse and
+    /// raises above that. A level that passes is used unchanged.
+    static constexpr int kSemidefiniteFallbackMax = 1024;
+    void CheckedSparseCoarsest(Level& c) {
         SparseCoarsest(c);
+        const int n = c.ndof;
+        VVector<double> xt(n), bt(n), yt(n), rt(n);
+        auto x = xt.FV();
+        for (int i = 0; i < n; ++i) x[i] = std::sin(1.0 + 0.7 * i);
+        c.A->Mult(xt, bt);
+        DeterministicCoarseSolve(*c.inv, bt, yt);
+        c.A->Mult(yt, rt);
+        rt.Add(-1.0, bt);
+        const double bn = L2Norm(bt), rn = L2Norm(rt);
+        if (std::isfinite(rn) && rn <= 1e-8 * bn) return;
+        if (n > kSemidefiniteFallbackMax)
+            throw std::runtime_error("AMG coarsest sparse Cholesky failed its range check (relative residual "
+                + std::to_string(bn > 0 ? rn / bn : rn) + ") on " + std::to_string(n)
+                + " rows, above the semidefinite fallback limit");
+        FactorSemidefiniteCoarsest(c);
     }
 
     void FactorSemidefiniteCoarsest(Level& c) {
@@ -1616,7 +1652,7 @@ private:
         std::vector<int> block_for_root(n,-1), positions(n,-1);
         for (int i = 0; i < n; ++i) {
             const int r=root(i);
-            if (size[r] < 16) continue;
+            if (size[r] < line_min_) continue;
             int& id = block_for_root[r];
             if (id < 0) {
                 id=int(line_blocks_.size());
@@ -1850,6 +1886,13 @@ private:
     void DualL1JacobiSmooth(int level, const BaseVector& b1, BaseVector& x1,
                             const BaseVector& b2, BaseVector& x2,
                             bool initially_zero = false) const {
+        if (level == 0 && !line_blocks_.empty()) {
+            // The same symmetric line smoother on each right-hand side keeps
+            // the dual cycle equal to two real cycles (complex symmetry for COCR).
+            ApplyLineSmoother(b1, x1, initially_zero);
+            ApplyLineSmoother(b2, x2, initially_zero);
+            return;
+        }
         auto& lev = levels_[level];
         auto fv_x1 = x1.FVDouble();
         auto fv_x2 = x2.FVDouble();

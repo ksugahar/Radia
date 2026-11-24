@@ -18,8 +18,7 @@ from urllib.request import url2pathname
 from . import __version__
 
 BASELINE = {key: key for key in (
-    "radia-mcp-meta", "build123d-mcp", "gmsh-mcp", "radia-mcp-analysis",
-    "radia-mcp-maglev",
+    "radia-mcp.meta", "build123d-mcp", "gmsh-mcp", "radia-mcp.mathematica",
 )}
 
 

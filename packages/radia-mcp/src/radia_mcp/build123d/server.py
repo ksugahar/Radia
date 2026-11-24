@@ -4944,7 +4944,6 @@ def _inspect_step_readback(path: str) -> str:
             "solid_count": len(pairs),
             "solids": [
                 {"id": solid_id, "label": label, "volume_mm3": solid.volume,
-                 "centroid_mm": list(solid.center()),
                  **_bbox_fields_b3d(solid.bounding_box())}
                 for solid_id, (label, solid) in enumerate(pairs, 1)
             ],
@@ -5163,7 +5162,7 @@ register_status_tool(
     server_name='build123d-mcp', tool_name='build123d_status',
     description='build123d STEP authoring (CAD-as-code) + Cubit interop',
     subpackage='radia_mcp.build123d',
-    related_servers=["cubit"],
+    related_servers=["cubit-mcp"],
     optional_deps=["build123d"],
 )
 
@@ -5194,6 +5193,7 @@ _B3D_READONLY_HINTS = (
     "_failures", "_suggest", "_reference", "_crosscheck", "_contract",
     "_manifest", "_handoff", "_package", "_probe", "_doctor", "_status",
     "lint_", "inspect_", "_inspect", "generate_", "_catalog",
+    "build123d_diff_shapes", "build123d_run", "build123d_render_views",
 )
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations_common(

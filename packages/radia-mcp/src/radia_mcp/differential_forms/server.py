@@ -569,7 +569,7 @@ register_status_tool(
     server_name='differential-forms',
     description='Visual differential geometry / exterior calculus for EM: Cartan, de Rham, cohomology, EM forces theory',
     subpackage='radia_mcp.differential_forms',
-    related_servers=["fem", "force", "radia-mcp-mathematica"],
+    related_servers=["fem", "force", "radia-mcp.mathematica"],
 )
 
 

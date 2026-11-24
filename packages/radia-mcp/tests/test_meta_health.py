@@ -226,19 +226,19 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     from radia_mcp.meta.server import radia_mcp_related
     from radia_mcp.meta.catalog import CATALOG, EXTERNAL_PACKAGES
 
-    assert "cubit" not in CATALOG
-    assert EXTERNAL_PACKAGES["cubit"]["pypi"] == "cubit-mesh-export"
-    assert EXTERNAL_PACKAGES["cubit"]["github"] == (
+    assert "cubit-mcp" not in CATALOG
+    assert EXTERNAL_PACKAGES["cubit-mcp"]["pypi"] == "cubit-mesh-export"
+    assert EXTERNAL_PACKAGES["cubit-mcp"]["github"] == (
         "https://github.com/ksugahar/cubit-mesh-export"
     )
-    assert EXTERNAL_PACKAGES["cubit"]["subpackage"] == "cubit_mesh_export.mcp"
+    assert EXTERNAL_PACKAGES["cubit-mcp"]["subpackage"] == "cubit_mesh_export.mcp"
 
     for name in ("build123d-mcp", "gmsh-mcp"):
         related = radia_mcp_related(name)
         names = [r["name"] for r in related["related"]]
-        assert "radia-ngsolve" in names, f"{name} related: {names}"
+        assert "radia-mcp.ngsolve" in names, f"{name} related: {names}"
 
-    reverse = radia_mcp_related("radia-ngsolve")
+    reverse = radia_mcp_related("radia-mcp.ngsolve")
     reverse_names = [r["name"] for r in reverse["related"]]
     for name in ("build123d-mcp", "gmsh-mcp"):
         assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
@@ -257,7 +257,7 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
             continue
         assert entry["selftest_command"] == f"{entry['entry_point']} --selftest", name
 
-    cubit = radia_mcp_get("cubit")
+    cubit = radia_mcp_get("cubit-mcp")
     gmsh = radia_mcp_get("gmsh-mcp")
     assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
     assert gmsh["audit_command"] == "radia-mcp serve gmsh-mcp --selftest --audit-repo"

@@ -146,7 +146,7 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
                     f"{short_name}: second status tools/call failed"
                 )
             payload_again = _status_payload(called_again)
-            if short_name == "radia-mcp-meta":
+            if short_name == "radia-mcp.meta":
                 gate_name = "radia_mcp_validate_solver_artifact"
                 if gate_name not in by_name:
                     raise AssertionError(f"{short_name}: artifact gate missing")

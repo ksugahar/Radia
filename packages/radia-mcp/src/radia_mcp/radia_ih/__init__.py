@@ -1,1 +1,1 @@
-"""radia-mcp-ih capability pack."""
+"""radia-mcp.ih capability pack."""
