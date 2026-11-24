@@ -194,10 +194,16 @@ def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
     assert '.bundle' in scripts[-1]
 
 
-@pytest.mark.parametrize('busy', [False, True])
+@pytest.mark.parametrize('busy', ['idle', 'heavy', 'light', 'locked'])
 def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_path, busy):
+    """Guards: the preflight waits for the lock and heavy runner jobs, ignores the
+    light runner, gives up at its deadline and always cleans its upload.
+    Assumes: pwsh is on PATH for the execution half (skipped otherwise)."""
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
+    # A zero deadline makes the waits observable without sleeping.
+    monkeypatch.setattr(module, 'RUNNER_WAIT_SECONDS', 0)
+    monkeypatch.setattr(module, 'RUNNER_POLL_SECONDS', 1)
     scripts = []
     monkeypatch.setattr(module, 'remote_command', lambda script, host: scripts.append(script))
     monkeypatch.setattr(module, 'run', lambda *a, **kw: None)
@@ -231,11 +237,23 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
         bundle.parent.mkdir(parents=True, exist_ok=True)
         bundle.write_bytes(b'partial upload')
         # Never depend on the host runner (including the one executing this test).
-        process_result = "[pscustomobject]@{ Id = 123 }" if busy else "$null"
+        process_result = {
+            'idle': "$null",
+            'heavy': r"[pscustomobject]@{ Id = 123; Path = 'C:\actions-runner\bin\Runner.Worker.exe' }",
+            'light': r"[pscustomobject]@{ Id = 124; Path = 'C:\actions-runner-light\bin\Runner.Worker.exe' }",
+            'locked': "$null",
+        }[busy]
         isolated = (
             "function Get-Process { param($Name, $ErrorAction) "
             f"return {process_result} " + "}\n" + isolated
         )
+        if busy == 'locked':
+            # Another preflight in this same process holds the exclusive lock.
+            lock_path = str(tmp_path / 'preflight.lock')
+            isolated = (
+                f"$held = [IO.File]::Open('{lock_path}', 'OpenOrCreate', 'ReadWrite', 'None')\n"
+                + isolated
+            )
         file.write_text(isolated, encoding='utf-8')
         # pwsh writes its failure text in the console code page (cp932 on a
         # Japanese Windows), so a strict utf-8 decode raised inside the reader
@@ -244,8 +262,13 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
                                 capture_output=True, text=True, timeout=30,
                                 encoding='utf-8', errors='replace')
         assert result.returncode != 0
-        expected = 'build runner is occupied' if busy else 'Git is unavailable'
-        assert expected in result.stderr
+        expected = {
+            'idle': 'Git is unavailable',
+            'heavy': 'build runner is occupied after 0 s',
+            'light': 'Git is unavailable',
+            'locked': 'another preflight still holds the lock after 0 s',
+        }[busy]
+        assert expected in result.stderr, (busy, expected, result.stderr[-2000:])
         assert not bundle.exists()
 
 

@@ -126,6 +126,11 @@ def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     return effective_base
 
 
+# The preflight waits this long in total for another preflight's lock and for
+# heavy build-runner jobs to finish, polling at the given interval.
+RUNNER_WAIT_SECONDS = 2700
+RUNNER_POLL_SECONDS = 30
+LIGHT_RUNNER_ROOT = r"C:\actions-runner-light"
 FORWARDED_ENV = ("RADIA_PUBLIC_NAME_RULES_FILE", "RADIA_OPTUNA_SOURCE")
 
 
@@ -295,11 +300,31 @@ $script:exportOwned = $false
 $script:pytestRootOwned = $false
 $pytestRoot = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
 try {{
-  # Fail fast on overlapping preflights; the OS releases the lock on process exit.
-  $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
-    [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-  if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
-    throw 'build runner is occupied; retry after its job finishes'
+  # Queue behind overlapping preflights and busy build runners instead of
+  # refusing, up to one shared deadline; the OS releases the lock on exit.
+  $deadline = [DateTime]::UtcNow.AddSeconds({RUNNER_WAIT_SECONDS})
+  $waitNoted = $false
+  while ($null -eq $lock) {{
+    try {{
+      $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
+        [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    }} catch [IO.IOException] {{
+      if ([DateTime]::UtcNow -ge $deadline) {{
+        throw 'another preflight still holds the lock after {RUNNER_WAIT_SECONDS} s'
+      }}
+      if (-not $waitNoted) {{ [Console]::Error.WriteLine('waiting for another preflight to finish'); $waitNoted = $true }}
+      Start-Sleep -Seconds {RUNNER_POLL_SECONDS}
+    }}
+  }}
+  $waitNoted = $false
+  # The light runner only runs small contract jobs and does not compete.
+  while (@(Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue |
+           Where-Object {{ $null -ne $_ -and -not ("$($_.Path)" -like '{LIGHT_RUNNER_ROOT}\\*') }}).Count -gt 0) {{
+    if ([DateTime]::UtcNow -ge $deadline) {{
+      throw 'build runner is occupied after {RUNNER_WAIT_SECONDS} s; retry after its job finishes'
+    }}
+    if (-not $waitNoted) {{ [Console]::Error.WriteLine('waiting for the build runner job to finish'); $waitNoted = $true }}
+    Start-Sleep -Seconds {RUNNER_POLL_SECONDS}
   }}
 if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
 if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
