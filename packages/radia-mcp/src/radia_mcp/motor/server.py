@@ -75,6 +75,7 @@ from radia_mcp.common.lazy_call import lazy_callable
 build_force_report_method_metadata_gate = lazy_callable(".force_report_gate", "force_report_method_metadata_gate", __package__)
 build_phase_flux_park_alignment_gate = lazy_callable(".phase_flux_park_gate", "phase_flux_park_alignment_gate", __package__)
 build_ipm_two_run_ldlq_gate = lazy_callable(".two_run_ldlq_gate", "ipm_two_run_ldlq_gate", __package__)
+build_cogging_torque_cross_lane_gate = lazy_callable(".cogging_torque_cross_lane_gate", "cogging_torque_cross_lane_gate", __package__)
 build_periodic_torque_sampling_gate = lazy_callable(".periodic_torque_sampling_gate", "periodic_torque_sampling_gate", __package__)
 build_rotating_circuit_transient_gate = lazy_callable(".rotating_circuit_transient_gate", "rotating_circuit_transient_gate", __package__)
 build_motion_table_coordinate_gate = lazy_callable(".motion_table_gate", "motion_table_coordinate_gate", __package__)
@@ -1603,6 +1604,28 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
 # Entry point
 # ============================================================
 
+
+
+@_validation.tool()
+def motor_cogging_torque_cross_lane_gate(
+    first_lane_json: str, second_lane_json: str, tolerances_json: str
+) -> str:
+    """Compare signed no-current torque sampled on a common mechanical angle grid.
+
+    Supply slots, poles, slot_pole_symmetry (boolean), mechanical_angles_deg,
+    torque_nm (total signed rotor torque about the positive rotation axis),
+    extraction_method (maxwell_stress, virtual_work or arkkio), and skew
+    ("none" or a matching description of geometry and averaging). Set
+    drop_duplicate_endpoint to discard a closing sample. Supply one full
+    revolution unless both lanes declare slot/pole symmetry, in which case
+    supply one primitive symmetry period. Both grids need a common angle datum.
+    Absolute tolerances in N m are peak_to_peak_nm, waveform_rms_nm and harmonic_nm.
+    """
+    try:
+        first, second, tolerances = map(json.loads, (first_lane_json, second_lane_json, tolerances_json))
+    except json.JSONDecodeError as exc:
+        return json.dumps({"status": "invalid_input", "checks": {"json_inputs": False}, "error": str(exc)})
+    return json.dumps(build_cogging_torque_cross_lane_gate(first, second, tolerances), allow_nan=False)
 
 
 _validation.install()
