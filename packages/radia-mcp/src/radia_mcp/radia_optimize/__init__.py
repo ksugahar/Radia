@@ -1,1 +1,1 @@
-"""radia-mcp-optimize capability pack."""
+"""radia-mcp.optimize capability pack."""

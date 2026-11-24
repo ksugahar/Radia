@@ -1,1 +1,1 @@
-"""radia-mcp-motor capability pack."""
+"""radia-mcp.motor capability pack."""

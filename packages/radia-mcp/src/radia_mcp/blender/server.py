@@ -10,7 +10,7 @@ bpy interpreter with ``-I -B`` and is not shipped in the wheel.  There is no
 generic script execution and no socket listener.
 
 Usage:
-    radia-mcp serve radia-mcp-postprocess --profile blender
+    radia-mcp serve radia-mcp.postprocess --profile blender
     python -m radia_mcp.blender.server --selftest   # no bpy needed
 """
 import json

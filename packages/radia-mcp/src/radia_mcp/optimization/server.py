@@ -1,4 +1,4 @@
-"""Internal radia-mcp-optimize domain; no additional standalone server entry point."""
+"""Internal radia-mcp.optimize domain; no additional standalone server entry point."""
 from mcp.server.fastmcp import FastMCP
 from typing import Any
 from mcp.types import ToolAnnotations

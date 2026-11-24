@@ -1,1 +1,1 @@
-"""radia-mcp-pcb capability pack."""
+"""radia-mcp.pcb capability pack."""

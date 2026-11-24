@@ -16,7 +16,7 @@ from .knowledge.aca_tsvd import get_aca_tsvd_knowledge
 
 SF_OVERVIEW = r"""
 ================================================================
-Stream-Function (SF) Coil Design -- radia-mcp-optimize (coil)
+Stream-Function (SF) Coil Design -- radia-mcp.optimize (coil)
 ================================================================
 
 The SF method designs a surface coil that produces a TARGET field over a

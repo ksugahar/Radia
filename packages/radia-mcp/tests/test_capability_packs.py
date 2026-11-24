@@ -42,7 +42,7 @@ def test_pack_preserves_domain_schemas_prompts_resources(pack):
 
 def test_unknown_profile_fails_before_import():
     with pytest.raises(ValueError, match="Unknown profile"):
-        CapabilityServer("radia-mcp-optimize", "typo")
+        CapabilityServer("radia-mcp.optimize", "typo")
 
 
 def test_duplicate_tool_is_rejected(monkeypatch):
@@ -53,7 +53,7 @@ def test_duplicate_tool_is_rejected(monkeypatch):
         asyncio.run(CapabilityServer("duplicate", "test").initialize())
 
 
-@pytest.mark.parametrize("pack,profile", [("radia-mcp-analysis", "field")])
+@pytest.mark.parametrize("pack,profile", [("radia-mcp.analysis", "field")])
 def test_real_stdio_discovery_call_and_errors(pack, profile, tmp_path):
     async def check():
         env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"))
@@ -93,8 +93,8 @@ def test_real_stdio_discovery_call_and_errors(pack, profile, tmp_path):
 
 def test_pack_tool_list_follows_a_domain_registry_change():
     async def check():
-        app = await CapabilityServer("radia-mcp-optimize", "search").initialize()
-        module = modules_for("radia-mcp-optimize", "search")[0]
+        app = await CapabilityServer("radia-mcp.optimize", "search").initialize()
+        module = modules_for("radia-mcp.optimize", "search")[0]
         source = importlib.import_module(f"radia_mcp.{module}.server").mcp
 
         def pack_probe_tool() -> str:
