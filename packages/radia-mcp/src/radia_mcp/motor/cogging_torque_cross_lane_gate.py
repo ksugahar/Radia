@@ -1,9 +1,8 @@
 """Compare sampled no-current cogging torque on a common mechanical grid."""
 
 from dataclasses import dataclass
-from math import isfinite, lcm
-
-import numpy as np
+from cmath import rect
+from math import fsum, isclose, isfinite, lcm, sqrt, tau
 
 
 _METHODS = {"maxwell_stress", "virtual_work", "arkkio"}
@@ -16,8 +15,8 @@ class _Lane:
     symmetry: bool
     method: str
     skew: str
-    angle: np.ndarray
-    torque: np.ndarray
+    angle: list[float]
+    torque: list[float]
     drop_endpoint: bool
     torque_basis: str
     stack_length: float
@@ -71,11 +70,14 @@ def _read_lane(lane):
             or excitation["phase_current_A"] != 0
         ):
             raise ValueError("no-current cogging requires excitation.phase_current_A = 0")
-    angle = np.asarray(lane["mechanical_angles_deg"], dtype=float)
-    torque = np.asarray(lane["torque_nm"], dtype=float)
-    if angle.ndim != 1 or angle.shape != torque.shape or angle.size < 3:
+    angles, samples = lane["mechanical_angles_deg"], lane["torque_nm"]
+    if not isinstance(angles, (list, tuple)) or not isinstance(samples, (list, tuple)):
+        raise ValueError("provide one-dimensional angle and torque arrays")
+    if len(angles) != len(samples) or len(angles) < 3:
         raise ValueError("provide equal one-dimensional angle and torque arrays")
-    if not np.all(np.isfinite(angle)) or not np.all(np.isfinite(torque)):
+    angle = [float(value) for value in angles]
+    torque = [float(value) for value in samples]
+    if not all(map(isfinite, angle)) or not all(map(isfinite, torque)):
         raise ValueError("angle and torque must be finite")
     return _Lane(slots, pole_count, symmetry, method, skew, angle, torque, drop_endpoint, basis, length, dimension, fraction)
 
@@ -83,14 +85,15 @@ def _read_lane(lane):
 def _periodic_samples(angle, torque, drop_endpoint, period):
     # The absolute tolerance accommodates rounding without resampling either lane.
     grid_atol = 1e-7
-    step = np.diff(angle)
-    if np.any(step <= 0) or not np.allclose(step, step[0], atol=grid_atol, rtol=0):
+    steps = [right - left for left, right in zip(angle, angle[1:])]
+    step = steps[0]
+    if any(delta <= 0 or not isclose(delta, step, abs_tol=grid_atol, rel_tol=0) for delta in steps):
         raise ValueError("mechanical angles must be increasing and uniformly spaced")
     if abs(angle[-1] - angle[0] - period) <= grid_atol:
         if not drop_endpoint:
             raise ValueError("duplicate periodic endpoint; declare drop_duplicate_endpoint to discard it")
         angle, torque = angle[:-1], torque[:-1]
-    if angle.size < 3 or abs(angle.size * step[0] - period) > grid_atol:
+    if len(angle) < 3 or abs(len(angle) * step - period) > grid_atol:
         raise ValueError("grid must cover one complete comparison period")
     return angle, torque
 
@@ -100,9 +103,21 @@ def _stack_scaling_suspected(first, second, lengths, tolerance):
     for length in lengths:
         factor = min(length, 1 / length)
         for left, right in ((first, second), (second, first)):
-            if np.max(np.abs(left - right * factor)) <= tolerance:
+            if all(abs(a - b * factor) <= tolerance for a, b in zip(left, right)):
                 return True
     return False
+
+
+def _harmonic_pair(first, second, phase):
+    count = len(first)
+    weights = [rect(2 / count, phase * index) for index in range(count)]
+    return tuple(
+        complex(
+            fsum(value * weight.real for value, weight in zip(torque, weights)),
+            fsum(value * weight.imag for value, weight in zip(torque, weights)),
+        )
+        for torque in (first, second)
+    )
 
 
 def cogging_torque_cross_lane_gate(first, second, tolerances):
@@ -121,7 +136,7 @@ def cogging_torque_cross_lane_gate(first, second, tolerances):
         limits = {}
         for name in ("peak_to_peak_nm", "waveform_rms_nm", "harmonic_nm"):
             value = tolerances[name]
-            if type(value) not in (float, int) or not np.isfinite(float(value)) or value < 0:
+            if type(value) not in (float, int) or not isfinite(value) or value < 0:
                 raise ValueError(f"{name} tolerance must be finite and nonnegative")
             limits[name] = float(value)
 
@@ -130,38 +145,48 @@ def cogging_torque_cross_lane_gate(first, second, tolerances):
         period = 360.0 / base_order
         angle_a, torque_a = _periodic_samples(a.angle, a.torque, a.drop_endpoint, period)
         angle_b, torque_b = _periodic_samples(b.angle, b.torque, b.drop_endpoint, period)
-        if angle_a.shape != angle_b.shape or not np.allclose(angle_a, angle_b, atol=1e-7, rtol=0):
+        if len(angle_a) != len(angle_b) or any(
+            not isclose(left, right, abs_tol=1e-7, rel_tol=0)
+            for left, right in zip(angle_a, angle_b)
+        ):
             raise ValueError("lanes must use a common mechanical angle grid and angular datum")
 
-        # Exclude Nyquist, where a signed phase cannot be resolved. FFT phase is
-        # referenced to the common first sample, so complex differences keep sign.
-        bins = np.arange(1, (angle_a.size + 1) // 2)
-        orders = bins * base_order
-        selected = orders % slot_pole_order == 0
-        if not np.any(selected):
+        # Skip Nyquist, whose phase is unresolved. Only project the bins
+        # selected by the slot/pole order, using the first sample as phase zero.
+        count = len(angle_a)
+        bin_stride = slot_pole_order // base_order
+        bins = range(bin_stride, (count + 1) // 2, bin_stride)
+        if not bins:
             raise ValueError("grid cannot resolve the first slot/pole harmonic below Nyquist")
-        bins, orders = bins[selected], orders[selected]
-        with np.errstate(over="raise", invalid="raise"):
-            factors = [a.torque_factor, b.torque_factor]
-            torque_a = torque_a * factors[0]
-            torque_b = torque_b * factors[1]
-            means = [float(np.mean(torque_a)), float(np.mean(torque_b))]
-            first_fft = np.fft.rfft(torque_a / angle_a.size)[bins] * 2
-            second_fft = np.fft.rfft(torque_b / angle_a.size)[bins] * 2
-            errors = np.abs(first_fft - second_fft)
-            peak_a, peak_b = float(np.ptp(torque_a)), float(np.ptp(torque_b))
-            waveform_rms = float(np.sqrt(np.mean(np.square(torque_a - torque_b))))
-            if not np.all(np.isfinite(errors)) or not np.all(np.isfinite(np.abs(first_fft))) or not np.all(np.isfinite(np.abs(second_fft))):
-                raise ValueError("harmonic calculation exceeds numeric range")
+        factors = [a.torque_factor, b.torque_factor]
+        torque_a = [value * factors[0] for value in torque_a]
+        torque_b = [value * factors[1] for value in torque_b]
+        means = [fsum(value / count for value in torque) for torque in (torque_a, torque_b)]
+        peaks = [max(torque) - min(torque) for torque in (torque_a, torque_b)]
+        waveform_rms = sqrt(fsum(((left - right) / sqrt(count)) ** 2 for left, right in zip(torque_a, torque_b)))
+        harmonics = []
+        for bin_index in bins:
+            phase = -tau * bin_index / count
+            left, right = _harmonic_pair(torque_a, torque_b, phase)
+            harmonics.append({
+                "order_per_mechanical_revolution": bin_index * base_order,
+                "amplitudes_nm": [abs(left), abs(right)],
+                "complex_difference_nm": abs(left - right),
+            })
+        metrics = [waveform_rms, *factors, *means, *peaks]
+        for harmonic in harmonics:
+            metrics.extend((*harmonic["amplitudes_nm"], harmonic["complex_difference_nm"]))
+        if not all(map(isfinite, metrics)):
+            raise ValueError("torque calculation exceeds numeric range")
     except (KeyError, ValueError, TypeError, OverflowError, FloatingPointError) as exc:
         return {"status": "invalid_input", "checks": {"inputs": False}, "error": str(exc), "findings": findings}
 
     checks = {
         "same_skew": a.skew == b.skew,
         "zero_mean_torque": all(abs(mean) <= limits["harmonic_nm"] for mean in means),
-        "peak_to_peak": abs(peak_a - peak_b) <= limits["peak_to_peak_nm"],
+        "peak_to_peak": abs(peaks[0] - peaks[1]) <= limits["peak_to_peak_nm"],
         "signed_waveform_rms": waveform_rms <= limits["waveform_rms_nm"],
-        "slot_pole_harmonics": bool(np.all(errors <= limits["harmonic_nm"])),
+        "slot_pole_harmonics": all(h["complex_difference_nm"] <= limits["harmonic_nm"] for h in harmonics),
     }
     if a.method != b.method:
         findings.append("extraction_methods_differ")
@@ -188,14 +213,7 @@ def cogging_torque_cross_lane_gate(first, second, tolerances):
         "model_dimensions": [a.model_dimension, b.model_dimension],
         "torque_to_full_machine_factors": factors,
         "mean_torque_nm": means,
-        "peak_to_peak_nm": [peak_a, peak_b],
+        "peak_to_peak_nm": peaks,
         "signed_waveform_rms_difference_nm": waveform_rms,
-        "harmonics": [
-            {
-                "order_per_mechanical_revolution": int(order),
-                "amplitudes_nm": [float(abs(left)), float(abs(right))],
-                "complex_difference_nm": float(error),
-            }
-            for order, left, right, error in zip(orders, first_fft, second_fft, errors)
-        ],
+        "harmonics": harmonics,
     }
