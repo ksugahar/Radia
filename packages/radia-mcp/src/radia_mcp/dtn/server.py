@@ -11,14 +11,6 @@ from radia_mcp.common import register_status_tool
 
 mcp = FastMCP("ngsolve-mcp.dtn")
 
-register_status_tool(
-    mcp,
-    "ngsolve-mcp.dtn",
-    "Dirichlet-to-Neumann (DtN) open-boundary operator and coarse-mesh coupling for NGSolve.",
-    "radia_mcp.dtn",
-    related_servers=["radia-ngsolve", "fem", "ngsolve-mcp.kelvin"],
-)
-
 _TOPICS = {
     "overview": (
         "ngsolve-mcp.dtn: Dirichlet-to-Neumann (DtN) open-boundary condition.\n"
@@ -46,6 +38,17 @@ def dtn_usage(topic: str = "overview") -> str:
     if key in _TOPICS:
         return _TOPICS[key]
     return f"Unknown topic '{topic}'. Available: {', '.join(sorted(_TOPICS))}"
+
+
+# Registered after every tool: the status registration applies the
+# annotation contract to the tools that exist at this point.
+register_status_tool(
+    mcp,
+    "ngsolve-mcp.dtn",
+    "Dirichlet-to-Neumann (DtN) open-boundary operator and coarse-mesh coupling for NGSolve.",
+    "radia_mcp.dtn",
+    related_servers=["radia-ngsolve", "fem", "ngsolve-mcp.kelvin"],
+)
 
 
 def _selftest() -> None:
