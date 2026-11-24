@@ -1,7 +1,7 @@
 """Declarative, startup-selected MCP capability packs."""
 
 PACKS = {
-    "radia-mcp-analysis": {
+    "radia-mcp.analysis": {
         "subpackage": "radia_mcp.radia_analysis",
         "description": "Field formulations, numerical methods and independent verification",
         "profiles": {
@@ -10,14 +10,14 @@ PACKS = {
             "theory": ("matrix_solvers", "differential_forms", "mor"),
         },
     },
-    "radia-mcp-learning": {
+    "radia-mcp.learning": {
         "subpackage": "radia_mcp.radia_learning",
         "description": "Surrogate models, physics-informed learning and data assimilation",
         "profiles": {
             "all": ("gnn", "pinn", "data_assimilation"),
         },
     },
-    "radia-mcp-optimize": {
+    "radia-mcp.optimize": {
         "subpackage": "radia_mcp.radia_optimize",
         "description": "Optimization: solver-neutral diagnostics, Bayesian/evolutionary search, topology and shape optimization, metamaterial design and stream-function coil design",
         "profiles": {
@@ -26,42 +26,42 @@ PACKS = {
             "coil": ("streamfunction", "fusion_reactor"),
         },
     },
-    "radia-mcp-ih": {
+    "radia-mcp.ih": {
         "subpackage": "radia_mcp.radia_ih",
         "description": "Induction heating: SIBC, ESIM, Karl iteration and screening physics",
         "profiles": {
             "all": ("ih", "force", "mor"),
         },
     },
-    "radia-mcp-maglev": {
+    "radia-mcp.maglev": {
         "subpackage": "radia_mcp.radia_maglev",
         "description": "Magnetic levitation and motion: guidance, propulsion and force workflows",
         "profiles": {
             "all": ("maglev", "electromagnet", "force"),
         },
     },
-    "radia-mcp-electromagnet": {
+    "radia-mcp.electromagnet": {
         "subpackage": "radia_mcp.radia_electromagnet",
         "description": "Electromagnets and accelerator magnets",
         "profiles": {
             "all": ("electromagnet", "accelerator", "magnetic_materials"),
         },
     },
-    "radia-mcp-motor": {
+    "radia-mcp.motor": {
         "subpackage": "radia_mcp.radia_motor",
         "description": "Electric machines: motor design, circuit coupling and materials",
         "profiles": {
             "all": ("motor", "electromagnet", "magnetic_materials"),
         },
     },
-    "radia-mcp-pcb": {
+    "radia-mcp.pcb": {
         "subpackage": "radia_mcp.radia_pcb",
         "description": "PCB coils, wireless power, PEEC and conductor losses",
         "profiles": {
             "all": ("pcb", "peec", "litz_transmission"),
         },
     },
-    "radia-mcp-acoustic": {
+    "radia-mcp.acoustic": {
         "subpackage": "radia_mcp.radia_acoustic_workflows",
         "description": "Production and educational acoustic routes with explicit ownership",
         "profiles": {
@@ -69,14 +69,14 @@ PACKS = {
             "education": ("acoustic_fembem",),
         },
     },
-    "radia-mcp-postprocess": {
+    "radia-mcp.postprocess": {
         "subpackage": "radia_mcp.radia_postprocess",
         "description": "Post-processing: Blender 3-D model animation (Gmsh inspection and sections stay in gmsh-mcp)",
         "profiles": {
             "blender": ("blender",),
         },
     },
-    "radia-mcp-rna": {
+    "radia-mcp.rna": {
         "subpackage": "radia_mcp.radia_rna",
         "description": "Reluctance network analysis / magnetic equivalent circuits and hysteresis modeling",
         "profiles": {
