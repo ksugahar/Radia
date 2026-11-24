@@ -188,3 +188,189 @@ def test_prima_rejects_unsupported_input():
     indefinite = L - 2.0 * np.linalg.eigvalsh(L).max() * np.eye(len(R))
     with pytest.raises(RuntimeError, match="positive definite|negative energy"):
         prima_reduce(**{**ok, "L": indefinite, "s0": 2 * math.pi * F_OP})
+
+
+def test_solve_fin_volume_prima_matches_dense_and_gates_low_order():
+    """Guards: the opt-in ``prima_order`` route of ``solve_fin_volume``
+    recovers the dense branch currents from the PRIMA basis expanded at the
+    operating frequency, records q and its residuals, and an order too low to
+    pass the shared KCL/KVL true-residual gate raises instead of returning.
+    Assumes: the 84-branch fixture lattice; at order 24 its Krylov space is
+    complete enough to meet the 1e-6 residual limit."""
+    from radia.fin_volume import solve_fin_volume
+
+    kw = dict(frequency=F_OP, sigma=5.8e7, current_A=10.0, n_layers=1, n_lanes=8,
+              n_stations=5, lane_grading="uniform", box_order=4)
+    step = FIXTURES / "beak_fin_short.step"
+    dense = solve_fin_volume(step, **kw)
+    red = solve_fin_volume(step, prima_order=24, **kw)
+    err = np.linalg.norm(red["current"] - dense["current"]) / np.linalg.norm(dense["current"])
+    assert err < 1e-6, (err, red["prima"])
+    assert red["prima"]["s0"] == pytest.approx(2 * math.pi * F_OP)
+    assert red["coil_true_residual"]["kvl_relative"] <= 1e-6
+    assert dense["prima"] is None
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        solve_fin_volume(step, prima_order=1, **kw)
+    with pytest.raises(ValueError, match="CPU-only"):
+        solve_fin_volume(step, prima_order=4, backend="gpu", **kw)
+
+
+def test_fin_prima_sweep_builds_once_and_gates_each_frequency(monkeypatch):
+    """Guards: one assembly and basis, correct restored currents, and fail-loud gating."""
+    from radia import fin_volume, peec_matrices
+
+    step = FIXTURES / "beak_fin_short.step"
+    points = (2 * F_OP, F_OP / 2, F_OP)
+    kw = dict(sigma=5.8e7, current_A=10., n_layers=1, n_lanes=8,
+              n_stations=5, lane_grading="uniform", box_order=4)
+    dense = [fin_volume.solve_fin_volume(step, frequency=f, **kw) for f in points]
+    assembled = fin_volume.assemble_fin_volume
+    reduce = peec_matrices.prima_reduce
+    calls = {"assembly": 0, "basis": 0}
+
+    def count_assembly(*args, **kwargs):
+        calls["assembly"] += 1
+        return assembled(*args, **kwargs)
+
+    def count_basis(*args, **kwargs):
+        calls["basis"] += 1
+        return reduce(*args, **kwargs)
+
+    monkeypatch.setattr(fin_volume, "assemble_fin_volume", count_assembly)
+    monkeypatch.setattr(peec_matrices, "prima_reduce", count_basis)
+    sweep = fin_volume.solve_fin_volume_prima_sweep(
+        step, frequencies=points, expansion_frequency=F_OP, prima_order=24, **kw)
+    assert calls == {"assembly": 1, "basis": 1}
+    assert len(sweep["points"]) == len(points)
+    assert [p["frequency_hz"] for p in sweep["points"]] == list(points)
+    for point, reference in zip(sweep["points"], dense):
+        result = point["solution"]
+        error = np.linalg.norm(result["I_fil"] - reference["I_fil"]) / np.linalg.norm(reference["I_fil"])
+        assert error <= 1e-6, (point["frequency_hz"], error)
+        assert max(result["coil_true_residual"][k] for k in ("kcl_relative", "kvl_relative")) <= 1e-6
+        assert result["prima"]["s0"] == pytest.approx(2 * math.pi * F_OP)
+
+    for invalid in (14.5, True, 0, -3, "14"):
+        with pytest.raises(ValueError, match="positive integer"):
+            fin_volume.solve_fin_volume_prima_sweep(
+                step, frequencies=points, expansion_frequency=F_OP, prima_order=invalid, **kw)
+    assert calls == {"assembly": 1, "basis": 1}
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        fin_volume.solve_fin_volume_prima_sweep(
+            step, frequencies=points, expansion_frequency=F_OP, prima_order=1, **kw)
+
+
+
+def test_fin_prima_sweep_rejects_a_later_residual_failure(monkeypatch):
+    """Guards: an invalid restored current at the second point aborts the sweep."""
+    from radia import fin_volume
+
+    points = (F_OP, 2 * F_OP, F_OP / 2)
+    evaluate = fin_volume._evaluate_fin_prima
+    evaluated = []
+
+    def restore_with_second_point_failure(reduced, branch_count, frequency, current_A):
+        current, info = evaluate(reduced, branch_count, frequency, current_A)
+        evaluated.append(frequency)
+        if frequency == points[1]:
+            current = np.zeros_like(current)
+        return current, info
+
+    monkeypatch.setattr(fin_volume, "_evaluate_fin_prima", restore_with_second_point_failure)
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        fin_volume.solve_fin_volume_prima_sweep(
+            FIXTURES / "beak_fin_short.step", frequencies=points,
+            expansion_frequency=F_OP, prima_order=24, sigma=5.8e7, current_A=10.0,
+            n_layers=1, n_lanes=8, n_stations=5, lane_grading="uniform", box_order=4)
+    assert evaluated == list(points[:2])
+
+
+
+def test_uniform_field_emf_obeys_faraday_and_terminal_gauge():
+    """Guards: directed flux, three field axes and collapsed-terminal closure."""
+    from types import SimpleNamespace
+
+    from radia.fin_prima import _uniform_field_emf_columns
+
+    # Orthogonal loop edges of length 2 m and 3 m.
+    corners = np.array([[0., 0., 0.], [1.2, 1.6, 0.], [1.2, 1.6, 3.], [0., 0., 3.]])
+    branches = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+    bars = corners[branches]
+    nodes = corners.copy()
+    nodes[0] = [0.2, 0.3, 0.4]
+    model = SimpleNamespace(nodes=nodes, branches=branches, branch_xyz=bars)
+    emf = _uniform_field_emf_columns(model)
+    expected_area = np.array([4.8, -3.6, 0.])
+    np.testing.assert_allclose(emf.sum(axis=0), -4e-7 * np.pi * expected_area,
+                               rtol=1e-13, atol=1e-19)
+    shift = np.array([2., -4., 8.])
+    shifted = SimpleNamespace(nodes=nodes + shift, branches=branches,
+                              branch_xyz=bars + shift)
+    shifted_emf = _uniform_field_emf_columns(shifted)
+    node_step = nodes[branches[:, 1]] - nodes[branches[:, 0]]
+    np.testing.assert_allclose(shifted_emf - emf,
+                               -2e-7 * np.pi * np.cross(shift, node_step),
+                               rtol=1e-13, atol=1e-19)
+    omega = 2 * np.pi * F_OP
+    impedance = 2.0 + 1j * omega * 8e-6
+    drives = np.column_stack((np.eye(3), [0.4, -0.9, 0.6]))
+    expected = -1j * omega * 4e-7 * np.pi * (expected_area @ drives) / impedance
+    for columns in (emf, shifted_emf):
+        current = 1j * omega * (columns.sum(axis=0) @ drives) / impedance
+        np.testing.assert_allclose(current, expected, rtol=1e-13, atol=1e-14)
+
+
+
+@pytest.mark.parametrize("field_free", [False, True], ids=["mixed", "field-free"])
+def test_uniform_field_sweep_matches_dense_mna(monkeypatch, field_free):
+    """Guards: a single basis handles the four inputs and gates lifted currents."""
+    from types import SimpleNamespace
+
+    from radia import fin_volume
+
+    nodes = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
+    branches = np.array([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
+    lat = SimpleNamespace(nodes=nodes, branches=branches, branch_xyz=nodes[branches])
+    rng = np.random.default_rng(3)
+    factor = rng.normal(size=(6, 6))
+    L = 1e-6 * (factor.T @ factor + np.eye(6))
+    R = np.linspace(.1, .2, 6)
+    topology = {"L": L, "R": R, "ports": [(1, 0)],
+                "segment_nodes": branches, "n_nodes": len(nodes)}
+    calls = []
+
+    def assemble(*args, **kwargs):
+        calls.append(kwargs["max_branches"])
+        return None, lat, None, topology, {}
+
+    monkeypatch.setattr(fin_volume, "assemble_fin_volume", assemble)
+    field = np.zeros(3) if field_free else np.array([.2 + .4j, -.9, .6])
+    drive = 1.5
+    frequencies = (F_OP / 2, F_OP, 2 * F_OP)
+    trial = fin_volume.solve_fin_volume_prima_sweep(
+        None, frequencies=frequencies, expansion_frequency=F_OP, prima_order=8,
+        sigma=5.8e7, current_A=drive, n_layers=1, n_lanes=8, n_stations=5,
+        max_branches=13000, uniform_field_A_per_m=field)
+    assert calls == [12000]
+    assert tuple(p["frequency_hz"] for p in trial["points"]) == frequencies
+
+    if field_free:
+        legacy_basis = fin_volume._build_fin_prima(topology, 8, F_OP)
+
+    # Independently assemble grounded MNA and straight-segment Faraday sources.
+    incidence = (np.eye(4)[branches[:, 1]] - np.eye(4)[branches[:, 0]]).T[1:]
+    flux_rhs = np.r_[np.zeros(3), -2e-7 * np.pi * field[[2, 1, 0]] * [1, -1, 1]]
+    for point in trial["points"]:
+        s = 2j * np.pi * point["frequency_hz"]
+        matrix = np.block([[np.diag(R) + s * L, -incidence.T],
+                           [incidence, np.zeros((3, 3))]])
+        reference = np.linalg.solve(matrix, np.r_[s * flux_rhs, -drive, 0., 0.])[:6]
+        result = point["solution"]
+        np.testing.assert_allclose(result["I_fil"], reference, rtol=1e-6, atol=1e-10)
+        if field_free:
+            legacy, _ = fin_volume._evaluate_fin_prima(
+                legacy_basis, len(branches), point["frequency_hz"], drive)
+            np.testing.assert_allclose(result["I_fil"], legacy, rtol=1e-6, atol=1e-10)
+        assert max(result["prima"]["kcl_relative"]) <= 1e-6
+        assert max(result["prima"]["kvl_relative"]) <= 1e-6
+        assert result["coil_power_W"] == pytest.approx(.5 * np.vdot(reference, R * reference).real)

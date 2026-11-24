@@ -10,7 +10,7 @@
 #include <stdexcept>
 
 RadiaHCurlStage RadiaStageHCurl(const std::string& path,
-    const std::vector<std::string>& labels,const std::string& dirichlet) {
+    const std::vector<std::string>& labels,const std::string& dirichlet,bool exportValidationModel) {
     auto mesh=std::make_shared<ngcomp::MeshAccess>(path);
     auto ne=mesh->GetNE(ngfem::VOL);
     if(mesh->GetDimension()!=3||!ne||ne>size_t((INT_MAX-256)/36)||mesh->GetDeformation()||mesh->GetCurveOrder()>1)
@@ -32,11 +32,11 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     // explicit HDF5/out-of-core design, not overflow or silent splitting.
     if(size_t(s.e)*s.nq*18>size_t(2ULL<<30)/sizeof(double))
         throw std::overflow_error("Mapped HCurl shape array exceeds 2 GiB capacity");
-    s.dofs.resize(ne*6);s.slots.resize(ne*36);s.curls.resize(ne*18);
+    s.dofs.resize(ne*6);s.curls.resize(ne*18);
     s.shape.resize(ne*s.nq*18);s.weights.resize(ne*s.nq);s.volume.resize(ne);
     s.free.resize(nd);auto mask=space->GetFreeDofs();
     for(int i=0;i<s.n;++i)s.free[i]=mask->Test(i);
-    std::vector<std::vector<int>> rows(nd),incident(nd);
+    std::vector<std::vector<int>> rows(exportValidationModel ? nd : 0),incident(nd);
     ngstd::LocalHeap heap(1<<22,"radia_cuda_hcurl_stage");
     for(int e=0;e<s.e;++e){
         ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,e);
@@ -49,7 +49,7 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
         for(int a=0;a<6;++a){
             if(dofs[a]<0||dofs[a]>=s.n)throw std::invalid_argument("Unsupported HCurl constrained DOF");
             s.dofs[e*6+a]=dofs[a];incident[dofs[a]].push_back(e*6+a);
-            for(int b=0;b<6;++b)rows[dofs[a]].push_back(dofs[b]);
+            if(exportValidationModel)for(int b=0;b<6;++b)rows[dofs[a]].push_back(dofs[b]);
         }
         ngbla::Matrix<> shape(6,3),curl(6,3);
         ngfem::IntegrationPoint center(.25,.25,.25);
@@ -66,15 +66,20 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
                 s.shape[(size_t(e)*s.nq+q)*18+a*3+c]=v;}
         }s.volume[e]=volume;
     }
-    s.rp.push_back(0);s.incident_rp.push_back(0);
-    for(int i=0;i<s.n;++i){auto& row=rows[i];std::sort(row.begin(),row.end());row.erase(std::unique(row.begin(),row.end()),row.end());
-        if(row.empty())throw std::runtime_error("Unused HCurl DOF");
-        if(s.ci.size()+row.size()>INT_MAX-256)throw std::overflow_error("HCurl CSR exceeds int32 capacity");
-        s.ci.insert(s.ci.end(),row.begin(),row.end());s.rp.push_back(int(s.ci.size()));
-        s.incident.insert(s.incident.end(),incident[i].begin(),incident[i].end());s.incident_rp.push_back(int(s.incident.size()));}
-    for(int e=0;e<s.e;++e)for(int a=0;a<6;++a)for(int b=0;b<6;++b){int i=s.dofs[e*6+a],j=s.dofs[e*6+b];
-        auto begin=s.ci.begin()+s.rp[i],end=s.ci.begin()+s.rp[i+1];auto p=std::lower_bound(begin,end,j);
-        if(p==end||*p!=j)throw std::runtime_error("HCurl CSR scatter contract failed");s.slots[e*36+a*6+b]=int(p-s.ci.begin());}
+    s.incident_rp.push_back(0);
+    if(exportValidationModel)s.rp.push_back(0);
+    for(int i=0;i<s.n;++i){
+        if(incident[i].empty())throw std::runtime_error("Unused HCurl DOF");
+        s.incident.insert(s.incident.end(),incident[i].begin(),incident[i].end());
+        s.incident_rp.push_back(int(s.incident.size()));
+        if(exportValidationModel){
+            auto& row=rows[i];
+            std::sort(row.begin(),row.end());
+            row.erase(std::unique(row.begin(),row.end()),row.end());
+            s.ci.insert(s.ci.end(),row.begin(),row.end());
+            s.rp.push_back(int(s.ci.size()));
+        }
+    }
     auto grad=space->CreateGradient();
     if(grad->Height()!=s.n||grad->Width()!=mesh->GetNV())throw std::runtime_error("NGSolve gradient/vertex contract failed");
     s.grp.push_back(0);

@@ -1,11 +1,13 @@
 #include "mex_error_boundary.hpp"
 /* SPDX-License-Identifier: MPL-2.0 */
-// FP64 natural-order IC(0). Host performs symbolic indexing only; CUDA owns
-// numerical factorization, triangular solves, PCG and projected-operator residuals.
+// FP64 natural-order IC(0), with device symbolic indexing and factorization.
 #include "mex.h"
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
 #include <cusparse.h>
+#include <thrust/device_ptr.h>
+#include <thrust/scan.h>
+#include <thrust/fill.h>
 #include <cublas_v2.h>
 #include <algorithm>
 #include <chrono>
@@ -58,9 +60,58 @@ __global__ void validate(int n,const int* rp,const int* ci,const int* free,const
     }
 }
 __global__ void identityRows(int n,const int* rp,const int* ci,const int* free,double* av){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n&&!free[i])for(int p=rp[i];p<rp[i+1];++p)if(ci[p]==i)av[p]=1.;}
-__global__ void lowerValues(int nz,const int* source,const double* original,double* lower){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<nz)lower[i]=original[source[i]];}
-__global__ void factorLevel(int count,const int* rows,const int* rp,const int* ci,double* ld,double shift,int* failure){
-    int t=blockIdx.x*blockDim.x+threadIdx.x;if(t>=count)return;int i=rows[t],begin=rp[i],diag=rp[i+1]-1;
+__global__ void validatePattern(int n,int nz,const int* rp,const int* ci,int* failure){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i>=n)return;
+    const int a=rp[i],b=rp[i+1];
+    if((i==0&&a!=0)||(i==n-1&&b!=nz)||a<0||a>b||b>nz){
+        atomicExch(failure,1);return;
+    }
+    bool diagonal=false;
+    int previous=-1;
+    for(int k=a;k<b;++k){
+        const int j=ci[k];
+        if(j<=previous||j>=n){atomicExch(failure,1);return;}
+        previous=j;diagonal|=j==i;
+    }
+    if(!diagonal)atomicExch(failure,1);
+}
+__global__ void countLower(int n,const int* rp,const int* ci,const int* free,int* counts,int* pruned){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i>=n)return;
+    int count=1,dropped=0;
+    for(int k=rp[i];k<rp[i+1]&&ci[k]<i;++k){
+        if(free[i]&&free[ci[k]])++count;else ++dropped;
+    }
+    counts[i+1]=count;
+    if(dropped)atomicAdd(pruned,dropped);
+}
+__global__ void fillLower(int n,const int* rp,const int* ci,const int* free,const double* values,
+                          const int* lrp,int* lci,double* ld){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i>=n)return;
+    int out=lrp[i];
+    for(int k=rp[i];k<rp[i+1]&&ci[k]<=i;++k){
+        const int j=ci[k];
+        if(j<i&&!(free[i]&&free[j]))continue;
+        lci[out]=j;ld[out++]=values[k];
+    }
+}
+__global__ void assignLevel(int n,const int* rp,const int* ci,int* levels,int level,int* assigned){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i>=n)return;
+    if(atomicAdd(levels+i,0)>=0)return;
+    for(int k=rp[i];k<rp[i+1]-1;++k){
+        const int predecessor=atomicAdd(levels+ci[k],0);
+        if(predecessor<0||predecessor>=level)return;
+    }
+    atomicExch(levels+i,level);
+    atomicAdd(assigned,1);
+}
+__global__ void factorLevel(int n,const int* levels,int level,const int* rp,const int* ci,double* ld,double shift,int* failure){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(i>=n||levels[i]!=level)return;
+    const int begin=rp[i],diag=rp[i+1]-1;
     for(int p=begin;p<diag;++p){int j=ci[p],jdiag=rp[j+1]-1;double sum=ld[p];int a=begin,b=rp[j];
         while(a<p&&b<jdiag){int ka=ci[a],kb=ci[b];if(ka<kb)++a;else if(kb<ka)++b;else{sum-=ld[a]*ld[b]/ld[rp[ka+1]-1];++a;++b;}}
         ld[p]=sum;
@@ -132,37 +183,63 @@ struct Context {
         n=dimension(field(op,"rows"));if(dimension(field(op,"cols"))!=n)throw std::runtime_error("square SPD operator required");
         auto values=field(op,"values");if(!mxIsGPUArray(values))throw std::runtime_error("GPU CSR required");auto check=mxGPUCreateFromMxArray(values);size_t count=mxGPUGetNumberOfElements(check);mxGPUDestroyGPUArray(check);if(count>INT_MAX||count<size_t(n))throw std::runtime_error("int32 CSR storage limit");nz=int(count);
         Inputs input;auto rows=input.get<int>(field(op,"rowptr"),mxINT32_CLASS,size_t(n)+1);auto cols=input.get<int>(field(op,"columns"),mxINT32_CLASS,nz);auto vals=input.get<double>(values,mxDOUBLE_CLASS,nz);
-        std::vector<int> hrp(size_t(n)+1),hci(nz);ck(cudaMemcpy(hrp.data(),rows,hrp.size()*sizeof(int),cudaMemcpyDeviceToHost));ck(cudaMemcpy(hci.data(),cols,hci.size()*sizeof(int),cudaMemcpyDeviceToHost));
-        if(hrp[0]!=0||hrp[n]!=nz)throw std::runtime_error("CSR endpoints invalid");
-        auto mask=mxGetField(op,0,"free");explicitFree=mask!=nullptr;std::vector<int> hostFree(n,1);
-        if(mask){auto f=input.get<int>(mask,mxINT32_CLASS,n);ck(cudaMemcpy(hostFree.data(),f,size_t(n)*sizeof(int),cudaMemcpyDeviceToHost));for(int value:hostFree)if(value!=0&&value!=1)throw std::runtime_error("Invalid free mask");}
-        std::vector<int> lp(size_t(n)+1),lc,source,level(n);lc.reserve(size_t(nz)/2+n);source.reserve(size_t(nz)/2+n);int maximum=0;
-        for(int i=0;i<n;++i){if(hrp[i]<0||hrp[i+1]<hrp[i]||hrp[i+1]>nz)throw std::runtime_error("CSR row range invalid");int previous=-1;bool diagonal=false;
-            for(int k=hrp[i];k<hrp[i+1];++k){int j=hci[k];if(j<0||j>=n||j<=previous)throw std::runtime_error("CSR columns must be sorted, unique and in range");previous=j;if(j<=i){if(j<i&&(!hostFree[i]||!hostFree[j])){++pruned;continue;}lc.push_back(j);source.push_back(k);if(j<i)level[i]=std::max(level[i],level[j]+1);else diagonal=true;}}
-            if(!diagonal)throw std::runtime_error("Missing CSR diagonal");lp[i+1]=int(lc.size());maximum=std::max(maximum,level[i]);
+        rp.alloc(size_t(n)+1);ci.alloc(nz);av.alloc(nz);free.alloc(n);failure.alloc(2);
+        ck(cudaMemset(failure.p,0,failure.bytes()));
+        ck(cudaMemcpy(rp.p,rows,rp.bytes(),cudaMemcpyDeviceToDevice));
+        ck(cudaMemcpy(ci.p,cols,ci.bytes(),cudaMemcpyDeviceToDevice));
+        ck(cudaMemcpy(av.p,vals,av.bytes(),cudaMemcpyDeviceToDevice));
+        auto mask=mxGetField(op,0,"free");explicitFree=mask!=nullptr;
+        if(mask){
+            auto f=input.get<int>(mask,mxINT32_CLASS,n);
+            ck(cudaMemcpy(free.p,f,free.bytes(),cudaMemcpyDeviceToDevice));
+        }else{
+            thrust::device_ptr<int> first(free.p);
+            thrust::fill(first,first+n,1);
         }
-        symbolicDownload=(size_t(n)+1+size_t(nz)+(explicitFree?size_t(n):0))*sizeof(int);free.upload(hostFree);
-        symbolicUpload=(3*(size_t(n)+1)+size_t(nz)+2*size_t(n)+4*lc.size()+2)*sizeof(int);
-        levels=maximum+1;rp.upload(hrp);ci.upload(hci);lrp.upload(lp);lci.upload(lc);av.alloc(nz);ck(cudaMemcpy(av.p,vals,av.bytes(),cudaMemcpyDeviceToDevice));failure.upload(std::vector<int>{0,0});
-        validate<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p,failure.p);flag();identityRows<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p);
-        Buffer<int> mapping,ordered;mapping.upload(source);std::vector<int> offsets(size_t(levels)+1),order(n);
-        for(int v:level)++offsets[v+1];for(int k=0;k<levels;++k)offsets[k+1]+=offsets[k];auto cursor=offsets;
-        for(int i=0;i<n;++i)order[cursor[level[i]]++]=i;ordered.upload(order);
-        std::vector<int> up(size_t(n)+1),uc(lc.size()),transposeMap(lc.size());
-        for(int j:lc)++up[j+1];for(int i=0;i<n;++i)up[i+1]+=up[i];auto next=up;
-        for(int i=0;i<n;++i)for(int k=lp[i];k<lp[i+1];++k){int dest=next[lc[k]]++;uc[dest]=i;transposeMap[dest]=k;}
-        Buffer<int> transpose;transpose.upload(transposeMap);urp.upload(up);uci.upload(uc);u.alloc(lc.size());
-        ck(cudaDeviceSynchronize());symbolicSeconds=elapsed(phase);phase=Clock::now();
-        Buffer<double> ld;ld.alloc(lc.size());l.alloc(lc.size());lowerValues<<<blocks(lc.size()),T>>>(int(lc.size()),mapping.p,av.p,ld.p);
-        for(int k=0;k<levels;++k){int size=offsets[k+1]-offsets[k];factorLevel<<<blocks(size),T>>>(size,ordered.p+offsets[k],lrp.p,lci.p,ld.p,shift,failure.p);}
-        flag();toCholesky<<<blocks(n),T>>>(n,lrp.p,lci.p,ld.p,l.p);ck(cudaGetLastError());
-        // Only already-validated constrained zero couplings were omitted. Free
-        // IC(0) entries/order and the original CSR operator remain unchanged.
-        lowerValues<<<blocks(lc.size()),T>>>(int(lc.size()),transpose.p,l.p,u.p);
-        ck(cudaDeviceSynchronize());factorSeconds=elapsed(phase);phase=Clock::now();
+        validatePattern<<<blocks(n),T>>>(n,nz,rp.p,ci.p,failure.p);flag();
+        validate<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p,failure.p);flag();
+        identityRows<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p);
+        lrp.alloc(size_t(n)+1);
+        ck(cudaMemset(lrp.p,0,sizeof(int)));
+        countLower<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,lrp.p,failure.p+1);
+        thrust::device_ptr<int> lowerRows(lrp.p+1);
+        thrust::inclusive_scan(lowerRows,lowerRows+n,lowerRows);
+        int lowerNnz=0;
+        ck(cudaMemcpy(&lowerNnz,lrp.p+n,sizeof(int),cudaMemcpyDeviceToHost));
+        ck(cudaMemcpy(&pruned,failure.p+1,sizeof(int),cudaMemcpyDeviceToHost));
+        lci.alloc(lowerNnz);
+        Buffer<double> ld;ld.alloc(lowerNnz);
+        fillLower<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p,lrp.p,lci.p,ld.p);
+        Buffer<int> rowLevels;rowLevels.alloc(n);
+        ck(cudaMemset(rowLevels.p,0xff,rowLevels.bytes()));
+        int assignedTotal=0;
+        while(assignedTotal<n){
+            ck(cudaMemset(failure.p+1,0,sizeof(int)));
+            assignLevel<<<blocks(n),T>>>(n,lrp.p,lci.p,rowLevels.p,levels,failure.p+1);
+            int assigned=0;
+            ck(cudaMemcpy(&assigned,failure.p+1,sizeof(int),cudaMemcpyDeviceToHost));
+            if(!assigned)throw std::runtime_error("IC symbolic level assignment stalled");
+            assignedTotal+=assigned;
+            ++levels;
+        }
+        symbolicSeconds=elapsed(phase);phase=Clock::now();
+        l.alloc(lowerNnz);
+        for(int k=0;k<levels;++k)
+            factorLevel<<<blocks(n),T>>>(n,rowLevels.p,k,lrp.p,lci.p,ld.p,shift,failure.p);
+        flag();toCholesky<<<blocks(n),T>>>(n,lrp.p,lci.p,ld.p,l.p);
+        ck(cudaGetLastError());ck(cudaDeviceSynchronize());factorSeconds=elapsed(phase);phase=Clock::now();
         x.alloc(n);r.alloc(n);p.alloc(n);ap.alloc(n);tmp.alloc(n);z.alloc(n);
-        cs(cusparseCreate(&sparse));cb(cublasCreate(&blas));ck(cudaStreamCreate(&stream));cs(cusparseSetStream(sparse,stream));cb(cublasSetStream(blas,stream));cs(cusparseCreateCsr(&lower,n,n,lc.size(),lrp.p,lci.p,l.p,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO,CUDA_R_64F));
-        cs(cusparseCreateCsr(&upper,n,n,lc.size(),urp.p,uci.p,u.p,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO,CUDA_R_64F));
+        cs(cusparseCreate(&sparse));cb(cublasCreate(&blas));ck(cudaStreamCreate(&stream));
+        cs(cusparseSetStream(sparse,stream));cb(cublasSetStream(blas,stream));
+        urp.alloc(size_t(n)+1);uci.alloc(lowerNnz);u.alloc(lowerNnz);
+        size_t transposeBytes=0;
+        cs(cusparseCsr2cscEx2_bufferSize(sparse,n,n,lowerNnz,l.p,lrp.p,lci.p,u.p,urp.p,uci.p,
+            CUDA_R_64F,CUSPARSE_ACTION_NUMERIC,CUSPARSE_INDEX_BASE_ZERO,CUSPARSE_CSR2CSC_ALG1,&transposeBytes));
+        Buffer<char> transpose;transpose.alloc(transposeBytes);
+        cs(cusparseCsr2cscEx2(sparse,n,n,lowerNnz,l.p,lrp.p,lci.p,u.p,urp.p,uci.p,
+            CUDA_R_64F,CUSPARSE_ACTION_NUMERIC,CUSPARSE_INDEX_BASE_ZERO,CUSPARSE_CSR2CSC_ALG1,transpose.p));
+        cs(cusparseCreateCsr(&lower,n,n,lowerNnz,lrp.p,lci.p,l.p,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO,CUDA_R_64F));
+        cs(cusparseCreateCsr(&upper,n,n,lowerNnz,urp.p,uci.p,u.p,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO,CUDA_R_64F));
         cusparseFillMode_t fill=CUSPARSE_FILL_MODE_LOWER;cusparseDiagType_t diag=CUSPARSE_DIAG_TYPE_NON_UNIT;
         cs(cusparseSpMatSetAttribute(lower,CUSPARSE_SPMAT_FILL_MODE,&fill,sizeof(fill)));cs(cusparseSpMatSetAttribute(lower,CUSPARSE_SPMAT_DIAG_TYPE,&diag,sizeof(diag)));
         fill=CUSPARSE_FILL_MODE_UPPER;cs(cusparseSpMatSetAttribute(upper,CUSPARSE_SPMAT_FILL_MODE,&fill,sizeof(fill)));cs(cusparseSpMatSetAttribute(upper,CUSPARSE_SPMAT_DIAG_TYPE,&diag,sizeof(diag)));
@@ -176,7 +253,7 @@ struct Context {
         // SetStream resets a handle's workspace, so assign this only after the
         // stream is fixed and before warmup/capture. No later SetStream calls.
         blasWorkspace.alloc(4ULL<<20);cb(cublasSetWorkspace(blas,blasWorkspace.p,blasWorkspace.bytes()));
-        captureGraph();graphSeconds=elapsed(phase);setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes()+transpose.bytes();
+        captureGraph();graphSeconds=elapsed(phase);setupPeakOwned=bytes()+rowLevels.bytes()+ld.bytes()+transpose.bytes();
     }
     void apply(){double one=1;cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward));cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,upper,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward));}
     void captureGraph(){

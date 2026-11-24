@@ -7,7 +7,7 @@ fmm_physics(fullfile(job,'physics-input.mat'),job,fullfile(job,'matlab'),fullfil
 fmm_numeric(fullfile(job,'numeric-input.mat'),job,fullfile(job,'matlab'),fullfile(job,'numeric.mat'));
 fmm_boundary(fullfile(job,'boundary.vol'),job,fullfile(job,'matlab'),fullfile(job,'boundary.mat'));
 assert(radia_cuda_fmm('live_count')==0);
-assert(all(structfun(@(x)x==0,radia_cuda_ams('resident_status'))));
+assert(all(structfun(@(x)x==0,radia_cuda_ams_validation('resident_status'))));
 pid=feature('getpid');
 shell=fullfile(getenv('SystemRoot'),'System32','WindowsPowerShell','v1.0','powershell.exe');
 command=sprintf('"%s" -NoProfile -ExecutionPolicy Bypass -File "%s" -ProcessId %d -OutputPath "%s"', ...

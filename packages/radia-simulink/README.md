@@ -20,7 +20,7 @@ to locate and use the installed GPU MATLAB files.
 The 0.1.5 release adds experimental GPU IC(0)-PCG with retained factors
 and `radia.gpu.HCurlICSystem`. CUDA performs the fixed-shift numerical
 factorization; cuSPARSE performs the forward and transpose triangular solves.
-Host code owns symbolic analysis and iteration control. The published 0.1.4
+CUDA performs symbolic factor analysis. Host code controls iteration. The published 0.1.4
 wheel remains unchanged. A100 comparison is pending while that host is shut
 down; build-host measurements are numerical diagnostics, not formal timing.
 See `validation_test/ic_cuda` for accuracy, lifecycle and scaling evidence.
@@ -31,16 +31,16 @@ HDF5 exchange, bounded HDiv-MMM and Laplace FMM operators. This does not certify
 arbitrary production AMS, ICCG, general HDiv-MMM, or migration of the older CPU
 MEX application models.
 The experimental AMS also includes sparse nonlinear affine-tetrahedron assembly
-and a persistent `radia.gpu.AMSContext` with reusable GPU PCG workspace. Its
+and a resident CUDA AMS hierarchy. Its
 manufactured monotone-material verification does not certify measured steel or
 arbitrary nonlinear devices. See the sparse study in validation_test/ams_cuda.
 There is no CPU solver fallback.
 
 `radia.gpu.HCurlSystem` retains the affine linear HCurl matrix, source vector,
-AMS hierarchy and GPU workspace across solves. Geometry, boundary labels,
+and AMS hierarchy across solves. Geometry, boundary labels,
 reluctivity and gauge mass remain fixed; `CurrentScale` changes only the
 source amplitude. Construct a new system when any fixed input changes.
-Nonlinear materials continue to use `radia.gpu.solveHCurl` and its adaptive
+Nonlinear materials continue to use `radia.gpu.solveHCurl` and its resident
 hierarchy updates. Supported HCurl geometry is first-order affine tetrahedra.
 The AMS iteration keeps curvature control on the GPU and caches bounded
 small coarse actions. Independent CPU comparisons, true residuals and
@@ -189,26 +189,13 @@ neither successful PCG nor AMS alone certifies HDiv-MMM support.
 
 ## Experimental AMS and large numeric exchange
 
-AMS CUDA and its snapshot adapter are package-owned native sources, built by
-`tools/build_ams_cuda.py` through the root build dispatcher. The CPU setup
-retains NGSolve and Radia ownership; the validation adapter is not installed
-as a CPU solver in this wheel. `radia.gpu.amsPCG` accepts a checked numeric
-hierarchy and RHS already uploaded to GPU memory, with no CPU fallback.
-
-`radia.gpu.prepareAMS(model)` constructs the shared native AMS directly in
-mexcuda host code and uploads its numeric hierarchy by default. GPU users
-supply numeric FEM operators, discrete gradient, coordinates and free-DOF mask;
-no Python adapter or Python-generated solver snapshot is required. The legacy
-MEX constructor is reused, with NGSolve sparsecholesky kept for coarse setup.
-The default host setup uses one thread; `SetupThreads` selects OpenMP row/chunk
-work. No TaskManager region is activated. Indirect NGSolve header/DLL and Python
-DLL dependencies are permitted; no Python interpreter initialization is needed.
-
-Use `validation_test/ams_cuda/native_setup_validation.py` for independent Python
-CPU parity and MATLAB-owned serial/OpenMP setup comparison, including transfer,
-solve and download times. The Python snapshot adapter remains a validation
-oracle only. Build-host timings are diagnostics; formal performance acceptance
-requires an idle GPU-equipped timing host.
+The HCurl production entry points assemble sparse matrices on the GPU.
+`radia.gpu.HCurlSystem` builds its AMS hierarchy once for the affine operator.
+`radia.gpu.solveHCurl` refreshes hierarchy values on the GPU as the Newton
+tangent changes. `radia.gpu.HCurlICSystem` retains the GPU IC(0) factor for
+multiple current scales. NGSolve supplies geometry and mapped basis data.
+The separate AMS validation MEX contains CPU setup and matrix export for
+independent comparisons. See [AMS validation](../../validation_test/ams_cuda/README.md).
 
 All AMS file exchange uses `radia.ams-hdf5.v1` plain HDF5. Install optional
 `radia-simulink[exchange]` dependencies for the Python writer, and read the result
@@ -228,69 +215,6 @@ CPU Radia distribution.
 
 The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API.
 
-### CUDA Graph experiment (2026-10-12)
-
-`radia.gpu.amsPCG(hierarchy,rhs,tol,maxIterations,false,true)` enables
-experimental CUDA Graph replay of the existing AMS cycle. The default remains
-direct CUDA launches. Graph capture, instantiation and cleanup belong to each
-solve; the graph does not outlive its arrays or workspace. No CPU fallback is
-introduced. NGSolve sparsecholesky setup remains unchanged.
-
-The diagnostic direct/Graph ABBA experiment is recorded in
-`validation_test/ams_cuda/results/cuda-graph-dfeec57af.json`. At 702073 DOFs,
-transfer-inclusive solve time changed from 0.40324 to 0.38472 seconds, while
-setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
-establish an end-to-end improvement. Host hierarchy construction remains the
-next acceleration target. CPU parity was verified independently; CPU timing
-was single-shot and does not establish repeated CPU/GPU speedup. These
-historical RTX 5000 timings are diagnostic, not formal performance acceptance;
-current GPU acceptance runs only on the A100 Windows GPU validation host.
-
-### CUDA AMS matrix generation
-
-`radia.gpu.prepareAMS(model,SetupThreads=4)` now generates the auxiliary and
-AMG coarse Galerkin matrices on CUDA. `SetupOnGPU=false` explicitly selects
-the previous host matrix-generation path for validation. Both paths retain
-NGSolve AMG coarsening/interpolation and serial `sparsecholesky` coarse
-factorization. Python is not a prerequisite and TaskManager is not activated.
-
-CUDA computes sorted CSR `AP` followed by `Pt(AP)`, preserving the current
-NGSolve sparse-product accumulation order and separate FP64 multiply/add
-rounding. Each row has one owner; floating-point atomics are not used. The
-matrix cache and all scratch allocations belong to one setup command and are
-freed on normal/error exit. Allocation checks reserve at least 2 GiB or 20%
-of device memory. Unsupported capacity or device state raises an error.
-
-The shared CPU code leaves its optional accelerator callback disabled.
-`graph_validation.py --comparison generation --rounds 2` compares both
-matrix-generation paths in ABBA order, excluding backend warmups. Full time
-includes host setup, device generation transfers, hierarchy upload, solve and
-solution download. Setup memory records the exact maximum concurrently owned
-CUDA allocation bytes; solve memory records a live allocation delta, not a
-whole-process peak.
-
-The clean candidate `73b33291d` passed bitwise comparison of every hierarchy
-array and sparsecholesky factor against the independent CPU oracle. The
-continuously timed public API pipeline (four samples per backend, two ABBA
-rounds after warmup) produced:
-
-| HCurl DOFs | Before, seconds | CUDA generation, seconds | Speedup |
-| --- | ---: | ---: | ---: |
-| 86735 | 0.61350 | 0.43760 | 1.40 |
-| 702073 | 4.99129 | 2.68588 | 1.86 |
-
-At 702073 DOFs, maximum CPU solution relative difference was 4.12e-8 and
-independently checked true relative residual was 7.64e-10. CUDA setup's peak
-owned allocation was 1317974332 bytes (1.23 GiB); the public pipeline's live
-GPU allocation delta was approximately 464841076 bytes (0.43 GiB), unchanged
-between backends. These are different stages, not a whole-process peak.
-Small 5326-DOF stage-sum timing regressed from 0.10574 to 0.11374 seconds.
-The explicitly selected backend does not silently switch based on size.
-
-Full JSON, memory definitions, artifact/source hashes, numerical gates and
-limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
-The candidate is not a deployed release; formal performance acceptance remains
-pending. No A100 operations were performed.
 # 0.1.3 common scope
 
 This candidate combines bounded HDiv-MMM, native affine lowest-order HCurl

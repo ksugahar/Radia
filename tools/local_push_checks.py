@@ -8,6 +8,10 @@ from pathlib import Path
 import subprocess
 import sys
 
+# Per-command budgets in seconds.  The shared precheck measured 255.76 s for the
+# policy tests alone, so the former fixed 180 s limit failed healthy pushes.
+COMMAND_BUDGETS_S = {'policy_lint': 600, 'compact_tests': 1500}
+
 COMPACT_TESTS = ['tests/policy', 'tests/test_ci_execution_policy.py', 'tests/test_sparsesolv_ci_contract.py']
 
 def load(path, name):
@@ -95,9 +99,15 @@ def run(root, base, candidate):
     result = plan(root, base, candidate)
     print(json.dumps(result, ensure_ascii=True), flush=True)
     if result['static_findings']: return 1
-    commands = [[sys.executable, 'tools/policy_lint.py', '--quiet'], [sys.executable, '-m', 'pytest', *COMPACT_TESTS, '-q', '-o', 'addopts=', '-p', 'no:cacheprovider']]
-    for command in commands:
-        completed = subprocess.run(command, cwd=root, timeout=180)
+    commands = [('policy_lint', [sys.executable, 'tools/policy_lint.py', '--quiet']),
+                ('compact_tests', [sys.executable, '-m', 'pytest', *COMPACT_TESTS, '-q', '-o', 'addopts=', '-p', 'no:cacheprovider'])]
+    for name, command in commands:
+        budget = COMMAND_BUDGETS_S[name]
+        try:
+            completed = subprocess.run(command, cwd=root, timeout=budget)
+        except subprocess.TimeoutExpired:
+            print(f'local push check {name} exceeded its {budget} s budget', file=sys.stderr, flush=True)
+            return 124
         if completed.returncode: return completed.returncode
     if git(root, 'rev-parse', 'HEAD') != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):
         raise ValueError('candidate checkout changed during local checks')

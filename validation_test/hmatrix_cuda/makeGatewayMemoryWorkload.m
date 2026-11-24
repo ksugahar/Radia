@@ -28,10 +28,11 @@ switch kind
         f=jsondecode(fileread(fullfile(inputsDir,'projection-reference.json')));
         f.mesh=fullfile(inputsDir,'curved-sphere.vol');action=@()projectionStep(f);
     case 'ams'
+        addpath(fullfile(fileparts(fileparts(mfilename('fullpath'))),'ams_cuda'));
         f=jsondecode(fileread(fullfile(inputsDir,'ams-independent-cpu.json')));m=f.model;
         m.A.rowptr=int32(m.A.rowptr);m.A.columns=int32(m.A.columns);
         m.G.rowptr=int32(m.G.rowptr);m.G.columns=int32(m.G.columns);m.free=int32(m.free);
-        f.hierarchy=radia.gpu.prepareAMS(m,SetupThreads=1);f.gpu_rhs=gpuArray(f.rhs);
+        f.hierarchy=prepareAMS(m,SetupThreads=1);f.gpu_rhs=gpuArray(f.rhs);
         row=repelem((1:m.A.rows)',diff(double(m.A.rowptr)));
         f.matrix=sparse(row,double(m.A.columns)+1,m.A.values,m.A.rows,m.A.cols);
         action=@()amsStep(f);
@@ -84,11 +85,11 @@ assert(norm(value(:)-f.coefficients(:))/norm(f.coefficients(:))<=1e-11);
 clear owner;assert(radia_cuda_projection('live_count')==0);
 end
 function amsStep(f)
-h=radia_cuda_ams('create',f.hierarchy);owner=onCleanup(@()radia_cuda_ams('release',h));
-[x,info]=radia_cuda_ams('solve',h,f.hierarchy.A,f.gpu_rhs,1e-10,4000,true);x=gather(x);free=logical(f.model.free);
+h=radia_cuda_ams_validation('create',f.hierarchy);owner=onCleanup(@()radia_cuda_ams_validation('release',h));
+[x,info]=radia_cuda_ams_validation('solve',h,f.hierarchy.A,f.gpu_rhs,1e-10,4000,true);x=gather(x);free=logical(f.model.free);
 assert(norm(x(free)-f.reference(free))/norm(f.reference(free))<=1e-8);
 res=f.matrix*x-f.rhs;assert(norm(res(free))/norm(f.rhs(free))<=1e-10 && info.true_relative_residual<=1e-10);
-clear owner;assert(all(structfun(@(v)v==0,radia_cuda_ams('resident_status'))));
+clear owner;assert(all(structfun(@(v)v==0,radia_cuda_ams_validation('resident_status'))));
 end
 function ihStep(f)
 f.config.bh_mode='linear';

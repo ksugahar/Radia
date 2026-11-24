@@ -57,3 +57,8 @@ def test_fem_cell_convergence_gate_keeps_diagnostics():
             {"converged": False, "iterations": 9,
              "relative_change": 0.02, "Z": 1.0 + 1.0j},
             "FEM scalar ESIM cell solve")
+
+
+def test_unknown_backend_fails_before_any_mesh_work():
+    with pytest.raises(ValueError, match="Backend must be"):
+        solver.solve_fem(vol_file="not_read.vol", Backend="tpu")

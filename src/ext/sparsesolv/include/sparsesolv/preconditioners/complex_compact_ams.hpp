@@ -43,7 +43,9 @@ public:
         int num_smooth = 1,
         bool smoothing_only_rows = false,
         bool lean_coarse = false,
-        std::array<std::vector<double>, 3> edge_vectors = {})
+        std::array<std::vector<double>, 3> edge_vectors = {},
+        bool auto_line_smoothing = false,
+        int line_max_length = 256)
         : ndof_complex_(ndof_complex > 0 ? ndof_complex : a_real_mat->Height())
     {
         // Build the real AMS hierarchy (shared for Re and Im)
@@ -52,7 +54,8 @@ public:
             coord_x, coord_y, coord_z,
             cycle_type, num_smooth, 0.25, print_level, correction_weight,
             subspace_solver, false, false, false, smoothing_only_rows, lean_coarse,
-            std::move(edge_vectors));
+            std::move(edge_vectors), auto_line_smoothing, std::vector<int>{}, line_max_length, false,
+            /*lines_with_gradient=*/true);
 
         // Cache accessors
         ndof_hc_ = ams_->GetNdofHC();
@@ -192,6 +195,7 @@ public:
     std::vector<double> StageSeconds() const { return std::vector<double>(t_stage_, t_stage_ + 10); }
     long CyclesRun() const { return cycles_run_; }
     const HypreBasedAMS& Real() const { return *ams_; }
+    shared_ptr<HypreBasedAMS> RealShared() const { return ams_; }
 
 private:
     mutable double t_stage_[10] = {0};

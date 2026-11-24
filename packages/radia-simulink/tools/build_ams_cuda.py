@@ -17,7 +17,8 @@ def main(args):
     from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     import netgen
     import matlab.engine
-    package=Path(__file__).resolve().parents[1]
+    script=Path(__file__).resolve()
+    package=script.parents[1]
     root=package.parents[1]
     commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
@@ -33,16 +34,23 @@ def main(args):
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
-             root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/ams_core.cuh',
+             root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/ams_core.cuh',root/'src/core/gpu/ams_refresh.cuh',
              root/'src/core/gpu/snapshot.hpp',package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
              package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp',
-             Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
+             script.with_name('matlab_cuda_toolchain.py'),script.with_name('vs2022_toolchain.py'),script,root/'Build.ps1']
     sources.append(root/'packages/radia-simulink/native/mex_error_boundary.hpp')
-    sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
+    sources.append(script.with_name('check_mex_error_boundaries.py'))
+    sources.extend(root / path for path in (
+        'src/core/gpu/fem/fem_amg.cuh',
+        'src/core/gpu/fem/fem_ams.cuh',
+        'src/core/gpu/fem/fem_api.hpp',
+        'src/core/gpu/fem/fem_device.cuh',
+        'src/core/gpu/fem/fem_krylov.cuh',
+    ))
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     obj=out/'snapshot.obj';binary=out/'_radia_ams_snapshot.pyd'
     python_lib=Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib'
@@ -82,10 +90,11 @@ def main(args):
         host_command+=['/c','/DMX_COMPAT_64','/DMATLAB_DEFAULT_RELEASE=R2017b','/DMATLAB_MEX_FILE',
                        f'/I{Path(eng.matlabroot()) / "extern/include"}',
                        f'/Fo{host_obj}',str(package/'native/ams_matlab_setup.cpp')]
-        batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'+
-                         subprocess.list2cmdline(host_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
-        with (out/'host-build.log').open('w') as log:
-            subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
+        if args.validation_oracle:
+            batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'+
+                             subprocess.list2cmdline(host_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
+            with (out/'host-build.log').open('w') as log:
+                subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
         fem_obj=out/'ams_fem_host.obj'
         fem_command=[arg.replace(str(host_obj),str(fem_obj)).replace('ams_matlab_setup.cpp','ams_fem_host.cpp') for arg in host_command]
         batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'+
@@ -93,8 +102,14 @@ def main(args):
         with (out/'fem-host-build.log').open('w') as log:
             subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
         flags='NVCCFLAGS=-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
-        eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
-                    str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),nargout=0)
+        libs=(str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'))
+        mex_args=('-v','-f',str(config),flags,'-lcublas','-lcusolver','-outdir',str(out))
+        eng.mexcuda(*mex_args,str(cuda),str(fem_obj),*libs,nargout=0)
+        artifacts=[binary,out/'_radia_ams_cpu_reference.pyd',out/'radia_cuda_ams.mexw64']
+        if args.validation_oracle:
+            oracle='radia_cuda_ams_validation'
+            eng.mexcuda(*mex_args,'-DRADIA_AMS_VALIDATION','-output',oracle,str(cuda),str(host_obj),str(fem_obj),*libs,nargout=0)
+            artifacts.append(out/(oracle+'.mexw64'))
         if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
             or commit!=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()):
             raise RuntimeError('Source changed while building; candidate provenance rejected')
@@ -102,7 +117,7 @@ def main(args):
                 'matlab':eng.version(),'configuration':str(config),'compiler_bin':os.environ['NVCC_CCBIN'],
                 'source_commit':commit,'source_dirty':dirty,
                 'sha256':{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in (binary,out/'_radia_ams_cpu_reference.pyd',out/'radia_cuda_ams.mexw64')},
+                          for p in artifacts},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
         record['snapshot_setup_backend']='OpenMP row/chunk dispatch; default one thread; serial coarse factorization'
         record['matlab_setup_backend']='Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions'
@@ -114,5 +129,6 @@ def main(args):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--require-clean-source',action='store_true')
+    p.add_argument('--validation-oracle',action='store_true',help='Also build the independent validation MEX')
     p.add_argument('--build-admission',type=Path);p.add_argument('--build-admission-sha256')
     main(p.parse_args())

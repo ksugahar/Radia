@@ -22,6 +22,41 @@ def _memoize_linked_source(function):
     return memoize_linked_source(function)
 
 
+def _point_tangent(mesh, table, nonlinear, linear_mu_cf, iron_h, mu0):
+    """Symmetric d2w/dH2 at mapped points: the PCHIP law in iron, the constant mu elsewhere."""
+    import ngsolve as ng
+    from .bh_law import monotone_bh_pchip
+
+    H_table, B_table = table[:, 0], table[:, 1]
+    law = monotone_bh_pchip(H_table, B_table, extrapolate=False)
+    slope = law.derivative()
+    H_last, B_last = float(H_table[-1]), float(B_table[-1])
+    iron_mask = mesh.MaterialCF({name: 1.0 for name in nonlinear}, default=0.0)
+
+    def evaluate(points):
+        mask = np.asarray(iron_mask(points)).ravel() > 0.5
+        mu = np.asarray(linear_mu_cf(points)).ravel()
+        tensor = np.zeros((len(points), 6))
+        tensor[~mask, 0] = tensor[~mask, 3] = tensor[~mask, 5] = mu[~mask]
+        if mask.any():
+            H = np.asarray(iron_h(points[mask]), dtype=float).reshape(-1, 3)
+            # The same radial smoothing as the co-energy of the residual.
+            magnitude = np.sqrt(np.sum(H * H, axis=1) + 1e-24)
+            inside = magnitude <= H_last
+            B = B_last + mu0 * (magnitude - H_last)
+            dB = np.full(magnitude.shape, mu0)
+            B[inside] = law(magnitude[inside])
+            dB[inside] = slope(magnitude[inside])
+            secant = B / magnitude
+            radial = (dB - secant) / (magnitude * magnitude)
+            values = np.column_stack((secant + radial * H[:, 0] * H[:, 0], radial * H[:, 0] * H[:, 1], radial * H[:, 0] * H[:, 2],
+                                      secant + radial * H[:, 1] * H[:, 1], radial * H[:, 1] * H[:, 2], secant + radial * H[:, 2] * H[:, 2]))
+            tensor[mask] = values
+        return tensor
+
+    return evaluate
+
+
 @_memoize_linked_source
 def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
@@ -31,7 +66,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         max_halvings=12, observation_points=None, progress_callback=None,
         bonus_intorder=4, inverse="sparsecholesky", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
-        material_bonus_intorder=None, **linear_options):
+        material_bonus_intorder=None, Backend="cpu", **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
 
     Nonlinear materials must lie in the physical total-potential region.
@@ -47,9 +82,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     automatic differentiation grows with the table length.
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
+
+    ``Backend="gpu"`` with the condensed form and ``linear_solver="cg"`` builds each
+    tangent and its preconditioner on the device. The constitutive tensor is evaluated
+    at the quadrature points on the host and crosses as coefficient data; the nonlinear
+    residual stays a host quadrature evaluation with no matrix. There is no fallback.
     """
     if inverse != "sparsecholesky":
         raise ValueError("direct FE solves require inverse='sparsecholesky'")
+    if Backend not in ("cpu", "gpu"):
+        raise ValueError(f"Backend must be 'cpu' or 'gpu', got {Backend!r}")
+    if Backend == "gpu" and (not condense_matching_trace or linear_solver != "cg"):
+        raise ValueError("Backend='gpu' needs condense_matching_trace=True and linear_solver='cg'")
     import ngsolve as ng
     from .kelvin_solver import (
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
@@ -115,7 +159,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             mesh, H_s, source_potential, reduced_materials=reduced, total_materials=total,
             interface_boundary=interface_boundary, order=order, mu_r_by_material=initial_mu,
             bonus_intorder=bonus_intorder, inverse=inverse, return_system=True,
-            solver=linear_solver, cg_tolerance=1e-10,
+            solver=linear_solver, cg_tolerance=1e-10, Backend=Backend,
+            cg_preconditioner="bddc_h1amg" if Backend == "gpu" else "local",
             dirichlet_bbbnd=linear_options.get("dirichlet_bbbnd", "GND"),
             total_source_h=linear_options.get("total_source_h"),
             total_source_materials=linear_options.get("total_source_materials", ()))
@@ -167,7 +212,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
                   - 0.5 * mu0 * float(mu_r_initial) * ng.InnerProduct(trial_h, trial_h))
     tangent += ng.SymbolicEnergy(correction.Compile(), definedon=selector,
                                 bonus_intorder=material_bonus_intorder)
-    preconditioner = ng.Preconditioner(tangent, "local") if linear_solver == "cg" else None
+    preconditioner = ng.Preconditioner(tangent, "local") if linear_solver == "cg" and Backend == "cpu" else None
     residual = rhs.CreateVector()
     trial = solution.vec.CreateVector()
     step = solution.vec.CreateVector()
@@ -203,6 +248,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     previous = ng.GridFunction(fes)
     reason = "iteration limit"
     trace_factor_cache = {}
+    device = None
+    device_report = None
+    if Backend == "gpu":
+        from . import fem_gpu
+        tangent_tensor = _point_tangent(mesh, table, nonlinear, result["mu_cf"], iron_h, mu0)
     for iteration in range(1, int(max_iterations) + 1):
         if converged:
             break
@@ -212,10 +262,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         before_mag = ng.sqrt(ng.InnerProduct(before_h, before_h) + 1e-24)
         before_b = (b_of(before_mag) / before_mag * before_h).Compile()
         t0 = time.perf_counter()
-        tangent.AssembleLinearization(solution.vec)
+        if Backend == "gpu":
+            if device is None:
+                device = fem_gpu.DeviceSystem(
+                    fes, fem_gpu.Coefficients(stiff=1.0, stiff_aux=1.0),
+                    bonus=(max(int(bonus_intorder), int(material_bonus_intorder)), 0, 0), tangent=tangent_tensor)
+            else:
+                device.update_tangent()
+        else:
+            tangent.AssembleLinearization(solution.vec)
         row["assembly_s"] = time.perf_counter() - t0
         t0 = time.perf_counter()
-        if linear_solver == "cg":
+        if Backend == "gpu":
+            device.setup("amg" if int(order) == 1 else "bddc")
+        elif linear_solver == "cg":
             from ngsolve.krylovspace import CGSolver
             preconditioner.Update()
             inv = CGSolver(mat=tangent.mat, pre=preconditioner.mat, tol=1e-10,
@@ -229,10 +289,17 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         linear_rhs = residual.CreateVector()
         linear_rhs.data = residual
         linear_rhs.FV().NumPy()[~free] = 0.0
-        step.data = -(inv * linear_rhs)
-        linear_error = residual.CreateVector()
-        linear_error.data = tangent.mat * step + residual
-        absolute_linear = float(np.linalg.norm(linear_error.FV().NumPy()[free]))
+        if Backend == "gpu":
+            device_report = device.solve(np.array(linear_rhs.FV().NumPy(), copy=True), tolerance=1e-10, max_iterations=3000)
+            step.FV().NumPy()[:] = -device_report.pop("solution")
+            absolute_linear = float(device_report["true_residual"]) * float(device_report["initial_norm"])
+            device_iterations = int(device_report["iterations"])
+        else:
+            step.data = -(inv * linear_rhs)
+            linear_error = residual.CreateVector()
+            linear_error.data = tangent.mat * step + residual
+            absolute_linear = float(np.linalg.norm(linear_error.FV().NumPy()[free]))
+            device_iterations = None
         from radia._residual_gate import residual_scale
         rhs_norm = float(np.linalg.norm(residual.FV().NumPy()[free]))
         linear_scale = residual_scale(rhs_norm, reference_norm)
@@ -241,7 +308,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         row["linear_reference_norm"] = reference_norm
         row["linear_residual_scale"] = linear_scale
         row["linear_residual_relative"] = relative_linear
-        row["linear_iterations"] = getattr(inv, "iterations", None)
+        row["linear_iterations"] = device_iterations if Backend == "gpu" else getattr(inv, "iterations", None)
         # The linear acceptance contract is independent of nonlinear stopping.
         from radia._residual_gate import RELATIVE_LIMIT
         row["linear_residual_limit"] = RELATIVE_LIMIT
@@ -249,7 +316,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             raise MixedOmegaNewtonNotConverged("Newton linear solve did not converge",
                                               {"nonlinear_stats": {"converged": False,
                                                "history": history + [row]}})
-        del inv
+        if Backend != "gpu":
+            del inv
         alpha = 1.0
         accepted = False
         t0 = time.perf_counter()
@@ -285,6 +353,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
+                 backend=Backend, device_report=device_report,
                  bh_interpolation=bh_interpolation_kind(table[:, 0], table[:, 1]),
                  bh_evaluation="spline", bonus_intorder=int(bonus_intorder),
                  material_bonus_intorder=int(material_bonus_intorder),

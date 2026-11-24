@@ -1,5 +1,11 @@
 # Experimental AMS CUDA MEX
 
+Build the validation MEX with `Build.ps1 -AmsCudaOnly -AmsValidationOracle`.
+The CPU setup and matrix export helpers in this directory require
+`radia_cuda_ams_validation`. The distributed wheel uses the resident
+`radia_cuda_ams` MEX.
+
+
 This experiment applies the existing real FP64 Radia AMS preconditioner on a
 CUDA GPU. It is an assembled-operator bridge, not NGSolve's upstream
 matrix-free GPU backend. It is not a released MATLAB solver or a claim of
@@ -101,7 +107,7 @@ CUDA AMS sources, the pybind snapshot adapter and the build helper are owned
 by `packages/radia-gpu/{native,tools}`. CPU hierarchy algorithms and NGSolve
 FE semantics retain their CPU owner. `Build.ps1 -AmsCudaOnly` is a thin
 monorepo dispatcher. The GPU distribution stages the standalone AMS MEX,
-`radia.gpu.amsPCG`, the HDF5 reader and exact-build provenance; it does not
+`amsPCG`, the HDF5 reader and exact-build provenance; it does not
 ship the validation-only CPU pybind adapter.
 
 `python validation_test/ams_cuda/validate_exchange.py --large --out <owned-dir>`
@@ -288,13 +294,13 @@ to satisfy this benchmark. Each run writes `result.json`, including failures.
 
 ## MATLAB-owned native setup
 
-The experimental candidate also exposes `radia.gpu.prepareAMS(model)` within
+The experimental candidate also exposes `prepareAMS(model)` within
 MATLAB/mexcuda. It reuses the retired MEX gateway's shared `HypreBasedAMS`
 constructor and NGSolve sparsecholesky; no Python adapter or prebuilt Python
 solver hierarchy is required. Supply a versioned numeric model containing
 `A`, `G` (sorted int32 CSR), `coordinates` (vertices by three), an int32 free-DOF
 mask, and cycle 1 or 7. NGSolve still owns FE orientation and assembly semantics.
-The default uploads the resulting hierarchy for `radia.gpu.amsPCG`; `Upload=false`
+The default uploads the resulting hierarchy for `amsPCG`; `Upload=false`
 returns host data for explicit transfer management. TaskManager regions are
 compiled out; indirect upstream dependencies are permitted by the clarified
 policy. Python DLL dependencies do not imply interpreter initialization.
@@ -332,7 +338,7 @@ The current implementation assembles sparse CSR operators from six mapped curl
 vectors and 36 CSR slots per affine tetrahedron. It supports lowest-order HCurl
 on affine tetrahedra; other element orders or geometry fail explicitly. NGSolve
 owns orientation and mapped shape functions. No global dense matrix is formed.
-`radia.gpu.AMSContext` owns a checked native handle, persistent PCG buffers and
+`AMSContext` owns a checked native handle, persistent PCG buffers and
 cached CUDA graph. Hierarchy replacement preserves its PCG workspace. Nonlinear
 residual, tangent and element-energy buffers also remain on the device. Native
 buffer allocation counters must remain zero during each resident linear solve;
@@ -462,7 +468,7 @@ The current implementation assembles sparse CSR operators from six mapped curl
 vectors and 36 CSR slots per affine tetrahedron. It supports lowest-order HCurl
 on affine tetrahedra; other element orders or geometry fail explicitly. NGSolve
 owns orientation and mapped shape functions. No global dense matrix is formed.
-`radia.gpu.AMSContext` owns a checked native handle, persistent PCG buffers and
+`AMSContext` owns a checked native handle, persistent PCG buffers and
 cached CUDA graph. Hierarchy replacement preserves its PCG workspace. Nonlinear
 residual, tangent and element-energy buffers also remain on the device. Native
 buffer allocation counters must remain zero during each resident linear solve;

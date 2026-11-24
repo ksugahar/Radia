@@ -6,6 +6,7 @@
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cusolverDn.h>
 #include <cmath>
 #include <algorithm>
 #include <atomic>
@@ -19,9 +20,12 @@
 #include <cstdint>
 #include "ams_fem_host.hpp"
 #include "../../../src/core/gpu/snapshot.hpp"
+#include "../../../src/core/gpu/fem/fem_ams.cuh"
+#include "../../../src/core/gpu/fem/fem_krylov.cuh"
 void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 #include "../../../src/core/gpu/ams_core.cuh"
+#include "../../../src/core/gpu/ams_refresh.cuh"
 const mxArray* field(const mxArray* a,const char* name) {
     if(!mxIsStruct(a)||mxGetNumberOfElements(a)!=1) throw std::runtime_error("scalar struct required");
     auto v=mxGetField(a,0,name); if(!v) throw std::runtime_error(std::string("missing field: ")+name); return v;
@@ -82,11 +86,17 @@ struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUA
 void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     if(nrhs>0 && mxIsChar(args[0])) {
         auto command=word(args[0]);
+#ifdef RADIA_AMS_VALIDATION
         if(command=="setup"){RadiaAMSSetup(nlhs,out,nrhs,args);return;}
+#endif
         mxInitGPU();
-        if(femCommand(command,nlhs,out,nrhs,args)||amsResidentCommand(command,nlhs,out,nrhs,args)||nonlinearCommand(command,nlhs,out,nrhs,args))return;
+        if(femCommand(command,nlhs,out,nrhs,args)||nonlinearCommand(command,nlhs,out,nrhs,args))return;
+#ifdef RADIA_AMS_VALIDATION
+        if(amsResidentCommand(command,nlhs,out,nrhs,args))return;
+#endif
         throw std::runtime_error("Unknown AMS command");
     }
+#ifdef RADIA_AMS_VALIDATION
     if((nrhs<5||nrhs>7)||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only[,use_graph])");
     if(nrhs>=6&&!mxIsLogicalScalar(args[5]))throw std::runtime_error("logical use_graph required");
     const bool use_graph=nrhs>=6&&mxIsLogicalScalarTrue(args[5]);
@@ -125,11 +135,16 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     mxSetField(out[1],0,names[4],mxCreateDoubleScalar(double(workspace_sample)));
     mxSetField(out[1],0,names[5],mxCreateLogicalScalar(!apply_only));
     mxSetField(out[1],0,names[6],mxCreateString((!apply_only&&use_graph)?"CUDA Graph replay of the unchanged AMS cycle":"direct CUDA kernels"));
+#else
+    throw std::runtime_error("A resident HCurl command is required");
+#endif
 }
 }
 // These definitions are linked by the separately compiled MATLAB setup
 // adapter. Keep external linkage, outside the private solver namespace.
+#ifdef RADIA_AMS_VALIDATION
 #include "ams_setup_gpu.cuh"
+#endif
 void mexFunction(int nl,mxArray** out,int nr,const mxArray** in){
 
     char errorMessage[2048]={0};

@@ -54,28 +54,24 @@ struct Context {
     Node data;
     Flag validation;
     Buffer rhs,output;
-    std::unique_ptr<AMS> ams;
     std::unique_ptr<Space> amg;
     explicit Context(const Node& input):n(rows(input)),rhs(n),output(n){
         ck(cudaGetDevice(&device));
         const auto& schema=input.at("schema").string();
-        if(schema=="radia.ams-accelerator.v1"){
-            data=upload(input,arrays);ams=std::make_unique<AMS>(data,validation);
-        }else if(schema=="radia.amg-accelerator.v1"){
-            Node space;space.kind=Node::record;space.fields["P"]=identity(n);space.fields["Pt"]=identity(n);
-            space.fields["levels"]=input.at("levels");
-            if(space.at("levels").items().empty())throw std::runtime_error("empty AMG hierarchy");
-            const auto& system=input.at("A");
-            const auto& first=space.at("levels").items().front().at("A");
-            if(system.at("rows").integer()!=first.at("rows").integer()
-                ||system.at("cols").integer()!=first.at("cols").integer()
-                ||system.at("rowptr").int_values!=first.at("rowptr").int_values
-                ||system.at("columns").int_values!=first.at("columns").int_values
-                ||system.at("values").real_values!=first.at("values").real_values)
-                throw std::runtime_error("AMG operator and finest-level snapshot differ");
-            data=upload(space,arrays);amg=std::make_unique<Space>(data,validation);
-            if(amg->levels[0]->a.n!=n)throw std::runtime_error("AMG snapshot operator dimension mismatch");
-        }else throw std::runtime_error("unsupported sparse accelerator schema");
+        if(schema!="radia.amg-accelerator.v1")throw std::runtime_error("unsupported sparse accelerator schema");
+        Node space;space.kind=Node::record;space.fields["P"]=identity(n);space.fields["Pt"]=identity(n);
+        space.fields["levels"]=input.at("levels");
+        if(space.at("levels").items().empty())throw std::runtime_error("empty AMG hierarchy");
+        const auto& system=input.at("A");
+        const auto& first=space.at("levels").items().front().at("A");
+        if(system.at("rows").integer()!=first.at("rows").integer()
+            ||system.at("cols").integer()!=first.at("cols").integer()
+            ||system.at("rowptr").int_values!=first.at("rowptr").int_values
+            ||system.at("columns").int_values!=first.at("columns").int_values
+            ||system.at("values").real_values!=first.at("values").real_values)
+            throw std::runtime_error("AMG operator and finest-level snapshot differ");
+        data=upload(space,arrays);amg=std::make_unique<Space>(data,validation);
+        if(amg->levels[0]->a.n!=n)throw std::runtime_error("AMG snapshot operator dimension mismatch");
         validation.check();ck(cudaGetLastError());
     }
     void selected(){
@@ -83,17 +79,14 @@ struct Context {
         if(current!=device)throw std::runtime_error("GPU hierarchy belongs to a different CUDA device");
         launch_stream=nullptr;
     }
-    void input(const double* b,size_t count,bool solve){
+    void input(const double* b,size_t count){
         selected();if(count!=size_t(n))throw std::runtime_error("RHS dimension mismatch");
         ck(cudaMemset(validation.p,0,sizeof(int)));
         ck(cudaMemcpy(rhs.p,b,n*sizeof(double),cudaMemcpyHostToDevice));
         verify_vec<<<(n+T-1)/T,T>>>(n,rhs.p,false,validation.p);
-        if(ams){
-            output.zero();verify_mask<<<(n+T-1)/T,T>>>(n,ams->free,solve?rhs.p:output.p,validation.p);
-        }
         validation.check();
     }
-    const CSR& matrix()const{return ams?ams->a:amg->levels[0]->a;}
+    const CSR& matrix()const{return amg->levels[0]->a;}
 };
 struct AMGAction {
     const CSR& a;Space& space;
@@ -107,18 +100,16 @@ void* create(const Node& node){return new Context(node);}
 Stats solve(void* owner,const double* b,size_t n,double* out,double tol,int limit){
     if(!owner||!std::isfinite(tol)||tol<=0||tol>1e-6||limit<1||limit>100000)
         throw std::runtime_error("invalid sparse GPU solve controls");
-    auto& c=*static_cast<Context*>(owner);c.input(b,n,true);
-    ResidentWork work(c.n);SolveStats result;
-    if(c.ams)result=residentPCG(*c.ams,c.matrix(),c.rhs.p,work,tol,limit,nullptr);
-    else {AMGAction action{c.matrix(),*c.amg};result=residentPCG(action,c.matrix(),c.rhs.p,work,tol,limit,nullptr);}
+    auto& c=*static_cast<Context*>(owner);c.input(b,n);
+    ResidentWork work(c.n);AMGAction action{c.matrix(),*c.amg};
+    auto result=residentPCG(action,c.matrix(),c.rhs.p,work,tol,limit,nullptr);
     ck(cudaGetLastError());ck(cudaMemcpy(out,work.x.p,n*sizeof(double),cudaMemcpyDeviceToHost));
     return {result.iterations,result.residual};
 }
 void apply(void* owner,const double* b,size_t n,double* out){
     if(!owner)throw std::runtime_error("closed sparse GPU hierarchy");
-    auto& c=*static_cast<Context*>(owner);c.input(b,n,false);
-    if(c.ams)c.ams->apply(c.rhs.p,c.output.p);
-    else {AMGAction action{c.matrix(),*c.amg};action.apply(c.rhs.p,c.output.p);}
+    auto& c=*static_cast<Context*>(owner);c.input(b,n);
+    AMGAction action{c.matrix(),*c.amg};action.apply(c.rhs.p,c.output.p);
     verify_vec<<<(c.n+T-1)/T,T>>>(c.n,c.output.p,false,c.validation.p);
     c.validation.check();ck(cudaGetLastError());
     ck(cudaMemcpy(out,c.output.p,n*sizeof(double),cudaMemcpyDeviceToHost));

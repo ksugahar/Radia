@@ -4,7 +4,7 @@ addpath(payload,'-begin');g=gpuDevice;wait(g);initial=radia_cuda_ams('resident_s
 labels=["back","front","left","right","top","bottom"];
 before=g.AvailableMemory;timer=tic;
 [x,info]=radia.gpu.solveHCurl(fullfile(job,'model.vol'),labels,Gamma=4, ...
-    CurrentDensity=[20 0 0],SetupThreads=1,LinearTolerance=1e-12,ReturnOnGPU=false);
+    CurrentDensity=[20 0 0],LinearTolerance=1e-12,ReturnOnGPU=false);
 wait(g);seconds=toc(timer);
 assert(all(isfinite(x)) && isequal(radia_cuda_ams('resident_status'),initial));
 report=struct('whole_api_seconds',seconds,'info',info,'device_free_before',before, ...

@@ -212,9 +212,10 @@
         "tools/prepare_hdiv_mesh_receipt.py",
         "tools/check_python_gpu_coexistence.py",
         "validation_test/induction_heating/fin_return_principle.py",
-        "tools/check_ninja_msvc_deps.py"
+        "tools/check_ninja_msvc_deps.py",
+        "tools/check_native_module_abi.py"
       ],
-      "audit_sha256": "c3a4cab7704705d0a9184e5d7f588a987cbf91764bc5602df92e34a3119f8b5a",
+      "audit_sha256": "179c505b2fbbd77c0d41668e7c3e207331307a00923ace08ff2c2177b75d3c53",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

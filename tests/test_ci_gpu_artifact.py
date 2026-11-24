@@ -55,6 +55,27 @@ def test_radia_wheel_comes_from_native_release_at_the_exact_sha(monkeypatch):
     assert routes[0] == f'actions/workflows/radia-simulink.yml/runs?head_sha={sha}&event=push&status=success&per_page=100'
 
 
+def test_exact_sha_dispatch_run_produces_simulink_artifacts(monkeypatch):
+    """Guards: a manual dispatch at the exact SHA is fetched when no push run exists.
+    Assumes: dispatch builds and seals github.sha itself, unlike a pull-request merge commit."""
+    import json
+    sha = 'd' * 40
+    routes = []
+    def request(route):
+        routes.append(route)
+        if route.startswith('actions/workflows/'):
+            runs = [dict(id=11, head_sha=sha)] if '&event=workflow_dispatch' in route else []
+            return json.dumps({'workflow_runs': runs}).encode()
+        return json.dumps({'artifacts': [dict(id=12, name='gpu-simulink-validation-bundle', expired=False)]}).encode()
+    monkeypatch.setattr(gpu, 'request', request)
+    selected = gpu.resolve(sha, gpu.SIMULINK_BUNDLE)
+    assert [(run['id'], found['id']) for run, found, _ in selected] == [(11, 12)]
+    assert [r for r in routes if r.startswith('actions/workflows/')] == [
+        f'actions/workflows/radia-simulink.yml/runs?head_sha={sha}{event}&status=success&per_page=100'
+        for event in ('&event=push', '&event=workflow_dispatch')]
+    assert not any('event=pull_request' in r for r in routes)
+
+
 def test_redirect_strips_credential_without_network():
     req = gpu.urllib.request.Request('https://api.github.com/repos/test/repo/actions/artifacts/1/zip',
         headers={'Authorization': 'Bearer secret', 'Accept': 'application/zip'})

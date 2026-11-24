@@ -51,6 +51,63 @@ def test_new_remote_branch_uses_main_merge_base(tmp_path):
     assert module.resolve_candidate_base(module.ZERO, head) == base
 
 
+def _main_and_feature(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "ci@example.invalid")
+    _git(repo, "config", "user.name", "CI Test")
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "base.txt")
+    _git(repo, "commit", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    (repo / "feature.txt").write_text("feature\n", encoding="utf-8")
+    _git(repo, "add", "feature.txt")
+    _git(repo, "commit", "-m", "feature")
+    return repo, base, _git(repo, "rev-parse", "HEAD")
+
+
+def test_push_of_a_commit_already_on_main_skips_without_bundle(monkeypatch, tmp_path, capsys):
+    """Guards: an exact-SHA verification branch push does not crash on an empty bundle.
+    Assumes: origin/main already passed main CI for that commit."""
+    repo, base, head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    assert module.candidate_on_main(base) is True
+    assert module.candidate_on_main(head) is False
+    def forbidden(*args, **kwargs):
+        pytest.fail('A commit already on main needs no bundle or transport')
+    monkeypatch.setattr(module, 'create_bundle', forbidden)
+    monkeypatch.setattr(module, 'run', forbidden)
+    assert module.main(['--base', module.ZERO, '--head', base]) == 0
+    assert 'Preflight skipped' in capsys.readouterr().out
+
+
+def test_existing_ref_update_to_a_main_commit_keeps_normal_preflight(monkeypatch, tmp_path):
+    """Guards: the skip applies only to a new ref; an existing ref update still bundles."""
+    repo, base, head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    calls = []
+    def stop(*args):
+        calls.append(args)
+        raise RuntimeError('bundle reached')
+    monkeypatch.setattr(module, 'create_bundle', stop)
+    assert module.main(['--base', head, '--head', base]) == 1
+    assert len(calls) == 1 and calls[0][:2] == (head, base)
+
+
+def test_unknown_candidate_ancestry_fails_loudly(tmp_path):
+    repo, _base, _head = _main_and_feature(tmp_path)
+    module = _load_module()
+    module.ROOT = repo
+    with pytest.raises(RuntimeError, match='cannot test candidate ancestry'):
+        module.candidate_on_main('f' * 40)
+
+
 @pytest.mark.parametrize('mapping,host,expected', [
     ('', '100', '100'),
     ('100=compute', '100', 'compute'),
@@ -78,6 +135,7 @@ def _mock_candidate(monkeypatch, module, tmp_path):
     monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
     monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw: pytest.fail('Preflight must not query GitHub runner inventory'))
     monkeypatch.setattr(module, 'create_bundle', lambda *a: 'a' * 40)
+    monkeypatch.setattr(module, 'candidate_on_main', lambda head: False)
     real_tempdir = module.tempfile.TemporaryDirectory
     monkeypatch.setattr(module.tempfile, 'TemporaryDirectory', lambda **kw:
         real_tempdir(dir=tmp_path))
@@ -148,7 +206,11 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
     assert script.index('try {') < script.index('[IO.File]::Open') < script.index('& $git clone')
     assert script.index('Runner.Worker') < script.index('& $git clone')
     assert '[IO.FileShare]::None' in script
-    assert script.index('} finally {') > script.index('worktree add')
+    assert script.index('} finally {') > script.index('Export-Candidate $git $repo $worktree $head')
+    assert script.rindex('Remove-CandidateExport $root $worktree') > script.index('Export-Candidate $git')
+    assert 'worktree add' not in script and 'worktree remove' not in script
+    assert 'Set-Content -LiteralPath $alternates' not in script
+    assert 'if ($exported -ne $head)' in script
     assert '$lock.Dispose()' in script
     # Parse the generated PowerShell without executing any remote command.
     import shutil
@@ -190,3 +252,177 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
 def test_preflight_refuses_other_roles_without_transport():
     with pytest.raises(RuntimeError, match="build target"):
         _load_module().resolve_ssh_destination("validation", "")
+
+
+def _pwsh_export_fixture(tmp_path):
+    """A cached repository with one commit and the owned work root, all scratch."""
+    import shutil
+    pwsh, git = shutil.which('pwsh'), shutil.which('git')
+    if not (pwsh and git):
+        pytest.skip('pwsh and git are required for the generated-PowerShell export test')
+    repo = tmp_path / 'root' / 'repo'
+    repo.mkdir(parents=True)
+    env = {k: v for k, v in __import__('os').environ.items() if not k.startswith('GIT_')}
+    def g(*args):
+        return subprocess.run([git, '-c', f'safe.directory={repo}', *args], cwd=repo, env=env,
+                              check=True, capture_output=True, text=True).stdout.strip()
+    g('init', '-q'); g('config', 'user.email', 't@example.invalid'); g('config', 'user.name', 't')
+    (repo / 'a.txt').write_text('candidate\n', encoding='utf-8')
+    g('add', '-A'); g('commit', '-q', '-m', 'c')
+    (tmp_path / 'root' / 'work').mkdir()
+    return pwsh, git, env, tmp_path / 'root', repo, g('rev-parse', 'HEAD')
+
+
+def _run_export(tmp_path, pwsh, git, env, root, repo, head, export, probe=''):
+    module = _load_module()
+    body = (module.EXPORT_FUNCTIONS + "\n$ErrorActionPreference = 'Stop'\n$script:exportOwned = $false\n"
+            f"try {{\n  Export-Candidate '{git}' '{repo}' '{export}' '{head}'\n{probe}\n}} finally {{\n"
+            f"  Remove-CandidateExport '{root}' '{export}'\n}}\n")
+    file = tmp_path / 'export.ps1'
+    file.write_text(body, encoding='utf-8')
+    return subprocess.run([pwsh, '-NoProfile', '-File', str(file)], capture_output=True, text=True,
+                          encoding='utf-8', errors='replace', timeout=120, env=env)
+
+
+def test_generated_export_runs_on_real_git_and_cleans_up(tmp_path):
+    """Guards: the build-host export reads the candidate through LF alternates,
+    verifies HEAD, is not a registered worktree, and is removed afterwards."""
+    pwsh, git, env, root, repo, head = _pwsh_export_fixture(tmp_path)
+    export = root / 'work' / 'run1'
+    record = tmp_path / 'probe.txt'
+    probe = ("  $alt = Join-Path $args_export '.git/objects/info/alternates'\n"
+             .replace('$args_export', f"'{export}'")
+             + "  $bytes = [IO.File]::ReadAllBytes($alt)\n"
+             + f"  $headNow = (& '{git}' -c 'safe.directory={export}' -C '{export}' rev-parse HEAD).Trim()\n"
+             + f"  Set-Content -LiteralPath '{record}' -Value ('{{0}} {{1}} {{2}}' -f $bytes[-1], ($bytes -contains 13), $headNow)\n")
+    result = _run_export(tmp_path, pwsh, git, env, root, repo, head, export, probe)
+    assert result.returncode == 0, result.stderr
+    last, has_cr, seen = record.read_text(encoding='utf-8').split()
+    assert (last, has_cr, seen) == ('10', 'False', head)
+    assert not export.exists()
+    listed = subprocess.run([git, '-c', f'safe.directory={repo}', 'worktree', 'list', '--porcelain'],
+                            cwd=repo, env=env, capture_output=True, text=True, check=True).stdout
+    assert listed.count('worktree ') == 1, listed
+
+
+def test_generated_export_never_removes_a_preexisting_path(tmp_path):
+    """Guards: a path that existed before this run is refused and kept, sentinel intact."""
+    pwsh, git, env, root, repo, head = _pwsh_export_fixture(tmp_path)
+    export = root / 'work' / 'run1'
+    export.mkdir()
+    sentinel = export / 'sentinel.txt'
+    sentinel.write_text('keep', encoding='utf-8')
+    result = _run_export(tmp_path, pwsh, git, env, root, repo, head, export)
+    assert result.returncode != 0
+    assert 'already exists' in result.stderr, result.stderr
+    assert sentinel.read_text(encoding='utf-8') == 'keep'
+
+
+def test_forwarded_env_lines_pass_locations_only():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "ci_preflight_remote_fwd", Path(__file__).parents[1] / "tools/ci_preflight_remote.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    lines = module.forwarded_env_lines({
+        "RADIA_PUBLIC_NAME_RULES_FILE": "D:/rules/o'k.json",
+        "RADIA_OPTUNA_SOURCE": "  ",
+        "UNRELATED": "x",
+    })
+    assert lines == ["$env:RADIA_PUBLIC_NAME_RULES_FILE = 'D:/rules/o''k.json'"], lines
+
+
+def test_failed_remote_launch_does_not_disclose_encoded_script(monkeypatch):
+    """Guards: a failing ssh launch reports status only, never the payload."""
+    import base64
+    import subprocess as sp
+    module = _load_module()
+    marker = "SYNTHETIC-PRIVATE-LOCATION-7f3c"
+    script = "\n".join(module.forwarded_env_lines(
+        {"RADIA_PUBLIC_NAME_RULES_FILE": f"D:/{marker}/rules.json"}))
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    monkeypatch.setattr(module.subprocess, "run",
+                        lambda *a, **k: sp.CompletedProcess(a[0], 1))
+    with pytest.raises(RuntimeError) as excinfo:
+        module.remote_command(script, "100")
+    message = str(excinfo.value)
+    assert "failed (1)" in message, message
+    assert marker not in message and encoded not in message, message
+
+
+def _run_pytest_root(tmp_path, root, path, body, env):
+    import shutil
+    pwsh = shutil.which('pwsh')
+    if not pwsh:
+        pytest.skip('pwsh is required for the generated-PowerShell pytest-root test')
+    module = _load_module()
+    script = (module.EXPORT_FUNCTIONS + "\n$ErrorActionPreference = 'Stop'\n$script:pytestRootOwned = $false\n"
+              f"try {{\n  New-PytestRoot '{root}' '{path}'\n{body}\n}} finally {{\n"
+              f"  Remove-PytestRoot '{root}' '{path}'\n}}\n")
+    file = tmp_path / 'pytest_root.ps1'
+    file.write_text(script, encoding='utf-8')
+    return subprocess.run([pwsh, '-NoProfile', '-File', str(file)], capture_output=True, text=True,
+                          encoding='utf-8', errors='replace', timeout=120, env=env)
+
+
+def test_pytest_root_never_removes_a_preexisting_path(tmp_path):
+    """Guards: per-run pytest scratch that existed before this run is refused and kept."""
+    import os
+    root = tmp_path / 'root'
+    path = root / 'tmp' / 'run1'
+    path.mkdir(parents=True)
+    sentinel = path / 'sentinel.txt'
+    sentinel.write_text('keep', encoding='utf-8')
+    result = _run_pytest_root(tmp_path, root, path, '', dict(os.environ))
+    assert result.returncode != 0, result.stdout
+    assert 'already exists' in result.stderr, result.stderr
+    assert sentinel.read_text(encoding='utf-8') == 'keep'
+
+
+def test_pytest_root_created_by_run_is_removed_without_following_links(tmp_path):
+    """Guards: an owned pytest root is removed; a junction inside is unlinked, its target kept."""
+    import os
+    root = tmp_path / 'root'
+    (root / 'tmp').mkdir(parents=True)
+    path = root / 'tmp' / 'run1'
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'keep.txt').write_text('keep', encoding='utf-8')
+    body = (f"  New-Item -ItemType Junction -Path '{path / 'current'}' -Target '{outside}' | Out-Null\n"
+            f"  Set-Content -LiteralPath '{path / 'a.txt'}' -Value x\n")
+    result = _run_pytest_root(tmp_path, root, path, body, dict(os.environ))
+    assert result.returncode == 0, result.stderr
+    assert not path.exists()
+    assert (outside / 'keep.txt').read_text(encoding='utf-8') == 'keep'
+
+
+def test_pytest_root_refuses_a_junction_parent(tmp_path):
+    """Guards: a junction at the shared tmp parent is refused before creation; target untouched."""
+    import os
+    root = tmp_path / 'root'
+    root.mkdir()
+    target = tmp_path / 'junction-target'
+    target.mkdir()
+    (target / 'sentinel.txt').write_text('keep', encoding='utf-8')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', str(root / 'tmp'), str(target)], check=True,
+                   capture_output=True)
+    result = _run_pytest_root(tmp_path, root, root / 'tmp' / 'run1', '', dict(os.environ))
+    assert result.returncode != 0, result.stdout
+    assert 'reparse-point parent' in result.stderr, result.stderr
+    assert sorted(p.name for p in target.iterdir()) == ['sentinel.txt']
+
+
+def test_generated_export_refuses_a_junction_work_parent(tmp_path):
+    """Guards: a junction at the work parent is refused before git init; target untouched."""
+    pwsh, git, env, root, repo, head = _pwsh_export_fixture(tmp_path)
+    (root / 'work').rmdir()
+    target = tmp_path / 'work-target'
+    target.mkdir()
+    (target / 'sentinel.txt').write_text('keep', encoding='utf-8')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', str(root / 'work'), str(target)], check=True,
+                   capture_output=True)
+    result = _run_export(tmp_path, pwsh, git, env, root, repo, head, root / 'work' / 'run1')
+    assert result.returncode != 0
+    assert 'reparse-point parent' in result.stderr, result.stderr
+    assert sorted(p.name for p in target.iterdir()) == ['sentinel.txt']

@@ -3,7 +3,7 @@
 
 GitHub Actions can only inspect commits already on GitHub. This helper closes
 that gap for ``pre-push``: it sends the candidate commit delta as a Git bundle
-to 100, checks it out in an isolated temporary worktree, and runs the
+to 100, checks it out as an owned standalone export (no registered worktree), and runs the
 deterministic fast gates there.
 
 The build validation host is reached directly over SSH, without GitHub
@@ -51,11 +51,17 @@ def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
     return aliases[host]
 
 
-def run(command: list[str], *, cwd: Path | None = None) -> None:
-    """Run a command while preserving its output for the pre-push caller."""
+def run(command: list[str], *, cwd: Path | None = None,
+        display: list[str] | None = None) -> None:
+    """Run a command while preserving its output for the pre-push caller.
+
+    ``display`` replaces the argv in failure diagnostics when it holds data
+    that must not reach logs.
+    """
     completed = subprocess.run(command, cwd=cwd, text=True)
     if completed.returncode:
-        raise RuntimeError(f"command failed ({completed.returncode}): {' '.join(command)}")
+        shown = ' '.join(command if display is None else display)
+        raise RuntimeError(f"command failed ({completed.returncode}): {shown}")
 
 
 def git_output(*args: str) -> str:
@@ -81,6 +87,30 @@ def resolve_candidate_base(base: str, head: str) -> str:
     raise RuntimeError("cannot resolve origin/main or main for a new branch push")
 
 
+def candidate_on_main(head: str) -> bool:
+    """True when ``head`` is already reachable from ``origin/main``.
+
+    A new ref at such a commit (an exact-SHA verification branch) adds no commit:
+    the candidate side is empty and main CI already ran on it. Any git error
+    other than "not an ancestor" fails loudly.
+    """
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    if probe.returncode:
+        return False
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", head, "origin/main"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    raise RuntimeError(f"cannot test candidate ancestry: {completed.stderr.strip()}")
+
+
 def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     """Create a bundle containing exactly the candidate side of the push."""
     effective_base = resolve_candidate_base(base, head)
@@ -96,10 +126,108 @@ def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     return effective_base
 
 
+FORWARDED_ENV = ("RADIA_PUBLIC_NAME_RULES_FILE", "RADIA_OPTUNA_SOURCE")
+
+
+def forwarded_env_lines(environ=os.environ) -> list[str]:
+    """Pass private-policy and pinned-source locations to the remote preflight.
+
+    Only locations are forwarded, never file contents; a missing path fails
+    loudly on the remote side like a missing local setting does.
+    """
+    lines = []
+    for name in FORWARDED_ENV:
+        value = environ.get(name, "").strip()
+        if value:
+            quoted = value.replace("'", "''")
+            lines.append(f"$env:{name} = '{quoted}'")
+    return lines
+
+
 def remote_command(script: str, host: str) -> None:
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    run(["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-EncodedCommand", encoded])
+    launcher = ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-EncodedCommand"]
+    # The encoded script carries forwarded private locations; never echo it.
+    run([*launcher, encoded], display=[*launcher, "<script>"])
+
+
+# PowerShell helpers for the build-host candidate export.  Plain text (not an
+# f-string) so the functions can also run on their own in an isolated test.
+EXPORT_FUNCTIONS = r"""
+function Assert-PlainParent($path) {
+  # The owned parent (work or tmp) and the preflight root above it must be real
+  # directories: a junction there would redirect creation and cleanup elsewhere.
+  $dir = Split-Path -Parent ([IO.Path]::GetFullPath($path))
+  foreach ($level in 1..2) {
+    if (Test-Path -LiteralPath $dir) {
+      $item = Get-Item -LiteralPath $dir -Force
+      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "refusing a reparse-point parent for owned scratch: $dir"
+      }
+    }
+    $dir = Split-Path -Parent $dir
+  }
+}
+
+function Export-Candidate($git, $repo, $export, $head) {
+  # Owned standalone export of the exact candidate: objects come from the cached
+  # repository through alternates; nothing is registered as a worktree there.
+  Assert-PlainParent $export
+  if (Test-Path -LiteralPath $export) { throw "candidate export path already exists: $export" }
+  & $git init -q $export
+  if ($LASTEXITCODE -ne 0) { throw "git init failed for the candidate export ($LASTEXITCODE)" }
+  $script:exportOwned = $true  # created by this invocation; only then may cleanup remove it
+  $objects = [IO.Path]::GetFullPath((Join-Path (Join-Path $repo '.git') 'objects'))
+  $alternates = Join-Path (Join-Path (Join-Path (Join-Path $export '.git') 'objects') 'info') 'alternates'
+  # Git reads alternates as LF-terminated UTF-8; a CR would become part of the path.
+  [IO.File]::WriteAllText($alternates, $objects + "`n", (New-Object Text.UTF8Encoding($false)))
+  & $git -c "safe.directory=$export" -C $export update-ref refs/radia-preflight/candidate $head
+  if ($LASTEXITCODE -ne 0) { throw "candidate $head is not readable from the cached repository" }
+  & $git -c "safe.directory=$export" -c core.autocrlf=false -C $export checkout -q --detach $head
+  if ($LASTEXITCODE -ne 0) { throw "checkout of candidate $head failed ($LASTEXITCODE)" }
+  $exported = (& $git -c "safe.directory=$export" -C $export rev-parse HEAD).Trim()
+  if ($exported -ne $head) { throw "candidate export is at $exported, expected $head" }
+}
+
+function Remove-CandidateExport($root, $export) {
+  if (-not $script:exportOwned) { return }  # never remove a path this run did not create
+  if (-not (Test-Path -LiteralPath $export)) { return }
+  Assert-PlainParent $export
+  $item = Get-Item -LiteralPath $export -Force
+  $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'work'))
+  if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "refusing to remove candidate export outside the owned work root: $export"
+  }
+  $links = Get-ChildItem -LiteralPath $export -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop
+  if ($links) { throw "candidate export contains links, not removed: $export" }
+  Remove-Item -LiteralPath $export -Recurse -Force -ErrorAction Stop
+}
+
+function New-PytestRoot($root, $path) {
+  # Per-run pytest scratch: refuse an existing path, record ownership on creation.
+  Assert-PlainParent $path
+  if (Test-Path -LiteralPath $path) { throw "pytest temp root already exists: $path" }
+  New-Item -ItemType Directory -Path $path -ErrorAction Stop | Out-Null
+  $script:pytestRootOwned = $true
+}
+
+function Remove-PytestRoot($root, $path) {
+  if (-not $script:pytestRootOwned) { return }  # never remove a path this run did not create
+  if (-not (Test-Path -LiteralPath $path)) { return }
+  Assert-PlainParent $path
+  $item = Get-Item -LiteralPath $path -Force
+  $owned = (Split-Path -Parent $item.FullName) -eq [IO.Path]::GetFullPath((Join-Path $root 'tmp'))
+  if (-not $owned -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "refusing to remove pytest temp root outside the owned tmp root: $path"
+  }
+  # pytest leaves its own "current" links; unlink them without following.
+  Get-ChildItem -LiteralPath $path -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop |
+    Sort-Object { $_.FullName.Length } -Descending |
+    ForEach-Object { if ($_.PSIsContainer) { [IO.Directory]::Delete($_.FullName, $false) } else { [IO.File]::Delete($_.FullName) } }
+  Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+}
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -118,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"100 preflight unavai100le: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
+    # Only a new ref (base ZERO) can have an empty candidate range by construction;
+    # an update of an existing ref always takes the normal preflight.
+    try:
+        on_main = args.base == ZERO and candidate_on_main(args.head)
+    except (OSError, RuntimeError) as exc:
+        print(f"100 preflight failed: {exc}", file=sys.stderr)
+        return 1
+    if on_main:
+        print(f"Preflight skipped: {args.head} is already on origin/main; the push adds no commit")
+        return 0
 
     run_id = uuid.uuid4().hex
     remote_root = r"C:\temp\radia-preflight"
@@ -140,8 +278,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             run(["scp", str(bundle), f"{ssh_destination}:{remote_bundle.replace(chr(92), '/')}"])
 
-        script = f"""
+        script = "\n".join(forwarded_env_lines()) + f"""
 $ErrorActionPreference = 'Stop'
+{EXPORT_FUNCTIONS}
 $git = 'C:\\Program Files\\Git\\cmd\\git.exe'
 $system_python = 'C:\\Program Files\\Python312\\python.exe'
 $root = '{remote_root}'
@@ -152,6 +291,9 @@ $ref = '{remote_ref}'
 $head = '{args.head}'
 $base = '{effective_base}'
 $lock = $null
+$script:exportOwned = $false
+$script:pytestRootOwned = $false
+$pytestRoot = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
 try {{
   # Fail fast on overlapping preflights; the OS releases the lock on process exit.
   $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
@@ -170,11 +312,14 @@ if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
 }}
 & $git -C $repo fetch $bundle "${{ref}}:${{ref}}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-& $git -C $repo worktree prune
-& $git -C $repo worktree add --detach $worktree $head
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+Export-Candidate $git $repo $worktree $head
   Push-Location $worktree
   try {{
+    # ssh reports the account name in a different case than path resolution;
+    # a session-owned temp root keeps pytest paths free of the account name.
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'tmp') | Out-Null
+    New-PytestRoot $root $pytestRoot
+    $env:PYTEST_DEBUG_TEMPROOT = $pytestRoot
     $venv = Join-Path $root 'fast-venv'
     $python = Join-Path $venv 'Scripts\\python.exe'
     if (-not (Test-Path -LiteralPath $python)) {{
@@ -200,7 +345,8 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 }} finally {{
   try {{
     if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
-      if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
+      Remove-CandidateExport $root $worktree
+      Remove-PytestRoot $root $pytestRoot
       if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}
     }}
   }} finally {{

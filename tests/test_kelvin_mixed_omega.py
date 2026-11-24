@@ -849,3 +849,17 @@ def test_current_free_physical_support_rejects_transformed_total_region():
                 interface_boundary='source_total_interface', kelvin_mats=('kelvin',),
                 current_free_total_source_boxes=[[[4., 4., 4.], [5., 5., 5.]]],
             )
+
+
+@pytest.mark.parametrize("options, message", [
+    ({"Backend": "tpu"}, "Backend must be"),
+    ({"Backend": "gpu"}, "needs solver='cg'"),
+    ({"Backend": "gpu", "solver": "cg", "cg_preconditioner": "local"}, "needs solver='cg'"),
+])
+def test_matching_trace_device_backend_raises_instead_of_substituting_a_route(options, message):
+    from radia.kelvin_solver import solve_magnetostatic_matching_trace_total_reduced_omega
+
+    with pytest.raises(ValueError, match=message):
+        solve_magnetostatic_matching_trace_total_reduced_omega(
+            None, None, None, mu_r_by_material={}, reduced_materials=(), total_materials=(),
+            interface_boundary="interface", **options)

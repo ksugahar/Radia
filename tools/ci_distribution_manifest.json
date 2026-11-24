@@ -2038,6 +2038,78 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "src/core/gpu/ams_refresh.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Device AMS hierarchy refresh consumed by the Python and MEX builders."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/fem/fem_amg.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Shared device FEM kernel used by Python and the HCurl Newton MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/fem/fem_ams.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Shared device FEM kernel used by Python and the HCurl Newton MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/fem/fem_api.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Shared device FEM kernel used by Python and the HCurl Newton MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/fem/fem_device.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Shared device FEM kernel used by Python and the HCurl Newton MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/fem/fem_krylov.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Shared device FEM kernel used by Python and the HCurl Newton MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "src/core/gpu/snapshot.hpp",
       "owners": [
         "radia",
@@ -2651,11 +2723,14 @@
             "tests/test_bem_strong_panel_impedance.py",
             "tests/test_bh_law.py",
             "tests/test_build_failure_propagation.py",
+            "tests/test_native_module_abi.py",
             "tests/test_linux_build.py",
             "tests/test_blas_provider_contract.py",
             "tools/build_linux.py",
             "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_calc_inductance_cli.py",
             "tests/test_element_line_quadrature_contract.py",
+            "tests/test_fin_prima.py",
             "tests/test_envelope_stop_core.py",
             "tests/test_esrf6_mesh_identity.py",
             "tests/test_esrf_mixed_quadrature_wiring.py",
@@ -2706,6 +2781,7 @@
             "tools/validation_source_gate.py",
             "tests/validation_gate/**",
             "tools/audit_taskmanager.py",
+            "tools/check_native_module_abi.py",
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
             "tools/sparsesolv_ci_impact.py",
@@ -2762,11 +2838,14 @@
             "tests/test_bem_strong_panel_impedance.py",
             "tests/test_bh_law.py",
             "tests/test_build_failure_propagation.py",
+            "tests/test_native_module_abi.py",
             "tests/test_linux_build.py",
             "tests/test_blas_provider_contract.py",
             "tools/build_linux.py",
             "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_calc_inductance_cli.py",
             "tests/test_element_line_quadrature_contract.py",
+            "tests/test_fin_prima.py",
             "tests/test_envelope_stop_core.py",
             "tests/test_esrf6_mesh_identity.py",
             "tests/test_esrf_mixed_quadrature_wiring.py",
@@ -2817,6 +2896,7 @@
             "tools/validation_source_gate.py",
             "tests/validation_gate/**",
             "tools/audit_taskmanager.py",
+            "tools/check_native_module_abi.py",
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
             "tools/sparsesolv_ci_impact.py",
@@ -2913,6 +2993,12 @@
             "src/core/gpu/resident_amg_host.hpp",
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
+            "src/core/gpu/ams_refresh.cuh",
+            "src/core/gpu/fem/fem_amg.cuh",
+            "src/core/gpu/fem/fem_ams.cuh",
+            "src/core/gpu/fem/fem_api.hpp",
+            "src/core/gpu/fem/fem_device.cuh",
+            "src/core/gpu/fem/fem_krylov.cuh",
             "src/core/gpu/snapshot.hpp",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
@@ -3049,6 +3135,12 @@
             "src/core/gpu/resident_amg_host.hpp",
             "src/core/gpu/resident_amg_python.cpp",
             "src/core/gpu/ams_core.cuh",
+            "src/core/gpu/ams_refresh.cuh",
+            "src/core/gpu/fem/fem_amg.cuh",
+            "src/core/gpu/fem/fem_ams.cuh",
+            "src/core/gpu/fem/fem_api.hpp",
+            "src/core/gpu/fem/fem_device.cuh",
+            "src/core/gpu/fem/fem_krylov.cuh",
             "src/core/gpu/snapshot.hpp",
             "validation_test/radia_simulink/**/*.py",
             "validation_test/radia_simulink/**/*.m",
@@ -3632,7 +3724,9 @@
             "tests/test_bem_strong_panel_impedance.py",
             "tests/test_bh_law.py",
             "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_calc_inductance_cli.py",
             "tests/test_cohomology_cut_linear_residual.py",
+            "tests/test_fin_prima.py",
             "tests/test_envelope_stop_core.py",
             "tests/test_panel_esim_complete_state.py",
             "validation_test/bem/test_loop_extension_ring.py",
@@ -3944,7 +4038,9 @@
             "tests/test_bem_strong_panel_impedance.py",
             "tests/test_bh_law.py",
             "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_calc_inductance_cli.py",
             "tests/test_cohomology_cut_linear_residual.py",
+            "tests/test_fin_prima.py",
             "tests/test_envelope_stop_core.py",
             "tests/test_panel_esim_complete_state.py",
             "validation_test/bem/test_loop_extension_ring.py",

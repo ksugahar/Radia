@@ -104,7 +104,7 @@ def main(args):
         for relative,digest in build['source_sha256'].items():
             if hashlib.sha256((root/relative).read_bytes()).hexdigest()!=digest:raise RuntimeError('Native source changed since build')
         for relative,digest in build['sha256'].items():
-            candidate=gpu_dir/Path(relative).name if relative.endswith('.mexw64') else root/relative
+            candidate=gpu_dir/Path(relative).name if Path(relative).name=='radia_cuda_ams.mexw64' else root/relative
             if hashlib.sha256(candidate.read_bytes()).hexdigest()!=digest:raise RuntimeError('Native binary hash mismatch')
         record['gpu_binary_sha256']=build['sha256']['build-ams-cuda/radia_cuda_ams.mexw64']
         record['versions']={p:md.version(p) for p in ('ngsolve','numpy','scipy','matlabengine')}
@@ -152,7 +152,7 @@ def main(args):
         record['input_sha256']=hashlib.sha256((out/'input.mat').read_bytes()).hexdigest()
         import matlab.engine
         startup=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_startup_seconds']=time.perf_counter()-startup
-        eng.addpath(str(Path(__file__).parent),nargout=0)
+        eng.addpath(str(Path(__file__).parent),str(root/'build-ams-cuda'),nargout=0)
         eng.nonlinear_resident(str(out/'input.mat'),str(out/'gpu.mat'),str(gpu_dir),str(matlab_dir),float(args.setup_threads),nargout=0)
         if args.contract:
             eng.resident_contract(str(out/'input.mat'),str(out/'contract.mat'),str(gpu_dir),str(matlab_dir),nargout=0)

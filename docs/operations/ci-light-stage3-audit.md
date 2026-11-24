@@ -447,3 +447,26 @@ at 81 files. The prior seal
 `22c8e5758d8f96b543aa9a57ff3e68f712fac366d76ff09ec9d620dcec4e32c4` was
 reproduced on the base before the change. The `audit_digest` seal is
 `24f72eb7fb659e9e18cbcb6f47c8137fd190f1532f686e333bf01f6761d55d8f`.
+
+## Impact-scoped pre-push checks
+
+The integrated pre-push change removed the broad pytest invocation from the local
+hook. The shared precheck and policy CI still run the policy suite. The two
+changed executable-closure files are tools/local_push_checks.py and
+tests/test_local_push_checks.py. The former limits the planned local execution
+to policy lint. The latter verifies the reduced command list with no native
+execution or remote calls. The 81-file light closure, discovered import set,
+workflow, requirements, profile budget, and runner declaration are unchanged.
+Substituting the two pre-change blobs reproduces the previous seal. The current
+closure digest is 762a760879bd3ab95af4cf4f831912924cc7cc9a1e77145ae2e12dcbc4321a42.
+
+## Exact-SHA pre-push export
+
+The exact-SHA pre-push change touches four files in the executable closure:
+tools/pre_push_check.py, tools/local_push_checks.py,
+tests/test_pre_push_check.py and tests/test_local_push_checks.py. Their new
+imports are standard library modules and pytest only. The tests drive the hook
+with mocked commands, so there is no native execution and no remote calls. The
+81-file light closure, workflow, requirements, profile budget and runner
+declaration are unchanged. Putting the four pre-change blobs back reproduces the
+previous seal. The current closure digest is 74383c9a7131a6bb0e97665724ce050615837c82c621ce756a1aeca18adedd2f.

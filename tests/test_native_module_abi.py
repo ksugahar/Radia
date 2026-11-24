@@ -103,9 +103,13 @@ def test_native_release_keeps_generated_context_outside_source_tree():
     assert memory["with"]["path"] == (
         "${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json"
     )
-    assert "src/radia/*.pyd.build.json" in (
-        steps["Upload native binary artifact"]["with"]["path"]
-    )
+    record = steps["Record the CPU natives with their hashes"]["run"]
+    assert 'Join-Path $env:RUNNER_TEMP "radia-cpu-natives-' in record, record
+    assert "ci_cpu_natives.py record --source-dir src/radia --out $natives" in record, record
+    assert '"RADIA_CPU_NATIVES_DIR=$natives" | Out-File $env:GITHUB_ENV' in record, record
+    actual_path = steps["Upload native binary artifact"]["with"]["path"]
+    expected_path = "${{ env.RADIA_CPU_NATIVES_DIR }}"
+    assert actual_path == expected_path, (actual_path, expected_path)
     for key, value in {
         "OMP_NUM_THREADS": "8", "NGS_NUM_THREADS": "8",
         "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
@@ -132,3 +136,19 @@ def test_native_copy_suffix_follows_the_platform(win32, expected):
     assert destination is not None, "Missing peec module copy destination"
     resolved = destination.group(1).replace("${RADIA_PYMOD_SUFFIX}", suffix)
     assert resolved == "${CMAKE_SOURCE_DIR}/src/radia/peec_matrices" + expected, (win32, resolved)
+
+
+def test_probe_timeout_fails_the_check_with_the_bounded_limit(monkeypatch, capsys, tmp_path):
+    """Guards: a hung import fails the ABI check and the probe is bounded."""
+    checker = _load_checker()
+    seen = {}
+
+    def hang(command, **kwargs):
+        seen["timeout"] = kwargs["timeout"]
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(checker.subprocess, "run", hang)
+    status = checker.main(["--source-root", str(tmp_path), "--module", "demo"])
+    assert status == 1, capsys.readouterr()
+    assert seen["timeout"] == checker.PROBE_TIMEOUT_SECONDS == 90.0
+    assert "FAIL" in capsys.readouterr().err

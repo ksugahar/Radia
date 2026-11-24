@@ -2326,7 +2326,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         cg_preconditioner="local", cg_tolerance=1.0e-10,
         cg_max_iterations=2000, return_system=False,
         dirichlet_bbbnd=None, total_source_h=None, total_source_materials=(),
-        surface_dirichlet=None):
+        surface_dirichlet=None, Backend="cpu"):
     """Solve the finite-domain matching-trace mixed Omega problem as SPD.
 
     This is a strict acceleration path for a joined, non-periodic mesh whose
@@ -2353,9 +2353,18 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     happens during assembly and is included in the assembly timing.
     ``"bddc_h1amg"`` uses element-wise BDDC for the high-order modes and
     H1-AMG on the vertex wirebasket (``wb_withedges=False``).
+
+    ``Backend="gpu"`` with ``solver="cg", cg_preconditioner="bddc_h1amg"`` builds
+    the form and the preconditioner on the device: AMG at order 1 and BDDC with
+    a device AMG wirebasket above it. The load and boundary values cross as data;
+    no CPU matrix exists on that path, and there is no fallback.
     """
     if inverse != "sparsecholesky":
         raise ValueError("direct FE solves require inverse='sparsecholesky'")
+    if Backend not in ("cpu", "gpu"):
+        raise ValueError(f"Backend must be 'cpu' or 'gpu', got {Backend!r}")
+    if Backend == "gpu" and (solver != "cg" or cg_preconditioner != "bddc_h1amg"):
+        raise ValueError("Backend='gpu' needs solver='cg' and cg_preconditioner='bddc_h1amg'")
     import ngsolve as ng
 
     function_started = time.perf_counter()
@@ -2455,7 +2464,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     a_bf += mu_cf * grad(u) * grad(v) * dx(
         bonus_intorder=bonus_intorder)
     preconditioner = None
-    if solver == "cg":
+    if solver == "cg" and Backend == "cpu":
         from ngsolve import Preconditioner
         if cg_preconditioner == "bddc_h1amg":
             preconditioner = Preconditioner(a_bf, "bddc", coarsetype="h1amg")
@@ -2482,7 +2491,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     setup_before_assembly = time.perf_counter() - function_started
 
     started = time.perf_counter()
-    a_bf.Assemble()
+    if Backend == "cpu":
+        a_bf.Assemble()
     matrix_assembly = time.perf_counter() - started
     started = time.perf_counter()
     f_lf.Assemble()
@@ -2527,14 +2537,30 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
                     raise ValueError("incompatible total/reduced surface Dirichlet junction")
                 values[mask] = transformed[mask]
                 assigned |= mask
-    residual = solution.vec.CreateVector()
-    residual.data = f_lf.vec - a_bf.mat * solution.vec
     free_mask = np.asarray(list(fes.FreeDofs()), dtype=bool)
-    effective_load_norm = float(np.linalg.norm(residual.FV().NumPy()[free_mask]))
+    if Backend == "cpu":
+        residual = solution.vec.CreateVector()
+        residual.data = f_lf.vec - a_bf.mat * solution.vec
+        effective_load_norm = float(np.linalg.norm(residual.FV().NumPy()[free_mask]))
     boundary_seconds = time.perf_counter() - boundary_started
     started = time.perf_counter()
     iterations = None
-    if solver == "direct":
+    device_report = None
+    if Backend == "gpu":
+        from . import fem_gpu
+        boundary_values = np.array(solution.vec.FV().NumPy(), copy=True)
+        boundary_values[free_mask] = 0.0
+        device_report = fem_gpu.solve_h1(
+            fes, fem_gpu.Coefficients(stiff=material_mu, stiff_aux=material_mu),
+            np.array(f_lf.vec.FV().NumPy(), copy=True), Backend="gpu", lift=boundary_values,
+            bonus=(bonus_intorder, 0, 0), tolerance=float(cg_tolerance),
+            max_iterations=int(cg_max_iterations))
+        solution.vec.FV().NumPy()[:] = device_report.pop("solution")
+        iterations = device_report["iterations"]
+        effective_load_norm = float(device_report["initial_norm"])
+        setup_seconds = float(device_report["timing_diagnostic"].get("preconditioner_seconds", 0.0))
+        solve_seconds = float(device_report["timing_diagnostic"].get("solve_seconds", 0.0))
+    elif solver == "direct":
         inv = a_bf.mat.Inverse(fes.FreeDofs(), inverse=inverse)
         setup_seconds = time.perf_counter() - started
         started = time.perf_counter()
@@ -2568,16 +2594,20 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             for material in mesh.GetMaterials()
         }))
     H_cf = CoefficientFunction(tuple(components))
-    final_residual = f_lf.vec.CreateVector()
-    final_residual.data = f_lf.vec - a_bf.mat * solution.vec
     free = np.asarray(list(fes.FreeDofs()), dtype=bool)
-    residual_values = final_residual.FV().NumPy()[free]
     rhs_values = f_lf.vec.FV().NumPy()[free]
-    relative_residual = float(
-        np.linalg.norm(residual_values) / max(effective_load_norm, 1.0e-30))
+    if Backend == "gpu":
+        # The device solve computed this on its own operator and raises above the limit.
+        relative_residual = float(device_report["true_residual"])
+        residual_l2 = relative_residual * effective_load_norm
+    else:
+        final_residual = f_lf.vec.CreateVector()
+        final_residual.data = f_lf.vec - a_bf.mat * solution.vec
+        residual_l2 = float(np.linalg.norm(final_residual.FV().NumPy()[free]))
+        relative_residual = float(residual_l2 / max(effective_load_norm, 1.0e-30))
     linear_residual = {
         "free_dofs": {
-            "l2": float(np.linalg.norm(residual_values)),
+            "l2": residual_l2,
             "rhs_l2": float(np.linalg.norm(rhs_values)),
             "effective_load_l2": effective_load_norm,
             "relative": relative_residual,
@@ -2617,6 +2647,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         "cg_preconditioner": cg_preconditioner if solver == "cg" else None,
         "assembly_includes_preconditioner_setup": solver == "cg",
         "iterations": iterations,
+        "backend": Backend,
+        "device_report": device_report,
         "phase_timings_seconds": {
             "setup_before_assembly": setup_before_assembly,
             "matrix_assembly": matrix_assembly,

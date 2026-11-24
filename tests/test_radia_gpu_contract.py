@@ -273,7 +273,8 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
     sdk = tmp_path / "sdk"
     (sdk / "pybind11").mkdir(parents=True)
     (sdk / "pybind11/header.h").write_text("synthetic header")
-    monkeypatch.setattr(builder, "headers", lambda: sdk)
+    monkeypatch.setattr(builder, "verify_windows_fork", lambda: {})
+    monkeypatch.setattr(builder, "headers", lambda _: sdk)
     def compile_fixture(command, output, label, commands):
         commands.append(list(map(str, command)))
         for item in command:
