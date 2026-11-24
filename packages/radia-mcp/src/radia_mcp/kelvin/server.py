@@ -11,14 +11,6 @@ from radia_mcp.common import register_status_tool
 
 mcp = FastMCP("ngsolve-mcp.kelvin")
 
-register_status_tool(
-    mcp,
-    "ngsolve-mcp.kelvin",
-    "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia.",
-    "radia_mcp.kelvin",
-    related_servers=["radia-ngsolve", "fem", "ngsolve-mcp.gauging"],
-)
-
 _TOPICS = {
     "overview": (
         "ngsolve-mcp.kelvin: Kelvin transformation for unbounded magnetostatic/eddy-current domains.\n"
@@ -46,6 +38,17 @@ def kelvin_usage(topic: str = "overview") -> str:
     if key in _TOPICS:
         return _TOPICS[key]
     return f"Unknown topic '{topic}'. Available: {', '.join(sorted(_TOPICS))}"
+
+
+# Registered after every tool: the status registration applies the
+# annotation contract to the tools that exist at this point.
+register_status_tool(
+    mcp,
+    "ngsolve-mcp.kelvin",
+    "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia.",
+    "radia_mcp.kelvin",
+    related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging"],
+)
 
 
 def _selftest() -> None:

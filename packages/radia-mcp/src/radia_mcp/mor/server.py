@@ -51,7 +51,7 @@ register_status_tool(
     server_name='mor',
     description='Model Order Reduction: POD, PRIMA/Krylov, hyperreduction (DEIM)',
     subpackage='radia_mcp.mor',
-    related_servers=["radia-ngsolve", "rna-mec"],
+    related_servers=["radia-mcp.ngsolve", "rna-mec"],
 )
 
 

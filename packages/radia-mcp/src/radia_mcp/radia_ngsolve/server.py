@@ -222,7 +222,7 @@ from ..acoustic_fembem import (
 from .gmsh_post_spec import get_gmsh_post_spec
 # NOTE: induction_heating_knowledge is in ih (not here)
 
-mcp = FastMCP("radia-ngsolve")
+mcp = FastMCP("radia-mcp.ngsolve")
 
 from radia_mcp.mesh_viewer.mcp import register_mesh_viewer_tool
 register_mesh_viewer_tool(mcp)
@@ -2070,7 +2070,7 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='radia-ngsolve',
+    server_name='radia-mcp.ngsolve',
     description='Radia + NGSolve: Kelvin / sparsesolv / PEEC / analytical formulas / lint',
     subpackage='radia_mcp.radia_ngsolve',
     related_servers=["fem", "bem", "force", "matrix-solvers"],
@@ -2079,7 +2079,7 @@ register_status_tool(
 
 apply_tool_contract(
     mcp,
-    server_name="radia-ngsolve",
+    server_name="radia-mcp.ngsolve",
     version=__version__,
 )
 

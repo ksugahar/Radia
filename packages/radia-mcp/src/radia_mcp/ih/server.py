@@ -208,7 +208,7 @@ register_status_tool(
                   "calc_inductance.py / calc_fem_kelvin.py / calc_fem_coilmesh.py."),
     subpackage="radia_mcp.ih",
     related_servers=["peec", "magnetic-materials",
-                      "radia-ngsolve", "litz-transmission"],
+                      "radia-mcp.ngsolve", "litz-transmission"],
     optional_deps=["radia", "ngsolve"],
 )
 

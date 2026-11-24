@@ -77,6 +77,33 @@ def _remove_owned(checkout, parent):
     shutil.rmtree(checkout, onexc=writable)
 
 
+def effective_base(base, head):
+    """Compare a branch update with origin/main when it brings in main's history.
+
+    After a pushed branch merges origin/main, diffing from the old remote head
+    would count every change main already accepted as this candidate's change.
+    When merge-base(head, origin/main) is not an ancestor of the old head, the
+    update added main history, and that merge base gives the candidate's own
+    diff, the same diff as its pull request.  Any other update keeps its remote
+    base; any git failure leaves the base for run_local_candidate to report.
+    """
+    if base == ZERO:
+        return base
+    git = ["git", "-c", f"safe.directory={ROOT}"]
+    try:
+        main_base = subprocess.check_output(
+            [*git, "merge-base", head, "origin/main"], cwd=ROOT, env=child_env(),
+            text=True, encoding="utf-8", stderr=subprocess.DEVNULL, timeout=30).strip()
+        brought_in_main = subprocess.run(
+            [*git, "merge-base", "--is-ancestor", main_base, base], cwd=ROOT,
+            env=child_env(), capture_output=True, timeout=30).returncode == 1
+        if brought_in_main:
+            return main_base
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return base
+
+
 def run_local_candidate(base, head):
     """Local checks run on an exact exported candidate, never another session's WIP."""
     git = ["git", "-c", f"safe.directory={ROOT}"]
@@ -149,6 +176,7 @@ def main(lines=None):
         if updates and not helper.is_file():
             raise ValueError("candidate preflight helper is missing")
         for base, head in updates:
+            base = effective_base(base, head)
             local_result = run_local_candidate(base, head)
             if local_result:
                 return local_result

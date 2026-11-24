@@ -218,7 +218,7 @@ register_status_tool(
     server_name='bem',
     description='MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, HACApK, FEM-BEM',
     subpackage='radia_mcp.bem',
-    related_servers=["radia-ngsolve", "peec"],
+    related_servers=["radia-mcp.ngsolve", "peec"],
 )
 
 

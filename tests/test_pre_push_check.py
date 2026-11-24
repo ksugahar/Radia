@@ -12,11 +12,13 @@ check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
 A, B, ZERO = "a" * 40, "b" * 40, "0" * 40
 REAL_LOCAL = check.run_local_candidate
+REAL_EFFECTIVE_BASE = check.effective_base
 
 
 @pytest.fixture(autouse=True)
 def isolate_local_checks(monkeypatch):
     monkeypatch.setattr(check, "run_local_candidate", lambda base, head: 0)
+    monkeypatch.setattr(check, "effective_base", lambda base, head: base)
 
 
 def record(ref, head=B, base=A):
@@ -219,3 +221,46 @@ def test_missing_base_suggests_fetch_without_checkout(monkeypatch, capsys):
     monkeypatch.setattr(check.subprocess, 'run', run)
     assert REAL_LOCAL(A, B) == 1
     assert 'fetch the remote base commit/history' in capsys.readouterr().err
+
+
+def test_local_and_remote_checks_use_the_effective_base(monkeypatch):
+    events = []
+    main_base = "d" * 40
+    monkeypatch.setattr(check, "effective_base", lambda base, head: main_base)
+    monkeypatch.setattr(check, "run_local_candidate", lambda base, head:
+                        events.append(("local", base, head)) or 0)
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw:
+                        events.append(("remote", cmd[-3], cmd[-1])) or SimpleNamespace(returncode=0))
+    assert check.main([record("refs/heads/branch")]) == 0
+    assert events == [("local", main_base, B), ("remote", main_base, B)]
+
+
+def test_update_that_merges_main_is_compared_with_main(monkeypatch, tmp_path):
+    """Guards: merging origin/main into a pushed branch does not count main's changes."""
+    repo = tmp_path / "merge-repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.invalid")
+    _git(repo, "config", "user.name", "t")
+
+    def commit(name):
+        (repo / name).write_text(name, encoding="utf-8")
+        _git(repo, "add", name)
+        _git(repo, "commit", "-q", "-m", name)
+        return _git(repo, "rev-parse", "HEAD")
+
+    commit("root")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    pushed = commit("feature-1")
+    plain_update = commit("feature-2")
+    _git(repo, "checkout", "-q", "main")
+    main_tip = commit("main-2")
+    _git(repo, "update-ref", "refs/remotes/origin/main", main_tip)
+    _git(repo, "checkout", "-q", "feature")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge main", "main")
+    merged = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(check, "ROOT", repo)
+    assert REAL_EFFECTIVE_BASE(plain_update, merged) == main_tip
+    assert REAL_EFFECTIVE_BASE(pushed, plain_update) == pushed
+    assert REAL_EFFECTIVE_BASE(ZERO, merged) == ZERO
+    assert REAL_EFFECTIVE_BASE("c" * 40, merged) == "c" * 40
