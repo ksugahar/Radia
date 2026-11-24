@@ -1433,6 +1433,7 @@ tools below.  The supported contracts have analytic tests
 | Warp By Vector | gmsh_warp | Plugin(Warp) MOVES THE MODEL NODES (in place) |
 | Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
 | Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons |
+| (no ParaView filter) | gmsh_equal_flux_seeds | equal-flux 3D seeds on a planar patch (two-stage inverse of the flux CDF); optional trace through gmsh_streamlines |
 | Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
 | Particle Tracer / ParticlePath | gmsh_particle_trace | BEYOND parity: ParaView advects massless tracers along a velocity field; this integrates the relativistic LORENTZ DYNAMICS dp/dt = q(E + v x B) (Boris pusher), which ParaView has no native filter for |
 | (no ParaView filter) | gmsh_poincare | BEYOND parity: plane-piercing section of the orbits, interpolated between samples |

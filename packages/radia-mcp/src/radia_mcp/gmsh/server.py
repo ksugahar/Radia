@@ -1209,6 +1209,56 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
                        return_points=return_points, out_file=out)
 
 
+@mcp.tool()
+def gmsh_equal_flux_seeds(msh_path: str, origin: list, e_xi: list, e_eta: list,
+                          n_u: int, n_v: int, table_nodes: int = 33,
+                          view_name: str | None = None, time_step: int = 0,
+                          quadrature_order: int = 6, trace: bool = False,
+                          trace_options: dict | None = None) -> dict:
+    """
+    Place equal-flux field-line seeds on a planar patch of a B view.
+
+    The patch is origin + xi*e_xi + eta*e_eta for xi, eta in [0, 1]
+    (metres). B is probed on a table_nodes^2 grid and on each seed row;
+    radia.flux_seeding inverts the normalized marginal V(eta), then the
+    conditional U(xi|eta) at that exact eta, so each of the n_u*n_v cells
+    carries total/(n_u*n_v) Wb. Returns stable seed IDs, physical and
+    flux coordinates, signed total and target cell flux, orientation,
+    placement residuals, an independent Gauss check of the cell fluxes
+    (quadrature_order=0 skips it) and provenance. trace=True feeds the
+    seeds to the 3D streamline tracer with the same view and time_step.
+    trace_options may set step_size, max_steps, both_directions,
+    adaptive, closure, max_turn_deg, arrows_every, return_points,
+    out_file and timeout_s; any other key (including view, time_step or
+    seeds) is rejected. Fails on a sign-changing, zero or out-of-data
+    patch.
+
+    Args:
+        msh_path: .msh with a 3-component B view in tesla.
+        origin: Patch corner [x, y, z] in metres.
+        e_xi: First edge vector in metres.
+        e_eta: Second edge vector in metres; e_xi x e_eta orients the flux.
+        n_u: Seeds per flux row.
+        n_v: Flux rows.
+        table_nodes: Table samples per chart direction.
+        view_name: Vector view for probing and tracing (default: first).
+        time_step: View step for probing and tracing.
+        quadrature_order: Gauss order of the cell-flux check (0 = off).
+        trace: Trace field lines from the seeds.
+        trace_options: Allowed tracer keywords (see above).
+    """
+    from .equal_flux import equal_flux_seeds_on_plane
+
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return equal_flux_seeds_on_plane(p, origin, e_xi, e_eta, n_u=n_u, n_v=n_v,
+                                     table_nodes=table_nodes, view=view_name,
+                                     time_step=time_step,
+                                     quadrature_order=quadrature_order, trace=trace,
+                                     trace_options=trace_options)
+
+
 def _abs_path(path_str: str | None) -> Path | None:
     """Resolve a possibly-relative tool path against PROJECT_ROOT."""
     if path_str is None:
