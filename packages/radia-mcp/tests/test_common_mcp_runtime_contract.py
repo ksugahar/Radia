@@ -146,8 +146,8 @@ def test_meta_server_passes_real_stdio_runtime_contract():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    result = module.probe_server("radia-mcp-meta", timeout=45)
-    assert result["server_name"] == "radia-mcp-meta"
+    result = module.probe_server("radia-mcp.meta", timeout=45)
+    assert result["server_name"] == "radia-mcp.meta"
     assert result["n_tools"] >= 5
     assert result["structured_status"] is True
     assert result["module_sha256_at_registration"]

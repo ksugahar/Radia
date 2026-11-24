@@ -83,7 +83,7 @@ def test_common_change_selftests_every_server_without_selecting_every_test():
         ["packages/radia-mcp/src/radia_mcp/common/status.py"]
     )
     assert plan["server_selftests"] == sorted(k for k, v in SELECTOR._catalog().items() if v.get("entry_point"))
-    assert "radia-mcp-meta" in plan["server_selftests"]
+    assert "radia-mcp.meta" in plan["server_selftests"]
     assert any(
         selector.startswith("tests/test_meta_health.py::")
         for selector in plan["package_tests"]

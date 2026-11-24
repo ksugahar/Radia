@@ -1701,6 +1701,57 @@ async def execute_build123d(
     )
 
 
+@mcp.tool()
+async def build123d_run(script: str, params: dict[str, object], export_dir: str) -> str:
+    """Run trusted Python defining build(params), export STEP, and inspect its readback.
+
+    Pass the same script and a revised parameter dictionary to regenerate it.
+    Values must be finite JSON numbers.
+    The function must return a valid build123d Shape. Use millimetres for CAD
+    lengths. STEP readback measures clearance, interference and shared face
+    area for every solid pair.
+    Each run saves its STEP in a separate directory under export_dir.
+    """
+    import anyio
+
+    return await anyio.to_thread.run_sync(
+        _build123d_run_sync, script, params, export_dir
+    )
+
+
+def _build123d_run_sync(script: str, params: dict[str, object], export_dir: str) -> str:
+    import hashlib
+    import math
+    import tempfile
+
+    if not export_dir.strip():
+        return _dumps(_error_payload_common("input", "Provide an export directory."))
+    for name, value in params.items():
+        try:
+            valid = type(value) in (int, float) and math.isfinite(value)
+        except OverflowError:
+            valid = False
+        if not valid:
+            return _dumps(_error_payload_common(
+                "input", f"Parameter {name!r} must be a finite JSON number."
+            ))
+
+    try:
+        root = Path(export_dir).resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        run_dir = tempfile.mkdtemp(prefix="build123d-", dir=root)
+    except OSError as exc:
+        return _dumps(_error_payload_common("export", str(exc)))
+
+    result = json.loads(_run_isolated(
+        "_inspect_build123d_in_process",
+        {"script": script, "params": params, "export_dir": run_dir, "export_name": "model"},
+        timeout_s=_ISOLATED_TIMEOUT_S, stage="exec",
+    ))
+    result.update(params=params, script_sha256=hashlib.sha256(script.encode("utf-8")).hexdigest())
+    return _dumps(result, indent=2)
+
+
 _ISOLATED_RESULT_MARKER = "__RADIA_MCP_ISOLATED_RESULT__"
 _ISOLATED_TIMEOUT_S = 300
 
@@ -1837,6 +1888,7 @@ def _inspect_build123d_in_process(
     export_dir: str = "",
     export_format: str = "step",
     export_name: str = "",
+    params: dict[str, float] | None = None,
 ) -> str:
     """Execute and inspect a build123d script in THIS process (isolated child)."""
     # Capture stdout
@@ -1851,6 +1903,12 @@ def _inspect_build123d_in_process(
         # Separate statements keep a leading ``from __future__`` legal.
         exec("from build123d import *", namespace)  # noqa: S102
         exec(compile(script, "<build123d script>", "exec"), namespace)  # noqa: S102
+        if params is not None:
+            from build123d import Shape
+
+            result = namespace["build"](dict(params))
+            if not isinstance(result, Shape) or not result.is_valid:
+                raise ValueError("build(params) must return a valid build123d Shape")
     except (Exception, SystemExit) as e:
         sys.stdout = old_stdout
         tb = traceback.format_exc()
@@ -1878,7 +1936,10 @@ def _inspect_build123d_in_process(
 
     from build123d import Shape
 
-    target, target_name = _last_assigned(script, namespace, Shape)
+    if params is None:
+        target, target_name = _last_assigned(script, namespace, Shape)
+    else:
+        target, target_name = result, "build(params)"
 
     if target is None:
         return _dumps({
@@ -1954,6 +2015,11 @@ def _inspect_build123d_in_process(
         if "export_error" in info:
             info["status"] = "error"
             info["stage"] = "export"
+        elif params is not None:
+            readback = json.loads(_inspect_step_readback(info["exported"]))
+            info["readback"] = readback
+            if readback["status"] != "ok":
+                info.update(status="error", stage="step_readback")
 
     if stdout_text:
         info["stdout"] = stdout_text
@@ -4623,7 +4689,7 @@ def _bbox_fields_b3d(bb):
 _GENERIC_CAD_LABELS = {"", "SOLID", "COMPOUND", "ASSEMBLY", "PART"}
 
 
-def _labeled_solids(shape):
+def _labeled_solids(shape, *, inherit_assembly_label: bool = True):
     """Collect (label, solid) pairs via assembly-children traversal.
 
     Labels live on Part/Compound CHILDREN, not on extracted Solids
@@ -4648,6 +4714,8 @@ def _labeled_solids(shape):
 
     def walk(node, inherited):
         label = (getattr(node, "label", "") or "").strip()
+        if not inherit_assembly_label and len(node.solids()) > 1:
+            label = ""
         if label.upper() in _GENERIC_CAD_LABELS:
             label = inherited
         kids = list(getattr(node, "children", []) or [])
@@ -4678,6 +4746,220 @@ def _load_cad_shape(p: Path):
 
 
 @mcp.tool()
+async def build123d_render_views(
+    path: str,
+    export_dir: str,
+    formats: list[str] | None = None,
+    section_plane: str = "xy",
+    section_offset_mm: object = None,
+    show_hidden: bool = True,
+    frame: dict[str, object] | None = None,
+) -> str:
+    """Draw a local STEP in isometric, XY, XZ, YZ and section views without Cubit.
+
+    Formats default to both svg and png. Projected views show dashed hidden
+    edges by default. Pass the returned frame (center_mm and pixels_per_mm)
+    to reuse the same coordinate registration and scale on another STEP.
+    The section offset is a world coordinate along the omitted axis in mm
+    (default: frame center). Keep section plane and offset fixed to compare
+    cuts. A cut with no contour is reported as an error.
+    """
+    import anyio
+
+    return await anyio.to_thread.run_sync(lambda: _run_isolated(
+        "_render_step_views",
+        {"path": path, "export_dir": export_dir, "formats": formats,
+         "section_plane": section_plane, "section_offset_mm": section_offset_mm,
+         "show_hidden": show_hidden, "frame": frame},
+        timeout_s=_ISOLATED_TIMEOUT_S, stage="render_views",
+    ))
+
+
+def _render_step_views(path, export_dir, formats, section_plane, section_offset_mm,
+                       show_hidden=True, frame=None):
+    import hashlib
+    import math
+
+    from .step_views import render_views
+    from .step_units import load_step_mm
+
+    def finite_number(value):
+        try:
+            return type(value) in (int, float) and math.isfinite(value)
+        except OverflowError:
+            return False
+
+    step = Path(path).resolve()
+    formats = ["svg", "png"] if formats is None else formats
+    section_plane = section_plane.lower()
+    if step.suffix.lower() not in {".step", ".stp"} or not step.is_file():
+        return _dumps(_error_payload_common("input", "Provide an existing .step or .stp file."))
+    if not export_dir.strip() or not formats or set(formats) - {"svg", "png"}:
+        return _dumps(_error_payload_common("input", "Provide an output directory and svg and/or png."))
+    if section_plane not in {"xy", "xz", "yz"} or (
+        section_offset_mm is not None and not finite_number(section_offset_mm)
+    ):
+        return _dumps(_error_payload_common("input", "Use section plane xy, xz or yz and a finite offset."))
+    if frame is not None:
+        center, scale = frame.get("center_mm"), frame.get("pixels_per_mm")
+        if (not isinstance(center, list) or len(center) != 3
+                or not all(finite_number(v) for v in center)
+                or not finite_number(scale) or scale <= 0):
+            return _dumps(_error_payload_common(
+                "input", "Frame requires three finite center_mm coordinates and positive pixels_per_mm."
+            ))
+    try:
+        with step.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        shape, units = load_step_mm(step)
+        drawings = render_views(shape, Path(export_dir).resolve(), formats,
+                                section_plane, section_offset_mm, show_hidden, frame)
+        return _dumps({"status": "ok", "step": str(step), "step_sha256": digest,
+                       **units, **drawings})
+    except Exception:
+        return _dumps(_error_payload_common(
+            "render_views", traceback.format_exc(),
+            environment_needles=("no module named 'pil'", "no module named 'ocp'",
+                                 "no module named 'build123d'"),
+        ))
+
+
+def _step_pair_measurements(a, b) -> dict:
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.Precision import Precision
+    from build123d import Shape
+
+    def common(left, right):
+        operation = BRepAlgoAPI_Common(left.wrapped, right.wrapped)
+        if not operation.IsDone():
+            raise ValueError("STEP Boolean intersection failed")
+        intersection = operation.Shape()
+        return None if intersection.IsNull() else Shape.cast(intersection)
+
+    intersection = common(a, b)
+    overlap = 0.0 if intersection is None else sum(s.volume for s in intersection.solids())
+    clearance = 0.0 if overlap > 0 else a.distance_to(b)
+    shared_area = 0.0
+    if overlap == 0.0 and clearance <= Precision.Confusion_s():
+        # A solid/solid Common drops lower-dimensional intersections.
+        for face_a in a.faces():
+            for face_b in b.faces():
+                patch = common(face_a, face_b)
+                if patch is not None:
+                    shared_area += sum(face.area for face in patch.faces())
+    return {
+        "clearance_mm": clearance,
+        "interference_volume_mm3": overlap,
+        "shared_face_area_mm2": shared_area,
+        "has_face_contact": shared_area > 0.0,
+    }
+
+
+def _read_step_solids(step: Path):
+    from .step_units import load_step_mm
+
+    shape, units = load_step_mm(step)
+    pairs = _labeled_solids(shape, inherit_assembly_label=False)
+    if not shape.is_valid or not pairs or len(pairs) != len(shape.solids()):
+        raise ValueError(f"STEP must contain valid, enumerable solids: {step}")
+    return shape, pairs, units
+
+
+@mcp.tool()
+async def build123d_diff_shapes(before_path: str, after_path: str) -> str:
+    """Compare two local STEP files in the same coordinate system.
+
+    Report before, after and after-minus-before volume, bounding box and
+    topology. Symmetric difference measures occupied volume in only one
+    model. Match solids by unique case-insensitive labels and report unresolved
+    IDs separately. The full-model comparison also covers unresolved solids.
+    """
+    import anyio
+
+    return await anyio.to_thread.run_sync(lambda: _run_isolated(
+        "_diff_step_files", {"before_path": before_path, "after_path": after_path},
+        timeout_s=_ISOLATED_TIMEOUT_S, stage="step_diff",
+    ))
+
+
+def _diff_step_files(before_path: str, after_path: str) -> str:
+    import hashlib
+
+    from .step_diff import compare_steps
+
+    inputs = {}
+    solids = []
+    for key, path in (("before", before_path), ("after", after_path)):
+        try:
+            step = Path(path).resolve()
+            with step.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            shape, pairs, units = _read_step_solids(step)
+            solids.append((shape, pairs))
+            inputs[key] = {"path": str(step), "sha256": digest, **units}
+        except Exception:
+            return _dumps(_error_payload_common(
+                f"{key}_step_readback", traceback.format_exc(),
+                environment_needles=("no module named 'build123d'", "no module named 'ocp'"),
+            ))
+    (before, before_pairs), (after, after_pairs) = solids
+    try:
+        result = compare_steps(before, after, before_pairs, after_pairs)
+        return _dumps({"status": "ok", "inputs": inputs,
+                       "measurement_length_unit": inputs["before"]["measurement_length_unit"],
+                       **result})
+    except Exception:
+        return _dumps(_error_payload_common("step_diff", traceback.format_exc()))
+
+
+def _inspect_step_readback(path: str) -> str:
+    """Measure a STEP file identically for local and external CAD sources."""
+    import hashlib
+    from importlib.metadata import version
+    from itertools import combinations
+
+    try:
+        step = Path(path)
+        with step.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        _, pairs, units = _read_step_solids(step)
+        by_label: dict[str, list[int]] = {}
+        for solid_id, (label, _) in enumerate(pairs, 1):
+            by_label.setdefault(label.casefold(), []).append(solid_id)
+        missing = by_label.pop("", [])
+        duplicates = [ids for ids in by_label.values() if len(ids) > 1]
+        measurements = []
+        for (id_a, (_, a)), (id_b, (_, b)) in combinations(enumerate(pairs, 1), 2):
+            try:
+                measurement = _step_pair_measurements(a, b)
+            except Exception as exc:
+                raise ValueError(f"STEP solid pair {id_a}, {id_b}: {exc}") from exc
+            measurements.append({"solid_ids": [id_a, id_b], **measurement})
+        result = {
+            "status": "ok",
+            "sha256": digest,
+            "build123d_version": version("build123d"),
+            "length_unit": "mm",
+            **units,
+            "solid_count": len(pairs),
+            "solids": [
+                {"id": solid_id, "label": label, "volume_mm3": solid.volume,
+                 **_bbox_fields_b3d(solid.bounding_box())}
+                for solid_id, (label, solid) in enumerate(pairs, 1)
+            ],
+            "labels_unique_and_present": not missing and not duplicates,
+            "label_audit": {"missing_solid_ids": missing, "duplicate_solid_id_groups": duplicates},
+            "pairs": measurements,
+        }
+        if len(measurements) == 1:
+            result.update({key: measurements[0][key] for key in
+                           ("clearance_mm", "interference_volume_mm3")})
+        return _dumps(result, indent=2)
+    except Exception:
+        return _dumps(_error_payload_common("step_readback", traceback.format_exc()))
+
+
+@mcp.tool()
 def build123d_probe(path: str, query: str = "summary") -> str:
     """
     Probe a STEP/BREP file with the SAME vocabulary as `cubit_probe`.
@@ -4688,6 +4970,10 @@ def build123d_probe(path: str, query: str = "summary") -> str:
     centroid / bbox_min / bbox_max / extent / volume).
 
     Valid queries:
+      "step_readback" — STEP hash, solid IDs, label audit, volumes and bounds,
+                        plus clearance, interference and shared face area
+                        for every pair. Dimensions are in mm and its powers.
+                        Face contact is measured for non-interfering pairs.
       "summary"  — {solids, faces, edges, vertices} counts
       "entities" — Probe-Don't-Guess dump: every solid {id, label,
                    centroid, bbox_min/max, extent, volume} and face
@@ -4704,6 +4990,9 @@ def build123d_probe(path: str, query: str = "summary") -> str:
         path: .step/.stp/.brep file (absolute or relative to cwd).
         query: probe name, see list above.
     """
+    if query.strip().lower() == "step_readback":
+        return _run_isolated("_inspect_step_readback", {"path": path},
+                             timeout_s=_ISOLATED_TIMEOUT_S, stage="step_readback")
     p = Path(path)
     if not p.is_file():
         return _dumps(_error_payload_common(

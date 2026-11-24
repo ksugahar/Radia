@@ -35,7 +35,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["build123d_api", "build123d_run", "execute_build123d",
                             "build123d_render_views", "build123d_diff_shapes",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit-mcp", "gmsh-mcp", "radia-ngsolve"],
+        "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-ngsolve"],
         "tags": ["cad"],
     },
     "onshape-mcp": {
@@ -85,7 +85,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "radia-acoustic",
             "matlab-mcp-lab",
             "acoustic-fembem",
-            "radia-mcp-mathematica",
+            "radia-mcp.mathematica",
             "matrix-solvers",
             "mor",
             "peec",
@@ -443,10 +443,10 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["differential_forms_visual_geometry",
                           "differential_forms_geometry_gate",
                           "differential_forms_maxwell"],
-        "related": ["fem", "force", "radia-mcp-mathematica"],
+        "related": ["fem", "force", "radia-mcp.mathematica"],
         "tags": ["theory"],
     },
-    "radia-mcp-mathematica": {
+    "radia-mcp.mathematica": {
         "subpackage": "radia_mcp.mathematica",
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
@@ -463,7 +463,7 @@ CATALOG: dict[str, dict[str, Any]] = {
     # ============================================================
     # Meta (the catalog itself — recommended first call)
     # ============================================================
-    "radia-mcp-meta": {
+    "radia-mcp.meta": {
         "subpackage": "radia_mcp.meta",
         "description": "★ RECOMMENDED FIRST CALL. Cross-server catalog "
                        "of all radia_mcp.* servers — answers \"which "
