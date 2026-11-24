@@ -243,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         ssh_destination = resolve_ssh_destination(args.host)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
-        print(f"100 preflight unavai100le: {exc}", file=sys.stderr)
+        print(f"100 preflight unavailable: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
     # Only a new ref (base ZERO) can have an empty candidate range by construction;
@@ -301,8 +301,8 @@ try {{
   if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
     throw 'build runner is occupied; retry after its job finishes'
   }}
-if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavai100le at $git" }}
-if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavai100le at $system_python" }}
+if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
+if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
   & $git clone --no-checkout https://github.com/ksugahar/Radia.git $repo
   if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
