@@ -22,7 +22,7 @@ def test_json_plan_apply_is_explicit_preserves_policies_and_exact_repeat(tmp_pat
     path = tmp_path / "client.json"
     original = {"other": {"secret": "never-log-this"}, "mcpServers": {
         "external": {"url": "https://example.invalid"},
-        "radia-mcp-maglev": {"command": "python", "args": ["-m", "radia_mcp.radia_maglev.server"],
+        "build123d-mcp": {"command": "python", "args": ["-m", "radia_mcp.build123d.server"],
                          "disabled": True, "tools": {"x": {"approval_policy": "always"}},
                          "env": {"CUSTOM": "kept"}},
     }}
@@ -35,9 +35,9 @@ def test_json_plan_apply_is_explicit_preserves_policies_and_exact_repeat(tmp_pat
     updated = json.loads(path.read_bytes())
     assert updated["other"] == original["other"]
     assert updated["mcpServers"]["external"] == original["mcpServers"]["external"]
-    motion = updated["mcpServers"]["radia-mcp-maglev"]
+    motion = updated["mcpServers"]["build123d-mcp"]
     assert motion["disabled"] and motion["env"] == {"CUSTOM": "kept"}
-    assert motion["tools"] == original["mcpServers"]["radia-mcp-maglev"]["tools"]
+    assert motion["tools"] == original["mcpServers"]["build123d-mcp"]["tools"]
     before2, after2, second = m.plan_config(path, sys.executable)
     assert before2 == after2 == after
     assert not second["changed"]
@@ -47,9 +47,9 @@ def test_json_plan_apply_is_explicit_preserves_policies_and_exact_repeat(tmp_pat
 @pytest.mark.parametrize("args", [["-m", "radia_mcp.radia_maglev.server", "--profile", "ih"], ["-c", "custom()"]])
 def test_custom_launch_arguments_block_the_entire_plan(tmp_path, args):
     path = tmp_path / "client.json"
-    path.write_text(json.dumps({"mcpServers": {"radia-mcp-maglev": {"command": "python", "args": args}}}))
+    path.write_text(json.dumps({"mcpServers": {"build123d-mcp": {"command": "python", "args": args}}}))
     before, after, report = m.plan_config(path, sys.executable)
-    assert report["conflicts"] == ["radia-mcp-maglev"]
+    assert report["conflicts"] == ["build123d-mcp"]
     assert not report["changed"] and before == after
 
 
@@ -124,7 +124,7 @@ def test_every_baseline_launcher_is_a_catalog_module():
 
 def test_versioned_python_executable_is_migratable():
     expected = {"args": ["-s", "-m", "radia_mcp.maintenance", "serve", "radia-mcp-meta"]}
-    assert m._migratable({"command": "/usr/bin/python3.12", **expected}, "radia-mcp-meta", expected)
+    assert m._migratable({"command": "/usr/bin/python3.12", **expected}, "radia-mcp.meta", expected)
 
 
 def test_duplicate_json_keys_are_rejected(tmp_path):
