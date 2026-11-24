@@ -131,3 +131,28 @@ def test_periodic_step_reuse_raises_on_true_residual_without_counting():
     with pytest.raises(RuntimeError, match="true relative residual"):
         solver.step(np.ones(6))
     assert solver.steps_solved == 0, f"actual={solver.steps_solved}, expected=0"
+
+
+def test_periodic_step_reuse_zero_load_returns_exact_zero():
+    K, M = _periodic_ring_matrices(6)
+    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6))
+    x = solver.step(np.zeros(6))
+    assert np.array_equal(x, np.zeros(6)), f"actual={x}, expected exact zeros"
+    assert solver.last_relative_residual == 0.0, f"actual={solver.last_relative_residual}, expected=0.0"
+    assert solver.steps_solved == 1, f"actual={solver.steps_solved}, expected=1"
+
+
+def test_periodic_step_reuse_indefinite_symmetric_is_never_silently_wrong():
+    # Symmetric, positive diagonal, indefinite (eigenvalues 3 and -1): passes the
+    # cheap SPD screens. The step must either raise or return the exact solution.
+    K = csc_matrix(np.array([[1.0, 2.0], [2.0, 1.0]]))
+    M = csc_matrix((2, 2))
+    rhs = np.array([1.0, 0.0])
+    expected = np.linalg.solve(K.toarray(), rhs)
+    try:
+        solver = PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2))
+        x = solver.step(rhs)
+    except (ValueError, RuntimeError):
+        return
+    rel_err = np.linalg.norm(x - expected) / np.linalg.norm(expected)
+    assert rel_err <= 1e-12, f"actual={rel_err}, expected<=1e-12 or a raised error"
