@@ -38,6 +38,13 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-ngsolve"],
         "tags": ["cad"],
     },
+    "ngsolve-mcp.gauging": {
+        "subpackage": "radia_mcp.gauging",
+        "description": "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary)",
+        "primary_tools": ["gauging_usage"],
+        "related": [],
+        "tags": ["fem"],
+    },
     "onshape-mcp": {
         "subpackage": "radia_mcp.onshape",
         "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
