@@ -236,9 +236,9 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     for name in ("build123d-mcp", "gmsh-mcp"):
         related = radia_mcp_related(name)
         names = [r["name"] for r in related["related"]]
-        assert "radia-ngsolve" in names, f"{name} related: {names}"
+        assert "radia-mcp.ngsolve" in names, f"{name} related: {names}"
 
-    reverse = radia_mcp_related("radia-ngsolve")
+    reverse = radia_mcp_related("radia-mcp.ngsolve")
     reverse_names = [r["name"] for r in reverse["related"]]
     for name in ("build123d-mcp", "gmsh-mcp"):
         assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
