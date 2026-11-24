@@ -492,9 +492,11 @@ def main():
     parser.add_argument("--selftest", action="store_true", help="Check local tool registration without network.")
     if parser.parse_args().selftest:
         tools = asyncio.run(mcp.list_tools())
-        if {tool.name for tool in tools} != {"onshape_export_cad", "onshape_discover", "onshape_read_parameters",
-                                           "onshape_render_shaded_views", "onshape_inspect_assembly",
-                                           "onshape_status", "onshape_reload_code"}:
+        # onshape_reload_code exists only in editable development installs.
+        if {tool.name for tool in tools} - {"onshape_reload_code"} != {
+            "onshape_export_cad", "onshape_discover", "onshape_read_parameters",
+            "onshape_render_shaded_views", "onshape_inspect_assembly", "onshape_status",
+        }:
             raise SystemExit("Unexpected Onshape research tool catalog")
         print("Onshape research tool registration passed")
         return
