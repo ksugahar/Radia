@@ -2477,7 +2477,7 @@ def test_ams_auto_line_smoothing_detects_anisotropic_hex_lines():
         cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
         solution.data = cg * rhs
     assert np.isfinite(first.FV().NumPy()).all()
-    projected_gradient = grad.CreateColVector()
+    projected_gradient = grad.CreateRowVector()
     projected_gradient.data = grad.T * first
     assert ng.Norm(projected_gradient) < 1e-10 * ng.Norm(first)
     residual = rhs.CreateVector()
