@@ -131,3 +131,19 @@ def test_discovery_to_fixed_step_export(discover, monkeypatch, tmp_path):
     assert Path(output["file"]).read_bytes() == fixture.read_bytes()
     assert calls == [("GET", workspace_path), ("GET", versions_path), ("GET", version_path),
                      ("POST", export_path), ("GET", download_path)]
+
+
+def test_tool_annotations_declare_web_access_and_local_writes(monkeypatch):
+    """Guards: every Onshape tool is open-world; only export and shaded views write."""
+    monkeypatch.setattr(server, "build_opener", lambda *args: pytest.fail("tools/list opened network"))
+    tools = {tool.name: tool.annotations for tool in asyncio.run(server.mcp.list_tools())
+             if tool.name not in {"onshape_status", "onshape_reload_code"}}
+    hints = {name: (ann.readOnlyHint, ann.destructiveHint, ann.openWorldHint)
+             for name, ann in tools.items()}
+    assert hints == {
+        "onshape_discover": (True, False, True),
+        "onshape_read_parameters": (True, False, True),
+        "onshape_inspect_assembly": (True, False, True),
+        "onshape_render_shaded_views": (False, False, True),
+        "onshape_export_cad": (False, False, True),
+    }

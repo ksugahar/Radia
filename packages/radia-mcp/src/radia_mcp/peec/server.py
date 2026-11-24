@@ -228,7 +228,7 @@ register_status_tool(
     server_name='peec',
     description='PEEC filament/panel, FastHenry parser, HOIBC, Carstensen AC copper loss',
     subpackage='radia_mcp.peec',
-    related_servers=["radia-ngsolve", "ih", "litz-transmission"],
+    related_servers=["radia-mcp.ngsolve", "ih", "litz-transmission"],
     optional_deps=["radia", "scipy"],
 )
 

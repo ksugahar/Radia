@@ -111,7 +111,7 @@ def matlab_sheet_metal_topology_build(spec_json:str)->str:
     return json.dumps(_sheet_metal_topology_build(spec_json),ensure_ascii=False,indent=2)
 _validation.install()
 
-register_status_tool(mcp,server_name="matlab-mcp-lab", tool_name='radia_matlab_status',description="Official MATLAB MCP composition, Radia/NGSolve MEX bridge, table-backed optimization, Simulink, and generic ML/RL gates",subpackage="radia_mcp.matlab",related_servers=["radia-ngsolve"])
+register_status_tool(mcp,server_name="matlab-mcp-lab", tool_name='radia_matlab_status',description="Official MATLAB MCP composition, Radia/NGSolve MEX bridge, table-backed optimization, Simulink, and generic ML/RL gates",subpackage="radia_mcp.matlab",related_servers=["radia-mcp.ngsolve"])
 def main():
     if "--selftest" in sys.argv: c=_contract(); assert c["ok"] and c["tool_count"]==43; print("Radia MATLAB MCP server self-test: OK"); return
     mcp.run()

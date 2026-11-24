@@ -9,28 +9,33 @@ import tempfile
 import time
 from http.client import HTTPException
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+
 from pydantic import Field
 
-from radia_mcp.common.status import register_status_tool
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.server_hardening import ANN_READONLY_WEB
 
-mcp = FastMCP("onshape-research-mcp")
-register_status_tool(
-    mcp,
-    "onshape-mcp",
-    "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
-    "radia_mcp.onshape",
+from .assembly import inspect_assembly
+from .discovery import ID as _ID, ORIGIN as _ORIGIN, discover, parse_document_url
+from .parameters import UnknownConfigurationParameters, read_parameters
+from .shaded_views import ViewName, render_shaded_views
+
+
+mcp = FastMCP("onshape-mcp")
+# Every tool calls cad.onshape.com; export and shaded views also write local files.
+_ANN_WRITES_WEB = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True,
 )
-_ORIGIN = "https://cad.onshape.com"
 _API = "/api/v11"
 _ELEMENTS = {"part_studio": "partstudios", "assembly": "assemblies"}
 _TRANSLATION_FORMATS = {"x_t": "PARASOLID", "sat": "ACIS"}
-_ID = re.compile(r"[0-9a-f]{24}")
 _STORAGE = re.compile(r"(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com")
 _DEFAULT_MAX_BYTES = 256 * 1024 * 1024
 _STEP_UNITS = {"METER", "CENTIMETER", "MILLIMETER", "INCH", "FOOT", "YARD"}
@@ -106,7 +111,207 @@ def _error(stage, message):
     return {"status": "error", "stage": stage, "error": message}
 
 
-@mcp.tool()
+def _authorization():
+    access, secret = os.getenv("ONSHAPE_ACCESS_KEY"), os.getenv("ONSHAPE_SECRET_KEY")
+    if not access or not secret:
+        return None
+    return "Basic " + base64.b64encode(f"{access}:{secret}".encode()).decode("ascii")
+
+
+def _auth_error():
+    return _error("auth", "Set ONSHAPE_ACCESS_KEY and ONSHAPE_SECRET_KEY in the server environment.")
+
+
+@mcp.tool(annotations=ANN_READONLY_WEB)
+async def onshape_discover(
+    operation: Literal["parse_url", "documents", "elements", "versions"],
+    url: str = "",
+    document_id: str = "",
+    search: str = "",
+    offset: Annotated[int, Field(strict=True, ge=0)] = 0,
+    limit: Annotated[int, Field(strict=True, gt=0, le=100)] = 20,
+) -> dict:
+    """Explore authorized cad.onshape.com documents, without writing to Onshape.
+
+    parse_url is local. documents lists one page of My Documents (optional search).
+    versions accepts a document_id or URL and returns version URLs.
+    elements accepts a workspace, version or microversion URL and lists CAD tabs.
+    For a version URL each tab supplies export_args for onshape_export_cad. Add
+    file_format and export_dir when exporting. A tab URL selects only
+    that tab. Only version URLs provide export_args.
+    """
+    import anyio
+
+    return await anyio.to_thread.run_sync(
+        _discover, operation, url, document_id, search, offset, limit
+    )
+
+
+def _discover(operation, url, document_id, search, offset, limit):
+    try:
+        reference = parse_document_url(url) if url else None
+        if operation == "parse_url":
+            if reference is None:
+                return _error("input", "Provide a document URL to parse.")
+            return {"status": "ok", "reference": reference}
+        if operation == "elements" and (reference is None or not reference["reference_id"]):
+            return _error("input", "Elements require a workspace, version or microversion URL.")
+        if operation == "versions" and reference is None and not _ID.fullmatch(document_id):
+            return _error("input", "Versions require a valid document ID or URL.")
+        if reference is not None and document_id and document_id != reference["document_id"]:
+            return _error("input", "Document ID does not match the URL.")
+        if operation == "documents" and (url or document_id):
+            return _error("input", "Document search accepts a search string rather than a document reference.")
+    except ValueError:
+        return _error("input", "Provide a valid cad.onshape.com document URL with one configuration at most.")
+
+    return _read_onshape("discovery", lambda request: discover(
+        request, operation, reference, document_id, search, offset, limit
+    ))
+
+
+def _read_onshape(stage, action):
+    authorization = _authorization()
+    if authorization is None:
+        return _auth_error()
+    opener = build_opener(_NoRedirect())
+
+    def request(path, options=None):
+        payload = None if options is None else json.dumps(options).encode("utf-8")
+        with _open(opener, _ORIGIN + _API + path, authorization, payload) as response:
+            ceiling = 4 * 1024 * 1024
+            payload = response.read(ceiling + 1)
+            if len(payload) > ceiling:
+                raise ValueError("Onshape read response too large.")
+            return json.loads(payload)
+
+    try:
+        return {"status": "ok", **action(request)}
+    except HTTPError as exc:
+        exc.close()
+        return {**_error(stage, "Onshape rejected the read request."), "http_status": exc.code}
+    except (URLError, OSError, HTTPException):
+        return _error(stage, "Onshape read or local file operation failed.")
+    except ImportError:
+        return _error(stage, "This operation requires the build123d extra.")
+    except UnknownConfigurationParameters as exc:
+        return {**_error("input", str(exc)), "unknown_parameter_ids": exc.ids}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return _error(stage, "Unexpected or oversized Onshape read response.")
+
+
+@mcp.tool(annotations=ANN_READONLY_WEB)
+async def onshape_read_parameters(
+    document_id: str,
+    element_id: str,
+    version_id: str,
+    element_type: Literal["part_studio", "assembly"],
+    configuration: str = "",
+    parameter_values: dict[str, str] | None = None,
+) -> dict:
+    """Read parameters from a fixed Onshape version, using discovery export_args.
+
+    Part Studios return formatted variable values, parsed numeric values and
+    units where available. Assemblies return configuration metadata.
+    Pass an existing configuration encodedId, or supply parameter IDs and
+    option values to compute one with Onshape's version-pinned encoder. The
+    encoder uses POST and does not change the document. Returned export_args
+    can be passed to onshape_export_cad with file_format and export_dir.
+    """
+    import anyio
+
+    return await anyio.to_thread.run_sync(
+        _read_parameters, document_id, element_id, version_id, element_type,
+        configuration, parameter_values,
+    )
+
+
+def _read_parameters(document_id, element_id, version_id, element_type,
+                     configuration, parameter_values):
+    if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
+        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+    if element_type not in _ELEMENTS or (configuration and parameter_values):
+        return _error("input", "Provide a CAD element type and only one configuration representation.")
+    source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
+              "element_type": element_type, "configuration": configuration}
+    return _read_onshape("parameters", lambda request: read_parameters(request, source, parameter_values))
+
+
+@mcp.tool(annotations=_ANN_WRITES_WEB)
+async def onshape_render_shaded_views(
+    document_id: str,
+    element_id: str,
+    version_id: str,
+    element_type: Literal["part_studio", "assembly"],
+    export_dir: str,
+    configuration: str = "",
+    views: list[ViewName] | None = None,
+) -> dict:
+    """Save shaded PNG previews for a fixed version on cad.onshape.com.
+
+    Use discovery or parameter export_args. Default views are isometric and
+    front; other presets are back, top, bottom, left and right. Each view
+    costs one read request. Requires Pillow from the build123d extra.
+    Use STEP readback for geometry measurements and comparisons.
+    """
+    import anyio
+
+    selected = ["isometric", "front"] if views is None else views
+    if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
+        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+    if (element_type not in _ELEMENTS or not export_dir.strip() or not selected
+            or len(set(selected)) != len(selected)
+            or any(view not in get_args(ViewName) for view in selected)):
+        return _error("input", "Provide a CAD element type, output directory and unique named views.")
+    source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
+              "element_type": element_type, "configuration": configuration}
+
+    def action(request):
+        images = render_shaded_views(
+            request, _ELEMENTS[element_type], document_id, element_id, version_id,
+            configuration, selected, export_dir,
+        )
+        return {**source, "views": images}
+
+    return await anyio.to_thread.run_sync(_read_onshape, "shaded_views", action)
+
+
+@mcp.tool(annotations=ANN_READONLY_WEB)
+async def onshape_inspect_assembly(
+    document_id: str,
+    element_id: str,
+    version_id: str,
+    element_type: Literal["assembly"],
+    configuration: str = "",
+    max_part_requests: Annotated[int, Field(strict=True, gt=0, le=100)] = 32,
+) -> dict:
+    """Read fixed-version assembly structure, mates and mass properties.
+
+    Pass discovery export_args for an assembly. Part occurrences carry the
+    top-level row-major transform (translation in m), volume in mm³ and
+    transformed centroid in mm. Part properties use each source microversion
+    and its effective configuration. Repeated sources reuse one GET per call.
+    Missing or budget-limited part properties are explicitly unresolved.
+    Match occurrences to STEP labels explicitly when comparing measurements.
+    """
+    import anyio
+
+    if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
+        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+    if element_type != "assembly" or type(max_part_requests) is not int or not 1 <= max_part_requests <= 100:
+        return _error("input", "Provide an assembly and a part request limit from 1 through 100.")
+    source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
+              "element_type": element_type, "configuration": configuration}
+
+    def action(request):
+        result = inspect_assembly(request, document_id, element_id, version_id,
+                                  configuration, max_part_requests)
+        return {**source, **result}
+
+    return await anyio.to_thread.run_sync(_read_onshape, "assembly", action)
+
+
+@mcp.tool(annotations=_ANN_WRITES_WEB)
 async def onshape_export_cad(
     document_id: str,
     element_id: str,
@@ -155,10 +360,9 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
         poll_timeout_s = float(poll_timeout_s)
     except OverflowError:
         return _error("input", "Polling deadline is outside the supported range.")
-    access, secret = os.getenv("ONSHAPE_ACCESS_KEY"), os.getenv("ONSHAPE_SECRET_KEY")
-    if not access or not secret:
-        return _error("auth", "Set ONSHAPE_ACCESS_KEY and ONSHAPE_SECRET_KEY in the server environment.")
-    authorization = "Basic " + base64.b64encode(f"{access}:{secret}".encode()).decode("ascii")
+    authorization = _authorization()
+    if authorization is None:
+        return _auth_error()
     opener = build_opener(_NoRedirect())
     source = f"/{_ELEMENTS[element_type]}/d/{document_id}/v/{version_id}/e/{element_id}"
     options = {"storeInDocument": False, "grouping": True,
@@ -270,6 +474,16 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
         return _error(stage, "Unexpected Onshape response.")
 
 
+register_status_tool(
+    mcp,
+    server_name="onshape-mcp", tool_name="onshape_status",
+    description="Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
+    subpackage="radia_mcp.onshape",
+    related_servers=["build123d-mcp"],
+    optional_deps=["build123d"],
+)
+
+
 def main():
     import argparse
     import asyncio
@@ -278,7 +492,11 @@ def main():
     parser.add_argument("--selftest", action="store_true", help="Check local tool registration without network.")
     if parser.parse_args().selftest:
         tools = asyncio.run(mcp.list_tools())
-        if "onshape_export_cad" not in {tool.name for tool in tools}:
+        # onshape_reload_code exists only in editable development installs.
+        if {tool.name for tool in tools} - {"onshape_reload_code"} != {
+            "onshape_export_cad", "onshape_discover", "onshape_read_parameters",
+            "onshape_render_shaded_views", "onshape_inspect_assembly", "onshape_status",
+        }:
             raise SystemExit("Unexpected Onshape research tool catalog")
         print("Onshape research tool registration passed")
         return
