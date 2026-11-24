@@ -1,1 +1,1 @@
-"""radia-mcp-postprocess capability pack."""
+"""radia-mcp.postprocess capability pack."""

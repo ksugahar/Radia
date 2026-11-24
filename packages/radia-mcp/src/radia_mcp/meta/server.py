@@ -6,8 +6,8 @@ ecosystem. Use this server as the FIRST stop when you don't know
 which other server to call.
 
 Usage:
-    radia-mcp-meta              # stdio
-    radia-mcp-meta --selftest   # self-test
+    python -m radia_mcp.maintenance serve radia-mcp.meta              # stdio
+    python -m radia_mcp.maintenance serve radia-mcp.meta --selftest   # self-test
 """
 
 import copy
@@ -438,7 +438,7 @@ def bug_patterns_stats() -> dict:
 
 register_status_tool(
     mcp,
-    server_name="radia-mcp-meta", tool_name='radia_meta_status',
+    server_name="radia-mcp.meta", tool_name='radia_meta_status',
     description="Cross-server catalog of all radia_mcp.* servers "
                 "(★ recommended first call when picking a tool)",
     subpackage="radia_mcp.meta",

@@ -1,1 +1,1 @@
-"""radia-mcp-rna capability pack."""
+"""radia-mcp.rna capability pack."""

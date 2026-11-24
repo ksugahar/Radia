@@ -1,1 +1,1 @@
-"""radia-mcp-acoustic capability pack."""
+"""radia-mcp.acoustic capability pack."""

@@ -1,1 +1,1 @@
-"""radia-mcp-electromagnet capability pack."""
+"""radia-mcp.electromagnet capability pack."""

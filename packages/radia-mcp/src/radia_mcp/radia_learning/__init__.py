@@ -1,1 +1,1 @@
-"""radia-mcp-learning capability pack."""
+"""radia-mcp.learning capability pack."""

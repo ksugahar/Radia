@@ -1,1 +1,1 @@
-"""radia-mcp-maglev capability pack."""
+"""radia-mcp.maglev capability pack."""
