@@ -52,7 +52,7 @@ register_status_tool(
     server_name="acoustic-fembem",
     description="Readable MATLAB P1 FEM/BEM, CQ, and validation education solver",
     subpackage="radia_mcp.acoustic_fembem",
-    related_servers=["radia-ngsolve", "bem", "fem"],
+    related_servers=["radia-mcp.ngsolve", "bem", "fem"],
 )
 
 

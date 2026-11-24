@@ -74,7 +74,7 @@ register_status_tool(
         "electromagnet",        # Kelvin transform
         "peec",                 # CRLH as PEEC ladder
         "ih",                   # ESIM surface impedance
-        "radia-ngsolve",        # periodic FES + BEM
+        "radia-mcp.ngsolve",        # periodic FES + BEM
         "pcb",                  # WPT-side ladder networks
         "litz-transmission",    # adjacent TL topic
     ],

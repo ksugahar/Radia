@@ -69,7 +69,7 @@ register_status_tool(
     server_name='radia-mcp-mathematica',
     description='Mathematica recipes: vector calc, Kelvin transform, symbolic Maxwell, evaluation pipeline',
     subpackage='radia_mcp.mathematica',
-    related_servers=["differential-forms", "radia-ngsolve"],
+    related_servers=["differential-forms", "radia-mcp.ngsolve"],
     # avoid collision with the existing `mathematica_status` tool
     # (wolframscript health probe — different from server introspection)
     tool_name="mathematica_server_status",

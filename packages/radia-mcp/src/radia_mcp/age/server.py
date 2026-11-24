@@ -47,7 +47,7 @@ register_status_tool(
     "ngsolve-mcp.age",
     "Air-Gap Element (AGE) analytical/harmonic rotor-stator coupling for NGSolve.",
     "radia_mcp.age",
-    related_servers=["radia-ngsolve", "fem", "motor"],
+    related_servers=["radia-mcp.ngsolve", "fem", "motor"],
 )
 
 
