@@ -126,6 +126,15 @@ def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
     return effective_base
 
 
+# The preflight waits this long in total for another preflight's lock and for
+# heavy build-runner jobs to finish, polling at the given interval.  The bound
+# covers only these waits, not the preflight itself, and it cannot keep the
+# parent `git push` SSH connection to the forge alive: a long hook can pass and
+# the push still end with exit 141, so long waits need a command-scoped
+# keepalive such as GIT_SSH_COMMAND='ssh -o ServerAliveInterval=20'.
+RUNNER_WAIT_SECONDS = 2700
+RUNNER_POLL_SECONDS = 30
+LIGHT_RUNNER_ROOT = r"C:\actions-runner-light"
 FORWARDED_ENV = ("RADIA_PUBLIC_NAME_RULES_FILE", "RADIA_OPTUNA_SOURCE")
 
 
@@ -243,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         ssh_destination = resolve_ssh_destination(args.host)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
-        print(f"100 preflight unavai100le: {exc}", file=sys.stderr)
+        print(f"100 preflight unavailable: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
     # Only a new ref (base ZERO) can have an empty candidate range by construction;
@@ -295,14 +304,38 @@ $script:exportOwned = $false
 $script:pytestRootOwned = $false
 $pytestRoot = Join-Path (Join-Path $root 'tmp') ([IO.Path]::GetFileName($worktree))
 try {{
-  # Fail fast on overlapping preflights; the OS releases the lock on process exit.
-  $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
-    [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-  if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
-    throw 'build runner is occupied; retry after its job finishes'
+  # Queue behind overlapping preflights and busy build runners instead of
+  # refusing, up to one shared deadline; the OS releases the lock on exit.
+  $deadline = [DateTime]::UtcNow.AddSeconds({RUNNER_WAIT_SECONDS})
+  $waitNoted = $false
+  while ($null -eq $lock) {{
+    try {{
+      $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
+        [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    }} catch [IO.IOException] {{
+      # Only sharing/lock violations (Win32 32/33) mean another preflight holds
+      # the lock; any other I/O error is permanent and must fail at once.
+      $win32 = $_.Exception.HResult -band 0xFFFF
+      if ($win32 -ne 32 -and $win32 -ne 33) {{ throw }}
+      if ([DateTime]::UtcNow -ge $deadline) {{
+        throw 'another preflight still holds the lock after {RUNNER_WAIT_SECONDS} s'
+      }}
+      if (-not $waitNoted) {{ [Console]::Error.WriteLine('waiting for another preflight to finish'); $waitNoted = $true }}
+      Start-Sleep -Seconds {RUNNER_POLL_SECONDS}
+    }}
   }}
-if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavai100le at $git" }}
-if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavai100le at $system_python" }}
+  $waitNoted = $false
+  # The light runner only runs small contract jobs and does not compete.
+  while (@(Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue |
+           Where-Object {{ $null -ne $_ -and -not ("$($_.Path)" -like '{LIGHT_RUNNER_ROOT}\\*') }}).Count -gt 0) {{
+    if ([DateTime]::UtcNow -ge $deadline) {{
+      throw 'build runner is occupied after {RUNNER_WAIT_SECONDS} s; retry after its job finishes'
+    }}
+    if (-not $waitNoted) {{ [Console]::Error.WriteLine('waiting for the build runner job to finish'); $waitNoted = $true }}
+    Start-Sleep -Seconds {RUNNER_POLL_SECONDS}
+  }}
+if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
+if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
   & $git clone --no-checkout https://github.com/ksugahar/Radia.git $repo
   if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
