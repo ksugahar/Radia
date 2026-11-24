@@ -35,7 +35,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["build123d_api", "build123d_run", "execute_build123d",
                             "build123d_render_views", "build123d_diff_shapes",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-ngsolve"],
+        "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-mcp.ngsolve"],
         "tags": ["cad"],
     },
     "ngsolve-mcp.age": {
@@ -91,7 +91,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                           "gmsh_render",
                           "gmsh_write_post_launch_artifact",
                           "gmsh_usage", "gmsh_reference"],
-        "related": ["blender-mcp", "build123d-mcp", "cubit-mcp", "radia-ngsolve"],
+        "related": ["blender-mcp", "build123d-mcp", "cubit-mcp", "radia-mcp.ngsolve"],
         "audit_command": "radia-mcp serve gmsh-mcp --selftest --audit-repo",
         "tags": ["mesh"],
     },
@@ -106,7 +106,7 @@ CATALOG: dict[str, dict[str, Any]] = {
     # ============================================================
     # FEM / BEM / specialty solvers
     # ============================================================
-    "radia-ngsolve": {
+    "radia-mcp.ngsolve": {
         "subpackage": "radia_mcp.radia_ngsolve",
         "description": "Radia + NGSolve: Kelvin / sparsesolv / PEEC / "
                        "analytical formulas / lint",
@@ -119,7 +119,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "fem",
             "force",
             "gmsh-mcp",
-            "radia-acoustic",
+            "ngsolve-mcp.acoustic",
             "matlab-mcp-lab",
             "acoustic-fembem",
             "radia-mcp.mathematica",
@@ -152,7 +152,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "differential-forms",
             "maglev",
             "motor",
-            "radia-ngsolve",
+            "radia-mcp.ngsolve",
             "team-benchmark",
         ],
         "tags": ["solver", "theory"],
@@ -170,7 +170,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "matlab_optuna_mcp_route",
                             "matlab_optuna_simulink_contract",
                             "matlab_radia_acoustic_interface_contract"],
-        "related": ["acoustic-fembem", "radia-ngsolve"],
+        "related": ["acoustic-fembem", "radia-mcp.ngsolve"],
         "tags": ["ml", "optimization", "solver"],
     },
     "acoustic-fembem": {
@@ -180,14 +180,14 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["acoustic_fembem_agent_guide",
                             "acoustic_fembem_extension_contract",
                             "acoustic_fembem_server_config"],
-        "related": ["matlab-mcp-lab", "radia-ngsolve", "bem", "fem"],
+        "related": ["matlab-mcp-lab", "radia-mcp.ngsolve", "bem", "fem"],
         "tags": ["fem", "theory"],
     },
-    "radia-acoustic": {
+    "ngsolve-mcp.acoustic": {
         "subpackage": "radia_mcp.radia_acoustic",
         "description": "Production NGSolve/ngsolve.bem acoustics, FSI, and CQ",
         "primary_tools": ["radia_acoustic_usage", "radia_acoustic_fsi_preflight", "radia_acoustic_cq_grid"],
-        "related": ["radia-ngsolve", "bem"],
+        "related": ["radia-mcp.ngsolve", "bem"],
         "tags": ["fem", "solver"],
     },
     "streamfunction": {
@@ -198,7 +198,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "NMR/MRI gradient and shim coil design",
         "primary_tools": ["streamfunction"],
         "related": [
-            "radia-ngsolve",
+            "radia-mcp.ngsolve",
             "bayesian-opt",
             "electromagnet",
             "peec",
@@ -217,7 +217,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "gnn",
             "matrix-solvers",
             "pinn",
-            "radia-ngsolve",
+            "radia-mcp.ngsolve",
             "team-benchmark",
             "acoustic-fembem",
         ],
@@ -231,10 +231,10 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "fem",
             "peec",
-            "radia-ngsolve",
+            "radia-mcp.ngsolve",
             "team-benchmark",
             "acoustic-fembem",
-            "radia-acoustic",
+            "ngsolve-mcp.acoustic",
         ],
         "tags": ["fem", "theory"],
     },
@@ -244,7 +244,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "(CG/BiCGSTAB/GMRES/COCG/COCR/IDR), preconditioners "
                        "(AMG, Hiptmair-Xu AMS), Biro-Preis A-V, tree-cotree",
         "primary_tools": ["matrix_solvers_overview"],
-        "related": ["radia-ngsolve", "fem"],
+        "related": ["radia-mcp.ngsolve", "fem"],
         "tags": ["solver", "theory"],
     },
     "mor": {
@@ -252,7 +252,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Model Order Reduction: POD, PRIMA/Krylov, "
                        "hyperreduction (DEIM)",
         "primary_tools": ["mor_systematic"],
-        "related": ["data-assimilation", "radia-ngsolve", "rna-mec"],
+        "related": ["data-assimilation", "radia-mcp.ngsolve", "rna-mec"],
         "tags": ["solver"],
     },
     # ============================================================
@@ -280,7 +280,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "bem",
             "ih",
             "litz-transmission",
-            "radia-ngsolve",
+            "radia-mcp.ngsolve",
             "streamfunction",
             "pcb",
         ],
@@ -493,7 +493,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "mathematica_run_script",
             "mathematica_status",
         ],
-        "related": ["differential-forms", "radia-ngsolve"],
+        "related": ["differential-forms", "radia-mcp.ngsolve"],
         "tags": ["theory"],
     },
 
@@ -540,7 +540,7 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
             "Direct mesh export uses the Cubit mesh. "
             "Netgen/NGSolve are used for Python curving and solver-side mesh checks."
         ),
-        "related": ["build123d-mcp", "gmsh-mcp", "radia-ngsolve", "topology-optimization"],
+        "related": ["build123d-mcp", "gmsh-mcp", "radia-mcp.ngsolve", "topology-optimization"],
     },
     "optuna-mcp": {
         "pypi": "optuna-mcp",
@@ -572,7 +572,7 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
                        "(MAGIC magnetostatic / ELFIN electrostatic / "
                        "BEAM particle tracking) — 16 tools + 1 prompt "
                        "over help HTM, examples, vendor wiki, ctypes API.",
-        "related": ["radia-ngsolve", "motor", "mor"],
+        "related": ["radia-mcp.ngsolve", "motor", "mor"],
     },
 }
 
