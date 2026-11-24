@@ -39,11 +39,14 @@ def _hcurl_cube_system():
 
     from radia.sparsesolv_ngsolve import LowestOrderGradient
 
-    mesh = ng.Mesh(OCCGeometry(Box((0, 0, 0), (1, 1, 1))).GenerateMesh(maxh=0.4))
-    fes = ng.HCurl(mesh, order=0)
-    u, v = fes.TnT()
-    stiffness = ng.BilinearForm(ng.curl(u) * ng.curl(v) * ng.dx).Assemble()
-    mass = ng.BilinearForm(u * v * ng.dx).Assemble()
+    # The caller owns the TaskManager region for meshing and assembly; the
+    # solver (AMS setup refuses an active TaskManager) is built outside it.
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(Box((0, 0, 0), (1, 1, 1))).GenerateMesh(maxh=0.4))
+        fes = ng.HCurl(mesh, order=0)
+        u, v = fes.TnT()
+        stiffness = ng.BilinearForm(ng.curl(u) * ng.curl(v) * ng.dx).Assemble()
+        mass = ng.BilinearForm(u * v * ng.dx).Assemble()
 
     def scipy_matrix(native):
         values, columns, pointers = native.CSR()
