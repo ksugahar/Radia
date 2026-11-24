@@ -2682,9 +2682,56 @@ def test_ams_line_options_fail_loudly_without_their_prerequisites():
     for kwargs in (dict(line_rank_ties=True, auto_line_smoothing=True),
                    dict(line_max_length=300),
                    dict(line_max_length=8, auto_line_smoothing=True),
-                   dict(line_max_length=2048, auto_line_smoothing=True)):
+                   dict(line_max_length=2048, auto_line_smoothing=True),
+                   dict(line_min_length=8),
+                   dict(line_min_length=3, auto_line_smoothing=True),
+                   dict(line_min_length=64, line_max_length=32, auto_line_smoothing=True)):
         with pytest.raises((ValueError, RuntimeError)):
             HypreBasedAMSPreconditioner(*args, beta_zero=True, **kwargs)
+
+
+def test_ams_line_min_length_admits_lines_of_a_thin_layer():
+    """Guards: a layer of 8 flat cells between isotropic cells gives 9-node lines,
+    kept with line_min_length=8 and dropped by the default 16, with CG still converging.
+    """
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+
+    def zmap(s):  # 4 cells of 0.25, 8 cells of 0.01, 4 cells of 0.25
+        k = 16 * s
+        return 0.25 * k if k <= 4 else 1.0 + 0.01 * (k - 4) if k <= 12 else 1.08 + 0.25 * (k - 12)
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=8, ny=8, nz=16,
+                                mapping=lambda x, y, z: (x, y, zmap(z)))
+    space = ng.HCurl(mesh, order=0)
+    u, v = space.TnT()
+    form = ng.BilinearForm(space)
+    form += ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+    form.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = np.asarray([tuple(vertex.point) for vertex in mesh.vertices])
+    args = (form.mat, grad, None, *coords.T.tolist())
+    rhs = form.mat.CreateRowVector()
+    seed = rhs.CreateVector()
+    seed.FV().NumPy()[:] = np.random.default_rng(7).standard_normal(len(seed))
+    rhs.data = form.mat * seed
+    lengths = {}
+    for minimum in (16, 8):
+        pre = HypreBasedAMSPreconditioner(*args, beta_zero=True, auto_line_smoothing=True,
+                                          line_min_length=minimum)
+        parts = [part for axis in pre.line_partitions for part in axis]
+        lengths[minimum] = sorted({len(part) for part in parts})
+        assert all(blocks == banded for blocks, banded, _ in pre.line_setup_profile)
+        solution = rhs.CreateVector()
+        with ng.TaskManager():
+            cg = ng.krylovspace.CGSolver(form.mat, pre=pre, tol=1e-12, maxiter=300)
+            solution.data = cg * rhs
+        residual = rhs.CreateVector()
+        residual.data = form.mat * solution - rhs
+        assert ng.Norm(residual) / ng.Norm(rhs) < 1e-10, minimum
+    assert lengths[16] == [], lengths
+    assert lengths[8] and min(lengths[8]) >= 8 and max(lengths[8]) < 16, lengths
 
 
 def _complex_hex_system(nx, ny, nz):

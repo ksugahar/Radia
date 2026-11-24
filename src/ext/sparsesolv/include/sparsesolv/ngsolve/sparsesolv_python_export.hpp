@@ -1399,7 +1399,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
        bool reuse_hierarchy,
        bool mixed_precision,
        bool auto_line_smoothing, std::vector<int> pmis_rank,
-       int line_max_length, bool line_rank_ties) -> shared_ptr<HypreBasedAMS>
+       int line_max_length, bool line_rank_ties, int line_min_length) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -1424,7 +1424,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
           reuse_hierarchy, mixed_precision, false, false,
           std::array<std::vector<double>,3>{}, auto_line_smoothing, std::move(pmis_rank),
-          line_max_length, line_rank_ties);
+          line_max_length, line_rank_ties, false, line_min_length);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -1443,6 +1443,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     py::arg("pmis_rank") = std::vector<int>{},
     py::arg("line_max_length") = 256,
     py::arg("line_rank_ties") = false,
+    py::arg("line_min_length") = 16,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -1484,6 +1485,10 @@ pmis_rank : list of int
   Coarse points retain their fine-level ranks. An empty list uses the default PMIS.
 line_max_length : int
   Diagnostic cap on merged line length, 16..1024 (default=256). Requires auto_line_smoothing.
+line_min_length : int
+  Shortest merged line kept as a line block, 4..line_max_length (default=16).
+  A thin layer of n cells gives lines of about n+1 nodes. The 50 % node coverage
+  rule is unchanged. Requires auto_line_smoothing.
 line_rank_ties : bool
   Diagnostic: order exactly equal link strengths by pmis_rank endpoint ranks instead of
   input order (default=False). Requires pmis_rank and auto_line_smoothing.
@@ -1513,7 +1518,8 @@ mixed_precision : bool
        int subspace_solver,
        int num_smooth,
        bool auto_line_smoothing,
-       int line_max_length) -> shared_ptr<ComplexHypreBasedAMS>
+       int line_max_length,
+       int line_min_length) -> shared_ptr<ComplexHypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(a_real_mat);
       if (!sp_mat)
@@ -1543,7 +1549,8 @@ mixed_precision : bool
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           ndof, cycle_type, print_level, correction_weight,
           subspace_solver, num_smooth, false, false,
-          std::array<std::vector<double>, 3>{}, auto_line_smoothing, line_max_length);
+          std::array<std::vector<double>, 3>{}, auto_line_smoothing, line_max_length,
+          line_min_length);
     },
     py::arg("a_real_mat"),
     py::arg("grad_mat"),
@@ -1559,6 +1566,7 @@ mixed_precision : bool
     py::arg("num_smooth") = 1,
     py::arg("auto_line_smoothing") = false,
     py::arg("line_max_length") = 256,
+    py::arg("line_min_length") = 16,
     R"raw_string(
 Complex Compact AMS preconditioner with TaskManager Re/Im parallelism.
 
@@ -1601,6 +1609,9 @@ auto_line_smoothing : bool
 line_max_length : int
   Diagnostic cap on merged line length, 16..1024 (default=256). Requires
   auto_line_smoothing.
+line_min_length : int
+  Shortest merged line kept as a line block, 4..line_max_length (default=16).
+  Requires auto_line_smoothing.
 )raw_string");
 
   RegisterAMSWirebasket();
