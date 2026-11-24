@@ -1877,6 +1877,13 @@ private:
     void DualL1JacobiSmooth(int level, const BaseVector& b1, BaseVector& x1,
                             const BaseVector& b2, BaseVector& x2,
                             bool initially_zero = false) const {
+        if (level == 0 && !line_blocks_.empty()) {
+            // The same symmetric line smoother on each right-hand side keeps
+            // the dual cycle equal to two real cycles (complex symmetry for COCR).
+            ApplyLineSmoother(b1, x1, initially_zero);
+            ApplyLineSmoother(b2, x2, initially_zero);
+            return;
+        }
         auto& lev = levels_[level];
         auto fv_x1 = x1.FVDouble();
         auto fv_x2 = x2.FVDouble();
