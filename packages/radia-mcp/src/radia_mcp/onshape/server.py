@@ -15,10 +15,12 @@ from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from pydantic import Field
 
 from radia_mcp.common import register_status_tool
+from radia_mcp.common.server_hardening import ANN_READONLY_WEB
 
 from .assembly import inspect_assembly
 from .discovery import ID as _ID, ORIGIN as _ORIGIN, discover, parse_document_url
@@ -27,6 +29,10 @@ from .shaded_views import ViewName, render_shaded_views
 
 
 mcp = FastMCP("onshape-mcp")
+# Every tool calls cad.onshape.com; export and shaded views also write local files.
+_ANN_WRITES_WEB = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True,
+)
 _API = "/api/v11"
 _ELEMENTS = {"part_studio": "partstudios", "assembly": "assemblies"}
 _TRANSLATION_FORMATS = {"x_t": "PARASOLID", "sat": "ACIS"}
@@ -116,7 +122,7 @@ def _auth_error():
     return _error("auth", "Set ONSHAPE_ACCESS_KEY and ONSHAPE_SECRET_KEY in the server environment.")
 
 
-@mcp.tool()
+@mcp.tool(annotations=ANN_READONLY_WEB)
 async def onshape_discover(
     operation: Literal["parse_url", "documents", "elements", "versions"],
     url: str = "",
@@ -194,7 +200,7 @@ def _read_onshape(stage, action):
         return _error(stage, "Unexpected or oversized Onshape read response.")
 
 
-@mcp.tool()
+@mcp.tool(annotations=ANN_READONLY_WEB)
 async def onshape_read_parameters(
     document_id: str,
     element_id: str,
@@ -231,7 +237,7 @@ def _read_parameters(document_id, element_id, version_id, element_type,
     return _read_onshape("parameters", lambda request: read_parameters(request, source, parameter_values))
 
 
-@mcp.tool()
+@mcp.tool(annotations=_ANN_WRITES_WEB)
 async def onshape_render_shaded_views(
     document_id: str,
     element_id: str,
@@ -270,7 +276,7 @@ async def onshape_render_shaded_views(
     return await anyio.to_thread.run_sync(_read_onshape, "shaded_views", action)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ANN_READONLY_WEB)
 async def onshape_inspect_assembly(
     document_id: str,
     element_id: str,
@@ -305,7 +311,7 @@ async def onshape_inspect_assembly(
     return await anyio.to_thread.run_sync(_read_onshape, "assembly", action)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_ANN_WRITES_WEB)
 async def onshape_export_cad(
     document_id: str,
     element_id: str,
