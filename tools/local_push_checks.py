@@ -37,14 +37,17 @@ def positive_literal_conflicts(text, pattern, edited_lines=None):
 def minimal_import_findings(text, edited_lines=None):
     """Conservative all-scope direct imports, not a claim of transitive proof.
 
-    Like positive_literal_conflicts, only imports touching edited lines count when
-    edited_lines is given, so unchanged imports in an edited file are not new debt.
+    When edited_lines is given, statically named imports count only if they touch an
+    edited line, like positive_literal_conflicts.  Unresolved dynamic imports stay
+    file-wide: an edit elsewhere can change the name they import.
     """
     tree = ast.parse(text)
     findings = []
     for node in ast.walk(tree):
-        if edited_lines is not None and isinstance(node, (ast.Import, ast.ImportFrom, ast.Call)):
-            if not edited_lines.intersection(range(node.lineno, node.end_lineno + 1)):
+        if edited_lines is not None and isinstance(node, (ast.Import, ast.ImportFrom, ast.Call)) and not edited_lines.intersection(range(node.lineno, node.end_lineno + 1)):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
                 continue
         modules = []
         if isinstance(node, ast.Import): modules = [a.name for a in node.names]
