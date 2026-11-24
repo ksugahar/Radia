@@ -11,14 +11,6 @@ from radia_mcp.common import register_status_tool
 
 mcp = FastMCP("ngsolve-mcp.age")
 
-register_status_tool(
-    mcp,
-    "ngsolve-mcp.age",
-    "Air-Gap Element (AGE) analytical/harmonic rotor-stator coupling for NGSolve.",
-    "radia_mcp.age",
-    related_servers=["radia-ngsolve", "fem", "motor"],
-)
-
 _TOPICS = {
     "overview": (
         "ngsolve-mcp.age: Air-Gap Element (AGE) for rotating electrical machines.\n"
@@ -46,6 +38,17 @@ def age_usage(topic: str = "overview") -> str:
     if key in _TOPICS:
         return _TOPICS[key]
     return f"Unknown topic '{topic}'. Available: {', '.join(sorted(_TOPICS))}"
+
+
+# Registered after every tool: the status registration applies the
+# annotation contract to the tools that exist at this point.
+register_status_tool(
+    mcp,
+    "ngsolve-mcp.age",
+    "Air-Gap Element (AGE) analytical/harmonic rotor-stator coupling for NGSolve.",
+    "radia_mcp.age",
+    related_servers=["radia-ngsolve", "fem", "motor"],
+)
 
 
 def _selftest() -> None:
