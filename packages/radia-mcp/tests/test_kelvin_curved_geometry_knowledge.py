@@ -113,14 +113,14 @@ async def _kelvin_stdio_probe():
         async with ClientSession(*streams) as session:
             await session.initialize()
             listed = {t.name: t for t in (await session.list_tools()).tools}
-            for name in ('radia_ngsolve_status', 'kelvin_transformation', 'kelvin_identify_post_hoc'):
+            for name in ('radia_mcp.ngsolve_status', 'kelvin_transformation', 'kelvin_identify_post_hoc'):
                 assert name in listed, name
-            for name in ('radia_ngsolve_status', 'kelvin_transformation'):
+            for name in ('radia_mcp.ngsolve_status', 'kelvin_transformation'):
                 assert listed[name].annotations.readOnlyHint is True, name
             # The same existing tool also has topic='verify', which adds in-memory
             # identifications. Its tool-wide annotation must not promise read-only.
             assert listed['kelvin_identify_post_hoc'].annotations.readOnlyHint is False
-            status = await session.call_tool('radia_ngsolve_status', {})
+            status = await session.call_tool('radia_mcp.ngsolve_status', {})
             assert not status.isError
             payload = status.structuredContent or json.loads(status.content[0].text)
             provenance = payload['runtime_provenance']
