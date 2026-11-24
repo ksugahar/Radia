@@ -394,6 +394,14 @@ def test_native_solver_lane_builds_required_axisymmetric_extension():
     assert "radia.peec_matrices" in verify["run"]
     assert "ExtensionFileLoader" in verify["run"]
 
+    hex_regression = next(s for s in steps if s.get("name") == "Run anisotropic HEX AMS with eight NGSolve workers")
+    assert hex_regression["if"] == verify["if"]
+    assert all(hex_regression["env"][key] == "8" for key in (
+        "RADIA_TEST_NGSOLVE_THREADS", "NGS_NUM_THREADS", "OMP_NUM_THREADS",
+    ))
+    assert "ng.SetNumThreads(" in hex_regression["run"]
+    assert "::test_ams_auto_line_smoothing_detects_anisotropic_hex_lines" in hex_regression["run"]
+
 
 def test_axifem_build_links_python_from_the_base_interpreter():
     script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
