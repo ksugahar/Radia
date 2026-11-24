@@ -45,6 +45,13 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [],
         "tags": ["fem"],
     },
+    "ngsolve-mcp.dtn": {
+        "subpackage": "radia_mcp.dtn",
+        "description": "Dirichlet-to-Neumann (DtN) open-boundary operator and coarse-mesh coupling for NGSolve",
+        "primary_tools": ["dtn_usage"],
+        "related": [],
+        "tags": ["fem"],
+    },
     "ngsolve-mcp.gauging": {
         "subpackage": "radia_mcp.gauging",
         "description": "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary)",
