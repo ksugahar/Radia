@@ -56,7 +56,7 @@ def test_real_mcp_schema_and_dispatch_expose_the_read_only_guide():
             assert actual == get_tests_design_guide(section), actual
 
     asyncio.run(exercise())
-    assert "tests_design_guide" in catalog.get("radia-mcp-meta")["primary_tools"]
+    assert "tests_design_guide" in catalog.get("radia-mcp.meta")["primary_tools"]
 
 
 def test_packaged_guide_imports_without_numerical_runtime():
