@@ -76,6 +76,7 @@ build_force_report_method_metadata_gate = lazy_callable(".force_report_gate", "f
 build_phase_flux_park_alignment_gate = lazy_callable(".phase_flux_park_gate", "phase_flux_park_alignment_gate", __package__)
 build_back_emf_cross_lane_gate = lazy_callable(".back_emf_cross_lane_gate", "back_emf_cross_lane_gate", __package__)
 build_ipm_two_run_ldlq_gate = lazy_callable(".two_run_ldlq_gate", "ipm_two_run_ldlq_gate", __package__)
+build_cogging_torque_cross_lane_gate = lazy_callable(".cogging_torque_cross_lane_gate", "cogging_torque_cross_lane_gate", __package__)
 build_periodic_torque_sampling_gate = lazy_callable(".periodic_torque_sampling_gate", "periodic_torque_sampling_gate", __package__)
 build_rotating_circuit_transient_gate = lazy_callable(".rotating_circuit_transient_gate", "rotating_circuit_transient_gate", __package__)
 build_motion_table_coordinate_gate = lazy_callable(".motion_table_gate", "motion_table_coordinate_gate", __package__)
@@ -1625,6 +1626,36 @@ def motor_back_emf_cross_lane_gate(first_lane_json: str, second_lane_json: str, 
     except json.JSONDecodeError as exc:
         return json.dumps({'status': 'invalid_input', 'checks': {'json_inputs': False}, 'error': str(exc)})
     return json.dumps(build_back_emf_cross_lane_gate(first, second, tolerances), allow_nan=False)
+
+
+@_validation.tool()
+def motor_cogging_torque_cross_lane_gate(
+    first_lane_json: str, second_lane_json: str, tolerances_json: str
+) -> str:
+    """Compare signed no-current torque sampled on a common mechanical angle grid.
+
+    Supply slots, pole_count (physical pole count 2p, never pole pairs),
+    slot_pole_symmetry (boolean), mechanical_angles_deg,
+    torque_nm (signed rotor torque about the positive rotation axis),
+    torque_basis (per_metre or total), stack_length_m, model_dimension (2d or 3d),
+    and model_fraction (fraction of full machine represented by the input torque).
+    The gate multiplies per-metre torque by stack length and divides each lane
+    by model_fraction. Use 1 for torque already scaled to the full machine.
+    Optional excitation is {"phase_current_A": 0}.
+    Also supply
+    extraction_method (maxwell_stress, virtual_work or arkkio), and skew
+    ("none" or a matching description of geometry and averaging). Set
+    drop_duplicate_endpoint to discard a closing sample. Supply one full
+    revolution unless both lanes declare slot/pole symmetry, in which case
+    supply one primitive symmetry period. Both grids need a common angle datum.
+    Absolute tolerances in N m are peak_to_peak_nm, waveform_rms_nm and harmonic_nm.
+    harmonic_nm also bounds each lane's absolute mean torque.
+    """
+    try:
+        first, second, tolerances = map(json.loads, (first_lane_json, second_lane_json, tolerances_json))
+    except json.JSONDecodeError as exc:
+        return json.dumps({"status": "invalid_input", "checks": {"json_inputs": False}, "error": str(exc)})
+    return json.dumps(build_cogging_torque_cross_lane_gate(first, second, tolerances), allow_nan=False)
 
 
 _validation.install()
