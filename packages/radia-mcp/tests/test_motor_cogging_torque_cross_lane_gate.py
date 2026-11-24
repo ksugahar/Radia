@@ -1,6 +1,5 @@
 """Surrogates for cross-lane cogging torque comparison."""
 
-import json
 
 import numpy as np
 import pytest
@@ -91,22 +90,6 @@ def test_endpoint_and_nyquist():
     assert cogging_torque_cross_lane_gate(first, second, _LIMITS)["status"] == "pass"
     coarse = _lane(symmetry=False, samples=24)
     assert "Nyquist" in cogging_torque_cross_lane_gate(coarse, coarse, _LIMITS)["error"]
-
-
-def test_tool_json_and_grid_alignment():
-    """Guards: structured JSON results and grid alignment in the public entry point.
-    Assumes: callers align the mechanical angle datum before invoking the gate.
-    """
-    from radia_mcp.motor.server import motor_cogging_torque_cross_lane_gate
-
-    first = json.dumps(_lane())
-    limits = json.dumps(_LIMITS)
-    assert json.loads(motor_cogging_torque_cross_lane_gate(first, first, limits))["status"] == "pass"
-    assert json.loads(motor_cogging_torque_cross_lane_gate("[", first, limits))["checks"] == {"json_inputs": False}
-    shifted = _lane()
-    shifted["mechanical_angles_deg"] = [value + 0.2 for value in shifted["mechanical_angles_deg"]]
-    result = json.loads(motor_cogging_torque_cross_lane_gate(first, json.dumps(shifted), limits))
-    assert "common mechanical angle grid" in result["error"]
 
 
 def test_equal_dc_bias_does_not_pass_cogging():

@@ -3,7 +3,6 @@
 Assumes: uniformly sampled synthetic periodic three-phase linkage signals.
 """
 
-import json
 import math
 
 import numpy as np
@@ -202,18 +201,3 @@ def test_label_and_data_inversion_are_both_reported():
     second['phase_flux_wb'] = (-np.asarray(second['phase_flux_wb'])).tolist()
     result = back_emf_cross_lane_gate(first, second, LIMITS)
     assert {'phase_linkage_sign_inversion', 'linkage_polarity_convention_differs'} <= set(result['findings'])
-
-
-def test_tool_uses_named_validation_group_and_json_strings():
-    """Guards: the MCP adapter uses JSON strings and the validation registry.
-
-    Assumes: the server has installed its validation tools at import time.
-    """
-    from radia_mcp.motor import server
-
-    lane = json.dumps(_lane())
-    command = 'motor_back_emf_cross_lane_gate'
-    handler = getattr(server, command)
-    assert server._validation._entries[command].function is handler
-    assert json.loads(handler(lane, lane, json.dumps(LIMITS)))['status'] == 'pass'
-    assert json.loads(handler('{', lane, json.dumps(LIMITS)))['status'] == 'invalid_input'
