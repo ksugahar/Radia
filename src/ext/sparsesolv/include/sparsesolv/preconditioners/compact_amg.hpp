@@ -1348,7 +1348,7 @@ private:
                 for (int k = 0; k < m; k++) { dx += (yt(k) - xt(k)) * (yt(k) - xt(k)); nx += xt(k) * xt(k); }
                 if (!inverted || !(dx <= 1e-12 * nx)) {
                     // Not reproduced (a nearly singular level): sparse Cholesky.
-                    SparseCoarsest(c);
+                    CheckedSparseCoarsest(c);
                     return;
                 }
                 c.dense_inv.assign(size_t(n) * n, 0.0);
@@ -1359,7 +1359,34 @@ private:
                 return;
             }
         }
+        CheckedSparseCoarsest(c);
+    }
+
+    /// Sparse Cholesky of the coarsest level, checked on one right-hand side in
+    /// its range (b = A x_t). Auxiliary Galerkin blocks can be exactly singular
+    /// beyond the constant kernel (structured hexahedra: Pi has an alternating
+    /// nodal kernel), and a factorization of such a level returns NaN or a
+    /// garbage solve. A failed check switches a level of at most
+    /// kSemidefiniteFallbackMax rows to the semidefinite pseudo-inverse and
+    /// raises above that. A level that passes is used unchanged.
+    static constexpr int kSemidefiniteFallbackMax = 1024;
+    void CheckedSparseCoarsest(Level& c) {
         SparseCoarsest(c);
+        const int n = c.ndof;
+        VVector<double> xt(n), bt(n), yt(n), rt(n);
+        auto x = xt.FV();
+        for (int i = 0; i < n; ++i) x[i] = std::sin(1.0 + 0.7 * i);
+        c.A->Mult(xt, bt);
+        DeterministicCoarseSolve(*c.inv, bt, yt);
+        c.A->Mult(yt, rt);
+        rt.Add(-1.0, bt);
+        const double bn = L2Norm(bt), rn = L2Norm(rt);
+        if (std::isfinite(rn) && rn <= 1e-8 * bn) return;
+        if (n > kSemidefiniteFallbackMax)
+            throw std::runtime_error("AMG coarsest sparse Cholesky failed its range check (relative residual "
+                + std::to_string(bn > 0 ? rn / bn : rn) + ") on " + std::to_string(n)
+                + " rows, above the semidefinite fallback limit");
+        FactorSemidefiniteCoarsest(c);
     }
 
     void FactorSemidefiniteCoarsest(Level& c) {

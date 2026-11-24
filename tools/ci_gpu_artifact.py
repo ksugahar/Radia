@@ -10,15 +10,18 @@ import urllib.request
 import zipfile
 
 
-# Compute validation of the MATLAB payloads consumes wheels built on main pushes.
-COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', '&event=push')]
+# A push or a manual dispatch builds and seals github.sha itself, so both are exact-SHA
+# producers; a pull-request run seals its merge commit and never qualifies.
+EXACT_SHA_EVENTS = ('&event=push', '&event=workflow_dispatch')
+# Compute validation of the MATLAB payloads consumes wheels built on main pushes or exact-SHA dispatches.
+COMPUTE_WHEELS = [('radia-simulink.yml', 'gpu-simulink-wheel', EXACT_SHA_EVENTS)]
 # The compute bundle of one radia-simulink push run: its wheel and every native build output
 # the GPU acceptance executes. A pull-request run builds and seals the merge commit, which is
-# not its head SHA, so only push runs are fetched. The build host compiles; the A100 only runs it.
-SIMULINK_BUNDLE = [('radia-simulink.yml', 'gpu-simulink-validation-bundle', '&event=push')]
+# not its head SHA, so only push and dispatch runs are fetched. The build host compiles; the A100 only runs it.
+SIMULINK_BUNDLE = [('radia-simulink.yml', 'gpu-simulink-validation-bundle', EXACT_SHA_EVENTS)]
 BUNDLE = 'radia-simulink-gpu-bundle.zip'
 # Native Release runs only for a release tag or a dispatch at the exact SHA, never for a PR.
-RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', '')]
+RADIA_WHEELS = [('build-test.yml', 'gpu-radia-wheel', ('',))]
 
 
 def digest(path):
@@ -116,7 +119,7 @@ def request(route):
 
 
 def newest_main_sha():
-    # Artifact listing is newest-first and paginated; only unexpired push/main
+    # Artifact listing is newest-first and paginated; only unexpired main
     # artifacts qualify. Commit order below determines newest main ancestry.
     available = {}
     page = 1
@@ -149,8 +152,9 @@ def newest_main_sha():
 
 def resolve(sha, wheels=COMPUTE_WHEELS):
     selected = []
-    for workflow, artifact, event in wheels:
-        runs = json.loads(request(f'actions/workflows/{workflow}/runs?head_sha={sha}{event}&status=success&per_page=100'))['workflow_runs']
+    for workflow, artifact, events in wheels:
+        runs = [run for event in events for run in json.loads(request(
+            f'actions/workflows/{workflow}/runs?head_sha={sha}{event}&status=success&per_page=100'))['workflow_runs']]
         found = None
         for run in runs:
             if run['head_sha'] != sha:
