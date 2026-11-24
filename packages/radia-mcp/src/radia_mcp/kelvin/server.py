@@ -7,7 +7,9 @@ import asyncio
 
 from mcp.server.fastmcp import FastMCP
 
+from radia_mcp import __version__
 from radia_mcp.common import register_status_tool
+from radia_mcp.common.mcp_contract import apply_tool_contract
 
 mcp = FastMCP("ngsolve-mcp.kelvin")
 
@@ -46,6 +48,9 @@ def kelvin_usage(topic: str = "overview") -> str:
     if key in _TOPICS:
         return _TOPICS[key]
     return f"Unknown topic '{topic}'. Available: {', '.join(sorted(_TOPICS))}"
+
+
+apply_tool_contract(mcp, server_name="ngsolve-mcp.kelvin", version=__version__)
 
 
 def _selftest() -> None:
