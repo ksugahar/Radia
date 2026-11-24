@@ -1,10 +1,11 @@
 """Surrogate tests for PeriodicStepReuseSolver.
 
-Guards: single-factorization reuse and exact pitch-step eddy-current state
+Guards: one NGSolve sparsecholesky construction reused and exact pitch-step eddy-current state
 permutation against an independent dense per-step solve; signed permutations;
 per-step true residual; loud rejection of non-integer, non-finite or complex
 inputs without counting a failed step.
-Assumes: linear nonsingular sparse K and M on a periodic DOF ring.
+Assumes: linear SPD A = K + M/dt on a periodic DOF ring; non-SPD A raises
+without any factorization attempt or fallback.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import numpy as np
 import pytest
 from scipy.sparse import csc_matrix, diags
 
+import radia.periodic_step_reuse as periodic_step_reuse
 from radia._residual_gate import RELATIVE_LIMIT
 from radia.periodic_step_reuse import PeriodicStepReuseSolver
 
@@ -29,12 +31,20 @@ def _periodic_ring_matrices(n: int = 12):
 
 
 @pytest.mark.parametrize("signed", [False, True])
-def test_periodic_step_reuse_matches_dense_reference_with_single_factorization(signed):
+def test_periodic_step_reuse_matches_dense_reference_with_single_factorization(signed, monkeypatch):
     n = 12
     dt = 0.01
     K, M = _periodic_ring_matrices(n)
     perm = np.roll(np.arange(n), -1)  # 1-pitch rotational shift
     sign = np.where(np.arange(n) % 2 == 0, 1.0, -1.0) if signed else None
+    constructions = []
+    real_factor = periodic_step_reuse._sparsecholesky
+
+    def counting_factor(A):
+        constructions.append(A.shape)
+        return real_factor(A)
+
+    monkeypatch.setattr(periodic_step_reuse, "_sparsecholesky", counting_factor)
     solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign)
     rng = np.random.default_rng(42)
 
@@ -54,6 +64,7 @@ def test_periodic_step_reuse_matches_dense_reference_with_single_factorization(s
         assert solver.last_relative_residual <= RELATIVE_LIMIT, (
             f"step {step}: actual={solver.last_relative_residual}, expected<={RELATIVE_LIMIT}")
 
+    assert constructions == [(n, n)], f"actual sparsecholesky constructions={constructions}, expected one"
     assert solver.factorization_count == 1
     assert solver.steps_solved == 8
 
@@ -81,6 +92,19 @@ def test_periodic_step_reuse_rejects_invalid_construction():
         PeriodicStepReuseSolver(K_nan, M, dt=0.01, perm=np.arange(6))
 
 
+def test_periodic_step_reuse_rejects_non_spd_without_fallback(monkeypatch):
+    K, M = _periodic_ring_matrices(6)
+    calls = []
+    monkeypatch.setattr(periodic_step_reuse, "_sparsecholesky", lambda A: calls.append(A) or None)
+    K_asym = K.tolil()
+    K_asym[0, 1] = -2.0
+    with pytest.raises(ValueError, match="symmetric positive definite"):
+        PeriodicStepReuseSolver(csc_matrix(K_asym), M, dt=0.01, perm=np.arange(6))
+    with pytest.raises(ValueError, match="positive definite"):
+        PeriodicStepReuseSolver(-K, M * 0.0, dt=0.01, perm=np.arange(6))
+    assert calls == [], f"actual factorization attempts={len(calls)}, expected=0"
+
+
 def test_periodic_step_reuse_rejects_bad_step_inputs_without_counting():
     K, M = _periodic_ring_matrices(6)
     solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.roll(np.arange(6), 1))
@@ -102,13 +126,8 @@ def test_periodic_step_reuse_rejects_bad_step_inputs_without_counting():
 def test_periodic_step_reuse_raises_on_true_residual_without_counting():
     K, M = _periodic_ring_matrices(6)
     solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6))
-    exact = solver._lu
-
-    class _PerturbedFactor:
-        def solve(self, b):
-            return exact.solve(b) * (1.0 + 1e-3)
-
-    solver._lu = _PerturbedFactor()
+    exact = solver._solve
+    solver._solve = lambda b: exact(b) * (1.0 + 1e-3)
     with pytest.raises(RuntimeError, match="true relative residual"):
         solver.step(np.ones(6))
     assert solver.steps_solved == 0, f"actual={solver.steps_solved}, expected=0"

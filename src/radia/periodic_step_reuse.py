@@ -5,8 +5,9 @@ an exact mesh symmetry pitch, the rotated/shifted mesh coincides with the origin
 mesh up to a DOF permutation (with optional +/-1 edge-orientation sign).
 This allows:
   1. Assembling the system matrix A = K + (1/dt) * M once.
-  2. Factoring (or building the AMS/preconditioner hierarchy for) A once and
-     reusing it across all time steps.
+  2. Factoring A once with NGSolve ``sparsecholesky`` and reusing the factor
+     across all time steps. A must be symmetric positive definite; there is
+     no LU or other fallback.
   3. Carrying eddy-current / flux state from the previous step by permuting
      the previous solution vector along the pitch mapping without re-meshing.
 
@@ -22,9 +23,29 @@ import numbers
 
 import numpy as np
 from scipy.sparse import csc_matrix, issparse
-from scipy.sparse.linalg import splu
 
 from ._residual_gate import RELATIVE_LIMIT, residual_scale
+from .ngsolve_sparse import real_sparse_matrix_type
+
+# Relative asymmetry allowed in A = K + M/dt, as a multiple of max|A|.
+_SYMMETRY_TOLERANCE = 1e-12
+
+
+def _sparsecholesky(A: csc_matrix):
+    """Factor the SPD matrix A once with NGSolve sparsecholesky; return x = solve(b)."""
+    data = A.tocoo()
+    native = real_sparse_matrix_type().CreateFromCOO(
+        data.row.tolist(), data.col.tolist(), data.data.tolist(), *data.shape)
+    inverse = native.Inverse(inverse="sparsecholesky")
+    source = native.CreateColVector()
+    answer = native.CreateRowVector()
+
+    def solve(b: np.ndarray) -> np.ndarray:
+        source.FV().NumPy()[:] = b
+        answer.data = inverse * source
+        return answer.FV().NumPy().copy()
+
+    return solve
 
 
 def _real_finite_vector(value, n: int, name: str) -> np.ndarray:
@@ -89,7 +110,15 @@ class PeriodicStepReuseSolver:
         self.sign = sign_arr
         self.M = M
         self.A = csc_matrix(K + (1.0 / self.dt) * self.M)
-        self._lu = splu(self.A)
+        scale = float(np.max(np.abs(self.A.data))) if self.A.nnz else 0.0
+        asymmetry = float(np.max(np.abs((self.A - self.A.T).data), initial=0.0))
+        if scale == 0.0 or asymmetry > _SYMMETRY_TOLERANCE * scale:
+            raise ValueError(
+                f"A = K + M/dt must be symmetric positive definite for sparsecholesky; "
+                f"max|A - A^T| = {asymmetry:.3e}, max|A| = {scale:.3e}")
+        if np.any(self.A.diagonal() <= 0.0):
+            raise ValueError("A = K + M/dt must be positive definite: nonpositive diagonal entry")
+        self._solve = _sparsecholesky(self.A)
         self.factorization_count = 1
         self.steps_solved = 0
         self.last_relative_residual = math.nan
@@ -108,7 +137,7 @@ class PeriodicStepReuseSolver:
         b = _real_finite_vector(rhs, self.n, "rhs")
         if x_prev is not None:
             b = b + (1.0 / self.dt) * (self.M @ self.shift_state(x_prev))
-        x_next = self._lu.solve(b)
+        x_next = self._solve(b)
         residual = self.A @ x_next - b
         relative = float(np.linalg.norm(residual)) / residual_scale(float(np.linalg.norm(b)))
         if not np.all(np.isfinite(x_next)) or not math.isfinite(relative) or relative > RELATIVE_LIMIT:
