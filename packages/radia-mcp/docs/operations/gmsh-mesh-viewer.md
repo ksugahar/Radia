@@ -5,7 +5,11 @@ The same `python -B -m radia_mcp.mesh_viewer FILE.msh` launcher and
 native loading. Adjacent `.opt` files are rejected. Gmsh is imported only for
 the MSH route; installed payload hashes must match `RADIA_GMSH_PROVENANCE`.
 Configuration loading and automatic option/session saving are disabled.
-The tool returns launch acceptance, not proof of successful rendering.
+`--check` on an MSH also reads it back with native Gmsh 5 in a child process
+(`radia_mcp.gmsh.readback`) and fails unless Gmsh opens it with no error or
+warning and every node belongs to an element; the identity then carries the
+loaded node, element and physical-group counts. The tool still returns launch
+acceptance, not proof of a rendered image.
 
 Use the declared extra and the canonical
 [two-step runtime installation](gmsh-development-runtime.md):
@@ -42,7 +46,11 @@ the default. Japanese output directories require that explicit scratch setting
 because the native VOL reader does not reliably handle Unicode filenames.
 A hash-identical VOL copy is loaded from staging. The exporter's `.geo`/`.opt`
 companions remain there and are never executed, opened or merged. After format
-and physical-group/selected-element-count checks, byte-identical MSH content is
+and physical-group/selected-element-count checks, native Gmsh 5 reads the staged
+MSH back and must load the same groups and selected element count with no error,
+warning or unconnected node; the receipt records it under `native_readback`. An
+exporter that leaves unconnected nodes in a boundary view is refused here.
+Byte-identical MSH content is
 copied to a temporary name beside the destination, hash-verified, and published
 by an exclusive hard link. The output filesystem must support hard links;
 otherwise publication fails explicitly. The temporary copy is removed on success

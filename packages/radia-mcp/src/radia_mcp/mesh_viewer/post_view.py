@@ -170,13 +170,19 @@ def convert_post_view(source: Path, output: str, checked_report: str,
     if (inspection.get('parse_errors') or not inspection.get('elements', {}).get('parse_complete')
             or actual_count != selected_count):
         raise ValueError(f'Exporter selected element count mismatch: {actual_count} != {selected_count}')
+    # The viewer is native Gmsh: it must load the staged bytes cleanly, with the same
+    # groups and element count and no node that no element references.
+    from radia_mcp.gmsh.readback import require_native_readback
+    readback = require_native_readback(staged, expected_groups=expected_groups,
+                                       expected_elements={dimension: selected_count})
     if sha256(source) != source_sha256.lower():
         raise ValueError('Source VOL changed during conversion')
     # Filesystem copy is not a second MSH writer.
     digest = _publish_mesh(staged, target)
     return {'schema': 'radia.mesh-post-view.v1', 'output': str(target), 'sha256': digest, 'staging': str(staging),
             'source_sha256': source_sha256.lower(), 'group_scope': group_scope,
-            'physical_groups': sorted(observed_groups), 'solver_input': False}
+            'physical_groups': sorted(observed_groups), 'native_readback': readback,
+            'solver_input': False}
 
 
 async def prepare_post_view_async(source: Path, output: str, checked_report: str,
@@ -226,6 +232,8 @@ async def prepare_post_view_async(source: Path, output: str, checked_report: str
                 or data.get('source_sha256') != source_sha256.lower()
                 or data.get('group_scope') != group_scope or data.get('solver_input') is not False
                 or data.get('staging') != str(staging) or not data.get('physical_groups')
+                or not isinstance(data.get('native_readback'), dict)
+                or data['native_readback'].get('unreferenced_nodes') != 0
                 or not isinstance(data.get('sha256'), str)
                 or not re.fullmatch('[0-9a-f]{64}', data['sha256'])):
             raise ValueError('Unbound conversion receipt; no GUI launched')

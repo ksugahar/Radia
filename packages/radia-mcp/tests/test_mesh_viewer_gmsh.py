@@ -128,6 +128,9 @@ def post_case(post_inputs, monkeypatch):
     monkeypatch.setattr(msh_inspect, 'inspect_msh', lambda _: {
         'physical_names': [{'dim': 3, 'name': 'iron'}],
         'elements': {'count': 6, 'parse_complete': True}, 'parse_errors': []})
+    from radia_mcp.gmsh import readback
+    monkeypatch.setattr(readback, 'require_native_readback', lambda path, **kwargs: {
+        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0})
     writes = []
     class Exporter:
         def __init__(self, mesh, boundary): self.boundary = boundary
@@ -338,7 +341,8 @@ def test_conversion_process_is_separate_and_uses_a_bound_receipt(post_case, monk
         Path(argv[-1]).write_text(json.dumps({'schema':'radia.mesh-post-view.v1',
             'output':str(output),'sha256':post_view.sha256(output),
             'source_sha256':digest,'group_scope':'materials','solver_input':False,
-            'staging':argv[argv.index('--staging-dir')+1],'physical_groups':[[3,'iron']]}))
+            'staging':argv[argv.index('--staging-dir')+1],'physical_groups':[[3,'iron']],
+            'native_readback':{'unreferenced_nodes':0}}))
     monkeypatch.setattr(post_view, 'run_worker', run)
     monkeypatch.setitem(sys.modules, 'ngsolve', None)
     result = post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
