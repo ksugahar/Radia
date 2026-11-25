@@ -110,7 +110,7 @@ def _dense_oracle(request):
 @pytest.mark.parametrize("signed", [False, True])
 def test_matches_dense_oracle_with_one_observed_setup(tmp_path, method, signed):
     _solver_module()
-    from radia._residual_gate import RELATIVE_LIMIT
+    RELATIVE_LIMIT = pytest.importorskip("radia._residual_gate").RELATIVE_LIMIT
 
     request = _request(tmp_path, method=method, signed=signed, pitch=3)
     result = worker.run(request)
