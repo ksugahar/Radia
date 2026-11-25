@@ -130,6 +130,35 @@ cutter = Compound([left, right])
         assert check_positional_compound_labels("x.py", _lines(text)) == [], text
 
 
+def test_rules_ignore_multiline_strings_and_unbound_names():
+    docstring = _lines('''
+def helper():
+    """Example of the trap:
+
+    with BuildSketch(Plane.XZ) as sk:
+        pick = min(sk.vertices(), key=lambda p: p.Z)
+    a.label = "a"
+    asm = Compound([a, b])
+    """
+    return None
+''')
+    assert check_sketch_vertex_global_z("x.py", docstring) == []
+    assert check_positional_compound_labels("x.py", docstring) == []
+
+    lambda_then_other_z = _lines("""
+with BuildSketch(Plane.XZ) as sk:
+    pair = (min(sk.vertices(), key=lambda v: v.Y), fixture.v.Z)
+    shifted = min(sk.vertices(), key=lambda v: v.Y + offset.Z)
+""")
+    assert check_sketch_vertex_global_z("x.py", lambda_then_other_z) == []
+
+    name_inside_call = _lines("""
+housing.label = "housing"
+cutter = Compound([make_clearance_for(housing), right])
+""")
+    assert check_positional_compound_labels("x.py", name_inside_call) == []
+
+
 def test_documented_surface_dispatch_runs_on_each_surface_type():
     import re
 
