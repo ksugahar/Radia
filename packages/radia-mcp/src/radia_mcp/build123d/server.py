@@ -537,6 +537,7 @@ def build123d_usage(topic: str = "overview") -> str:
             "examples_gallery"- 21 gallery examples (Benchy, Heat Exchanger, Vase, ...)
             "examples_lab_patterns" - Lab-specific: IH/Halbach/dipole/PEEC/maglev archetypes
             "coil_modeling"   - PEEC filament extraction from CAD
+            "rebuild_from_reference_step" - Rebuild a reference STEP: surface data, profiles, labels, diff
             "all"             - Complete documentation
     """
     return get_build123d_documentation(topic)

@@ -315,6 +315,82 @@ def check_tiny_fillet_radius(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
+# ---------------------------------------------------------------------------
+# Rule: global Z used on vertices of a sketch on a non-XY plane
+# ---------------------------------------------------------------------------
+
+_SKETCH_ON_PLANE_RE = re.compile(r"\bwith\s+BuildSketch\s*\(\s*(?:plane\s*=\s*)?Plane\.(XZ|ZX|YZ|ZY)\b[^)]*\)\s*as\s+(\w+)")
+_VERTEX_Z_RE = re.compile(r"\.Z\b")
+
+
+def check_sketch_vertex_global_z(filepath: str, lines: List[str]) -> List[Dict]:
+	"""MODERATE: inside `with BuildSketch(Plane.XZ) as sk:`, `sk.vertices()`
+	are in the sketch's local frame, so every vertex has Z == 0. Selecting
+	vertices by `.Z` there ties them all and the pick follows vertex order,
+	so a fillet or chamfer can land on another corner. Use the local `.Y`.
+	"""
+	findings: List[Dict] = []
+	active: tuple[int, str, str] | None = None  # (indent, sketch name, plane)
+	for i, raw in enumerate(lines, 1):
+		line = raw.rstrip("\n")
+		stripped = line.strip()
+		if not stripped or stripped.startswith("#"):
+			continue
+		indent = len(line) - len(line.lstrip())
+		if active is not None and indent <= active[0]:
+			active = None
+		m = _SKETCH_ON_PLANE_RE.search(stripped)
+		if m:
+			active = (indent, m.group(2), m.group(1))
+			continue
+		if active is None:
+			continue
+		name = active[1]
+		uses_vertices = re.search(rf"\b{name}\.vertices\s*\(", stripped) or "vertices()" in stripped
+		if uses_vertices and _VERTEX_Z_RE.search(stripped):
+			findings.append({
+				"line": i,
+				"severity": "MODERATE",
+				"rule": "sketch-vertex-global-z",
+				"message": (
+					f"Vertices of a sketch on Plane.{active[2]} are in the sketch's "
+					"local frame (Z == 0); selecting them by `.Z` ties every vertex. "
+					"Use the local `.X`/`.Y`, and select again after each 2D fillet."),
+			})
+	return findings
+
+
+# ---------------------------------------------------------------------------
+# Rule: labelled shapes exported through a positional Compound
+# ---------------------------------------------------------------------------
+
+_POSITIONAL_COMPOUND_RE = re.compile(r"\bCompound\s*\(\s*\[")
+_LABEL_ASSIGN_RE = re.compile(r"\.label\s*=")
+
+
+def check_positional_compound_labels(filepath: str, lines: List[str]) -> List[Dict]:
+	"""MODERATE: `Compound([a, b])` keeps no children, so labels set on the
+	parts never reach STEP. Use `Compound(children=[a, b])` when the script
+	assigns labels.
+	"""
+	if not any(_LABEL_ASSIGN_RE.search(l) for l in lines if not l.strip().startswith("#")):
+		return []
+	findings: List[Dict] = []
+	for i, raw in enumerate(lines, 1):
+		if raw.strip().startswith("#"):
+			continue
+		if _POSITIONAL_COMPOUND_RE.search(raw):
+			findings.append({
+				"line": i,
+				"severity": "MODERATE",
+				"rule": "positional-compound-drops-labels",
+				"message": (
+					"`Compound([...])` stores no children, so part labels are lost "
+					"on STEP export. Use `Compound(children=[...])`."),
+			})
+	return findings
+
+
 ALL_RULES = [
 	check_missing_buildpart_context,
 	check_sweep_path_arg,
@@ -323,4 +399,6 @@ ALL_RULES = [
 	check_unclosed_polyline_for_extrude,
 	check_deprecated_api,
 	check_tiny_fillet_radius,
+	check_sketch_vertex_global_z,
+	check_positional_compound_labels,
 ]

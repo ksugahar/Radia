@@ -2645,7 +2645,19 @@ export_step(asm, "asm.step")
 
 ## Labels matter
 
-STEP round-trip preserves `shape.label`.  After `import step "asm.step"`
+Labels reach STEP only through the assembly tree: build the compound with
+`Compound(children=[...])`. `Compound([a, b])` stores the shapes without
+children, and the STEP readback carries no part labels. Read labels back from
+`compound.children` (or the tree below it); `compound.solids()` returns the
+same solids with empty labels.
+
+Placing one shape twice (`i1 = Pos(...) * base; i2 = Pos(...) * base`) makes
+the instances share their underlying shape, and STEP export writes the last
+label for both. Give instances that need their own names their own
+construction, or treat the shared name as an instance group (see
+`rebuild_from_reference_step`).
+
+With `children=`, the STEP round-trip preserves `shape.label`.  After `import step "asm.step"`
 in Cubit, `block N add volume all; block N name "<label>"` will show
 "magnet", "pole", "air". Solver material and boundary names must satisfy the
 canonical label contract (`^[a-z][a-z0-9_]*$`); preserving a STEP label does
@@ -3078,6 +3090,73 @@ live in `radia_mcp.build123d.pipeline`; the executable validation corpus lives i
 """
 
 
+REBUILD_FROM_REFERENCE_STEP = """# Rebuilding a reference STEP in build123d
+
+Goal: a parametric build123d model whose STEP readback matches a reference
+STEP from another CAD system, so the model can be edited and compared.
+
+## Read the reference first
+- Measure each solid: volume, centroid, bounding box, and face counts per
+  surface type (plane, cylinder, cone, torus, B-spline).
+- Read analytic surface data from OCCT, not from `Face.radius`: build123d
+  returns None for a cylinder or sphere stored as a trimmed surface
+  (`Geom_RectangularTrimmedSurface`), which some exporters write.
+
+```python
+from OCP.BRepAdaptor import BRepAdaptor_Surface
+s = BRepAdaptor_Surface(face.wrapped)
+cyl = s.Cylinder()   # .Radius(), .Axis().Location(), .Axis().Direction()
+cone = s.Cone()      # .RefRadius(), .SemiAngle(), .Apex()
+tor = s.Torus()      # .MajorRadius(), .MinorRadius(), .Location()
+```
+
+- Skip parts whose surfaces are mostly B-splines (knurls, vendor models);
+  rebuild the analytic parts and say which parts were left out.
+
+## Revolved parts: one (r, z) profile
+Draw the profile with `BuildSketch(Plane.XZ)` and revolve it about `Axis.Z`.
+Two traps when filleting profile corners:
+- `sk.vertices()` inside the sketch are in the sketch's local frame
+  (Z == 0); the profile's z is the local Y. Selecting by `.Z` ties every
+  vertex, and the tie is broken by vertex order, so a fillet can land on a
+  different corner from run to run.
+- A 2D `fillet` replaces the sketch face. Select vertices again after each
+  call instead of reusing an earlier list.
+
+```python
+with BuildSketch(Plane.XZ) as sk:
+    with BuildLine():
+        Polyline(*profile_rz, close=True)
+    make_face()
+    pick = lambda r, z: min(sk.vertices(), key=lambda v: (v.X - r) ** 2 + (v.Y - z) ** 2)
+    fillet(pick(r_head, 0.0), head_fillet)
+    fillet(pick(r_neck, z_neck), neck_fillet)   # picked after the first fillet
+body = revolve(sk.sketch, Axis.Z)
+```
+
+## Names, parameters and configurations
+- `build123d_run` parameters are finite numbers only. Build names in the
+  script (for example from a length parameter).
+- Configured parts in the reference often carry the configuration in their
+  name (a screw of shank 5, 8 and 12 has three names). Match that name, or
+  label matching reports `missing_match`.
+- Export with `Compound(children=[...])` so labels survive
+  (`assemblies_and_compounds`).
+
+## Compare with the symmetric difference, not volume alone
+`build123d_diff_shapes` reports, per matched part, the volume delta, the
+topology delta and the symmetric-difference volume. A misplaced feature can
+keep the volume: the same fillet on another edge at the same radius from the
+axis removes the same volume. Accept a rebuild on the symmetric difference
+and the face counts per type; the volume delta alone cannot catch it.
+
+Repeated instances with one label (one shape placed twice) are paired by
+centroid when the pairing is unambiguous; otherwise they stay unresolved
+with the candidate distances. Single parts whose labels differ are not
+paired: rename one side.
+"""
+
+
 _TOPICS = {
     "overview": OVERVIEW,
     "parametric_library": PARAMETRIC_LIBRARY,
@@ -3103,6 +3182,7 @@ _TOPICS = {
     "loft_polyline": COIL_FROM_POLYLINE,  # alias
     "joints_and_mates": JOINTS_AND_MATES,
     "assemblies_and_compounds": ASSEMBLIES_AND_COMPOUNDS,
+    "rebuild_from_reference_step": REBUILD_FROM_REFERENCE_STEP,
     "cae_workflow_tips": CAE_WORKFLOW_TIPS,
     "plane_axis_location_cookbook": PLANE_AXIS_LOCATION_COOKBOOK,
     "builder_vs_algebra_rosetta": BUILDER_VS_ALGEBRA_ROSETTA,
