@@ -1236,6 +1236,12 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "validation_test/test_native_build_dirty_source.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "tests/matlab/fixtures/ltspice_rc.cir",
       "owners": [
         "radia-simulink"
@@ -3683,6 +3689,7 @@
             "tools/run_test_tier.py",
             "tools/native_build_provenance.ps1",
             "tests/test_native_build_provenance.py",
+            "validation_test/test_native_build_dirty_source.py",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_tree_receipt.py",
             ".github/workflows/sparsesolv.yml",
@@ -4001,6 +4008,7 @@
             "tools/run_test_tier.py",
             "tools/native_build_provenance.ps1",
             "tests/test_native_build_provenance.py",
+            "validation_test/test_native_build_dirty_source.py",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_tree_receipt.py",
             ".github/workflows/sparsesolv.yml",
