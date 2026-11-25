@@ -1,9 +1,10 @@
 from radia_mcp.ih.ih_knowledge import get_induction_heating_documentation
+from radia_mcp.ih.peec_knowledge import get_ih_peec_documentation
 from radia_mcp.radia_ngsolve.knowledge.axifem import get_axifem_documentation
 
 
 def test_ih_solver_priority_distinguishes_hcurl_compound_and_thermal_spaces():
-    text = get_induction_heating_documentation("peec_bem_sibc")
+    text = get_ih_peec_documentation("bem_sibc")
     assert "prefer AMS for p=1" in text
     assert "BDDC with AMS coarse solve" in text
     assert "Compound A-V" in text
@@ -21,6 +22,7 @@ def test_ih_solver_priority_distinguishes_hcurl_compound_and_thermal_spaces():
     assert "Periodic Kelvin requires separate validation" in compound
     assert "pardiso" not in compound.lower()
     assert "pardiso" not in get_induction_heating_documentation("all").lower()
+    assert "pardiso" not in get_ih_peec_documentation("all").lower()
 
 
 def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
@@ -120,7 +122,7 @@ def test_ih_thermal_knowledge_warns_against_frozen_ht_for_magnetic_parts():
 
 
 def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
-    text = get_induction_heating_documentation("all")
+    text = get_induction_heating_documentation("all") + get_ih_peec_documentation("all")
     assert "complete-SIBC-reciprocity" in text
     assert "solved-total-field-lumped-P1" in text
     assert "validate_ih_sibc_closure.py" in text
@@ -128,3 +130,18 @@ def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
     assert "heat-pattern fallback" not in text or "No fallback" in text
     assert "delta_L keeps the plain-solve phi convention" not in text
     assert "genus >= 1 skips keep" not in text
+
+
+def test_ih_peec_tool_leads_with_peec_routes_and_names_fem_check():
+    """Guards: ih exposes PEEC as a main route and points to an independent FEM check."""
+    import asyncio
+
+    from radia_mcp.ih.server import mcp
+
+    names = {tool.name for tool in asyncio.run(mcp.list_tools())}
+    assert {"ih_peec", "ih_esim", "ih_sibc"} <= names, sorted(names)
+    routes = get_ih_peec_documentation("routes")
+    assert "PEEC + BEM-SIBC" in routes
+    assert "ngsolve-mcp" in routes
+    assert "av_coil_sigma" in routes
+    assert get_induction_heating_documentation("peec_bem_sibc").startswith("Unknown topic")
