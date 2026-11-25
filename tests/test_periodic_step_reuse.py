@@ -4,8 +4,9 @@ Guards: one setup reused across steps for each explicit method: Radia
 SparseSolv Compact AMG or Compact AMS with native PCG (main routes) and the
 NGSolve sparsecholesky factorization; exact pitch-step eddy-current state
 permutation against an independent dense per-step solve; signed permutations;
-per-step true residual; loud PCG non-convergence and indefinite breakdown, while
-sparsecholesky returns the exact solution of an indefinite nonsingular A;
+per-step true residual; loud PCG non-convergence; rejection of an indefinite or
+insufficiently definite A by every method before any setup, on both the dense
+Cholesky and the Lanczos definiteness routes, at the scaled margin;
 rejection of an AMS gradient that the curl-curl K does not annihilate;
 loud rejection of non-integer, non-finite or complex inputs and of a missing or
 mismatched method choice, without counting a failed step.
@@ -267,22 +268,74 @@ def test_zero_load_returns_exact_zero():
     assert solver.steps_solved == 1, f"actual={solver.steps_solved}, expected=1"
 
 
-@pytest.mark.parametrize("method", ["amg", "sparsecholesky"])
-def test_indefinite_symmetric_is_never_silently_wrong(method):
+def _counting_setups(monkeypatch):
+    factorizations = []
+    real_factor = periodic_step_reuse._sparsecholesky
+    monkeypatch.setattr(periodic_step_reuse, "_sparsecholesky",
+                        lambda native: factorizations.append(native.height) or real_factor(native))
+    return _counting_builder(monkeypatch), factorizations
+
+
+def _method_arguments(method, n):
+    if method != "ams":
+        return {}
+    # A zero gradient column satisfies K @ G = 0, so only definiteness can reject.
+    return {"gradient": csr_matrix((n, 1)), "coordinates": np.zeros((1, 3))}
+
+
+@pytest.mark.parametrize("method", ["amg", "ams", "sparsecholesky"])
+def test_indefinite_symmetric_rejected_before_any_setup(method, monkeypatch):
     # Symmetric, positive diagonal, indefinite (eigenvalues 3 and -1): passes the
-    # cheap SPD screens. PCG must break down loudly; sparsecholesky solves this
-    # nonsingular system exactly. Neither may return a wrong value.
+    # symmetry and diagonal screens; the c2eeabf0 counterexample.
     K = csc_matrix(np.array([[1.0, 2.0], [2.0, 1.0]]))
     M = csc_matrix((2, 2))
-    rhs = np.array([1.0, 0.0])
-    solver = PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2), method=method)
-    if method == "amg":
-        with pytest.raises(RuntimeError):
-            solver.step(rhs)
-        assert solver.steps_solved == 0, f"actual={solver.steps_solved}, expected=0"
-        return
-    x = solver.step(rhs)
-    expected = np.linalg.solve(K.toarray(), rhs)
-    rel_err = np.linalg.norm(x - expected) / np.linalg.norm(expected)
-    assert rel_err <= 1e-12, f"actual={rel_err}, expected<=1e-12"
-    assert solver.steps_solved == 1, f"actual={solver.steps_solved}, expected=1"
+    preconditioners, factorizations = _counting_setups(monkeypatch)
+    with pytest.raises(ValueError, match="not positive definite"):
+        PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2), method=method,
+                                **_method_arguments(method, 2))
+    assert preconditioners == [], f"actual preconditioners={preconditioners}, expected none"
+    assert factorizations == [], f"actual factorizations={factorizations}, expected none"
+
+
+def _blocks(gap: float, blocks: int):
+    # Unit-diagonal 2x2 blocks [[1, a], [a, 1]], a = 1 - gap: lambda_min = gap exactly.
+    block = np.array([[1.0, 1.0 - gap], [1.0 - gap, 1.0]])
+    return csc_matrix(np.kron(np.eye(blocks), block)), csc_matrix((2 * blocks, 2 * blocks))
+
+
+@pytest.mark.parametrize("route", ["dense-cholesky", "lanczos"])
+def test_definiteness_margin_boundary(route, monkeypatch):
+    if route == "lanczos":
+        monkeypatch.setattr(periodic_step_reuse, "_DENSE_DEFINITENESS_LIMIT", 0)
+    margin = periodic_step_reuse._DEFINITENESS_MARGIN
+    blocks = 10
+    K, M = _blocks(10.0 * margin, blocks)
+    solver = PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2 * blocks),
+                                     method="sparsecholesky")
+    assert solver.definiteness["route"] == route, f"actual={solver.definiteness}"
+    if route == "lanczos":
+        estimate = solver.definiteness["lambda_min_scaled"]
+        assert abs(estimate - 10.0 * margin) <= 1e-2 * margin, (
+            f"actual estimate={estimate}, expected {10.0 * margin}")
+    K, M = _blocks(0.1 * margin, blocks)
+    preconditioners, factorizations = _counting_setups(monkeypatch)
+    with pytest.raises(ValueError, match="not positive definite"):
+        PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2 * blocks), method="sparsecholesky")
+    assert factorizations == [], f"actual factorizations={factorizations}, expected none"
+
+
+def test_lanczos_route_rejects_large_indefinite_and_accepts_spd():
+    n = periodic_step_reuse._DENSE_DEFINITENESS_LIMIT + 200
+    K, M = _periodic_ring_matrices(n)
+    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.roll(np.arange(n), -1), method="amg")
+    assert solver.definiteness["route"] == "lanczos", f"actual={solver.definiteness}"
+    x = solver.step(np.ones(n))
+    assert solver.last_relative_residual <= RELATIVE_LIMIT, f"actual={solver.last_relative_residual}"
+    assert np.all(np.isfinite(x))
+    # Ring with unit diagonal and -1 neighbours: spectrum [-1, 3], indefinite.
+    off = np.full(n - 1, -1.0)
+    ring = diags([off, np.ones(n), off], [-1, 0, 1], format="lil")
+    ring[0, n - 1] = ring[n - 1, 0] = -1.0
+    with pytest.raises(ValueError, match="not positive definite"):
+        PeriodicStepReuseSolver(csc_matrix(ring), csc_matrix((n, n)), dt=1.0, perm=np.arange(n),
+                                method="amg")

@@ -16,20 +16,31 @@ This allows:
      the previous solution vector along the pitch mapping without re-meshing.
 
 Applicability contract. The solved space is every DOF of K and M (Dirichlet
-rows must already be eliminated by the caller). That A is symmetric positive
-definite on that whole space is a caller-owned precondition: this module does
-not and cannot verify it. "amg" targets scalar SPD operators. "ams" targets a
-lowest-order HCurl system whose K is the curl-curl part, so K @ gradient
-vanishes, and whose M/dt term makes A definite on the gradient kernel.
-Rejected before any setup: asymmetry, a nonpositive diagonal, and for "ams" a
-gradient that K does not annihilate. These screens are necessary, not
-sufficient: an indefinite A can pass them. With "amg" or "ams", a step raises,
-and is not counted, only when PCG detects a breakdown (r.z <= 0 or p.Ap <= 0)
-or does not converge; for an indefinite A, PCG can still converge for a
-particular right-hand side, so not every indefinite A is rejected.
-"sparsecholesky" does not detect indefiniteness: for a nonsingular indefinite A
-it returns the solution of that system. In every method the per-step
-true-residual gate certifies only the linear solve, never definiteness.
+rows must already be eliminated by the caller), and A must be symmetric
+positive definite on that whole space. "amg" targets scalar SPD operators.
+"ams" targets a lowest-order HCurl system whose K is the curl-curl part, so
+K @ gradient vanishes, and whose M/dt term makes A definite on the gradient
+kernel.
+
+Rejected before any preconditioner or factorization is built, for every method:
+asymmetry, a nonpositive diagonal, for "ams" a gradient that K does not
+annihilate, and insufficient definiteness. Definiteness is judged on the
+Jacobi-scaled matrix S = D^-1/2 A D^-1/2 (D = diag(A), unit diagonal, spectrum
+in (0, n]) by requiring lambda_min(S) >= _DEFINITENESS_MARGIN:
+
+- n <= _DENSE_DEFINITENESS_LIMIT: a dense Cholesky factorization of
+  S - margin * I must succeed. This is a certificate up to rounding.
+- larger n: a Lanczos estimate of lambda_min(S) (ARPACK, smallest algebraic,
+  fixed start vector) must reach the margin. This is an estimate, not a
+  certificate. A run that does not converge raises; the check is never skipped.
+
+S may be indefinite or nearly singular only below that margin, and so it is
+rejected. Above it, a residual indefiniteness that escapes the Lanczos estimate
+is still possible for large n. Then PCG ("amg", "ams") raises on a detected
+breakdown (r.z <= 0 or p.Ap <= 0) or on nonconvergence, but it can converge for
+a particular right-hand side; "sparsecholesky" solves a nonsingular indefinite
+system without detecting it. In every method the per-step true-residual gate
+certifies only the linear solve.
 
 Inputs are real and finite; anything else raises instead of being cast. Every
 step checks its true relative residual against the shared limit and counts
@@ -42,7 +53,7 @@ import math
 import numbers
 
 import numpy as np
-from scipy.sparse import csc_matrix, issparse
+from scipy.sparse import csc_matrix, diags, issparse
 
 from ._residual_gate import RELATIVE_LIMIT, residual_scale
 from .ngsolve_sparse import real_sparse_matrix_type
@@ -56,6 +67,42 @@ _METHODS = ("amg", "ams", "sparsecholesky")
 _DEFAULT_PCG_ITERATIONS = 1000
 # Relative ||K G|| allowed for "ams": zero in exact arithmetic for a curl-curl K.
 _GRADIENT_KERNEL_TOLERANCE = 1e-10
+# Required lambda_min of the Jacobi-scaled A (user-approved acceptance value).
+_DEFINITENESS_MARGIN = 1e-10
+# Largest n judged by dense Cholesky; above it a Lanczos estimate is used.
+_DENSE_DEFINITENESS_LIMIT = 3000
+_LANCZOS_TOLERANCE = 1e-8
+
+
+def _check_definiteness(A: csc_matrix) -> dict:
+    """Reject A unless lambda_min(D^-1/2 A D^-1/2) >= _DEFINITENESS_MARGIN."""
+    n = A.shape[0]
+    scale = diags(1.0 / np.sqrt(A.diagonal()))
+    scaled = csc_matrix(scale @ A @ scale)
+    margin = _DEFINITENESS_MARGIN
+    if n <= _DENSE_DEFINITENESS_LIMIT:
+        try:
+            np.linalg.cholesky(scaled.toarray() - margin * np.eye(n))
+        except np.linalg.LinAlgError:
+            raise ValueError(
+                f"A = K + M/dt is not positive definite with margin: dense Cholesky of "
+                f"D^-1/2 A D^-1/2 - {margin:g} I failed (n = {n})") from None
+        return {"route": "dense-cholesky", "margin": margin, "lambda_min_scaled": None}
+    from scipy.sparse.linalg import ArpackNoConvergence, eigsh
+
+    start = np.random.default_rng(0).standard_normal(n)
+    try:
+        estimate = float(eigsh(scaled, k=1, which="SA", v0=start, tol=_LANCZOS_TOLERANCE,
+                               return_eigenvectors=False)[0])
+    except ArpackNoConvergence:
+        raise RuntimeError(
+            f"Lanczos estimate of lambda_min(D^-1/2 A D^-1/2) did not converge (n = {n}); "
+            f"definiteness was not established") from None
+    if not math.isfinite(estimate) or estimate < margin:
+        raise ValueError(
+            f"A = K + M/dt is not positive definite with margin: Lanczos lambda_min of "
+            f"D^-1/2 A D^-1/2 = {estimate:.3e} < {margin:g} (n = {n})")
+    return {"route": "lanczos", "margin": margin, "lambda_min_scaled": estimate}
 
 
 def _native_matrix(matrix: csc_matrix):
@@ -218,6 +265,7 @@ class PeriodicStepReuseSolver:
                 f"max|A - A^T| = {asymmetry:.3e}, max|A| = {scale:.3e}")
         if np.any(self.A.diagonal() <= 0.0):
             raise ValueError("A = K + M/dt must be positive definite: nonpositive diagonal entry")
+        self.definiteness = _check_definiteness(self.A)
         self.method = method
         native = _native_matrix(self.A)
         if method == "sparsecholesky":
