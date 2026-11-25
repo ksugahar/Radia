@@ -1,5 +1,6 @@
 """Analytic sphere layer potentials and circular-current Biot-Savart checks."""
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse,hashlib,json,socket,os,sys
 import numpy as np
 from scipy.io import savemat,loadmat
@@ -20,9 +21,8 @@ def main(args):
         savemat(out/'input.mat',dict(sphere=sphere,weights=weights[:,None],targets=targets,coil=coil,current=current,coilTargets=coilTargets))
         receipt=json.loads((args.binary/'build.json').read_text());record['build']=receipt
         if hashlib.sha256((args.binary/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest()!=receipt['binary_sha256']:raise RuntimeError('Binary hash mismatch')
-        import netgen,matlab.engine
-        net=Path(netgen.__file__).parent;os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(Path(sys.base_prefix)),os.environ['PATH']])
-        engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
+        import matlab.engine
+        engine=start_matlab(matlab.engine, '-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
         engine.fmm_physics(str(out/'input.mat'),str(args.binary.resolve()),str(root/'packages/radia-simulink/matlab'),str(out/'output.mat'),nargout=0)
         result=loadmat(out/'output.mat',simplify_cells=True);r=np.linalg.norm(targets,axis=1)
         expectedSL=np.where(r>1,1/r,1.);expectedDL=np.where(r>1,0.,-1.)

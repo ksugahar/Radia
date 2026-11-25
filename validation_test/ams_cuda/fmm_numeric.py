@@ -1,5 +1,6 @@
 """Independent NumPy direct Laplace sum for CUDA scalar/dipole FMM."""
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse,hashlib,json,socket,time,os,sys
 import numpy as np
 from scipy.io import savemat,loadmat
@@ -25,9 +26,8 @@ def main(args):
     try:
         receipt=json.loads((args.binary/'build.json').read_text());record['build']=receipt
         if hashlib.sha256((args.binary/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest()!=receipt['binary_sha256']:raise RuntimeError('Binary hash mismatch')
-        import netgen,matlab.engine
-        net=Path(netgen.__file__).parent;os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(Path(sys.base_prefix)),os.environ['PATH']])
-        engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
+        import matlab.engine
+        engine=start_matlab(matlab.engine, '-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
         rng=np.random.default_rng(19870909);sources=rng.uniform(-1,1,(args.sources,3));targets=rng.uniform(-1.2,1.2,(args.targets,3))
         charge=rng.normal(size=(args.sources,3));dipole=rng.normal(size=(args.sources,9))*.03
         t=time.perf_counter();expectedP,expectedE=direct(sources,targets,charge,dipole);record['cpu_direct_seconds']=time.perf_counter()-t

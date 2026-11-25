@@ -5,6 +5,7 @@ vectors and 36 CSR slots per affine tetrahedron, never a dense global operator.
 CPU uses its normal TaskManager-native AMS build, with no hierarchy export.
 """
 from pathlib import Path
+from matlab_runtime import start_matlab, probe_ams_mex
 import argparse, hashlib, importlib.metadata as md, json, os, socket, statistics, subprocess, sys, time
 import numpy as np
 import ngsolve as ng
@@ -96,9 +97,6 @@ def main(args):
         nonlinear_tolerance=1e-9,linear_true_tolerance=1e-10,cpu_cg_internal_tolerance=1e-12,independent_parity_limit=1e-7)
     eng=None;preprocessing=time.perf_counter()
     try:
-        import netgen
-        net=Path(netgen.__file__).parent
-        os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
         sys.path.insert(0,str(root/'build-ams-cuda'));import _radia_ams_cpu_reference as bridge
         build=json.loads((root/'build-ams-cuda/build.json').read_text());record['build']=build
         for relative,digest in build['source_sha256'].items():
@@ -151,7 +149,8 @@ def main(args):
         savemat(out/'input.mat',dict(model=model,fem=fem,rhs=rhs.FV().NumPy()[:,None],routes=np.asarray(args.routes,dtype=float)))
         record['input_sha256']=hashlib.sha256((out/'input.mat').read_bytes()).hexdigest()
         import matlab.engine
-        startup=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_startup_seconds']=time.perf_counter()-startup
+        startup=time.perf_counter();eng=start_matlab(matlab.engine, '-nodesktop -nosplash');record['matlab_startup_seconds']=time.perf_counter()-startup
+        probe_ams_mex(eng, gpu_dir / 'radia_cuda_ams.mexw64')
         eng.addpath(str(Path(__file__).parent),str(root/'build-ams-cuda'),nargout=0)
         eng.nonlinear_resident(str(out/'input.mat'),str(out/'gpu.mat'),str(gpu_dir),str(matlab_dir),float(args.setup_threads),nargout=0)
         if args.contract:

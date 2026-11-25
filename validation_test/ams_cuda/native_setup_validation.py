@@ -4,6 +4,7 @@ Python generates validation inputs/oracles only; GPU users pass numeric FEM
 operators directly to prepareAMS. All outcomes, including failures, save JSON.
 """
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse, json, os, socket, statistics, subprocess, sys, time
 import numpy as np
 import ngsolve as ng
@@ -31,15 +32,12 @@ def main(args):
         source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),cases=[])
     eng=None
     try:
-        import netgen
-        net=Path(netgen.__file__).parent
-        os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
         sys.path.insert(0,str(ROOT/'build-ams-cuda'))
         import _radia_ams_snapshot as bridge
         ng.SetNumThreads(1)
         if not args.generate_only:
             import matlab.engine
-            eng=matlab.engine.start_matlab('-nodesktop -nosplash')
+            eng=start_matlab(matlab.engine, '-nodesktop -nosplash')
             eng.addpath(str(Path(__file__).parent),nargout=0)
         record['build']=json.loads((ROOT/'build-ams-cuda/build.json').read_text())
         for h in args.maxh:
