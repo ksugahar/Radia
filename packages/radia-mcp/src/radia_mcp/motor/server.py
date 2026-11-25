@@ -905,6 +905,81 @@ async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
+_PERIODIC_STEP_REUSE_SCHEMA = "radia-mcp.motor.periodic-step-reuse.v1"
+
+
+@mcp.tool()
+async def motor_periodic_step_reuse(request_json: str) -> str:
+    """Run Radia's periodic step reuse solver on the qualified synthetic ring.
+
+    Calls ``radia.periodic_step_reuse.PeriodicStepReuseSolver`` in one owned
+    worker process (120 s timeout).  The only case is
+    ``"synthetic_periodic_ring"``: the SPD scalar ring of Radia's surrogate
+    tests, advanced by an exact pitch rotation, optionally signed.  It checks
+    the reuse route's linear solves; it is not a motor validation and does not
+    use AMS.
+
+    Request keys (all required): ``case``, ``n`` (4..3000), ``steps``
+    (1..200), ``dt`` (> 0), ``pitch`` (1..n-1), ``signed`` (bool), ``method``
+    (``"amg"`` or ``"sparsecholesky"``), ``rhs`` (``"random"`` or
+    ``"zero"``), ``seed`` (integer), ``output_dir`` (existing absolute path).
+
+    Returns observed setup builds and reuse count, each step's true relative
+    residual ``||A x - b_eff|| / ||b_eff||`` recomputed with ``b_eff`` including
+    the pitch-mapped previous state, the maximum residual, the artifact path and
+    the SHA-256 of its final bytes, and source/backend provenance.  Status is
+    ``ok``, ``invalid_input``, ``unsupported_runtime``, ``gate_failed``,
+    ``worker_failed`` or ``timeout``.
+    """
+
+    process = None
+    try:
+        json.loads(request_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.motor.periodic_step_reuse_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(request_json.encode("utf-8")),
+            timeout=120.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise _WorkerFailed(message[-1000:] or "periodic step reuse worker failed")
+        result = _decode_owned_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": _PERIODIC_STEP_REUSE_SCHEMA,
+            "status": "timeout",
+            "error": "periodic step reuse worker exceeded 120 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": _PERIODIC_STEP_REUSE_SCHEMA,
+            "status": "worker_failed",
+            "error": str(exc),
+        }
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
+        result = {
+            "schema": _PERIODIC_STEP_REUSE_SCHEMA,
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
