@@ -59,8 +59,12 @@ def _require_exporter_capability(*, deadline=None) -> None:
         env=os.environ, deadline=deadline if deadline is not None else transaction_deadline(),
         phase='VOL post-view exporter preflight'))
 
-def _publish_mesh(staged: Path, target: Path) -> str:
-    """Publish only a completed verified copy; linking never overwrites a target."""
+def _publish_mesh(staged: Path, target: Path, expected_sha256: str) -> str:
+    """Publish only a completed copy of the verified bytes; linking never overwrites a target.
+
+    expected_sha256 is the digest of the bytes native Gmsh read back; a copy
+    with any other digest is never linked, so no unreceipted target remains.
+    """
     fd, name = tempfile.mkstemp(prefix='.' + target.name + '-', suffix='.partial', dir=target.parent)
     temporary = Path(name)
     try:
@@ -70,6 +74,8 @@ def _publish_mesh(staged: Path, target: Path) -> str:
         digest = sha256(temporary)
         if digest != sha256(staged):
             raise RuntimeError('Post-view byte-copy hash mismatch')
+        if digest != expected_sha256:
+            raise ValueError('Published MSH differs from the bytes native Gmsh read back')
         # Requires hard-link support; an unsupported output filesystem fails
         # explicitly. There is no overwrite or partial-copy fallback.
         os.link(temporary, target)
@@ -178,9 +184,7 @@ def convert_post_view(source: Path, output: str, checked_report: str,
     if sha256(source) != source_sha256.lower():
         raise ValueError('Source VOL changed during conversion')
     # Filesystem copy is not a second MSH writer.
-    digest = _publish_mesh(staged, target)
-    if readback.get('sha256') != digest:
-        raise ValueError('Published MSH differs from the bytes native Gmsh read back')
+    digest = _publish_mesh(staged, target, readback.get('sha256'))
     return {'schema': 'radia.mesh-post-view.v1', 'output': str(target), 'sha256': digest, 'staging': str(staging),
             'source_sha256': source_sha256.lower(), 'group_scope': group_scope,
             'physical_groups': sorted(observed_groups), 'native_readback': readback,

@@ -35,7 +35,8 @@ def checked_vol(tmp_path_factory):
     iron = occ.Box((0, 0, 0), (0.01, 0.01, 0.01)); iron.mat("iron"); iron.faces.name = "iron_wall"
     air = occ.Box((0.01, 0, 0), (0.02, 0.01, 0.01)); air.mat("air"); air.faces.name = "air_wall"
     source = source_dir / "two_region.vol"
-    occ.OCCGeometry(occ.Glue([iron, air])).GenerateMesh(maxh=0.005).Save(str(source))
+    with ng.TaskManager():
+        occ.OCCGeometry(occ.Glue([iron, air])).GenerateMesh(maxh=0.005).Save(str(source))
     mesh = ng.Mesh(str(source))
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     # The handoff is caller-asserted (documented contract): counts come from NGSolve itself.

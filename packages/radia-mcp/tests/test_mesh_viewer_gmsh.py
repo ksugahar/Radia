@@ -277,9 +277,22 @@ def test_publication_never_overwrites_a_racing_output(tmp_path):
     staged = tmp_path / 'staged.msh'; staged.write_bytes(b'new mesh')
     target = tmp_path / 'output.msh'; target.write_bytes(b'other producer')
     with pytest.raises(FileExistsError):
-        post_view._publish_mesh(staged, target)
+        post_view._publish_mesh(staged, target, post_view.sha256(staged))
     assert target.read_bytes() == b'other producer'
     assert list(tmp_path.glob('.*.partial')) == []
+
+
+def test_readback_digest_mismatch_never_publishes(post_case, monkeypatch):
+    source, output, receipt, digest, _ = post_case
+    from radia_mcp.gmsh import readback
+    monkeypatch.setattr(readback, 'require_native_readback', lambda path, **kwargs: {
+        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0,
+        'sha256': '0' * 64})
+    with pytest.raises(ValueError, match='native Gmsh read back'):
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials',
+                                    staging_dir=assigned_stage(output))
+    # No target and no temporary copy: a retry starts from a clean destination.
+    assert not output.exists() and list(output.parent.glob('.*.partial')) == []
 
 
 def test_post_fails_on_unpreserved_groups_and_never_creates_final_output(post_case):
