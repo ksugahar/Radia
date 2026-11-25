@@ -1069,6 +1069,35 @@ solver = ssn.SparseSolvSolver(a.mat, method="COCR",
 Note: COCR uses unconjugated inner product (x^T y, not x^H y).
 For Hermitian positive-definite systems, use CG or ICCG with conjugate=True.
 
+## Flat and Anisotropic Meshes: Line Smoothing
+
+Thin layers, laminations, airgaps and skin-depth layers give flat elements on
+which point smoothing stalls. `HypreBasedAMSPreconditioner` and
+`ComplexHypreBasedAMSPreconditioner` offer CPU line smoothing on the finest
+coarsened nodal blocks:
+
+- `auto_line_smoothing=False` by default. Turn it on only for flat meshes. It
+  requires `beta_zero` and excludes `mixed_precision` and `reuse_hierarchy`.
+- `pmis_rank`: optional H1-node ranks from
+  `radia.ngsolve_sparse.stable_pmis_rank(coordinates, fine_axis=...)`, so that
+  coarsening does not depend on thread or input order.
+- `line_max_length` (16..1024, default 256) and `line_min_length`
+  (4..line_max_length, default 16) are diagnostic caps on merged lines.
+  `line_rank_ties` is a diagnostic tie rule. These three need
+  `auto_line_smoothing=True`.
+- Report the iteration count with and without line smoothing on the same mesh
+  before you claim a gain.
+
+## Measuring AMS Performance
+
+- Keep AMS setup and the outer Krylov loop in C++ under the caller's
+  `TaskManager()`. A single-threaded SciPy `gmres`/`splu` wrapper hides the
+  thread scaling you are trying to measure.
+- In Newton loops keep the hierarchy and call `Update(new_mat)` with the new
+  tangent values (see above) instead of building a new preconditioner.
+- GPU runs select the backend explicitly (`Backend="gpu"`), record it and fail
+  loudly. There is no implicit CPU fallback.
+
 ## Limitations
 
 1. **order=1 only**: First-order Nedelec elements required. For high-order, use

@@ -12,6 +12,7 @@ from radia_mcp.motor.age_quality_knowledge import get_age_quality_report
 from radia_mcp.radia_ngsolve.knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
 from radia_mcp.radia_ngsolve.knowledge.kelvin import get_kelvin_documentation
 from radia_mcp.radia_ngsolve.knowledge.ngsolve import get_ngsolve_documentation
+from radia_mcp.radia_ngsolve.knowledge.sparsesolv import get_sparsesolv_documentation
 
 FIXTURE = pathlib.Path(__file__).parent / "data" / "fem_migrated_topics.json"
 
@@ -34,3 +35,13 @@ def test_every_retired_topic_has_a_radia_mcp_route():
             if text not in dispatch(renamed.get(topic, topic)):
                 missing.append(f"{server}:{topic}")
     assert not missing, missing
+
+
+def test_unlanded_ngsolve_mcp_know_how_is_in_radia_mcp():
+    """AMS and Newton notes that were only on the unpushed ngsolve-mcp branch."""
+    ams = get_sparsesolv_documentation("ams")
+    for key in ("auto_line_smoothing", "stable_pmis_rank", "line_max_length", 'Backend="gpu"'):
+        assert key in ams, key
+    nonlinear = get_ngsolve_documentation("nonlinear")
+    assert "d nu / d(B^2) >= 0" in nonlinear
+    assert "ramp the excitation" in nonlinear
