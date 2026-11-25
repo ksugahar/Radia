@@ -27,6 +27,9 @@ _TOPICS = {
     ),
     "verify_first": """# Verify-first checks for a periodic Kelvin pair
 
+These are checks 2 and 3 of the IH example. Check 1 (mesh and labels) stays
+in the IH recipe.
+
 2. Periodic slave DOFs: build the underlying HCurl space with the intended
    essential constraints, then wrap it with Periodic. Compare FreeDofs().NumSet()
    before and after. A nonempty Kelvin identification should remove free slave

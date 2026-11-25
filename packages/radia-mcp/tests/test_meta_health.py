@@ -300,6 +300,9 @@ def test_ih_catalog_tools_and_fem_links_match_status():
         assert status["related_servers"] == entry["related"]
         _, kelvin_status = await kelvin_mcp.call_tool("ngsolve_mcp_kelvin_status", {})
         assert kelvin_status["related_servers"] == CATALOG["ngsolve-mcp.kelvin"]["related"]
+        assert {"radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging", "ih"} <= set(
+            kelvin_status["related_servers"]
+        )
 
     asyncio.run(check_tools())
 

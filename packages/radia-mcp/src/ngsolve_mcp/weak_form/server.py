@@ -18,8 +18,8 @@ _TOPICS = {
     ),
     "magnetostatics_a": (
         "Vector-potential A-formulation in HCurl:\n"
-        "  a += SymbolicBFI(nu * curl(u) * curl(v))\n"
-        "  f += SymbolicLFI(J * v)"
+        "  a += nu * InnerProduct(curl(u), curl(v)) * dx\n"
+        "  f += InnerProduct(J, v) * dx"
     ),
     "eddy_current": """# Frequency-domain A-phi weak form
 
@@ -52,7 +52,18 @@ magnetic field with the chosen SIBC. Derive its sign and frequency factor
 from the time convention, normal orientation and E-to-A relation; do not
 substitute Zs itself. For A-phi, include the tangential scalar gradient where
 the impedance law uses the total tangential electric field. Verify that the
-chosen convention gives nonnegative dissipated power for a passive surface.""",
+chosen convention gives nonnegative dissipated power for a passive surface.
+
+Example: let the FEM domain be the air/coil side, with its outward normal n
+pointing into the conductor. With exp(+i omega t) and E_t = -i omega A_t,
+the Leontovich condition using the conductor normal -n gives
+n cross H = (i omega / Zs) A_t. For a good conductor with skin depth delta
+and conductivity sigma, Zs = (1 + i) / (sigma * delta):
+
+    a += (1j * omega / Zs) * InnerProduct(A.Trace(), v.Trace()) * ds("sibc")
+
+Re(i omega / Zs) = omega * sigma * delta / 2 > 0 for this convention.
+Derive the coefficient again if the normal, phasor convention or unknowns differ.""",
     "ih_reference": """# Independent NGSolve FEM reference for induction heating
 
 For an axisymmetric reference, use the azimuthal A formulation with the
@@ -72,8 +83,8 @@ description, not a numerical qualification or a production Radia route.""",
         "  Enforces normal flux continuity across material interfaces."
     ),
     "symbolic_bfi": (
-        "Use BFI(grad/curl/div) with CoefficientFunction material laws\n"
-        "and assemble with BilinearForm(fes, symmetric=True/False)."
+        "Legacy syntax reference. For current code, add the integrand times dx or ds\n"
+        "directly to BilinearForm or LinearForm; see magnetostatics_a and eddy_current."
     ),
 }
 
