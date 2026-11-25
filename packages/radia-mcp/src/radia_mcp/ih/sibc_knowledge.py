@@ -212,10 +212,10 @@ IH_MATHEMATICA_VERIFICATION = load_prompt("radia_mcp.ih", "mathematica_verificat
 
 IH_NGSOLVE_RECIPES = (
     load_prompt("radia_mcp.ih", "ngsolve_recipes")
-    .replace("<!-- IH_COIL_AV_TREE -->", GAUGING_TOPICS["coil_av_tree"])
-    .replace("<!-- IH_EDDY_CURRENT -->", WEAK_FORM_TOPICS["eddy_current"])
-    .replace("<!-- IH_SIBC_ROBIN -->", WEAK_FORM_TOPICS["sibc_robin"])
-    .replace("<!-- IH_KELVIN_VERIFY_FIRST -->", KELVIN_TOPICS["verify_first"])
+    .replace("<!-- IH_COIL_AV_TREE -->", '###' + GAUGING_TOPICS["coil_av_tree"])
+    .replace("<!-- IH_EDDY_CURRENT -->", '###' + WEAK_FORM_TOPICS["eddy_current"])
+    .replace("<!-- IH_SIBC_ROBIN -->", '###' + WEAK_FORM_TOPICS["sibc_robin"])
+    .replace("<!-- IH_KELVIN_VERIFY_FIRST -->", '##' + KELVIN_TOPICS["verify_first"])
 )
 
 _BEM_DEPRECATED_MSG = """

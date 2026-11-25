@@ -87,7 +87,8 @@ comparing it with total volume-FEM inductance.
 **MANDATORY** before any 5-minute physics solve. Each check is <1 s.
 
 ```python
-from ngsolve import BND, HCurl, Mesh, Integrate, CoefficientFunction as CF
+from ngsolve import (BND, HCurl, Mesh, Periodic, GridFunction, Integrate,
+                     InnerProduct, CoefficientFunction as CF)
 
 mesh = Mesh("model.vol")
 
@@ -99,6 +100,23 @@ print("Boundaries:", mesh.GetBoundaries())  # expect: sibc, gnd, kelvin_int, kel
 <!-- IH_KELVIN_VERIFY_FIRST -->
 
 ```python
+# Check 2: the intended Kelvin periodic identification removes free slave DOFs
+fes_base = HCurl(mesh, order=1, dirichlet="gnd", complex=True)
+fes = Periodic(fes_base)
+assert fes_base.FreeDofs().NumSet() > fes.FreeDofs().NumSet()
+
+# Check 3: the matching unit-phase traces have the same squared norm
+gfu = GridFunction(fes)
+gfu.vec[:] = 0
+gfu.Set(CF((1.0, 0, 0)), definedon=mesh.Boundaries("kelvin_int"))
+g = gfu.Trace()
+norm_int = Integrate(InnerProduct(g, g), mesh, BND,
+                     definedon=mesh.Boundaries("kelvin_int")).real
+norm_ext = Integrate(InnerProduct(g, g), mesh, BND,
+                     definedon=mesh.Boundaries("kelvin_ext")).real
+assert norm_int > 0
+assert abs(norm_ext / norm_int - 1.0) < 1e-3
+
 # Check 4: SIBC boundary has nonzero area
 A_sibc = Integrate(CF(1), mesh, BND,
                    definedon=mesh.Boundaries("sibc"))
@@ -106,7 +124,6 @@ print(f"SIBC area: {A_sibc:.6e} m^2 (should match coil-facing wp surf)")
 assert A_sibc > 1e-9
 
 # Check 5: GND is constrained in the base space
-fes_base = HCurl(mesh, order=1, dirichlet="gnd", complex=True)
 gnd_dofs = [i for i in range(fes_base.ndof) if not fes_base.FreeDofs()[i]]
 print(f"GND-constrained DOFs: {len(gnd_dofs)} (should be > 0)")
 assert len(gnd_dofs) > 0

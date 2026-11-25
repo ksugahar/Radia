@@ -59,14 +59,14 @@ def test_consolidated_fem_usage_and_inline_ih_recipe():
                   "magnetostatics_a", "symbolic_bfi", "hdiv_flux"):
         assert ngsolve_usage(topic) == weak_form_usage(topic)
     for topic in ("eddy_current", "sibc_robin"):
-        assert weak_form_usage(topic) in recipe
+        assert "###" + weak_form_usage(topic) in recipe
     verify_first = kelvin_transformation("verify_first")
     assert verify_first == kelvin_usage("verify_first")
-    assert verify_first in recipe
+    assert "##" + verify_first in recipe
     coil = fem_gauge_open_boundary("coil_av_tree")
     assert gauging_usage("coil_av_tree") in coil
-    assert gauging_usage("coil_av_tree") in recipe
+    assert "###" + gauging_usage("coil_av_tree") in recipe
     assert "within 1%" in coil and "30% lower" in coil
-    assert all(f"# Check {number}:" in recipe for number in (1, 4, 5))
+    assert all(f"# Check {number}:" in recipe for number in (1, 2, 3, 4, 5))
     assert "Unknown topic" not in dtn_coarse_mesh("spherical_harmonics")
     assert "Unknown topic" not in ngsolve_usage("taskmanager")

@@ -197,6 +197,9 @@ In one air-coil check, the final tree-gauge L agreed within 1% with
   separately.
 
 Radia implementation: src/radia/panels/calc_fem_coilmesh.py.
+
+See also `fem_gauge_open_boundary(topic="gauge")` and
+`ih_sibc(topic="ngsolve_recipes")` for the IH voltage convention.
 """
 
 
