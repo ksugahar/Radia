@@ -85,15 +85,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.ACCEPTANCE_SHA }}
-      - name: Verify source commit
+      - name: Test saved RAW fixtures through a dedicated MATLAB Engine
         shell: pwsh
         run: |
           if ($env:ACCEPTANCE_SHA -cnotmatch '^[0-9a-f]{40}$' -or (git rev-parse HEAD) -cne $env:ACCEPTANCE_SHA) {
             throw 'LTspice checkout does not match the requested source commit'
           }
-      - name: Test saved RAW fixtures through a dedicated MATLAB Engine
-        shell: pwsh
-        run: |
           @'
           import hashlib, json, os, subprocess, sys, tempfile
           from pathlib import Path
