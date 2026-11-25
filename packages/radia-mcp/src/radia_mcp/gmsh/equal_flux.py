@@ -65,6 +65,12 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
     if bad:
         return {"ok": False, "error": f"unsupported trace_options {bad}; "
                                       f"allowed: {sorted(TRACE_OPTIONS)}"}
+    try:
+        time_step = int(time_step)
+        if time_step < 0:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        return {"ok": False, "error": "time_step must be a non-negative integer"}
     view = 0 if view is None else view
     try:
         from radia.flux_seeding import cell_flux_quadrature, equal_flux_seeds, planar_patch
@@ -75,7 +81,7 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")
         patch = planar_patch(origin, e_xi, e_eta)
-        g = patch.flux_density(_probe_b(path, view, int(time_step), timeout_s))
+        g = patch.flux_density(_probe_b(path, view, time_step, timeout_s))
         nodes = np.linspace(0.0, 1.0, int(table_nodes))
         seeds = equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes, n_u=n_u, n_v=n_v,
                                  chart=patch.chart)
@@ -102,7 +108,7 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
         "equal_flux_quadrature": check,
         "provenance": {**seeds.provenance, "field_samples": "gmsh view probe",
                        "msh_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                       "view": view, "time_step": int(time_step),
+                       "view": view, "time_step": time_step,
                        "table_nodes": int(table_nodes),
                        "patch": {"origin_m": list(map(float, origin)),
                                  "e_xi_m": list(map(float, e_xi)),
@@ -112,6 +118,6 @@ def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[
     }
     if trace:
         traced = streamlines(path, seeds=seeds.points_m.tolist(), view=view,
-                             time_step=int(time_step), **options)
+                             time_step=time_step, **options)
         result["trace"] = traced
     return result

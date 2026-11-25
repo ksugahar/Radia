@@ -69,12 +69,17 @@ def test_patch_outside_the_data_fails_loudly(tmp_path):
 
 
 def _two_view_msh(tmp_path):
-    """B with steps 0 and 1 (step 1 doubles Bz), then an unrelated one-step view."""
-    rows = lambda k: [(i, [0.0, 0.0, k * float(bz(np.asarray(p, float)))]) for i, p in _P.items()]
+    """B is vertical at step 0 and tilted at step 1, beside a scalar view."""
+    vertical = []
+    tilted = []
+    for tag, point in _P.items():
+        base_bz = float(bz(np.asarray(point, float)))
+        vertical.append((tag, [0.0, 0.0, base_bz]))
+        tilted.append((tag, [base_bz, 0.0, 2 * base_bz]))
     other = [(i, [1.0]) for i in _P]
     path = tmp_path / "two_views.msh"
-    path.write_text(_CUBE + field_section("NodeData", "B", 3, rows(1), step=0)
-                    + field_section("NodeData", "B", 3, rows(2), time=1.0, step=1)
+    path.write_text(_CUBE + field_section("NodeData", "B", 3, vertical, step=0)
+                    + field_section("NodeData", "B", 3, tilted, time=1.0, step=1)
                     + field_section("NodeData", "other", 1, other), encoding="utf-8")
     return path
 
@@ -85,12 +90,32 @@ def test_one_view_and_step_serve_probe_and_trace(tmp_path, view):
     result = equal_flux_seeds_on_plane(
         _two_view_msh(tmp_path), ORIGIN, E_XI, E_ETA, n_u=2, n_v=2, table_nodes=3,
         view=view, time_step=1, quadrature_order=0, trace=True,
-        trace_options={"step_size": 0.05, "max_steps": 40})
+        trace_options={"step_size": 0.05, "max_steps": 40, "return_points": True})
     assert result["ok"] is True, result.get("error")
     assert result["total_flux_Wb"] == pytest.approx(2 * 0.64)
     assert result["provenance"]["view"] == (0 if view is None else view)
     assert result["trace"]["ok"] is True, result["trace"].get("error")
-    assert len(result["trace"]["lines"]) == 4
+    assert len(result["trace"]["polylines"]) == 4
+    for line in result["trace"]["polylines"]:
+        points = np.asarray(line["points"])
+        displacement = points - points[0]
+        assert np.ptp(points[:, 2]) > 0.05
+        np.testing.assert_allclose(displacement[:, 0], 0.5 * displacement[:, 2],
+                                   atol=1e-9)
+
+
+@pytest.mark.parametrize("two_steps", [False, True])
+def test_negative_time_step_is_rejected_before_probing(tmp_path, monkeypatch, two_steps):
+    """Guards: the all-steps sentinel never reaches the single-step probe."""
+    path = _two_view_msh(tmp_path) if two_steps else _msh(tmp_path)
+
+    def unexpected_probe(*args, **kwargs):
+        pytest.fail("negative time step reached the probe")
+
+    monkeypatch.setattr("radia_mcp.gmsh.equal_flux.probe_field", unexpected_probe)
+    result = equal_flux_seeds_on_plane(
+        path, ORIGIN, E_XI, E_ETA, n_u=2, n_v=2, time_step=-1, trace=True)
+    assert result == {"ok": False, "error": "time_step must be a non-negative integer"}
 
 
 @pytest.mark.parametrize("key", ["view", "time_step", "seeds", "seed_start", "unknown"])
