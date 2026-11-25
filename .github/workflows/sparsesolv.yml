@@ -732,6 +732,7 @@ jobs:
           & $ciPython -m pip install @cadPins mkl-devel pybind11==3.0.2 ninja cmake pytest scipy pyyaml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "RADIA_TEST_FE_SDK=fork" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install the independent Cubit mesh checker
