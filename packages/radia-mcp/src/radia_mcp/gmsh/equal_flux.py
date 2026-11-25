@@ -86,8 +86,8 @@ def _check_patch(spec: Any) -> str | None:
     if not isinstance(spec, dict):
         return "seed_patch must be a dict"
     shape = spec.get("shape", "parallelogram")
-    if shape not in PATCH_SHAPES:
-        return f"seed_patch shape must be one of {sorted(PATCH_SHAPES)}"
+    if not isinstance(shape, str) or shape not in PATCH_SHAPES:
+        return f"seed_patch shape must be one of {sorted(PATCH_SHAPES)}, got {shape!r}"
     required, optional = PATCH_SHAPES[shape]
     missing = sorted(set(required) - set(spec))
     extra = sorted(set(spec) - set(required) - set(optional) - PATCH_COMMON)
@@ -100,6 +100,49 @@ def _check_patch(spec: Any) -> str | None:
                 "(two-stage grid)")
     if has_grid and "sign" in spec:
         return ("sign applies to n_lines only; the n_u x n_v grid needs a one-signed surface")
+    for key, value in spec.items():
+        problem = _check_value(key, value)
+        if problem:
+            return f"seed_patch {key} {problem}"
+    return None
+
+
+VECTOR_KEYS = frozenset({"origin", "e_xi", "e_eta", "center", "normal", "axis_origin", "axis",
+                         "reference", "start", "end"})
+SCALAR_KEYS = frozenset({"r_outer", "r_inner", "radius"})
+COUNT_MINIMUM = {"n_lines": 1, "n_u": 1, "n_v": 1, "n": 1, "table_nodes": 2,
+                 "quadrature_order": 0}
+
+
+def _is_number(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and bool(np.isfinite(value)))
+
+
+def _check_value(key: str, value: Any) -> str | None:
+    """Return why one seed_patch or seed_line value is malformed, or None.
+
+    JSON null, booleans, strings and non-finite numbers are rejected here so
+    that a schema-accepted payload never reaches int() or float() unchecked.
+    """
+    if key in VECTOR_KEYS:
+        if (not isinstance(value, (list, tuple)) or len(value) != 3
+                or not all(_is_number(v) for v in value)):
+            return f"must be a list of 3 finite numbers, got {value!r}"
+    elif key in SCALAR_KEYS:
+        if not _is_number(value):
+            return f"must be a finite number, got {value!r}"
+    elif key == "theta_range":
+        if (not isinstance(value, (list, tuple)) or len(value) != 2
+                or not all(_is_number(v) for v in value)):
+            return f"must be [theta0, theta1] in radians, got {value!r}"
+    elif key in COUNT_MINIMUM:
+        if (not isinstance(value, int) or isinstance(value, bool)
+                or value < COUNT_MINIMUM[key]):
+            return f"must be an integer >= {COUNT_MINIMUM[key]}, got {value!r}"
+    elif key == "sign":
+        if value not in ("auto", "positive", "negative"):
+            return f"must be 'auto', 'positive' or 'negative', got {value!r}"
     return None
 
 
@@ -324,7 +367,10 @@ def trace_field_lines(path: str | Path, *, seed_patch: dict | None = None,
     must be given. trace_options are the tracer keywords in TRACE_OPTIONS
     (extent = {"min", "max"} stops lines at a box). The result is the
     tracer's result plus "seeding" and, for equal flux, "flux_account" and
-    "warnings".
+    "warnings". flux_per_line_Wb is the signed nominal flux of each seed's
+    cell; tracer lengths and returned points are in the file's coordinates,
+    point_m in metres, fluxes in Wb. Malformed values (JSON null, booleans,
+    non-finite numbers, wrong lengths) are rejected before probing.
     """
     if (seed_patch is None) == (seed_line is None):
         return {"ok": False, "error": "give exactly one of seed_patch (equal-flux seeds on a "
@@ -362,9 +408,13 @@ def trace_field_lines(path: str | Path, *, seed_patch: dict | None = None,
         result["flux_account"] = account
         result["warnings"] = warnings
         return result
-    line = dict(seed_line)
-    if set(line) != SEED_LINE_KEYS:
+    if not isinstance(seed_line, dict) or set(seed_line) != SEED_LINE_KEYS:
         return {"ok": False, "error": f"seed_line needs exactly {sorted(SEED_LINE_KEYS)}"}
+    line = dict(seed_line)
+    for key, value in line.items():
+        problem = _check_value(key, value)
+        if problem:
+            return {"ok": False, "error": f"seed_line {key} {problem}"}
     if length_unit not in LENGTH_UNITS:
         return {"ok": False, "error": f"length_unit must be one of {sorted(LENGTH_UNITS)}"}
     result = streamlines(path, line["start"], line["end"], n_seeds=line["n"], view=view,

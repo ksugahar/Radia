@@ -222,6 +222,46 @@ def test_ambiguous_or_malformed_seeding_fails_before_probing(tmp_path, kwargs, m
     assert message in result["error"], result["error"]
 
 
+DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer": 0.3,
+        "n_lines": 3}
+
+
+@pytest.mark.parametrize("seeding, message", [
+    ({"seed_patch": {**PATCH, "n_u": None}}, "seed_patch n_u must be an integer >= 1, got None"),
+    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer >= 2"),
+    ({"seed_patch": {**PATCH, "quadrature_order": -1}}, "quadrature_order must be an integer >= 0"),
+    ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer >= 1, got True"),
+    ({"seed_patch": {**PLANE_Y0, "n_lines": 2.5}}, "n_lines must be an integer"),
+    ({"seed_patch": {**PLANE_Y0, "sign": None}}, "seed_patch sign must be"),
+    ({"seed_patch": {**PATCH, "origin": [0, 0]}}, "seed_patch origin must be a list of 3"),
+    ({"seed_patch": {**PATCH, "e_xi": [0, float("nan"), 0]}}, "seed_patch e_xi must be a list of 3"),
+    ({"seed_patch": {**PATCH, "origin": None}}, "seed_patch origin must be a list of 3"),
+    ({"seed_patch": {**DISK, "r_outer": "0.3"}}, "seed_patch r_outer must be a finite number"),
+    ({"seed_patch": {**DISK, "theta_range": [0]}}, "seed_patch theta_range must be"),
+    ({"seed_patch": {**DISK, "shape": ["annulus"]}}, "shape must be one of"),
+    ({"seed_line": {"start": [0, 0, 0], "end": [1, 0, 0], "n": None}},
+     "seed_line n must be an integer >= 1, got None"),
+    ({"seed_line": {"start": None, "end": [1, 0, 0], "n": 2}}, "seed_line start must be a list"),
+    ({"seed_line": None, "seed_patch": None}, "exactly one of seed_patch"),
+])
+def test_malformed_values_return_field_errors_before_probing(tmp_path, monkeypatch,
+                                                             seeding, message):
+    """Schema-accepted JSON values (null, bool, nan, wrong length) never reach int()."""
+    def unexpected(*args, **kwargs):
+        pytest.fail("a malformed payload reached the probe or the tracer")
+
+    monkeypatch.setattr("radia_mcp.gmsh.equal_flux.probe_field", unexpected)
+    monkeypatch.setattr("radia_mcp.gmsh.equal_flux.streamlines", unexpected)
+    from radia_mcp.gmsh.server import gmsh_equal_flux_seeds, gmsh_streamlines
+    trace = getattr(gmsh_streamlines, "fn", gmsh_streamlines)
+    result = trace(str(_msh(tmp_path)), **seeding)
+    assert result["ok"] is False and message in result["error"], result
+    if seeding.get("seed_patch") is not None:
+        place = getattr(gmsh_equal_flux_seeds, "fn", gmsh_equal_flux_seeds)
+        placed = place(str(_msh(tmp_path)), seeding["seed_patch"])
+        assert placed["ok"] is False and message in placed["error"], placed
+
+
 def test_millimetre_coordinates_give_the_same_flux_in_wb(tmp_path):
     _flux_seeding()
     metres = trace_field_lines(_msh(tmp_path), seed_patch=PATCH, **TRACE)

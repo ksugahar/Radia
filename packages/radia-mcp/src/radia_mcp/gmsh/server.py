@@ -1191,6 +1191,12 @@ def gmsh_streamlines(msh_path: str, seed_patch: dict | None = None,
     "warnings" where line density stops standing for flux (truncated lines,
     repeated crossings, untraced seeds).
 
+    Units: flux_per_line_Wb is the signed nominal flux of each seed's cell
+    on the seed surface (a mathematical line has no area of its own).
+    step_size, extent, returned polyline points and arc lengths are in the
+    file's coordinates (length_unit); seeds also give point_m in metres;
+    fluxes are in Wb.
+
     Args:
         msh_path: .msh with a 3-component vector view (B in tesla).
         seed_patch: Equal-flux seed surface (the default choice).
@@ -1233,7 +1239,8 @@ def gmsh_equal_flux_seeds(msh_path: str, seed_patch: dict,
     seed_patch is the same dict as for gmsh_streamlines (parallelogram,
     annulus or cylinder; n_lines with sign, or n_u and n_v). B is probed
     on a table_nodes^2 chart table; radia.flux_seeding then places the
-    seeds so each carries total/n_lines Wb. Returns stable seed IDs, file
+    seeds so each seed's cell carries total/n_lines Wb (flux_per_line_Wb,
+    signed and nominal: the line itself has no area). Returns stable seed IDs, file
     and metre coordinates, chart coordinates, the seeded signed total, both
     flux parts, flux per line, orientation, placement diagnostics (cell
     aspect ratios), an independent Gauss check of the cell fluxes
