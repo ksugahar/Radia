@@ -46,6 +46,8 @@ Reference docs (consolidated 2026-05-04):
     / continued-fraction behavior and executable validation)
 """
 
+from radia_mcp.fem.fem_reference_topics import KELVIN_TOPICS
+
 KELVIN_OVERVIEW = """
 # Kelvin Transformation for Open Boundary Problems
 
@@ -3576,6 +3578,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         return json.dumps(FIELD_ENERGY_GATE_LIFECYCLE, sort_keys=True)
     topics = {
         "gate_lifecycle": "The v5-v11 field/energy gates are active complementary contracts, not successive replacements. Query gate_lifecycle for their machine-readable roles and deprecation state. This is not numerical solver acceptance.",
+        **{key: text for key, text in KELVIN_TOPICS.items() if key != "overview"},
         "overview": KELVIN_OVERVIEW,
         "h_formulation": KELVIN_H_FORMULATION,
         "a_formulation": KELVIN_A_FORMULATION,

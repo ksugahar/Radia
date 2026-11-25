@@ -7,40 +7,13 @@ import asyncio
 
 from mcp.server.fastmcp import FastMCP
 
+from radia_mcp.fem.fem_reference_topics import CORE_TOPICS as _TOPICS
+
 from radia_mcp.common import register_status_tool
 from radia_mcp.common.windows_stdio import run_stdio
 from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.core")
-
-_TOPICS = {
-    "index": (
-        "ngsolve-mcp.core: NGSolve FEM spaces, solvers, and TaskManager.\n"
-        "Topics: spaces, solvers, taskmanager, eddy_current."
-    ),
-    "spaces": (
-        "NGSolve finite element spaces:\n"
-        "- H1(mesh, order=p, dirichlet=...): scalar nodal potential (phi, T)\n"
-        "- HCurl(mesh, order=p, dirichlet=..., nograds=...): vector potential A / E-field\n"
-        "- HDiv(mesh, order=p): flux density B / current density J\n"
-        "- L2(mesh, order=p-1): discontinuous scalar/vector fields"
-    ),
-    "solvers": (
-        "NGSolve linear solvers & preconditioners:\n"
-        "- Direct: sparsecholesky for suitable symmetric systems; check backend availability and matrix assumptions.\n"
-        "- Iterative: CG / GMRES with bddc / multigrid / local preconditioners\n"
-        "- External: sparsesolv (compact_ams / compact_amg)"
-    ),
-    "taskmanager": (
-        "Wrap assembly and solves with `with TaskManager():` for shared-memory\n"
-        "parallelism; call `SetNumThreads(n)` before entering TaskManager if needed."
-    ),
-    "eddy_current": (
-        'See ngsolve-mcp.weak-form: weak_form_usage(topic="eddy_current") '
-        'for the A-phi formulation and weak_form_usage(topic="ih_reference") '
-        "for independent induction-heating FEM checks."
-    ),
-}
 
 
 @mcp.tool()

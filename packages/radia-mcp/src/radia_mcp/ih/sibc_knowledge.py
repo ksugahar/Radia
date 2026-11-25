@@ -18,6 +18,8 @@ Thermal S-Functions over checked standalone radia_mex object handles. Cubit's
 embedded PySide toolbar owns mesh export only; it is not an analysis panel.
 """
 
+from radia_mcp.fem.fem_reference_topics import GAUGING_TOPICS, KELVIN_TOPICS, WEAK_FORM_TOPICS
+
 from radia_mcp.common import load_prompt
 
 IH_PEEC_FEM = """
@@ -208,7 +210,13 @@ Steel always needs two-way. Copper/aluminum OK with one-way at low frequencies.
 
 IH_MATHEMATICA_VERIFICATION = load_prompt("radia_mcp.ih", "mathematica_verification")
 
-IH_NGSOLVE_RECIPES = load_prompt("radia_mcp.ih", "ngsolve_recipes")
+IH_NGSOLVE_RECIPES = (
+    load_prompt("radia_mcp.ih", "ngsolve_recipes")
+    .replace("<!-- IH_COIL_AV_TREE -->", GAUGING_TOPICS["coil_av_tree"])
+    .replace("<!-- IH_EDDY_CURRENT -->", WEAK_FORM_TOPICS["eddy_current"])
+    .replace("<!-- IH_SIBC_ROBIN -->", WEAK_FORM_TOPICS["sibc_robin"])
+    .replace("<!-- IH_KELVIN_VERIFY_FIRST -->", KELVIN_TOPICS["verify_first"])
+)
 
 _BEM_DEPRECATED_MSG = """
 # BEM knowledge has moved

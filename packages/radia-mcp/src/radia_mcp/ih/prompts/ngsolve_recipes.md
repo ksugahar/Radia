@@ -61,44 +61,20 @@ No universal speed claim or new validation result follows from this recipe.
 
 ### Gauge fixing for a port-driven A–V coil with a SIBC workpiece
 
-For the FEM gauge reference, see `fem_gauge_open_boundary(topic="coil_av_tree")`.
+Use the reviewed tree gauge below for the installed Radia solver
+`radia.panels.calc_fem_coilmesh`. Check which gauge the installed version uses.
+With scaled potential `phi` and `s = 1j * omega`, the coil electric field is
+`E = -s * (A + grad(phi))`. A unit `phi` lift corresponds to voltage magnitude
+`abs(s)` with this port convention.
 
-This applies to a meshed conducting coil with source and sink faces,
-surrounding air, and a workpiece represented by a surface impedance. See
-`radia.panels.calc_fem_coilmesh` for the solver in the installed Radia
-version. The spanning-tree method below describes the reviewed solver
-candidate. Check which gauge the installed solver uses before reproducing
-its results.
+<!-- IH_COIL_AV_TREE -->
 
-With the solver's scaled scalar potential `phi` and `s = 1j * omega`,
-the coil electric field is `E = -s * (A + grad(phi))`. The transformation
-`A -> A + grad(chi)`, `phi -> phi - chi` preserves this field and
-`curl(A)`. Lowest-order edge elements still contain vertex gradients with
-`nograds=True`. A point constraint on an H1 potential or a choice of
-sparse solver cannot remove this HCurl nullspace.
+Keep mesh, excitation and complex `Z_s` fixed when comparing formulations.
+Then check against an independent reference with compatible ports and return path.
 
-- **SIBC trace.** The surface law uses the tangential trace of `A`.
-  A gauge function must be constant on each connected SIBC component so
-  its tangential gradient vanishes there. Collapse each component to its
-  own node in the gauge graph, accounting for periodic vertex
-  identifications. Keep the physical trace degrees of freedom.
-- **Ports.** Keep the source and sink as separate graph nodes. Since
-  `phi` is prescribed on the ports, the homogeneous gauge must preserve
-  those data. The candidate also fixes the line integral of `A` along a
-  designated physical source-to-sink path. This defines the voltage
-  convention across the gap. Choose the path on actual mesh edges,
-  accounting for periodic copies and avoiding the SIBC surface. Reject
-  the setup if no such path exists. A unit `phi` lift corresponds to a
-  voltage of magnitude `abs(s)` in this convention.
-- **Tree and verification.** With the path held fixed, use a spanning
-  tree of the resulting graph to constrain the lowest-order edge
-  degrees of freedom. Check that different admissible trees have
-  different masks and reproduce current-normalized inductance and both
-  losses. Check the true residual and the unnormalized terminal current.
-  A small residual can coexist with an incorrect port drive. When
-  comparing formulations, keep the mesh, excitation and complex
-  `Z_s` fixed first, then check against an independent reference with
-  compatible ports and return path.
+<!-- IH_EDDY_CURRENT -->
+
+<!-- IH_SIBC_ROBIN -->
 
 An air-coil inductance comparison checks the port convention in that
 setup. Coil losses still require mesh refinement against the copper
@@ -111,41 +87,26 @@ comparing it with total volume-FEM inductance.
 **MANDATORY** before any 5-minute physics solve. Each check is <1 s.
 
 ```python
-from ngsolve import (H1, HCurl, Periodic, GridFunction, Integrate,
-                     CoefficientFunction as CF)
+from ngsolve import BND, HCurl, Mesh, Integrate, CoefficientFunction as CF
 
 mesh = Mesh("model.vol")
 
 # Check 1: materials and boundaries spelled as expected
 print("Materials:", mesh.GetMaterials())   # expect: air, kelvin (NOT wp!)
-print("Boundaries:", mesh.GetBoundaries())  # expect: sibc, gnd,
-                                            #         kelvin_int, kelvin_ext
+print("Boundaries:", mesh.GetBoundaries())  # expect: sibc, gnd, kelvin_int, kelvin_ext
+```
 
-# Check 2: Periodic actually constrains slave DOFs
-fes_base = HCurl(mesh, order=1, dirichlet="gnd", complex=True)
-fes = Periodic(fes_base)
-slaved = sum(fes_base.FreeDofs()) - sum(fes.FreeDofs())
-print(f"Kelvin slaved DOFs: {slaved} (should be > 0)")
-assert slaved > 0
+<!-- IH_KELVIN_VERIFY_FIRST -->
 
-# Check 3: Functional Kelvin pair test
-gfu = GridFunction(fes); gfu.vec[:] = 0
-gfu.Set(CF((1.0, 0, 0)), definedon=mesh.Boundaries("kelvin_int"))
-norm_int = Integrate(InnerProduct(gfu, gfu), mesh,
-                      definedon=mesh.Boundaries("kelvin_int"))
-norm_ext = Integrate(InnerProduct(gfu, gfu), mesh,
-                      definedon=mesh.Boundaries("kelvin_ext"))
-ratio = norm_ext / max(norm_int, 1e-30)
-print(f"Kelvin int->ext ratio: {ratio:.6f} (should be 1.0)")
-assert abs(ratio - 1.0) < 1e-3
-
+```python
 # Check 4: SIBC boundary has nonzero area
 A_sibc = Integrate(CF(1), mesh, BND,
                    definedon=mesh.Boundaries("sibc"))
 print(f"SIBC area: {A_sibc:.6e} m^2 (should match coil-facing wp surf)")
 assert A_sibc > 1e-9
 
-# Check 5: GND vertex is identified
+# Check 5: GND is constrained in the base space
+fes_base = HCurl(mesh, order=1, dirichlet="gnd", complex=True)
 gnd_dofs = [i for i in range(fes_base.ndof) if not fes_base.FreeDofs()[i]]
 print(f"GND-constrained DOFs: {len(gnd_dofs)} (should be > 0)")
 assert len(gnd_dofs) > 0

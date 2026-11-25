@@ -15,6 +15,8 @@ Sources:
   - public-safe curated corpus (K. Sugahara's EM formulations)
 """
 
+from radia_mcp.fem.fem_reference_topics import CORE_TOPICS, WEAK_FORM_TOPICS
+
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
 from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
 
@@ -7696,6 +7698,9 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "memory": SOLVER_CAPACITY,
         "diagnostics": SOLVER_CAPACITY,
         "bddc": SOLVER_CAPACITY,
+        "taskmanager": CORE_TOPICS["taskmanager"],
+        "weak_form": "FEM weak-form topics: " + ", ".join(sorted(WEAK_FORM_TOPICS.keys() - {"overview"})),
+        **{key: text for key, text in WEAK_FORM_TOPICS.items() if key != "overview"},
         "overview": NGSOLVE_OVERVIEW,
         "spaces": NGSOLVE_FE_SPACES,
         "maxwell": NGSOLVE_MAXWELL,

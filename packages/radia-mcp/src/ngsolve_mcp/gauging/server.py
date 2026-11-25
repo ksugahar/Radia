@@ -7,50 +7,12 @@ import asyncio
 
 from mcp.server.fastmcp import FastMCP
 
+from radia_mcp.fem.fem_reference_topics import GAUGING_TOPICS as _TOPICS
+
 from radia_mcp.common import register_status_tool
 from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.gauging")
-
-_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.gauging: Electromagnetic gauging reference and gates.\n"
-        "Topics: tree_cotree, coil_av_tree, coulomb, open_boundary."
-    ),
-    "tree_cotree": (
-        "Tree-Cotree gauging for HCurl magnetostatics/eddy-current formulations:\n"
-        "Remove gradient-space nullspace (ker curl) by eliminating spanning-tree\n"
-        "edge DoFs on the mesh graph before solving."
-    ),
-    "coil_av_tree": """# Tree gauge for a voltage-driven coil
-
-Keep source and sink ports separate in the A-V space. Build the tree from
-active free edges, excluding Dirichlet edges and periodic slaves. Contract
-periodic copies consistently. Preserve tangential A on each connected SIBC
-trace by contracting each trace component separately in the tree graph.
-
-Choose the shortest admissible source-to-sink mesh-edge path off the SIBC
-trace. Hold the line integral of A along that path fixed to enforce the
-terminal voltage convention. Reject the setup if no admissible path exists. Do not use a
-tree that short-circuits the ports or eliminates the prescribed terminal drop.
-For disconnected free-edge graphs use one spanning tree per component.
-
-Compare two admissible trees with distinct free-edge masks. Verify terminal
-impedance, field energy, current-normalized inductance, and both coil and
-workpiece losses. Check the true residual and the unnormalized terminal
-current: a small residual can coexist with an incorrect port drive. Include
-internal reactance when comparing with a BEM or surface-current air-coil
-reference, and check loss convergence separately. The IH voltage scaling, production recipe and comparison criteria
-remain in the IH application guidance.""",
-    "coulomb": (
-        "Coulomb gauge (div A = 0) and grad-div stabilization:\n"
-        "Enforce div A = 0 via Lagrange multiplier or augmented grad-div term."
-    ),
-    "open_boundary": (
-        "Open-boundary gauging with Kelvin transformation or BEM-FEM coupling:\n"
-        "Ensure exterior potential decay and compatible gauge across interfaces."
-    ),
-}
 
 
 @mcp.tool()

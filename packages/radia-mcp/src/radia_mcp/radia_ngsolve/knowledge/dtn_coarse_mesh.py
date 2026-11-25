@@ -47,6 +47,8 @@ Related knowledge: kelvin_transformation (Kelvin material modulation),
 fem_bem_schur (using Λ_ext as an exact open BC).
 """
 
+from radia_mcp.fem.fem_reference_topics import DTN_TOPICS
+
 DTN_COARSE_MESH_OVERVIEW = r"""
 # Coarse-Mesh Accuracy of Open BCs = a Property of the DtN Matrix
 
@@ -2904,6 +2906,7 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
     """Return DtN-spectrum / coarse-mesh-accuracy documentation."""
     topics = {
         "dtn_continued_fraction": DTN_CONTINUED_FRACTION,
+        **{key: text for key, text in DTN_TOPICS.items() if key != "overview"},
         "overview": DTN_COARSE_MESH_OVERVIEW,
         "numerics": DTN_COARSE_MESH_NUMERICS,
         "api": DTN_COARSE_MESH_API,

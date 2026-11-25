@@ -7,28 +7,11 @@ import asyncio
 
 from mcp.server.fastmcp import FastMCP
 
+from radia_mcp.fem.fem_reference_topics import DTN_TOPICS as _TOPICS
+
 from radia_mcp.common import register_status_tool
 
 mcp = FastMCP("ngsolve-mcp.dtn")
-
-_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.dtn: Dirichlet-to-Neumann (DtN) open-boundary condition.\n"
-        "Topics: spherical_harmonics, coarse_mesh, bem_fem_comparison."
-    ),
-    "spherical_harmonics": (
-        "Exact DtN map on a spherical artificial boundary r = R0 expands exterior\n"
-        "harmonic modes in spherical harmonics Y_l^m with radial decay (R0/r)^(l+1)."
-    ),
-    "coarse_mesh": (
-        "Use curved high-order boundary elements on r = R0 so DtN quadrature\n"
-        "remains accurate even on coarse interior meshes."
-    ),
-    "bem_fem_comparison": (
-        "DtN is diagonal in spherical modes (ideal for spherical truncation);\n"
-        "BEM-FEM Schur or Kelvin transformation handles arbitrary boundary shapes."
-    ),
-}
 
 
 @mcp.tool()
