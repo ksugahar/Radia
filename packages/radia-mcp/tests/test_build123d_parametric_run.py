@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 
@@ -82,6 +83,43 @@ def test_gap_regeneration_and_standalone_step_readback(tmp_path):
         assert part["delta"]["topology"] == dict(solids=0, faces=0, edges=0, vertices=0)
     assert parts["right_block"]["symmetric_difference_volume_mm3"] == pytest.approx(36)
     assert diff["assembly"]["symmetric_difference_volume_mm3"] == pytest.approx(36)
+
+
+def test_regenerated_step_preserves_regions_in_checked_netgen_vol(tmp_path):
+    """Guards: STEP-to-Netgen preserves named volumes after a gap edit."""
+    if any(importlib.util.find_spec(name) is None for name in ("netgen", "ngsolve")):
+        pytest.skip("Netgen and NGSolve are required by the STEP-to-VOL pipeline")
+    pytest.importorskip("cubit_mesh_export.check")
+    from radia_mcp.build123d.pipeline import _stage_mesh_multi
+
+    expected_volumes = {"left_block": 120.0, "right_block": 72.0}
+    for gap_mm in (2.0, 0.5):
+        run = json.loads(asyncio.run(server.build123d_run(
+            SCRIPT, {"gap_mm": gap_mm}, str(tmp_path),
+        )))
+        assert run["status"] == "ok", run
+        step = Path(run["exported"])
+        readback = json.loads(server.build123d_probe(str(step), "step_readback"))
+        assert readback["status"] == "ok", readback
+        assert readback["clearance_mm"] == pytest.approx(gap_mm)
+        assert readback["interference_volume_mm3"] == 0
+        assert readback["labels_unique_and_present"], readback
+        labels = [solid["label"] for solid in readback["solids"]]
+        assert {solid["label"]: solid["volume_mm3"] for solid in readback["solids"]} == (
+            pytest.approx(expected_volumes)
+        )
+
+    result = _stage_mesh_multi(step, labels, tmp_path, "edited_gap", maxh=1.0, units="mm")
+    contract = json.loads(Path(result["label_contract"]).read_text(encoding="utf-8"))
+    report = json.loads(Path(result["vol_check"]).read_text(encoding="utf-8"))
+    assert report["passed"], report
+    assert contract["strict_labels"] and contract["units"] == "m", contract
+    assert sorted(contract["required"]["materials"]) == sorted(expected_volumes)
+
+    assert report["labels"]["passed"], report["labels"]
+    assert sorted(report["labels"]["materials"]) == sorted(expected_volumes)
+    volumes = {row["name"]: row["ng_volume"] * 1e9 for row in report["materials"]}
+    assert volumes == pytest.approx(expected_volumes)
 
 
 def test_assembly_readback_reports_every_pair_and_label_issue(tmp_path):
