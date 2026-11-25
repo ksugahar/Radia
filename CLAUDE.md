@@ -20,8 +20,7 @@ Do not commit logs, transient solver output, binary backups, lock copies, genera
 ## Engineering Architecture
 Prefer established public abstractions over proprietary plumbing.
 - NGSolve owns spaces, orientation, Piola maps, curved geometry, quadrature, assembly, `CoefficientFunction` and `GridFunction` behavior.
-- `radia-mcp`: PEEC, pure BEM, HDiv-MMM/VIM, SIBC/ESIM, stream functions, Radia-method motors, periodic step reuse, AMS core.
-- `ngsolve-mcp`: FEM, FEM/BEM (Kelvin/DtN, A-phi, T-Omega, mixed Omega, gauging, AGE, AMS MCP). By method.
+- `radia-mcp`: Radia-method routes (PEEC, pure BEM, HDiv-MMM/VIM, SIBC/ESIM, stream functions, their motors, periodic step reuse, AMS core) and FEM/FEM-BEM guidance (Kelvin/DtN, A-phi, T-Omega, mixed Omega, gauging, AGE, AMS MCP).
 - Cubit and build123d own CAD authoring; Netgen/NGSolve and Cubit own solver meshing; Gmsh is the post-processing target. Modeling APIs use neutral domain names: no reference commercial-solver brands in identifiers, docs, tests or commit messages, and no vendor API compatibility claims.
 - Build thin Python/MATLAB/MCP adapters around tested domain workflows; do not duplicate solver logic or expose every helper (contracts per `packages/radia-mcp/CONTRIBUTING.md`). Keep two genuinely independent analysis routes for important models when feasible.
 - Application workflows live in `radia-mcp` application packs; `radia` holds the general library and validated solvers. MCP workflows compute only through validated `radia` entries (except AGE without a `radia` import), stay importable as Python functions, and move a component into `radia` once it becomes general and needs validation.

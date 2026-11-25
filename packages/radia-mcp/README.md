@@ -1,5 +1,16 @@
 # radia-mcp
 
+For NGSolve FEM guidance use `radia-mcp.ngsolve` (`ngsolve_usage`,
+`kelvin_transformation`, `dtn_coarse_mesh`) and the Radia FEM gauge tool
+`fem_gauge_open_boundary`. IH recipes are available directly through
+`ih_sibc(topic="ngsolve_recipes")`. AGE guidance is in `radia-mcp.motor`.
+Find AMS MCP guidance through `sparsesolv` and the matrix-solver guide.
+
+Use `radia-mcp serve radia-mcp.acoustic --profile production` for production
+acoustics and `--profile education` for the educational FEM/BEM workflows.
+The planned VOL exporter will use `radia-mcp.mesh`.
+
+
 Cubit MCP is independently distributed with `cubit-mesh-export`, under
 `cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
 and launch the cubit-mesh-export Cubit MCP server for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD

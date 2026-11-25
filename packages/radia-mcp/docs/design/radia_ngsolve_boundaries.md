@@ -1,5 +1,16 @@
 # `radia_ngsolve` ownership and growth boundaries
 
+For NGSolve FEM guidance use `radia-mcp.ngsolve` (`ngsolve_usage`,
+`kelvin_transformation`, `dtn_coarse_mesh`) and the Radia FEM gauge tool
+`fem_gauge_open_boundary`. IH recipes are available directly through
+`ih_sibc(topic="ngsolve_recipes")`. AGE guidance is in `radia-mcp.motor`.
+Find AMS MCP guidance through `sparsesolv` and the matrix-solver guide.
+
+Use `radia-mcp serve radia-mcp.acoustic --profile production` for production
+acoustics and `--profile education` for the educational FEM/BEM workflows.
+The planned VOL exporter will use `radia-mcp.mesh`.
+
+
 Status: adopted for incremental migration; this is a source-layout design, not a
 new MCP server or a change to numerical acceptance criteria.
 

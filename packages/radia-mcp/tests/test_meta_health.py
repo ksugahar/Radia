@@ -288,7 +288,7 @@ def test_ih_catalog_tools_and_fem_links_match_status():
     from radia_mcp.meta.catalog import CATALOG
 
     expected_tools = ["ih_peec", "ih_esim", "ih_sibc", "induction_heating"]
-    fem_keys = {"ngsolve-mcp.core", "ngsolve-mcp.gauging", "ngsolve-mcp.kelvin", "ngsolve-mcp.weak-form"}
+    fem_keys = {"radia-mcp.ngsolve", "fem"}
     entry = CATALOG["ih"]
     assert entry["primary_tools"] == expected_tools
     assert fem_keys <= set(entry["related"])
@@ -301,12 +301,10 @@ def test_ih_catalog_tools_and_fem_links_match_status():
         assert status["related_servers"] == entry["related"]
         _, core_status = await core_mcp.call_tool("ngsolve_mcp_core_status", {})
         assert core_status["related_servers"] == CATALOG["ngsolve-mcp.core"]["related"]
-        assert "ih" in core_status["related_servers"]
+        assert CATALOG["ngsolve-mcp.core"]["entry_point"] == "radia-mcp serve ngsolve-mcp.core"
         _, kelvin_status = await kelvin_mcp.call_tool("ngsolve_mcp_kelvin_status", {})
         assert kelvin_status["related_servers"] == CATALOG["ngsolve-mcp.kelvin"]["related"]
-        assert {"radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging", "ih"} <= set(
-            kelvin_status["related_servers"]
-        )
+        assert CATALOG["ngsolve-mcp.kelvin"]["entry_point"] == "radia-mcp serve ngsolve-mcp.kelvin"
 
     asyncio.run(check_tools())
 
@@ -465,3 +463,13 @@ def test_all_tags_in_canonical_keep_set():
         # Not a hard failure, just a warning surfaced in pytest -v.
         import warnings
         warnings.warn(f"Keep-set tags never used: {sorted(unused)}")
+
+
+def test_acoustic_catalog_routes_clients_to_the_existing_pack():
+    from radia_mcp.meta.catalog import CATALOG
+
+    pack = CATALOG["radia-mcp.acoustic"]
+    assert {"production", "education"} <= set(pack["profiles"])
+    assert {"bem", "radia-mcp.ngsolve"} <= set(pack["related"])
+    assert all("radia-mcp.acoustic" in CATALOG[key]["related"] for key in pack["related"])
+    assert CATALOG["ngsolve-mcp.acoustic"]["entry_point"] == "radia-mcp serve ngsolve-mcp.acoustic"

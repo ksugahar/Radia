@@ -640,11 +640,40 @@ for _name, _info in CATALOG.items():
 _PACK_MEMBERS = {m for _p in PACKS for m in modules_for(_p)}
 for _name, _info in CATALOG.items():
     _module = _info["subpackage"].removeprefix("radia_mcp.")
-    if _info.get("kind") == "capability-pack" or _module not in _PACK_MEMBERS:
+    if (
+        _info.get("kind") == "capability-pack"
+        or _module not in _PACK_MEMBERS
+        or _name == "ngsolve-mcp.acoustic"
+    ):
         _info["entry_point"] = f"radia-mcp serve {_name}"
     else:
         _info["kind"] = "domain"
 del _name, _info, _module
+
+# Keep registered legacy keys callable until client cutover. Discover migrated
+# knowledge and acoustic profiles through their Radia destinations.
+_LEGACY_ROUTES = {
+    "ngsolve-mcp.core": "radia-mcp.ngsolve",
+    "ngsolve-mcp.age": "radia-mcp.motor",
+    "ngsolve-mcp.dtn": "radia-mcp.ngsolve",
+    "ngsolve-mcp.gauging": "fem",
+    "ngsolve-mcp.kelvin": "radia-mcp.ngsolve",
+    "ngsolve-mcp.weak-form": "radia-mcp.ngsolve",
+    "ngsolve-mcp.acoustic": "radia-mcp.acoustic",
+}
+_related_snapshot = {name: tuple(info["related"]) for name, info in CATALOG.items()}
+for _name, _info in CATALOG.items():
+    _canonical = _LEGACY_ROUTES.get(_name, _name)
+    for _related in _related_snapshot[_name]:
+        _target = _LEGACY_ROUTES.get(_related, _related)
+        if _canonical != _target and _target not in CATALOG[_canonical]["related"]:
+            CATALOG[_canonical]["related"].append(_target)
+    _info["related"] = [
+        name for name in _info["related"]
+        if _name not in _LEGACY_ROUTES and name not in _LEGACY_ROUTES
+    ]
+del _name, _info, _canonical, _related_snapshot
+
 
 def _resolve(name: str) -> str | None:
     """Return ``name`` when it is a catalog key, else None.
