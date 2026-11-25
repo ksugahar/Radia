@@ -1,4 +1,4 @@
-"""Surrogate tests for the motor_periodic_step_reuse tool and its owned worker.
+"""Surrogate tests for the motor_periodic_step_reuse_run tool and its owned worker.
 
 Guards: request bounds (only the qualified synthetic ring, amg/sparsecholesky,
 no unknown keys); missing-runtime reporting; on a runtime that provides
@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -173,7 +174,41 @@ def test_tool_is_registered_and_rejects_invalid_json():
     from radia_mcp.motor import server
 
     tools = asyncio.run(server.mcp.list_tools())
-    assert "motor_periodic_step_reuse" in {tool.name for tool in tools}
-    result = json.loads(asyncio.run(server.motor_periodic_step_reuse("{not json")))
+    assert "motor_periodic_step_reuse_run" in {tool.name for tool in tools}
+    result = json.loads(asyncio.run(server.motor_periodic_step_reuse_run("{not json")))
     assert result["status"] == "invalid_input", f"actual={result}"
     assert result["schema"] == worker.SCHEMA
+
+
+def test_identical_concurrent_calls_own_separate_artifacts(tmp_path, monkeypatch):
+    # Two identical requests through the real tool run in two worker processes
+    # at once; each must report its own finished file whose final bytes match
+    # the reported SHA-256, and no partial file may remain.
+    _solver_module()
+    from radia_mcp.motor import server
+
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(p for p in sys.path if p))
+    request_json = json.dumps(_request(tmp_path))
+
+    async def both():
+        return await asyncio.gather(server.motor_periodic_step_reuse_run(request_json),
+                                    server.motor_periodic_step_reuse_run(request_json))
+
+    results = [json.loads(text) for text in asyncio.run(both())]
+    assert [r["status"] for r in results] == ["ok", "ok"], f"actual={results}"
+    paths = [Path(r["artifact"]["path"]) for r in results]
+    assert paths[0] != paths[1], f"actual paths={paths}"
+    for result, path in zip(results, paths):
+        data = path.read_bytes()
+        assert hashlib.sha256(data).hexdigest() == result["artifact"]["sha256"]
+        assert len(data) == result["artifact"]["bytes"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(p.name for p in paths)
+
+
+def test_artifact_writer_never_reuses_a_file(tmp_path):
+    params = worker.parse_request(_request(tmp_path))
+    first = worker.write_artifact(tmp_path, params, b"one\n")
+    second = worker.write_artifact(tmp_path, params, b"two\n")
+    assert first != second
+    assert first.read_bytes() == b"one\n" and second.read_bytes() == b"two\n"
+    assert not list(tmp_path.glob("*.partial"))

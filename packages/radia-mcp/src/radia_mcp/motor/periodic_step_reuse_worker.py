@@ -21,6 +21,7 @@ import numbers
 import os
 import platform
 import sys
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -136,6 +137,32 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def write_artifact(directory: Path, params: dict, payload: bytes) -> Path:
+    """Write one artifact owned by this invocation and expose it only when complete.
+
+    The name carries the request digest plus a random invocation id, so identical
+    concurrent requests never share a file.  Bytes go to an exclusively created
+    partial file, are flushed to disk, then renamed to the final name; the final
+    file is reread and must match the payload before it is reported.
+    """
+    tag = hashlib.sha256(json.dumps(params, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    stem = f"periodic_step_reuse_{params['method']}_{tag}_{uuid.uuid4().hex}"
+    partial = directory / f"{stem}.json.partial"
+    final = directory / f"{stem}.json"
+    with open(partial, "xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        os.rename(partial, final)
+    except OSError:
+        partial.unlink(missing_ok=True)
+        raise
+    if final.read_bytes() != payload:
+        raise RuntimeError(f"artifact {final} does not hold the bytes that were written")
+    return final
+
+
 def _provenance(module) -> dict:
     import numpy
     import scipy
@@ -237,9 +264,7 @@ def run(request) -> dict:
         "provenance": provenance,
     }
     payload = (json.dumps(artifact_body, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    tag = hashlib.sha256(json.dumps(params, sort_keys=True).encode("utf-8")).hexdigest()[:12]
-    path = Path(params["output_dir"]) / f"periodic_step_reuse_{params['method']}_{tag}.json"
-    path.write_bytes(payload)
+    path = write_artifact(Path(params["output_dir"]), params, payload)
     return {
         "schema": SCHEMA,
         "status": "ok",

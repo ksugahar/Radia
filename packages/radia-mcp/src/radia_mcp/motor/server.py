@@ -909,7 +909,7 @@ _PERIODIC_STEP_REUSE_SCHEMA = "radia-mcp.motor.periodic-step-reuse.v1"
 
 
 @mcp.tool()
-async def motor_periodic_step_reuse(request_json: str) -> str:
+async def motor_periodic_step_reuse_run(request_json: str) -> str:
     """Run Radia's periodic step reuse solver on the qualified synthetic ring.
 
     Calls ``radia.periodic_step_reuse.PeriodicStepReuseSolver`` in one owned
