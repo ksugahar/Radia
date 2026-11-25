@@ -17,14 +17,9 @@ STEP.
                         PEECBuilder filaments (nwinc x nhinc) for
                         skin / proximity effects.
 
-Legacy note (2026-04-25): earlier revisions exposed
-``coil_builder_from_step`` and ``coil_builder_from_wire_step`` as
-one-shot wrappers for the EM panel.  Both were removed when the EM
-panel adopted a CoilBuilder-only policy (user: "AnalyticalCoilは、
-CoilBuilder経由で、PEECはstepファイル経由がよいよ").  If you need
-CoilBuilder-from-STEP today, author the coil as a `.py`
-``build_coil()`` module and call it directly; there is no longer a
-STEP -> CoilBuilder path through this module.
+For Python callers, ``coil_from_step_file(path, current_a=...)`` also builds
+a CoilBuilder from a STEP swept solid. Optional closure is explicit. This API
+does not change the EM panel's CoilBuilder-only input policy.
 
 Walking-plane algorithm
 -----------------------
@@ -152,13 +147,9 @@ def _load_step_via_build123d(step_path):
     front, BRep carries lossless geometry to the back-end mesher.
 
     Multiple solids are fused so the downstream walking-plane sees one
-    body.  Returns None if build123d is not installed, so the caller can
-    fall through to the legacy netgen.occ path.
+    body. Reader import and conversion errors propagate to the caller.
     """
-    try:
-        import build123d as bd
-    except ImportError:
-        return None
+    import build123d as bd
     import tempfile
     from netgen.occ import OCCGeometry
     shape = bd.import_step(step_path)
@@ -190,35 +181,10 @@ def _load_step_via_build123d(step_path):
     return ng_solids[0] if len(ng_solids) == 1 else ng_shape
 
 
-def _load_step_via_netgen(step_path):
-    """Fallback STEP reader: netgen.occ direct (legacy path, no XCAF).
-
-    Used when build123d is not installed.  Cannot read labels / colors
-    because netgen.occ does not expose the XCAF TDF attribute layer.
-    """
-    from netgen.occ import OCCGeometry
-    geo = OCCGeometry(step_path)
-    shape = geo.shape
-    solids = list(shape.solids)
-    if not solids:
-        raise ValueError(f"STEP contains no solids: {step_path}")
-    if len(solids) == 1:
-        return solids[0]
-    fused = solids[0]
-    for s in solids[1:]:
-        fused = fused + s
-    return fused
-
-
 def load_step_solid(step_path):
     """Load a STEP file and return a single Solid (netgen.occ).
 
-    Reader selection:
-      1. build123d (pythonocc-core / XCAF) — preferred, preserves label
-         and color metadata on the build123d side before BRep transit.
-      2. netgen.occ direct — fallback when build123d is not installed.
-
-    Unifying on build123d as the primary STEP reader means that label
+    File-based loading requires build123d. Using it as the STEP reader means that label
     / color auto-detection (see _start_hint_from_step_labels in
     coil_from_cad) and geometry loading use the same parsed document
     state, regardless of which CAD tool produced the STEP.
@@ -233,10 +199,7 @@ def load_step_solid(step_path):
     """
     if not os.path.isfile(step_path):
         raise FileNotFoundError(step_path)
-    result = _load_step_via_build123d(step_path)
-    if result is None:
-        result = _load_step_via_netgen(step_path)
-    return result
+    return _load_step_via_build123d(step_path)
 
 
 # ---------- Cross-section helpers -------------------------------------------
@@ -1228,8 +1191,41 @@ def to_coil_builder(result, current=1.0):
     return builder, segs
 
 
+def coil_from_step_file(step_path, *, current_a: float, close_mode: str | None = None, **extract_kwargs):
+    """Build a CoilBuilder from a STEP swept-solid with explicit current and optional loop closure.
+
+    Args:
+        step_path: Path to the STEP file containing a swept coil solid.
+        current_a: Required coil current in amperes.
+        close_mode: Optional explicit closure mode ('arc_optimize' or 'direct'); None leaves path as extracted.
+        **extract_kwargs: Forwarded to ``extract_centerline``.
+
+    Returns:
+        Tuple of ``(builder, segments, summary_dict)``. The reconstructed
+        segments describe the input path; the builder includes optional closure.
+
+    Errors from STEP import, centerline extraction and closure propagate.
+    """
+    if not np.isfinite(current_a):
+        raise ValueError(f"current_a must be finite, got {current_a}")
+    result = extract_centerline(os.fsdecode(step_path), **extract_kwargs)
+    builder, segs = to_coil_builder(result, current=float(current_a))
+    gap_before = float(builder.gap)
+    if close_mode is not None:
+        builder.close_loop(mode=close_mode)
+    summary = {
+        "step_path": str(step_path),
+        "current_a": float(current_a),
+        "segment_count": len(builder.segments),
+        "gap_before_m": gap_before,
+        "gap_after_m": float(builder.gap),
+        "is_closed": bool(builder.is_closed),
+        "close_mode": close_mode,
+    }
+    return builder, segs, summary
+
+
 # coil_builder_from_step / coil_builder_from_wire_step were removed
 # 2026-04-25.  The EM panel is CoilBuilder-only (.py); the PEEC
 # pipeline uses `extract_centerline` + `to_coil_builder` internally
-# via `coil_from_cad.filaments_from_step`.  There is no supported
-# STEP -> CoilBuilder entry point in this module anymore.
+# via `coil_from_cad.filaments_from_step`.

@@ -1790,6 +1790,38 @@ class CoilBuilder:
 		"""Check if the coil path forms a closed loop (within tolerance)."""
 		return self.gap < 1e-10
 
+	def close_direct(self, tolerance=1e-10):
+		"""Close an open coil path by appending a straight return segment to the start point.
+
+		Unlike ``close()``, this works for straight-only / polygonal coils and open
+		coils whose gap should be bridged explicitly by a return conductor.
+		"""
+		if not self.segments:
+			raise ValueError("Cannot close an empty CoilBuilder")
+		gap_vec = self.segments[0].start_pos - self._position
+		dist = float(np.linalg.norm(gap_vec))
+		if dist <= tolerance:
+			return self
+		y_axis = gap_vec / dist
+		# Pick an orthonormal frame aligned with the return direction
+		ref = self._orientation[2]
+		if abs(float(np.dot(ref, y_axis))) > 0.99:
+			ref = self._orientation[0]
+		x_axis = np.cross(y_axis, ref)
+		x_axis = x_axis / np.linalg.norm(x_axis)
+		z_axis = np.cross(x_axis, y_axis)
+		self._orientation = np.array([x_axis, y_axis, z_axis])
+		return self.add_straight(length=dist)
+
+	def close_loop(self, mode="arc_optimize", tolerance=None):
+		"""Close the coil loop using an explicit strategy: 'arc_optimize' or 'direct'."""
+		m = str(mode).strip().lower()
+		if m == "arc_optimize":
+			return self.close() if tolerance is None else self.close(tolerance=tolerance)
+		if m == "direct":
+			return self.close_direct() if tolerance is None else self.close_direct(tolerance=tolerance)
+		raise ValueError(f"Unknown close_loop mode {mode!r}; expected 'arc_optimize' or 'direct'")
+
 	def close(self, tolerance=1e-6):
 		"""Verify loop closure or optimize arc angles to close the gap.
 
