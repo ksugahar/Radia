@@ -159,6 +159,44 @@ cutter = Compound([make_clearance_for(housing), right])
     assert check_positional_compound_labels("x.py", name_inside_call) == []
 
 
+def test_rules_follow_python_scopes():
+    other_function = _lines("""
+def labelled_part():
+    part = Box(1, 1, 1)
+    part.label = "outer"
+    return part
+
+def helper():
+    part = Box(1, 1, 1)
+    return Compound([part, Box(2, 2, 2)])
+""")
+    assert check_positional_compound_labels("x.py", other_function) == []
+
+    same_function = _lines("""
+def assembly():
+    part = Box(1, 1, 1)
+    part.label = "outer"
+    return Compound([part, Box(2, 2, 2)])
+""")
+    assert [f["line"] for f in check_positional_compound_labels("x.py", same_function)] == [4]
+
+    shadowed = _lines("""
+with BuildSketch(Plane.XZ) as sk:
+    def highest(sk):
+        return max(sk.vertices(), key=lambda v: v.Z)
+    pick = max(sk.vertices(), key=lambda v: v.Y + (lambda v: v.Z)(reference_vertex))
+    rebound = [v.Z for v in sk.vertices() for v in other_vertices]
+""")
+    assert check_sketch_vertex_global_z("x.py", shadowed) == []
+
+    in_function = _lines("""
+def profile():
+    with BuildSketch(Plane.XZ) as sk:
+        return min(sk.vertices(), key=lambda v: v.Z)
+""")
+    assert [f["line"] for f in check_sketch_vertex_global_z("x.py", in_function)] == [3]
+
+
 def test_documented_surface_dispatch_runs_on_each_surface_type():
     import re
 

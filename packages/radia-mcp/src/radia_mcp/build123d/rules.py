@@ -320,8 +320,9 @@ def check_tiny_fillet_radius(filepath: str, lines: List[str]) -> List[Dict]:
 # Rule: global Z used on the local vertices of a sketch on a non-XY plane
 # ---------------------------------------------------------------------------
 # Both rules below read the AST, so strings, docstrings and comments are never
-# candidates, and only directly bound expressions are matched. More complex
-# expressions are left unsupported rather than guessed.
+# candidates, and only directly bound expressions are matched. Each Python scope
+# (function, class, lambda, comprehension) is read on its own, so a nested
+# rebinding of the same name is not followed. Uncertain cases give no finding.
 
 _NON_XY_PLANES = {"XZ", "ZX", "YZ", "ZY"}
 _LIST_SELECTORS = {"sort_by", "filter_by", "group_by"}
@@ -332,6 +333,41 @@ def _parse(lines: List[str]):
 		return ast.parse("".join(lines))
 	except SyntaxError:
 		return None
+
+
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda,
+           ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+
+
+def _binds(scope, name: str) -> bool:
+	"""True when a nested scope may give `name` a new meaning (conservative)."""
+	if isinstance(scope, ast.ClassDef):
+		return True
+	if isinstance(scope, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+		return any(isinstance(n, ast.Name) and n.id == name
+		           for g in scope.generators for n in ast.walk(g.target))
+	args = scope.args
+	params = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+	if any(a.arg == name for a in params):
+		return True
+	body = [scope.body] if isinstance(scope, ast.Lambda) else scope.body
+	return any(isinstance(n, ast.Name) and n.id == name and isinstance(n.ctx, ast.Store)
+	           for stmt in body for n in ast.walk(stmt))
+
+
+def _walk_scope(nodes, name: str | None = None):
+	"""Yield the nodes where `name` keeps its meaning.
+
+	Nested scopes are yielded; they are entered only when they do not rebind
+	`name` (never, when no name is given).
+	"""
+	stack = list(nodes)[::-1]
+	while stack:
+		node = stack.pop()
+		yield node
+		if isinstance(node, _SCOPES) and (name is None or _binds(node, name)):
+			continue
+		stack.extend(list(ast.iter_child_nodes(node))[::-1])
 
 
 def _non_xy_sketch_name(item: ast.withitem) -> tuple[str, str] | None:
@@ -358,34 +394,37 @@ def _is_vertices_of(node, name: str) -> bool:
 def _reads_z_of(expr, var: str) -> bool:
 	return any(isinstance(n, ast.Attribute) and n.attr == "Z"
 	           and isinstance(n.value, ast.Name) and n.value.id == var
-	           for n in ast.walk(expr))
+	           for n in _walk_scope([expr], var))
 
 
 def _local_vertex_z_nodes(body: List[ast.stmt], name: str):
-	for stmt in body:
-		for node in ast.walk(stmt):
-			# min/max/sorted(name.vertices(), key=lambda v: ... v.Z ...)
-			if isinstance(node, ast.Call) and node.args and _is_vertices_of(node.args[0], name):
-				for kw in node.keywords:
-					lam = kw.value
-					if (kw.arg == "key" and isinstance(lam, ast.Lambda) and len(lam.args.args) == 1
-					        and _reads_z_of(lam.body, lam.args.args[0].arg)):
+	for node in _walk_scope(body, name):
+		# min/max/sorted(name.vertices(), key=lambda v: ... v.Z ...)
+		if isinstance(node, ast.Call) and node.args and _is_vertices_of(node.args[0], name):
+			for kw in node.keywords:
+				lam = kw.value
+				if (kw.arg == "key" and isinstance(lam, ast.Lambda) and len(lam.args.args) == 1
+				        and _reads_z_of(lam.body, lam.args.args[0].arg)):
+					yield node
+		# name.vertices().sort_by(Axis.Z)
+		if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+		        and node.func.attr in _LIST_SELECTORS and _is_vertices_of(node.func.value, name)
+		        and node.args and isinstance(node.args[0], ast.Attribute)
+		        and isinstance(node.args[0].value, ast.Name)
+		        and node.args[0].value.id == "Axis" and node.args[0].attr == "Z"):
+			yield node
+		# [... v.Z ... for v in name.vertices() if ... v.Z ...]
+		if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+			parts = [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+			for gen in node.generators:
+				if isinstance(gen.target, ast.Name) and _is_vertices_of(gen.iter, name):
+					var = gen.target.id
+					rebound = [n for g in node.generators for n in ast.walk(g.target)
+					           if isinstance(n, ast.Name) and n.id == var]
+					if len(rebound) > 1:          # binding of `var` is ambiguous: do not guess
+						continue
+					if any(_reads_z_of(e, var) for e in parts + list(gen.ifs)):
 						yield node
-			# name.vertices().sort_by(Axis.Z)
-			if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-			        and node.func.attr in _LIST_SELECTORS and _is_vertices_of(node.func.value, name)
-			        and node.args and isinstance(node.args[0], ast.Attribute)
-			        and isinstance(node.args[0].value, ast.Name)
-			        and node.args[0].value.id == "Axis" and node.args[0].attr == "Z"):
-				yield node
-			# [... v.Z ... for v in name.vertices() if ... v.Z ...]
-			if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
-				parts = [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-				for gen in node.generators:
-					if isinstance(gen.target, ast.Name) and _is_vertices_of(gen.iter, name):
-						var = gen.target.id
-						if any(_reads_z_of(e, var) for e in parts + list(gen.ifs)):
-							yield node
 
 
 def check_sketch_vertex_global_z(filepath: str, lines: List[str]) -> List[Dict]:
@@ -439,11 +478,22 @@ def check_positional_compound_labels(filepath: str, lines: List[str]) -> List[Di
 	tree = _parse(lines)
 	if tree is None:
 		return []
-	labelled = {t.value.id for n in ast.walk(tree) if isinstance(n, ast.Assign)
-	            for t in n.targets if isinstance(t, ast.Attribute) and t.attr == "label"
-	            and isinstance(t.value, ast.Name)}
 	findings: List[Dict] = []
-	for node in ast.walk(tree):
+	scopes = [tree.body] + [
+		[n.body] if isinstance(n, ast.Lambda) else n.body for n in ast.walk(tree)
+		if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))]
+	for body in scopes:
+		nodes = list(_walk_scope(body))
+		labelled = {t.value.id for n in nodes if isinstance(n, ast.Assign)
+		            for t in n.targets if isinstance(t, ast.Attribute) and t.attr == "label"
+		            and isinstance(t.value, ast.Name)}
+		findings.extend(_compound_findings(nodes, labelled))
+	return sorted(findings, key=lambda f: f["line"])
+
+
+def _compound_findings(nodes, labelled):
+	findings: List[Dict] = []
+	for node in nodes:
 		if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
 		        and node.func.id == "Compound" and node.args and isinstance(node.args[0], ast.List)):
 			continue
@@ -458,7 +508,7 @@ def check_positional_compound_labels(filepath: str, lines: List[str]) -> List[Di
 					"stores no children, so their labels are not exported as STEP "
 					"parts. If they are assembly parts, use `Compound(children=[...])`."),
 			})
-	return sorted(findings, key=lambda f: f["line"])
+	return findings
 
 
 ALL_RULES = [
