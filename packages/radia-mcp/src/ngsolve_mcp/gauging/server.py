@@ -8,6 +8,7 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
+from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.gauging")
 
@@ -28,14 +29,18 @@ active free edges, excluding Dirichlet edges and periodic slaves. Contract
 periodic copies consistently. Preserve tangential A on each connected SIBC
 trace by contracting each trace component separately in the tree graph.
 
-Choose a fixed admissible mesh-edge path for the terminal voltage. Keep it off
-the SIBC trace and reject the setup if no admissible path exists. Do not use a
+Choose the shortest admissible source-to-sink mesh-edge path off the SIBC
+trace. Hold the line integral of A along that path fixed to enforce the
+terminal voltage convention. Reject the setup if no admissible path exists. Do not use a
 tree that short-circuits the ports or eliminates the prescribed terminal drop.
 For disconnected free-edge graphs use one spanning tree per component.
 
-Check terminal impedance and field energy under a second admissible tree.
-Compare against an independent air-coil reference and check loss convergence
-separately. The IH voltage scaling, production recipe and comparison criteria
+Compare two admissible trees with distinct free-edge masks. Verify terminal
+impedance, field energy, current-normalized inductance, and both coil and
+workpiece losses. Check the true residual and the unnormalized terminal
+current: a small residual can coexist with an incorrect port drive. Include
+internal reactance when comparing with a BEM or surface-current air-coil
+reference, and check loss convergence separately. The IH voltage scaling, production recipe and comparison criteria
 remain in the IH application guidance.""",
     "coulomb": (
         "Coulomb gauge (div A = 0) and grad-div stabilization:\n"
@@ -64,7 +69,7 @@ register_status_tool(
     "ngsolve-mcp.gauging",
     "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary, gauge-invariance gate).",
     "ngsolve_mcp.gauging",
-    related_servers=["radia-mcp.ngsolve", "fem", "differential-forms"],
+    related_servers=CATALOG["ngsolve-mcp.gauging"]["related"],
 )
 
 

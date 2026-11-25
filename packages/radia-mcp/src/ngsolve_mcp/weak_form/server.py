@@ -8,6 +8,7 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
+from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.weak-form")
 
@@ -36,7 +37,10 @@ current NGSolve integrator syntax (nu = inverse permeability, sigma = conductivi
     a += 1j * omega * sigma * InnerProduct(A + grad(phi), v + grad(q)) * dx("conductor")
 
 Use the supplied conductor region selector in place of the example label.
-Use one consistent test-space convention throughout. The q test enforces
+This bilinear form is complex symmetric with real reciprocal material
+coefficients and compatible constraints. The trial/test proxies above are
+not conjugated; in power or energy post-processing use a conjugated field
+product without double conjugation by InnerProduct. The q test enforces
 charge conservation; specify terminal and insulating boundary conditions
 before choosing source terms. A-only variants require separate assumptions.
 """,
@@ -105,7 +109,7 @@ register_status_tool(
     "ngsolve-mcp.weak-form",
     "NGSolve weak-form variational formulations (HCurl/HDiv/H1, BilinearForm, LinearForm, SymbolicBFI).",
     "ngsolve_mcp.weak_form",
-    related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging"],
+    related_servers=CATALOG["ngsolve-mcp.weak-form"]["related"],
 )
 
 

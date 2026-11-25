@@ -38,8 +38,9 @@ in the IH recipe.
 
 3. Interior/exterior ratio: set a nonzero tangential test field on kelvin_int in
    the periodic space and evaluate its squared trace norms on kelvin_int and
-   kelvin_ext with boundary integration (BND). For a complex trace use the
-   conjugate in the squared magnitude. Reject zero interior norm. Compare
+   kelvin_ext with Integrate(InnerProduct(g, g), mesh, BND, definedon=...).
+   NGSolve InnerProduct conjugates complex coefficient functions in this
+   evaluation; do not add Conj to the trace. Reject zero interior norm. Compare
    norm_ext / norm_int to one for the matching unit-phase Kelvin interface.
    The existing IH verify-first example uses abs(ratio - 1.0) < 1e-3; do not
    generalize this criterion to interfaces with different weighting or phase.""",
