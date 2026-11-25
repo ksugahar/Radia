@@ -71,11 +71,13 @@ jobs:
           python -m venv $venv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $python = Join-Path $venv 'Scripts/python.exe'
-          $pins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
-          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
+          & $python -I tools/ci_fork_wheels.py install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -I tools/ci_fork_wheels.py verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB is required for the GPU acceptance' }
-          & $python -m pip install @pins numpy scipy h5py psutil pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
+          & $python -m pip install numpy scipy h5py psutil pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Python GPU calls admit only the exact pip CUDA runtime named in the
           # radia metadata. The checkout is imported via PYTHONPATH; only its
@@ -96,6 +98,21 @@ jobs:
           Move-Item -Path (Join-Path $metadataDir "out/$distInfo") -Destination $purelib
           Remove-Item -Recurse -Force $metadataDir
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Verify bundled Radia CPU native and ABI
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          $natives = @(Get-ChildItem -LiteralPath src/radia -Filter '_radia_pybind*.pyd' -File)
+          if ($natives.Count -ne 1) { throw 'Expected one bundled Radia CPU native' }
+          $native = $natives[0]
+          $receipt = Get-Content -Raw -LiteralPath ($native.FullName + '.build.json') | ConvertFrom-Json
+          if ($receipt.source_commit -cne $env:ACCEPTANCE_SHA -or
+              (Get-FileHash -LiteralPath $native.FullName).Hash.ToLowerInvariant() -cne $receipt.binary_sha256) {
+            throw 'Bundled Radia CPU native identity mismatch'
+          }
+          python -s -c "import pathlib,sys; import radia._radia_pybind as n; assert pathlib.Path(n.__file__).resolve() == pathlib.Path(sys.argv[1]).resolve()" $native.FullName
+          exit $LASTEXITCODE
       - name: Verify HDiv device boundary and same-kernel parity
         shell: pwsh
         run: |
