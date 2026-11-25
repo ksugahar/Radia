@@ -1,7 +1,7 @@
 """PEEC route knowledge for induction heating (radia_mcp.ih).
 
 PEEC and ESIM are the main Radia routes of the IH pack. Independent FEM
-cross-checks of these routes use the FEM knowledge of ngsolve-mcp; general
+cross-checks of these routes use the IH NGSolve recipes; general
 PEEC formulation lives in the ``peec`` pack.
 """
 
@@ -26,8 +26,8 @@ Nonlinear steel or ferrite workpieces use ESIM with Karl iteration
 General PEEC formulation, bundles and AC loss are in the `peec` pack.
 
 Independent check: compare against a FEM route (volume coil A-V with
-resolved skin, `induction_heating(topic="av_coil_sigma")`, and the FEM
-knowledge of ngsolve-mcp). A PEEC result is not validated by its own
+resolved skin, `induction_heating(topic="av_coil_sigma")`, and
+the IH NGSolve recipes (`ih_sibc(topic="ngsolve_recipes")`)). A PEEC result is not validated by its own
 approximation.
 """
 

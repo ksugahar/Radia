@@ -208,6 +208,9 @@ def get_gauge_open_boundary_knowledge(topic: str = "gauge") -> str:
         kelvin_transform   - Kelvin transformation (★ lab default for open BC)
         abc_pml            - Asymptotic BC and PML alternatives
         coil_av_tree       - Tree gauge for port-driven A-V coils with SIBC
+        tree_cotree        - Tree-cotree nullspace removal for HCurl
+        coulomb            - Coulomb gauge and grad-div stabilization
+        gauge_open_boundary - Gauge compatibility with Kelvin or BEM-FEM exteriors
         all                - Everything
     """
     topic = topic.lower().strip()
@@ -222,9 +225,10 @@ def get_gauge_open_boundary_knowledge(topic: str = "gauge") -> str:
     reference_topics = {
         name: GAUGING_TOPICS[name] for name in ("tree_cotree", "coulomb")
     }
+    reference_topics["gauge_open_boundary"] = GAUGING_TOPICS["open_boundary"]
     if topic in reference_topics:
         return reference_topics[topic]
     if topic == "all":
         return "\n\n".join([GAUGE, KELVIN_TRANSFORM, ABC_PML, COIL_AV_TREE, *reference_topics.values()])
     return (f"Unknown topic '{topic}'. Available: gauge, kelvin_transform, "
-            "abc_pml, coil_av_tree, tree_cotree, coulomb, all.")
+            "abc_pml, coil_av_tree, tree_cotree, coulomb, gauge_open_boundary, all.")

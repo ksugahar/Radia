@@ -1,8 +1,8 @@
 """
 Induction Heating MCP Server (radia_mcp.ih)
 
-The main IH knowledge is the PEEC and ESIM routes; FEM knowledge from
-ngsolve-mcp serves mainly as their independent validation.
+The main IH knowledge is the PEEC and ESIM routes; the NGSolve FEM recipes
+in this pack serve mainly as their independent validation.
 
 Provides tools for:
 - PEEC coil routes (PEEC + BEM-SIBC, PEEC + FEM workpiece + Kelvin)
@@ -82,8 +82,8 @@ def ih_peec(topic: str = "all") -> str:
     Get the PEEC coil routes of the induction heating workflow.
 
     PEEC and ESIM are the main Radia routes of this pack. Independent FEM
-    cross-checks use `induction_heating(topic="av_coil_sigma")` and the
-    FEM knowledge of ngsolve-mcp; general PEEC formulation is in the
+    cross-checks use `induction_heating(topic="av_coil_sigma")` and
+    the IH NGSolve recipes (`ih_sibc(topic="ngsolve_recipes")`); general PEEC formulation is in the
     `peec` pack.
 
     Args:

@@ -142,6 +142,7 @@ def test_ih_peec_tool_leads_with_peec_routes_and_names_fem_check():
     assert {"ih_peec", "ih_esim", "ih_sibc"} <= names, sorted(names)
     routes = get_ih_peec_documentation("routes")
     assert "PEEC + BEM-SIBC" in routes
-    assert "ngsolve-mcp" in routes
+    assert 'ih_sibc(topic="ngsolve_recipes")' in routes
+    assert "ngsolve-mcp" not in routes
     assert "av_coil_sigma" in routes
     assert get_induction_heating_documentation("peec_bem_sibc").startswith("Unknown topic")
