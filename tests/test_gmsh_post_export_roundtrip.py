@@ -60,6 +60,39 @@ def _reopen(path):
         gmsh.finalize()
 
 
+def test_boundary_export_omits_interior_nodes_and_keeps_nodal_values(tmp_path):
+    """Guards: only boundary connectivity nodes and their values are emitted."""
+    mesh = MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2)
+    boundary_vertices = {v.nr for el in mesh.Elements(ng.BND) for v in el.vertices}
+    assert len(boundary_vertices) < mesh.nv
+    values = np.array([v.point[0] + 2 * v.point[1] + 3 * v.point[2]
+                       for v in mesh.vertices])
+
+    boundary = GmshPostExport(mesh, boundary=True)
+    boundary.add_field("coordinate", values)
+    path = boundary.write(str(tmp_path / "boundary.msh"))
+    gmsh.initialize(readConfigFiles=False)
+    try:
+        gmsh.open(path)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        _, elements, connectivity = gmsh.model.mesh.getElements(2)
+        assert sum(len(block) for block in elements) == sum(1 for _ in mesh.Elements(ng.BND))
+        assert set(tags) == {tag for block in connectivity for tag in block}
+        assert len(tags) == len(boundary_vertices)
+        assert {gmsh.model.getPhysicalName(dim, tag)
+                for dim, tag in gmsh.model.getPhysicalGroups()} == set(mesh.GetBoundaries())
+        _, field_tags, data, _, _ = gmsh.view.getModelData(gmsh.view.getTags()[0], 0)
+        field = dict(zip(field_tags, data))
+        assert set(field) == set(tags)
+        for tag, point in zip(tags, np.asarray(coords).reshape(-1, 3)):
+            assert field[tag][0] == pytest.approx(point @ [1, 2, 3])
+    finally:
+        gmsh.finalize()
+
+    volume = GmshPostExport(mesh).write_mesh(str(tmp_path / "volume.msh"))
+    assert _reopen(volume)[2] == mesh.nv
+
+
 def _assert_launch_companions(msh_path):
     geo_path = os.path.splitext(msh_path)[0] + ".geo"
     geo_opt_path = geo_path + ".opt"

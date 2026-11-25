@@ -568,7 +568,6 @@ class GmshPostExport:
 
         nodes, mat_names, elem_data = _extract_mesh_data_grouped(
             mesh, is_surface)
-        n_nodes = len(nodes)
         mat_elem_map, _elem_id_map, n_elems = _assign_element_ids(
             mat_names, elem_data)
         # Top-element dimension: 2 for a BEM surface export OR a native 2-D
@@ -582,6 +581,7 @@ class GmshPostExport:
         payload = self._build_single_mesh_payload(
             nodes, mat_names, elem_data, mat_elem_map, n_elems,
             dim, mat_bboxes, time, timestep)
+        n_nodes = sum(len(block.coords) for block in payload.node_blocks)
 
         with open(filename, 'w', encoding='utf-8') as f:
             _emit_v42_msh(f, payload)
@@ -734,6 +734,21 @@ class GmshPostExport:
                 data_fields.append(DataField(
                     kind='$NodeData', name=name, ncomp=ncomp,
                     items=items, time=time, timestep=timestep))
+
+        if self._boundary:
+            # Compact after field evaluation so input arrays still use mesh
+            # vertex order and high-order nodes retain their interpolated data.
+            used_tags = sorted({tag for block in element_blocks
+                                for conn in block.connectivity for tag in conn})
+            tag_map = {old: new for new, old in enumerate(used_tags, start=1)}
+            node_blocks[0].coords = [nodes[tag - 1] for tag in used_tags]
+            for block in element_blocks:
+                block.connectivity = [[tag_map[tag] for tag in conn]
+                                      for conn in block.connectivity]
+            for data_field in data_fields:
+                if data_field.kind == '$NodeData':
+                    data_field.items = [(tag_map[tag], value)
+                                        for tag, value in data_field.items if tag in tag_map]
 
         return PayloadV42(
             groups=groups, entities=entities,
