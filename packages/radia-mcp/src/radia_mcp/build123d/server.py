@@ -4871,8 +4871,10 @@ async def build123d_diff_shapes(before_path: str, after_path: str) -> str:
 
     Report before, after and after-minus-before volume, bounding box and
     topology. Symmetric difference measures occupied volume in only one
-    model. Match solids by unique case-insensitive labels and report unresolved
-    IDs separately. The full-model comparison also covers unresolved solids.
+    model. Match solids by unique case-insensitive labels. Repeated labels with
+    equal counts are paired by centroid when each pair is unambiguous (closer
+    than half the next candidate); otherwise they stay unresolved with the
+    distances. The full-model comparison also covers unresolved solids.
     """
     import anyio
 

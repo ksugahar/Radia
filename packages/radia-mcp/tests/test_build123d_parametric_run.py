@@ -179,3 +179,47 @@ def test_assembly_readback_reports_every_pair_and_label_issue(tmp_path):
     assert issues["renamed_bracket"]["issues"] == ["missing_match"]
     assert diff["assembly"]["before"]["volume_mm3"] == pytest.approx(28)
     assert diff["assembly"]["symmetric_difference_volume_mm3"] == pytest.approx(0)
+
+
+def _pins(tmp_path, name, offsets):
+    from build123d import Box, Compound, Pos, export_step
+
+    base = Box(30, 6, 2)
+    base.label = "base"
+    pins = []
+    for x, height in offsets:
+        pin = Pos(x, 0, 1 + height / 2) * Box(2, 2, height)
+        pin.label = "pin"
+        pins.append(pin)
+    step = tmp_path / f"{name}.step"
+    assert export_step(Compound(label=name, children=[base, *pins]), step)
+    return step
+
+
+def test_repeated_labels_pair_by_unambiguous_placement(tmp_path):
+    """Guards: same-label instances pair by centroid; edits stay attached to the right one."""
+    before = _pins(tmp_path, "before", [(-10, 4), (10, 4)])
+    after = _pins(tmp_path, "after", [(-10, 4), (10.5, 6)])
+    diff = json.loads(server._diff_step_files(str(before), str(after)))
+    assert diff["status"] == "ok", diff
+    assert diff["unresolved"] == []
+    pins = [part for part in diff["matched_parts"] if part["before"]["label"] == "pin"]
+    assert [part["match"] for part in pins] == ["placement", "placement"]
+    deltas = sorted(part["comparison"]["delta"]["volume_mm3"] for part in pins)
+    assert deltas == pytest.approx([0, 8])
+    moved = max(pins, key=lambda part: part["centroid_distance_mm"])
+    assert moved["centroid_distance_mm"] == pytest.approx((0.5**2 + 1**2) ** 0.5)
+    assert [part["match"] for part in diff["matched_parts"]
+            if part["before"]["label"] == "base"] == ["label"]
+
+
+def test_ambiguous_repeated_labels_stay_unresolved(tmp_path):
+    """Guards: a pattern shifted by half its pitch is not paired by guesswork."""
+    before = _pins(tmp_path, "before", [(-10, 4), (0, 4)])
+    after = _pins(tmp_path, "after", [(-5, 4), (5, 4)])
+    diff = json.loads(server._diff_step_files(str(before), str(after)))
+    assert diff["status"] == "ok", diff
+    [entry] = [row for row in diff["unresolved"] if row["label_key"] == "pin"]
+    assert entry["issues"] == ["duplicate_label", "ambiguous_placement"]
+    assert len(entry["centroid_distance_mm"]) == 4
+    assert all(part["before"]["label"] != "pin" for part in diff["matched_parts"])
