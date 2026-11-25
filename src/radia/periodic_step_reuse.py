@@ -1,15 +1,17 @@
-"""Periodic pitch-matched time-stepping with matrix, preconditioner, and state reuse.
+"""Periodic pitch-matched time-stepping with matrix, solver-setup, and state reuse.
 
 For rotating machines or periodic linear guides where each time step advances by
 an exact mesh symmetry pitch, the rotated/shifted mesh coincides with the original
 mesh up to a DOF permutation (with optional +/-1 edge-orientation sign).
 This allows:
   1. Assembling the system matrix A = K + (1/dt) * M once.
-  2. Building one Radia SparseSolv preconditioner for A and reusing it with
-     native PCG across all time steps: ``"amg"`` (Compact AMG, scalar SPD
-     operators) or ``"ams"`` (Compact AMS, lowest-order HCurl operators; the
-     caller supplies the discrete gradient and vertex coordinates). The choice
-     is explicit; there is no default, no direct factorization and no fallback.
+  2. One setup for A reused across all time steps, chosen explicitly by
+     ``method`` with no default and no fallback between methods:
+     ``"amg"`` (main route for scalar SPD operators: Radia SparseSolv Compact
+     AMG with native PCG), ``"ams"`` (main route for lowest-order HCurl
+     operators: Compact AMS with native PCG; the caller supplies the discrete
+     gradient and vertex coordinates) or ``"sparsecholesky"`` (NGSolve direct
+     factorization, built once, for problems small enough to factor).
   3. Carrying eddy-current / flux state from the previous step by permuting
      the previous solution vector along the pitch mapping without re-meshing.
 
@@ -18,11 +20,13 @@ rows must already be eliminated by the caller); A must be symmetric positive
 definite on that whole space. "amg" targets scalar SPD operators. "ams" targets
 a lowest-order HCurl system whose K is the curl-curl part, so K @ gradient
 vanishes, and whose M/dt term makes A definite on the gradient kernel.
-Rejected before any preconditioner is built: asymmetry, a nonpositive diagonal,
-and for "ams" a gradient that K does not annihilate. These screens are
-necessary, not sufficient: an indefinite A can pass them. It is then rejected
-during the step, when PCG breaks down (r.z <= 0 or p.Ap <= 0) or does not
-converge, and that step is not counted. A small residual is not evidence of
+Rejected before any setup: asymmetry, a nonpositive diagonal, and for "ams" a
+gradient that K does not annihilate. These screens are necessary, not
+sufficient: an indefinite A can pass them. With "amg" or "ams" it is then
+rejected during the step, when PCG breaks down (r.z <= 0 or p.Ap <= 0) or does
+not converge, and that step is not counted. "sparsecholesky" does not detect
+indefiniteness: for a nonsingular indefinite A it returns the solution of that
+system, still gated by the true residual. A small residual is not evidence of
 definiteness; the caller owns the SPD property.
 
 Inputs are real and finite; anything else raises instead of being cast. Every
@@ -46,7 +50,8 @@ _SYMMETRY_TOLERANCE = 1e-12
 # PCG stops on its true relative residual below the shared limit, leaving
 # margin for the independent recheck in step().
 _PCG_TOLERANCE = 0.5 * RELATIVE_LIMIT
-_PRECONDITIONERS = ("amg", "ams")
+_METHODS = ("amg", "ams", "sparsecholesky")
+_DEFAULT_PCG_ITERATIONS = 1000
 # Relative ||K G|| allowed for "ams": zero in exact arithmetic for a curl-curl K.
 _GRADIENT_KERNEL_TOLERANCE = 1e-10
 
@@ -84,6 +89,20 @@ def _pcg_solver(native, preconditioner, max_iterations: int):
             raise RuntimeError(
                 f"periodic step PCG did not converge in {iterations} iterations "
                 f"(maximum {max_iterations})")
+        return answer.FV().NumPy().copy()
+
+    return solve
+
+
+def _sparsecholesky(native):
+    """Factor A once with NGSolve sparsecholesky; return x = solve(b)."""
+    inverse = native.Inverse(inverse="sparsecholesky")
+    source = native.CreateColVector()
+    answer = native.CreateColVector()
+
+    def solve(b: np.ndarray) -> np.ndarray:
+        source.FV().NumPy()[:] = b
+        answer.data = inverse * source
         return answer.FV().NumPy().copy()
 
     return solve
@@ -128,13 +147,19 @@ def _permutation(perm, n: int) -> np.ndarray:
 class PeriodicStepReuseSolver:
     """Reusable linear time-stepping solver for pitch-matched periodic motion."""
 
-    def __init__(self, K, M, dt: float, perm, sign=None, *, preconditioner: str,
-                 gradient=None, coordinates=None, max_iterations: int = 1000) -> None:
-        if not isinstance(preconditioner, str) or preconditioner not in _PRECONDITIONERS:
-            raise ValueError(f"preconditioner must be one of {_PRECONDITIONERS}, got {preconditioner!r}")
-        if (isinstance(max_iterations, bool) or not isinstance(max_iterations, numbers.Integral)
-                or max_iterations < 1):
-            raise ValueError(f"max_iterations must be a positive integer, got {max_iterations!r}")
+    def __init__(self, K, M, dt: float, perm, sign=None, *, method: str,
+                 gradient=None, coordinates=None, max_iterations=None) -> None:
+        if not isinstance(method, str) or method not in _METHODS:
+            raise ValueError(f"method must be one of {_METHODS}, got {method!r}")
+        if method == "sparsecholesky":
+            if max_iterations is not None:
+                raise ValueError("max_iterations belongs to the PCG methods 'amg' and 'ams'")
+        else:
+            if max_iterations is None:
+                max_iterations = _DEFAULT_PCG_ITERATIONS
+            if (isinstance(max_iterations, bool) or not isinstance(max_iterations, numbers.Integral)
+                    or max_iterations < 1):
+                raise ValueError(f"max_iterations must be a positive integer, got {max_iterations!r}")
         if isinstance(dt, bool) or not isinstance(dt, numbers.Real) or not math.isfinite(dt) or dt <= 0.0:
             raise ValueError(f"dt must be a finite positive real number, got {dt!r}")
         K = _real_finite_matrix(K, "K")
@@ -151,9 +176,9 @@ class PeriodicStepReuseSolver:
             if not np.all(np.isin(sign_arr, (-1.0, 1.0))):
                 raise ValueError("sign entries must be -1 or +1")
 
-        if preconditioner == "amg":
+        if method != "ams":
             if gradient is not None or coordinates is not None:
-                raise ValueError("gradient and coordinates belong to the 'ams' preconditioner")
+                raise ValueError("gradient and coordinates belong to the 'ams' method")
         else:
             if gradient is None or coordinates is None:
                 raise ValueError("'ams' requires the discrete gradient and vertex coordinates")
@@ -187,16 +212,19 @@ class PeriodicStepReuseSolver:
         asymmetry = float(np.max(np.abs((self.A - self.A.T).data), initial=0.0))
         if scale == 0.0 or asymmetry > _SYMMETRY_TOLERANCE * scale:
             raise ValueError(
-                f"A = K + M/dt must be symmetric positive definite for PCG; "
+                f"A = K + M/dt must be symmetric positive definite; "
                 f"max|A - A^T| = {asymmetry:.3e}, max|A| = {scale:.3e}")
         if np.any(self.A.diagonal() <= 0.0):
             raise ValueError("A = K + M/dt must be positive definite: nonpositive diagonal entry")
-        self.preconditioner = preconditioner
+        self.method = method
         native = _native_matrix(self.A)
-        self._solve = _pcg_solver(
-            native, _build_preconditioner(preconditioner, native, gradient, coordinates),
-            int(max_iterations))
-        self.preconditioner_setups = 1
+        if method == "sparsecholesky":
+            self._solve = _sparsecholesky(native)
+        else:
+            self._solve = _pcg_solver(
+                native, _build_preconditioner(method, native, gradient, coordinates),
+                int(max_iterations))
+        self.setup_count = 1
         self.steps_solved = 0
         self.last_relative_residual = math.nan
 
@@ -206,11 +234,11 @@ class PeriodicStepReuseSolver:
         return self.sign * x[self.perm]
 
     def step(self, rhs, x_prev=None) -> np.ndarray:
-        """Advance one periodic pitch step reusing the single preconditioner.
+        """Advance one periodic pitch step reusing the single setup.
 
-        Raises RuntimeError, without counting the step, when PCG does not
-        converge (an indefinite A breaks it loudly), the solution is not finite
-        or its true relative residual exceeds RELATIVE_LIMIT.
+        Raises RuntimeError, without counting the step, when PCG breaks down or
+        does not converge, the solution is not finite or its true relative
+        residual exceeds RELATIVE_LIMIT.
         """
         b = _real_finite_vector(rhs, self.n, "rhs")
         if x_prev is not None:

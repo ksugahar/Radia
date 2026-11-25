@@ -1,12 +1,14 @@
 """Surrogate tests for PeriodicStepReuseSolver.
 
-Guards: one Radia SparseSolv preconditioner (Compact AMG or Compact AMS)
-constructed once and reused by native PCG; exact pitch-step eddy-current state
+Guards: one setup reused across steps for each explicit method: Radia
+SparseSolv Compact AMG or Compact AMS with native PCG (main routes) and the
+NGSolve sparsecholesky factorization; exact pitch-step eddy-current state
 permutation against an independent dense per-step solve; signed permutations;
-per-step true residual; loud PCG non-convergence and indefinite breakdown;
+per-step true residual; loud PCG non-convergence and indefinite breakdown, while
+sparsecholesky returns the exact solution of an indefinite nonsingular A;
 rejection of an AMS gradient that the curl-curl K does not annihilate;
 loud rejection of non-integer, non-finite or complex inputs and of a missing or
-mismatched preconditioner choice, without counting a failed step.
+mismatched method choice, without counting a failed step.
 Assumes: linear SPD A = K + M/dt on all DOFs; a periodic scalar DOF ring for AMG and a
 lowest-order HCurl curl-curl + mass system on a small cube mesh for AMS.
 """
@@ -103,11 +105,11 @@ def test_amg_matches_dense_reference_with_single_preconditioner(signed, monkeypa
     perm = np.roll(np.arange(n), -1)  # 1-pitch rotational shift
     sign = np.where(np.arange(n) % 2 == 0, 1.0, -1.0) if signed else None
     constructions = _counting_builder(monkeypatch)
-    solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign, preconditioner="amg")
+    solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign, method="amg")
     errors = _march_against_dense_reference(solver, K, M, dt, perm, sign, steps=8, seed=42)
     assert max(errors) <= 1e-6, f"actual errors={errors}, expected<=1e-6"
     assert constructions == ["amg"], f"actual constructions={constructions}, expected one 'amg'"
-    assert solver.preconditioner_setups == 1
+    assert solver.setup_count == 1
     assert solver.steps_solved == 8
 
 
@@ -119,19 +121,43 @@ def test_ams_matches_dense_reference_with_single_preconditioner(monkeypatch):
     perm = rng.permutation(n)
     sign = rng.choice([-1.0, 1.0], size=n)
     constructions = _counting_builder(monkeypatch)
-    solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign, preconditioner="ams",
+    solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign, method="ams",
                                      gradient=gradient, coordinates=coordinates)
     errors = _march_against_dense_reference(solver, K, M, dt, perm, sign, steps=4, seed=3)
     assert max(errors) <= 1e-5, f"actual errors={errors}, expected<=1e-5"
     assert constructions == ["ams"], f"actual constructions={constructions}, expected one 'ams'"
     assert solver.steps_solved == 4
 
-    starved = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, preconditioner="ams",
+    starved = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, method="ams",
                                       gradient=gradient, coordinates=coordinates,
                                       max_iterations=1)
     with pytest.raises(RuntimeError, match="did not converge"):
         starved.step(rng.standard_normal(n))
     assert starved.steps_solved == 0, f"actual={starved.steps_solved}, expected=0"
+
+
+@pytest.mark.parametrize("signed", [False, True])
+def test_sparsecholesky_matches_dense_reference_with_single_factorization(signed, monkeypatch):
+    n = 12
+    dt = 0.01
+    K, M = _periodic_ring_matrices(n)
+    perm = np.roll(np.arange(n), -1)
+    sign = np.where(np.arange(n) % 2 == 0, 1.0, -1.0) if signed else None
+    factorizations = []
+    real_factor = periodic_step_reuse._sparsecholesky
+
+    def counting_factor(native):
+        factorizations.append(native.height)
+        return real_factor(native)
+
+    monkeypatch.setattr(periodic_step_reuse, "_sparsecholesky", counting_factor)
+    constructions = _counting_builder(monkeypatch)
+    solver = PeriodicStepReuseSolver(K, M, dt=dt, perm=perm, sign=sign, method="sparsecholesky")
+    errors = _march_against_dense_reference(solver, K, M, dt, perm, sign, steps=8, seed=42)
+    assert max(errors) <= 1e-12, f"actual errors={errors}, expected<=1e-12"
+    assert factorizations == [n], f"actual factorizations={factorizations}, expected one"
+    assert constructions == [], f"actual preconditioners={constructions}, expected none"
+    assert solver.steps_solved == 8
 
 
 def test_ams_rejects_gradient_not_annihilated_by_k(monkeypatch):
@@ -140,7 +166,7 @@ def test_ams_rejects_gradient_not_annihilated_by_k(monkeypatch):
     corrupted.data[0] *= 2.0
     constructions = _counting_builder(monkeypatch)
     with pytest.raises(ValueError, match="K @ gradient = 0"):
-        PeriodicStepReuseSolver(K, M, dt=0.1, perm=np.arange(K.shape[0]), preconditioner="ams",
+        PeriodicStepReuseSolver(K, M, dt=0.1, perm=np.arange(K.shape[0]), method="ams",
                                 gradient=corrupted, coordinates=coordinates)
     assert constructions == [], f"actual constructions={constructions}, expected none"
 
@@ -157,18 +183,21 @@ def test_rejects_invalid_construction():
         dict(dt=0.01, perm=np.arange(6), sign=[1, 1, np.nan, 1, 1, 1]),
         dict(dt=0.01, perm=np.arange(6), max_iterations=0),
         dict(dt=0.01, perm=np.arange(6), max_iterations=True),
+        dict(dt=0.01, perm=np.arange(6), max_iterations=1.5),
     ]
     for kwargs in bad:
         with pytest.raises(ValueError):
-            PeriodicStepReuseSolver(K, M, preconditioner="amg", **kwargs)
+            PeriodicStepReuseSolver(K, M, method="amg", **kwargs)
     for kwargs in (
-        dict(preconditioner="lu"),
-        dict(preconditioner="amg", gradient=gradient, coordinates=coordinates),
-        dict(preconditioner="ams"),
-        dict(preconditioner="ams", gradient=gradient),
-        dict(preconditioner="ams", gradient=csr_matrix(np.ones((5, 2))), coordinates=coordinates),
-        dict(preconditioner="ams", gradient=gradient, coordinates=np.zeros((3, 3))),
-        dict(preconditioner="ams", gradient=gradient, coordinates=np.full((2, 3), np.nan)),
+        dict(method="lu"),
+        dict(method="sparsecholesky", max_iterations=10),
+        dict(method="sparsecholesky", gradient=gradient, coordinates=coordinates),
+        dict(method="amg", gradient=gradient, coordinates=coordinates),
+        dict(method="ams"),
+        dict(method="ams", gradient=gradient),
+        dict(method="ams", gradient=csr_matrix(np.ones((5, 2))), coordinates=coordinates),
+        dict(method="ams", gradient=gradient, coordinates=np.zeros((3, 3))),
+        dict(method="ams", gradient=gradient, coordinates=np.full((2, 3), np.nan)),
     ):
         with pytest.raises(ValueError):
             PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6), **kwargs)
@@ -176,14 +205,14 @@ def test_rejects_invalid_construction():
         PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6))  # no preconditioner choice
     for perm in ([0.0, 1.5, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 2.0, 3.0, 4.0, 5.0], [True] * 6):
         with pytest.raises(TypeError):
-            PeriodicStepReuseSolver(K, M, dt=0.01, perm=perm, preconditioner="amg")
+            PeriodicStepReuseSolver(K, M, dt=0.01, perm=perm, method="amg")
     with pytest.raises(TypeError):
         PeriodicStepReuseSolver(K.astype(complex), M, dt=0.01, perm=np.arange(6),
-                                preconditioner="amg")
+                                method="amg")
     K_nan = K.copy()
     K_nan[0, 0] = np.nan
     with pytest.raises(ValueError):
-        PeriodicStepReuseSolver(K_nan, M, dt=0.01, perm=np.arange(6), preconditioner="amg")
+        PeriodicStepReuseSolver(K_nan, M, dt=0.01, perm=np.arange(6), method="amg")
 
 
 def test_rejects_non_spd_before_any_preconditioner(monkeypatch):
@@ -193,16 +222,16 @@ def test_rejects_non_spd_before_any_preconditioner(monkeypatch):
     K_asym[0, 1] = -2.0
     with pytest.raises(ValueError, match="symmetric positive definite"):
         PeriodicStepReuseSolver(csc_matrix(K_asym), M, dt=0.01, perm=np.arange(6),
-                                preconditioner="amg")
+                                method="amg")
     with pytest.raises(ValueError, match="positive definite"):
-        PeriodicStepReuseSolver(-K, M * 0.0, dt=0.01, perm=np.arange(6), preconditioner="amg")
+        PeriodicStepReuseSolver(-K, M * 0.0, dt=0.01, perm=np.arange(6), method="amg")
     assert constructions == [], f"actual constructions={constructions}, expected none"
 
 
 def test_rejects_bad_step_inputs_without_counting():
     K, M = _periodic_ring_matrices(6)
     solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.roll(np.arange(6), 1),
-                                     preconditioner="amg")
+                                     method="amg")
     good = np.ones(6)
     for rhs, x_prev, error in (
         (np.array([np.nan, 1, 1, 1, 1, 1]), None, ValueError),
@@ -220,7 +249,7 @@ def test_rejects_bad_step_inputs_without_counting():
 
 def test_raises_on_true_residual_without_counting():
     K, M = _periodic_ring_matrices(6)
-    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6), preconditioner="amg")
+    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6), method="amg")
     accurate = solver._solve
     solver._solve = lambda b: accurate(b) * (1.0 + 1e-3)
     with pytest.raises(RuntimeError, match="true relative residual"):
@@ -230,7 +259,7 @@ def test_raises_on_true_residual_without_counting():
 
 def test_zero_load_returns_exact_zero():
     K, M = _periodic_ring_matrices(6)
-    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6), preconditioner="amg")
+    solver = PeriodicStepReuseSolver(K, M, dt=0.01, perm=np.arange(6), method="amg")
     x = solver.step(np.zeros(6))
     assert np.array_equal(x, np.zeros(6)), f"actual={x}, expected exact zeros"
     assert solver.last_relative_residual == 0.0, (
@@ -238,12 +267,22 @@ def test_zero_load_returns_exact_zero():
     assert solver.steps_solved == 1, f"actual={solver.steps_solved}, expected=1"
 
 
-def test_indefinite_symmetric_raises_loudly():
+@pytest.mark.parametrize("method", ["amg", "sparsecholesky"])
+def test_indefinite_symmetric_is_never_silently_wrong(method):
     # Symmetric, positive diagonal, indefinite (eigenvalues 3 and -1): passes the
-    # cheap SPD screens; PCG must break down loudly rather than return a value.
+    # cheap SPD screens. PCG must break down loudly; sparsecholesky solves this
+    # nonsingular system exactly. Neither may return a wrong value.
     K = csc_matrix(np.array([[1.0, 2.0], [2.0, 1.0]]))
     M = csc_matrix((2, 2))
-    solver = PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2), preconditioner="amg")
-    with pytest.raises(RuntimeError):
-        solver.step(np.array([1.0, 0.0]))
-    assert solver.steps_solved == 0, f"actual={solver.steps_solved}, expected=0"
+    rhs = np.array([1.0, 0.0])
+    solver = PeriodicStepReuseSolver(K, M, dt=1.0, perm=np.arange(2), method=method)
+    if method == "amg":
+        with pytest.raises(RuntimeError):
+            solver.step(rhs)
+        assert solver.steps_solved == 0, f"actual={solver.steps_solved}, expected=0"
+        return
+    x = solver.step(rhs)
+    expected = np.linalg.solve(K.toarray(), rhs)
+    rel_err = np.linalg.norm(x - expected) / np.linalg.norm(expected)
+    assert rel_err <= 1e-12, f"actual={rel_err}, expected<=1e-12"
+    assert solver.steps_solved == 1, f"actual={solver.steps_solved}, expected=1"
