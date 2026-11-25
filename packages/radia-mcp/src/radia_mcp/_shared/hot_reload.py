@@ -411,10 +411,11 @@ def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_m
     if os.environ.get("RADIA_MCP_HOT_RELOAD", "").strip() == "0":
         return
     # Import locally: status registration calls this function during server setup.
-    from radia_mcp.common.status import _distribution_provenance
+    from radia_mcp.common.status import _distribution_for_subpackage, _distribution_provenance
 
     try:
-        editable = _distribution_provenance(module_prefix.split('.')[0].replace('_', '-')).get("editable") is True
+        distribution = _distribution_for_subpackage(module_prefix)
+        editable = _distribution_provenance(distribution).get("editable") is True
     except (OSError, TypeError, ValueError, AttributeError):
         editable = False
     if not editable:
