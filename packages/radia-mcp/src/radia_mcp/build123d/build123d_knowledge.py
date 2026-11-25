@@ -3174,8 +3174,8 @@ def mitre_inset(points, d):
     for (p, u), (q, v) in zip(lines[-1:] + lines[:-1], lines):
         t = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / (u[0] * v[1] - u[1] * v[0])
         out.append((p[0] + t * u[0], p[1] + t * u[1]))
-    # Valid only while every edge keeps its direction: past that the outline has
-    # collapsed or self-intersected, and the result is not the inward offset.
+    # An edge that reverses means the inset has passed a collapse. This local check
+    # does not detect winding or crossings between nonadjacent edges.
     for (a, b), (c, e) in zip(zip(points, points[1:] + points[:1]), zip(out, out[1:] + out[:1])):
         if (b[0] - a[0]) * (e[0] - c[0]) + (b[1] - a[1]) * (e[1] - c[1]) <= 0:
             raise ValueError(f"inset {d} collapses the outline at edge {a} -> {b}")
@@ -3199,15 +3199,20 @@ def frustum(bottom, z0, top, z1):
     return Solid(Shell(faces))
 ```
 
-Preconditions, checked by the recipe: `mitre_inset` needs a counter-clockwise
-outline without consecutive collinear edges, and an inset small enough that no
-edge reverses (the outline has not collapsed or self-intersected); otherwise it
-raises. `frustum` needs equal vertex counts in the same order and each top
-edge parallel to its bottom edge, so every side is a planar quad; a side whose
-top edge has collapsed to a point (a triangle) is not covered by this short
-version. A wall that stays vertical on part of an edge needs its own inset of 0;
-the top outline then steps, so the bottom outline repeats that vertex and
-that side becomes a triangle.
+Caller preconditions, not checked: the outline is a simple polygon in
+counter-clockwise order without consecutive collinear edges, and the inset
+changes no topology, so the result is again a simple loop (a clockwise outline
+grows outward, and a narrow neck can close into crossing edges without any
+edge reversing). For `frustum`, the two outlines lie at distinct Z levels and
+corresponding vertices run in the same direction.
+
+What the recipe checks: `mitre_inset` raises when an offset edge collapses or
+reverses; `frustum` raises on unequal vertex counts and on a top edge that is
+not parallel to its bottom edge, so every side it builds is a planar quad. A
+side whose top edge has collapsed to a point (a triangle) is not covered by
+this short version. A wall that stays vertical on part of an edge needs its
+own inset of 0; the top outline then steps, so the bottom outline repeats that
+vertex and that side becomes a triangle.
 
 ## Patterned features can differ
 A reference built from a pattern may still change one instance (one wall
