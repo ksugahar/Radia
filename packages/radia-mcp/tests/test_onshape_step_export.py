@@ -112,6 +112,7 @@ def test_untrusted_download_redirect_is_rejected(tmp_path):
 
 def test_invalid_version_returns_before_auth(tmp_path, monkeypatch):
     monkeypatch.delenv("ONSHAPE_ACCESS_KEY", raising=False)
+    monkeypatch.setattr(server, "_authorization", lambda: pytest.fail("unexpected authentication"))
     result = asyncio.run(server.onshape_export_cad(
         DOCUMENT, ELEMENT, "workspace", "assembly", str(tmp_path), "step"
     ))
@@ -278,3 +279,56 @@ def test_export_tool_declares_positive_integer_limits():
         argument = tool.inputSchema["properties"][name]
         assert argument["type"] == "integer"
         assert argument["exclusiveMinimum"] == 0
+
+
+def test_fixed_step_cache_reuses_verified_bytes_and_isolates_options(tmp_path, run_export, monkeypatch):
+    cad = pytest.importorskip("build123d")
+    reference = tmp_path / "reference.step"
+    assert cad.export_step(cad.Box(10, 8, 6), reference)
+    payload = reference.read_bytes()
+    cache_root = tmp_path / "cache"
+    monkeypatch.setenv("ONSHAPE_STEP_CACHE_DIR", str(cache_root))
+    requests = []
+
+    class MockOpener:
+        def open(self, request, timeout):
+            requests.append(request)
+            if request.get_method() == "POST":
+                return io.BytesIO(json.dumps({
+                    "id": TRANSLATION, "requestState": "DONE",
+                    "resultExternalDataIds": [RESULT],
+                }).encode())
+            return io.BytesIO(payload)
+
+    first = run_export(MockOpener(), step_unit="MILLIMETER", configuration="size=large")
+    changed = run_export(MockOpener(), step_unit="INCH", configuration="size=large")
+    different_config = run_export(MockOpener(), step_unit="INCH", configuration="size=small")
+    assert [r.get("cache") for r in (first, changed, different_config)] == ["miss"] * 3
+    assert len(requests) == 6
+    assert len(list(cache_root.iterdir())) == 3
+    assert str(cache_root) not in json.dumps(first)
+
+    monkeypatch.delenv("ONSHAPE_ACCESS_KEY")
+    monkeypatch.delenv("ONSHAPE_SECRET_KEY")
+    hit = run_export(MockOpener(), step_unit="MILLIMETER", configuration="size=large")
+    assert hit["cache"] == "hit" and hit["status"] == "ok", hit
+    assert hit["file"] != first["file"]
+    assert Path(hit["file"]).read_bytes() == payload
+    assert hit["file_sha256"] == first["file_sha256"]
+    assert len(requests) == 6
+
+    (cache_root / first["cache_key"] / "model.step").write_bytes(b"corrupted")
+    broken = run_export(MockOpener(), step_unit="MILLIMETER", configuration="size=large")
+    assert (broken["status"], broken["stage"], broken["cache"]) == ("error", "cache", "error")
+    assert len(requests) == 6
+
+
+def test_workspace_export_is_never_cached(tmp_path, monkeypatch):
+    cache_root = tmp_path / "cache"
+    monkeypatch.setenv("ONSHAPE_STEP_CACHE_DIR", str(cache_root))
+    monkeypatch.setattr(server, "_authorization", lambda: pytest.fail("unexpected authentication"))
+    result = asyncio.run(server.onshape_export_cad(
+        DOCUMENT, ELEMENT, "workspace", "part_studio", str(tmp_path), "step",
+    ))
+    assert (result["status"], result["stage"], result["cache"]) == ("error", "input", "not_eligible")
+    assert not cache_root.exists()

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 from http.client import HTTPException
@@ -229,7 +230,8 @@ async def onshape_read_parameters(
 def _read_parameters(document_id, element_id, version_id, element_type,
                      configuration, parameter_values):
     if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
-        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+        return {**_error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits)."),
+                "cache": "not_eligible"}
     if element_type not in _ELEMENTS or (configuration and parameter_values):
         return _error("input", "Provide a CAD element type and only one configuration representation.")
     source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
@@ -258,7 +260,8 @@ async def onshape_render_shaded_views(
 
     selected = ["isometric", "front"] if views is None else views
     if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
-        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+        return {**_error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits)."),
+                "cache": "not_eligible"}
     if (element_type not in _ELEMENTS or not export_dir.strip() or not selected
             or len(set(selected)) != len(selected)
             or any(view not in get_args(ViewName) for view in selected)):
@@ -297,7 +300,8 @@ async def onshape_inspect_assembly(
     import anyio
 
     if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
-        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+        return {**_error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits)."),
+                "cache": "not_eligible"}
     if element_type != "assembly" or type(max_part_requests) is not int or not 1 <= max_part_requests <= 100:
         return _error("input", "Provide an assembly and a part request limit from 1 through 100.")
     source = {"document_id": document_id, "element_id": element_id, "version_id": version_id,
@@ -309,6 +313,62 @@ async def onshape_inspect_assembly(
         return {**source, **result}
 
     return await anyio.to_thread.run_sync(_read_onshape, "assembly", action)
+
+
+def _step_cache_key(endpoint, options):
+    request = [_ORIGIN, _API, endpoint, "step", options]
+    return hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
+
+
+def _publish_cached_step(entry, key, root, max_bytes):
+    """Verify the bytes copied to the caller's destination before publication."""
+    manifest = entry / "provenance.json"
+    record = json.loads(manifest.read_text(encoding="utf-8"))
+    if (record.get("cache_key") != key or record.get("format") != "step"
+            or record.get("file") != "model.step"):
+        raise ValueError("Cache provenance mismatch")
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".onshape-", dir=root) as staging:
+        folder = Path(staging) / "bundle"
+        folder.mkdir()
+        artifact = folder / "model.step"
+        digest = hashlib.sha256()
+        size = 0
+        with (entry / artifact.name).open("rb") as reader, artifact.open("wb") as writer:
+            for chunk in iter(lambda: reader.read(1024 * 1024), b""):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ValueError("Cached STEP exceeds the requested size limit")
+                digest.update(chunk)
+                writer.write(chunk)
+        if digest.hexdigest() != record.get("file_sha256") or record.get("step_sha256") != record["file_sha256"]:
+            raise ValueError("Cached STEP hash mismatch")
+        (folder / manifest.name).write_text(json.dumps(record, indent=2) + "\n",
+                                            encoding="utf-8", newline="\n")
+        published = root / f"onshape-step-{Path(staging).name.removeprefix('.onshape-')}"
+        folder.rename(published)
+    return _export_result(record, published, "hit")
+
+
+def _store_cached_step(entry, folder):
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".onshape-", dir=entry.parent) as staging:
+        bundle = Path(staging) / "bundle"
+        shutil.copytree(folder, bundle)
+        try:
+            bundle.rename(entry)
+        except FileExistsError:
+            # A concurrent export already published this immutable request.
+            pass
+
+
+def _export_result(record, published, cache):
+    result = {**record, "status": "ok", "cache": cache,
+              "file": str(published / record["file"]),
+              "provenance": str(published / "provenance.json")}
+    if record["format"] == "step":
+        result["step"] = result["file"]
+    return result
 
 
 @mcp.tool(annotations=_ANN_WRITES_WEB)
@@ -334,6 +394,8 @@ async def onshape_export_cad(
     units are METER, CENTIMETER, MILLIMETER, INCH, FOOT and YARD. Omitting
     step_unit uses the server default. Download and polling default to
     256 MiB and 120 seconds, respectively. Both accept positive integers.
+    Set ONSHAPE_STEP_CACHE_DIR to enable a private, user-local fixed-version
+    STEP cache. A verified hit can be served without Onshape credentials.
     """
     import anyio
 
@@ -346,7 +408,8 @@ async def onshape_export_cad(
 def _export_cad(document_id, element_id, version_id, element_type, export_dir,
                 file_format, configuration, step_unit, max_download_bytes, poll_timeout_s):
     if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
-        return _error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits).")
+        return {**_error("input", "Provide document, element and immutable version IDs (24 lowercase hex digits)."),
+                "cache": "not_eligible"}
     if element_type not in _ELEMENTS or not export_dir.strip():
         return _error("input", "Provide a part_studio or assembly and a local export directory.")
     if file_format not in {"step", *_TRANSLATION_FORMATS}:
@@ -360,10 +423,6 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
         poll_timeout_s = float(poll_timeout_s)
     except OverflowError:
         return _error("input", "Polling deadline is outside the supported range.")
-    authorization = _authorization()
-    if authorization is None:
-        return _auth_error()
-    opener = build_opener(_NoRedirect())
     source = f"/{_ELEMENTS[element_type]}/d/{document_id}/v/{version_id}/e/{element_id}"
     options = {"storeInDocument": False, "grouping": True,
                "notifyUser": False, "triggerAutoDownload": False}
@@ -381,6 +440,23 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
             options["configuration"] = configuration
         if file_format == "x_t":
             options["parasolidMode"] = "TEXT"
+    cache_root = os.environ.get("ONSHAPE_STEP_CACHE_DIR") if file_format == "step" else None
+    entry = None
+    cache = "disabled" if file_format == "step" else "not_eligible"
+    if cache_root:
+        key = _step_cache_key(endpoint, options)
+        entry = Path(cache_root) / key
+        cache = "miss"
+        try:
+            if entry.exists():
+                return _publish_cached_step(entry, key, Path(export_dir).resolve(), max_download_bytes)
+        except (OSError, ValueError, TypeError, AttributeError, KeyError):
+            return {**_error("cache", "Cached STEP failed verification or could not be copied."),
+                    "cache": "error"}
+    authorization = _authorization()
+    if authorization is None:
+        return {**_auth_error(), "cache": cache}
+    opener = build_opener(_NoRedirect())
     stage = "export"
     translation_id = None
     try:
@@ -437,15 +513,16 @@ def _export_cad(document_id, element_id, version_id, element_type, export_dir,
                               declared_length_units=read_step_length_units(artifact),
                               measurement_length_unit="mm")
                 record.update(step=artifact.name, step_sha256=digest)
+            if entry is not None:
+                record["cache_key"] = key
             manifest = folder / "provenance.json"
             manifest.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
             published = root / f"onshape-{file_format}-{Path(staging).name.removeprefix('.onshape-')}"
+            if entry is not None:
+                stage = "cache"
+                _store_cached_step(entry, folder)
             folder.rename(published)
-        result = {"status": "ok", **record, "file": str(published / artifact.name),
-                  "provenance": str(published / manifest.name)}
-        if file_format == "step":
-            result["step"] = result["file"]
-        return result
+        return _export_result(record, published, cache)
     except HTTPError as exc:
         with exc:
             diagnostic = {

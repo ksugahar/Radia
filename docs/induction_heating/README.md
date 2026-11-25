@@ -14,6 +14,7 @@ in the [solver handoff](SOLVER_DEVELOPMENT_HANDOFF.md).
 
 | Purpose | Entry point |
 | --- | --- |
+| Reproduce fin-volume PEEC and PRIMA on a finned conductor | [Fin PEEC and PRIMA](FIN_PEEC_PRIMA_REPRODUCE.md) |
 | Inspect temperature and conservative source transfer | [Thermal feature notebook](axisymmetric_p2_thermal.ipynb) |
 | Operate the supported analysis with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
 | Prepare geometry and labeled mesh | [Cubit workflow](../cubit_mesh_export/README.md) |
