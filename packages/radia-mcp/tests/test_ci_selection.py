@@ -22,7 +22,7 @@ def test_contract_set_is_always_selected():
     assert plan["mode"] == "targeted"
     assert "tests/test_ci_selection.py" in plan["package_tests"]
     assert any(
-        selector.startswith("tests/test_meta_health.py::")
+        selector.split("::", 1)[0] == "tests/test_meta_health.py"
         for selector in plan["package_tests"]
     )
     assert "tests/test_meta_health.py" not in plan["package_tests"]
@@ -78,6 +78,13 @@ def test_large_server_registration_change_stays_on_contract_lane():
     assert len(plan["package_tests"]) < 20
 
 
+def test_bundled_ngsolve_server_change_selects_its_selftest():
+    plan = SELECTOR.build_plan(
+        ["packages/radia-mcp/src/ngsolve_mcp/core/server.py"]
+    )
+    assert plan["server_selftests"] == ["ngsolve-mcp.core"]
+
+
 def test_common_change_selftests_every_server_without_selecting_every_test():
     plan = SELECTOR.build_plan(
         ["packages/radia-mcp/src/radia_mcp/common/status.py"]
@@ -85,7 +92,7 @@ def test_common_change_selftests_every_server_without_selecting_every_test():
     assert plan["server_selftests"] == sorted(k for k, v in SELECTOR._catalog().items() if v.get("entry_point"))
     assert "radia-mcp.meta" in plan["server_selftests"]
     assert any(
-        selector.startswith("tests/test_meta_health.py::")
+        selector.split("::", 1)[0] == "tests/test_meta_health.py"
         for selector in plan["package_tests"]
     )
     assert len(plan["package_tests"]) < len(list((PACKAGE_ROOT / "tests").glob("test_*.py")))

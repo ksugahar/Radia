@@ -24,6 +24,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
 TEST_ROOT = PACKAGE_ROOT / "tests"
 SOURCE_PREFIX = "packages/radia-mcp/src/radia_mcp/"
+NGSOLVE_SOURCE_PREFIX = "packages/radia-mcp/src/ngsolve_mcp/"
 TEST_PREFIX = "packages/radia-mcp/tests/"
 
 ALWAYS_TESTS = (
@@ -314,10 +315,14 @@ def build_plan(
             selected.add("tests/test_policy_lint.py")
             continue
 
-        if not path.startswith(SOURCE_PREFIX):
+        if path.startswith(SOURCE_PREFIX):
+            prefix = SOURCE_PREFIX
+        elif path.startswith(NGSOLVE_SOURCE_PREFIX):
+            prefix = NGSOLVE_SOURCE_PREFIX
+        else:
             continue
 
-        relative = path.removeprefix(SOURCE_PREFIX)
+        relative = path.removeprefix(prefix)
         parts = tuple(part for part in relative.split("/") if part)
         if len(parts) < 2:
             servers.update(launchable)
@@ -344,8 +349,10 @@ def build_plan(
             servers.update(launchable)
             if is_hot_reload_contract:
                 selected.add("tests/test_hot_reload.py")
-        elif family in family_servers:
-            servers.add(family_servers[family])
+        else:
+            server_family = f"ngsolve_mcp.{family}" if prefix == NGSOLVE_SOURCE_PREFIX else family
+            if server_family in family_servers:
+                servers.add(family_servers[server_family])
 
         if family == "common" and stem == "__init__":
             selected.update(
