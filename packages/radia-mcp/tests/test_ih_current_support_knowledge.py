@@ -1,9 +1,10 @@
 from radia_mcp.ih.ih_knowledge import get_induction_heating_documentation
 from radia_mcp.ih.esim_knowledge import ESIM_USAGE_OVERVIEW
+from radia_mcp.ih.peec_knowledge import get_ih_peec_documentation
 
 
 def test_current_sibc_and_heat_contracts_are_explicit():
-    text = get_induction_heating_documentation('all')
+    text = get_induction_heating_documentation('all') + get_ih_peec_documentation('all')
     assert 'lumped_surface_p1' in text
     assert 'Unmapped points fail loudly' in text
     assert 'nonuniform arrays fail loudly' in text.lower()
@@ -36,7 +37,8 @@ def test_sibc_default_is_current_architecture_not_redirect_stub():
 
 def test_esim_is_not_described_as_unimplemented():
     from radia_mcp.ih.esim_knowledge import get_ih_esim_documentation
-    text = get_induction_heating_documentation('all') + get_ih_esim_documentation('all')
+    text = (get_induction_heating_documentation('all') + get_ih_peec_documentation('all')
+            + get_ih_esim_documentation('all'))
     assert 'ESIM WIP' not in text
     assert 'ESIM-WIP' not in text
     assert '"esim_converged": false' in text
@@ -60,7 +62,7 @@ def test_ih_capacity_report_does_not_invent_factor_telemetry_or_expand_ams():
 
 
 def test_panel_esim_default_keeps_direct_certification_and_reference():
-    text=get_induction_heating_documentation('all')
+    text=get_induction_heating_documentation('all') + get_ih_peec_documentation('all')
     assert '--esim-panel-evaluator table' in text
     assert '--esim-panel-evaluator direct' in text
     assert 'all-panel direct final certification is unchanged' in text

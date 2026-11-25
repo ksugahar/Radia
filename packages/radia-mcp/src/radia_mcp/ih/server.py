@@ -1,10 +1,13 @@
 """
 Induction Heating MCP Server (radia_mcp.ih)
 
+The main IH knowledge is the PEEC and ESIM routes; FEM knowledge from
+ngsolve-mcp serves mainly as their independent validation.
+
 Provides tools for:
-- IH-specific linting (eddy current, SIBC, ESIM, Bessel functions)
-- SIBC method selection (BEM Scalar BIE vs FEM coilmesh)
+- PEEC coil routes (PEEC + BEM-SIBC, PEEC + FEM workpiece + Kelvin)
 - ESIM nonlinear surface impedance documentation
+- SIBC method selection (BEM Scalar BIE vs FEM coilmesh)
 - Biot-Savart coil field computation
 - Screening physics and Karl iteration
 - IH simulation workflow (EM -> thermal)
@@ -29,6 +32,7 @@ from mcp.server.fastmcp import FastMCP
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
 from .esim_knowledge import get_ih_esim_documentation
+from .peec_knowledge import get_ih_peec_documentation
 from radia_mcp.common.lazy_call import lazy_callable
 evaluate_team36_json = lazy_callable(".team36_gate", "evaluate_team36_json", __package__)
 team36_contract = lazy_callable(".team36_gate", "team36_contract", __package__)
@@ -62,10 +66,33 @@ def induction_heating(topic: str = "all") -> str:
             "postprocess"   - GMSH output, field evaluation
             "pitfalls"      - Common mistakes
             "esim_kelvin"   - ESIM + Kelvin for IH
+            "av_coil_sigma" - Volume coil A-V with resolved skin (FEM truth
+                              for checking PEEC)
+            "failed_approaches" - Approaches tried and rejected
             "memory"        - Solver capacity, actual IH chain and diagnostic reporting
                               (aliases solvers, capacity, diagnostics, bddc)
     """
     return get_induction_heating_documentation(topic)
+
+
+@mcp.tool()
+def ih_peec(topic: str = "all") -> str:
+    """
+    Get the PEEC coil routes of the induction heating workflow.
+
+    PEEC and ESIM are the main Radia routes of this pack. Independent FEM
+    cross-checks use `induction_heating(topic="av_coil_sigma")` and the
+    FEM knowledge of ngsolve-mcp; general PEEC formulation is in the
+    `peec` pack.
+
+    Args:
+        topic: Options:
+            "all"      - All sections
+            "routes"   - PEEC couplings in IH, entry points, how to check them
+            "bem_sibc" - PEEC coil + BEM-SIBC workpiece production path
+                         (rotating workpiece, solver priorities, L and P_wp)
+    """
+    return get_ih_peec_documentation(topic)
 
 
 @mcp.tool()
@@ -183,7 +210,7 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
     return (
         f"Set up an induction heating simulation for: {geometry}\n"
         f"Material: {material}\n\n"
-        "Use the ih_sibc and ih_knowledge tools.\n"
+        "Use the ih_peec, ih_esim and ih_sibc tools.\n"
         "Key points (Simulink application plus headless solver contracts):\n"
         "1. L + P_wp via weak coupling (PEEC coil, Telegen ΔL):\n"
         "     calc_inductance.py --coil-solver peec --coil-step <coil.step>\n"
