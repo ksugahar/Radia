@@ -130,7 +130,8 @@ def post_case(post_inputs, monkeypatch):
         'elements': {'count': 6, 'parse_complete': True}, 'parse_errors': []})
     from radia_mcp.gmsh import readback
     monkeypatch.setattr(readback, 'require_native_readback', lambda path, **kwargs: {
-        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0})
+        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0,
+        'sha256': post_view.sha256(Path(path))})
     writes = []
     class Exporter:
         def __init__(self, mesh, boundary): self.boundary = boundary

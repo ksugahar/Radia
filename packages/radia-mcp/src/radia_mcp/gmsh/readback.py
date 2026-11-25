@@ -9,6 +9,9 @@ Gmsh rejects or reads with warnings fails here instead of in the GUI.
 """
 from __future__ import annotations
 
+import hashlib
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -72,8 +75,27 @@ def native_readback(path: str | Path, *, timeout_s: float = 120.0) -> dict[str, 
     resolved = Path(path).resolve()
     if not resolved.is_file():
         return {"ok": False, "ran": False, "path": str(resolved), "error": f"file not found: {resolved}"}
-    return run_gmsh_json_subprocess(_SCRIPT, [str(resolved)], timeout_s=timeout_s,
-                                    prefix="radia_mcp_gmsh_readback_")
+    # Native Gmsh also reads companions such as FILE.msh.opt beside the file it
+    # opens. Read an isolated byte copy so the MSH bytes are the only input, as
+    # in the viewer, which never receives the exporter's companions.
+    with tempfile.TemporaryDirectory(prefix="radia_mcp_gmsh_readback_input_") as work:
+        isolated = Path(work) / "readback.msh"
+        shutil.copyfile(resolved, isolated)
+        digest = _sha256(isolated)
+        if digest != _sha256(resolved):
+            return {"ok": False, "ran": False, "path": str(resolved),
+                    "error": "MSH changed while it was copied for native readback"}
+        result = run_gmsh_json_subprocess(_SCRIPT, [str(isolated)], timeout_s=timeout_s,
+                                          prefix="radia_mcp_gmsh_readback_")
+    return {**result, "path": str(resolved), "sha256": digest}
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def require_native_readback(path: str | Path, *, expected_groups=None, expected_elements=None,
@@ -96,4 +118,5 @@ def require_native_readback(path: str | Path, *, expected_groups=None, expected_
         observed = {int(dim): count for dim, count in result["elements"].items()}
         if observed != dict(expected_elements):
             raise RuntimeError(f"Native Gmsh element counts {observed} != expected {dict(expected_elements)}")
-    return {key: result[key] for key in ("nodes", "elements", "physical_groups", "unreferenced_nodes", "views")}
+    return {key: result[key] for key in ("nodes", "elements", "physical_groups", "unreferenced_nodes", "views",
+                                         "sha256")}

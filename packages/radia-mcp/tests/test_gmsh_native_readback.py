@@ -1,18 +1,15 @@
 """Native Gmsh readback of post-view MSH files: what the viewer actually loads.
 
 Guards: `radia_mcp.gmsh.readback` reports node, element and group counts from
-native Gmsh 5 and refuses files that Gmsh cannot open or loads with warnings or
-unconnected nodes; `convert_post_view` publishes a VOL post view only after
-that readback matches the selected groups and element count.
-Assumes: the qualified Gmsh 5 runtime (RADIA_GMSH_PROVENANCE); the end-to-end
-cases also need NGSolve/Netgen OCC and Radia's production MSH exporter. Without
-them the tests skip visibly with the missing piece named.
+native Gmsh 5 for the MSH bytes alone (never an adjacent companion) and
+refuses files that Gmsh cannot open or loads with warnings or unconnected
+nodes; the viewer preflight runs it. Real VOL conversions are validated in
+validation_test/radia_mcp/test_gmsh_post_view_native_readback.py.
+Assumes: the qualified Gmsh 5 runtime (RADIA_GMSH_PROVENANCE); without it the
+tests skip visibly.
 """
-import hashlib
 import json
 import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -88,68 +85,11 @@ def test_viewer_preflight_runs_the_native_readback(tmp_path, monkeypatch, capsys
     assert "'unreferenced_nodes': 1" in capsys.readouterr().err
 
 
-@pytest.fixture
-def checked_vol(tmp_path, monkeypatch):
-    occ = pytest.importorskip("netgen.occ", reason="needs Netgen OCC to build the VOL fixture")
-    ng = pytest.importorskip("ngsolve", reason="needs NGSolve to load the VOL")
-    exporter = pytest.importorskip("radia.gmsh_post_export", reason="needs Radia's production MSH exporter")
-    if not hasattr(exporter, "PayloadV42"):
-        pytest.skip("installed radia lacks the production MSH 4.2 exporter")
-    source_dir = tmp_path / "in"; source_dir.mkdir()
-    scratch = tmp_path / "out"; scratch.mkdir()
-    iron = occ.Box((0, 0, 0), (0.01, 0.01, 0.01)); iron.mat("iron"); iron.faces.name = "iron_wall"
-    air = occ.Box((0.01, 0, 0), (0.02, 0.01, 0.01)); air.mat("air"); air.faces.name = "air_wall"
-    source = source_dir / "two_region.vol"
-    occ.OCCGeometry(occ.Glue([iron, air])).GenerateMesh(maxh=0.005).Save(str(source))
-    mesh = ng.Mesh(str(source))
-    digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    # The handoff is caller-asserted (documented contract): counts come from NGSolve itself.
-    report = {"schema": "cubit-mesh-export.vol-check.v1", "passed": True,
-              "mesh": {"dimension": mesh.dim, "curve_order": 1, "n_elements": mesh.ne, "n_points": mesh.nv},
-              "labels": {"schema": "radia.vol-label-contract.v1", "passed": True,
-                         "materials": sorted(set(mesh.GetMaterials())),
-                         "boundaries": sorted(set(mesh.GetBoundaries()))}}
-    handoff = tmp_path / "handoff.json"
-    handoff.write_text(json.dumps({"schema": "radia.checked-vol-handoff.v1", "source_sha256": digest,
-                                   "report": report}), encoding="utf-8")
-    monkeypatch.setenv("RADIA_MESH_VIEWER_SCRATCH", str(scratch))
-    return source, scratch, handoff, digest, mesh, ng
-
-
-def _convert(checked_vol, scope):
-    from radia_mcp.mesh_viewer import post_view
-    source, scratch, handoff, digest, _, _ = checked_vol
-    operation = Path(tempfile.mkdtemp(prefix=".radia-post-receipt-", dir=scratch))
-    return post_view.convert_post_view(source, str(scratch / f"view_{scope}.msh"), str(handoff), digest, scope,
-                                       staging_dir=operation / "staging")
-
-
-@pytest.mark.parametrize("scope", ["materials", "boundaries"])
-def test_checked_vol_post_view_loads_cleanly_in_native_gmsh(checked_vol, scope, monkeypatch):
-    from radia_mcp.gmsh import readback as module
-    _, _, _, _, mesh, ng = checked_vol
-    boundary = scope == "boundaries"
-    selected = sum(1 for _ in mesh.Elements(ng.BND if boundary else ng.VOL))
-    calls = []
-    original = module.require_native_readback
-    monkeypatch.setattr(module, "require_native_readback",
-                        lambda path, **kwargs: calls.append(kwargs) or original(path, **kwargs))
-    try:
-        result = _convert(checked_vol, scope)
-    except RuntimeError as error:
-        if boundary and "'unreferenced_nodes': 1" in str(error):
-            pytest.skip("installed radia exporter predates boundary-node compaction; "
-                        f"the conversion correctly refused its output: {error}")
-        raise
-    readback = result["native_readback"]
-    names = mesh.GetBoundaries() if boundary else mesh.GetMaterials()
-    # The conversion binds the native load to its own selection, not just to "it opened".
-    assert calls == [{"expected_groups": {(mesh.dim - int(boundary), n) for n in names},
-                      "expected_elements": {mesh.dim - int(boundary): selected}}], calls
-    assert readback["elements"] == {str(mesh.dim - int(boundary)): selected}, readback
-    assert {tuple(g) for g in readback["physical_groups"]} == {(mesh.dim - int(boundary), n) for n in names}
-    assert readback["unreferenced_nodes"] == 0
-    if not boundary:
-        assert readback["nodes"] == mesh.nv, readback
-    # The published bytes are the bytes that were read back.
-    assert native_readback(result["output"])["nodes"] == readback["nodes"]
+def test_adjacent_companion_is_not_read(tmp_path):
+    # Native Gmsh reads FILE.msh.opt beside the file it opens; this one is invalid
+    # and would log an error. The readback must see the MSH bytes only.
+    path = _write(tmp_path, "view.msh", _triangle(False))
+    (tmp_path / "view.msh.opt").write_text("this is not a Gmsh option script;\n", encoding="ascii")
+    result = native_readback(path)
+    assert result["ok"] is True and result["errors"] == [], result
+    assert result["path"] == str(path.resolve()) and len(result["sha256"]) == 64

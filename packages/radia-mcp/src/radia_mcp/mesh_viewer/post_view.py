@@ -179,6 +179,8 @@ def convert_post_view(source: Path, output: str, checked_report: str,
         raise ValueError('Source VOL changed during conversion')
     # Filesystem copy is not a second MSH writer.
     digest = _publish_mesh(staged, target)
+    if readback.get('sha256') != digest:
+        raise ValueError('Published MSH differs from the bytes native Gmsh read back')
     return {'schema': 'radia.mesh-post-view.v1', 'output': str(target), 'sha256': digest, 'staging': str(staging),
             'source_sha256': source_sha256.lower(), 'group_scope': group_scope,
             'physical_groups': sorted(observed_groups), 'native_readback': readback,
