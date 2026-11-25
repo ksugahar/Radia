@@ -255,14 +255,23 @@ def test_matlab_child_uses_locked_mkl_directory_and_restores_parent_path(tmp_pat
     ))
     monkeypatch.setenv("PATH", "original")
 
-    def launch(options):
-        assert os.environ["PATH"].split(os.pathsep) == [
-            str(net), str(mkl.parent), str(occt.parent), str(base), "original"
-        ]
-        return options
+    child = {"PATH": "original"}
+
+    def setenv(name, value, **kwargs):
+        child[name] = value
+        return _matlab_future(None)
+
+    def launch(options, *, background):
+        assert os.environ["PATH"] == "original" and background
+        return _matlab_future(SimpleNamespace(
+            getenv=lambda name, **kwargs: _matlab_future(child[name]), setenv=setenv
+        ))
 
     engine = SimpleNamespace(start_matlab=launch)
-    assert runtime.start_matlab(engine, "options") == "options"
+    runtime.start_matlab(engine, "options")
+    assert child["PATH"].split(os.pathsep) == [
+        str(net), str(mkl.parent), str(occt.parent), str(base), "original"
+    ]
     assert verified == [{}]
     assert os.environ["PATH"] == "original"
     mkl.unlink()
@@ -292,3 +301,58 @@ def test_release_wheels_exercise_pip_resolution_in_fresh_venvs():
         assert "Expected a fresh acceptance path" in gate
         assert "verify_public_fe_sdk.py smoke --wheel" in gate
         assert ("--gpu" in gate) == gpu
+
+
+def _matlab_future(value=None, *, error=None):
+    def result(*, timeout):
+        assert timeout > 0
+        if error is not None:
+            raise error
+        return value
+
+    return SimpleNamespace(result=result, cancel=lambda: None)
+
+
+@pytest.mark.parametrize("phase", ["startup", "mex"])
+def test_matlab_timeout_only_kills_the_owned_process(tmp_path, monkeypatch, capsys, phase):
+    spec = importlib.util.spec_from_file_location(
+        "matlab_runtime", ROOT / "validation_test/ams_cuda/matlab_runtime.py"
+    )
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    killed = []
+
+    class Process:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def kill(self):
+            killed.append(self.pid)
+
+    ours, other = Process(123), Process(999)
+    class EngineTimeout(Exception):
+        pass
+
+    monkeypatch.setitem(sys.modules, "matlab.engine", SimpleNamespace(TimeoutError=EngineTimeout))
+    stalled = _matlab_future(error=EngineTimeout())
+    if phase == "startup":
+        children = iter(({other}, {ours, other}))
+        monkeypatch.setattr(runtime, "_matlab_children", lambda: next(children))
+        monkeypatch.setattr(runtime, "matlab_dll_directories", lambda: ())
+        engine = SimpleNamespace(start_matlab=lambda *args, **kwargs: stalled)
+        with pytest.raises(TimeoutError, match="MATLAB engine start"):
+            runtime.start_matlab(engine, "options")
+    else:
+        monkeypatch.setattr(runtime, "_matlab_children", lambda: {ours, other})
+        mex = tmp_path / "radia_cuda_ams.mexw64"
+        mex.touch()
+        engine = SimpleNamespace(
+            feature=lambda *args, **kwargs: _matlab_future(ours.pid),
+            addpath=lambda *args, **kwargs: _matlab_future(),
+            which=lambda *args, **kwargs: _matlab_future(str(mex)),
+            feval=lambda *args, **kwargs: stalled,
+        )
+        with pytest.raises(TimeoutError, match="radia_cuda_ams.mexw64 feval"):
+            runtime.probe_ams_mex(engine, mex)
+    assert killed == [123]
+    assert "TIMEOUT" in capsys.readouterr().out
