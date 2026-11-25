@@ -78,6 +78,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
         "primary_tools": ["onshape_discover", "onshape_read_parameters",
                           "onshape_render_shaded_views", "onshape_inspect_assembly",
+                          "onshape_measure_planar_face",
                           "onshape_export_cad"],
         "related": ["build123d-mcp"],
         "tags": ["cad"],

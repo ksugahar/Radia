@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -12,7 +13,7 @@ from http.client import HTTPException
 from pathlib import Path
 from typing import Annotated, Literal, get_args
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from mcp.server.fastmcp import FastMCP
@@ -371,6 +372,64 @@ def _export_result(record, published, cache):
     return result
 
 
+_PLANAR_FACE_QUERY = """function(context is Context, queries) {
+    const face = qGeometry(qEntityFilter(queries.face, EntityType.FACE), GeometryType.PLANE);
+    if (size(evaluateQuery(context, face)) != 1)
+        return [];
+    const data = {"entities" : face};
+    const center = evApproximateCentroid(context, data) / meter;
+    const area = evArea(context, data) / (meter * meter);
+    return [area, center[0], center[1], center[2]];
+}"""
+
+
+@mcp.tool(annotations=ANN_READONLY_WEB)
+async def onshape_measure_planar_face(
+    document_id: str,
+    element_id: str,
+    version_id: str,
+    face_id: str,
+    configuration: str = "",
+) -> dict:
+    """Read a planar face's area and approximate centroid in a fixed Part Studio.
+
+    Supply a deterministic face ID from the same version and configuration.
+    The built-in FeatureScript query returns SI measurements in Part Studio
+    coordinates. Use this when aggregate part properties cannot identify a face.
+    """
+    if not all(_ID.fullmatch(value) for value in (document_id, element_id, version_id)):
+        return _error("input", "Provide document, element and immutable version IDs.")
+    if not re.fullmatch(r"[A-Za-z0-9_+=/-]{1,256}", face_id):
+        return _error("input", "Provide one deterministic face ID.")
+
+    import anyio
+
+    def read(request):
+        path = f"/partstudios/d/{document_id}/v/{version_id}/e/{element_id}/featurescript"
+        query = {"rollbackBarIndex": -1}
+        if configuration:
+            query["configuration"] = configuration
+        response = request(path + "?" + urlencode(query), {
+            "script": _PLANAR_FACE_QUERY,
+            "queries": {"face": [face_id]},
+        })
+        values = response["result"]["value"]
+        if values == []:
+            return _error("featurescript", "Expected exactly one planar face in this version.")
+        area, x, y, z = numbers = [value["value"] for value in values]
+        if any(type(value) not in (int, float) or not math.isfinite(value) for value in numbers) or area <= 0:
+            raise ValueError("Invalid planar face measurements")
+        return {
+            "document_id": document_id, "element_id": element_id,
+            "version_id": version_id, "configuration": configuration or None,
+            "face_id": face_id, "coordinate_frame": "part_studio",
+            "script_sha256": hashlib.sha256(_PLANAR_FACE_QUERY.encode()).hexdigest(),
+            "area_m2": area, "approximate_centroid_m": [x, y, z],
+        }
+
+    return await anyio.to_thread.run_sync(_read_onshape, "featurescript", read)
+
+
 @mcp.tool(annotations=_ANN_WRITES_WEB)
 async def onshape_export_cad(
     document_id: str,
@@ -572,7 +631,8 @@ def main():
         # onshape_reload_code exists only in editable development installs.
         if {tool.name for tool in tools} - {"onshape_reload_code"} != {
             "onshape_export_cad", "onshape_discover", "onshape_read_parameters",
-            "onshape_render_shaded_views", "onshape_inspect_assembly", "onshape_status",
+            "onshape_render_shaded_views", "onshape_inspect_assembly", "onshape_measure_planar_face",
+            "onshape_status",
         }:
             raise SystemExit("Unexpected Onshape research tool catalog")
         print("Onshape research tool registration passed")
