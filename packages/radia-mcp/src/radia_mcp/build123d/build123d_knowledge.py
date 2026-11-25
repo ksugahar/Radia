@@ -2645,15 +2645,16 @@ export_step(asm, "asm.step")
 
 ## Labels matter
 
-Labels reach STEP only through the assembly tree: build the compound with
-`Compound(children=[...])`. `Compound([a, b])` stores the shapes without
-children, and the STEP readback carries no part labels. Read labels back from
-`compound.children` (or the tree below it); `compound.solids()` returns the
-same solids with empty labels.
+Per-part labels (measured with build123d 0.13.0, `export_step` then
+`import_step`): `Compound(children=[a, b])` exports `a` and `b` as labelled
+STEP children, while `Compound([a, b])` stores the shapes without children and
+the readback has no part labels. Read labels back from `compound.children`
+(or the tree below it); `compound.solids()` returns the same solids with
+empty labels.
 
-Placing one shape twice (`i1 = Pos(...) * base; i2 = Pos(...) * base`) makes
-the instances share their underlying shape, and STEP export writes the last
-label for both. Give instances that need their own names their own
+In the same export path, placing one shape twice
+(`i1 = Pos(...) * base; i2 = Pos(...) * base`) makes the instances share their
+underlying shape, and both were exported with the last label assigned. Give instances that need their own names their own
 construction, or treat the shared name as an instance group (see
 `rebuild_from_reference_step`).
 
@@ -3102,12 +3103,20 @@ STEP from another CAD system, so the model can be edited and compared.
   returns None for a cylinder or sphere stored as a trimmed surface
   (`Geom_RectangularTrimmedSurface`), which some exporters write.
 
+Call only the accessor that matches the surface type; the others raise
+`Standard_NoSuchObject`.
+
 ```python
+from build123d import GeomType
 from OCP.BRepAdaptor import BRepAdaptor_Surface
+
 s = BRepAdaptor_Surface(face.wrapped)
-cyl = s.Cylinder()   # .Radius(), .Axis().Location(), .Axis().Direction()
-cone = s.Cone()      # .RefRadius(), .SemiAngle(), .Apex()
-tor = s.Torus()      # .MajorRadius(), .MinorRadius(), .Location()
+if face.geom_type == GeomType.CYLINDER:
+    c = s.Cylinder()   # .Radius(), .Axis().Location(), .Axis().Direction()
+elif face.geom_type == GeomType.CONE:
+    c = s.Cone()       # .RefRadius(), .SemiAngle(), .Apex()
+elif face.geom_type == GeomType.TORUS:
+    c = s.Torus()      # .MajorRadius(), .MinorRadius(), .Location()
 ```
 
 - Skip parts whose surfaces are mostly B-splines (knurls, vendor models);
@@ -3140,15 +3149,16 @@ body = revolve(sk.sketch, Axis.Z)
 - Configured parts in the reference often carry the configuration in their
   name (a screw of shank 5, 8 and 12 has three names). Match that name, or
   label matching reports `missing_match`.
-- Export with `Compound(children=[...])` so labels survive
-  (`assemblies_and_compounds`).
+- Export with `Compound(children=[...])` so per-part labels reach the STEP
+  part tree (`assemblies_and_compounds`).
 
-## Compare with the symmetric difference, not volume alone
+## Report the symmetric difference, not volume alone
 `build123d_diff_shapes` reports, per matched part, the volume delta, the
 topology delta and the symmetric-difference volume. A misplaced feature can
 keep the volume: the same fillet on another edge at the same radius from the
-axis removes the same volume. Accept a rebuild on the symmetric difference
-and the face counts per type; the volume delta alone cannot catch it.
+axis removes the same volume, so the volume delta alone cannot catch it.
+Report the symmetric difference and the face counts per type next to it.
+These are comparison metrics; the acceptance criterion belongs to the user.
 
 Repeated instances with one label (one shape placed twice) are paired by
 centroid when the pairing is unambiguous; otherwise they stay unresolved

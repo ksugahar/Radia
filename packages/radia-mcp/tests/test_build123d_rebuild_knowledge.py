@@ -90,16 +90,23 @@ def test_sketch_vertex_global_z_rule():
 with BuildSketch(Plane.XZ) as sk:
     make_face()
     pick = lambda x, z: min(sk.vertices(), key=lambda p: (p.X - x) ** 2 + (p.Z - z) ** 2)
+    low = sk.vertices().sort_by(Axis.Z)[0]
+    tops = [v for v in sk.vertices() if v.Z > 1]
 body = min(body.vertices(), key=lambda p: p.Z)
 """)
     findings = check_sketch_vertex_global_z("x.py", wrong)
-    assert [(f["line"], f["rule"]) for f in findings] == [(3, "sketch-vertex-global-z")]
+    assert [(f["line"], f["rule"]) for f in findings] == [
+        (3, "sketch-vertex-global-z"), (4, "sketch-vertex-global-z"), (5, "sketch-vertex-global-z")]
 
     right = _lines("""
 with BuildSketch(Plane.XZ) as sk:
     pick = lambda x, z: min(sk.vertices(), key=lambda p: (p.X - x) ** 2 + (p.Y - z) ** 2)
-with BuildSketch(Plane.XY) as top:
-    low = min(top.vertices(), key=lambda p: p.Z)
+    top = max(sk.sketch.vertices(), key=lambda v: v.Z)
+    ref = max(reference.vertices(), key=lambda v: v.Z)
+    # min(sk.vertices(), key=lambda p: p.Z)
+    note = "min(sk.vertices(), key=lambda p: p.Z)"
+with BuildSketch(Plane.XY) as top_sk:
+    low = min(top_sk.vertices(), key=lambda p: p.Z)
 """)
     assert check_sketch_vertex_global_z("x.py", right) == []
 
@@ -112,11 +119,33 @@ asm = Compound([a, b])
     findings = check_positional_compound_labels("x.py", wrong)
     assert [(f["line"], f["rule"]) for f in findings] == [(2, "positional-compound-drops-labels")]
 
-    assert check_positional_compound_labels("x.py", _lines("""
+    for text in ("""
 a.label = "a"
 asm = Compound(children=[a, b])
-""")) == []
-    assert check_positional_compound_labels("x.py", _lines("asm = Compound([a, b])")) == []
+""", "asm = Compound([a, b])", """
+housing.label = "housing"
+cutter = Compound([left, right])
+# Compound([housing])
+"""):
+        assert check_positional_compound_labels("x.py", _lines(text)) == [], text
+
+
+def test_documented_surface_dispatch_runs_on_each_surface_type():
+    import re
+
+    from build123d import Cone, Torus
+
+    text = get_build123d_documentation("rebuild_from_reference_step")
+    block = next(b for b in re.findall(r"```python\n(.*?)```", text, re.S)
+                 if "BRepAdaptor_Surface" in b)
+    cases = {GeomType.CYLINDER: (Cylinder(2, 5), "Radius", 2.0),
+             GeomType.CONE: (Cone(2, 1, 3), "RefRadius", 2.0),
+             GeomType.TORUS: (Torus(5, 1), "MinorRadius", 1.0)}
+    for geom_type, (shape, getter, expected) in cases.items():
+        face = next(f for f in shape.faces() if f.geom_type == geom_type)
+        scope = {"face": face}
+        exec(block, scope)
+        assert getattr(scope["c"], getter)() == pytest.approx(expected), geom_type
 
 
 def test_rebuild_topic_is_registered():

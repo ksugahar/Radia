@@ -316,78 +316,104 @@ def check_tiny_fillet_radius(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
-# Rule: global Z used on vertices of a sketch on a non-XY plane
+# Rule: global Z used on the local vertices of a sketch on a non-XY plane
 # ---------------------------------------------------------------------------
 
-_SKETCH_ON_PLANE_RE = re.compile(r"\bwith\s+BuildSketch\s*\(\s*(?:plane\s*=\s*)?Plane\.(XZ|ZX|YZ|ZY)\b[^)]*\)\s*as\s+(\w+)")
-_VERTEX_Z_RE = re.compile(r"\.Z\b")
+_SKETCH_ON_PLANE_RE = re.compile(
+	r"\bwith\s+BuildSketch\s*\(\s*(?:plane\s*=\s*)?Plane\.(XZ|ZX|YZ|ZY)\b[^)]*\)\s*as\s+(\w+)")
+_STRING_RE = re.compile(r"(\"\"\"|'''|\"[^\"\n]*\"|'[^'\n]*')")
+
+
+def _code_only(line: str) -> str:
+	"""Drop string literals and a trailing comment from one source line."""
+	return _STRING_RE.sub("''", line).split("#", 1)[0]
+
+
+def _local_vertex_z_uses(code: str, name: str) -> bool:
+	"""True when `.Z` is read from an element of `<name>.vertices()` itself.
+
+	`<name>.sketch.vertices()` (the placed sketch) and other receivers are
+	in global coordinates and are not matched.
+	"""
+	source = rf"(?<![\w.]){re.escape(name)}\.vertices\s*\(\s*\)"
+	if re.search(source + r"\s*\.\s*(sort_by|filter_by|group_by)\s*\(\s*Axis\.Z\b", code):
+		return True
+	for m in re.finditer(source + r"\s*,\s*key\s*=\s*lambda\s+(\w+)\s*:", code):
+		if re.search(rf"\b{m.group(1)}\.Z\b", code[m.end():]):
+			return True
+	for m in re.finditer(r"\bfor\s+(\w+)\s+in\s+" + source, code):
+		if re.search(rf"\b{m.group(1)}\.Z\b", code):
+			return True
+	return False
 
 
 def check_sketch_vertex_global_z(filepath: str, lines: List[str]) -> List[Dict]:
 	"""MODERATE: inside `with BuildSketch(Plane.XZ) as sk:`, `sk.vertices()`
 	are in the sketch's local frame, so every vertex has Z == 0. Selecting
-	vertices by `.Z` there ties them all and the pick follows vertex order,
-	so a fillet or chamfer can land on another corner. Use the local `.Y`.
+	them by `.Z` ties every vertex and the pick follows vertex order, so a
+	fillet or chamfer can land on another corner. Use the local `.Y`.
+	Only `.Z` read from elements of the builder's own `vertices()` counts.
 	"""
 	findings: List[Dict] = []
 	active: tuple[int, str, str] | None = None  # (indent, sketch name, plane)
 	for i, raw in enumerate(lines, 1):
 		line = raw.rstrip("\n")
-		stripped = line.strip()
-		if not stripped or stripped.startswith("#"):
+		code = _code_only(line).rstrip()
+		if not code.strip():
 			continue
 		indent = len(line) - len(line.lstrip())
 		if active is not None and indent <= active[0]:
 			active = None
-		m = _SKETCH_ON_PLANE_RE.search(stripped)
+		m = _SKETCH_ON_PLANE_RE.search(code)
 		if m:
 			active = (indent, m.group(2), m.group(1))
 			continue
-		if active is None:
-			continue
-		name = active[1]
-		uses_vertices = re.search(rf"\b{name}\.vertices\s*\(", stripped) or "vertices()" in stripped
-		if uses_vertices and _VERTEX_Z_RE.search(stripped):
+		if active is not None and _local_vertex_z_uses(code, active[1]):
 			findings.append({
 				"line": i,
 				"severity": "MODERATE",
 				"rule": "sketch-vertex-global-z",
 				"message": (
-					f"Vertices of a sketch on Plane.{active[2]} are in the sketch's "
-					"local frame (Z == 0); selecting them by `.Z` ties every vertex. "
-					"Use the local `.X`/`.Y`, and select again after each 2D fillet."),
+					f"`{active[1]}.vertices()` of a sketch on Plane.{active[2]} are in the "
+					"sketch's local frame (Z == 0); selecting them by `.Z` ties every "
+					"vertex. Use the local `.X`/`.Y`, and select again after each 2D fillet."),
 			})
 	return findings
 
 
 # ---------------------------------------------------------------------------
-# Rule: labelled shapes exported through a positional Compound
+# Rule: labelled parts exported through a positional Compound
 # ---------------------------------------------------------------------------
 
-_POSITIONAL_COMPOUND_RE = re.compile(r"\bCompound\s*\(\s*\[")
-_LABEL_ASSIGN_RE = re.compile(r"\.label\s*=")
+_POSITIONAL_COMPOUND_RE = re.compile(r"\bCompound\s*\(\s*\[([^\]]*)\]")
+_LABEL_ASSIGN_RE = re.compile(r"^\s*(\w+)\.label\s*=")
 
 
 def check_positional_compound_labels(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: `Compound([a, b])` keeps no children, so labels set on the
-	parts never reach STEP. Use `Compound(children=[a, b])` when the script
-	assigns labels.
+	"""MODERATE: `Compound([a, b])` keeps no children, so a label set on `a`
+	or `b` does not reach the STEP part tree (build123d 0.13 export and
+	readback). Flags only compounds listing a name the script labels;
+	unlabelled helper compounds are left alone.
 	"""
-	if not any(_LABEL_ASSIGN_RE.search(l) for l in lines if not l.strip().startswith("#")):
+	labelled = {m.group(1) for l in lines if (m := _LABEL_ASSIGN_RE.match(_code_only(l)))}
+	if not labelled:
 		return []
 	findings: List[Dict] = []
 	for i, raw in enumerate(lines, 1):
-		if raw.strip().startswith("#"):
-			continue
-		if _POSITIONAL_COMPOUND_RE.search(raw):
-			findings.append({
-				"line": i,
-				"severity": "MODERATE",
-				"rule": "positional-compound-drops-labels",
-				"message": (
-					"`Compound([...])` stores no children, so part labels are lost "
-					"on STEP export. Use `Compound(children=[...])`."),
-			})
+		code = _code_only(raw)
+		for m in _POSITIONAL_COMPOUND_RE.finditer(code):
+			operands = set(re.findall(r"\b\w+\b", m.group(1)))
+			hit = sorted(operands & labelled)
+			if hit:
+				findings.append({
+					"line": i,
+					"severity": "MODERATE",
+					"rule": "positional-compound-drops-labels",
+					"message": (
+						f"`Compound([...])` lists labelled part(s) {', '.join(hit)} but "
+						"stores no children, so their labels are not exported as STEP "
+						"parts. If they are assembly parts, use `Compound(children=[...])`."),
+				})
 	return findings
 
 
