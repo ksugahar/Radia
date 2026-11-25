@@ -219,3 +219,63 @@ def test_rebuild_topic_is_registered():
     text = get_build123d_documentation("rebuild_from_reference_step")
     assert text.startswith("# Rebuilding a reference STEP"), text[:80]
     assert "rebuild_from_reference_step" in get_build123d_documentation("unknown-topic")
+
+
+_L_OUTLINE = [(0.0, 0.0), (5.0, 0.0), (5.0, 3.0), (4.0, 3.0), (4.0, 1.0), (0.0, 1.0)]  # CCW, re-entrant (4, 1)
+
+
+def _sketch(points):
+    from build123d import BuildLine, Polyline, make_face
+
+    with BuildSketch() as sk:
+        with BuildLine():
+            Polyline(*points, close=True)
+        make_face()
+    return sk.sketch
+
+
+def test_tapered_extrude_follows_winding_and_rounds_reentrant_corner():
+    from build123d import extrude
+
+    spans = {}
+    for name, pts in (("ccw", _L_OUTLINE), ("cw", _L_OUTLINE[::-1])):
+        solid = extrude(Pos(0, 0, 2) * _sketch(pts), 0.3, taper=30, dir=(0, 0, 1))
+        bb = solid.bounding_box()
+        spans[name] = (round(bb.min.Z, 6), round(bb.max.Z, 6))
+        assert sum(f.geom_type == GeomType.CONE for f in solid.faces()) == 1, name
+    assert spans == {"ccw": (2.0, 2.3), "cw": (1.7, 2.0)}, spans
+
+
+def test_ruled_loft_of_polygons_has_bspline_sides():
+    from build123d import Vector, Wire, loft
+
+    def face(pts, z):
+        return Face(Wire.make_polygon([Vector(x, y, z) for x, y in pts], close=True))
+
+    inner = [(0.2, 0.2), (4.8, 0.2), (4.8, 2.8), (4.2, 2.8), (4.2, 0.8), (0.2, 0.8)]
+    solid = loft([face(_L_OUTLINE, 0.0), face(inner, 0.3)], ruled=True)
+    types = [f.geom_type for f in solid.faces()]
+    assert types.count(GeomType.BSPLINE) == 6 and types.count(GeomType.PLANE) == 2, types
+
+
+def test_documented_frustum_is_planar_and_has_prismatoid_volume():
+    import re
+
+    text = get_build123d_documentation("rebuild_from_reference_step")
+    block = next(b for b in re.findall(r"```python\n(.*?)```", text, re.S) if "def frustum" in b)
+    scope = {}
+    exec(block, scope)
+
+    def area(pts):
+        return 0.5 * sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+
+    d, h = 0.2, 0.5
+    top = scope["mitre_inset"](_L_OUTLINE, d)
+    expected_top = [(0.2, 0.2), (4.8, 0.2), (4.8, 2.8), (4.2, 2.8), (4.2, 0.8), (0.2, 0.8)]
+    assert [c for p in top for c in p] == pytest.approx([c for p in expected_top for c in p]), top
+    solid = scope["frustum"](_L_OUTLINE, 0.0, top, h)
+    assert solid.is_valid
+    assert all(f.geom_type == GeomType.PLANE for f in solid.faces())
+    mid = scope["mitre_inset"](_L_OUTLINE, d / 2)
+    expected = h / 6 * (area(_L_OUTLINE) + 4 * area(mid) + area(top))   # exact for planar ruled sides
+    assert solid.volume == pytest.approx(expected, rel=1e-12), (solid.volume, expected)

@@ -3143,6 +3143,59 @@ with BuildSketch(Plane.XZ) as sk:
 body = revolve(sk.sketch, Axis.Z)
 ```
 
+## Tapered pockets and drafted walls
+Measured with build123d 0.13.0:
+- `extrude(face, amount, taper=...)` follows the winding of the outline: a
+  clockwise outline went the other way along Z, even with `dir=(0, 0, 1)`.
+  Plain `extrude` and the face normal do not show the difference. Give
+  tapered outlines in counter-clockwise order, and check the result's bounding box.
+- A tapered extrude rounds a re-entrant corner into a cone face. Many CAD
+  systems keep that corner sharp (two planes meeting on a line).
+- `loft([lower, upper], ruled=True)` between two polygons gives B-spline side
+  faces, not planes, so face counts by type will not match a planar reference.
+
+For planar sides and sharp corners, build the solid from its faces:
+
+```python
+import math
+from build123d import Face, Shell, Solid, Vector, Wire
+
+
+def mitre_inset(points, d):
+    # Move every edge of a counter-clockwise polygon inward by d; corners stay sharp.
+    lines = []
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]):
+        ux, uy = x1 - x0, y1 - y0
+        n = math.hypot(ux, uy)
+        lines.append(((x0 - d * uy / n, y0 + d * ux / n), (ux, uy)))
+    out = []
+    for (p, u), (q, v) in zip(lines[-1:] + lines[:-1], lines):
+        t = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / (u[0] * v[1] - u[1] * v[0])
+        out.append((p[0] + t * u[0], p[1] + t * u[1]))
+    return out
+
+
+def frustum(bottom, z0, top, z1):
+    # Solid between two polygons with matching vertex order; every face is planar.
+    lo = [Vector(x, y, z0) for x, y in bottom]
+    hi = [Vector(x, y, z1) for x, y in top]
+    faces = [Face(Wire.make_polygon(lo, close=True)), Face(Wire.make_polygon(hi, close=True))]
+    for i in range(len(lo)):
+        j = (i + 1) % len(lo)
+        faces.append(Face(Wire.make_polygon([lo[i], lo[j], hi[j], hi[i]], close=True)))
+    return Solid(Shell(faces))
+```
+
+`mitre_inset` assumes no two consecutive edges are collinear. A wall that
+stays vertical on part of an edge needs its own inset of 0, and the top
+outline then steps, so the bottom outline repeats that vertex.
+
+## Patterned features can differ
+A reference built from a pattern may still change one instance (one wall
+without draft, one wider gap). Compare every instance, and use the
+symmetric-difference pieces to find the one that differs before changing
+shared parameters.
+
 ## Names, parameters and configurations
 - `build123d_run` parameters are finite numbers only. Build names in the
   script (for example from a length parameter).
