@@ -4936,18 +4936,23 @@ def _require_gauge_point(mesh, dirichlet, dirichlet_bbbnd):
     OCC vertex glued into the geometry), removes no dof and would leave the
     Phi gauge free without any NGSolve error.
     """
-    from ngsolve import H1
+    from ngsolve import H1, VOL
 
-    # NGSolve already excludes vertices of no element from the free dofs, so
-    # count only the dofs that each selector removes from the untagged space.
-    plain = H1(mesh, order=1).FreeDofs().NumSet()
-    if dirichlet and H1(mesh, order=1, dirichlet=dirichlet).FreeDofs().NumSet() < plain:
-        return  # a Dirichlet face already fixes the gauge
-    gauged = plain
-    if dirichlet_bbbnd:
-        gauged = H1(mesh, order=1,
-                    dirichlet_bbbnd=dirichlet_bbbnd).FreeDofs().NumSet()
-    if gauged >= plain:
+    space = H1(mesh, order=1)
+    free_dofs = space.FreeDofs()
+    vertices = {vertex for element in mesh.Elements(VOL) for vertex in element.vertices}
+    active_dofs = {
+        dof for vertex in vertices for dof in space.GetDofNrs(vertex)
+        if dof >= 0 and free_dofs[dof]
+    }
+
+    def fixes_active_dof(**selectors):
+        selected_free = H1(mesh, order=1, **selectors).FreeDofs()
+        return any(not selected_free[dof] for dof in active_dofs)
+
+    if dirichlet and fixes_active_dof(dirichlet=dirichlet):
+        return
+    if not (dirichlet_bbbnd and fixes_active_dof(dirichlet_bbbnd=dirichlet_bbbnd)):
         tags = sorted(n for n in set(mesh.GetBBBoundaries()) if n)
         raise ValueError(
             f"periodic A-Phi gauge is not fixed: dirichlet={dirichlet!r} "
