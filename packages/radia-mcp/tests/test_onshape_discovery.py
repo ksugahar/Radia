@@ -144,6 +144,7 @@ def test_tool_annotations_declare_web_access_and_local_writes(monkeypatch):
         "onshape_discover": (True, False, True),
         "onshape_read_parameters": (True, False, True),
         "onshape_inspect_assembly": (True, False, True),
+        "onshape_measure_planar_face": (True, False, True),
         "onshape_render_shaded_views": (False, False, True),
         "onshape_export_cad": (False, False, True),
     }
