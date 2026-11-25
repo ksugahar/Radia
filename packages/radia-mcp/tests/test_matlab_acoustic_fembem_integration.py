@@ -126,7 +126,7 @@ def test_cli_prints_contract_json(capsys):
     assert payload["tool_count"] == 10
 
 
-def test_radia_ngsolve_mcp_exposes_integration_tools():
+def test_radia_ngsolve_exposes_integration_tools():
     from radia_mcp.radia_ngsolve.server import (
         matlab_acoustic_fembem_extension_contract as mcp_contract,
         matlab_acoustic_fembem_server_config as mcp_config,

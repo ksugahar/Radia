@@ -163,7 +163,7 @@ def _distribution_provenance(distribution_name: str = "radia-mcp") -> dict:
 
 def _distribution_for_subpackage(subpackage: str) -> str:
     root = subpackage.split(".")[0]
-    return "radia-mcp" if root == "ngsolve_mcp" else root.replace("_", "-")
+    return root.replace("_", "-")
 
 
 def _runtime_provenance(subpackage: str) -> dict:

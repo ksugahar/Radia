@@ -89,7 +89,6 @@ def test_catalog_control_tool_names_are_valid_and_unique():
     ]
     assert all(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name) for name in names)
     assert len(names) == len(set(names))
-    assert control_tool_stem("ngsolve-mcp.weak-form") == "ngsolve_mcp_weak_form"
     assert control_tool_stem("é /") == "___"
 
 
@@ -282,8 +281,6 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
 def test_ih_catalog_tools_and_fem_links_match_status():
     import asyncio
 
-    from ngsolve_mcp.core.server import mcp as core_mcp
-    from ngsolve_mcp.kelvin.server import mcp as kelvin_mcp
     from radia_mcp.ih.server import mcp
     from radia_mcp.meta.catalog import CATALOG
 
@@ -299,12 +296,7 @@ def test_ih_catalog_tools_and_fem_links_match_status():
         assert set(expected_tools) <= names
         _, status = await mcp.call_tool("ih_status", {})
         assert status["related_servers"] == entry["related"]
-        _, core_status = await core_mcp.call_tool("ngsolve_mcp_core_status", {})
-        assert core_status.get("related_servers", []) == CATALOG["ngsolve-mcp.core"]["related"]
-        assert CATALOG["ngsolve-mcp.core"]["entry_point"] == "radia-mcp serve ngsolve-mcp.core"
-        _, kelvin_status = await kelvin_mcp.call_tool("ngsolve_mcp_kelvin_status", {})
-        assert kelvin_status.get("related_servers", []) == CATALOG["ngsolve-mcp.kelvin"]["related"]
-        assert CATALOG["ngsolve-mcp.kelvin"]["entry_point"] == "radia-mcp serve ngsolve-mcp.kelvin"
+
 
     asyncio.run(check_tools())
 
@@ -352,12 +344,121 @@ def test_topics_dispatcher_sync_for_dispatcher_servers():
     import inspect
     from radia_mcp.meta import catalog
 
+    server_loaders = {
+        "radia_mcp.accelerator": lambda: importlib.import_module("radia_mcp.accelerator.server"),
+        "radia_mcp.acoustic_fembem": lambda: importlib.import_module("radia_mcp.acoustic_fembem.server"),
+        "radia_mcp.bayesian_opt": lambda: importlib.import_module("radia_mcp.bayesian_opt.server"),
+        "radia_mcp.bem": lambda: importlib.import_module("radia_mcp.bem.server"),
+        "radia_mcp.blender": lambda: importlib.import_module("radia_mcp.blender.server"),
+        "radia_mcp.build123d": lambda: importlib.import_module("radia_mcp.build123d.server"),
+        "radia_mcp.data_assimilation": lambda: importlib.import_module("radia_mcp.data_assimilation.server"),
+        "radia_mcp.differential_forms": lambda: importlib.import_module("radia_mcp.differential_forms.server"),
+        "radia_mcp.electromagnet": lambda: importlib.import_module("radia_mcp.electromagnet.server"),
+        "radia_mcp.evolutionary": lambda: importlib.import_module("radia_mcp.evolutionary.server"),
+        "radia_mcp.fem": lambda: importlib.import_module("radia_mcp.fem.server"),
+        "radia_mcp.force": lambda: importlib.import_module("radia_mcp.force.server"),
+        "radia_mcp.fusion_reactor": lambda: importlib.import_module("radia_mcp.fusion_reactor.server"),
+        "radia_mcp.gmsh": lambda: importlib.import_module("radia_mcp.gmsh.server"),
+        "radia_mcp.gnn": lambda: importlib.import_module("radia_mcp.gnn.server"),
+        "radia_mcp.ih": lambda: importlib.import_module("radia_mcp.ih.server"),
+        "radia_mcp.litz_transmission": lambda: importlib.import_module("radia_mcp.litz_transmission.server"),
+        "radia_mcp.maglev": lambda: importlib.import_module("radia_mcp.maglev.server"),
+        "radia_mcp.magnetic_materials": lambda: importlib.import_module("radia_mcp.magnetic_materials.server"),
+        "radia_mcp.mathematica": lambda: importlib.import_module("radia_mcp.mathematica.server"),
+        "radia_mcp.matlab": lambda: importlib.import_module("radia_mcp.matlab.server"),
+        "radia_mcp.matrix_solvers": lambda: importlib.import_module("radia_mcp.matrix_solvers.server"),
+        "radia_mcp.meta": lambda: importlib.import_module("radia_mcp.meta.server"),
+        "radia_mcp.metamaterial": lambda: importlib.import_module("radia_mcp.metamaterial.server"),
+        "radia_mcp.mor": lambda: importlib.import_module("radia_mcp.mor.server"),
+        "radia_mcp.motor": lambda: importlib.import_module("radia_mcp.motor.server"),
+        "radia_mcp.onshape": lambda: importlib.import_module("radia_mcp.onshape.server"),
+        "radia_mcp.pcb": lambda: importlib.import_module("radia_mcp.pcb.server"),
+        "radia_mcp.peec": lambda: importlib.import_module("radia_mcp.peec.server"),
+        "radia_mcp.pinn": lambda: importlib.import_module("radia_mcp.pinn.server"),
+        "radia_mcp.radia_acoustic_workflows": lambda: importlib.import_module("radia_mcp.radia_acoustic_workflows.server"),
+        "radia_mcp.radia_analysis": lambda: importlib.import_module("radia_mcp.radia_analysis.server"),
+        "radia_mcp.radia_electromagnet": lambda: importlib.import_module("radia_mcp.radia_electromagnet.server"),
+        "radia_mcp.radia_ih": lambda: importlib.import_module("radia_mcp.radia_ih.server"),
+        "radia_mcp.radia_learning": lambda: importlib.import_module("radia_mcp.radia_learning.server"),
+        "radia_mcp.radia_maglev": lambda: importlib.import_module("radia_mcp.radia_maglev.server"),
+        "radia_mcp.radia_motor": lambda: importlib.import_module("radia_mcp.radia_motor.server"),
+        "radia_mcp.radia_ngsolve": lambda: importlib.import_module("radia_mcp.radia_ngsolve.server"),
+        "radia_mcp.radia_optimize": lambda: importlib.import_module("radia_mcp.radia_optimize.server"),
+        "radia_mcp.radia_pcb": lambda: importlib.import_module("radia_mcp.radia_pcb.server"),
+        "radia_mcp.radia_postprocess": lambda: importlib.import_module("radia_mcp.radia_postprocess.server"),
+        "radia_mcp.radia_rna": lambda: importlib.import_module("radia_mcp.radia_rna.server"),
+        "radia_mcp.rna_mec": lambda: importlib.import_module("radia_mcp.rna_mec.server"),
+        "radia_mcp.streamfunction": lambda: importlib.import_module("radia_mcp.streamfunction.server"),
+        "radia_mcp.team_benchmark": lambda: importlib.import_module("radia_mcp.team_benchmark.server"),
+        "radia_mcp.topology_optimization": lambda: importlib.import_module("radia_mcp.topology_optimization.server"),
+    }
+    knowledge_loaders = {
+        "blender-mcp": (
+            lambda: importlib.import_module("radia_mcp.blender.knowledge"),
+        ),
+        "radia-mcp.ngsolve": (
+            lambda: importlib.import_module("radia_mcp.radia_ngsolve.knowledge"),
+        ),
+        "force": (
+            lambda: importlib.import_module("radia_mcp.force.knowledge"),
+        ),
+        "streamfunction": (
+            lambda: importlib.import_module("radia_mcp.streamfunction.knowledge"),
+            lambda: importlib.import_module("radia_mcp.streamfunction.streamfunction_knowledge"),
+        ),
+        "ih": (
+            lambda: importlib.import_module("radia_mcp.ih.ih_knowledge"),
+        ),
+        "peec": (
+            lambda: importlib.import_module("radia_mcp.peec.peec_knowledge"),
+        ),
+        "electromagnet": (
+            lambda: importlib.import_module("radia_mcp.electromagnet.em_knowledge"),
+        ),
+        "accelerator": (
+            lambda: importlib.import_module("radia_mcp.accelerator.knowledge"),
+        ),
+        "fusion-reactor": (
+            lambda: importlib.import_module("radia_mcp.fusion_reactor.knowledge"),
+        ),
+        "litz-transmission": (
+            lambda: importlib.import_module("radia_mcp.litz_transmission.knowledge"),
+        ),
+        "rna-mec": (
+            lambda: importlib.import_module("radia_mcp.rna_mec.knowledge"),
+        ),
+        "bayesian-opt": (
+            lambda: importlib.import_module("radia_mcp.bayesian_opt.knowledge"),
+        ),
+        "evolutionary": (
+            lambda: importlib.import_module("radia_mcp.evolutionary.knowledge"),
+        ),
+        "data-assimilation": (
+            lambda: importlib.import_module("radia_mcp.data_assimilation.knowledge"),
+        ),
+        "gnn": (
+            lambda: importlib.import_module("radia_mcp.gnn.knowledge"),
+        ),
+        "pinn": (
+            lambda: importlib.import_module("radia_mcp.pinn.knowledge"),
+        ),
+        "metamaterial": (
+            lambda: importlib.import_module("radia_mcp.metamaterial.knowledge"),
+        ),
+        "maglev": (
+            lambda: importlib.import_module("radia_mcp.maglev.knowledge"),
+        ),
+        "radia-mcp.meta": (
+            lambda: importlib.import_module("radia_mcp.meta.knowledge"),
+        ),
+    }
+    assert server_loaders.keys() == {info["subpackage"] for info in catalog.CATALOG.values()}
     drift = []
     skipped = []
     for name, info in catalog.CATALOG.items():
         subpkg = info["subpackage"]
         try:
-            mod = importlib.import_module(f"{subpkg}.server")
+            mod = server_loaders[subpkg]()
         except Exception as e:
             skipped.append(f"{name}: server import failed ({type(e).__name__})")
             continue
@@ -389,11 +490,9 @@ def test_topics_dispatcher_sync_for_dispatcher_servers():
 
         # Find the TOPICS dict in the same subpackage's knowledge module
         topics_dict = None
-        for kn_mod_name in (subpkg + ".knowledge",
-                            subpkg + "." + name.replace("-", "_") + "_knowledge",
-                            subpkg + ".em_knowledge"):  # electromagnet
+        for load_knowledge in knowledge_loaders.get(name, ()):
             try:
-                kn = importlib.import_module(kn_mod_name)
+                kn = load_knowledge()
             except ImportError:
                 continue
             for attr in ("TOPICS",):
@@ -472,4 +571,15 @@ def test_acoustic_catalog_routes_clients_to_the_existing_pack():
     assert {"production", "education"} <= set(pack["profiles"])
     assert {"bem", "radia-mcp.ngsolve"} <= set(pack["related"])
     assert all("radia-mcp.acoustic" in CATALOG[key]["related"] for key in pack["related"])
-    assert CATALOG["ngsolve-mcp.acoustic"]["entry_point"] == "radia-mcp serve ngsolve-mcp.acoustic"
+
+
+def test_catalog_has_no_retired_fem_routes():
+    from radia_mcp.meta.catalog import CATALOG
+
+    retired_prefix = "ngsolve-mcp" + "."
+    assert not any(key.startswith(retired_prefix) for key in CATALOG)
+    assert not any(
+        target.startswith(retired_prefix)
+        for entry in CATALOG.values()
+        for target in entry["related"]
+    )

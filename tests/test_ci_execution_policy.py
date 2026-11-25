@@ -446,7 +446,7 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
         assert required in contract
 
 
-def test_ngsolve_mcp_install_guidance_matches_native_dependency_pin():
+def test_ngsolve_install_guidance_matches_native_dependency_pin():
     knowledge = (
         ROOT
         / "packages"

@@ -1,10 +1,6 @@
 """Shared FEM reference text for the Radia MCP topic dispatchers."""
 
 CORE_TOPICS = {
-    "index": (
-        "ngsolve-mcp.core: NGSolve FEM spaces, solvers, and TaskManager.\n"
-        "Topics: spaces, solvers, taskmanager, eddy_current."
-    ),
     "spaces": (
         "NGSolve finite element spaces:\n"
         "- H1(mesh, order=p, dirichlet=...): scalar nodal potential (phi, T)\n"
@@ -22,19 +18,10 @@ CORE_TOPICS = {
         "Wrap assembly and solves with `with TaskManager():` for shared-memory\n"
         "parallelism; call `SetNumThreads(n)` before entering TaskManager if needed."
     ),
-    "eddy_current": (
-        'See ngsolve-mcp.weak-form: weak_form_usage(topic="eddy_current") '
-        'for the A-phi formulation and weak_form_usage(topic="ih_reference") '
-        "for independent induction-heating FEM checks."
-    ),
 }
 
 
 WEAK_FORM_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.weak-form: NGSolve variational weak-form patterns.\n"
-        "Topics: magnetostatics_a, eddy_current, sibc_robin, ih_reference, hdiv_flux, symbolic_bfi."
-    ),
     "magnetostatics_a": (
         "Vector-potential A-formulation in HCurl:\n"
         "  a += nu * InnerProduct(curl(u), curl(v)) * dx\n"
@@ -112,10 +99,6 @@ description, not a numerical qualification or a production Radia route.""",
 
 
 GAUGING_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.gauging: Electromagnetic gauging reference and gates.\n"
-        "Topics: tree_cotree, coil_av_tree, coulomb, open_boundary."
-    ),
     "tree_cotree": (
         "Tree-Cotree gauging for HCurl magnetostatics/eddy-current formulations:\n"
         "Remove gradient-space nullspace (ker curl) by eliminating spanning-tree\n"
@@ -153,10 +136,6 @@ remain in the IH application guidance.""",
 
 
 KELVIN_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.kelvin: Kelvin transformation for unbounded magnetostatic/eddy-current domains.\n"
-        "Topics: inversion, jacobian, interface_coupling, verify_first."
-    ),
     "inversion": (
         "Spherical/ellipsoidal Kelvin inversion maps exterior r > R0 to interior r' = R0^2 / r,\n"
         "preserving harmonicity with scaled material weight (R0 / r')^2."
@@ -192,10 +171,6 @@ in the IH recipe.
 
 
 DTN_TOPICS = {
-    "overview": (
-        "ngsolve-mcp.dtn: Dirichlet-to-Neumann (DtN) open-boundary condition.\n"
-        "Topics: spherical_harmonics, coarse_mesh, bem_fem_comparison."
-    ),
     "spherical_harmonics": (
         "Exact DtN map on a spherical artificial boundary r = R0 expands exterior\n"
         "harmonic modes in spherical harmonics Y_l^m with radial decay (R0/r)^(l+1)."

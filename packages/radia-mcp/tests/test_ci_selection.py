@@ -73,16 +73,9 @@ def test_large_server_registration_change_stays_on_contract_lane():
         ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/server.py"]
     )
     assert plan["server_selftests"] == ["radia-mcp.analysis"]
-    assert "tests/test_radia_ngsolve_mcp_contract.py" in plan["package_tests"]
+    assert "tests/test_radia_ngsolve_server_contract.py" in plan["package_tests"]
     assert "tests/test_force_coenergy_gate.py" not in plan["package_tests"]
     assert len(plan["package_tests"]) < 20
-
-
-def test_bundled_ngsolve_server_change_selects_its_selftest():
-    plan = SELECTOR.build_plan(
-        ["packages/radia-mcp/src/ngsolve_mcp/core/server.py"]
-    )
-    assert plan["server_selftests"] == ["ngsolve-mcp.core"]
 
 
 def test_common_change_selftests_every_server_without_selecting_every_test():

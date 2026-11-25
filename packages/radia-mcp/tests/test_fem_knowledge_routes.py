@@ -1,8 +1,7 @@
 """Every topic text of the retired ngsolve-mcp servers stays reachable from radia-mcp.
 
-The fixture holds the ngsolve-mcp topic tables as of 5813761fe. Index and
-pointer entries carry no knowledge and are listed explicitly; every other
-text must be returned by the named radia-mcp route.
+The fixture holds the substantive FEM topics from 5813761fe.
+Each text must be returned by the named Radia MCP route.
 """
 
 import json
@@ -14,7 +13,7 @@ from radia_mcp.radia_ngsolve.knowledge.dtn_coarse_mesh import get_dtn_coarse_mes
 from radia_mcp.radia_ngsolve.knowledge.kelvin import get_kelvin_documentation
 from radia_mcp.radia_ngsolve.knowledge.ngsolve import get_ngsolve_documentation
 
-FIXTURE = pathlib.Path(__file__).parent / "data" / "ngsolve_mcp_retired_topics.json"
+FIXTURE = pathlib.Path(__file__).parent / "data" / "fem_migrated_topics.json"
 
 # server -> (radia-mcp dispatcher, {old topic: new topic})
 ROUTES = {
@@ -25,12 +24,6 @@ ROUTES = {
     "gauging": (get_gauge_open_boundary_knowledge, {"open_boundary": "gauge_open_boundary"}),
     "age": (get_age_quality_report, {}),
 }
-NO_KNOWLEDGE = {
-    ("core", "index"), ("core", "eddy_current"), ("weak_form", "overview"),
-    ("kelvin", "overview"), ("dtn", "overview"), ("gauging", "overview"), ("age", "overview"),
-}
-
-
 def test_every_retired_topic_has_a_radia_mcp_route():
     tables = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert set(tables) == set(ROUTES)
@@ -38,8 +31,6 @@ def test_every_retired_topic_has_a_radia_mcp_route():
     for server, topics in tables.items():
         dispatch, renamed = ROUTES[server]
         for topic, text in topics.items():
-            if (server, topic) in NO_KNOWLEDGE:
-                continue
             if text not in dispatch(renamed.get(topic, topic)):
                 missing.append(f"{server}:{topic}")
     assert not missing, missing

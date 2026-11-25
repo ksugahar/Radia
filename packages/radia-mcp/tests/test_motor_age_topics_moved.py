@@ -1,18 +1,15 @@
-"""AGE method notes moved from ngsolve-mcp.age into radia-mcp.motor."""
+"""AGE guidance and import boundary in the Radia motor package."""
 
 import subprocess
 import sys
 
 
-def test_age_topics_same_text_on_legacy_and_new_route():
-    from ngsolve_mcp.age.server import age_usage
+def test_age_topics_are_served_by_motor_guidance():
     from radia_mcp.motor.age import AGE_TOPICS
     from radia_mcp.motor.age_quality_knowledge import get_age_quality_report
 
     for topic, text in AGE_TOPICS.items():
         assert get_age_quality_report(topic) == text
-        assert age_usage(topic) == text
-    assert "motor_age_quality" in age_usage("overview")
 
 
 def test_age_package_does_not_import_radia():

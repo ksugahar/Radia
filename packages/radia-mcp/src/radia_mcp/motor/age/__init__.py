@@ -1,7 +1,7 @@
 """Air-gap element (AGE) method notes served by radia-mcp.motor ``motor_age_quality``.
 
 This package must not import ``radia``; the AGE no-radia-import exception
-applies here. The text was moved unchanged from the former ngsolve-mcp.age server.
+applies here. The AGE method notes preserve the original topic text.
 """
 
 AGE_TOPICS = {

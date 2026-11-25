@@ -7,6 +7,19 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Retire the bundled NGSolve MCP keys after moving their guidance to Radia MCP.
+  The replacements are:
+  - `ngsolve-mcp.core` / `ngsolve_usage` → `radia-mcp.ngsolve` / `ngsolve_usage`.
+  - `ngsolve-mcp.age` / `age_usage` → `radia-mcp.motor` / `motor_age_quality`.
+  - `ngsolve-mcp.dtn` / `dtn_usage` → `radia-mcp.ngsolve` / `dtn_coarse_mesh`.
+  - `ngsolve-mcp.gauging` / `gauging_usage` → `fem` / `fem_gauge_open_boundary`.
+  - `ngsolve-mcp.kelvin` / `kelvin_usage` → `radia-mcp.ngsolve` / `kelvin_transformation`.
+  - `ngsolve-mcp.weak-form` / `weak_form_usage` → `radia-mcp.ngsolve` / `ngsolve_usage`.
+  - `ngsolve-mcp.acoustic` → `radia-mcp.acoustic --profile production`,
+    with the same `radia_acoustic_usage`, `radia_acoustic_capabilities`,
+    `radia_acoustic_fsi_preflight` and `radia_acoustic_cq_grid` tools.
+  Use the destination's status and reload tools or its capability-pack status.
+
 ## [2.0.3] - 2026-11-21
 
 - Add the Gmsh 5 update and qualification workflow to

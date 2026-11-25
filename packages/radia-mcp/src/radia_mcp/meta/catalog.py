@@ -38,60 +38,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-mcp.ngsolve"],
         "tags": ["cad"],
     },
-    "ngsolve-mcp.core": {
-        "subpackage": "ngsolve_mcp.core",
-        "description": "NGSolve finite element spaces, solvers and TaskManager",
-        "primary_tools": ["ngsolve_usage"],
-        "related": ["ih"],
-        "tags": ["fem"],
-    },
-    "ngsolve-mcp.age": {
-        "subpackage": "ngsolve_mcp.age",
-        "description": "Air-Gap Element (AGE) analytical/harmonic rotor-stator coupling for NGSolve",
-        "primary_tools": ["age_usage"],
-        "related": [],
-        "tags": ["fem"],
-    },
-    "ngsolve-mcp.dtn": {
-        "subpackage": "ngsolve_mcp.dtn",
-        "description": "Dirichlet-to-Neumann (DtN) open-boundary operator and coarse-mesh coupling for NGSolve",
-        "primary_tools": ["dtn_usage"],
-        "related": [],
-        "tags": ["fem"],
-    },
-    "ngsolve-mcp.gauging": {
-        "subpackage": "ngsolve_mcp.gauging",
-        "description": "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary)",
-        "primary_tools": ["gauging_usage"],
-        "related": [
-            "ih",
-            "ngsolve-mcp.kelvin",
-            "radia-mcp.ngsolve",
-            "fem",
-            "differential-forms",
-            "ngsolve-mcp.weak-form",
-        ],
-        "tags": ["fem"],
-    },
-    "ngsolve-mcp.kelvin": {
-        "subpackage": "ngsolve_mcp.kelvin",
-        "description": "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia",
-        "primary_tools": ["kelvin_usage"],
-        "related": ["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging", "ih"],
-        "tags": ["fem"],
-    },
-    "ngsolve-mcp.weak-form": {
-        "subpackage": "ngsolve_mcp.weak_form",
-        "description": "NGSolve weak-form variational formulations (HCurl/HDiv/H1, BilinearForm, SymbolicBFI)",
-        "primary_tools": ["weak_form_usage"],
-        "related": [
-            "ih",
-            "radia-mcp.ngsolve",
-            "fem",
-            "ngsolve-mcp.gauging",
-        ],
-        "tags": ["fem"],
-    },
     "onshape-mcp": {
         "subpackage": "radia_mcp.onshape",
         "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
@@ -139,8 +85,6 @@ CATALOG: dict[str, dict[str, Any]] = {
             "fem",
             "force",
             "gmsh-mcp",
-            "ngsolve-mcp.acoustic",
-            "ngsolve-mcp.kelvin",
             "matlab-mcp-lab",
             "acoustic-fembem",
             "radia-mcp.mathematica",
@@ -148,8 +92,8 @@ CATALOG: dict[str, dict[str, Any]] = {
             "mor",
             "peec",
             "streamfunction",
-            "ngsolve-mcp.gauging",
-            "ngsolve-mcp.weak-form",
+            "ih",
+            "radia-mcp.acoustic",
         ],
         "tags": ["fem", "solver"],
     },
@@ -206,13 +150,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["matlab-mcp-lab", "radia-mcp.ngsolve", "bem", "fem"],
         "tags": ["fem", "theory"],
     },
-    "ngsolve-mcp.acoustic": {
-        "subpackage": "radia_mcp.radia_acoustic",
-        "description": "Production NGSolve/ngsolve.bem acoustics, FSI, and CQ",
-        "primary_tools": ["radia_acoustic_usage", "radia_acoustic_fsi_preflight", "radia_acoustic_cq_grid"],
-        "related": ["radia-mcp.ngsolve", "bem"],
-        "tags": ["fem", "solver"],
-    },
     "streamfunction": {
         "subpackage": "radia_mcp.streamfunction",
         "description": "Stream-function coil design: (ACA+)+TSVD least-norm, "
@@ -241,11 +178,9 @@ CATALOG: dict[str, dict[str, Any]] = {
             "matrix-solvers",
             "pinn",
             "radia-mcp.ngsolve",
-            "ngsolve-mcp.kelvin",
             "team-benchmark",
             "acoustic-fembem",
-            "ngsolve-mcp.gauging",
-            "ngsolve-mcp.weak-form",
+            "ih",
         ],
         "tags": ["fem", "theory"],
     },
@@ -260,7 +195,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "radia-mcp.ngsolve",
             "team-benchmark",
             "acoustic-fembem",
-            "ngsolve-mcp.acoustic",
+            "radia-mcp.acoustic",
         ],
         "tags": ["fem", "theory"],
     },
@@ -287,17 +222,15 @@ CATALOG: dict[str, dict[str, Any]] = {
     "ih": {
         "subpackage": "radia_mcp.ih",
         "description": "Induction heating: PEEC and ESIM routes (main), SIBC, Karl iteration, "
-                       "workpiece coupling; FEM cross-checks via ngsolve-mcp",
+                       "workpiece coupling; FEM cross-checks via radia-mcp.ngsolve",
         "primary_tools": ["ih_peec", "ih_esim", "ih_sibc", "induction_heating"],
         "related": [
             "litz-transmission",
             "magnetic-materials",
-            "ngsolve-mcp.core",
-            "ngsolve-mcp.gauging",
-            "ngsolve-mcp.kelvin",
-            "ngsolve-mcp.weak-form",
             "peec",
             "rna-mec",
+            "radia-mcp.ngsolve",
+            "fem",
         ],
         "tags": ["application"],
     },
@@ -514,7 +447,6 @@ CATALOG: dict[str, dict[str, Any]] = {
             "fem",
             "force",
             "radia-mcp.mathematica",
-            "ngsolve-mcp.gauging",
         ],
         "tags": ["theory"],
     },
@@ -621,7 +553,7 @@ for _pack, _spec in PACKS.items():
         "subpackage": _spec["subpackage"],
         "description": _spec["description"],
         "primary_tools": ["capability_pack_status"],
-        "related": [],
+        "related": list(_spec.get("related", ())),
         "tags": ["meta"],
         "kind": "capability-pack",
         "profiles": ["all", *[p for p in _spec["profiles"] if p != "all"]],
@@ -640,40 +572,11 @@ for _name, _info in CATALOG.items():
 _PACK_MEMBERS = {m for _p in PACKS for m in modules_for(_p)}
 for _name, _info in CATALOG.items():
     _module = _info["subpackage"].removeprefix("radia_mcp.")
-    if (
-        _info.get("kind") == "capability-pack"
-        or _module not in _PACK_MEMBERS
-        or _name == "ngsolve-mcp.acoustic"
-    ):
+    if _info.get("kind") == "capability-pack" or _module not in _PACK_MEMBERS:
         _info["entry_point"] = f"radia-mcp serve {_name}"
     else:
         _info["kind"] = "domain"
 del _name, _info, _module
-
-# Keep registered legacy keys callable until client cutover. Discover migrated
-# knowledge and acoustic profiles through their Radia destinations.
-_LEGACY_ROUTES = {
-    "ngsolve-mcp.core": "radia-mcp.ngsolve",
-    "ngsolve-mcp.age": "radia-mcp.motor",
-    "ngsolve-mcp.dtn": "radia-mcp.ngsolve",
-    "ngsolve-mcp.gauging": "fem",
-    "ngsolve-mcp.kelvin": "radia-mcp.ngsolve",
-    "ngsolve-mcp.weak-form": "radia-mcp.ngsolve",
-    "ngsolve-mcp.acoustic": "radia-mcp.acoustic",
-}
-_related_snapshot = {name: tuple(info["related"]) for name, info in CATALOG.items()}
-for _name, _info in CATALOG.items():
-    _canonical = _LEGACY_ROUTES.get(_name, _name)
-    for _related in _related_snapshot[_name]:
-        _target = _LEGACY_ROUTES.get(_related, _related)
-        if _canonical != _target and _target not in CATALOG[_canonical]["related"]:
-            CATALOG[_canonical]["related"].append(_target)
-    _info["related"] = [
-        name for name in _info["related"]
-        if _name not in _LEGACY_ROUTES and name not in _LEGACY_ROUTES
-    ]
-del _name, _info, _canonical, _related_snapshot
-
 
 def _resolve(name: str) -> str | None:
     """Return ``name`` when it is a catalog key, else None.

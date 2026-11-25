@@ -64,6 +64,7 @@ PACKS = {
     "radia-mcp.acoustic": {
         "subpackage": "radia_mcp.radia_acoustic_workflows",
         "description": "Production and educational acoustic routes with explicit ownership",
+        "related": ("radia-mcp.ngsolve", "bem"),
         "profiles": {
             "production": ("radia_acoustic",),
             "education": ("acoustic_fembem",),

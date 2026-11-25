@@ -24,7 +24,6 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
 TEST_ROOT = PACKAGE_ROOT / "tests"
 SOURCE_PREFIX = "packages/radia-mcp/src/radia_mcp/"
-NGSOLVE_SOURCE_PREFIX = "packages/radia-mcp/src/ngsolve_mcp/"
 TEST_PREFIX = "packages/radia-mcp/tests/"
 
 ALWAYS_TESTS = (
@@ -317,8 +316,6 @@ def build_plan(
 
         if path.startswith(SOURCE_PREFIX):
             prefix = SOURCE_PREFIX
-        elif path.startswith(NGSOLVE_SOURCE_PREFIX):
-            prefix = NGSOLVE_SOURCE_PREFIX
         else:
             continue
 
@@ -350,9 +347,8 @@ def build_plan(
             if is_hot_reload_contract:
                 selected.add("tests/test_hot_reload.py")
         else:
-            server_family = f"ngsolve_mcp.{family}" if prefix == NGSOLVE_SOURCE_PREFIX else family
-            if server_family in family_servers:
-                servers.add(family_servers[server_family])
+            if family in family_servers:
+                servers.add(family_servers[family])
 
         if family == "common" and stem == "__init__":
             selected.update(
