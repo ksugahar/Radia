@@ -1,17 +1,25 @@
 """Equal-flux field-line seeds and field-line tracing on a Gmsh vector view.
 
 Thin adapter: B is probed from the MSH view, and seeds come from the
-validated radia.flux_seeding two-stage inverse. Optionally the seeds feed
-the existing 3D streamline tracer. Seed placement, its equal-flux
-quadrature check and trace termination are reported separately.
+validated radia.flux_seeding layouts on a seed surface (a parallelogram,
+a planar annulus or a cylinder sector):
 
-trace_field_lines is the field-line entry point: equal-flux seeding on a
-patch is the default choice, so line density follows flux; uniform seeds
-along a segment stay available only on explicit request and are labelled
-as not flux-weighted.
+- n_lines: recursive equal-flux bisection (any count, near-square cells,
+  one sign of a sign-changing surface);
+- n_u, n_v: the two-stage inverse grid (one-signed surfaces).
 
-MSH carries no length unit. length_unit states the unit of the file's
-coordinates ("m" or "mm"); fluxes are always reported in Wb.
+trace_field_lines is the field-line entry point: equal-flux seeding is the
+default choice, so line density follows flux; uniform seeds along a segment
+stay available only on explicit request and are labelled as not
+flux-weighted. After tracing, a flux account reports how each line ended
+(closed, open at the data or extent boundary, truncated by max_steps,
+stagnated), how often lines cross the seed surface again and how much of
+the opposite-sign flux the returning lines draw. Line density stands for
+flux only along lines that are neither truncated nor drawn twice.
+
+MSH carries no length unit. The picture and the seed positions do not
+depend on it; length_unit ("m" or "mm") only scales the reported fluxes
+to Wb.
 """
 
 from __future__ import annotations
@@ -28,11 +36,19 @@ from .post_process import _check_input, probe_field, streamlines
 # time_step so that placement and tracing read the same view and step.
 TRACE_OPTIONS = frozenset({"step_size", "max_steps", "both_directions", "adaptive",
                            "closure", "max_turn_deg", "arrows_every", "return_points",
-                           "out_file", "timeout_s"})
+                           "extent", "out_file", "timeout_s"})
 LENGTH_UNITS = {"m": 1.0, "mm": 1e-3}
-SEED_PATCH_KEYS = frozenset({"origin", "e_xi", "e_eta", "n_u", "n_v", "table_nodes",
-                             "quadrature_order"})
+PATCH_SHAPES = {
+    "parallelogram": (("origin", "e_xi", "e_eta"), ()),
+    "annulus": (("center", "normal", "r_outer"), ("r_inner", "theta_range", "reference")),
+    "cylinder": (("axis_origin", "axis", "radius"), ("theta_range", "reference")),
+}
+LENGTH_KEYS = frozenset({"origin", "e_xi", "e_eta", "center", "r_outer", "r_inner",
+                         "axis_origin", "axis", "radius"})
+PATCH_COMMON = frozenset({"shape", "n_lines", "n_u", "n_v", "sign", "table_nodes",
+                          "quadrature_order"})
 SEED_LINE_KEYS = frozenset({"start", "end", "n"})
+LINE_ENDS = ("closed", "open", "truncated", "stagnation")
 
 
 def _radia_version() -> str:
@@ -65,92 +81,228 @@ def _probe_b(path: Path, view, time_step: int, timeout_s: float, scale: float = 
     return field
 
 
-def equal_flux_seeds_on_plane(path: str | Path, origin: list[float], e_xi: list[float],
-                              e_eta: list[float], *, n_u: int, n_v: int,
-                              table_nodes: int = 33, view: str | int | None = None,
-                              time_step: int = 0, quadrature_order: int = 6,
-                              trace: bool = False, trace_options: dict | None = None,
-                              length_unit: str = "m",
-                              timeout_s: float = 300.0) -> dict[str, Any]:
-    """Seed the patch origin + xi e_xi + eta e_eta, xi, eta in [0, 1], with
-    n_u * n_v equal-flux seeds of the probed B view (B in T, fluxes in Wb).
+def _check_patch(spec: Any) -> str | None:
+    """Return an error for a malformed seed_patch, before any probing."""
+    if not isinstance(spec, dict):
+        return "seed_patch must be a dict"
+    shape = spec.get("shape", "parallelogram")
+    if shape not in PATCH_SHAPES:
+        return f"seed_patch shape must be one of {sorted(PATCH_SHAPES)}"
+    required, optional = PATCH_SHAPES[shape]
+    missing = sorted(set(required) - set(spec))
+    extra = sorted(set(spec) - set(required) - set(optional) - PATCH_COMMON)
+    if missing or extra:
+        return (f"seed_patch ({shape}) needs {sorted(required)}, optional "
+                f"{sorted(set(optional) | PATCH_COMMON)}; missing {missing}, unknown {extra}")
+    has_lines, has_grid = "n_lines" in spec, ("n_u" in spec or "n_v" in spec)
+    if has_lines == has_grid or (has_grid and not {"n_u", "n_v"} <= set(spec)):
+        return ("seed_patch needs either n_lines (balanced bisection) or both n_u and n_v "
+                "(two-stage grid)")
+    if has_grid and "sign" in spec:
+        return ("sign applies to n_lines only; the n_u x n_v grid needs a one-signed surface")
+    return None
 
-    origin, e_xi and e_eta are in the file's coordinates, whose unit is
-    length_unit ("m" or "mm"). Each seed reports "point" in file
-    coordinates and "point_m" in metres; tracing uses file coordinates.
-    view None selects the first view (index 0) for both probing and tracing.
-    trace_options may hold only TRACE_OPTIONS keys; others are rejected
-    before any probing.
-    """
+
+def _chart(spec: dict, scale: float):
+    from radia.flux_seeding import annular_patch, cylindrical_patch, planar_patch
+
+    v = {k: (scale * np.asarray(val, dtype=float) if k in LENGTH_KEYS else val)
+         for k, val in spec.items()}
+    shape = spec.get("shape", "parallelogram")
+    if shape == "parallelogram":
+        return planar_patch(v["origin"], v["e_xi"], v["e_eta"])
+    extra = {k: v[k] for k in ("theta_range", "reference") if k in v}
+    if shape == "annulus":
+        return annular_patch(v["center"], v["normal"], float(v["r_outer"]),
+                             r_inner_m=float(v.get("r_inner", 0.0)), **extra)
+    return cylindrical_patch(v["axis_origin"], v["axis"], float(v["radius"]), **extra)
+
+
+def _place(path, spec, *, view, time_step, length_unit, timeout_s):
+    """Place seeds; returns (result, chart, scale). chart is None on failure."""
     err = _check_input(path)
     if err:
-        return err
-    options = dict(trace_options or {})
-    bad = sorted(set(options) - TRACE_OPTIONS)
-    if bad:
-        return {"ok": False, "error": f"unsupported trace_options {bad}; "
-                                      f"allowed: {sorted(TRACE_OPTIONS)}"}
+        return err, None, None
+    problem = _check_patch(spec)
+    if problem:
+        return {"ok": False, "error": problem}, None, None
     try:
         time_step = int(time_step)
         if time_step < 0:
             raise ValueError
     except (TypeError, ValueError, OverflowError):
-        return {"ok": False, "error": "time_step must be a non-negative integer"}
+        return {"ok": False, "error": "time_step must be a non-negative integer"}, None, None
     if length_unit not in LENGTH_UNITS:
         return {"ok": False, "error": f"length_unit must be one of {sorted(LENGTH_UNITS)}; "
-                                      "MSH carries no unit, so state the file's coordinate unit"}
+                                      "MSH carries no unit, so state the file's coordinate "
+                                      "unit"}, None, None
     scale = LENGTH_UNITS[length_unit]
     view = 0 if view is None else view
     try:
-        from radia.flux_seeding import cell_flux_quadrature, equal_flux_seeds, planar_patch
+        from radia.flux_seeding import (balanced_cell_flux_quadrature,
+                                        balanced_equal_flux_seeds, cell_flux_quadrature,
+                                        equal_flux_seeds)
     except ImportError as exc:
-        return {"ok": False, "error": f"radia.flux_seeding is unavailable in radia "
-                                      f"{_radia_version()}: {exc}; update radia"}
+        return {"ok": False, "error": f"radia.flux_seeding is unavailable or too old in radia "
+                                      f"{_radia_version()}: {exc}; update radia"}, None, None
     path = Path(path)
+    table_nodes = spec.get("table_nodes", 33)
+    order = int(spec.get("quadrature_order", 6))
+    balanced = "n_lines" in spec
     try:
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")
-        patch = planar_patch(*(scale * np.asarray(v, dtype=float) for v in (origin, e_xi, e_eta)))
-        g = patch.flux_density(_probe_b(path, view, time_step, timeout_s, scale))
+        chart = _chart(spec, scale)
+        g = chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale))
         nodes = np.linspace(0.0, 1.0, int(table_nodes))
-        seeds = equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes, n_u=n_u, n_v=n_v,
-                                 chart=patch.chart)
+        if balanced:
+            seeds = balanced_equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes,
+                                              n_lines=spec["n_lines"], chart=chart.chart,
+                                              metric=chart.metric,
+                                              sign=spec.get("sign", "auto"))
+            check_fn = balanced_cell_flux_quadrature
+        else:
+            seeds = equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes, n_u=spec["n_u"],
+                                     n_v=spec["n_v"], chart=chart.chart, metric=chart.metric)
+            check_fn = cell_flux_quadrature
         check = None
-        if int(quadrature_order) > 0:
-            q = cell_flux_quadrature(g, seeds, xi_nodes=nodes, eta_nodes=nodes,
-                                     order=int(quadrature_order))
+        if order > 0:
+            q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order)
             check = {k: q[k] for k in ("independent_total_flux_Wb",
                                        "max_relative_cell_deviation", "coverage", "order")}
     except (ValueError, RuntimeError) as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": str(exc)}, None, None
 
+    entries = []
+    for i, p, c in zip(seeds.ids, seeds.points_m, seeds.chart_coords):
+        entries.append({"id": int(i), "point": (p / scale).tolist(), "point_m": p.tolist(),
+                        "chart": c.tolist()})
+    if balanced:
+        counts = {"layout": "balanced", "n_lines": seeds.n_lines}
+        parts = {"positive_flux_Wb": seeds.positive_flux_Wb,
+                 "negative_flux_Wb": seeds.negative_flux_Wb}
+    else:
+        for entry, f in zip(entries, seeds.flux_coords):
+            entry["flux"] = f.tolist()
+        counts = {"layout": "grid", "n_lines": seeds.n_u * seeds.n_v,
+                  "n_u": seeds.n_u, "n_v": seeds.n_v}
+        one = seeds.total_flux_Wb
+        parts = {"positive_flux_Wb": max(one, 0.0), "negative_flux_Wb": min(one, 0.0)}
     result: dict[str, Any] = {
         "ok": True,
-        "seeds": [{"id": int(i), "point": (p / scale).tolist(), "point_m": p.tolist(),
-                   "chart": c.tolist(), "flux": f.tolist()}
-                  for i, p, c, f in zip(seeds.ids, seeds.points_m, seeds.chart_coords,
-                                        seeds.flux_coords)],
-        "n_u": seeds.n_u, "n_v": seeds.n_v,
+        "seeds": entries,
+        **counts,
         "orientation": seeds.orientation,
         "total_flux_Wb": seeds.total_flux_Wb,
-        "target_cell_flux_Wb": seeds.target_cell_flux_Wb,
+        "flux_per_line_Wb": seeds.target_cell_flux_Wb,
+        **parts,
         "placement_diagnostics": seeds.diagnostics,
         "equal_flux_quadrature": check,
         "provenance": {**seeds.provenance, "field_samples": "gmsh view probe",
                        "msh_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                        "view": view, "time_step": time_step,
                        "table_nodes": int(table_nodes), "length_unit": length_unit,
-                       "patch": {"origin": list(map(float, origin)),
-                                 "e_xi": list(map(float, e_xi)),
-                                 "e_eta": list(map(float, e_eta))}},
-        "limitations": "planar patch only; field samples are the view's interpolation; "
-                       "no field-line closure or CAD splitting is implied",
+                       "seed_patch": {k: (np.asarray(v, float).tolist()
+                                          if k in LENGTH_KEYS or k in ("normal", "reference",
+                                                                       "theta_range")
+                                          else v) for k, v in spec.items()}},
+        "limitations": "field samples are the view's interpolation; seeds cover one flux "
+                       "sign; no field-line closure or CAD splitting is implied",
     }
-    if trace:
-        traced = streamlines(path, seeds=(seeds.points_m / scale).tolist(), view=view,
-                             time_step=time_step, **options)
-        result["trace"] = traced
-    return result
+    return result, chart, scale
+
+
+def place_equal_flux_seeds(path: str | Path, seed_patch: dict, *,
+                           view: str | int | None = None, time_step: int = 0,
+                           length_unit: str = "m", timeout_s: float = 300.0) -> dict[str, Any]:
+    """Place equal-flux seeds on seed_patch (no tracing); see trace_field_lines."""
+    return _place(path, seed_patch, view=view, time_step=time_step,
+                  length_unit=length_unit, timeout_s=timeout_s)[0]
+
+
+def _crossings(points_m: np.ndarray, chart, seed_vertex: int, closed: bool) -> list[int]:
+    """Signs of the crossings of a +B polyline through the seed surface.
+
+    The crossing at the seed itself (the segments around the seed vertex,
+    and the closing segment of a closed line) is not counted.
+    """
+    s, _, _ = chart.locate(points_m)
+    skip = {seed_vertex - 1, seed_vertex}
+    if closed:
+        skip.add(len(points_m) - 2)
+    signs = []
+    for i in np.nonzero(np.sign(s[:-1]) * np.sign(s[1:]) < 0)[0]:
+        if int(i) in skip:
+            continue
+        t = s[i] / (s[i] - s[i + 1])
+        _, xi, eta = chart.locate(points_m[i] + t * (points_m[i + 1] - points_m[i]))
+        if -1e-9 <= xi <= 1 + 1e-9 and -1e-9 <= eta <= 1 + 1e-9:
+            signs.append(1 if s[i + 1] > s[i] else -1)
+    return signs
+
+
+def _line_end(line: dict) -> str:
+    if line["closed"]:
+        return "closed"
+    reasons = set(line["reasons"].values())
+    if "max_steps" in reasons:
+        return "truncated"
+    if "stagnation" in reasons:
+        return "stagnation"
+    return "open"
+
+
+def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict, list[str]]:
+    """How the traced lines represent the seeded and the opposite flux."""
+    q = placed["flux_per_line_Wb"]
+    sign = placed["orientation"]
+    ends = dict.fromkeys(LINE_ENDS, 0)
+    per_line, repeats, opposite = [], 0, 0
+    for line, poly in zip(traced["lines"], traced["polylines"]):
+        end = _line_end(line)
+        ends[end] += 1
+        signs = _crossings(np.asarray(poly["points"], dtype=float) * scale, chart,
+                           poly["seed_vertex"], poly["closed"])
+        same = sum(1 for c in signs if c == sign)
+        other = len(signs) - same
+        repeats += same
+        opposite += other
+        per_line.append({"seed_index": line["seed_index"], "end": end,
+                         "repeat_crossings": same, "opposite_crossings": other})
+    n_seeds = len(placed["seeds"])
+    not_traced = n_seeds - len(per_line)
+    opposite_flux = placed["negative_flux_Wb"] if sign > 0 else placed["positive_flux_Wb"]
+    drawn = -q * opposite
+    account = {
+        "flux_per_line_Wb": q,
+        "flux_by_end_Wb": {end: q * count for end, count in ends.items()},
+        "lines_by_end": ends,
+        "not_traced_lines": not_traced,
+        "repeat_crossings": repeats,
+        "opposite_crossings": opposite,
+        "opposite_flux_Wb": opposite_flux,
+        "opposite_flux_drawn_Wb": drawn,
+        "opposite_flux_drawn_fraction": (drawn / opposite_flux if opposite_flux else None),
+        "lines": per_line,
+    }
+    warnings = []
+    if ends["truncated"]:
+        warnings.append(f"{ends['truncated']} line(s) stopped at max_steps "
+                        f"({abs(q) * ends['truncated']:.4g} Wb): beyond the cut the line "
+                        "density under-represents flux; raise max_steps")
+    if not_traced:
+        warnings.append(f"{not_traced} seed(s) produced no line (outside the data or the "
+                        "extent)")
+    one_sided = sum(1 for line in traced["lines"]
+                    if not line["closed"] and "backward" not in line["reasons"])
+    if one_sided:
+        warnings.append(f"{one_sided} open line(s) were traced forward only "
+                        "(both_directions=False): behind the seed surface they are missing")
+    if repeats:
+        warnings.append(f"lines cross the seed surface {repeats} more time(s) in the seeded "
+                        "direction: there each tube is drawn again and line density "
+                        "over-represents flux")
+    return account, warnings
 
 
 def trace_field_lines(path: str | Path, *, seed_patch: dict | None = None,
@@ -159,48 +311,56 @@ def trace_field_lines(path: str | Path, *, seed_patch: dict | None = None,
                       **trace_options) -> dict[str, Any]:
     """Trace field lines of a vector view; equal-flux seeding is the default choice.
 
-    seed_patch = {origin, e_xi, e_eta, n_u, n_v[, table_nodes, quadrature_order]}
-    places n_u * n_v seeds that each carry the same flux through the patch
-    (radia.flux_seeding), so line density follows the field. seed_line =
-    {start, end, n} places n uniform seeds on a segment; it is not
-    flux-weighted and is reported as such. Exactly one must be given.
-    trace_options are the tracer keywords in TRACE_OPTIONS. The result is
-    the tracer's result plus "seeding", which records the method and, for
-    equal flux, total and per-line flux in Wb and the placement provenance.
+    seed_patch places seeds that each carry the same flux through a seed
+    surface (radia.flux_seeding), so line density follows the field:
+    shape "parallelogram" {origin, e_xi, e_eta} (default), "annulus"
+    {center, normal, r_outer[, r_inner, theta_range, reference]} or
+    "cylinder" {axis_origin, axis, radius[, theta_range, reference]}, with
+    either n_lines (balanced bisection; sign "auto" | "positive" |
+    "negative") or n_u and n_v (two-stage grid), and optional table_nodes
+    and quadrature_order. Lengths are in the file's coordinates; angles in
+    radians. seed_line = {start, end, n} places n uniform seeds on a
+    segment; it is not flux-weighted and is reported as such. Exactly one
+    must be given. trace_options are the tracer keywords in TRACE_OPTIONS
+    (extent = {"min", "max"} stops lines at a box). The result is the
+    tracer's result plus "seeding" and, for equal flux, "flux_account" and
+    "warnings".
     """
     if (seed_patch is None) == (seed_line is None):
         return {"ok": False, "error": "give exactly one of seed_patch (equal-flux seeds on a "
-                                      "planar patch; the default choice) or seed_line (uniform "
+                                      "seed surface; the default choice) or seed_line (uniform "
                                       "seeds on a segment, not flux-weighted)"}
     bad = sorted(set(trace_options) - TRACE_OPTIONS)
     if bad:
         return {"ok": False, "error": f"unsupported tracer options {bad}; "
                                       f"allowed: {sorted(TRACE_OPTIONS)}"}
     if seed_patch is not None:
-        patch = dict(seed_patch)
-        missing = sorted({"origin", "e_xi", "e_eta", "n_u", "n_v"} - set(patch))
-        extra = sorted(set(patch) - SEED_PATCH_KEYS)
-        if missing or extra:
-            return {"ok": False, "error": f"seed_patch needs {sorted(SEED_PATCH_KEYS)}; "
-                                          f"missing {missing}, unknown {extra}"}
-        placed = equal_flux_seeds_on_plane(
-            path, patch["origin"], patch["e_xi"], patch["e_eta"], n_u=patch["n_u"],
-            n_v=patch["n_v"], table_nodes=patch.get("table_nodes", 33),
-            quadrature_order=patch.get("quadrature_order", 6), view=view,
-            time_step=time_step, trace=True, trace_options=trace_options,
-            length_unit=length_unit)
-        if not placed.get("ok"):
+        options = dict(trace_options)
+        timeout_s = options.get("timeout_s", 300.0)
+        placed, chart, scale = _place(path, seed_patch, view=view, time_step=time_step,
+                                      length_unit=length_unit, timeout_s=timeout_s)
+        if chart is None:
             return placed
-        result = dict(placed["trace"])
+        keep_points = bool(options.pop("return_points", False))
+        traced = streamlines(path, seeds=[s["point"] for s in placed["seeds"]],
+                             view=0 if view is None else view, time_step=time_step,
+                             return_points=True, **options)
+        if not traced.get("ok"):
+            return traced
+        account, warnings = _flux_account(traced, placed, chart, scale)
+        result = dict(traced)
+        if not keep_points:
+            result["polylines"] = None
         result["seeding"] = {
             "method": "equal_flux", "flux_weighted": True,
-            "n_u": placed["n_u"], "n_v": placed["n_v"], "orientation": placed["orientation"],
-            "total_flux_Wb": placed["total_flux_Wb"],
-            "flux_per_line_Wb": placed["target_cell_flux_Wb"],
-            "equal_flux_quadrature": placed["equal_flux_quadrature"],
-            "placement_diagnostics": placed["placement_diagnostics"],
-            "seeds": placed["seeds"], "provenance": placed["provenance"],
-            "limitations": placed["limitations"]}
+            **{k: placed[k] for k in ("layout", "n_lines", "orientation", "total_flux_Wb",
+                                      "flux_per_line_Wb", "positive_flux_Wb",
+                                      "negative_flux_Wb", "equal_flux_quadrature",
+                                      "placement_diagnostics", "seeds", "provenance",
+                                      "limitations")},
+            **{k: placed[k] for k in ("n_u", "n_v") if k in placed}}
+        result["flux_account"] = account
+        result["warnings"] = warnings
         return result
     line = dict(seed_line)
     if set(line) != SEED_LINE_KEYS:
