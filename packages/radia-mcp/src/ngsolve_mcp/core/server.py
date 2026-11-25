@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
 from radia_mcp.common.windows_stdio import run_stdio
+from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.core")
 
@@ -56,6 +57,7 @@ register_status_tool(
     "ngsolve-mcp.core",
     "NGSolve finite element spaces, solvers and TaskManager.",
     "ngsolve_mcp.core",
+    related_servers=CATALOG["ngsolve-mcp.core"]["related"],
 )
 
 
