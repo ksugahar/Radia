@@ -78,6 +78,21 @@ def test_meta_catalog_does_not_require_local_mcp_client_config():
     assert ".mcp.json" not in (catalog.__doc__ or "")
 
 
+def test_catalog_control_tool_names_are_valid_and_unique():
+    from radia_mcp.common.status import control_tool_stem
+    from radia_mcp.meta.catalog import CATALOG
+
+    names = [
+        f"{control_tool_stem(key)}_{suffix}"
+        for key in CATALOG
+        for suffix in ("status", "reload_code")
+    ]
+    assert all(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name) for name in names)
+    assert len(names) == len(set(names))
+    assert control_tool_stem("ngsolve-mcp.weak-form") == "ngsolve_mcp_weak_form"
+    assert control_tool_stem("é /") == "___"
+
+
 def test_every_cataloged_server_has_register_status_tool():
     """Policy: every server.py in catalog must wire register_status_tool.
 

@@ -47,6 +47,7 @@ import importlib.metadata
 import inspect
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Optional
 
@@ -224,6 +225,11 @@ def _introspect_fastmcp_tools(mcp) -> list[str]:
         return []
 
 
+def control_tool_stem(server_name: str) -> str:
+    """Convert a public server key to the stable ASCII tool-name stem."""
+    return re.sub(r"[^A-Za-z0-9_]", "_", server_name)
+
+
 def register_status_tool(
     mcp,
     server_name: str,
@@ -247,11 +253,10 @@ def register_status_tool(
         audit_command: optional heavier repo-wide validation/audit command,
                        separate from the lightweight `--selftest` health check.
         tool_name: override the auto-generated tool name (default:
-                    server_name with "-" replaced by "_", plus "_status")
+                    normalized server key, plus "_status")
     """
     if tool_name is None:
-        short = server_name.replace("-", "_")
-        tool_name = f"{short}_status"
+        tool_name = f"{control_tool_stem(server_name)}_status"
 
     @mcp.tool(name=tool_name)
     def _status() -> dict[str, object]:
