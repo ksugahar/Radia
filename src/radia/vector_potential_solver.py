@@ -122,6 +122,10 @@ def _build_nu_of_b_interpolator(bh_data):
     return nu_of_b, b_max
 
 
+# Extra SymbolicEnergy order that matches solve_linear's source quadrature.
+_ENERGY_SOURCE_INTORDER_OFFSET = 2
+
+
 def _coercive_bh_law(B_values, H_values):
     """Return NGSolve H(B) and coenergy laws with a vacuum high-field tail.
 
@@ -729,7 +733,8 @@ class VectorPotentialSolver:
 
     def solve_nonlinear_newton(self, bh_data, tol=1e-4, maxiter=50,
                                dirichlet='default', verbose=True,
-                               solver='auto', eps=DEFAULT_GAUGE_EPSILON):
+                               solver='auto', eps=DEFAULT_GAUGE_EPSILON,
+                               *, bonus_intorder=0):
         """Newton iteration with SymbolicEnergy for nonlinear B-H curve.
 
         Uses magnetic coenergy w*(B) = integral_0^B H(B') dB' and NGSolve
@@ -752,7 +757,22 @@ class VectorPotentialSolver:
             'auto', 'ams', 'bddc', 'sparsecholesky', or 'direct'.
         eps : float
             Dimensionless gauge regularization strength.
+        bonus_intorder : int
+            Additional quadrature order for the source field B_s, with the
+            same meaning as in ``solve_linear``: in the linear B-H range both
+            paths then give the same field. B_s is usually not polynomial,
+            and in iron its quadrature error is balanced by nu * curl(A_r)
+            with a small nu, so per-element iron B is sensitive to it in
+            proportion to mu_r while the iron mean is not. Raise it when
+            per-element iron B matters and B_s varies within an element.
         """
+        bonus_intorder = int(bonus_intorder)
+        if bonus_intorder < 0:
+            raise ValueError(f"bonus_intorder must be >= 0, got {bonus_intorder}")
+        # NGSolve integrates SymbolicEnergy two orders lower than the linear
+        # form of solve_linear; this offset gave identical fields (to 1e-12)
+        # for HCurl orders 1 and 2 at every bonus order tried.
+        energy_intorder = bonus_intorder + _ENERGY_SOURCE_INTORDER_OFFSET
         from ngsolve import (HCurl, GridFunction, BilinearForm, BSpline,
                              SymbolicEnergy, InnerProduct, curl, dx,
                              sqrt, Preconditioner, TaskManager)
@@ -818,13 +838,15 @@ class VectorPotentialSolver:
         for mat in air_mats:
             a += SymbolicEnergy(
                 (1.0 / (2.0 * MU_0)) * InnerProduct(B_total, B_total),
-                definedon=self.mesh.Materials(mat))
+                definedon=self.mesh.Materials(mat),
+                bonus_intorder=energy_intorder)
 
         # Iron: w*(|B|) from BSpline
         for mat in iron_mats:
             a += SymbolicEnergy(
                 w_star(B_mag_safe),
-                definedon=self.mesh.Materials(mat))
+                definedon=self.mesh.Materials(mat),
+                bonus_intorder=energy_intorder)
 
         # Source coupling: -nu_0 * B_s . curl(A_r)
         # Without this, the energy stationarity gives curl(H) = 0 (wrong).
@@ -833,7 +855,8 @@ class VectorPotentialSolver:
         #   J.A_r = (1/mu_0)*curl(B_s).A_r = (1/mu_0)*B_s.curl(A_r) + boundary
         nu_0 = 1.0 / MU_0
         a += SymbolicEnergy(
-            -nu_0 * InnerProduct(self._B_source_cf, curl(A)))
+            -nu_0 * InnerProduct(self._B_source_cf, curl(A)),
+            bonus_intorder=energy_intorder)
 
         # Gauge regularization: eps * |A|^2 / 2
         eps, _ = self._resolve_gauge_epsilons(eps, None)

@@ -1,0 +1,80 @@
+"""Reduced-A Newton and linear paths integrate a non-polynomial source alike.
+
+Guards: ``VectorPotentialSolver.solve_nonlinear_newton`` integrates the source
+field B_s with the same quadrature as ``solve_linear`` for the same
+``bonus_intorder``. In the linear B-H range the two paths must then give the
+same per-element iron B. With the default energy quadrature the Newton path
+differed by several times the iron field's norm, while the iron mean agreed.
+Assumes: the B-H table's first segment is linear (mu_r 14874) and the iron
+field stays on it; the source is a point dipole outside the mesh, so B_s varies
+strongly within the coarse iron elements.
+"""
+
+import numpy as np
+import pytest
+
+ng = pytest.importorskip("ngsolve")
+occ = pytest.importorskip("netgen.occ")
+
+from radia.vector_potential_solver import MU_0, VectorPotentialSolver
+
+BH = [[0.0, 0.0], [53.5, 1.0], [87.0, 1.5], [130.0, 1.7], [1.0e5, 2.2]]
+MU_R_FIRST_SEGMENT = 1.0 / (MU_0 * 53.5)
+
+
+def _mesh():
+    air = occ.Box(occ.Pnt(-1, -1, -1), occ.Pnt(1, 1, 1))
+    air.faces.name = "outer"
+    iron = occ.Box(occ.Pnt(-0.15, -0.15, -0.4), occ.Pnt(0.15, 0.15, 0.4))
+    iron.mat("iron")
+    air = air - iron
+    air.mat("air")
+    return ng.Mesh(occ.OCCGeometry(occ.Glue([air, iron])).GenerateMesh(maxh=0.25))
+
+
+def _dipole(position, moment):
+    rx, ry, rz = ng.x - position[0], ng.y - position[1], ng.z - position[2]
+    r2 = rx * rx + ry * ry + rz * rz
+    r = ng.sqrt(r2)
+    mr = moment[0] * rx + moment[1] * ry + moment[2] * rz
+    c = MU_0 / (4 * np.pi)
+    return ng.CF(tuple(c * (3 * mr * q / (r2 * r2 * r) - m / (r2 * r))
+                       for q, m in zip((rx, ry, rz), moment)))
+
+
+@pytest.mark.parametrize("order", [1, 2])
+def test_newton_matches_linear_per_iron_element(order):
+    mesh = _mesh()
+    source = _dipole((0.45, 0.0, 0.0), (5.0e3, 0.0, 0.0))
+    volume = np.asarray(ng.Integrate(ng.CF(1.0), mesh, element_wise=True))
+    iron = np.array([e.mat == "iron" for e in mesh.Elements(ng.VOL)])
+
+    def iron_means(field):
+        parts = [np.asarray(ng.Integrate(field[i], mesh, element_wise=True, order=10))
+                 for i in range(3)]
+        return (np.column_stack(parts) / volume[:, None])[iron]
+
+    with ng.TaskManager():
+        linear = VectorPotentialSolver(mesh, mu_r_dict={"iron": MU_R_FIRST_SEGMENT}, order=order)
+        linear.set_source_cf(source)
+        linear.solve_linear(dirichlet="outer", solver="direct")
+        b_linear = iron_means(linear.get_B())
+        newton = VectorPotentialSolver(mesh, iron_domains="iron", order=order)
+        newton.set_source_cf(source)
+        newton.solve_nonlinear_newton(BH, dirichlet="outer", solver="direct",
+                                      tol=1e-12, verbose=False)
+        b_newton = iron_means(newton.get_B())
+
+    w = volume[iron]
+    assert np.abs(b_linear).max() < 0.9, np.abs(b_linear).max()   # stays on the linear segment
+    rel = np.sqrt((w * ((b_newton - b_linear) ** 2).sum(1)).sum()
+                  / (w * (b_linear ** 2).sum(1)).sum())
+    assert rel < 1e-8, f"Newton vs linear iron B relative L2 {rel:.3e}, expected < 1e-8"
+
+
+def test_newton_rejects_negative_bonus_intorder():
+    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=1.0))
+    solver = VectorPotentialSolver(mesh, iron_domains=mesh.GetMaterials()[0], order=1)
+    solver.set_source_cf(ng.CF((0.1, 0.0, 0.0)))
+    with pytest.raises(ValueError, match="bonus_intorder"):
+        solver.solve_nonlinear_newton(BH, bonus_intorder=-1, verbose=False)
