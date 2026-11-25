@@ -230,7 +230,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py',
     }
     # Radia and Simulink share exact-SHA artifact recovery.
-    expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py'}
+    expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py', 'tools/verify_public_fe_sdk.py'}
     # These package initializers execute before modules in the numerical
     # closure; ownership stays with the package plus the proven CPU integration.
     initializers = {
