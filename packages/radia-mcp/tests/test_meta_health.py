@@ -282,11 +282,12 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
 def test_ih_catalog_tools_and_fem_links_match_status():
     import asyncio
 
+    from ngsolve_mcp.kelvin.server import mcp as kelvin_mcp
     from radia_mcp.ih.server import mcp
     from radia_mcp.meta.catalog import CATALOG
 
     expected_tools = ["ih_peec", "ih_esim", "ih_sibc", "induction_heating"]
-    fem_keys = {"ngsolve-mcp.core", "ngsolve-mcp.gauging", "ngsolve-mcp.weak-form"}
+    fem_keys = {"ngsolve-mcp.core", "ngsolve-mcp.gauging", "ngsolve-mcp.kelvin", "ngsolve-mcp.weak-form"}
     entry = CATALOG["ih"]
     assert entry["primary_tools"] == expected_tools
     assert fem_keys <= set(entry["related"])
@@ -297,6 +298,8 @@ def test_ih_catalog_tools_and_fem_links_match_status():
         assert set(expected_tools) <= names
         _, status = await mcp.call_tool("ih_status", {})
         assert status["related_servers"] == entry["related"]
+        _, kelvin_status = await kelvin_mcp.call_tool("ngsolve_mcp_kelvin_status", {})
+        assert kelvin_status["related_servers"] == CATALOG["ngsolve-mcp.kelvin"]["related"]
 
     asyncio.run(check_tools())
 

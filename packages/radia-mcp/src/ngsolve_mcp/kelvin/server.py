@@ -8,13 +8,14 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
+from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ngsolve-mcp.kelvin")
 
 _TOPICS = {
     "overview": (
         "ngsolve-mcp.kelvin: Kelvin transformation for unbounded magnetostatic/eddy-current domains.\n"
-        "Topics: inversion, jacobian, interface_coupling."
+        "Topics: inversion, jacobian, interface_coupling, verify_first."
     ),
     "inversion": (
         "Spherical/ellipsoidal Kelvin inversion maps exterior r > R0 to interior r' = R0^2 / r,\n"
@@ -24,6 +25,21 @@ _TOPICS = {
         "In NGSolve, apply the Jacobian-weighted bilinear form on the inverted region\n"
         "so that exterior energy and far-field decay match exact open-boundary conditions."
     ),
+    "verify_first": """# Verify-first checks for a periodic Kelvin pair
+
+2. Periodic slave DOFs: build the underlying HCurl space with the intended
+   essential constraints, then wrap it with Periodic. Compare FreeDofs().NumSet()
+   before and after. A nonempty Kelvin identification should remove free slave
+   DOFs in this setup. Confirm expected labels, pairing, orientation and phase
+   before proceeding; a lower count alone does not certify the pairing.
+
+3. Interior/exterior ratio: set a nonzero tangential test field on kelvin_int in
+   the periodic space and evaluate its squared trace norms on kelvin_int and
+   kelvin_ext with boundary integration (BND). For a complex trace use the
+   conjugate in the squared magnitude. Reject zero interior norm. Compare
+   norm_ext / norm_int to one for the matching unit-phase Kelvin interface.
+   The existing IH verify-first example uses abs(ratio - 1.0) < 1e-3; do not
+   generalize this criterion to interfaces with different weighting or phase.""",
     "interface_coupling": (
         "Match tangential trace (HCurl) or normal flux (HDiv) continuously across r = R0\n"
         "between the physical interior mesh and the Kelvin-inverted exterior mesh."
@@ -47,7 +63,7 @@ register_status_tool(
     "ngsolve-mcp.kelvin",
     "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia.",
     "ngsolve_mcp.kelvin",
-    related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging"],
+    related_servers=CATALOG["ngsolve-mcp.kelvin"]["related"],
 )
 
 

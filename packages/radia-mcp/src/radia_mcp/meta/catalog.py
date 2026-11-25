@@ -70,7 +70,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "ngsolve_mcp.kelvin",
         "description": "Kelvin transformation open-boundary exterior inversion for NGSolve/Radia",
         "primary_tools": ["kelvin_usage"],
-        "related": [],
+        "related": ["ih"],
         "tags": ["fem"],
     },
     "ngsolve-mcp.weak-form": {
@@ -276,6 +276,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "magnetic-materials",
             "ngsolve-mcp.core",
             "ngsolve-mcp.gauging",
+            "ngsolve-mcp.kelvin",
             "ngsolve-mcp.weak-form",
             "peec",
             "rna-mec",
