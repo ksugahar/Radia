@@ -588,6 +588,7 @@
         "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
         "validation_test/radia_mcp/test_eddy_driven_region.py",
         "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+        "validation_test/radia_mcp/test_motor_periodic_step_reuse.py",
         "tests/test_accel_solver_selection.py",
         "tests/test_ngsbem_peec_body_direct.py",
         "tests/test_ngsbem_eddy_direct.py",

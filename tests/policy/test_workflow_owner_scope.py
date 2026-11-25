@@ -211,6 +211,9 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
         "validation_test/radia_mcp/test_eddy_driven_region.py",
         "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+        "packages/radia-mcp/src/radia_mcp/motor/periodic_step_reuse_worker.py",
+        "packages/radia-mcp/src/radia_mcp/motor/__init__.py",
+        "validation_test/radia_mcp/test_motor_periodic_step_reuse.py",
     }
     routing_files = {"tools/ci_runner_routing.py", "tools/ci_runner_routing.json"}
     # The common runner contract covers every distribution's actual jobs;

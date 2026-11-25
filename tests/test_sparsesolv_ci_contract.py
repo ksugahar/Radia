@@ -719,7 +719,8 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
             "validation_test/radia_mcp/test_eddy_driven_region.py",
-            "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"],
+            "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+            "validation_test/radia_mcp/test_motor_periodic_step_reuse.py"],
         "radia-simulink": ["tests/cpp/test_radia_ih_thermal_acceptance.cpp",
                       "tests/cpp/test_radia_mex_sparse_symmetry.cpp"],
     }
