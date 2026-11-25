@@ -16,18 +16,20 @@ This allows:
      the previous solution vector along the pitch mapping without re-meshing.
 
 Applicability contract. The solved space is every DOF of K and M (Dirichlet
-rows must already be eliminated by the caller); A must be symmetric positive
-definite on that whole space. "amg" targets scalar SPD operators. "ams" targets
-a lowest-order HCurl system whose K is the curl-curl part, so K @ gradient
+rows must already be eliminated by the caller). That A is symmetric positive
+definite on that whole space is a caller-owned precondition: this module does
+not and cannot verify it. "amg" targets scalar SPD operators. "ams" targets a
+lowest-order HCurl system whose K is the curl-curl part, so K @ gradient
 vanishes, and whose M/dt term makes A definite on the gradient kernel.
 Rejected before any setup: asymmetry, a nonpositive diagonal, and for "ams" a
 gradient that K does not annihilate. These screens are necessary, not
-sufficient: an indefinite A can pass them. With "amg" or "ams" it is then
-rejected during the step, when PCG breaks down (r.z <= 0 or p.Ap <= 0) or does
-not converge, and that step is not counted. "sparsecholesky" does not detect
-indefiniteness: for a nonsingular indefinite A it returns the solution of that
-system, still gated by the true residual. A small residual is not evidence of
-definiteness; the caller owns the SPD property.
+sufficient: an indefinite A can pass them. With "amg" or "ams", a step raises,
+and is not counted, only when PCG detects a breakdown (r.z <= 0 or p.Ap <= 0)
+or does not converge; for an indefinite A, PCG can still converge for a
+particular right-hand side, so not every indefinite A is rejected.
+"sparsecholesky" does not detect indefiniteness: for a nonsingular indefinite A
+it returns the solution of that system. In every method the per-step
+true-residual gate certifies only the linear solve, never definiteness.
 
 Inputs are real and finite; anything else raises instead of being cast. Every
 step checks its true relative residual against the shared limit and counts
