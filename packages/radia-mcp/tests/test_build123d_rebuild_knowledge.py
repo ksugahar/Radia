@@ -279,3 +279,18 @@ def test_documented_frustum_is_planar_and_has_prismatoid_volume():
     mid = scope["mitre_inset"](_L_OUTLINE, d / 2)
     expected = h / 6 * (area(_L_OUTLINE) + 4 * area(mid) + area(top))   # exact for planar ruled sides
     assert solid.volume == pytest.approx(expected, rel=1e-12), (solid.volume, expected)
+
+
+def test_documented_recipe_rejects_inputs_outside_its_preconditions():
+    import re
+
+    text = get_build123d_documentation("rebuild_from_reference_step")
+    block = next(b for b in re.findall(r"```python\n(.*?)```", text, re.S) if "def frustum" in b)
+    scope = {}
+    exec(block, scope)
+    square = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]
+    assert len(scope["mitre_inset"](square, 1.9)) == 4
+    with pytest.raises(ValueError, match="collapses"):
+        scope["mitre_inset"](square, 3.0)          # collapsed at 2.0; the formula alone returns a 2x2 square
+    with pytest.raises(ValueError, match="not parallel"):
+        scope["frustum"](square, 0.0, [(0.0, 0.0), (4.0, 1.0), (4.0, 4.0), (0.0, 4.0)], 1.0)

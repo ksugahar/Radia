@@ -3144,15 +3144,17 @@ body = revolve(sk.sketch, Axis.Z)
 ```
 
 ## Tapered pockets and drafted walls
-Measured with build123d 0.13.0:
-- `extrude(face, amount, taper=...)` follows the winding of the outline: a
+Measured with build123d 0.13.0 on a planar L-shaped outline with one
+re-entrant corner (other outlines may behave differently; check yours):
+- `extrude(face, amount, taper=...)` followed the winding of the outline: the
   clockwise outline went the other way along Z, even with `dir=(0, 0, 1)`.
   Plain `extrude` and the face normal do not show the difference. Give
   tapered outlines in counter-clockwise order, and check the result's bounding box.
-- A tapered extrude rounds a re-entrant corner into a cone face. Many CAD
+- The tapered extrude rounded the re-entrant corner into a cone face. Many CAD
   systems keep that corner sharp (two planes meeting on a line).
-- `loft([lower, upper], ruled=True)` between two polygons gives B-spline side
-  faces, not planes, so face counts by type will not match a planar reference.
+- `loft([lower, upper], ruled=True)` between the outline and its inset gave
+  B-spline side faces, not planes, so face counts by type did not match a
+  planar reference.
 
 For planar sides and sharp corners, build the solid from its faces:
 
@@ -3172,13 +3174,24 @@ def mitre_inset(points, d):
     for (p, u), (q, v) in zip(lines[-1:] + lines[:-1], lines):
         t = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / (u[0] * v[1] - u[1] * v[0])
         out.append((p[0] + t * u[0], p[1] + t * u[1]))
+    # Valid only while every edge keeps its direction: past that the outline has
+    # collapsed or self-intersected, and the result is not the inward offset.
+    for (a, b), (c, e) in zip(zip(points, points[1:] + points[:1]), zip(out, out[1:] + out[:1])):
+        if (b[0] - a[0]) * (e[0] - c[0]) + (b[1] - a[1]) * (e[1] - c[1]) <= 0:
+            raise ValueError(f"inset {d} collapses the outline at edge {a} -> {b}")
     return out
 
 
 def frustum(bottom, z0, top, z1):
     # Solid between two polygons with matching vertex order; every face is planar.
+    if len(bottom) != len(top):
+        raise ValueError("bottom and top need the same number of vertices")
     lo = [Vector(x, y, z0) for x, y in bottom]
     hi = [Vector(x, y, z1) for x, y in top]
+    for i in range(len(lo)):                     # planar sides need parallel edge pairs
+        j = (i + 1) % len(lo)
+        if (lo[j] - lo[i]).cross(hi[j] - hi[i]).length > 1e-9 * (lo[j] - lo[i]).length:
+            raise ValueError(f"side {i} is not planar: bottom and top edges are not parallel")
     faces = [Face(Wire.make_polygon(lo, close=True)), Face(Wire.make_polygon(hi, close=True))]
     for i in range(len(lo)):
         j = (i + 1) % len(lo)
@@ -3186,9 +3199,15 @@ def frustum(bottom, z0, top, z1):
     return Solid(Shell(faces))
 ```
 
-`mitre_inset` assumes no two consecutive edges are collinear. A wall that
-stays vertical on part of an edge needs its own inset of 0, and the top
-outline then steps, so the bottom outline repeats that vertex.
+Preconditions, checked by the recipe: `mitre_inset` needs a counter-clockwise
+outline without consecutive collinear edges, and an inset small enough that no
+edge reverses (the outline has not collapsed or self-intersected); otherwise it
+raises. `frustum` needs equal vertex counts in the same order and each top
+edge parallel to its bottom edge, so every side is a planar quad; a side whose
+top edge has collapsed to a point (a triangle) is not covered by this short
+version. A wall that stays vertical on part of an edge needs its own inset of 0;
+the top outline then steps, so the bottom outline repeats that vertex and
+that side becomes a triangle.
 
 ## Patterned features can differ
 A reference built from a pattern may still change one instance (one wall
