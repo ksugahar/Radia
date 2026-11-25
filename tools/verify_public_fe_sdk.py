@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import importlib
 import importlib.metadata as metadata
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -13,7 +14,6 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 FE_PACKAGES = {"ngsolve": "ngsolve", "netgen-mesher": "netgen"}
 CPU_MODULES = ("_radia_pybind", "peec_matrices", "sparsesolv_ngsolve", "axifem")
-GPU_MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda", "_fem_cuda", "_peec_fin_cuda")
 
 
 def pins():
@@ -60,7 +60,10 @@ def import_wheel(wheel, gpu):
         result[name] = str(origin)
     if gpu:
         from radia.gpu import _native
-        for name in GPU_MODULES:
+        spec = importlib.util.spec_from_file_location("radia_gpu_wheel_payload", Path(__file__).with_name("python_gpu_payload.py"))
+        payload = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(payload)
+        for name in payload.MODULES:
             origin = Path(_native(name).__file__).resolve()
             if not origin.is_relative_to(prefix):
                 raise RuntimeError(f"Unexpected native module origin for {name}: {origin}")

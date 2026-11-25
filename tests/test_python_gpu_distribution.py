@@ -31,7 +31,7 @@ def record(name, data, source="a" * 40):
                 pybind_header_hashes={"pybind11/header.h": "c" * 64})
 
 
-@pytest.mark.parametrize("mutation", ["none", "missing", "source", "hash", "architecture", "ptx", "diagnostic", "private"])
+@pytest.mark.parametrize("mutation", ["none", "missing", "missing_sidecar", "source", "hash", "architecture", "ptx", "diagnostic", "private"])
 def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutation):
     payload = load("python_gpu_payload")
     verifier = load("verify_cpu_wheel")
@@ -42,7 +42,7 @@ def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutati
         z.writestr("radia/_radia_pybind.pyd", core)
         z.writestr("radia/_radia_pybind.pyd.build.json", json.dumps(record("_radia_pybind.pyd", core)))
         for module in payload.MODULES:
-            if module == "_hdiv_cuda" and mutation == "missing":
+            if module == "_peec_fin_cuda" and mutation == "missing":
                 continue
             name = module + ".cp312-win_amd64.pyd"
             data = b"synthetic non-executable GPU"
@@ -54,14 +54,17 @@ def test_formal_wheel_requires_complete_same_source_gpu_payload(tmp_path, mutati
                 if mutation == "ptx": receipt["ptx_architectures"] = []
                 if mutation == "diagnostic": receipt["fault_injection"] = True
             z.writestr("radia/" + name, data)
-            z.writestr("radia/" + name + ".build.json", json.dumps(receipt))
+            if module != "_peec_fin_cuda" or mutation != "missing_sidecar":
+                z.writestr("radia/" + name + ".build.json", json.dumps(receipt))
         if mutation == "private": z.writestr("radia/commands.json", "private original")
     if mutation == "none":
         result = verifier.verify(wheel, require_python_gpu=True)
         assert len(result["python_gpu_binaries"]) == len(payload.MODULES), result
+        assert "radia/_peec_fin_cuda.cp312-win_amd64.pyd" in result["python_gpu_binaries"], result
         assert result["runtime_qualified"] is False, result
     else:
-        with pytest.raises(ValueError): verifier.verify(wheel, require_python_gpu=True)
+        with pytest.raises((ValueError, KeyError)):
+            verifier.verify(wheel, require_python_gpu=True)
 
 
 def test_cpu_only_wheel_cannot_satisfy_gpu_release(tmp_path):
@@ -72,7 +75,8 @@ def test_cpu_only_wheel_cannot_satisfy_gpu_release(tmp_path):
         load("verify_cpu_wheel").verify(wheel, require_python_gpu=True)
 
 
-def test_stage_validates_all_members_before_copying(tmp_path):
+@pytest.mark.parametrize("bad_source", [False, True])
+def test_stage_validates_all_members_before_copying(tmp_path, bad_source):
     payload = load("python_gpu_payload")
     out, package = tmp_path / "out", tmp_path / "package"
     out.mkdir(); package.mkdir()
@@ -80,10 +84,19 @@ def test_stage_validates_all_members_before_copying(tmp_path):
         binary = out / (module + ".cp312-win_amd64.pyd")
         binary.write_bytes(b"synthetic")
         receipt = record(binary.name, binary.read_bytes())
-        if module == "_hdiv_cuda": receipt["source_commit"] = "b" * 40
+        if bad_source and module == "_peec_fin_cuda":
+            receipt["source_commit"] = "b" * 40
         Path(str(binary) + ".build.json").write_text(json.dumps(receipt))
-    with pytest.raises(ValueError): payload.stage(out, package, "a" * 40, ".cp312-win_amd64.pyd")
-    assert list(package.iterdir()) == [], list(package.iterdir())
+    if bad_source:
+        with pytest.raises(ValueError, match="_peec_fin_cuda"):
+            payload.stage(out, package, "a" * 40, ".cp312-win_amd64.pyd")
+        assert not list(package.iterdir())
+    else:
+        staged = payload.stage(out, package, "a" * 40, ".cp312-win_amd64.pyd")
+        binary = "_peec_fin_cuda.cp312-win_amd64.pyd"
+        assert {binary, binary + ".build.json"} <= set(staged)
+        for name in staged:
+            assert (package / name).read_bytes() == (out / name).read_bytes()
 
 
 @pytest.mark.parametrize("mutate_sdk", [False, True])

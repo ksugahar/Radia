@@ -31,12 +31,10 @@ SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
 # Radia-only GPU inputs: not shared with the radia-simulink MEX builds.
 SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu", "peec_fin_host.hpp",
                             "peec_fin_python.cpp", "peec_fin_cuda.cu", "../peec_oriented_box.hpp")
-COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
-              ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
-              ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
-              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"),
-              ("_fem_cuda", "fem/fem_python.cpp", "fem/fem_python_cuda.cu"),
-              ("_peec_fin_cuda", "peec_fin_python.cpp", "peec_fin_cuda.cu"))
+spec = importlib.util.spec_from_file_location("radia_gpu_build_payload", Path(__file__).with_name("python_gpu_payload.py"))
+payload = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(payload)
+COMPONENTS = payload.COMPONENTS
 
 
 def sha(path):
@@ -329,6 +327,7 @@ def main():
     source_hashes.update({p.relative_to(ROOT).as_posix(): sha(p) for p in (CORE / "fem").rglob("*") if p.is_file()})
     source_hashes["src/core/gpu/ams_amg_kernels.cuh"] = sha(CORE / "ams_amg_kernels.cuh")
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
+    source_hashes["tools/python_gpu_payload.py"] = sha(payload.__file__)
     header_hashes = {p.relative_to(include).as_posix(): sha(p) for p in (include / "pybind11").rglob("*") if p.is_file()}
     commands = []
     for module, cpp, cu in COMPONENTS:

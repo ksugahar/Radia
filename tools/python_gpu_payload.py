@@ -7,7 +7,13 @@ from pathlib import Path
 import re
 import shutil
 
-MODULES = ("_gpu_csr", "_gpu_resident_amg", "_gpu_ams", "_hdiv_cuda", "_fem_cuda")
+COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
+              ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
+              ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
+              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"),
+              ("_fem_cuda", "fem/fem_python.cpp", "fem/fem_python_cuda.cu"),
+              ("_peec_fin_cuda", "peec_fin_python.cpp", "peec_fin_cuda.cu"))
+MODULES = tuple(name for name, _, _ in COMPONENTS)
 WINDOWS_ARCHITECTURES = ("80",)
 # Windows modules also embed compute_80 PTX; Linux sm_100 modules embed none.
 WINDOWS_PTX_ARCHITECTURES = ("80",)
