@@ -14,13 +14,29 @@ mcp = FastMCP("ngsolve-mcp.gauging")
 _TOPICS = {
     "overview": (
         "ngsolve-mcp.gauging: Electromagnetic gauging reference and gates.\n"
-        "Topics: tree_cotree, coulomb, open_boundary."
+        "Topics: tree_cotree, coil_av_tree, coulomb, open_boundary."
     ),
     "tree_cotree": (
         "Tree-Cotree gauging for HCurl magnetostatics/eddy-current formulations:\n"
         "Remove gradient-space nullspace (ker curl) by eliminating spanning-tree\n"
         "edge DoFs on the mesh graph before solving."
     ),
+    "coil_av_tree": """# Tree gauge for a voltage-driven coil
+
+Keep source and sink ports separate in the A-V space. Build the tree from
+active free edges, excluding Dirichlet edges and periodic slaves. Contract
+periodic copies consistently. Preserve tangential A on each connected SIBC
+trace by contracting each trace component separately in the tree graph.
+
+Choose a fixed admissible mesh-edge path for the terminal voltage. Keep it off
+the SIBC trace and reject the setup if no admissible path exists. Do not use a
+tree that short-circuits the ports or eliminates the prescribed terminal drop.
+For disconnected free-edge graphs use one spanning tree per component.
+
+Check terminal impedance and field energy under a second admissible tree.
+Compare against an independent air-coil reference and check loss convergence
+separately. The IH voltage scaling, production recipe and comparison criteria
+remain in the IH application guidance.""",
     "coulomb": (
         "Coulomb gauge (div A = 0) and grad-div stabilization:\n"
         "Enforce div A = 0 via Lagrange multiplier or augmented grad-div term."

@@ -26,7 +26,7 @@ _TOPICS = {
     ),
     "solvers": (
         "NGSolve linear solvers & preconditioners:\n"
-        "- Direct: pardiso / umfpack / sparsecholesky\n"
+        "- Direct: sparsecholesky for suitable symmetric systems; check backend availability and matrix assumptions.\n"
         "- Iterative: CG / GMRES with bddc / multigrid / local preconditioners\n"
         "- External: sparsesolv (compact_ams / compact_amg)"
     ),
@@ -35,8 +35,9 @@ _TOPICS = {
         "parallelism; call `SetNumThreads(n)` before entering TaskManager if needed."
     ),
     "eddy_current": (
-        "Frequency-domain A-formulation in HCurl:\n"
-        "  a += SymbolicBFI(nu * curl(u) * curl(v) + 1j * omega * sigma * u * v)"
+        'See ngsolve-mcp.weak-form: weak_form_usage(topic="eddy_current") '
+        'for the A-phi formulation and weak_form_usage(topic="ih_reference") '
+        "for independent induction-heating FEM checks."
     ),
 }
 
