@@ -8,26 +8,16 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from radia_mcp.common import register_status_tool
+from radia_mcp.motor.age import AGE_TOPICS as _MOVED
 
 mcp = FastMCP("ngsolve-mcp.age")
 
 _TOPICS = {
     "overview": (
-        "ngsolve-mcp.age: Air-Gap Element (AGE) for rotating electrical machines.\n"
-        "Topics: harmonic_coupling, torque, periodic_motion."
+        'ngsolve-mcp.age is a legacy route. Its topics are now served by radia-mcp.motor: motor_age_quality(topic=<topic>), with the same text.'
+        + "\nTopics: " + ", ".join(_MOVED)
     ),
-    "harmonic_coupling": (
-        "AGE replaces the physical air-gap mesh with an analytical Fourier-series\n"
-        "harmonic coupling between stator and rotor cylindrical interfaces."
-    ),
-    "torque": (
-        "Electromagnetic torque is computed directly from the AGE Fourier coefficients\n"
-        "without remeshing across arbitrary rotor angles."
-    ),
-    "periodic_motion": (
-        "Supports fractional-slot / anti-periodic sector symmetry and smooth\n"
-        "angular sweeps for cogging torque and back-EMF."
-    ),
+    **_MOVED,
 }
 
 

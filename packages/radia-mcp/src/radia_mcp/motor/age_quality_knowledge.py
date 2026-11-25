@@ -523,11 +523,14 @@ def format_age_validation_plan(plan: dict[str, Any]) -> str:
 
 
 def get_age_quality_report(topic: str = "overview") -> str:
-    """Return AGE motor quality documentation."""
+    """Return AGE motor quality documentation and the AGE method notes."""
+    from radia_mcp.motor.age import AGE_TOPICS
+
+    sections = {**SECTIONS, **AGE_TOPICS}
     t = topic.strip().lower()
     if t == "all":
-        return "\n\n---\n\n".join(SECTIONS[key] for key in SECTIONS)
-    if t not in SECTIONS:
-        valid = ", ".join(sorted(SECTIONS))
+        return "\n\n---\n\n".join(sections[key] for key in sections)
+    if t not in sections:
+        valid = ", ".join(sorted(sections))
         return f"Unknown topic {t!r}. Valid topics: {valid}\n"
-    return SECTIONS[t]
+    return sections[t]
