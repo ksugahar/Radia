@@ -4,8 +4,11 @@ from io import BytesIO
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+import zipfile
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("ci_fork_wheels", ROOT / "tools/ci_fork_wheels.py")
@@ -120,3 +123,74 @@ def test_lock_urls_name_the_locked_release_and_file():
         source = lock["sources"]["netgen" if package == "netgen-mesher" else "ngsolve"]
         assert wheel["url"].endswith("/" + urllib.parse.quote(wheel["filename"], safe="")), wheel["url"]
         assert f"/releases/download/radia-win-{source[:8]}" in wheel["url"], wheel["url"]
+
+def test_linux_fork_requires_the_locked_wheel_and_installed_payload(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("gpu_builder", ROOT / "tools/build_python_gpu.py")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    site = tmp_path / "venv" / "site"
+    lock = {"schema": 1, "wheels": {}}
+    origins = {}
+    for package, module, source in (
+        ("netgen-mesher", "netgen", "a" * 40),
+        ("ngsolve", "ngsolve", "b" * 40),
+    ):
+        entries = {f"{module}/__init__.py": b"", f"{module}/native.so": module.encode()}
+        wheel = tmp_path / f"{module}.whl"
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name, content in entries.items():
+                archive.writestr(name, content)
+                path = site / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+        lock["wheels"][package] = {
+            "file": wheel.name,
+            "sha256": builder.sha(wheel),
+            "source_commit": source,
+            "version": f"6.2.2608+radia.{source[:8]}.cuda",
+        }
+        origins[module] = site / module / "__init__.py"
+    path = tmp_path / "lock.json"
+    path.write_text(json.dumps(lock), encoding="utf-8")
+    monkeypatch.setattr(builder.sys, "prefix", str(site.parent))
+    monkeypatch.setattr(builder.importlib.util, "find_spec", lambda name: SimpleNamespace(origin=origins[name]))
+    monkeypatch.setattr(builder.metadata, "distribution", lambda name: SimpleNamespace(
+        version=lock["wheels"][name]["version"], locate_file=lambda relative: site / relative
+    ))
+    assert builder.verify_linux_fork(path) == lock
+    native = site / "ngsolve/native.so"
+    native.write_bytes(b"wrong ABI")
+    with pytest.raises(RuntimeError, match="installed|Installed"):
+        builder.verify_linux_fork(path)
+    native.write_bytes(b"ngsolve")
+    (tmp_path / "ngsolve.whl").write_bytes(b"wrong wheel")
+    with pytest.raises(RuntimeError, match="wheel hash mismatch"):
+        builder.verify_linux_fork(path)
+
+
+def test_matlab_consumer_uses_the_producer_fork_and_checks_abi_before_parity():
+    workflow = ROOT / ".github/workflows/radia-simulink-a100.yml"
+    steps = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]["validate"]["steps"]
+    commands = "\n".join(step.get("run", "") for step in steps)
+    assert (commands.index("ci_fork_wheels.py install")
+            < commands.index("ci_fork_wheels.py verify")
+            < commands.index("Get-FileHash -LiteralPath $native.FullName")
+            < commands.index("import radia._radia_pybind")
+            < commands.index("run_device_boundary.py"))
+    assert "pip install @pins" not in commands
+
+
+def test_ltspice_acceptance_checks_both_checkouts_and_uploads_the_bound_log():
+    workflow = ROOT / ".github/workflows/ltspice-data-safety.yml"
+    document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    assert document[True]["workflow_dispatch"]["inputs"]["sha"]["required"]
+    for job in ("ci-impact", "matlab-data-contracts"):
+        steps = document["jobs"][job]["steps"]
+        checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+        assert "ACCEPTANCE_SHA" in checkout["with"]["ref"]
+        assert any("git rev-parse HEAD" in step.get("run", "") for step in steps)
+    steps = document["jobs"]["matlab-data-contracts"]["steps"]
+    commands = "\n".join(step.get("run", "") for step in steps)
+    assert '"source_commit": os.environ["ACCEPTANCE_SHA"]' in commands
+    assert '"log_sha256": hashlib.sha256(output).hexdigest()' in commands
+    assert any(step.get("with", {}).get("name") == "ltspice-acceptance" for step in steps)

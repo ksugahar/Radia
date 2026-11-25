@@ -2634,7 +2634,15 @@
             "!**/*.md"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {
+          "inputs": {
+            "sha": {
+              "description": "Full source commit SHA for LTspice acceptance",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
       },
       "selector_refs": [
         "tools/sparsesolv_ci_impact.py:required_for_event"

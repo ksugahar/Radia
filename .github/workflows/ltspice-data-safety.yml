@@ -36,9 +36,17 @@ on:
       - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
   workflow_dispatch:
+    inputs:
+      sha:
+        description: Full source commit SHA for LTspice acceptance
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+env:
+  ACCEPTANCE_SHA: ${{ inputs.sha || github.sha }}
 
 concurrency:
   group: ltspice-data-safety-${{ github.ref }}
@@ -54,6 +62,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ env.ACCEPTANCE_SHA }}
+      - name: Verify source commit
+        shell: bash
+        run: |
+          [[ "$ACCEPTANCE_SHA" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "$ACCEPTANCE_SHA" ]]
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -70,11 +83,17 @@ jobs:
       PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ACCEPTANCE_SHA }}
       - name: Test saved RAW fixtures through a dedicated MATLAB Engine
         shell: pwsh
         run: |
+          if ($env:ACCEPTANCE_SHA -cnotmatch '^[0-9a-f]{40}$' -or (git rev-parse HEAD) -cne $env:ACCEPTANCE_SHA) {
+            throw 'LTspice checkout does not match the requested source commit'
+          }
           @'
-          import subprocess, sys, tempfile
+          import hashlib, json, os, subprocess, sys, tempfile
+          from pathlib import Path
           code = r"""
           import os
           import matlab.engine
@@ -99,7 +118,27 @@ jobs:
                   child.wait(timeout=20)
                   result = 124
               log.seek(0)
-              print(log.read().decode('utf-8', errors='replace'), flush=True)
+              output = log.read()
+              print(output.decode('utf-8', errors='replace'), flush=True)
+              marker = "LTSPICE_DATA_SAFETY_PASS"
+              if result == 0:
+                  if marker.encode() not in output.splitlines():
+                      raise RuntimeError("MATLAB pass marker missing")
+                  receipt = Path(os.environ["RUNNER_TEMP"]) / (
+                      "ltspice-acceptance-" + os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
+                  )
+                  receipt.mkdir(exist_ok=False)
+                  (receipt / "matlab.log").write_bytes(output)
+                  (receipt / "ltspice_acceptance.json").write_text(json.dumps({
+                      "source_commit": os.environ["ACCEPTANCE_SHA"],
+                      "pass_marker": marker,
+                      "log_sha256": hashlib.sha256(output).hexdigest(),
+                  }, indent=2) + "\n", encoding="utf-8")
               raise SystemExit(result)
           '@ | python -
           exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ltspice-acceptance
+          path: ${{ runner.temp }}/ltspice-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error

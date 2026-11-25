@@ -18,7 +18,10 @@ def test_ltspice_data_ci_is_scoped_and_runs_the_real_matlab_test():
     assert job['runs-on'] == ['self-hosted', 'Windows', 'X64', '100']
     assert job['timeout-minutes'] == '5'
     assert job['env']['PYTHONIOENCODING'] == 'utf-8'
-    code = job['steps'][1]['run']
+    matlab_steps = [step['run'] for step in job['steps']
+                    if "runtests('tests/matlab/test_ltspice_data_safety.m')" in step.get('run', '')]
+    assert len(matlab_steps) == 1
+    code = matlab_steps[0]
     assert "runtests('tests/matlab/test_ltspice_data_safety.m')" in code
     assert 'all([r.Passed])' in code and '~any([r.Incomplete])' in code
     assert 'start_matlab' in code and 'eng.quit()' in code

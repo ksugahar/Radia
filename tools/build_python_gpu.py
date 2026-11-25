@@ -8,9 +8,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata as metadata
+import importlib.util
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import re
 import subprocess
@@ -18,6 +19,7 @@ import sys
 import sysconfig
 import time
 import tomllib
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "src/core/gpu"
@@ -115,6 +117,63 @@ def verify_windows_fork():
 
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
     verify_installed(lock)
+    return lock
+
+
+def verify_linux_fork(lock_path):
+    """Verify wheel bytes and the installed Linux SDK before using its headers."""
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    packages = {"ngsolve": "ngsolve", "netgen-mesher": "netgen"}
+    if lock.get("schema") != 1 or set(lock["wheels"]) != packages.keys():
+        raise ValueError("Expected a Linux fork lock for NGSolve and Netgen")
+    prefix = Path(sys.prefix).resolve()
+    if prefix == Path(sys.base_prefix).resolve():
+        raise RuntimeError("Linux fork build requires an isolated virtual environment")
+    for package, module in packages.items():
+        record = lock["wheels"][package]
+        version = record["version"]
+        source = record["source_commit"]
+        version_source = re.search(r"\+radia\.([0-9a-f]{7,40})(?:\.|$)", version)
+        if (not re.fullmatch(r"[0-9a-f]{40}", source) or not version_source
+                or not source.startswith(version_source[1])):
+            raise ValueError(f"Invalid Linux fork source identity: {package}")
+        wheel = lock_path.parent / record["file"]
+        if (Path(record["file"]).name != record["file"] or wheel.suffix != ".whl"
+                or sha(wheel) != record["sha256"]):
+            raise RuntimeError(f"Linux fork wheel hash mismatch: {package}")
+        dist = metadata.distribution(package)
+        if dist.version != version:
+            raise RuntimeError(f"Incorrect installed Linux fork version: {package}")
+        spec = importlib.util.find_spec(module)
+        origin = Path(spec.origin).resolve() if spec and spec.origin else None
+        expected_origin = Path(dist.locate_file(f"{module}/__init__.py")).resolve()
+        if origin != expected_origin or not expected_origin.is_relative_to(prefix):
+            raise RuntimeError(f"Incorrect installed Linux fork import origin: {module}")
+        native_count = 0
+        with zipfile.ZipFile(wheel) as archive:
+            for member in archive.infolist():
+                path = PurePosixPath(member.filename)
+                if member.is_dir() or path.parts[0].endswith(".dist-info"):
+                    continue
+                if path.is_absolute() or ".." in path.parts or chr(92) in member.filename:
+                    raise ValueError(f"Invalid Linux fork wheel member: {member.filename}")
+                if path.parts[0].endswith(".data"):
+                    if len(path.parts) < 3 or path.parts[1] not in {"purelib", "platlib"}:
+                        # Wheel scripts and headers outside site-packages are not SDK inputs here.
+                        if len(path.parts) > 1 and path.parts[1] == "scripts":
+                            continue
+                        raise ValueError(f"Unsupported Linux fork wheel layout: {member.filename}")
+                    path = PurePosixPath(*path.parts[2:])
+                installed = Path(dist.locate_file(str(path))).resolve()
+                if not installed.is_relative_to(prefix) or not installed.is_file():
+                    raise RuntimeError(f"Missing installed Linux fork member: {path}")
+                with archive.open(member) as stream:
+                    expected = hashlib.file_digest(stream, "sha256").hexdigest()
+                if sha(installed) != expected:
+                    raise RuntimeError(f"Installed Linux fork member hash mismatch: {path}")
+                native_count += bool(re.search(r"\.so(?:\.|$)", path.name))
+        if not native_count:
+            raise RuntimeError(f"No native libraries in Linux fork wheel: {package}")
     return lock
 
 
@@ -234,6 +293,7 @@ def main():
     parser.add_argument("--admission", type=Path, required=True)
     parser.add_argument("--admission-sha256", required=True)
     parser.add_argument("--matlab-root", type=Path)
+    parser.add_argument("--linux-fork-lock", type=Path, help="Hash-pinned Linux fork wheel manifest")
     parser.add_argument("--components", nargs="+", choices=[row[0] for row in COMPONENTS],
                         default=[row[0] for row in COMPONENTS], help="Explicit subset to rebuild from this exact commit")
     args = parser.parse_args()
@@ -248,7 +308,11 @@ def main():
     nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
     cuda_sdk_flags, cuda_sdk_identity = (windows_cuda_layout(cuda, args.matlab_root, nvcc_version)
                                          if windows else ([], None))
-    lock = verify_windows_fork() if windows else None
+    if windows and args.linux_fork_lock:
+        parser.error("--linux-fork-lock is Linux-only")
+    lock = verify_windows_fork() if windows else (
+        verify_linux_fork(args.linux_fork_lock) if args.linux_fork_lock else None
+    )
     include = headers(lock)
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
