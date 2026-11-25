@@ -194,3 +194,30 @@ def test_ltspice_acceptance_checks_both_checkouts_and_uploads_the_bound_log():
     assert '"source_commit": os.environ["ACCEPTANCE_SHA"]' in commands
     assert '"log_sha256": hashlib.sha256(output).hexdigest()' in commands
     assert any(step.get("with", {}).get("name") == "ltspice-acceptance" for step in steps)
+
+
+def test_hdiv_host_configure_uses_the_verified_cuda_toolkit(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("gpu_builder", ROOT / "tools/build_python_gpu.py")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda executable: executable)
+    monkeypatch.setattr(builder, "installed_config", lambda package, name: tmp_path / package / name)
+    monkeypatch.setattr(builder, "cuda_libraries", lambda cuda, windows: {})
+
+    class ConfigureObserved(Exception):
+        pass
+
+    cuda = tmp_path / "CUDA Toolkit" / "12.8"
+
+    def verify_configure(command, out, label, commands):
+        assert label == "_hdiv_cuda-host-configure"
+        assert f"-DCUDAToolkit_ROOT={cuda.as_posix()}" in command
+        raise ConfigureObserved
+
+    monkeypatch.setattr(builder, "execute", verify_configure)
+    args = SimpleNamespace(host_compiler=tmp_path / "compiler")
+    with pytest.raises(ConfigureObserved):
+        builder.build_hdiv_host(args, tmp_path / "ext.so", tmp_path / "device.o",
+                                tmp_path / "include", cuda, tmp_path, [])

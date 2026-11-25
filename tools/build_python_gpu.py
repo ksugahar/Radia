@@ -265,6 +265,7 @@ def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
                  "-DNGSolve_DIR=" + cmake_path(ng.parent), "-DNetgen_DIR=" + cmake_path(netgen.parent),
                  "-DPython3_EXECUTABLE=" + cmake_path(sys.executable), "-DRADIA_PYBIND_INCLUDE=" + cmake_path(include),
                  "-DRADIA_CUDA_OBJECT=" + cmake_path(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
+                 "-DCUDAToolkit_ROOT=" + cmake_path(cuda),
                  "-DRADIA_OUTPUT=" + cmake_path(out)]
     configure += ["-DRADIA_" + key.upper() + "=" + cmake_path(path) for key, path in libs.items()]
     execute(configure, out, "_hdiv_cuda-host-configure", commands)
