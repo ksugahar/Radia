@@ -116,6 +116,7 @@ where = ["src"]
 "radia_mcp.blender" = ["colormaps.json"]
 "radia_mcp.ih" = ["prompts/*.md"]
 "radia_mcp.peec" = ["prompts/*.md"]
+"radia_mcp.onshape" = ["knowledge/*.md"]
 "radia_mcp.matlab" = [
     "skill.md",
     "extensions/*.json",
