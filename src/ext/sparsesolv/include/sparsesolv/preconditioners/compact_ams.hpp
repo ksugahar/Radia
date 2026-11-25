@@ -414,7 +414,7 @@ private:
     shared_ptr<SparseMatrix<double>> A_G_;     // G^T * A * G
     shared_ptr<BaseMatrix> B_G_;               // Solver for A_G (AMG or direct)
     bool project_gradient_ = false;
-    shared_ptr<SparseMatrix<double>> gradient_gram_;
+    shared_ptr<SparseMatrixTM<double>> gradient_gram_;
     shared_ptr<BaseMatrix> gradient_gram_inverse_;
     mutable std::unique_ptr<VVector<double>> projection_rhs_, projection_potential_;
 
