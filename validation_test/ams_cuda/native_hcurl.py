@@ -1,5 +1,6 @@
 """Independent NGSolve oracle for the Python-free native HCurl/AMS workflow."""
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse,hashlib,json,os,socket,subprocess,sys,time
 import numpy as np
 import ngsolve as ng
@@ -28,9 +29,7 @@ def main(args):
         source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip())
     engine=None
     try:
-        import netgen,matlab.engine
-        net=Path(netgen.__file__).parent
-        os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
+        import matlab.engine
         build=json.loads((root/'build-ams-cuda/build.json').read_text())
         for rel,digest in build['source_sha256'].items():
             if hashlib.sha256((root/rel).read_bytes()).hexdigest()!=digest:raise RuntimeError('Source differs from build receipt')
@@ -79,7 +78,7 @@ def main(args):
         cpu_res=true_residual(cpu);record['cpu_true_relative_residual']=cpu_res
         record.update(gamma=args.gamma,current_density=[current,0,0])
         if cpu_res>(1e-9 if args.gamma else 1e-10):raise RuntimeError('Independent CPU solve failed true residual')
-        startup=time.perf_counter();engine=matlab.engine.start_matlab('-nodesktop -nosplash')
+        startup=time.perf_counter();engine=start_matlab(matlab.engine, '-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
         engine.addpath(str(Path(__file__).parent),str(root/'build-cuda-mex'),nargout=0)
         engine.native_hcurl(str(vol),str(root/'build-ams-cuda'),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),float(args.gamma),nargout=0)

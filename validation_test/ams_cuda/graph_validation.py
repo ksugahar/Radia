@@ -4,6 +4,7 @@ Timing on RTX 5000/100 is diagnostic only. Python orchestrates validation;
 it is not required by the MATLAB GPU runtime.
 """
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse, hashlib, json, os, statistics, subprocess, sys, time
 import numpy as np
 from scipy.io import loadmat
@@ -75,9 +76,7 @@ def cpu_oracle(path,oracle_dir=ROOT/'build-ams-cuda'):
         matrix_nonzeros=len(model['A']['values']))
 
 def main(args):
-    import netgen, matlab.engine
-    net=Path(netgen.__file__).parent
-    os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
+    import matlab.engine
     args.out.mkdir(parents=True,exist_ok=False)
     generation=args.comparison=='generation'
     record=dict(schema='radia.ams-cuda-matrix-generation.v1' if generation else 'radia.ams-cuda-graph-comparison.v1',accepted=False,
@@ -90,7 +89,7 @@ def main(args):
     try:
         if args.require_idle_host:assert_idle_host()
         startup=time.perf_counter()
-        eng=matlab.engine.start_matlab('-nodesktop -nosplash')
+        eng=start_matlab(matlab.engine, '-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
         eng.addpath(str(Path(__file__).parent),nargout=0)
         record['build']=json.loads(args.build_receipt.read_text())

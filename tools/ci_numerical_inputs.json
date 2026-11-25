@@ -86,6 +86,9 @@
     }
   },
   "consumer_inputs": {
+    "tests/test_native_build_provenance.py": [
+      "validation_test/test_native_build_dirty_source.py"
+    ],
     "tests/gmsh_post/test_native_field_handoff.py": [
       "src/radia/panels/open_gmsh.py"
     ]

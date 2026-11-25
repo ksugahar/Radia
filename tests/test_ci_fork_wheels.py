@@ -194,3 +194,78 @@ def test_ltspice_acceptance_checks_both_checkouts_and_uploads_the_bound_log():
     assert '"source_commit": os.environ["ACCEPTANCE_SHA"]' in commands
     assert '"log_sha256": hashlib.sha256(output).hexdigest()' in commands
     assert any(step.get("with", {}).get("name") == "ltspice-acceptance" for step in steps)
+
+
+def test_hdiv_host_configure_uses_the_verified_cuda_toolkit(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("gpu_builder", ROOT / "tools/build_python_gpu.py")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda executable: executable)
+    monkeypatch.setattr(builder, "installed_config", lambda package, name: tmp_path / package / name)
+    monkeypatch.setattr(builder, "cuda_libraries", lambda cuda, windows: {})
+
+    class ConfigureObserved(Exception):
+        pass
+
+    cuda = tmp_path / "CUDA Toolkit" / "12.8"
+
+    def verify_configure(command, out, label, commands):
+        assert label == "_hdiv_cuda-host-configure"
+        assert f"-DCUDAToolkit_ROOT={cuda.as_posix()}" in command
+        raise ConfigureObserved
+
+    monkeypatch.setattr(builder, "execute", verify_configure)
+    args = SimpleNamespace(host_compiler=tmp_path / "compiler")
+    with pytest.raises(ConfigureObserved):
+        builder.build_hdiv_host(args, tmp_path / "ext.so", tmp_path / "device.o",
+                                tmp_path / "include", cuda, tmp_path, [])
+
+
+def test_matlab_child_uses_locked_mkl_directory_and_restores_parent_path(tmp_path, monkeypatch):
+    import os
+
+    spec = importlib.util.spec_from_file_location(
+        "matlab_runtime", ROOT / "validation_test/ams_cuda/matlab_runtime.py"
+    )
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    prefix, base = tmp_path / "venv", tmp_path / "python"
+    net = prefix / "Lib/site-packages/netgen"
+    mkl = prefix / "Library/bin/mkl_rt.3.dll"
+    occt = prefix / "bin/TKOffset.dll"
+    python = base / f"python{sys.version_info.major}{sys.version_info.minor}.dll"
+    for path in (net / "__init__.py", mkl, occt, python):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    lock = tmp_path / "fork-lock.json"
+    lock.write_text("{}", encoding="utf-8")
+    verified = []
+    monkeypatch.setattr(runtime.runpy, "run_path", lambda path: {
+        "LOCK": lock, "verify_installed": verified.append,
+    })
+    monkeypatch.setattr(runtime.sys, "prefix", str(prefix))
+    monkeypatch.setattr(runtime.sys, "base_prefix", str(base))
+    monkeypatch.setattr(runtime.importlib.util, "find_spec",
+                        lambda name: SimpleNamespace(origin=str(net / "__init__.py")))
+    files = {"mkl": mkl, "netgen-occt": occt}
+    monkeypatch.setattr(runtime.metadata, "distribution", lambda name: SimpleNamespace(
+        files=[files[name]], locate_file=lambda path: path
+    ))
+    monkeypatch.setenv("PATH", "original")
+
+    def launch(options):
+        assert os.environ["PATH"].split(os.pathsep) == [
+            str(net), str(mkl.parent), str(occt.parent), str(base), "original"
+        ]
+        return options
+
+    engine = SimpleNamespace(start_matlab=launch)
+    assert runtime.start_matlab(engine, "options") == "options"
+    assert verified == [{}]
+    assert os.environ["PATH"] == "original"
+    mkl.unlink()
+    with pytest.raises(FileNotFoundError, match=r"mkl_rt\.3\.dll"):
+        runtime.start_matlab(engine, "options")
+    assert os.environ["PATH"] == "original"

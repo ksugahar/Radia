@@ -4,6 +4,7 @@ import argparse
 import importlib.metadata as md
 import json
 from pathlib import Path
+from matlab_runtime import start_matlab, probe_ams_mex
 import os
 import platform
 import socket
@@ -71,13 +72,10 @@ def main(args):
     try:
         if not args.cpu_only:
             import matlab.engine
-            import netgen
-            net=Path(netgen.__file__).parent
-            os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),
-                str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),
-                str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
             record['versions']['matlabengine']=md.version('matlabengine')
-            timer=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
+            timer=time.perf_counter();eng=start_matlab(matlab.engine, '-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
+            probe_ams_mex(eng, oracle)
+            probe_ams_mex(eng, gpu_dir / 'radia_cuda_ams.mexw64')
             eng.addpath(str(Path(__file__).parent),str(binary),nargout=0)
         for h in args.maxh:
             for cycle in (1,7):

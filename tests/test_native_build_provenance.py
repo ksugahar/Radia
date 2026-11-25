@@ -231,13 +231,6 @@ def test_initial_dirty_source_completes_without_manifest(tmp_path):
     assert not manifest_path.exists()
 
 
-def test_dirty_source_change_during_build_is_still_rejected(tmp_path):
-    repo, binary = _repo(tmp_path)
-    (repo / "source.txt").write_text("dirty at start\n", encoding="utf-8")
-    mutation = f"[IO.File]::WriteAllText({_quote(repo / 'source.txt')}, 'dirtier')"
-    _assert_change_rejected(repo, binary, mutation)
-
-
 def test_git_failure_rejects_and_removes_stale_manifest(tmp_path):
     repo, binary = _repo(tmp_path)
     mutation = f"Rename-Item -LiteralPath {_quote(repo / '.git')} -NewName '.git-away'"

@@ -224,6 +224,7 @@ on:
       - 'tools/run_test_tier.py'
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
+      - 'validation_test/test_native_build_dirty_source.py'
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_tree_receipt.py'
       - '.github/workflows/sparsesolv.yml'
@@ -538,6 +539,7 @@ on:
       - 'tools/run_test_tier.py'
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
+      - 'validation_test/test_native_build_dirty_source.py'
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_tree_receipt.py'
       - '.github/workflows/sparsesolv.yml'
@@ -778,6 +780,13 @@ jobs:
         shell: pwsh
         run: |
           python tools/run_test_tier.py --profile native-build-contracts --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json"
+          exit $LASTEXITCODE
+
+      - name: Validate provenance for an already dirty source tree
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.native_required == 'true'
+        shell: pwsh
+        run: |
+          python -m pytest -q validation_test/test_native_build_dirty_source.py
           exit $LASTEXITCODE
 
       - name: Build current package and SparseSolv

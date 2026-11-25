@@ -1,5 +1,6 @@
 """Independent native NGSolve Galerkin SL/DL oracle for corrected CUDA FMM."""
 from pathlib import Path
+from matlab_runtime import start_matlab
 import argparse,json,hashlib,os,sys,socket,time
 import numpy as np
 import ngsolve as ng
@@ -13,8 +14,7 @@ def main(args):
         scope='Flat exterior P1 Galerkin SL/DL with native exact near corrections; independent NGSolve quadrature')
     engine=None
     try:
-        import netgen,matlab.engine
-        net=Path(netgen.__file__).parent;os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(Path(sys.base_prefix)),os.environ['PATH']])
+        import matlab.engine
         from cubit_mesh_export.check import check_consistency
         checked=check_consistency(args.vol,contract=Path(__file__).with_name('native_hcurl_labels.json'),strict_labels=True)
         (out/'vol_check.json').write_text(json.dumps(checked,indent=2)+'\n')
@@ -30,7 +30,7 @@ def main(args):
         SL=dense(sl);DL=dense(dl);record['mesh_sha256']=hashlib.sha256(args.vol.read_bytes()).hexdigest()
         receipt=json.loads((args.binary/'build.json').read_text());record['build']=receipt
         if hashlib.sha256((args.binary/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest()!=receipt['binary_sha256']:raise RuntimeError('Binary hash mismatch')
-        engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
+        engine=start_matlab(matlab.engine, '-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
         engine.fmm_boundary(str(args.vol.resolve()),str(args.binary.resolve()),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),nargout=0)
         result=loadmat(out/'native.mat',simplify_cells=True);ids=np.asarray(result['global_dofs'],dtype=int);x=result['x'];expectedSL=SL[np.ix_(ids,ids)]@x;expectedDL=DL[np.ix_(ids,ids)]@x
         metrics=dict(SL_relative=float(np.linalg.norm(result['slResult']-expectedSL)/np.linalg.norm(expectedSL)),DL_relative=float(np.linalg.norm(result['dlResult']-expectedDL)/np.linalg.norm(expectedDL)))
