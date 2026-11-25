@@ -52,6 +52,12 @@ struct MaterialStagingContext {
         if(mesh->GetCurveOrder()!=curveOrder)
             throw std::invalid_argument("Material staging requires the .vol stored at geometry order "+std::to_string(curveOrder)+
                                         "; it stores order "+std::to_string(mesh->GetCurveOrder())+" and is never curved here");
+#ifdef RADIA_PUBLIC_FE
+        for(std::size_t e=0;e<ne;++e){
+            if(mesh->GetElType(ngfem::ElementId(ngfem::VOL,int(e)))==ngfem::ET_PYRAMID)
+                throw std::invalid_argument("Pyramid material staging requires the Netgen pyramid mapping capability; unavailable with the public SDK");
+        }
+#endif
         ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
         nd=std::size_t(space->GetNDof());if(!nd||nd>count)throw std::invalid_argument("Material DOF numbering exceeds int32");
         if(!periodicBoundaries.empty()){

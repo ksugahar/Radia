@@ -138,13 +138,13 @@ jobs:
           $venv = Join-Path $env:RUNNER_TEMP "radia-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $basePython = (Get-Command python).Source
           $gitDir = Split-Path -Parent (Get-Command git -ErrorAction Stop).Source
-          & $basePython -m venv --system-site-packages $venv
+          & $basePython -m venv $venv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $ciPython = Join-Path $venv 'Scripts\python.exe'
           # The native release lane owns its MKL headers/import libraries in
           # the run-local venv. Do not assume a developer-machine install.
-          & $ciPython -I tools/ci_fork_wheels.py install
+          & $ciPython -I tools/verify_public_fe_sdk.py install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir mkl-devel pybind11==3.0.2 ninja
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -216,7 +216,7 @@ jobs:
         shell: pwsh
         run: |
           $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
-          & $ciPython -I tools/ci_fork_wheels.py verify
+          & $ciPython -I tools/verify_public_fe_sdk.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
             Write-Host "::error::NGSolve not found at $env:NGSOLVE_DIR"
@@ -551,6 +551,17 @@ jobs:
       # ----------------------------------------------------------------
       # Upload native binaries as an artifact for the CD workflow to consume
       # ----------------------------------------------------------------
+      - name: Verify exact wheel through clean public pip resolution
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem dist -Filter radia-*.whl)
+          if ($wheels.Count -ne 1) { throw 'Expected one exact release wheel' }
+          $venv = Join-Path $env:RUNNER_TEMP "public-wheel-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $venv) { throw 'Expected a fresh acceptance path' }
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $venv 'Scripts/python.exe') -I tools/verify_public_fe_sdk.py smoke --wheel $wheels[0].FullName
+          exit $LASTEXITCODE
       - name: Record the CPU natives with their hashes
         if: success()
         shell: pwsh
@@ -618,7 +629,7 @@ jobs:
           # from this checkout next to the exact NGSolve/Netgen pins.
           $deps = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['dependencies'], sep='\n')")
           if ($LASTEXITCODE -ne 0 -or @($deps | Where-Object { $_ -match '^(ngsolve|netgen-mesher)==' }).Count -ne 2) { throw 'Expected exact ngsolve and netgen-mesher pins' }
-          & $ciPython -I tools/ci_fork_wheels.py install
+          & $ciPython -I tools/verify_public_fe_sdk.py install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install @deps build wheel twine==6.2.0 "setuptools>=77"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -678,7 +689,7 @@ jobs:
           & $ciPython -m pip install --only-binary=:all: @gpuPins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # The GPU runtime pins are the last dependency install of this job.
-          & $ciPython -I tools/ci_fork_wheels.py verify
+          & $ciPython -I tools/verify_public_fe_sdk.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython tools/check_python_gpu_coexistence.py --source-commit $env:GITHUB_SHA --report (Join-Path $env:RADIA_CI_OUTPUT_DIR 'python-gpu-coexistence.json')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -699,6 +710,17 @@ jobs:
             Write-Host "::error::Wheel build failed"
             exit $LASTEXITCODE
           }
+      - name: Verify exact wheel through clean public pip resolution
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem dist -Filter radia-*.whl)
+          if ($wheels.Count -ne 1) { throw 'Expected one exact release wheel' }
+          $venv = Join-Path $env:RUNNER_TEMP "public-wheel-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $venv) { throw 'Expected a fresh acceptance path' }
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $venv 'Scripts/python.exe') -I tools/verify_public_fe_sdk.py smoke --wheel $wheels[0].FullName --gpu
+          exit $LASTEXITCODE
       - name: Upload native binary artifact
         uses: actions/upload-artifact@v4
         with:

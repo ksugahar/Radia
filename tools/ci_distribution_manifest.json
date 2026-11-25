@@ -823,6 +823,18 @@
       ]
     },
     {
+      "pattern": "tools/verify_public_fe_sdk.py",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Native Release and the Simulink producer and consumer verify the same public FE SDK."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "tools/ci_fork_wheels.py",
       "owners": [
         "radia"

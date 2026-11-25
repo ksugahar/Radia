@@ -23,9 +23,13 @@ def matlab_dll_directories():
     base = Path(sys.base_prefix).resolve()
     if prefix == base:
         raise RuntimeError("MATLAB validation requires the isolated fork venv")
-    verifier = runpy.run_path(str(ROOT / "tools/ci_fork_wheels.py"))
-    lock = json.loads(verifier["LOCK"].read_text(encoding="utf-8"))
-    verifier["verify_installed"](lock)
+    public = os.environ.get("RADIA_MATLAB_PUBLIC_FE") == "1"
+    if public:
+        runpy.run_path(str(ROOT / "tools/verify_public_fe_sdk.py"))["verify"]()
+    else:
+        verifier = runpy.run_path(str(ROOT / "tools/ci_fork_wheels.py"))
+        lock = json.loads(verifier["LOCK"].read_text(encoding="utf-8"))
+        verifier["verify_installed"](lock)
     net = Path(importlib.util.find_spec("netgen").origin).resolve().parent
     mkl = prefix / "Library" / "bin"
     occt = prefix / "bin"
@@ -39,7 +43,8 @@ def matlab_dll_directories():
                    for item in package.files or () if item.name.lower() == name.lower()):
             raise RuntimeError(f"MATLAB dependency {name} is outside its installed package record")
     _require_dll(base, f"python{sys.version_info.major}{sys.version_info.minor}.dll")
-    return net, mkl, occt, base
+    openblas = net.parent / "ngsolve_openblas"
+    return (net, mkl, occt, base, openblas) if public and openblas.is_dir() else (net, mkl, occt, base)
 
 
 def start_matlab(engine, options):

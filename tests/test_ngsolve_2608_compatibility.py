@@ -85,12 +85,13 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
         encoding="utf-8"
     )
     assert "Create isolated NGSolve environment" in workflow
-    assert "-m venv --system-site-packages" in workflow
+    assert "-m venv $venv" in workflow
+    assert "--system-site-packages" not in workflow
     assert "RADIA_CI_VENV=" in workflow
     assert "NGSOLVE_DIR=" in workflow
     assert "Netgen_DIR=" in workflow
-    assert "tools/ci_fork_wheels.py install" in workflow
-    assert "tools/ci_fork_wheels.py verify" in workflow
+    assert "tools/verify_public_fe_sdk.py install" in workflow
+    assert "tools/verify_public_fe_sdk.py verify" in workflow
     assert "Get-Command git -ErrorAction Stop" in workflow
     assert "RADIA_CI_GIT_DIR=$gitDir" in workflow
     assert '$env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"' in workflow

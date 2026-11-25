@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 100
     env:
       ACCEPTANCE_SHA: ${{ inputs.sha }}
+      RADIA_MATLAB_PUBLIC_FE: '1'
     steps:
       - name: Initialize runner-owned CI scratch
         shell: pwsh
@@ -71,9 +72,9 @@ jobs:
           python -m venv $venv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $python = Join-Path $venv 'Scripts/python.exe'
-          & $python -I tools/ci_fork_wheels.py install
+          & $python -I tools/verify_public_fe_sdk.py install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $python -I tools/ci_fork_wheels.py verify
+          & $python -I tools/verify_public_fe_sdk.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB is required for the GPU acceptance' }

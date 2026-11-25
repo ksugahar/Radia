@@ -34,11 +34,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $wheels = @(Get-ChildItem gpu-input -Recurse -Filter *.whl)
           if ($wheels.Count -ne 1) { throw 'Expected one verified radia wheel' }
-          & "$venv/Scripts/python.exe" -I tools/ci_fork_wheels.py install
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$venv/Scripts/python.exe" -I -m pip install --only-binary=:all: "$($wheels[0].FullName)[gpu]" pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$venv/Scripts/python.exe" -I tools/ci_fork_wheels.py verify
+          & "$venv/Scripts/python.exe" -I tools/verify_public_fe_sdk.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "HDIV_LANE_PYTHON=$venv/Scripts/python.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "HDIV_LANE_WHEEL=$($wheels[0].FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8

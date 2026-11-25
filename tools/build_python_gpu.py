@@ -246,7 +246,7 @@ def hdiv_source_hashes():
             for p in HDIV.rglob("*") if p.is_file()}
 
 
-def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
+def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands, *, fork_sdk=False):
     """NGSolve owns host compile definitions/includes/link ABI; nvcc stays separate."""
     import shutil
     cmake = shutil.which("cmake")
@@ -266,6 +266,7 @@ def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
                  "-DPython3_EXECUTABLE=" + cmake_path(sys.executable), "-DRADIA_PYBIND_INCLUDE=" + cmake_path(include),
                  "-DRADIA_CUDA_OBJECT=" + cmake_path(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
                  "-DCUDAToolkit_ROOT=" + cmake_path(cuda),
+                 "-DRADIA_PUBLIC_FE=" + ("OFF" if fork_sdk else "ON"),
                  "-DRADIA_OUTPUT=" + cmake_path(out)]
     configure += ["-DRADIA_" + key.upper() + "=" + cmake_path(path) for key, path in libs.items()]
     execute(configure, out, "_hdiv_cuda-host-configure", commands)
@@ -294,6 +295,7 @@ def main():
     parser.add_argument("--admission", type=Path, required=True)
     parser.add_argument("--admission-sha256", required=True)
     parser.add_argument("--matlab-root", type=Path)
+    parser.add_argument("--windows-dev-fork", action="store_true", help="Use the locked Windows development SDK")
     parser.add_argument("--linux-fork-lock", type=Path, help="Hash-pinned Linux fork wheel manifest")
     parser.add_argument("--components", nargs="+", choices=[row[0] for row in COMPONENTS],
                         default=[row[0] for row in COMPONENTS], help="Explicit subset to rebuild from this exact commit")
@@ -311,7 +313,9 @@ def main():
                                          if windows else ([], None))
     if windows and args.linux_fork_lock:
         parser.error("--linux-fork-lock is Linux-only")
-    lock = verify_windows_fork() if windows else (
+    if not windows and args.windows_dev_fork:
+        parser.error("--windows-dev-fork is Windows-only")
+    lock = verify_windows_fork() if args.windows_dev_fork else (
         verify_linux_fork(args.linux_fork_lock) if args.linux_fork_lock else None
     )
     include = headers(lock)
@@ -348,7 +352,8 @@ def main():
             cuda_command += ["-Xcompiler", "-fPIC"]
         execute(cuda_command, out, module + "-cuda", commands)
         if module == "_hdiv_cuda":
-            hdiv_artifacts = build_hdiv_host(args, binary, obj, include, cuda, out, commands)
+            hdiv_artifacts = build_hdiv_host(args, binary, obj, include, cuda, out, commands,
+                                                  fork_sdk=lock is not None)
         elif windows:
             command = [args.host_compiler, "/nologo", "/LD", "/EHsc", "/MD", "/O2", "/fp:precise", "/std:c++20", "/utf-8",
                        "/I" + str(include), "/I" + sysconfig.get_path("include"),

@@ -172,8 +172,8 @@ def test_matlab_consumer_uses_the_producer_fork_and_checks_abi_before_parity():
     workflow = ROOT / ".github/workflows/radia-simulink-a100.yml"
     steps = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]["validate"]["steps"]
     commands = "\n".join(step.get("run", "") for step in steps)
-    assert (commands.index("ci_fork_wheels.py install")
-            < commands.index("ci_fork_wheels.py verify")
+    assert (commands.index("verify_public_fe_sdk.py install")
+            < commands.index("verify_public_fe_sdk.py verify")
             < commands.index("Get-FileHash -LiteralPath $native.FullName")
             < commands.index("import radia._radia_pybind")
             < commands.index("run_device_boundary.py"))
@@ -269,3 +269,26 @@ def test_matlab_child_uses_locked_mkl_directory_and_restores_parent_path(tmp_pat
     with pytest.raises(FileNotFoundError, match=r"mkl_rt\.3\.dll"):
         runtime.start_matlab(engine, "options")
     assert os.environ["PATH"] == "original"
+
+
+def test_public_wheel_gate_rejects_local_fork_versions(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("public_sdk", ROOT / "tools/verify_public_fe_sdk.py")
+    sdk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sdk)
+    monkeypatch.setattr(sdk.sys, "prefix", str(tmp_path))
+    monkeypatch.setattr(sdk.metadata, "version", lambda name: "6.2.2608+radia.fork")
+    with pytest.raises(RuntimeError, match="required public version"):
+        sdk.verify()
+
+
+def test_release_wheels_exercise_pip_resolution_in_fresh_venvs():
+    workflow = ROOT / ".github/workflows/build-test.yml"
+    jobs = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
+    for job, gpu in (("build-test", False), ("windows-gpu-wheel", True)):
+        commands = "\n".join(step.get("run", "") for step in jobs[job]["steps"])
+        assert "ci_fork_wheels.py" not in commands
+        gate = next(step["run"] for step in jobs[job]["steps"]
+                    if step.get("name") == "Verify exact wheel through clean public pip resolution")
+        assert "Expected a fresh acceptance path" in gate
+        assert "verify_public_fe_sdk.py smoke --wheel" in gate
+        assert ("--gpu" in gate) == gpu
