@@ -300,10 +300,10 @@ def test_ih_catalog_tools_and_fem_links_match_status():
         _, status = await mcp.call_tool("ih_status", {})
         assert status["related_servers"] == entry["related"]
         _, core_status = await core_mcp.call_tool("ngsolve_mcp_core_status", {})
-        assert core_status["related_servers"] == CATALOG["ngsolve-mcp.core"]["related"]
+        assert core_status.get("related_servers", []) == CATALOG["ngsolve-mcp.core"]["related"]
         assert CATALOG["ngsolve-mcp.core"]["entry_point"] == "radia-mcp serve ngsolve-mcp.core"
         _, kelvin_status = await kelvin_mcp.call_tool("ngsolve_mcp_kelvin_status", {})
-        assert kelvin_status["related_servers"] == CATALOG["ngsolve-mcp.kelvin"]["related"]
+        assert kelvin_status.get("related_servers", []) == CATALOG["ngsolve-mcp.kelvin"]["related"]
         assert CATALOG["ngsolve-mcp.kelvin"]["entry_point"] == "radia-mcp serve ngsolve-mcp.kelvin"
 
     asyncio.run(check_tools())
