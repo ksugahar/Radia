@@ -47,7 +47,7 @@ register_status_tool(
     mcp,
     "ngsolve-mcp.gauging",
     "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary, gauge-invariance gate).",
-    "radia_mcp.gauging",
+    "ngsolve_mcp.gauging",
     related_servers=["radia-mcp.ngsolve", "fem", "differential-forms"],
 )
 

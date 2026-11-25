@@ -101,7 +101,7 @@ def test_every_cataloged_server_has_register_status_tool():
     """
     from radia_mcp.meta import catalog
     repo_root = Path(__file__).resolve().parent.parent
-    src_root = repo_root / "src" / "radia_mcp"
+    src_root = repo_root / "src"
 
     missing = []
     for name, info in catalog.CATALOG.items():
@@ -109,7 +109,7 @@ def test_every_cataloged_server_has_register_status_tool():
             # Public protocol status/schema coverage lives in test_capability_packs.
             assert "capability_pack_status" in info["primary_tools"]
             continue
-        subpkg_dir = info["subpackage"].replace("radia_mcp.", "")
+        subpkg_dir = Path(*info["subpackage"].split("."))
         server_py = src_root / subpkg_dir / "server.py"
         if not server_py.exists():
             missing.append(f"{name}: server.py missing at {server_py}")

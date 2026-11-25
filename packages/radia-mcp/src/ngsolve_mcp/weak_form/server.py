@@ -51,7 +51,7 @@ register_status_tool(
     mcp,
     "ngsolve-mcp.weak-form",
     "NGSolve weak-form variational formulations (HCurl/HDiv/H1, BilinearForm, LinearForm, SymbolicBFI).",
-    "radia_mcp.weak_form",
+    "ngsolve_mcp.weak_form",
     related_servers=["radia-mcp.ngsolve", "fem", "ngsolve-mcp.gauging"],
 )
 

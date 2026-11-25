@@ -161,6 +161,11 @@ def _distribution_provenance(distribution_name: str = "radia-mcp") -> dict:
     return result
 
 
+def _distribution_for_subpackage(subpackage: str) -> str:
+    root = subpackage.split(".")[0]
+    return "radia-mcp" if root == "ngsolve_mcp" else root.replace("_", "-")
+
+
 def _runtime_provenance(subpackage: str) -> dict:
     """Identify the exact Python/MCP implementation loaded by this process."""
     module_name = f"{subpackage}.server"
@@ -176,7 +181,7 @@ def _runtime_provenance(subpackage: str) -> dict:
         "python_executable": sys.executable,
         "module": module_name,
         "module_file": str(Path(module_file).resolve()) if module_file else None,
-        "distribution": _distribution_provenance(subpackage.split('.')[0].replace('_', '-')),
+        "distribution": _distribution_provenance(_distribution_for_subpackage(subpackage)),
     }
     try:
         result["mcp_sdk_version"] = importlib.metadata.version("mcp")
@@ -307,7 +312,7 @@ def register_status_tool(
     )
     from radia_mcp.common.server_hardening import install_call_log
 
-    distribution = _distribution_provenance(subpackage.split('.')[0].replace('_', '-'))
+    distribution = _distribution_provenance(_distribution_for_subpackage(subpackage))
     apply_tool_contract(
         mcp,
         server_name=server_name,
