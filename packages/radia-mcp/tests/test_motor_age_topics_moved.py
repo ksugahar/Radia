@@ -17,6 +17,6 @@ def test_age_package_does_not_import_radia():
     import radia_mcp
 
     src = os.path.dirname(os.path.dirname(radia_mcp.__file__))
-    code = ("import sys; sys.path.insert(0, sys.argv[1]); import radia_mcp.motor.age; "
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import radia_mcp.motor.age.lanes; "
             "sys.exit(1 if any(m == 'radia' or m.startswith('radia.') for m in sys.modules) else 0)")
     assert subprocess.run([sys.executable, "-I", "-c", code, src]).returncode == 0

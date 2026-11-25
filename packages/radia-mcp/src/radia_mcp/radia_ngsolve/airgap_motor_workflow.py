@@ -166,6 +166,11 @@ def age_motor_rotation_sweep(
     axial_length: float = 1.0,
     niter: int = 20,
     tol: float = 1e-6,
+    *,
+    source_fn: Optional[Callable] = None,
+    phase_linkage_fn: Optional[Callable] = None,
+    linkage_stack_basis: Optional[str] = None,
+    record_export_metadata: bool = False,
 ):
     """Compute torque vs rotor angle, reusing nonlinear solve per angle.
 
@@ -181,10 +186,22 @@ def age_motor_rotation_sweep(
     axial_length  : float     Axial stack length [m].
     niter         : int       Max Picard iterations per angle.
     tol           : float     Relative convergence tolerance.
+    source_fn     : callable  Return an assembled LinearForm for each rotor angle.
+    phase_linkage_fn: callable  Return signed abc linkage from (solution, angle).
+    linkage_stack_basis: str  Required with the linkage callback. Declares its
+                              normalization as per_metre or total.
+    record_export_metadata: bool  Record torque axial_length_m for lane export.
 
     Returns
     -------
-    list of dicts with ``{theta_r, torque, niter_used, converged}``."""
+    list of dicts with ``{theta_r, torque, niter_used, converged}``.
+    With a linkage callback, rows also contain phase_flux_wb and its basis.
+    The first nonlinear solve failure propagates and aborts the sweep.
+    """
+    if phase_linkage_fn is not None and linkage_stack_basis not in ("per_metre", "total"):
+        raise ValueError("declare linkage_stack_basis for the phase linkage callback")
+    if type(record_export_metadata) is not bool:
+        raise ValueError("record_export_metadata must be boolean")
     results = []
     for theta_r in theta_r_list:
         dirichlet_cf = excitation_fn(theta_r)
@@ -192,15 +209,22 @@ def age_motor_rotation_sweep(
             fes, coupling, bilinear_fn,
             nu_cf_fn=nu_cf_fn,
             dirichlet_cf=dirichlet_cf,
+            source_lf=source_fn(theta_r) if source_fn is not None else None,
             niter=niter, tol=tol,
         )
         T = airgap_torque(coupling, gfu, axial_length=axial_length)
-        results.append({
+        row = {
             "theta_r": theta_r,
             "torque": T,
             "niter_used": info["niter_used"],
             "converged": info["converged"],
-        })
+        }
+        if record_export_metadata:
+            row["axial_length_m"] = axial_length
+        if phase_linkage_fn is not None:
+            row["phase_flux_wb"] = tuple(phase_linkage_fn(gfu, theta_r))
+            row["linkage_stack_basis"] = linkage_stack_basis
+        results.append(row)
     return results
 
 

@@ -1683,6 +1683,26 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
 
 
 @_validation.tool()
+def motor_age_lanes(sweep_json: str) -> str:
+    """Convert converged open-circuit 2D AGE sweeps into motor gate inputs.
+
+    Use zero phase current and radians for theta_r. Back-EMF rows carry signed
+    abc phase_flux_wb and linkage_stack_basis (per_metre or total). Cogging
+    rows carry signed torque and axial_length_m from record_export_metadata.
+    The existing cross-lane gates qualify each sampling grid and period.
+    """
+    from .age.lanes import age_motor_lanes
+
+    try:
+        payload = json.loads(sweep_json)
+        if not isinstance(payload, dict):
+            raise ValueError("sweep_json must encode an object")
+        return json.dumps(age_motor_lanes(**payload), allow_nan=False)
+    except (TypeError, ValueError, OverflowError) as exc:
+        return json.dumps({"status": "invalid_input", "error": str(exc)})
+
+
+@_validation.tool()
 def motor_back_emf_cross_lane_gate(first_lane_json: str, second_lane_json: str, tolerances_json: str) -> str:
     """Compare signed abc linkage and derived EMF over one uniform electrical period.
 
