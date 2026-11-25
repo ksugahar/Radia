@@ -37,6 +37,7 @@ from radia_mcp.common.lazy_call import lazy_callable
 evaluate_team36_json = lazy_callable(".team36_gate", "evaluate_team36_json", __package__)
 team36_contract = lazy_callable(".team36_gate", "team36_contract", __package__)
 from radia_mcp.common import register_status_tool
+from radia_mcp.meta.catalog import CATALOG
 
 mcp = FastMCP("ih")
 
@@ -234,8 +235,7 @@ register_status_tool(
                   "+ workpiece coupling. Production calc scripts: "
                   "calc_inductance.py / calc_fem_kelvin.py / calc_fem_coilmesh.py."),
     subpackage="radia_mcp.ih",
-    related_servers=["peec", "magnetic-materials",
-                      "radia-mcp.ngsolve", "litz-transmission"],
+    related_servers=CATALOG["ih"]["related"],
     optional_deps=["radia", "ngsolve"],
 )
 

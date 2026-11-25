@@ -42,7 +42,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "ngsolve_mcp.core",
         "description": "NGSolve finite element spaces, solvers and TaskManager",
         "primary_tools": ["ngsolve_usage"],
-        "related": [],
+        "related": ["ih"],
         "tags": ["fem"],
     },
     "ngsolve-mcp.age": {
@@ -63,7 +63,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "ngsolve_mcp.gauging",
         "description": "Electromagnetic gauging (Tree-Cotree, Coulomb/Lorenz, open-boundary)",
         "primary_tools": ["gauging_usage"],
-        "related": [],
+        "related": ["ih"],
         "tags": ["fem"],
     },
     "ngsolve-mcp.kelvin": {
@@ -77,7 +77,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "ngsolve_mcp.weak_form",
         "description": "NGSolve weak-form variational formulations (HCurl/HDiv/H1, BilinearForm, SymbolicBFI)",
         "primary_tools": ["weak_form_usage"],
-        "related": [],
+        "related": ["ih"],
         "tags": ["fem"],
     },
     "onshape-mcp": {
@@ -268,12 +268,15 @@ CATALOG: dict[str, dict[str, Any]] = {
     # ============================================================
     "ih": {
         "subpackage": "radia_mcp.ih",
-        "description": "Induction heating: SIBC, ESIM, Karl iteration, "
-                       "workpiece coupling",
-        "primary_tools": ["induction_heating", "ih_sibc", "ih_esim"],
+        "description": "Induction heating: PEEC and ESIM routes (main), SIBC, Karl iteration, "
+                       "workpiece coupling; FEM cross-checks via ngsolve-mcp",
+        "primary_tools": ["ih_peec", "ih_esim", "ih_sibc", "induction_heating"],
         "related": [
             "litz-transmission",
             "magnetic-materials",
+            "ngsolve-mcp.core",
+            "ngsolve-mcp.gauging",
+            "ngsolve-mcp.weak-form",
             "peec",
             "rna-mec",
         ],

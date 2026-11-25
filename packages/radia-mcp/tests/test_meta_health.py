@@ -279,6 +279,28 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
     assert "audit_command" not in radia_mcp_get("radia-ngsolve")
 
 
+def test_ih_catalog_tools_and_fem_links_match_status():
+    import asyncio
+
+    from radia_mcp.ih.server import mcp
+    from radia_mcp.meta.catalog import CATALOG
+
+    expected_tools = ["ih_peec", "ih_esim", "ih_sibc", "induction_heating"]
+    fem_keys = {"ngsolve-mcp.core", "ngsolve-mcp.gauging", "ngsolve-mcp.weak-form"}
+    entry = CATALOG["ih"]
+    assert entry["primary_tools"] == expected_tools
+    assert fem_keys <= set(entry["related"])
+    assert all("ih" in CATALOG[key]["related"] for key in fem_keys)
+
+    async def check_tools():
+        names = {tool.name for tool in await mcp.list_tools()}
+        assert set(expected_tools) <= names
+        _, status = await mcp.call_tool("ih_status", {})
+        assert status["related_servers"] == entry["related"]
+
+    asyncio.run(check_tools())
+
+
 def test_all_related_links_are_bidirectional():
     """If A's related list contains B, then B's must contain A.
 
