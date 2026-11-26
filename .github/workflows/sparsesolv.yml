@@ -739,7 +739,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true' && (steps.native-impact.outputs.python_required == 'true' || steps.native-impact.outputs.heavy_required == 'true')
         shell: pwsh
         run: |
-          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==2.6.0
+          python -m pip install --only-binary=:all: --no-deps cubit-mesh-export==3.1.0
           exit $LASTEXITCODE
 
       - name: Install Gmsh post-processing reference separately
