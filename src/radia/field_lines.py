@@ -21,18 +21,25 @@ stops short of it.
 A turn the minimum step cannot follow is examined on the straight path of
 the step. If the direction jumps there, within a bracket about 1e-12 of the
 step wide (a discontinuity of B to working precision, as at a material
-interface), the jump is an interface: a short probe from its far side along
-the new direction decides whether the line crosses (it stays on the far
-side; tangential B may flip, as at the equator of a magnetised ball) or
-reverses (it falls back to the near side, as where B meets its reverse
-head-on). A crossing runs straight to the jump and on along the new
-direction (an error of order step^2 curvature) and is counted in the record
-as an interface crossing; a reversal stops the line. There is no threshold
-on the normal component. Without a jump the turn is smooth detail finer than
-the minimum step: below 90 degrees the RK step is accepted and counted as an
-unresolved turn (less accurate there); at 90 degrees or more the line stops
-as an unresolved turn rather than guess across it (near a field null or a
-separatrix).
+interface), the jump is an interface. Probes from its far side along the
+new direction, at 1e-3 down to 1e-9 of the step, decide whether the line
+crosses (one probe stays on the far side; tangential B may flip, as at the
+equator of a magnetised ball) or reverses (every probe falls back to the
+near side, as where B meets its reverse head-on). A crossing runs straight
+to the jump and on along the new direction (an error of order step^2
+curvature), and its end must lie on the far side: the far piece is halved
+down to the probe distance that stayed there. Crossings are counted in the
+record; a reversal stops the line. There is no threshold on the normal
+component. A second jump within one minimum step of a crossing (an interface
+curving back across the step) stops the line as an unresolved turn. Without
+a jump the turn is smooth detail finer than the minimum step: below 90
+degrees the RK step is accepted and counted as an unresolved turn (less
+accurate there); at 90 degrees or more the line stops as an unresolved turn
+rather than guess across it (near a field null or a separatrix).
+
+Resolution limits: a far side that curves back within 1e-9 of the step at
+every probe is reported as a reversal, and a jump that the straight path of
+the minimum step does not meet falls to the smooth-turn rules.
 
 A traced line cannot prove that the exact line closes. A line counts as
 closed when, after leaving its seed, a step passes within closure_tol_m of
