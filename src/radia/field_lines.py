@@ -16,17 +16,23 @@ of the boundary. A trial step whose RK stages meet a field null or leave
 the data is retried with half the step; only at the minimum step does the
 line stop there. The turn of a step is the largest turn of its RK stages
 and its end, since a stage beyond a kink skews the step even when the end
-stops short of it. At the minimum step a turn the step cannot resolve is
-accepted as an unresolved turn (a material interface, or field detail finer
-than the minimum step) and counted in the record; the step then runs
-straight to where the direction turns (located by bisection) and on along
-the new direction, so a kink costs an error of order step^2 curvature, not
-of order the step. A turn of 90 degrees or more is accepted only as an interface
-crossing: B before and after must share a normal component, the one normal
-to B_before - B_after, of at least interface_normal_fraction of |B| (normal
-B is continuous at an interface, tangential B may flip, as at the equator
-of a magnetised ball). Otherwise B runs head-on into its reverse and the
-line stops as a reversal, distinct from a stagnation where |B| vanishes.
+stops short of it.
+
+A turn the minimum step cannot follow is examined on the straight path of
+the step. If the direction jumps there, within a bracket about 1e-12 of the
+step wide (a discontinuity of B to working precision, as at a material
+interface), the jump is an interface: a short probe from its far side along
+the new direction decides whether the line crosses (it stays on the far
+side; tangential B may flip, as at the equator of a magnetised ball) or
+reverses (it falls back to the near side, as where B meets its reverse
+head-on). A crossing runs straight to the jump and on along the new
+direction (an error of order step^2 curvature) and is counted in the record
+as an interface crossing; a reversal stops the line. There is no threshold
+on the normal component. Without a jump the turn is smooth detail finer than
+the minimum step: below 90 degrees the RK step is accepted and counted as an
+unresolved turn (less accurate there); at 90 degrees or more the line stops
+as an unresolved turn rather than guess across it (near a field null or a
+separatrix).
 
 A traced line cannot prove that the exact line closes. A line counts as
 closed when, after leaving its seed, a step passes within closure_tol_m of
@@ -72,8 +78,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from .flux_seeding import surface_crossings as _surface_crossings
 
-LINE_ENDS = ("closed", "open", "truncated", "stagnation", "reversal")
-REASONS = ("left_data", "left_extent", "closed", "stagnation", "reversal", "max_steps")
+LINE_ENDS = ("closed", "open", "truncated", "stagnation", "reversal", "unresolved")
+REASONS = ("left_data", "left_extent", "closed", "stagnation", "reversal", "unresolved_turn",
+           "max_steps")
 _OK, _LEFT_DATA, _LEFT_EXTENT, _STAGNANT = 0, 1, 2, 3
 _STATUS_REASON = {_LEFT_DATA: "left_data", _LEFT_EXTENT: "left_extent",
                   _STAGNANT: "stagnation"}
@@ -109,6 +116,8 @@ class FieldLine:
             return "stagnation"
         if "reversal" in reasons:
             return "reversal"
+        if "unresolved_turn" in reasons:
+            return "unresolved"
         return "open"
 
 
@@ -179,42 +188,33 @@ def _nearest_on_step(p0, t0, p1, t1, target):
     return s, point, float(np.linalg.norm(point - target))
 
 
-def _shared_normal_fraction(b0, b1):
-    """|B . n| / max(|B0|, |B1|) for the normal n to B0 - B1, shared by B0 and B1.
+def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5):
+    """Locate a direction jump on the straight path p0 + s ds t0 and step across it.
 
-    The only plane across which B0 and B1 have equal normal components (div B
-    = 0) is normal to B0 - B1 projected out; zero for B1 = -B0 (a head-on
-    reversal), cos(theta) at a magnetised ball's surface.
+    Bisection keeps the bracket where the direction passes half its
+    end-to-end turn. A jump (a discontinuity of B) keeps at least jump_share
+    of that turn across a bracket 2^-iterations of the step wide; a smooth
+    field's turn shrinks with the bracket, so the search stops early and
+    returns None. For a jump, a probe 1e-3 ds from the far side along the
+    far direction shows whether the line stays there (a crossing) or falls
+    back (a reversal). Returns None (smooth or no data), ("reversal",) or
+    ("cross", point, B, unit direction).
     """
-    b0, b1 = np.asarray(b0, dtype=float), np.asarray(b1, dtype=float)
-    d = b0 - b1
-    scale = max(float(np.linalg.norm(b0)), float(np.linalg.norm(b1)))
-    if scale == 0 or not np.all(np.isfinite(d)):
-        return 0.0
-    dn = float(np.linalg.norm(d))
-    normal = b0 - (b0 @ d) * d / dn ** 2 if dn > 0 else b0
-    return float(np.linalg.norm(normal)) / scale
-
-
-def _step_through_kink(probe, p0, t0, ds, sign, iterations=40):
-    """One step of length ds that turns where B turns on the straight path p0 + s ds t0.
-
-    The turn is located by bisection (where the direction has turned by half
-    the end-to-end turn), so a kink at an interface is crossed with an error
-    of order ds^2 curvature instead of the RK order-ds error. Returns
-    (point, B, unit direction) or None (then the RK step is kept).
-    """
-    def direction(points):
-        v, nv, st = probe(np.atleast_2d(points))
-        if np.any(st != _OK):
+    def direction(point):
+        v, nv, st = probe(np.atleast_2d(point))
+        if st[0] != _OK:
             return None, None
-        return v, _unit(v, nv, np.full(len(v), sign))
+        return v[0], _unit(v, nv, np.full(1, sign))[0]
 
-    _, u_end = direction(p0 + ds * t0)
-    if u_end is None:
+    def turn(u, w):
+        return float(np.arccos(np.clip(u @ w, -1.0, 1.0)))
+
+    _, u_lo = direction(p0)
+    _, u_hi = direction(p0 + ds * t0)
+    if u_lo is None or u_hi is None:
         return None
-    half = 0.5 * np.arccos(np.clip(u_end[0] @ t0, -1.0, 1.0))
-    if half <= 0:
+    u_start, total = u_lo, turn(u_lo, u_hi)
+    if total <= 0:
         return None
     lo, hi = 0.0, 1.0
     for _ in range(iterations):
@@ -222,27 +222,23 @@ def _step_through_kink(probe, p0, t0, ds, sign, iterations=40):
         _, u = direction(p0 + mid * ds * t0)
         if u is None:
             return None
-        if np.arccos(np.clip(u[0] @ t0, -1.0, 1.0)) > half:
-            hi = mid
+        if turn(u_start, u) > 0.5 * total:
+            hi, u_hi = mid, u
         else:
-            lo = mid
-    _, u_after = direction(p0 + hi * ds * t0)
-    if u_after is None:
+            lo, u_lo = mid, u
+        if turn(u_lo, u_hi) < jump_share * total:
+            return None  # the turn spreads over the path: smooth, not a jump
+    far = p0 + hi * ds * t0
+    _, u_probe = direction(far + 1e-3 * ds * u_hi)
+    if u_probe is None:
         return None
-    end = p0 + lo * ds * t0 + (1.0 - lo) * ds * u_after[0]
+    if turn(u_probe, u_lo) < turn(u_probe, u_hi):
+        return ("reversal",)  # the far direction leads back to the near side
+    end = p0 + lo * ds * t0 + (1.0 - lo) * ds * u_hi
     v, u = direction(end)
     if v is None:
         return None
-    return end, v[0], u[0]
-
-
-def _stages_reverse(k, j, fraction):
-    """True if a stage direction turns by 90 degrees or more with no shared normal."""
-    first = k[0][j]
-    for other in k[1:]:
-        if first @ other[j] <= 0 and _shared_normal_fraction(first, other[j]) < fraction:
-            return True
-    return False
+    return ("cross", end, v, u)
 
 
 def _unit(values, norm, sign):
@@ -262,7 +258,6 @@ def trace_field_lines(
     closure_tol_m: float | None = None,
     extent_m: dict | None = None,
     stagnation_T: float | None = None,
-    interface_normal_fraction: float = 1e-2,
 ) -> tuple[list[FieldLine], dict]:
     """Trace field lines from seeds through any callable field.
 
@@ -270,9 +265,7 @@ def trace_field_lines(
     step_m / 64. extent_m = {"min": [x, y, z], "max": [x, y, z]} stops
     lines at a box. stagnation_T is the |B| at or below which a line stops
     (default 1e-12 of the median seed |B|). closure_tol_m is the closure
-    tolerance (default step_m / 1000). interface_normal_fraction is the
-    shared normal |B| fraction above which a turn of 90 degrees or more at
-    the minimum step is crossed as an interface. Returns the lines in seed order
+    tolerance (default step_m / 1000). Returns the lines in seed order
     (seeds that produced no step are left out) and an evaluation record.
     """
     seeds = np.asarray(seeds_m, dtype=float)
@@ -285,8 +278,6 @@ def trace_field_lines(
         raise ValueError("max_steps must be positive")
     if not 0 < float(max_turn_deg) <= 180:
         raise ValueError("max_turn_deg must be in (0, 180]")
-    if not 0 < float(interface_normal_fraction) < 1:
-        raise ValueError("interface_normal_fraction must be in (0, 1)")
     closure_tol = 1e-3 * step if closure_tol_m is None else float(closure_tol_m)
     if not (np.isfinite(closure_tol) and closure_tol > 0):
         raise ValueError("closure_tol_m must be positive")
@@ -327,7 +318,7 @@ def trace_field_lines(
     active = ok0.copy()
     angle_max = np.radians(float(max_turn_deg))
     turns = np.zeros(n, dtype=np.int64)
-    sharp = np.zeros(n, dtype=np.int64)
+    crossings = np.zeros(n, dtype=np.int64)
 
     while np.any(active):
         idx = np.nonzero(active)[0]
@@ -374,21 +365,20 @@ def trace_field_lines(
                 if not at_min[j]:
                     ds[i] = max(ds_min, 0.5 * ds[i])
                     continue
-                if _stages_reverse(k, j, interface_normal_fraction):
-                    reason[i] = "reversal"  # B runs head-on into its reverse: the step stalls
+                jump = _interface_step(probe, p[i], t[i], ds[i], sign[i])
+                if jump is not None and jump[0] == "reversal":
+                    reason[i] = "reversal"  # B meets its reverse across a jump
                     active[i] = False
                     continue
-                # RK smears a kink over the step; step straight to the kink, then on.
-                kinked = _step_through_kink(probe, p[i], t[i], ds[i], sign[i])
-                if kinked is not None:
-                    p_new[j], v_new[j], t_new[j] = kinked
-                if t[i] @ t_new[j] <= 0:
-                    if _shared_normal_fraction(values[i][-1], v_new[j]) < interface_normal_fraction:
-                        reason[i] = "reversal"
-                        active[i] = False
-                        continue
-                    sharp[i] += 1  # an interface where tangential B flips
-                turns[i] += 1  # unresolved at the minimum step: accepted, less accurate
+                if jump is not None:
+                    p_new[j], v_new[j], t_new[j] = jump[1:]
+                    crossings[i] += 1  # an interface, stepped straight across
+                elif angle[j] >= 0.5 * np.pi or chord[j] < 0.5 * ds[i]:
+                    reason[i] = "unresolved_turn"  # smooth, too sharp to guess across
+                    active[i] = False
+                    continue
+                else:
+                    turns[i] += 1  # smooth detail below the minimum step: less accurate
             p_old, t_old, v_old = p[i].copy(), t[i].copy(), values[i][-1]
             p[i] = p_new[j]
             t[i] = t_new[j]
@@ -450,8 +440,7 @@ def trace_field_lines(
               "step_m": step, "min_step_m": ds_min, "stagnation_T": probe.stagnation_T,
               "n_seeds": len(seeds), "n_lines": len(lines),
               "closure_tol_m": closure_tol, "unresolved_turns": int(turns.sum()),
-              "interface_turns_ge_90deg": int(sharp.sum()),
-              "interface_normal_fraction": float(interface_normal_fraction)}
+              "interface_crossings": int(crossings.sum())}
     return lines, record
 
 

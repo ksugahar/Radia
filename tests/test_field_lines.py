@@ -147,7 +147,6 @@ def test_closed_lines_are_written_without_duplicate_nodes(tmp_path):
     ({"step_m": 0}, "step_m"),
     ({"max_steps": 0}, "max_steps"),
     ({"max_turn_deg": 0}, "max_turn_deg"),
-    ({"interface_normal_fraction": 1}, "interface_normal_fraction"),
     ({"extent_m": {"min": [0, 0, 0], "max": [0, 1, 1]}}, "extent_m"),
 ])
 def test_invalid_tracer_inputs_fail_loudly(kwargs, message):
@@ -173,7 +172,7 @@ def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
 
     Across z = 0 with equal Bz, B may turn by 90 degrees or more (tangential B
     flips, Bz = 0.1 carries on): the line crosses and continues along the upper
-    B. Where B = +x meets B = -x at x = 0 no normal component is shared: the
+    B. Where B = +x meets B = -x at x = 0 the far direction leads back: the
     line stops there as a reversal.
     """
     box = {"min": [-1, -1, -0.1], "max": [1, 1, 0.1]}
@@ -181,14 +180,13 @@ def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
     lines, record = trace_field_lines(field, [[0, 0, -0.05]], step_m=0.01, max_steps=100,
                                       extent_m=box, both_directions=False)
     assert lines[0].reasons == {"forward": "left_extent"}, record
-    assert record["unresolved_turns"] >= 1, record
+    assert record["interface_crossings"] >= 1 and record["unresolved_turns"] == 0, record
     assert lines[0].points_m[-1, 2] > 0.09 and lines[0].points_m[-1, 0] > 0.09
-    assert record["interface_turns_ge_90deg"] == 0, record
     lines, record = trace_field_lines(_layered([1.0, 0.0, 0.1], [-1.0, 0.0, 0.1]),
                                       [[0, 0, -0.005]], step_m=0.01,
                                       max_steps=400, extent_m=box, both_directions=False)
     assert lines[0].reasons == {"forward": "left_extent"}, (lines[0].reasons, record)
-    assert record["interface_turns_ge_90deg"] == 1, record
+    assert record["interface_crossings"] == 1, record
     upper = lines[0].points_m[lines[0].points_m[:, 2] > 2 * record["min_step_m"]]
     assert len(upper) > 5 and np.all(np.diff(upper[:, 0]) < 0)  # along (-1, 0, 0.1)
     np.testing.assert_allclose(np.diff(upper[:, 2]) / np.diff(upper[:, 0]), -0.1, rtol=1e-9)
@@ -198,7 +196,51 @@ def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
     assert lines[0].reasons == {"forward": "reversal"}, (lines[0].reasons, record)
     assert lines[0].end == "reversal"
     assert abs(lines[0].points_m[-1, 0]) <= 2 * record["min_step_m"]
-    assert record["interface_turns_ge_90deg"] == 0, record
+    assert record["interface_crossings"] == 0, record
+
+
+@pytest.mark.parametrize("eps", [0.005, 1e-6])
+def test_a_near_tangential_interface_is_crossed_without_a_threshold(eps):
+    """Guards: any shared normal B crosses; only the far side's direction decides.
+
+    B = (1, 0, eps) for z < 0 and (-1, 0, eps) above: the exact line reaches
+    z = 0 and goes on along (-1, 0, eps), however small eps > 0 is.
+    """
+    box = {"min": [-1, -1, -0.1], "max": [1, 1, 0.1]}
+    lines, record = trace_field_lines(_layered([1.0, 0.0, eps], [-1.0, 0.0, eps]),
+                                      [[0, 0, -1e-3 * eps / 0.005]], step_m=0.04, max_steps=30,
+                                      extent_m=box, both_directions=False)
+    pts = lines[0].points_m
+    assert lines[0].end != "reversal" and record["interface_crossings"] == 1, (lines[0].reasons, record)
+    upper = pts[pts[:, 2] > 0]
+    assert len(upper) >= 5 and np.all(np.diff(upper[:, 0]) < 0)
+    np.testing.assert_allclose(np.diff(upper[:, 2]) / np.diff(upper[:, 0]), -eps, rtol=1e-6)
+
+
+@pytest.mark.parametrize("step", [1.92, 0.96, 0.192])
+def test_a_coarse_step_never_crosses_a_smooth_separatrix(step):
+    """Guards: a smooth turn is no interface; the line stays on its side of x = 0.
+
+    B = (-x, y, 0) is divergence-free with lines x y = const; from (0.02, 0.001)
+    x > 0 for ever. A step far coarser than the turn must not step across it.
+    """
+    saddle = _flat(lambda p: p * np.array([-1.0, 1.0, 0.0]))
+    lines, record = trace_field_lines(saddle, [[0.02, 0.001, 0]], step_m=step, max_steps=12,
+                                      both_directions=False)
+    assert record["interface_crossings"] == 0, record
+    for line in lines:
+        assert np.all(line.points_m[:, 0] > 0), (line.points_m[:, 0].min(), line.reasons, record)
+        assert line.reasons["forward"] in ("unresolved_turn", "max_steps"), line.reasons
+
+
+def test_a_smooth_head_on_null_stops_as_an_unresolved_turn():
+    """Guards: a smooth reversal of direction (B = -x x_hat through x = 0) is not an interface."""
+    null = _flat(lambda p: np.column_stack((-p[:, 0], 0 * p[:, 0], 0 * p[:, 0])))
+    lines, record = trace_field_lines(null, [[-0.3, 0, 0]], step_m=0.05, max_steps=200,
+                                      both_directions=False)
+    assert lines[0].end in ("unresolved", "stagnation"), (lines[0].reasons, record)
+    assert record["interface_crossings"] == 0
+    assert np.all(lines[0].points_m[:, 0] < 0)
 
 
 def _magnetised_ball(radius, b_r):
@@ -226,7 +268,7 @@ def test_lines_cross_a_magnetised_ball_surface_where_tangential_b_flips():
     seeds = [[0.95 * a, 0, 0], [0.999 * a, 0, 0]]
     lines, record = trace_field_lines(_magnetised_ball(a, 1.0), seeds, step_m=0.002, max_steps=3000)
     assert [line.end for line in lines] == ["closed", "closed"], ([l.reasons for l in lines], record)
-    assert record["interface_turns_ge_90deg"] >= 4, record
+    assert record["interface_crossings"] >= 4 and record["unresolved_turns"] == 0, record
     for line, rho in zip(lines, (0.95 * a, 0.999 * a)):
         inside = line.points_m[np.linalg.norm(line.points_m, axis=1) < a]
         # Every pass keeps the radius: the kink is located, not smeared over a
