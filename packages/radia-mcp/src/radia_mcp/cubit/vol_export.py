@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from radia_mcp.cubit import periodic as _periodic
+
 # Thresholds in model length units, identical to the native exporter.
 PROJECT_REJECT_THRESHOLD = 1.5
 EDGE_REJECT_THRESHOLD = 1.5
@@ -483,6 +485,17 @@ def _explicit_surface_label(cubit, sid: int) -> str:
     return label
 
 
+def _boundary_name(cubit, bc: int, sideset_label: dict[int, str]) -> str:
+    """Sideset name, else the Cubit surface name, else ``surface_<id>``; no spaces.
+
+    ``bc`` is a Cubit surface id, or ``-sideset_id`` for a free sideset face set.
+    """
+    label = sideset_label.get(bc)
+    if label is None:
+        label = cubit.get_entity_name("surface", bc) or f"surface_{bc}"
+    return label.replace(" ", "_")
+
+
 def _mesh_area(points: list[tuple[float, float, float]]) -> float:
     import numpy as np  # noqa: PLC0415
 
@@ -500,20 +513,26 @@ def _mesh_area(points: list[tuple[float, float, float]]) -> float:
     return area
 
 
-def _write_lf(mesh, path: Path) -> None:
-    """Save through Netgen, then store the bytes with LF line ends only."""
-    temporary = path.with_name(path.name + ".tmp.vol")
+def _serialize(mesh, near: Path) -> bytes:
+    """Save through Netgen and return the bytes with LF line ends only."""
+    temporary = near.with_name(near.name + f".{os.getpid()}.tmp.vol")
     mesh.Save(str(temporary))
-    data = temporary.read_bytes().replace(b"\r\n", b"\n")
-    temporary.unlink()
+    try:
+        data = temporary.read_bytes().replace(b"\r\n", b"\n")
+    finally:
+        temporary.unlink()
     if b"\r" in data:
         raise ExportError("Netgen .vol serialization contains a carriage return")
-    path.write_bytes(data)
+    return data
 
 
 def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
-               journal: str | os.PathLike[str] | None = None) -> dict[str, Any]:
+               journal: str | os.PathLike[str] | None = None,
+               periodic: dict[str, Any] | None = None) -> dict[str, Any]:
     """Export the current Cubit model (optionally after playing a journal).
+
+    ``periodic`` holds the nine explicit ``periodic_*`` contract fields (see
+    :mod:`radia_mcp.cubit.periodic`); the output must not exist yet.
 
     Returns the companion JSON record, which is also written next to the
     ``.vol`` as ``<out_path>.json``.  Raises :class:`ExportError` when the
@@ -527,6 +546,12 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
     if not hasattr(ngm.Mesh, "GeometricRefit"):
         raise ExportError("This Netgen runtime lacks Mesh.GeometricRefit")
     t_start = time.perf_counter()
+    try:
+        contract = _periodic.parse_contract(periodic or {})
+        if contract is not None:
+            _periodic.require_fresh(Path(out_path).resolve())
+    except _periodic.PeriodicError as error:
+        raise ExportError(f"Named periodic contract rejected: {error}") from error
     if journal is not None:
         journal = Path(journal).resolve()
         if not journal.is_file():
@@ -734,10 +759,7 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
 
     # -- boundary names ---------------------------------------------------------
     for fd, bc in enumerate(fd_bc, start=1):
-        label = sideset_label.get(bc)
-        if label is None:
-            label = cubit.get_entity_name("surface", bc) or f"surface_{bc}"
-        mesh.SetBCName(fd - 1, label.replace(" ", "_"))
+        mesh.SetBCName(fd - 1, _boundary_name(cubit, bc, sideset_label))
 
     names = {bid: cubit.get_exodus_entity_name("block", bid).lower() for bid in md.block_ids}
     air = next((block_to_domain[b] for b, n in names.items() if n == "air"), 0)
@@ -783,7 +805,14 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
     curved_pyramids = sum(1 for el in mesh.Elements3D()
                           if len(el.vertices) == 5 and el.curved)
 
-    _write_lf(mesh, out_path)
+    periodic_result = None
+    if contract is not None:
+        try:
+            periodic_result = _periodic.apply_identification(
+                mesh, contract, lambda m: _serialize(m, out_path).decode("utf-8"))
+        except _periodic.PeriodicError as error:
+            raise ExportError(f"Named periodic export rejected: {error}") from error
+    vol_bytes = _serialize(mesh, out_path)
 
     # -- companion JSON -----------------------------------------------------------
     materials: dict[str, float] = {}
@@ -822,8 +851,11 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
                                          "surface_elements": removed_seam_elements}, "curved_pyramids": curved_pyramids,
                  "geometric_refit": refit, "kelvin_autodetect": kelvin_counts,
                  "warnings": md.warnings})
-    record = {
-        "export_passed": True,
+    record: dict[str, Any] = {"export_passed": True}
+    if periodic_result is not None:
+        record["periodic_identification"] = _periodic.companion_record(
+            periodic_result, {fd: bc for fd, bc in enumerate(fd_bc, start=1)})
+    record.update({
         "curving": diag,
         "materials": materials,
         "mesh_only_materials": mesh_only,
@@ -833,9 +865,17 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
         "n_points": len(md.node_ids),
         "order": order,
         "export_time_s": round(time.perf_counter() - t_start, 3),
-    }
-    Path(str(out_path) + ".json").write_text(json.dumps(record, indent=2) + "\n",
-                                             encoding="utf-8", newline="\n")
+    })
+    record_bytes = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+    if contract is not None:
+        try:
+            _periodic.publish_bundle(out_path, vol_bytes, record_bytes)
+        except (_periodic.PeriodicError, OSError) as error:
+            raise ExportError(f"Named periodic bundle publication failed: {error}. Failed outputs "
+                              "are unqualified; remove only your own leftovers before retrying.") from error
+    else:
+        out_path.write_bytes(vol_bytes)
+        Path(str(out_path) + ".json").write_bytes(record_bytes)
     return record
 
 
@@ -847,13 +887,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True, help="output .vol path")
     parser.add_argument("--order", type=int, default=2)
     parser.add_argument("--result", help="status JSON path (written on success and failure)")
+    for name in _periodic.FIELDS:
+        parser.add_argument("--" + name.replace("_", "-"), dest=name,
+                            help="named periodic contract field (all nine or none)")
     args = parser.parse_args(argv)
     status: dict[str, Any]
     try:
         if not args.cubit_bin:
             raise ExportError("Pass --cubit-bin or set RADIA_CUBIT_BIN")
         cubit = import_cubit(args.cubit_bin)
-        record = export_vol(args.out, args.order, cubit=cubit, journal=args.journal)
+        record = export_vol(args.out, args.order, cubit=cubit, journal=args.journal,
+                            periodic={k: getattr(args, k) for k in _periodic.FIELDS})
         status = {"status": "ok", "vol": str(Path(args.out).resolve()), "record": record}
         code = 0
     except Exception as error:  # noqa: BLE001  (reported to the caller as JSON)
