@@ -64,7 +64,11 @@ class ExportError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 def import_cubit(cubit_bin: str | os.PathLike[str]):
-    """Import and initialise Cubit's Python API in batch/nographics mode."""
+    """Import and initialise Cubit's Python API in batch/nographics mode.
+
+    ``-noinitfile`` keeps the user's ``$HOME/.cubit`` and ``$CWD/.cubit`` (and
+    anything they play) out of the export.
+    """
     bin_dir = Path(cubit_bin)
     if not (bin_dir / "cubit").is_dir():
         raise ExportError(f"Cubit Python package not found under {bin_dir}")
@@ -74,7 +78,7 @@ def import_cubit(cubit_bin: str | os.PathLike[str]):
         os.add_dll_directory(str(bin_dir))
     import cubit  # noqa: PLC0415  (Cubit is an optional, process-local runtime)
 
-    cubit.init(["cubit", "-nographics", "-nojournal", "-batch"])
+    cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
     return cubit
 
 
@@ -200,7 +204,8 @@ def extract_mesh(cubit) -> CubitMesh:
 # ---------------------------------------------------------------------------
 
 def _dist(a, b) -> float:
-    return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+    dx, dy, dz = a[0] - b[0], a[1] - b[1], a[2] - b[2]
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
 def _periods(cubit, sid: int) -> tuple[float, float]:
@@ -276,6 +281,9 @@ def _make_geometry_class(ngm):
             self.polar = polar
             self.bboxes = bboxes
             self.pad = pad
+            # same bounds as lo[i] - pad and hi[i] + pad, computed once
+            self.padded_bboxes = {sid: ([v - pad for v in lo], [v + pad for v in hi])
+                                  for sid, (lo, hi) in bboxes.items()}
             self._surfaces = {}
             self._curves = {}
             self.diag = {"projection_route": PROJECTION_ROUTE,
@@ -310,12 +318,14 @@ def _make_geometry_class(ngm):
             if sid in self.polar:
                 self.diag["polar_skips"] += 1
                 return x, None
-            lo, hi = self.bboxes[sid]
-            if any(x[i] < lo[i] - self.pad or x[i] > hi[i] + self.pad for i in range(3)):
+            lo, hi = self.padded_bboxes[sid]
+            x0, x1, x2 = x
+            if (x0 < lo[0] or x0 > hi[0] or x1 < lo[1] or x1 > hi[1]
+                    or x2 < lo[2] or x2 > hi[2]):
                 self.diag["project_bbox_identity"] += 1
                 return x, None
-            surface = self._surface(sid)
-            closest = tuple(surface.closest_point_trimmed(list(x)))
+            surface = self._surfaces.get(sid) or self._surface(sid)
+            closest = tuple(surface.closest_point_trimmed([x0, x1, x2]))
             disp = _dist(closest, x)
             if not math.isfinite(disp):
                 raise ExportError(f"Non-finite projection on Cubit surface {sid}")
