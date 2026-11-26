@@ -473,6 +473,9 @@ def _make_geometry_class(ngm):
 # Netgen mesh construction and export (port of NetgenCurver + ExportNetgenCommand)
 # ---------------------------------------------------------------------------
 
+_GEOM_ACIS = 13  # Netgen Mesh::GEOM_ACIS, the geometry type of the native exporter
+
+
 def _explicit_surface_label(cubit, sid: int) -> str:
     label = cubit.get_entity_name("surface", sid)
     if label in (f"Surface {sid}", f"Surface_{sid}", f"surface_{sid}"):
@@ -556,6 +559,7 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
             sideset_label[sid] = label
 
     mesh = ngm.Mesh(dim=3)
+    mesh.geomtype = _GEOM_ACIS  # writes the surface element UV columns
     pid = {nid: mesh.Add(ngm.MeshPoint(ngm.Pnt(*md.coords[nid]))) for nid in md.node_ids}
 
     # -- face descriptors, one per meshed Cubit surface -----------------------
@@ -564,6 +568,8 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
     fd_bc: list[int] = []  # original BC property per descriptor (surface id or -sideset)
     fd_domains: list[tuple[int, int]] = []
     surface_faces: dict[int, tuple[list[tuple[int, ...]], list[tuple[int, ...]]]] = {}
+    seam_descriptors: list[int] = []
+    seam_surfaces: list[int] = []
     for sid in surfaces:
         tris = [_connectivity(cubit, "tri", t, 3)
                 for t in cubit.parse_cubit_list("tri", f"in surface {sid}")]
@@ -574,16 +580,20 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
         parents = list(cubit.get_relatives("surface", sid, "volume"))
         din = vol_to_domain.get(parents[0], 0) if parents else 0
         dout = vol_to_domain.get(parents[1], 0) if len(parents) >= 2 else 0
+        fd = len(fd_bc) + 1
         if din > 0 and din == dout:
+            # A webcut seam inside one material: it supports curving and the
+            # conforming mesh, but is not an FE boundary.  It is removed after
+            # curving, unless it carries a user label (then refuse).
             label = sideset_label.get(sid) or _explicit_surface_label(cubit, sid)
             if label:
                 raise ExportError(
                     f"Same-material internal surface {sid} is explicitly labelled '{label}'. "
-                    "Netgen cannot encode it as a boundary with identical DomainIn/DomainOut.")
-            raise ExportError(
-                f"Same-material internal surface {sid} (domain {din}): the native exporter "
-                "curves with it and deletes it afterwards; that deletion is not ported.")
-        fd = len(fd_bc) + 1
+                    "Netgen cannot encode it as a boundary with identical DomainIn/DomainOut. "
+                    "Remove that surface from the sideset, or model the intended interface "
+                    "with distinct domains.")
+            seam_descriptors.append(fd)
+            seam_surfaces.append(sid)
         fd_of_surface[sid] = fd
         fd_bc.append(sid)
         fd_domains.append((din, dout))
@@ -610,9 +620,9 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
 
     added_faces: set[tuple[int, ...]] = set()
     seam_shifts = 0
-    descriptors = [ngm.FaceDescriptor(surfnr=i + 1, domin=d[0], domout=d[1], bc=i + 1)
-                   for i, d in enumerate(fd_domains)]
-    for descriptor in descriptors:
+    for i, (din, dout) in enumerate(fd_domains):
+        descriptor = ngm.FaceDescriptor(surfnr=i + 1, domin=din, domout=dout, bc=i + 1)
+        descriptor.tlosurf = i + 1
         mesh.Add(descriptor)
     for sid, (tris, quads) in surface_faces.items():
         fd = fd_of_surface[sid]
@@ -645,7 +655,9 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
             fd = len(fd_bc) + 1
             fd_bc.append(-ss.id)
             fd_domains.append((din, dout))
-            mesh.Add(ngm.FaceDescriptor(surfnr=fd, domin=din, domout=dout, bc=fd))
+            descriptor = ngm.FaceDescriptor(surfnr=fd, domin=din, domout=dout, bc=fd)
+            descriptor.tlosurf = fd
+            mesh.Add(descriptor)
             for conn in faces:
                 mesh.Add(ngm.Element2D(fd, [pid[n] for n in conn], uv=[(0.0, 0.0)] * len(conn)))
                 added_faces.add(tuple(sorted(conn)))
@@ -673,9 +685,15 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
         descriptor = mesh.Add(ed)
         segments = 0
         edge_ids = list(cubit.parse_cubit_list("edge", f"in curve {cid}"))
+        curve = cubit.curve(cid)
+        length, u_start = curve.length(), curve.start_param()
         for eid in edge_ids:
             conn = _connectivity(cubit, "edge", eid, 2)
-            mesh.Add(ngm.Element1D([pid[conn[0]], pid[conn[1]]], index=descriptor))
+            dist = [0.0, 0.0]
+            if length > 0:
+                dist = [curve.length_from_u(u_start, curve.u_from_position(list(md.coords[n])))
+                        / length for n in conn[:2]]
+            mesh.Add(ngm.Element1D([pid[conn[0]], pid[conn[1]]], index=descriptor, dist=dist))
             segments += 1
         if segments != len(edge_ids):
             raise ExportError(f"Cubit curve {cid} exported only {segments}/{len(edge_ids)} segments")
@@ -692,6 +710,27 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
     for bid in md.block_ids:
         mesh.SetMaterial(block_to_domain[bid], cubit.get_exodus_entity_name("block", bid)
                          or f"volume_{bid}")
+
+    # -- curving ----------------------------------------------------------------
+    mesh.UpdateTopology()
+    geometry_class = _make_geometry_class(ngm)
+    fd_to_surface = {fd: sid for sid, fd in fd_of_surface.items()}
+    geometry = geometry_class(cubit, fd_to_surface, edge_bindings, polar, bboxes, pad)
+    refit: dict[str, Any] | None = None
+    if order >= 2:
+        mesh.SetGeometry(geometry)
+        try:
+            mesh.Curve(order)
+            if order >= 3:
+                refit = dict(mesh.GeometricRefit())
+        finally:
+            mesh.SetGeometry(ngm.NetgenGeometry())
+    removed_seam_elements = 0
+    if seam_descriptors:
+        removed_seam_elements = mesh.DeleteFaceDescriptors(seam_descriptors)
+        dropped = set(seam_descriptors)
+        fd_bc = [bc for fd, bc in enumerate(fd_bc, start=1) if fd not in dropped]
+        fd_domains = [d for fd, d in enumerate(fd_domains, start=1) if fd not in dropped]
 
     # -- boundary names ---------------------------------------------------------
     for fd, bc in enumerate(fd_bc, start=1):
@@ -741,20 +780,6 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
             if nid in pid:
                 mesh.Add(ngm.Element0D(pid[nid], index=cd3))
 
-    # -- curving ----------------------------------------------------------------
-    mesh.UpdateTopology()
-    geometry_class = _make_geometry_class(ngm)
-    fd_to_surface = {fd: sid for sid, fd in fd_of_surface.items()}
-    geometry = geometry_class(cubit, fd_to_surface, edge_bindings, polar, bboxes, pad)
-    refit: dict[str, Any] | None = None
-    if order >= 2:
-        mesh.SetGeometry(geometry)
-        try:
-            mesh.Curve(order)
-            if order >= 3:
-                refit = dict(mesh.GeometricRefit())
-        finally:
-            mesh.SetGeometry(ngm.NetgenGeometry())
     curved_pyramids = sum(1 for el in mesh.Elements3D()
                           if len(el.vertices) == 5 and el.curved)
 
@@ -782,7 +807,7 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
             area = cubit.get_surface_area(bc)
         boundaries[name] = boundaries.get(name, 0.0) + area
     edges: dict[str, float] = {}
-    support = {bc for bc in fd_bc if bc > 0}
+    support = {bc for bc in fd_bc if bc > 0} | set(seam_surfaces)
     for cid in cubit.parse_cubit_list("curve", "all"):
         parents = list(cubit.parse_cubit_list("surface", f"in curve {cid}"))
         if len(parents) < 2 or parents[0] not in support or parents[1] not in support:
@@ -792,7 +817,9 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
 
     diag = dict(geometry.diag)
     diag.update({"error": "", "polar_surfaces": sorted(polar), "seam_uv_shifts": seam_shifts,
-                 "free_sideset_faces": free_faces, "curved_pyramids": curved_pyramids,
+                 "free_sideset_faces": free_faces,
+                 "same_material_seams": {"descriptors": len(seam_descriptors),
+                                         "surface_elements": removed_seam_elements}, "curved_pyramids": curved_pyramids,
                  "geometric_refit": refit, "kelvin_autodetect": kelvin_counts,
                  "warnings": md.warnings})
     record = {
