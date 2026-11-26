@@ -48,7 +48,6 @@ LENGTH_KEYS = frozenset({"origin", "e_xi", "e_eta", "center", "r_outer", "r_inne
 PATCH_COMMON = frozenset({"shape", "n_lines", "n_u", "n_v", "sign", "table_nodes",
                           "quadrature_order"})
 SEED_LINE_KEYS = frozenset({"start", "end", "n"})
-LINE_ENDS = ("closed", "open", "truncated", "stagnation")
 
 
 def _radia_version() -> str:
@@ -204,12 +203,14 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
     scale = LENGTH_UNITS[length_unit]
     view = 0 if view is None else view
     try:
+        import radia.field_lines  # noqa: F401  (the flux account needs it)
         from radia.flux_seeding import (SampleBudget, balanced_cell_flux_quadrature,
                                         balanced_equal_flux_seeds, cell_flux_quadrature,
                                         equal_flux_seeds)
     except ImportError as exc:
-        return {"ok": False, "error": f"radia.flux_seeding is unavailable or too old in radia "
-                                      f"{_radia_version()}: {exc}; update radia"}, None, None
+        return {"ok": False, "error": "radia.flux_seeding or radia.field_lines is unavailable "
+                                      f"or too old in radia {_radia_version()}: {exc}; "
+                                      "update radia"}, None, None
     path = Path(path)
     table_nodes = spec.get("table_nodes", 33)
     order = int(spec.get("quadrature_order", 3))
@@ -287,73 +288,18 @@ def place_equal_flux_seeds(path: str | Path, seed_patch: dict, *,
                   length_unit=length_unit, timeout_s=timeout_s)[0]
 
 
-def _line_end(line: dict) -> str:
-    if line["closed"]:
-        return "closed"
-    reasons = set(line["reasons"].values())
-    if "max_steps" in reasons:
-        return "truncated"
-    if "stagnation" in reasons:
-        return "stagnation"
-    return "open"
-
-
 def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict, list[str]]:
-    """How the traced lines represent the seeded and the opposite flux."""
-    from radia.flux_seeding import surface_crossings
+    """How the traced lines represent the seeded and the opposite flux (radia.field_lines)."""
+    from radia.field_lines import FieldLine, flux_account
 
-    q = placed["flux_per_line_Wb"]
+    lines = [FieldLine(line["seed_index"], np.asarray(poly["points"], dtype=float) * scale, None,
+                       poly["seed_vertex"], poly["closed"], dict(line["reasons"]))
+             for line, poly in zip(traced["lines"], traced["polylines"])]
     sign = placed["orientation"]
-    ends = dict.fromkeys(LINE_ENDS, 0)
-    per_line, repeats, opposite = [], 0, 0
-    for line, poly in zip(traced["lines"], traced["polylines"]):
-        end = _line_end(line)
-        ends[end] += 1
-        signs = surface_crossings(np.asarray(poly["points"], dtype=float) * scale, chart,
-                                  seed_vertex=poly["seed_vertex"], closed=poly["closed"])
-        same = sum(1 for c in signs if c == sign)
-        other = len(signs) - same
-        repeats += same
-        opposite += other
-        per_line.append({"seed_index": line["seed_index"], "end": end,
-                         "repeat_crossings": same, "opposite_crossings": other})
-    n_seeds = len(placed["seeds"])
-    not_traced = n_seeds - len(per_line)
-    opposite_flux = placed["negative_flux_Wb"] if sign > 0 else placed["positive_flux_Wb"]
-    observed = -q * opposite
-    account = {
-        "flux_per_line_Wb": q,
-        "flux_by_end_Wb": {end: q * count for end, count in ends.items()},
-        "lines_by_end": ends,
-        "not_traced_lines": not_traced,
-        "repeat_crossings": repeats,
-        "opposite_crossings": opposite,
-        "opposite_flux_Wb": opposite_flux,
-        # Signed-flux weighted count of observed opposite crossings. Lines may
-        # cross more than once or only part of the opposite flux may be met,
-        # so this is not a coverage fraction.
-        "opposite_crossing_flux_Wb": observed,
-        "opposite_crossing_flux_ratio": (observed / opposite_flux if opposite_flux else None),
-        "lines": per_line,
-    }
-    warnings = []
-    if ends["truncated"]:
-        warnings.append(f"{ends['truncated']} line(s) stopped at max_steps "
-                        f"({abs(q) * ends['truncated']:.4g} Wb): beyond the cut the line "
-                        "density under-represents flux; raise max_steps")
-    if not_traced:
-        warnings.append(f"{not_traced} seed(s) produced no line (outside the data or the "
-                        "extent)")
-    one_sided = sum(1 for line in traced["lines"]
-                    if not line["closed"] and "backward" not in line["reasons"])
-    if one_sided:
-        warnings.append(f"{one_sided} open line(s) were traced forward only "
-                        "(both_directions=False): behind the seed surface they are missing")
-    if repeats:
-        warnings.append(f"lines cross the seed surface {repeats} more time(s) in the seeded "
-                        "direction: there each tube is drawn again and line density "
-                        "over-represents flux")
-    return account, warnings
+    opposite = placed["negative_flux_Wb"] if sign > 0 else placed["positive_flux_Wb"]
+    return flux_account(lines, chart, n_seeds=len(placed["seeds"]),
+                        flux_per_line_Wb=placed["flux_per_line_Wb"], orientation=sign,
+                        opposite_flux_Wb=opposite)
 
 
 def trace_field_lines(path: str | Path, *, seed_patch: dict | None = None,
