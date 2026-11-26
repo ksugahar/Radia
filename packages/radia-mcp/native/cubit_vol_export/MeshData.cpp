@@ -100,7 +100,7 @@ void MeshData::extract_elements(MeshExportInterface *iface)
 {
   // SNAPSHOT user-defined blocks BEFORE calling iface->get_block_list.
   //
-  // BUG (keiko 2026-05-30, 100号機, ih_toymodel 6turn coil loft):
+  // BUG (2026-05-30, six-turn coil loft model):
   //   `export netgen` errors with "ERROR: No block with ID 2 was
   //   found" AND leaves a phantom block 2 in the Cubit session.
   //
@@ -265,7 +265,7 @@ void MeshData::extract_sidesets(MeshExportInterface *iface)
   // parse_cubit_list("sideset", "all") gives us the set of
   // user-defined sideset IDs; the phantom is skipped per the same
   // user_block_set pattern.  Bugs of this class were fixed for
-  // blocks 2026-05-30 (keiko 100号機 6-turn loft); sidesets +
+  // blocks 2026-05-30 (six-turn coil loft); sidesets +
   // nodesets fixed 2026-05-31.
   std::vector<int> user_sideset_ids = CubitInterface::parse_cubit_list("sideset", "all");
   std::set<int> user_sideset_set(user_sideset_ids.begin(), user_sideset_ids.end());
