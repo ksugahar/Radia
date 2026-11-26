@@ -40,7 +40,11 @@ def _worker(monkeypatch, write_status=None, raise_exc=None):
         if raise_exc is not None:
             raise raise_exc
         if write_status is not None:
-            Path(command[command.index("--result") + 1]).write_text(write_status, encoding="utf-8")
+            target = Path(command[command.index("--result") + 1])
+            if isinstance(write_status, bytes):
+                target.write_bytes(write_status)
+            else:
+                target.write_text(write_status, encoding="utf-8")
         return SimpleNamespace(returncode=1, stdout=b"", stderr=b"")
     monkeypatch.setattr(runner.subprocess, "run", run)
 
@@ -131,7 +135,13 @@ def test_worker_timeout_cleans_up_and_is_reported_as_timeout(tmp_path, monkeypat
     assert _leftovers(tmp_path) == []
 
 
-@pytest.mark.parametrize("text, fragment", [("{not json", "malformed"), ("[1, 2]", "not a JSON object")])
+@pytest.mark.parametrize("text, fragment", [
+    ("{not json", "malformed"),
+    ("[1, 2]", "not a JSON object"),
+    (b'{"status": "ok' + bytes([0xFF]) + b'"}', "malformed"),
+    ('{"token": "x"}', "expected 'ok' or 'error'"),
+    ('{"status": "maybe"}', "expected 'ok' or 'error'"),
+])
 def test_bad_worker_status_is_a_protocol_error(tmp_path, monkeypatch, text, fragment):
     journal, kw = _setup(tmp_path)
     _worker(monkeypatch, write_status=text)
@@ -187,3 +197,28 @@ def test_tool_labels_worker_output_mismatch_as_protocol(tmp_path, monkeypatch):
     _worker(monkeypatch, write_status=json.dumps({"status": "ok", "token": "stale"}))
     out = _tool(journal, tmp_path / "m.vol", kw)
     assert out["error_type"] == "WorkerOutputMismatch" and out["kind"] == "worker_protocol", out
+
+
+def test_corrupt_companion_with_matching_hash_is_a_protocol_error(tmp_path, monkeypatch):
+    import hashlib
+    journal, kw = _setup(tmp_path)
+    bad = b"{broken"
+
+    def run(command, **kwargs):
+        if "--result" not in command:
+            return SimpleNamespace(returncode=0, stdout=(json.dumps(GOOD) + "\n").encode(), stderr=b"")
+        vol =command[command.index("--out") + 1]
+        Path(vol).write_bytes(b"mesh")
+        Path(vol + ".json").write_bytes(bad)
+        record = {"status": "ok", "token": command[command.index("--token") + 1],
+                  "sha256": hashlib.sha256(b"mesh").hexdigest(), "companion": {},
+                  "companion_sha256": hashlib.sha256(bad).hexdigest()}
+        Path(command[command.index("--result") + 1]).write_text(json.dumps(record), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    out = _tool(journal, tmp_path / "m.vol", kw)
+    assert out["status"] == "error" and out["kind"] == "worker_protocol", out
+    assert "not valid JSON" in out["error"], out
+    assert not (tmp_path / "m.vol").exists() and not (tmp_path / "m.vol.json").exists()
+    assert _leftovers(tmp_path) == []

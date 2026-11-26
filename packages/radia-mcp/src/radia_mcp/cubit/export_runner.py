@@ -256,15 +256,17 @@ def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, pr
 
 def _read_status(status_path: Path, returncode: int) -> dict[str, Any]:
     """Parse the worker status file; anything but a JSON object is a protocol error."""
-    text = status_path.read_text(encoding="utf-8")
     try:
-        status = json.loads(text)
-    except json.JSONDecodeError as error:
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise WorkerProtocolError(f"worker (rc {returncode}) wrote malformed status JSON to "
                                   f"{status_path}: {error}") from error
     if not isinstance(status, dict):
         raise WorkerProtocolError(f"worker (rc {returncode}) status in {status_path} is a "
                                   f"{type(status).__name__}, not a JSON object")
+    if status.get("status") not in ("ok", "error"):
+        raise WorkerProtocolError(f"worker (rc {returncode}) status in {status_path} has "
+                                  f"status {status.get('status')!r}; expected 'ok' or 'error'")
     return status
 
 
@@ -346,6 +348,10 @@ def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Pa
         digest = _sha256(path)
         if status.get(key) != digest:
             return f"worker {key} {status.get(key)!r} does not match {path} ({digest})"
-    if json.loads(companion.read_text(encoding="utf-8")) != status.get("companion"):
+    try:
+        record = json.loads(companion.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return f"{companion} is not valid JSON: {error}"
+    if record != status.get("companion"):
         return f"{companion} does not match the companion record the worker reported"
     return None
