@@ -274,6 +274,8 @@ def _make_geometry_class(ngm):
             self.polar = polar
             self.bboxes = bboxes
             self.pad = pad
+            self._surfaces = {}
+            self._curves = {}
             self.diag = {"projection_route": PROJECTION_ROUTE,
                          "project_calls": 0, "project_rejects": 0,
                          "project_bbox_identity": 0, "polar_skips": 0,
@@ -282,6 +284,20 @@ def _make_geometry_class(ngm):
                          "edge_max_disp": 0.0, "between_edge_calls": 0,
                          "between_edge_projection": 0, "between_edge_arc": 0,
                          "normal_calls": 0, "tangent_calls": 0}
+
+        # cubit.surface()/cubit.curve() look the entity up on every call
+        # (about 1 ms each on a meshed model), so keep one handle per entity.
+        def _surface(self, sid):
+            handle = self._surfaces.get(sid)
+            if handle is None:
+                handle = self._surfaces[sid] = self.cubit.surface(sid)
+            return handle
+
+        def _curve_object(self, cid):
+            handle = self._curves.get(cid)
+            if handle is None:
+                handle = self._curves[cid] = self.cubit.curve(cid)
+            return handle
 
         # -- surface projection -------------------------------------------
         def _project(self, surfnr, x):
@@ -296,7 +312,7 @@ def _make_geometry_class(ngm):
             if any(x[i] < lo[i] - self.pad or x[i] > hi[i] + self.pad for i in range(3)):
                 self.diag["project_bbox_identity"] += 1
                 return x, None
-            surface = self.cubit.surface(sid)
+            surface = self._surface(sid)
             closest = tuple(surface.closest_point_trimmed(list(x)))
             disp = _dist(closest, x)
             if not math.isfinite(disp):
@@ -347,7 +363,7 @@ def _make_geometry_class(ngm):
             sid = self.fd_to_surface.get(surfnr)
             if sid is None:
                 return ngm.Vec(0.0, 0.0, 1.0)
-            n = self.cubit.surface(sid).normal_at([p[0], p[1], p[2]])
+            n = self._surface(sid).normal_at([p[0], p[1], p[2]])
             return ngm.Vec(n[0], n[1], n[2])
 
         # -- curve projection ---------------------------------------------
@@ -359,7 +375,7 @@ def _make_geometry_class(ngm):
             if {f1, f2} != {s1, s2}:
                 raise ExportError(f"Surface mismatch for Netgen geometric edge {edgenr}: "
                                   f"({s1},{s2}) vs ({f1},{f2})")
-            return curve_id, self.cubit.curve(curve_id)
+            return curve_id, self._curve_object(curve_id)
 
         def ProjectPointEdge(self, s1, s2, p, gi, edgenr):
             self.diag["edge_calls"] += 1
