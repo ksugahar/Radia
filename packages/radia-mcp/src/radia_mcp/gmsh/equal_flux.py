@@ -112,11 +112,19 @@ VECTOR_KEYS = frozenset({"origin", "e_xi", "e_eta", "center", "normal", "axis_or
 SCALAR_KEYS = frozenset({"r_outer", "r_inner", "radius"})
 COUNT_MINIMUM = {"n_lines": 1, "n_u": 1, "n_v": 1, "n": 1, "table_nodes": 2,
                  "quadrature_order": 0}
+# Resource guards against runaway allocation, not accuracy limits.
+COUNT_MAXIMUM = {"n_lines": 100_000, "n_u": 1_000, "n_v": 1_000, "n": 100_000,
+                 "table_nodes": 4_097, "quadrature_order": 64}
 
 
 def _is_number(value: Any) -> bool:
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and bool(np.isfinite(value)))
+    """A finite int or float; an int too large for a float is not one."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return bool(np.isfinite(float(value)))
+    except OverflowError:
+        return False
 
 
 def _check_value(key: str, value: Any) -> str | None:
@@ -138,8 +146,10 @@ def _check_value(key: str, value: Any) -> str | None:
             return f"must be [theta0, theta1] in radians, got {value!r}"
     elif key in COUNT_MINIMUM:
         if (not isinstance(value, int) or isinstance(value, bool)
-                or value < COUNT_MINIMUM[key]):
-            return f"must be an integer >= {COUNT_MINIMUM[key]}, got {value!r}"
+                or not COUNT_MINIMUM[key] <= value <= COUNT_MAXIMUM[key]):
+            shown = value if not isinstance(value, int) or abs(value) < 10**30 else "a huge integer"
+            return (f"must be an integer in [{COUNT_MINIMUM[key]}, {COUNT_MAXIMUM[key]}], "
+                    f"got {shown!r}")
     elif key == "sign":
         if value not in ("auto", "positive", "negative"):
             return f"must be 'auto', 'positive' or 'negative', got {value!r}"
@@ -263,27 +273,6 @@ def place_equal_flux_seeds(path: str | Path, seed_patch: dict, *,
                   length_unit=length_unit, timeout_s=timeout_s)[0]
 
 
-def _crossings(points_m: np.ndarray, chart, seed_vertex: int, closed: bool) -> list[int]:
-    """Signs of the crossings of a +B polyline through the seed surface.
-
-    The crossing at the seed itself (the segments around the seed vertex,
-    and the closing segment of a closed line) is not counted.
-    """
-    s, _, _ = chart.locate(points_m)
-    skip = {seed_vertex - 1, seed_vertex}
-    if closed:
-        skip.add(len(points_m) - 2)
-    signs = []
-    for i in np.nonzero(np.sign(s[:-1]) * np.sign(s[1:]) < 0)[0]:
-        if int(i) in skip:
-            continue
-        t = s[i] / (s[i] - s[i + 1])
-        _, xi, eta = chart.locate(points_m[i] + t * (points_m[i + 1] - points_m[i]))
-        if -1e-9 <= xi <= 1 + 1e-9 and -1e-9 <= eta <= 1 + 1e-9:
-            signs.append(1 if s[i + 1] > s[i] else -1)
-    return signs
-
-
 def _line_end(line: dict) -> str:
     if line["closed"]:
         return "closed"
@@ -297,6 +286,8 @@ def _line_end(line: dict) -> str:
 
 def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict, list[str]]:
     """How the traced lines represent the seeded and the opposite flux."""
+    from radia.flux_seeding import surface_crossings
+
     q = placed["flux_per_line_Wb"]
     sign = placed["orientation"]
     ends = dict.fromkeys(LINE_ENDS, 0)
@@ -304,8 +295,8 @@ def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict
     for line, poly in zip(traced["lines"], traced["polylines"]):
         end = _line_end(line)
         ends[end] += 1
-        signs = _crossings(np.asarray(poly["points"], dtype=float) * scale, chart,
-                           poly["seed_vertex"], poly["closed"])
+        signs = surface_crossings(np.asarray(poly["points"], dtype=float) * scale, chart,
+                                  seed_vertex=poly["seed_vertex"], closed=poly["closed"])
         same = sum(1 for c in signs if c == sign)
         other = len(signs) - same
         repeats += same
@@ -315,7 +306,7 @@ def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict
     n_seeds = len(placed["seeds"])
     not_traced = n_seeds - len(per_line)
     opposite_flux = placed["negative_flux_Wb"] if sign > 0 else placed["positive_flux_Wb"]
-    drawn = -q * opposite
+    observed = -q * opposite
     account = {
         "flux_per_line_Wb": q,
         "flux_by_end_Wb": {end: q * count for end, count in ends.items()},
@@ -324,8 +315,11 @@ def _flux_account(traced: dict, placed: dict, chart, scale: float) -> tuple[dict
         "repeat_crossings": repeats,
         "opposite_crossings": opposite,
         "opposite_flux_Wb": opposite_flux,
-        "opposite_flux_drawn_Wb": drawn,
-        "opposite_flux_drawn_fraction": (drawn / opposite_flux if opposite_flux else None),
+        # Signed-flux weighted count of observed opposite crossings. Lines may
+        # cross more than once or only part of the opposite flux may be met,
+        # so this is not a coverage fraction.
+        "opposite_crossing_flux_Wb": observed,
+        "opposite_crossing_flux_ratio": (observed / opposite_flux if opposite_flux else None),
         "lines": per_line,
     }
     warnings = []

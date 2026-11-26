@@ -99,7 +99,7 @@ def test_seed_patch_traces_equal_flux_lines(tmp_path):
         np.testing.assert_allclose(xy, np.broadcast_to(seed["point"][:2], xy.shape), atol=1e-9)
     account = result["flux_account"]
     assert account["lines_by_end"] == {"closed": 0, "open": 6, "truncated": 0, "stagnation": 0}
-    assert account["opposite_flux_drawn_fraction"] is None and result["warnings"] == []
+    assert account["opposite_crossing_flux_ratio"] is None and result["warnings"] == []
 
 
 def test_balanced_annulus_seeds_carry_the_disk_flux(tmp_path):
@@ -135,26 +135,8 @@ def test_closed_lines_draw_the_opposite_flux_once(tmp_path):
     assert all(s["point"][0] < 0 for s in seeding["seeds"])
     assert account["lines_by_end"]["closed"] == 4
     assert (account["repeat_crossings"], account["opposite_crossings"]) == (0, 4)
-    assert account["opposite_flux_drawn_fraction"] == pytest.approx(1.0, abs=1e-12)
+    assert account["opposite_crossing_flux_ratio"] == pytest.approx(1.0, abs=1e-12)
     assert result["warnings"] == []
-
-
-@pytest.mark.parametrize("offset", [1e-15, -1e-15])
-def test_the_seed_crossing_itself_is_not_counted(offset):
-    """A seed a rounding error off the surface still crosses it only once.
-
-    The polyline runs +y through the seed at x = -0.2, turns, and returns
-    through x = +0.2 in -y: exactly one opposite crossing, for an open line
-    and for the same loop closed back onto its seed.
-    """
-    from radia_mcp.gmsh.equal_flux import _crossings
-    chart = _flux_seeding().planar_patch([-0.4, 0, -0.2], [0.8, 0, 0], [0, 0, 0.4])
-    path = np.array([[-0.2, -0.05, 0], [-0.2, offset, 0], [-0.2, 0.05, 0], [0.0, 0.2, 0],
-                     [0.2, 0.05, 0], [0.2, -0.05, 0], [0.0, -0.2, 0]])
-    # The area normal e_xi x e_eta is -y, so +y motion is a negative crossing.
-    assert _crossings(path, chart, 1, closed=False) == [1]
-    closed = np.vstack((path[1:], [[-0.2, -0.05, 0], path[1]]))
-    assert _crossings(closed, chart, 0, closed=True) == [1]
 
 
 def test_extent_stops_lines_and_loses_the_return_flux(tmp_path):
@@ -169,7 +151,7 @@ def test_extent_stops_lines_and_loses_the_return_flux(tmp_path):
         assert points[:, 0].max() <= 0.1
     stopped = [line for line in result["lines"] if "left_extent" in line["reasons"].values()]
     assert len(stopped) == account["lines_by_end"]["open"]
-    assert account["opposite_flux_drawn_fraction"] < 1
+    assert account["opposite_crossing_flux_ratio"] < 1
 
 
 def test_truncated_and_repeating_lines_are_warned(tmp_path):
@@ -227,10 +209,10 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
 
 
 @pytest.mark.parametrize("seeding, message", [
-    ({"seed_patch": {**PATCH, "n_u": None}}, "seed_patch n_u must be an integer >= 1, got None"),
-    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer >= 2"),
-    ({"seed_patch": {**PATCH, "quadrature_order": -1}}, "quadrature_order must be an integer >= 0"),
-    ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer >= 1, got True"),
+    ({"seed_patch": {**PATCH, "n_u": None}}, "seed_patch n_u must be an integer in [1, 1000], got None"),
+    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer in [2, 4097]"),
+    ({"seed_patch": {**PATCH, "quadrature_order": -1}}, "quadrature_order must be an integer in [0, 64]"),
+    ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer in [1, 100000], got True"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": 2.5}}, "n_lines must be an integer"),
     ({"seed_patch": {**PLANE_Y0, "sign": None}}, "seed_patch sign must be"),
     ({"seed_patch": {**PATCH, "origin": [0, 0]}}, "seed_patch origin must be a list of 3"),
@@ -240,13 +222,18 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
     ({"seed_patch": {**DISK, "theta_range": [0]}}, "seed_patch theta_range must be"),
     ({"seed_patch": {**DISK, "shape": ["annulus"]}}, "shape must be one of"),
     ({"seed_line": {"start": [0, 0, 0], "end": [1, 0, 0], "n": None}},
-     "seed_line n must be an integer >= 1, got None"),
+     "seed_line n must be an integer in [1, 100000], got None"),
     ({"seed_line": {"start": None, "end": [1, 0, 0], "n": 2}}, "seed_line start must be a list"),
     ({"seed_line": None, "seed_patch": None}, "exactly one of seed_patch"),
+    ({"seed_patch": {**DISK, "r_outer": 2**64 * 10**300}}, "seed_patch r_outer must be a finite number"),
+    ({"seed_patch": {**PATCH, "origin": [10**400, 0, 0]}}, "seed_patch origin must be a list of 3"),
+    ({"seed_patch": {**PLANE_Y0, "n_lines": 10**400}},
+     "n_lines must be an integer in [1, 100000], got 'a huge integer'"),
+    ({"seed_patch": {**PATCH, "table_nodes": 2**64}}, "table_nodes must be an integer in [2, 4097]"),
 ])
 def test_malformed_values_return_field_errors_before_probing(tmp_path, monkeypatch,
                                                              seeding, message):
-    """Schema-accepted JSON values (null, bool, nan, wrong length) never reach int()."""
+    """Schema-accepted JSON values (null, bool, nan, wrong length, huge ints) never reach int()."""
     def unexpected(*args, **kwargs):
         pytest.fail("a malformed payload reached the probe or the tracer")
 

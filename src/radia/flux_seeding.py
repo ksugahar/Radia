@@ -103,6 +103,14 @@ def _grid(xi, eta):
 class _Chart:
     """Common chart interface: chart, area_vector, metric, locate, flux_density."""
 
+    def monotone_points(self, points_m: NDArray) -> tuple[NDArray, NDArray]:
+        """Insert points so the signed offset is monotone along every segment.
+
+        Returns the points and the new index of each original vertex. The
+        offset of a planar chart is linear along a segment: nothing to add.
+        """
+        return points_m, np.arange(len(points_m))
+
     def flux_density(self, field_T: Callable) -> Callable:
         """Return g(xi, eta) = B . (F_xi x F_eta) for field_T(points) -> (..., 3)."""
 
@@ -260,6 +268,64 @@ class CylindricalPatch(_Chart):
         x, y = d @ self.e1, d @ self.e2
         xi = np.mod(np.arctan2(y, x) - self.theta0, 2 * np.pi) / self.dtheta
         return np.hypot(x, y) - self.radius_m, xi, (d @ self.axis_unit) / self.height_m
+
+    def monotone_points(self, points_m):
+        """Add each segment's point nearest the axis: the radius is convex along
+        a segment, so a chord entering and leaving the cylinder gets both roots."""
+        p = np.asarray(points_m, dtype=float)
+        d = p - self.axis_origin_m
+        perp = d - np.outer(d @ self.axis_unit, self.axis_unit)
+        step = np.diff(perp, axis=0)
+        length2 = np.einsum("ij,ij->i", step, step)
+        t = np.where(length2 > 0, -np.einsum("ij,ij->i", perp[:-1], step)
+                     / np.where(length2 > 0, length2, 1.0), -1.0)
+        inner = np.nonzero((t > 1e-12) & (t < 1 - 1e-12))[0]
+        if not len(inner):
+            return p, np.arange(len(p))
+        feet = p[inner] + t[inner, None] * (p[inner + 1] - p[inner])
+        index = np.arange(len(p)) + np.searchsorted(inner, np.arange(len(p)), side="left")
+        out = np.empty((len(p) + len(inner), 3))
+        out[index] = p
+        out[inner + np.arange(1, len(inner) + 1)] = feet
+        return out, index
+
+
+def surface_crossings(points_m: ArrayLike, chart, *, seed_vertex: int,
+                      closed: bool) -> list[int]:
+    """Signs (+1 along the area normal) of a polyline's crossings of a seed surface.
+
+    The polyline is first made monotone in the signed offset (see
+    monotone_points). A crossing is a change of sign between consecutive
+    vertices off the surface; vertices on it (|offset| <= 1e-12 of the
+    polyline's coordinate scale) do not count, so a line that touches the
+    surface and returns is no crossing and one that passes through a vertex
+    on it is one. The crossing must lie inside the chart's [0, 1]^2. The
+    crossing at the seed vertex, and for a closed line at its first and last
+    vertex (the seed), is not counted.
+    """
+    original = np.asarray(points_m, dtype=float)
+    if len(original) < 2:
+        return []
+    pts, index = chart.monotone_points(original)
+    s, _, _ = chart.locate(pts)
+    tol = 1e-12 * max(float(np.max(np.abs(pts))), 1e-300)
+    side = np.where(np.abs(s) <= tol, 0, np.sign(s)).astype(int)
+    excluded = {int(index[seed_vertex])}
+    if closed:
+        excluded.update({0, len(pts) - 1})
+    off = np.nonzero(side)[0]
+    signs = []
+    for i, j in zip(off[:-1], off[1:]):
+        if side[i] == side[j] or any(i <= e <= j for e in excluded):
+            continue
+        if j == i + 1:
+            at = pts[i] + s[i] / (s[i] - s[j]) * (pts[j] - pts[i])
+        else:
+            at = pts[i + 1]  # the first vertex on the surface
+        _, xi, eta = chart.locate(at)
+        if -1e-9 <= xi <= 1 + 1e-9 and -1e-9 <= eta <= 1 + 1e-9:
+            signs.append(int(side[j]))
+    return signs
 
 
 def planar_patch(origin_m: ArrayLike, e_xi_m: ArrayLike, e_eta_m: ArrayLike) -> PlanarPatch:
@@ -602,6 +668,56 @@ def _split(pts: NDArray, density: NDArray, fraction: float) -> tuple[float, floa
     return float(at), total
 
 
+def _mixed_cells(table: NDArray) -> NDArray:
+    """Table cells whose corner values take both strict signs."""
+    corners = np.stack((table[:-1, :-1], table[:-1, 1:], table[1:, :-1], table[1:, 1:]))
+    return np.any(corners > 0, axis=0) & np.any(corners < 0, axis=0)
+
+
+def _edge_zeros(nodes: NDArray, values: NDArray) -> NDArray:
+    """Linear zero crossings along the last axis between strictly opposite signs."""
+    a, b = values[..., :-1], values[..., 1:]
+    hit = a * b < 0
+    rows, k = np.nonzero(hit.reshape(-1, hit.shape[-1]))
+    a, b = a.reshape(-1, a.shape[-1])[rows, k], b.reshape(-1, b.shape[-1])[rows, k]
+    return nodes[k] + a / (a - b) * (nodes[k + 1] - nodes[k])
+
+
+def _resolve_zero_line(flux_density: Callable, xi: NDArray, eta: NDArray, table: NDArray):
+    """Insert table nodes where cell edges cross zero, and resample the density.
+
+    The clipped bilinear interpolant puts support on both sides of a zero line
+    that runs through a cell. Adding the edge crossings of the mixed cells as
+    nodes (one pass) makes a zero line that is straight along either chart
+    axis lie on table lines; a curved one leaves smaller mixed cells, whose
+    share of the flux is reported.
+    """
+    mixed = _mixed_cells(table)
+    if not np.any(mixed):
+        return xi, eta, table
+    rows, cols = np.nonzero(mixed)
+    # Edges of mixed cells only: horizontal edges (constant eta) give xi zeros,
+    # vertical edges (constant xi) give eta zeros.
+    new_xi, new_eta = [], []
+    for r, c in zip(rows, cols):
+        for rr in (r, r + 1):
+            new_xi.append(_edge_zeros(xi[c:c + 2], table[rr, c:c + 2]))
+        for cc in (c, c + 1):
+            new_eta.append(_edge_zeros(eta[r:r + 2], table[r:r + 2, cc]))
+
+    def merged(nodes, extra):
+        extra = np.concatenate(extra) if extra else np.empty(0)
+        out = np.unique(np.concatenate((nodes, extra)))
+        keep = np.concatenate(([True], np.diff(out) > 1e-12 * (nodes[-1] - nodes[0])))
+        return out[keep]
+
+    xi, eta = merged(xi, new_xi), merged(eta, new_eta)
+    table = _row_density(flux_density, xi, eta)
+    if not np.all(np.isfinite(table)):
+        raise ValueError("flux density must be finite (refined table)")
+    return xi, eta, table
+
+
 def balanced_equal_flux_seeds(
     flux_density: Callable,
     *,
@@ -617,7 +733,12 @@ def balanced_equal_flux_seeds(
     flux_density, chart and the table nodes are as for equal_flux_seeds;
     metric(xi, eta) -> (|F_xi|, |F_eta|) gives physical lengths per unit
     chart coordinate. The density is the bilinear interpolant of the table,
-    clipped to the selected sign at the nodes. A rectangle holding n seeds
+    clipped to the selected sign at the nodes. Where the normal flux changes
+    sign inside a table cell, the edge zero crossings of that cell are first
+    added as table nodes and the density resampled there, so clipping does
+    not spread the support across the zero line; diagnostics report the
+    added nodes and the share of the seeded flux still in cells whose
+    corners take both signs. A rectangle holding n seeds
     is cut across its longer physical side where the marginal flux reaches
     floor(n / 2) / n of its own, until each cell holds one seed; the seed is
     the flux median of its cell (marginal along the longer side, then the
@@ -629,7 +750,8 @@ def balanced_equal_flux_seeds(
     cross the surface only with the other sign are not seeded.
 
     Raises ValueError for nonfinite samples, a zero or absent selected flux,
-    a bad sign or n_lines, or nonfinite chart points.
+    a bad sign or n_lines, nonfinite chart points, or a seed where the
+    caller's flux_density has the other sign (refine the table there).
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     n_lines = int(n_lines)
@@ -640,6 +762,8 @@ def balanced_equal_flux_seeds(
     table = _row_density(flux_density, xi, eta)
     if not np.all(np.isfinite(table)):
         raise ValueError("flux density must be finite (table)")
+    given_shape = [len(eta), len(xi)]
+    xi, eta, table = _resolve_zero_line(flux_density, xi, eta, table)
 
     def flux_of(part):
         return float(_pl_integral(eta, _pl_integral(xi, part, xi[0], xi[-1]), eta[0], eta[-1]))
@@ -715,6 +839,16 @@ def balanced_equal_flux_seeds(
 
     cells = np.asarray(cells, dtype=float)
     chart_coords = np.asarray(seeds_chart, dtype=float)
+    at_seeds = orientation * np.asarray(flux_density(chart_coords[:, 0], chart_coords[:, 1]),
+                                        dtype=float)
+    wrong = np.nonzero(~(at_seeds >= 0))[0]
+    if len(wrong):
+        raise ValueError(f"{len(wrong)} of {n_lines} seeds lie where the normal flux has the "
+                         f"other sign (first at chart {chart_coords[wrong[0]].tolist()}); "
+                         "the table does not resolve the zero line, refine it")
+    corner_mean = 0.25 * (density[:-1, :-1] + density[:-1, 1:] + density[1:, :-1]
+                          + density[1:, 1:]) * np.outer(np.diff(eta), np.diff(xi))
+    mixed_share = float(corner_mean[_mixed_cells(table)].sum() / total)
     points = np.asarray(chart(chart_coords[:, 0], chart_coords[:, 1]), dtype=float)
     if points.shape != (n_lines, 3) or not np.all(np.isfinite(points)):
         raise ValueError("chart must return finite 3-D points for every seed")
@@ -733,6 +867,8 @@ def balanced_equal_flux_seeds(
         positive_flux_Wb=positive,
         negative_flux_Wb=-negative,
         diagnostics={"table_shape": [len(eta), len(xi)],
+                     "given_table_shape": given_shape,
+                     "mixed_cell_flux_share": mixed_share,
                      **_aspect_summary(lx * (cells[:, 1] - cells[:, 0]),
                                        ly * (cells[:, 3] - cells[:, 2]))},
         provenance={"method": BALANCED_METHOD, "module": __name__},

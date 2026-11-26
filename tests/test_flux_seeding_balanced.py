@@ -17,7 +17,7 @@ import pytest
 
 from radia.flux_seeding import (annular_patch, balanced_cell_flux_quadrature,
                                 balanced_equal_flux_seeds, cylindrical_patch,
-                                equal_flux_seeds, planar_patch)
+                                equal_flux_seeds, planar_patch, surface_crossings)
 
 UNIT = planar_patch([0, 0, 0], [1, 0, 0], [0, 1, 0])
 
@@ -63,6 +63,46 @@ def test_one_sign_of_a_sign_changing_surface_is_seeded(sign, expected):
                                           eta_nodes=np.linspace(0, 1, 5))
     assert check["max_relative_cell_deviation"] < 1e-12 and check["coverage"] == pytest.approx(1)
 
+
+
+def test_a_zero_line_inside_a_table_cell_does_not_leak_seeds():
+    """Guards: zero-line node insertion; the clipped support stays on one side.
+
+    xi - 1/2 on the 2 x 2 table has its zero inside the only cell; clipping
+    at the nodes alone gives total 1/4 and seeds at xi < 1/2.
+    """
+    density = lambda xi, eta: xi - 0.5 + 0 * eta
+    seeds = _seed(density, 36, nodes=2, sign="positive")
+    assert seeds.total_flux_Wb == pytest.approx(0.125, abs=1e-15)
+    xi = seeds.chart_coords[:, 0]
+    assert np.all(xi > 0.5), xi[xi <= 0.5]
+    x0, x1, y0, y1 = seeds.cells.T
+    a, b = np.clip(x0, 0.5, 1.0), np.clip(x1, 0.5, 1.0)
+    flux = ((b - 0.5) ** 2 - (a - 0.5) ** 2) / 2 * (y1 - y0)
+    np.testing.assert_allclose(flux, np.full(36, 0.125 / 36), rtol=1e-12)
+    assert seeds.diagnostics["given_table_shape"] == [2, 2]
+    assert seeds.diagnostics["table_shape"] == [2, 3]
+    assert seeds.diagnostics["mixed_cell_flux_share"] == 0
+
+
+def test_a_curved_zero_line_reports_its_unresolved_share():
+    """Guards: every seed on the seeded sign of the caller's density."""
+    density = lambda xi, eta: (xi - 0.5) ** 2 + (eta - 0.5) ** 2 - 0.09
+    seeds = _seed(density, 20, nodes=9, sign="negative")
+    g = density(*seeds.chart_coords.T)
+    assert np.all(g < 0), g
+    assert 0 < seeds.diagnostics["mixed_cell_flux_share"] < 0.5
+
+
+def test_a_seed_on_the_other_sign_fails_loudly():
+    """Guards: the seed sign check against the caller's density.
+
+    Every table node is positive, but the density is negative near xi = 1/2,
+    where the median seeds land.
+    """
+    density = lambda xi, eta: 1 - 10 * np.sin(np.pi * xi) ** 2 + 0 * eta
+    with pytest.raises(ValueError, match="other sign"):
+        _seed(density, 4, nodes=2, sign="positive")
 
 def test_sign_change_requires_an_explicit_side():
     """Guards: auto never silently picks one side of a mixed surface."""
@@ -148,3 +188,54 @@ def test_degenerate_charts_are_rejected(build, message):
     """Guards: inverted radii, zero axes, overlong sectors and parallel references."""
     with pytest.raises(ValueError, match=message):
         build()
+
+
+
+@pytest.mark.parametrize("offset", [1e-9, 1e-15, 0.0, -1e-15, -1e-9])
+def test_the_seed_crossing_itself_is_not_counted(offset):
+    """Guards: seed exclusion for open and closed lines, on or a rounding error off the surface.
+
+    The polyline runs +y through the seed at x = -0.2, turns, and returns
+    through x = +0.2 in -y: exactly one opposite crossing.
+    """
+    chart = planar_patch([-0.4, 0, -0.2], [0.8, 0, 0], [0, 0, 0.4])  # area normal -y
+    path = np.array([[-0.2, -0.05, 0], [-0.2, offset, 0], [-0.2, 0.05, 0], [0.0, 0.2, 0],
+                     [0.2, 0.05, 0], [0.2, -0.05, 0], [0.0, -0.2, 0]])
+    assert surface_crossings(path, chart, seed_vertex=1, closed=False) == [1]
+    loop = np.vstack((path[1:], [[-0.2, -0.05, 0], path[1]]))
+    assert surface_crossings(loop, chart, seed_vertex=0, closed=True) == [1]
+    assert surface_crossings(loop, chart, seed_vertex=len(loop) - 1, closed=True) == [1]
+
+
+def test_vertices_on_the_surface_count_a_passage_but_not_a_touch():
+    """Guards: offsets that vanish at vertices (sides 0, +, 0, - and +, 0, +)."""
+    through = np.array([[0.3, 0.5, 0.0], [0.4, 0.5, 0.1], [0.5, 0.5, 0.0], [0.6, 0.5, -0.1]])
+    assert surface_crossings(through, UNIT, seed_vertex=0, closed=False) == [-1]
+    touch = np.array([[0.3, 0.5, 0.1], [0.5, 0.5, 0.0], [0.7, 0.5, 0.1]])
+    assert surface_crossings(touch, UNIT, seed_vertex=0, closed=False) == []
+
+
+def test_a_chord_through_a_cylinder_crosses_it_twice():
+    """Guards: monotone refinement of a convex offset; sector bounds.
+
+    Both ends of the segment x = 2 -> -2 lie outside the unit cylinder, so
+    endpoint signs alone see no crossing.
+    """
+    chord = np.array([[3.0, 0, 0.5], [2.0, 0, 0.5], [-2.0, 0, 0.5]])
+    full = cylindrical_patch([0, 0, 0], [0, 0, 1], 1.0)
+    assert surface_crossings(chord, full, seed_vertex=0, closed=False) == [-1, 1]
+    quarter = cylindrical_patch([0, 0, 0], [0, 0, 1], 1.0, theta_range=(-0.5, 0.5))
+    assert surface_crossings(chord, quarter, seed_vertex=0, closed=False) == [-1]
+    grazing = np.array([[3.0, 1.0, 0.5], [2.0, 1.0, 0.5], [-2.0, 1.0, 0.5]])
+    assert surface_crossings(grazing, full, seed_vertex=0, closed=False) == []
+
+
+def test_a_crossing_at_the_annulus_seam_is_inside():
+    """Guards: theta wrap-around at a full annulus and the end of a sector."""
+    ring = annular_patch([0, 0, 0], [0, 0, 1], 1.0, r_inner_m=0.2)
+    for y in (1e-13, 0.0, -1e-13):
+        segment = np.array([[0.5, 0, -0.2], [0.5, y, -0.1], [0.5, y, 0.1]])
+        assert surface_crossings(segment, ring, seed_vertex=0, closed=False) == [1], y
+    sector = annular_patch([0, 0, 0], [0, 0, 1], 1.0, theta_range=(0.0, np.pi / 2))
+    segment = np.array([[0.5, -0.01, -0.2], [0.5, -0.01, -0.1], [0.5, -0.01, 0.1]])
+    assert surface_crossings(segment, sector, seed_vertex=0, closed=False) == []

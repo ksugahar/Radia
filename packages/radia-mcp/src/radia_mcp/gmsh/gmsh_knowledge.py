@@ -1488,8 +1488,10 @@ decreasing exactness -- always prefer the highest one that applies:
    the flux crosses both ways (a magnet mid-plane) needs sign "positive" or
    "negative": seed ONE side, because each closed line crosses it once
    each way and both sides would draw every tube twice.  Read the result's
-   flux_account: opposite_flux_drawn_fraction near 1 means the returning
-   lines carry the other side's flux; truncated lines (max_steps),
+   flux_account: opposite_crossing_flux_ratio counts the observed returns,
+   flux weighted; near 1 the returning lines meet about the other side's
+   flux, but it is a count, not a coverage (a line may return twice, or a
+   part of the other side may be missed); truncated lines (max_steps),
    repeat crossings (helical or multi-pass lines) and untraced seeds are
    warned because there density no longer stands for flux.  extent stops
    lines at a box; lines ending there are complete inside the box only.
