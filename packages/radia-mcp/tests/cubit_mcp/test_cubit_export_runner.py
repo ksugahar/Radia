@@ -282,6 +282,28 @@ def test_companion_planted_before_publish_rolls_back_and_retry_succeeds(tmp_path
     assert out.read_bytes() == b"mesh" and planted.read_bytes() == b"{}"
 
 
+def test_companion_replaced_during_verification_keeps_it_and_removes_own_vol(tmp_path, monkeypatch):
+    out = tmp_path / "m.vol"
+    companion = tmp_path / "m.vol.json"
+    original = runner._verify_outputs
+
+    def swap_then_verify(status, token, vol, comp, returncode):
+        if vol == out:  # post-publication verification of the real destination
+            comp.unlink()
+            comp.write_bytes(b'{"foreign": 1}')
+        return original(status, token, vol, comp, returncode)
+
+    monkeypatch.setattr(runner, "_verify_outputs", swap_then_verify)
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], {"status": "ok"}))
+    result = runner.run_export(_journal(tmp_path), out, 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "error", result
+    assert "no longer this run's output" in result["error"], result
+    assert not out.exists(), "this run's .vol must still be rolled back"
+    assert companion.read_bytes() == b'{"foreign": 1}', "the foreign companion must stay"
+    assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()
+
+
 def test_worker_error_survives_a_failing_stage_cleanup(tmp_path, monkeypatch):
     class WorkerBoom(RuntimeError):
         pass

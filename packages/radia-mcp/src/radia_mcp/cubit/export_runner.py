@@ -253,24 +253,35 @@ def _publish(status: dict[str, Any], token: str, pairs: tuple[tuple[Path, Path],
             os.link(staged, dest)
             published.append((staged, dest))
         problem = _verify_outputs(status, token, pairs[0][1], pairs[1][1], 0)
-        if problem:
-            _rollback(published)
-        return problem
     except BaseException as exc:
         try:
             _rollback(published)
         except OSError as rollback:
             exc.add_note(f"rollback of published outputs failed: {type(rollback).__name__}: {rollback}")
         raise
+    if problem:
+        try:
+            _rollback(published)
+        except OSError as rollback:
+            problem += f"; rollback: {rollback}"
+    return problem
 
 
 def _rollback(published: list[tuple[Path, Path]]) -> None:
-    """Unlink destinations this run published, only when they are still the staged file."""
+    """Unlink destinations this run published, only when they are still the staged file.
+
+    A destination replaced by someone else is left untouched, and the rest of
+    this run's files are still removed; the refusals are raised at the end.
+    """
+    foreign = []
     for staged, dest in reversed(published):
         if dest.exists() and os.path.samefile(staged, dest):
             dest.unlink()
-        else:
-            raise OSError(f"refusing to remove {dest}: it is no longer the file this run published")
+        elif dest.exists():
+            foreign.append(str(dest))
+    if foreign:
+        raise OSError("refusing to remove files that are no longer this run's output: "
+                      + ", ".join(foreign))
 
 
 def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Path,
