@@ -205,7 +205,8 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
     assert 'ci_gpu_artifact.py fetch gpu-input --radia --sha ${{ github.sha }}' in commands
     assert 'run_installed.py --source-commit ${{ github.sha }}' in commands
     assert '--require-gpu A100' in commands
-    assert 'ci_fork_wheels.py install' in commands
+    assert 'verify_public_fe_sdk.py verify' in commands
+    assert 'ci_fork_wheels.py' not in commands
     assert 'netgen_overlay.py' not in commands
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     native = yaml.safe_load((ROOT / '.github/workflows/build-test.yml').read_text(encoding='utf-8'))
@@ -215,10 +216,11 @@ def test_hdiv_a100_lane_is_compute_only_on_the_sealed_radia_wheel():
 
 
 @pytest.mark.parametrize('workflow, job', [('build-test.yml', 'build-test'), ('sparsesolv.yml', 'ams-regression')])
-def test_windows_native_ci_installs_locked_fork_before_build(workflow, job):
+def test_windows_native_ci_selects_the_lane_sdk_before_build(workflow, job):
     steps = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8'))['jobs'][job]['steps']
     commands = "\n".join(step.get('run', '') for step in steps)
-    assert 'ci_fork_wheels.py install' in commands
+    installer = 'verify_public_fe_sdk.py' if workflow == 'build-test.yml' else 'ci_fork_wheels.py'
+    assert installer + ' install' in commands
     assert 'netgen_overlay.py' not in commands
 
 

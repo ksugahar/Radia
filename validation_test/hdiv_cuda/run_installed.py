@@ -76,7 +76,7 @@ def check_installed(source_commit):
 
 
 def check_netgen():
-    helper = Path(__file__).resolve().parents[2] / "tools/ci_fork_wheels.py"
+    helper = Path(__file__).resolve().parents[2] / "tools/verify_public_fe_sdk.py"
     return json.loads(subprocess.check_output([sys.executable, "-I", str(helper), "verify"], text=True))
 
 

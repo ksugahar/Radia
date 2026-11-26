@@ -6,6 +6,7 @@ which the installed lane checks by hash. Pinned stock 6.2.2608 scales every pyra
 z by 1 - 1e-10, which fails the unchanged 1e-11 projection on tet-pyramid-hex
 (order 1/2 about 1.6e-11/1.8e-11); that stays a hard failure.
 """
+import importlib.metadata
 import os
 import numpy as np
 import pytest
@@ -29,6 +30,10 @@ def test_ng_pyramid_mapped_material_mass(tmp_path, record_property, family, orde
     path = tmp_path / "material.vol"
     mesh.ngmesh.Save(str(path))
     with ng.TaskManager():
+        if importlib.metadata.version("netgen-mesher") == "6.2.2608":
+            with pytest.raises(ValueError, match="requires the Netgen pyramid mapping capability"):
+                gpu._MaterialStagingContext(str(path), order)
+            return
         fes = ng.HDiv(mesh, order=order)
         u, v = fes.TnT()
         mass = ng.BilinearForm(fes, symmetric=True)

@@ -823,6 +823,18 @@
       ]
     },
     {
+      "pattern": "tools/verify_public_fe_sdk.py",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Native Release and the Simulink producer and consumer verify the same public FE SDK."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "tools/ci_fork_wheels.py",
       "owners": [
         "radia"
@@ -3101,6 +3113,7 @@
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
             "tools/ci_gpu_artifact.py",
+            "tools/verify_public_fe_sdk.py",
             "tests/test_ci_gpu_artifact.py",
             "src/runtime/ih/**",
             "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
@@ -3243,6 +3256,7 @@
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
             "tools/ci_gpu_artifact.py",
+            "tools/verify_public_fe_sdk.py",
             "tests/test_ci_gpu_artifact.py",
             "src/runtime/ih/**",
             "tests/cpp/test_radia_ih_thermal_acceptance.cpp",

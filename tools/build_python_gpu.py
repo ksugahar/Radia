@@ -31,12 +31,10 @@ SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
 # Radia-only GPU inputs: not shared with the radia-simulink MEX builds.
 SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu", "peec_fin_host.hpp",
                             "peec_fin_python.cpp", "peec_fin_cuda.cu", "../peec_oriented_box.hpp")
-COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
-              ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
-              ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
-              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"),
-              ("_fem_cuda", "fem/fem_python.cpp", "fem/fem_python_cuda.cu"),
-              ("_peec_fin_cuda", "peec_fin_python.cpp", "peec_fin_cuda.cu"))
+spec = importlib.util.spec_from_file_location("radia_gpu_build_payload", Path(__file__).with_name("python_gpu_payload.py"))
+payload = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(payload)
+COMPONENTS = payload.COMPONENTS
 
 
 def sha(path):
@@ -246,7 +244,7 @@ def hdiv_source_hashes():
             for p in HDIV.rglob("*") if p.is_file()}
 
 
-def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
+def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands, *, fork_sdk=False):
     """NGSolve owns host compile definitions/includes/link ABI; nvcc stays separate."""
     import shutil
     cmake = shutil.which("cmake")
@@ -266,6 +264,7 @@ def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
                  "-DPython3_EXECUTABLE=" + cmake_path(sys.executable), "-DRADIA_PYBIND_INCLUDE=" + cmake_path(include),
                  "-DRADIA_CUDA_OBJECT=" + cmake_path(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
                  "-DCUDAToolkit_ROOT=" + cmake_path(cuda),
+                 "-DRADIA_PUBLIC_FE=" + ("OFF" if fork_sdk else "ON"),
                  "-DRADIA_OUTPUT=" + cmake_path(out)]
     configure += ["-DRADIA_" + key.upper() + "=" + cmake_path(path) for key, path in libs.items()]
     execute(configure, out, "_hdiv_cuda-host-configure", commands)
@@ -294,6 +293,7 @@ def main():
     parser.add_argument("--admission", type=Path, required=True)
     parser.add_argument("--admission-sha256", required=True)
     parser.add_argument("--matlab-root", type=Path)
+    parser.add_argument("--windows-dev-fork", action="store_true", help="Use the locked Windows development SDK")
     parser.add_argument("--linux-fork-lock", type=Path, help="Hash-pinned Linux fork wheel manifest")
     parser.add_argument("--components", nargs="+", choices=[row[0] for row in COMPONENTS],
                         default=[row[0] for row in COMPONENTS], help="Explicit subset to rebuild from this exact commit")
@@ -311,7 +311,9 @@ def main():
                                          if windows else ([], None))
     if windows and args.linux_fork_lock:
         parser.error("--linux-fork-lock is Linux-only")
-    lock = verify_windows_fork() if windows else (
+    if not windows and args.windows_dev_fork:
+        parser.error("--windows-dev-fork is Windows-only")
+    lock = verify_windows_fork() if args.windows_dev_fork else (
         verify_linux_fork(args.linux_fork_lock) if args.linux_fork_lock else None
     )
     include = headers(lock)
@@ -325,6 +327,7 @@ def main():
     source_hashes.update({p.relative_to(ROOT).as_posix(): sha(p) for p in (CORE / "fem").rglob("*") if p.is_file()})
     source_hashes["src/core/gpu/ams_amg_kernels.cuh"] = sha(CORE / "ams_amg_kernels.cuh")
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
+    source_hashes["tools/python_gpu_payload.py"] = sha(payload.__file__)
     header_hashes = {p.relative_to(include).as_posix(): sha(p) for p in (include / "pybind11").rglob("*") if p.is_file()}
     commands = []
     for module, cpp, cu in COMPONENTS:
@@ -348,7 +351,8 @@ def main():
             cuda_command += ["-Xcompiler", "-fPIC"]
         execute(cuda_command, out, module + "-cuda", commands)
         if module == "_hdiv_cuda":
-            hdiv_artifacts = build_hdiv_host(args, binary, obj, include, cuda, out, commands)
+            hdiv_artifacts = build_hdiv_host(args, binary, obj, include, cuda, out, commands,
+                                                  fork_sdk=lock is not None)
         elif windows:
             command = [args.host_compiler, "/nologo", "/LD", "/EHsc", "/MD", "/O2", "/fp:precise", "/std:c++20", "/utf-8",
                        "/I" + str(include), "/I" + sysconfig.get_path("include"),

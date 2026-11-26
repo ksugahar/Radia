@@ -1,7 +1,17 @@
 # NGSolve fork lanes
 
-User decision, 2026-11-16. Radia depends on the Sugahara forks of Netgen and
-NGSolve (`ksugahar/netgen`, `ksugahar/ngsolve`), not on the official wheels.
+Radia release lanes use the exact public Netgen and NGSolve versions in
+`pyproject.toml`. Windows CPU and GPU publication wheels, Linux source
+builds and MATLAB acceptance build and run against those same public pins.
+The published wheel must import in a fresh Windows environment using its
+normal pip dependencies, and the GPU wheel is also checked with its GPU
+extra. MATLAB producer and consumer must agree on the SDK and use it
+within their isolated job environments.
+
+The locked fork is available for explicit development and numerical
+qualification. Its receipts do not qualify a public-SDK release. Pyramid
+material staging that requires the fork mapping patch raises a capability
+error in the public GPU build.
 
 ## Maintenance model
 
@@ -15,7 +25,7 @@ The forks are not a development line. Each maintenance round:
    fork checks;
 4. tags netgen and ngsolve with the same tag on `master` and publishes the
    wheels and SDK on the forks' GitHub Releases;
-5. pins Radia's metadata to the exact published wheel versions of `ngsolve`
+5. pins the explicit development lock to the exact published wheel versions of `ngsolve`
    and `netgen-mesher` from that release (a PEP 440 version such as
    `6.2.2608.post100.dev0+radia.1`, not the tag string), then rebuilds and
    revalidates Radia against them.
@@ -27,8 +37,7 @@ submodule points at the netgen fork commit with the same tag. Users install
 with `pip install --find-links <wheelhouse>`, where the wheelhouse is a page
 or directory that lists the actual wheel files of that release; an ordinary
 release page is not assumed to work as one. PyPI carries no fork wheels.
-Every Radia CI lane that installs NGSolve receives the same fork wheels and
-checks the installed distribution versions and native ABI.
+Fork development lanes verify their exact lock and native ABI.
 
 ## Supported lanes
 

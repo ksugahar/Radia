@@ -72,6 +72,7 @@ on:
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'tools/ci_gpu_artifact.py'
+      - 'tools/verify_public_fe_sdk.py'
       - 'tests/test_ci_gpu_artifact.py'
       - 'src/runtime/ih/**'
       - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
@@ -210,6 +211,7 @@ on:
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'tools/ci_gpu_artifact.py'
+      - 'tools/verify_public_fe_sdk.py'
       - 'tests/test_ci_gpu_artifact.py'
       - 'src/runtime/ih/**'
       - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
@@ -386,10 +388,10 @@ jobs:
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
           & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel pybind11==3.0.2 "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The Python GPU build links the locked fork SDK, not the public FE pins.
-          & $python -I tools/ci_fork_wheels.py install
+          # Keep the producer on the same public SDK as the acceptance environment.
+          & $python -I tools/verify_public_fe_sdk.py install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $python -I tools/ci_fork_wheels.py verify
+          & $python -I tools/verify_public_fe_sdk.py verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Python GPU calls admit only the exact pip CUDA runtime named in the
           # radia metadata. The checkout is imported via PYTHONPATH; only its

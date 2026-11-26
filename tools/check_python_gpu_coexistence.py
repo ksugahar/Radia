@@ -17,7 +17,9 @@ import sys
 import sysconfig
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = ('_gpu_csr', '_gpu_resident_amg', '_gpu_ams', '_hdiv_cuda', '_fem_cuda')
+spec = importlib.util.spec_from_file_location("radia_gpu_coexistence_payload", Path(__file__).with_name("python_gpu_payload.py"))
+payload = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(payload)
 
 
 def sha(path):
@@ -66,10 +68,7 @@ def check_order(order, source_commit):
     package = (ROOT / 'src/radia').resolve()
     if 'radia' in sys.modules:
         raise RuntimeError('Coexistence must own the initial Radia import')
-    spec = importlib.util.spec_from_file_location('coexistence_payload', ROOT / 'tools/python_gpu_payload.py')
-    payload = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(payload)
-    for name in MODULES:
+    for name in payload.MODULES:
         binary = package / (name + sysconfig.get_config_var('EXT_SUFFIX'))
         record = json.loads(Path(str(binary) + '.build.json').read_text(encoding='utf-8'))
         payload.verify_payload(binary.name, binary.read_bytes(), record, source_commit,
@@ -123,7 +122,7 @@ def main(argv=None):
                   resident_construction_requested=False, device_context_checked=False)
     try:
         if args.order:
-            order = MODULES if args.order == 'forward' else MODULES[::-1]
+            order = payload.MODULES if args.order == 'forward' else payload.MODULES[::-1]
             result.update(check_order(order, args.source_commit))
         else:
             source_identity(args.source_commit)

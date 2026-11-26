@@ -9,6 +9,8 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
+from importlib import metadata
 import sys
 import types
 from pathlib import Path
@@ -23,11 +25,30 @@ def api():
 
 @pytest.mark.parametrize("name",["hex_pair","tet_pyramid_hex"])
 def test_committed_receipt_still_binds_the_fixture(name):
-    # The GPU lane consumes these receipts; a changed mesh, contract or receipt must be regenerated.
-    base=ROOT/"tests/fixtures/hdiv";receipt=(base/(name+".receipt.json")).read_bytes()
-    provenance=json.loads((base/(name+".receipt.json.provenance.json")).read_bytes())
-    api()._verify_mesh_receipt((base/(name+".vol")).read_bytes(),(base/(name+".labels.json")).read_bytes(),receipt,
-                               hashlib.sha256(receipt).hexdigest(),provenance)
+    base = ROOT / "tests/fixtures/hdiv"
+    fork = os.environ.get("RADIA_TEST_FE_SDK", "public") == "fork"
+    receipt_name = "hex_pair.public" if name == "hex_pair" and not fork else name
+    receipt = (base / f"{receipt_name}.receipt.json").read_bytes()
+    provenance = json.loads((base / f"{receipt_name}.receipt.json.provenance.json").read_bytes())
+    args = (
+        (base / f"{name}.vol").read_bytes(),
+        (base / f"{name}.labels.json").read_bytes(),
+        receipt,
+        hashlib.sha256(receipt).hexdigest(),
+        provenance,
+    )
+    if name == "tet_pyramid_hex" and not fork:
+        runtime = metadata.version("ngsolve")
+        recorded = provenance["ngsolve_version"]
+        expected = "Checked-mesh checker/runtime ABI mismatch"
+        with pytest.raises(ValueError) as caught:
+            api()._verify_mesh_receipt(*args)
+        assert str(caught.value) == expected, (
+            f"NGSolve runtime {runtime}, receipt {recorded}: "
+            f"expected {expected!r}, got {str(caught.value)!r}"
+        )
+        return
+    api()._verify_mesh_receipt(*args)
 
 
 def fixture(tmp_path,compressed=False):

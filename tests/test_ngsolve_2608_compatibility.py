@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import importlib.metadata
 import json
+import os
 import importlib.util
 import sys
 import tomllib
@@ -43,19 +44,21 @@ def _dependencies(path: Path) -> set[str]:
 
 def test_ngsolve_netgen_runtime_matches_radia_exact_package_pins():
     assert ng.__version__ == PINNED_VERSION
-    # The runtime is the locked fork build: its local version segment names
-    # the fork commit, and the public metadata pin stays on the base release.
-    for name, wheel in FORK_LOCK["wheels"].items():
-        installed = importlib.metadata.version(name)
-        assert installed == wheel["version"], (name, installed, wheel["version"])
-        assert installed.split("+", 1)[0] == PINNED_VERSION, (name, installed)
+    names = ("ngsolve", "netgen-mesher")
+    dependencies = _dependencies(ROOT / "pyproject.toml")
+    public_pins = {name: next(item.split("==", 1)[1] for item in dependencies
+                              if item.startswith(name + "==")) for name in names}
+    assert set(public_pins.values()) == {PINNED_VERSION}
 
-    radia_dependencies = _dependencies(ROOT / "pyproject.toml")
-    expected = {
-        f"ngsolve=={PINNED_VERSION}",
-        f"netgen-mesher=={PINNED_VERSION}",
-    }
-    assert expected <= radia_dependencies
+    sdk = os.environ.get("RADIA_TEST_FE_SDK", "public")
+    assert sdk in {"public", "fork"}, sdk
+    expected = public_pins
+    if sdk == "fork":
+        expected = {name: FORK_LOCK["wheels"][name]["version"] for name in names}
+        assert {name: version.split("+", 1)[0] for name, version in expected.items()} == public_pins
+    for name, version in expected.items():
+        installed = importlib.metadata.version(name)
+        assert installed == version, (sdk, name, installed, version)
 
 
 
@@ -85,12 +88,13 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
         encoding="utf-8"
     )
     assert "Create isolated NGSolve environment" in workflow
-    assert "-m venv --system-site-packages" in workflow
+    assert "-m venv $venv" in workflow
+    assert "--system-site-packages" not in workflow
     assert "RADIA_CI_VENV=" in workflow
     assert "NGSOLVE_DIR=" in workflow
     assert "Netgen_DIR=" in workflow
-    assert "tools/ci_fork_wheels.py install" in workflow
-    assert "tools/ci_fork_wheels.py verify" in workflow
+    assert "tools/verify_public_fe_sdk.py install" in workflow
+    assert "tools/verify_public_fe_sdk.py verify" in workflow
     assert "Get-Command git -ErrorAction Stop" in workflow
     assert "RADIA_CI_GIT_DIR=$gitDir" in workflow
     assert '$env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"' in workflow
