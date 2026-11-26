@@ -18,7 +18,9 @@ from __future__ import annotations
 import json
 import math
 import os
+import hashlib
 import subprocess
+import uuid
 import sys
 from pathlib import Path
 from typing import Any
@@ -136,16 +138,20 @@ def run_export(journal: str | os.PathLike[str], out_path: str | os.PathLike[str]
     out = Path(out_path).resolve()
     if out.suffix != ".vol":
         raise ValueError(f"output must end in .vol: {out}")
-    if out.exists():
-        raise FileExistsError(f"refusing to overwrite an existing .vol: {out}")
+    companion_path = Path(str(out) + ".json")
+    for existing in (out, companion_path):
+        if existing.exists():
+            raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
     bin_dir = resolve_cubit_bin(cubit_bin)
     plugin = resolve_plugin_dir(plugin_dir)
     probe = probe_worker(python)
-    status_path = Path(str(out) + ".status.json")
+    token = uuid.uuid4().hex
+    status_path = Path(f"{out}.{token}.status.json")
     boot = _BOOT % (SOURCE_ROOT, WORKER_MODULE, WORKER_MODULE)
     command = [probe["python"], *ISOLATED_FLAGS, "-c", boot, "--cubit-bin", str(bin_dir),
                "--plugin-dir", str(plugin), "--journal", str(journal_path), "--out", str(out),
-               "--order", str(int(order)), "--result", str(status_path)]
+               "--order", str(int(order)), "--result", str(status_path),
+               "--token", token]
     if periodic:
         command += ["--periodic", json.dumps(periodic)]
     if kelvin.get("add_kelvin"):
@@ -161,6 +167,23 @@ def run_export(journal: str | os.PathLike[str], out_path: str | os.PathLike[str]
                    "status_json": str(status_path),
                    "stdout_tail": run.stdout.decode(errors="replace")[-2000:],
                    "stderr_tail": run.stderr.decode(errors="replace")[-2000:]})
-    if run.returncode != 0 and status.get("status") == "ok":
-        status["status"] = "error"
+    if status.get("status") == "ok":
+        problem = _verify_outputs(status, token, out, companion_path, run.returncode)
+        if problem:
+            status.update({"status": "error", "error_type": "WorkerOutputMismatch", "error": problem})
     return status
+
+
+def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Path,
+                    returncode: int) -> str | None:
+    """Return why this run's ok status is not backed by its own outputs, or None."""
+    if returncode != 0:
+        return f"worker exited with {returncode} but reported ok"
+    if status.get("token") != token:
+        return f"status token {status.get('token')!r} does not match this run {token!r}"
+    if not out.is_file() or not companion.is_file():
+        return f"worker reported ok but {out} or {companion} is missing"
+    digest = hashlib.sha256(out.read_bytes()).hexdigest()
+    if status.get("sha256") != digest:
+        return f"worker sha256 {status.get('sha256')!r} does not match {out} ({digest})"
+    return None

@@ -6,6 +6,7 @@ verdicts, the periodic/Kelvin argument contract and the input refusals only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from types import SimpleNamespace
@@ -40,17 +41,26 @@ def _journal(tmp_path):
     return journal
 
 
-def _fake_run(probe, calls, status=None):
+def _fake_run(probe, calls, status=None, returncode=None):
+    """Probe answers, then a mock worker; an ok status also writes the .vol pair."""
     def run(command, **kwargs):
         calls.append((command, kwargs))
         if "--result" not in command:
             return SimpleNamespace(returncode=0, stdout=(json.dumps(probe) + "\n").encode(), stderr=b"")
-        out = command[command.index("--result") + 1]
+        result = command[command.index("--result") + 1]
         if status is not None:
-            with open(out, "w", encoding="utf-8") as handle:
-                handle.write(json.dumps(status))
-        return SimpleNamespace(returncode=0 if status and status["status"] == "ok" else 1,
-                               stdout=b"", stderr=b"")
+            record = dict(status, token=command[command.index("--token") + 1])
+            if status["status"] == "ok":
+                vol = command[command.index("--out") + 1]
+                with open(vol, "wb") as handle:
+                    handle.write(b"mesh")
+                with open(vol + ".json", "w", encoding="utf-8") as handle:
+                    handle.write("{}")
+                record["sha256"] = hashlib.sha256(b"mesh").hexdigest()
+            with open(result, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(record))
+        code = returncode if returncode is not None else (0 if status and status["status"] == "ok" else 1)
+        return SimpleNamespace(returncode=code, stdout=b"", stderr=b"")
     return run
 
 
@@ -156,3 +166,34 @@ def test_tool_reports_environment_and_input_errors_as_json(tmp_path, monkeypatch
     out = json.loads(server.cubit_export_vol(str(journal), str(tmp_path / "m.vol"), 2, add_kelvin=True,
                                              kelvin_sym_y="sideways"))
     assert out["status"] == "error" and out["kind"] == "input", out
+
+
+def test_stale_status_and_silent_worker_are_not_success(tmp_path, monkeypatch):
+    out = tmp_path / "m.vol"
+    (tmp_path / "m.vol.status.json").write_text(json.dumps({"status": "ok"}), encoding="utf-8")
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], None, returncode=0))
+    result = runner.run_export(_journal(tmp_path), out, 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "error" and result["error_type"] == "WorkerCrash", result
+
+
+def test_ok_status_without_outputs_is_an_error(tmp_path, monkeypatch):
+    def run(command, **kwargs):
+        if "--result" not in command:
+            return SimpleNamespace(returncode=0, stdout=(json.dumps(GOOD) + "\n").encode(), stderr=b"")
+        with open(command[command.index("--result") + 1], "w", encoding="utf-8") as handle:
+            handle.write(json.dumps({"status": "ok", "sha256": "0" * 64,
+                                     "token": command[command.index("--token") + 1]}))
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    result = runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "error" and result["error_type"] == "WorkerOutputMismatch", result
+
+
+def test_existing_companion_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, []))
+    (tmp_path / "m.vol.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
+                          python=sys.executable, plugin_dir=_plugin(tmp_path))

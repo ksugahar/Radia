@@ -12,5 +12,5 @@ add_library(cubit_mesh_export_ccm MODULE
   ExportNetgenCommand.cpp)
 set_target_properties(cubit_mesh_export_ccm PROPERTIES OUTPUT_NAME "cubit_mesh_export" PREFIX "" SUFFIX ".dll")
 target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom nglib ngcore)
-target_compile_definitions(cubit_mesh_export_ccm PRIVATE HAVE_NETGEN CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj /utf-8)

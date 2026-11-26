@@ -58,15 +58,6 @@ def export_command(out: Path, order: int, periodic: dict | None) -> str:
     return f'export netgen "{out.as_posix()}" order {int(order)} ' + (extra + " " if extra else "") + "overwrite"
 
 
-def _journal_lines(journal: Path) -> list[str]:
-    lines = []
-    for raw in journal.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#"):
-            lines.append(line)
-    return lines
-
-
 def run(args: argparse.Namespace) -> dict:
     out = Path(args.out).resolve()
     plugin_dir = Path(args.plugin_dir).resolve()
@@ -88,8 +79,11 @@ def run(args: argparse.Namespace) -> dict:
     import cubit
     cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
     started = time.perf_counter()
-    for line in _journal_lines(Path(args.journal)):
-        cubit.cmd(line)
+    journal = Path(args.journal).resolve()
+    # Cubit plays the journal itself, so continuation lines, comments and
+    # APREPRO blocks keep their journal meaning.
+    if not cubit.cmd(f'playback "{journal.as_posix()}"'):
+        raise RuntimeError(f"Cubit journal playback failed: {journal}")
     kelvin_info = _kelvin.apply_options(kelvin_options) if kelvin_options else None
     cubit.cmd(command)
     if not out.is_file():
@@ -113,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--order", type=int, required=True)
     parser.add_argument("--result", required=True)
+    parser.add_argument("--token", required=True, help="run token echoed into the status file")
     parser.add_argument("--periodic", default="", help="JSON object with the nine periodic_* fields")
     parser.add_argument("--kelvin", default="", help="JSON object with the Kelvin options")
     args = parser.parse_args(argv)
@@ -123,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         status = {"status": "error", "error_type": type(exc).__name__, "error": str(exc),
                   "traceback": traceback.format_exc()[-4000:]}
         code = 1
+    status["token"] = args.token
     Path(args.result).write_text(json.dumps(status, indent=1, default=str), encoding="utf-8")
     return code
 
