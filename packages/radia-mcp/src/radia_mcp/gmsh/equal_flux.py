@@ -107,7 +107,7 @@ def _check_patch(spec: Any) -> str | None:
     if has_grid and spec["n_u"] * spec["n_v"] > MAX_LINES:
         return f"seed_patch n_u x n_v = {spec['n_u'] * spec['n_v']} exceeds {MAX_LINES} lines"
     # The table and the independent total quadrature are known before anything is probed;
-    # the rest is counted as it is probed (_Budgeted).
+    # the rest is counted as it is probed (radia.flux_seeding.SampleBudget).
     nodes, order = spec.get("table_nodes", 33), spec.get("quadrature_order", 3)
     need = nodes ** 2 + ((nodes - 1) * order) ** 2
     if need > FIELD_SAMPLE_LIMIT:
@@ -204,7 +204,7 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
     scale = LENGTH_UNITS[length_unit]
     view = 0 if view is None else view
     try:
-        from radia.flux_seeding import (balanced_cell_flux_quadrature,
+        from radia.flux_seeding import (SampleBudget, balanced_cell_flux_quadrature,
                                         balanced_equal_flux_seeds, cell_flux_quadrature,
                                         equal_flux_seeds)
     except ImportError as exc:
@@ -218,8 +218,9 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")
         chart = _chart(spec, scale)
-        g = _Budgeted(chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale)),
-                      FIELD_SAMPLE_LIMIT)
+        # One budget for the whole seeding: placement and cell check share it.
+        g = SampleBudget(chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale)),
+                         FIELD_SAMPLE_LIMIT)
         nodes = np.linspace(0.0, 1.0, int(table_nodes))
         if balanced:
             seeds = balanced_equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes,
@@ -233,8 +234,7 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
             check_fn = cell_flux_quadrature
         check = None
         if order > 0:
-            q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order,
-                         max_samples=FIELD_SAMPLE_LIMIT - g.used)
+            q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order)
             check = {k: q[k] for k in ("independent_total_flux_Wb",
                                        "max_relative_cell_deviation", "coverage", "order")}
     except (ValueError, RuntimeError) as exc:
@@ -277,22 +277,6 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
                        "sign; no field-line closure or CAD splitting is implied",
     }
     return result, chart, scale
-
-
-class _Budgeted:
-    """Flux density that refuses a call which would exceed the seeding's sample budget."""
-
-    def __init__(self, density, limit: int):
-        self.density, self.limit, self.used = density, int(limit), 0
-
-    def __call__(self, xi, eta):
-        size = int(np.broadcast(np.asarray(xi), np.asarray(eta)).size)
-        if self.used + size > self.limit:
-            raise ValueError(f"the seeding needs more than {self.limit:,} field samples "
-                             f"({self.used:,} used, {size:,} more asked); reduce n_lines, "
-                             "table_nodes or quadrature_order (0 skips the cell check)")
-        self.used += size
-        return self.density(xi, eta)
 
 
 def place_equal_flux_seeds(path: str | Path, seed_patch: dict, *,

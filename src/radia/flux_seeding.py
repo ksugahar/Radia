@@ -464,8 +464,43 @@ def _check_budget(n_samples: int, what: str, limit: int = MAX_FIELD_SAMPLES) -> 
                          "quadrature order or the number of lines")
 
 
+class SampleBudget:
+    """Flux density that counts its field samples against one budget.
+
+    Every seeding entry wraps the caller's flux_density in one of these, so a
+    placement or a quadrature never evaluates more than max_samples points in
+    total. Pass the same SampleBudget to a placement and its cell check to
+    share one budget across both; an entry given a SampleBudget uses it as is.
+    A call that would exceed the budget raises ValueError before evaluating.
+    """
+
+    def __init__(self, flux_density: Callable, limit: int = MAX_FIELD_SAMPLES):
+        self.flux_density, self.limit, self.used = flux_density, int(limit), 0
+
+    @property
+    def remaining(self) -> int:
+        return self.limit - self.used
+
+    def __call__(self, xi, eta):
+        size = int(np.broadcast(np.asarray(xi), np.asarray(eta)).size)
+        if self.used + size > self.limit:
+            raise ValueError(f"the seeding needs more than {self.limit:,} field samples "
+                             f"({self.used:,} used, {size:,} more asked); reduce the number "
+                             "of lines, the table nodes or the quadrature order")
+        self.used += size
+        return self.flux_density(xi, eta)
+
+
+def _budget(flux_density: Callable, max_samples: int) -> SampleBudget:
+    if isinstance(flux_density, SampleBudget):
+        return flux_density
+    return SampleBudget(flux_density, max_samples)
+
+
 def _row_density(flux_density: Callable, xi: NDArray, eta: NDArray) -> NDArray:
-    _check_budget(len(xi) * len(eta), "the flux density table")
+    limit = (flux_density.remaining if isinstance(flux_density, SampleBudget)
+             else MAX_FIELD_SAMPLES)
+    _check_budget(len(xi) * len(eta), "the flux density table", limit)
     g = np.asarray(flux_density(xi[None, :], eta[:, None]), dtype=float)
     return np.broadcast_to(g, (len(eta), len(xi))).copy()
 
@@ -496,6 +531,7 @@ def equal_flux_seeds(
     n_v: int,
     chart: Callable,
     metric: Callable | None = None,
+    max_samples: int = MAX_FIELD_SAMPLES,
 ) -> EqualFluxSeeds:
     """Place n_u * n_v equal-flux seeds by the two-stage inverse.
 
@@ -507,12 +543,14 @@ def equal_flux_seeds(
 
     Raises ValueError for nonfinite samples, a sign change, an interior zero,
     a zero total flux, a flat marginal or conditional segment, or a chart that
-    returns nonfinite points.
+    returns nonfinite points, or when the field samples of the whole placement
+    would exceed max_samples (see SampleBudget).
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     n_u, n_v = int(n_u), int(n_v)
     if n_u < 1 or n_v < 1:
         raise ValueError("n_u and n_v must be positive")
+    flux_density = _budget(flux_density, max_samples)
 
     table = _row_density(flux_density, xi, eta)
     orientation = _check_sign(table, "table")
@@ -611,9 +649,10 @@ def cell_flux_quadrature(
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     n_u, n_v, sign = seeds.n_u, seeds.n_v, seeds.orientation
     k = len(_gauss(order)[0])
+    flux_density = _budget(flux_density, max_samples)
     _check_budget(len(xi) * len(eta) + n_v * k * (len(xi) + k * n_u)
                   + (len(xi) - 1) * k * (len(eta) - 1) * k, "the cell flux quadrature",
-                  max_samples)
+                  flux_density.remaining)
     table = _check_rows(_row_density(flux_density, xi, eta), sign, "table", edge_rows=True)
     rho = _cumulative(xi, table)[:, -1]
     marginal = _cumulative(eta, rho[None, :])
@@ -768,6 +807,7 @@ def balanced_equal_flux_seeds(
     chart: Callable,
     metric: Callable,
     sign: str = "auto",
+    max_samples: int = MAX_FIELD_SAMPLES,
 ) -> BalancedFluxSeeds:
     """Place n_lines equal-flux seeds by recursive bisection of one flux sign.
 
@@ -792,7 +832,10 @@ def balanced_equal_flux_seeds(
 
     Raises ValueError for nonfinite samples, a zero or absent selected flux,
     a bad sign or n_lines, nonfinite chart points, or a seed where the
-    caller's flux_density has the other sign (refine the table there).
+    caller's flux_density has the other sign (refine the table there), or
+    when the field samples of the whole placement (table, zero-line
+    refinement and seed sign check) would exceed max_samples (see
+    SampleBudget).
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     n_lines = int(n_lines)
@@ -800,6 +843,7 @@ def balanced_equal_flux_seeds(
         raise ValueError("n_lines must be positive")
     if sign not in SIGNS:
         raise ValueError(f"sign must be one of {list(SIGNS)}")
+    flux_density = _budget(flux_density, max_samples)
     table = _row_density(flux_density, xi, eta)
     if not np.all(np.isfinite(table)):
         raise ValueError("flux density must be finite (table)")
@@ -935,10 +979,11 @@ def balanced_cell_flux_quadrature(
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     t, w = _gauss(order)
+    flux_density = _budget(flux_density, max_samples)
     pieces = sum((len(_breaks(xi, x0, x1)) - 1) * (len(_breaks(eta, y0, y1)) - 1)
                  for x0, x1, y0, y1 in seeds.cells)
     _check_budget(pieces * len(t) ** 2 + (len(xi) - 1) * len(t) * (len(eta) - 1) * len(t),
-                  "the cell flux quadrature", max_samples)
+                  "the cell flux quadrature", flux_density.remaining)
     xs_q, ys_q, ws_q, owner = [], [], [], []
     for index, (x0, x1, y0, y1) in enumerate(seeds.cells):
         xb, yb = _breaks(xi, x0, x1), _breaks(eta, y0, y1)

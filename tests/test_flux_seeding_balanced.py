@@ -15,7 +15,7 @@ The table reproduces each density exactly because it is bilinear in the chart.
 import numpy as np
 import pytest
 
-from radia.flux_seeding import (annular_patch, balanced_cell_flux_quadrature,
+from radia.flux_seeding import (SampleBudget, annular_patch, balanced_cell_flux_quadrature,
                                 balanced_equal_flux_seeds, cylindrical_patch,
                                 equal_flux_seeds, planar_patch, surface_crossings)
 
@@ -294,9 +294,38 @@ def test_a_thousand_lines_fit_the_sample_budget_at_the_defaults():
         used.append(np.broadcast(xi, eta).size)
         return 1 + xi * eta + 0 * xi
 
-    seeds = _seed(density, 1000, nodes=33)
-    check = balanced_cell_flux_quadrature(density, seeds, xi_nodes=np.linspace(0, 1, 33),
-                                          eta_nodes=np.linspace(0, 1, 33), order=3,
-                                          max_samples=MAX_FIELD_SAMPLES - sum(used))
-    assert sum(used) <= MAX_FIELD_SAMPLES, used
+    budget = SampleBudget(density)
+    seeds = _seed(budget, 1000, nodes=33)
+    check = balanced_cell_flux_quadrature(budget, seeds, xi_nodes=np.linspace(0, 1, 33),
+                                          eta_nodes=np.linspace(0, 1, 33), order=3)
+    assert sum(used) == budget.used <= MAX_FIELD_SAMPLES, used
     assert check["coverage"] == pytest.approx(1, abs=1e-12)
+
+
+def test_one_placement_stays_within_the_sample_budget_across_its_evaluations():
+    """Guards: the table and the seed sign check of one placement share MAX_FIELD_SAMPLES.
+
+    316 x 316 = 99,856 table samples fit alone; the 1000-point seed check would
+    take the placement to 100,856, so it is refused before that evaluation.
+    """
+    from radia.flux_seeding import MAX_FIELD_SAMPLES
+    used = []
+
+    def density(xi, eta):
+        used.append(np.broadcast(xi, eta).size)
+        return 1 + 0 * xi * eta
+
+    with pytest.raises(ValueError, match="more than 100,000 field samples"):
+        _seed(density, 1000, nodes=316)
+    assert used == [316 * 316] and sum(used) <= MAX_FIELD_SAMPLES
+
+
+def test_a_shared_budget_refuses_the_call_that_would_exceed_it():
+    """Guards: SampleBudget counts every call and refuses before evaluating."""
+    probed = []
+    g = SampleBudget(lambda xi, eta: probed.append(np.broadcast(xi, eta).size) or 0 * xi, 10)
+    g(np.zeros(4), np.zeros(1))
+    g(np.zeros(6), np.zeros(1))
+    with pytest.raises(ValueError, match="more than 10 field samples"):
+        g(np.zeros(1), np.zeros(1))
+    assert probed == [4, 6] and g.used == 10 and g.remaining == 0

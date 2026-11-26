@@ -292,13 +292,3 @@ def test_mcp_tool_defaults_to_equal_flux_seeding(tmp_path):
     assert placed["ok"] is True and placed["layout"] == "balanced" and len(placed["seeds"]) == 5
 
 
-def test_the_seeding_sample_budget_refuses_a_call_before_probing():
-    """Guards: the cumulative field-sample budget shared by table, seed checks and cell check."""
-    from radia_mcp.gmsh.equal_flux import _Budgeted
-    probed = []
-    g = _Budgeted(lambda xi, eta: probed.append(np.broadcast(xi, eta).size) or 0 * xi, 10)
-    g(np.zeros(4), np.zeros(1))
-    g(np.zeros(6), np.zeros(1))
-    with pytest.raises(ValueError, match="more than 10 field samples"):
-        g(np.zeros(1), np.zeros(1))
-    assert probed == [4, 6] and g.used == 10
