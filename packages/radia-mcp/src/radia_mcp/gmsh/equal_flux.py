@@ -106,6 +106,13 @@ def _check_patch(spec: Any) -> str | None:
             return f"seed_patch {key} {problem}"
     if has_grid and spec["n_u"] * spec["n_v"] > MAX_LINES:
         return f"seed_patch n_u x n_v = {spec['n_u'] * spec['n_v']} exceeds {MAX_LINES} lines"
+    # The table and the independent total quadrature are known before anything is probed;
+    # the rest is counted as it is probed (_Budgeted).
+    nodes, order = spec.get("table_nodes", 33), spec.get("quadrature_order", 3)
+    need = nodes ** 2 + ((nodes - 1) * order) ** 2
+    if need > FIELD_SAMPLE_LIMIT:
+        return (f"seed_patch table_nodes={nodes} with quadrature_order={order} needs about "
+                f"{need:,} field samples, above the {FIELD_SAMPLE_LIMIT:,} limit; reduce either")
     return None
 
 
@@ -117,6 +124,7 @@ COUNT_MINIMUM = {"n_lines": 1, "n_u": 1, "n_v": 1, "n": 1, "table_nodes": 2,
 # Resource guards against runaway allocation, not accuracy limits; radia.flux_seeding
 # also bounds the field samples of every grid it evaluates (MAX_FIELD_SAMPLES).
 MAX_LINES = 1_000  # user-set 2026-11-26: up to about 1000 field lines per seeding
+FIELD_SAMPLE_LIMIT = 100_000  # user-set 2026-11-26: field samples per seeding, all probes
 COUNT_MAXIMUM = {"n_lines": MAX_LINES, "n_u": MAX_LINES, "n_v": MAX_LINES, "n": MAX_LINES,
                  "table_nodes": 316, "quadrature_order": 64}
 
@@ -202,24 +210,16 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
     except ImportError as exc:
         return {"ok": False, "error": f"radia.flux_seeding is unavailable or too old in radia "
                                       f"{_radia_version()}: {exc}; update radia"}, None, None
-    from radia.flux_seeding import MAX_FIELD_SAMPLES
     path = Path(path)
     table_nodes = spec.get("table_nodes", 33)
     order = int(spec.get("quadrature_order", 3))
     balanced = "n_lines" in spec
-    # All probing of one seeding shares MAX_FIELD_SAMPLES. The table and the independent
-    # total quadrature are known before anything is probed; the rest is counted as probed.
-    need = int(table_nodes) ** 2 + ((int(table_nodes) - 1) * order) ** 2
-    if need > MAX_FIELD_SAMPLES:
-        return {"ok": False, "error": f"seed_patch table_nodes={table_nodes} with quadrature_order="
-                                      f"{order} needs about {need:,} field samples, above the "
-                                      f"{MAX_FIELD_SAMPLES:,} limit; reduce either"}, None, None
     try:
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")
         chart = _chart(spec, scale)
         g = _Budgeted(chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale)),
-                      MAX_FIELD_SAMPLES)
+                      FIELD_SAMPLE_LIMIT)
         nodes = np.linspace(0.0, 1.0, int(table_nodes))
         if balanced:
             seeds = balanced_equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes,
@@ -234,7 +234,7 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
         check = None
         if order > 0:
             q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order,
-                         max_samples=MAX_FIELD_SAMPLES - g.used)
+                         max_samples=FIELD_SAMPLE_LIMIT - g.used)
             check = {k: q[k] for k in ("independent_total_flux_Wb",
                                        "max_relative_cell_deviation", "coverage", "order")}
     except (ValueError, RuntimeError) as exc:
