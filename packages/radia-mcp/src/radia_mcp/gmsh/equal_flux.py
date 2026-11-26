@@ -112,9 +112,10 @@ VECTOR_KEYS = frozenset({"origin", "e_xi", "e_eta", "center", "normal", "axis_or
 SCALAR_KEYS = frozenset({"r_outer", "r_inner", "radius"})
 COUNT_MINIMUM = {"n_lines": 1, "n_u": 1, "n_v": 1, "n": 1, "table_nodes": 2,
                  "quadrature_order": 0}
-# Resource guards against runaway allocation, not accuracy limits.
+# Resource guards against runaway allocation, not accuracy limits; radia.flux_seeding
+# also bounds the field samples of every grid it evaluates (MAX_FIELD_SAMPLES).
 COUNT_MAXIMUM = {"n_lines": 100_000, "n_u": 1_000, "n_v": 1_000, "n": 100_000,
-                 "table_nodes": 4_097, "quadrature_order": 64}
+                 "table_nodes": 2_000, "quadrature_order": 64}
 
 
 def _is_number(value: Any) -> bool:
@@ -198,10 +199,18 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
     except ImportError as exc:
         return {"ok": False, "error": f"radia.flux_seeding is unavailable or too old in radia "
                                       f"{_radia_version()}: {exc}; update radia"}, None, None
+    from radia.flux_seeding import MAX_FIELD_SAMPLES
     path = Path(path)
     table_nodes = spec.get("table_nodes", 33)
     order = int(spec.get("quadrature_order", 6))
     balanced = "n_lines" in spec
+    # Probe table plus the independent total quadrature (order^2 points per table cell),
+    # checked before anything is probed; the library checks each grid exactly again.
+    need = int(table_nodes) ** 2 + ((int(table_nodes) - 1) * order) ** 2
+    if need > MAX_FIELD_SAMPLES:
+        return {"ok": False, "error": f"seed_patch table_nodes={table_nodes} with quadrature_order="
+                                      f"{order} needs about {need:,} field samples, above the "
+                                      f"{MAX_FIELD_SAMPLES:,} limit; reduce either"}, None, None
     try:
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")

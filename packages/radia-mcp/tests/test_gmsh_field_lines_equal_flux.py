@@ -210,7 +210,7 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
 
 @pytest.mark.parametrize("seeding, message", [
     ({"seed_patch": {**PATCH, "n_u": None}}, "seed_patch n_u must be an integer in [1, 1000], got None"),
-    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer in [2, 4097]"),
+    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer in [2, 2000]"),
     ({"seed_patch": {**PATCH, "quadrature_order": -1}}, "quadrature_order must be an integer in [0, 64]"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer in [1, 100000], got True"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": 2.5}}, "n_lines must be an integer"),
@@ -229,7 +229,9 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
     ({"seed_patch": {**PATCH, "origin": [10**400, 0, 0]}}, "seed_patch origin must be a list of 3"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": 10**400}},
      "n_lines must be an integer in [1, 100000], got 'a huge integer'"),
-    ({"seed_patch": {**PATCH, "table_nodes": 2**64}}, "table_nodes must be an integer in [2, 4097]"),
+    ({"seed_patch": {**PATCH, "table_nodes": 2**64}}, "table_nodes must be an integer in [2, 2000]"),
+    ({"seed_patch": {**PATCH, "table_nodes": 2000, "quadrature_order": 64}},
+     "needs about 16,371,620,096 field samples"),
 ])
 def test_malformed_values_return_field_errors_before_probing(tmp_path, monkeypatch,
                                                              seeding, message):

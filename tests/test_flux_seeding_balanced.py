@@ -239,3 +239,47 @@ def test_a_crossing_at_the_annulus_seam_is_inside():
     sector = annular_patch([0, 0, 0], [0, 0, 1], 1.0, theta_range=(0.0, np.pi / 2))
     segment = np.array([[0.5, -0.01, -0.2], [0.5, -0.01, -0.1], [0.5, -0.01, 0.1]])
     assert surface_crossings(segment, sector, seed_vertex=0, closed=False) == []
+
+
+
+def test_an_exit_through_a_cylinder_sector_is_located_on_the_surface():
+    """Guards: the crossing point is the offset root, not a radial interpolation.
+
+    (0, 0.6, 0.5) -> (2, 0.6, 0.5) leaves the unit cylinder at (0.8, 0.6, 0.5),
+    theta = 0.6435, inside the sector [0.60, 0.70].
+    """
+    sector = cylindrical_patch([0, 0, 0], [0, 0, 1], 1.0, theta_range=(0.60, 0.70))
+    chord = np.array([[-0.1, 0.6, 0.5], [0.0, 0.6, 0.5], [2.0, 0.6, 0.5]])  # seed at vertex 0
+    assert surface_crossings(chord, sector, seed_vertex=0, closed=False) == [1]
+
+
+@pytest.mark.parametrize("shift", [0.0, 1e6, 1e12])
+def test_crossing_counts_do_not_change_under_translation(shift):
+    """Guards: the on-surface tolerance is local, not scaled by world coordinates."""
+    d = np.array([shift, -0.5 * shift, 0.0])
+    patch = planar_patch(d, [1, 0, 0], [0, 1, 0])
+    through = d + np.array([[0.3, 0.5, 0.0], [0.4, 0.5, 0.1], [0.5, 0.5, 0.0], [0.6, 0.5, -0.1]])
+    assert surface_crossings(through, patch, seed_vertex=0, closed=False) == [-1]
+    touch = d + np.array([[0.3, 0.5, 0.1], [0.5, 0.5, 0.0], [0.7, 0.5, 0.1]])
+    assert surface_crossings(touch, patch, seed_vertex=0, closed=False) == []
+
+
+def test_field_sample_budget_is_checked_before_evaluating():
+    """Guards: no grid larger than MAX_FIELD_SAMPLES reaches the caller's density."""
+    from radia.flux_seeding import MAX_FIELD_SAMPLES
+    calls = []
+
+    def density(xi, eta):
+        calls.append(np.broadcast(xi, eta).size)
+        return 1 + 0 * xi * eta
+
+    side = int(np.sqrt(MAX_FIELD_SAMPLES)) + 1
+    with pytest.raises(ValueError, match="field samples"):
+        _seed(density, 4, nodes=side)
+    assert calls == []
+    seeds = _seed(density, 4, nodes=3)
+    calls.clear()
+    with pytest.raises(ValueError, match="cell flux quadrature needs"):
+        balanced_cell_flux_quadrature(density, seeds, xi_nodes=np.linspace(0, 1, 400),
+                                      eta_nodes=np.linspace(0, 1, 400), order=64)
+    assert calls == []

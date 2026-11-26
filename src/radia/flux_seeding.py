@@ -290,25 +290,48 @@ class CylindricalPatch(_Chart):
         return out, index
 
 
+def _offset_root(chart, a: NDArray, b: NDArray, side_a: int) -> NDArray:
+    """Point where the signed offset changes sign on a monotone segment a -> b."""
+    lo, hi = 0.0, 1.0
+    for _ in range(64):
+        mid = 0.5 * (lo + hi)
+        s_mid = float(chart.locate(a + mid * (b - a))[0])
+        if s_mid == 0:
+            return a + mid * (b - a)
+        if np.sign(s_mid) == side_a:
+            lo = mid
+        else:
+            hi = mid
+    return a + 0.5 * (lo + hi) * (b - a)
+
+
 def surface_crossings(points_m: ArrayLike, chart, *, seed_vertex: int,
                       closed: bool) -> list[int]:
     """Signs (+1 along the area normal) of a polyline's crossings of a seed surface.
 
     The polyline is first made monotone in the signed offset (see
     monotone_points). A crossing is a change of sign between consecutive
-    vertices off the surface; vertices on it (|offset| <= 1e-12 of the
-    polyline's coordinate scale) do not count, so a line that touches the
-    surface and returns is no crossing and one that passes through a vertex
-    on it is one. The crossing must lie inside the chart's [0, 1]^2. The
-    crossing at the seed vertex, and for a closed line at its first and last
-    vertex (the seed), is not counted.
+    vertices off the surface; vertices on it do not count, so a line that
+    touches the surface and returns is no crossing and one that passes
+    through a vertex on it is one. "On it" means an offset within the
+    rounding of its own evaluation: 16 eps times the vertex's distance from
+    the chart centre plus the chart's size, which does not change when the
+    surface and the polyline are translated together. The crossing point is
+    the root of the offset on its monotone piece (bisection, exact for curved
+    charts) and must lie inside the chart's [0, 1]^2. The crossing at the
+    seed vertex, and for a closed line at its first and last vertex (the
+    seed), is not counted.
     """
     original = np.asarray(points_m, dtype=float)
     if len(original) < 2:
         return []
     pts, index = chart.monotone_points(original)
     s, _, _ = chart.locate(pts)
-    tol = 1e-12 * max(float(np.max(np.abs(pts))), 1e-300)
+    centre = np.asarray(chart.chart(0.5, 0.5), dtype=float)
+    corners = np.asarray(chart.chart(np.array([0.0, 1.0, 0.0, 1.0]),
+                                     np.array([0.0, 0.0, 1.0, 1.0])), dtype=float)
+    size = float(np.max(np.linalg.norm(corners - centre, axis=1)))
+    tol = 16 * np.finfo(float).eps * (np.linalg.norm(pts - centre, axis=1) + size)
     side = np.where(np.abs(s) <= tol, 0, np.sign(s)).astype(int)
     excluded = {int(index[seed_vertex])}
     if closed:
@@ -319,7 +342,7 @@ def surface_crossings(points_m: ArrayLike, chart, *, seed_vertex: int,
         if side[i] == side[j] or any(i <= e <= j for e in excluded):
             continue
         if j == i + 1:
-            at = pts[i] + s[i] / (s[i] - s[j]) * (pts[j] - pts[i])
+            at = _offset_root(chart, pts[i], pts[j], side[i])
         else:
             at = pts[i + 1]  # the first vertex on the surface
         _, xi, eta = chart.locate(at)
@@ -430,7 +453,19 @@ def _evaluate(x: NDArray, density: NDArray, cumulative: NDArray, at: NDArray) ->
     return cumulative[rows, seg] + d0 * t + (d1 - d0) * t * t / (2 * h)
 
 
+# Resource guard (not an accuracy limit): field samples in one grid evaluation.
+MAX_FIELD_SAMPLES = 4_000_000
+
+
+def _check_budget(n_samples: int, what: str) -> None:
+    if n_samples > MAX_FIELD_SAMPLES:
+        raise ValueError(f"{what} needs {n_samples:,} field samples, above the "
+                         f"{MAX_FIELD_SAMPLES:,} limit; reduce the table nodes, the "
+                         "quadrature order or the number of lines")
+
+
 def _row_density(flux_density: Callable, xi: NDArray, eta: NDArray) -> NDArray:
+    _check_budget(len(xi) * len(eta), "the flux density table")
     g = np.asarray(flux_density(xi[None, :], eta[:, None]), dtype=float)
     return np.broadcast_to(g, (len(eta), len(xi))).copy()
 
@@ -892,6 +927,11 @@ def balanced_cell_flux_quadrature(
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     t, w = _gauss(order)
+    pieces = sum((len(_breaks(xi, x0, x1)) - 1) * (len(_breaks(eta, y0, y1)) - 1)
+                 for x0, x1, y0, y1 in seeds.cells)
+    _check_budget(pieces * len(t) ** 2, "the cell flux quadrature")
+    _check_budget(((len(xi) - 1) * len(t)) * ((len(eta) - 1) * len(t)),
+                  "the independent total flux quadrature")
     xs_q, ys_q, ws_q, owner = [], [], [], []
     for index, (x0, x1, y0, y1) in enumerate(seeds.cells):
         xb, yb = _breaks(xi, x0, x1), _breaks(eta, y0, y1)
