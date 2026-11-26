@@ -106,7 +106,8 @@ def test_cylinder_volume_error_falls_with_order_and_nodeset_survives(tmp_path):
         text = vol.read_text(encoding="utf-8")
         assert "cd3names\n1\n1\tcorners\n" in text
         import ngsolve as ng
-        volume = ng.Integrate(ng.CF(1), ng.Mesh(str(vol)))
+        with ng.TaskManager():
+            volume = ng.Integrate(ng.CF(1), ng.Mesh(str(vol)))
         errors[order] = abs(volume - math.pi) / math.pi
     print("relative volume error by order:", errors)
     assert errors[1] > errors[2] > errors[3], errors

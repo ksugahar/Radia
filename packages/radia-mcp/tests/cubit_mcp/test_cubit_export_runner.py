@@ -41,10 +41,17 @@ def _journal(tmp_path):
     return journal
 
 
-def _fake_run(probe, calls, status=None, returncode=None):
-    """Probe answers, then a mock worker; an ok status also writes the .vol pair."""
+def _fake_run(probe, calls, status=None, returncode=None, before=None, companion=b"{}"):
+    """Probe answers, then a mock worker; an ok status also writes the .vol pair.
+
+    ``before`` runs inside the worker call (to synchronize concurrent runs);
+    ``companion`` is the companion file written, while the status always
+    reports the record ``{}`` and its sha256.
+    """
     def run(command, **kwargs):
         calls.append((command, kwargs))
+        if before is not None and "--result" in command:
+            before()
         if "--result" not in command:
             return SimpleNamespace(returncode=0, stdout=(json.dumps(probe) + "\n").encode(), stderr=b"")
         result = command[command.index("--result") + 1]
@@ -54,9 +61,10 @@ def _fake_run(probe, calls, status=None, returncode=None):
                 vol = command[command.index("--out") + 1]
                 with open(vol, "wb") as handle:
                     handle.write(b"mesh")
-                with open(vol + ".json", "w", encoding="utf-8") as handle:
-                    handle.write("{}")
-                record["sha256"] = hashlib.sha256(b"mesh").hexdigest()
+                with open(vol + ".json", "wb") as handle:
+                    handle.write(companion)
+                record.update(sha256=hashlib.sha256(b"mesh").hexdigest(), companion={},
+                              companion_sha256=hashlib.sha256(b"{}").hexdigest())
             with open(result, "w", encoding="utf-8") as handle:
                 handle.write(json.dumps(record))
         code = returncode if returncode is not None else (0 if status and status["status"] == "ok" else 1)
@@ -197,3 +205,41 @@ def test_existing_companion_is_refused(tmp_path, monkeypatch):
     with pytest.raises(FileExistsError):
         runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
                           python=sys.executable, plugin_dir=_plugin(tmp_path))
+
+
+def test_altered_companion_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner.subprocess, "run",
+                        _fake_run(GOOD, [], {"status": "ok"}, companion=b'{"x": 1}'))
+    out = tmp_path / "m.vol"
+    result = runner.run_export(_journal(tmp_path), out, 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "error" and "companion_sha256" in result["error"], result
+    assert not out.exists() and not (tmp_path / "m.vol.json").exists()
+
+
+def test_concurrent_exports_to_one_path_publish_once(tmp_path, monkeypatch):
+    import threading
+    inside, release = threading.Event(), threading.Event()
+
+    def hold():
+        if not inside.is_set():
+            inside.set()
+            assert release.wait(30)
+
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], {"status": "ok"}, before=hold))
+    out, journal = tmp_path / "m.vol", _journal(tmp_path)
+    kwargs = dict(cubit_bin=_cubit_bin(tmp_path), python=sys.executable, plugin_dir=_plugin(tmp_path))
+    results = {}
+    first = threading.Thread(target=lambda: results.setdefault(
+        "first", runner.run_export(journal, out, 2, **kwargs)))
+    first.start()
+    assert inside.wait(30)
+    try:
+        with pytest.raises(FileExistsError, match="another export"):
+            runner.run_export(journal, out, 2, **kwargs)
+    finally:
+        release.set()
+        first.join(30)
+    assert results["first"]["status"] == "ok", results
+    assert out.read_bytes() == b"mesh"
+    assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()

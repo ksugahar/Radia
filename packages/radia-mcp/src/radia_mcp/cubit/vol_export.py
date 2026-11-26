@@ -94,6 +94,7 @@ def run(args: argparse.Namespace) -> dict:
         raise RuntimeError(f"export netgen wrote no companion JSON: {companion_path}")
     return {"status": "ok", "vol": str(out), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
             "companion_json": str(companion_path), "companion": companion,
+            "companion_sha256": hashlib.sha256(companion_path.read_bytes()).hexdigest(),
             "export_command": command, "plugin": str(plugin_dir / PLUGIN_DLL),
             "kelvin": kelvin_info, "netgen": getattr(netgen, "__version__", None),
             "elapsed_s": round(time.perf_counter() - started, 3)}

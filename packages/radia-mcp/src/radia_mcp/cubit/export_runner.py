@@ -139,39 +139,82 @@ def run_export(journal: str | os.PathLike[str], out_path: str | os.PathLike[str]
     if out.suffix != ".vol":
         raise ValueError(f"output must end in .vol: {out}")
     companion_path = Path(str(out) + ".json")
-    for existing in (out, companion_path):
+    for existing in (out, companion_path):  # early refusal; _claim re-checks under the lock
         if existing.exists():
             raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
     bin_dir = resolve_cubit_bin(cubit_bin)
     plugin = resolve_plugin_dir(plugin_dir)
     probe = probe_worker(python)
+    lock = _claim(out)
+    try:
+        return _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, probe,
+                              periodic, kelvin, timeout_s)
+    finally:
+        lock.unlink()
+
+
+def _claim(out: Path) -> Path:
+    """Claim ``out`` with an O_EXCL lock file held through publication; refuse existing outputs."""
+    lock = Path(str(out) + ".lock")
+    try:
+        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        raise FileExistsError(f"another export holds {lock}") from None
+    for existing in (out, Path(str(out) + ".json")):
+        if existing.exists():
+            lock.unlink()
+            raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
+    return lock
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, probe,
+                   periodic, kelvin, timeout_s) -> dict[str, Any]:
     token = uuid.uuid4().hex
-    status_path = Path(f"{out}.{token}.status.json")
+    stage = out.parent / f".{out.name}.{token}.stage"
+    stage.mkdir()
+    staged = stage / out.name
+    staged_companion = Path(str(staged) + ".json")
+    status_path = stage / "status.json"
     boot = _BOOT % (SOURCE_ROOT, WORKER_MODULE, WORKER_MODULE)
     command = [probe["python"], *ISOLATED_FLAGS, "-c", boot, "--cubit-bin", str(bin_dir),
-               "--plugin-dir", str(plugin), "--journal", str(journal_path), "--out", str(out),
+               "--plugin-dir", str(plugin), "--journal", str(journal_path), "--out", str(staged),
                "--order", str(int(order)), "--result", str(status_path),
                "--token", token]
     if periodic:
         command += ["--periodic", json.dumps(periodic)]
     if kelvin.get("add_kelvin"):
         command += ["--kelvin", json.dumps(kelvin)]
-    run = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, cwd=str(out.parent),
-                         timeout=timeout_s, creationflags=_creationflags())
-    if status_path.is_file():
-        status = json.loads(status_path.read_text(encoding="utf-8"))
-    else:
-        status = {"status": "error", "error_type": "WorkerCrash",
-                  "error": f"worker exited with {run.returncode} and wrote no status file"}
-    status.update({"returncode": run.returncode, "command": command, "worker_probe": probe,
-                   "status_json": str(status_path),
-                   "stdout_tail": run.stdout.decode(errors="replace")[-2000:],
-                   "stderr_tail": run.stderr.decode(errors="replace")[-2000:]})
-    if status.get("status") == "ok":
-        problem = _verify_outputs(status, token, out, companion_path, run.returncode)
-        if problem:
-            status.update({"status": "error", "error_type": "WorkerOutputMismatch", "error": problem})
-    return status
+    try:
+        run = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, cwd=str(stage),
+                             timeout=timeout_s, creationflags=_creationflags())
+        if status_path.is_file():
+            status = json.loads(status_path.read_text(encoding="utf-8"))
+        else:
+            status = {"status": "error", "error_type": "WorkerCrash",
+                      "error": f"worker exited with {run.returncode} and wrote no status file"}
+        status.update({"returncode": run.returncode, "command": command, "worker_probe": probe,
+                       "stdout_tail": run.stdout.decode(errors="replace")[-2000:],
+                       "stderr_tail": run.stderr.decode(errors="replace")[-2000:]})
+        if status.get("status") == "ok":
+            problem = _verify_outputs(status, token, staged, staged_companion, run.returncode)
+            if not problem:
+                # Hard links fail when the destination exists, so publication
+                # never replaces bytes another run returned.
+                os.link(staged, out)
+                os.link(staged_companion, companion_path)
+                problem = _verify_outputs(status, token, out, companion_path, 0)
+                status.update({"vol": str(out), "companion_json": str(companion_path)})
+            if problem:
+                status.update({"status": "error", "error_type": "WorkerOutputMismatch", "error": problem})
+        return status
+    finally:
+        for leftover in stage.iterdir():
+            leftover.unlink()
+        stage.rmdir()
 
 
 def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Path,
@@ -183,7 +226,10 @@ def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Pa
         return f"status token {status.get('token')!r} does not match this run {token!r}"
     if not out.is_file() or not companion.is_file():
         return f"worker reported ok but {out} or {companion} is missing"
-    digest = hashlib.sha256(out.read_bytes()).hexdigest()
-    if status.get("sha256") != digest:
-        return f"worker sha256 {status.get('sha256')!r} does not match {out} ({digest})"
+    for path, key in ((out, "sha256"), (companion, "companion_sha256")):
+        digest = _sha256(path)
+        if status.get(key) != digest:
+            return f"worker {key} {status.get(key)!r} does not match {path} ({digest})"
+    if json.loads(companion.read_text(encoding="utf-8")) != status.get("companion"):
+        return f"{companion} does not match the companion record the worker reported"
     return None
