@@ -11,7 +11,7 @@ CUBIT_OVERVIEW = """
 # Cubit Mesh Generation Overview
 
 Coreform Cubit provides structured and unstructured meshing with export to
-Netgen `.vol` through the radia-mcp curving worker (`cubit_export_vol`).
+Netgen `.vol` through `cubit_export_vol` (native plugin in an isolated worker).
 
 ## Typical Workflow
 
@@ -21,11 +21,12 @@ other platforms use the system temporary directory. Journals refuse overwrite;
 use a caller-owned per-run scratch root for isolated tests, not a shared fixed
 test-client path. This does not start Cubit or change its licensing requirements.
 
-The Cubit MCP server and the curving worker belong to radia-mcp
-(`radia-mcp serve cubit-mcp`). The server does not import `radia`. Curved
-`.vol` export runs in an isolated external Python (`python -I -B -m
-radia_mcp.cubit.vol_export`) that needs a Netgen build with
-`Mesh.GeometricRefit`; the native `export netgen` command plugin is retired.
+The Cubit MCP server and the export route belong to radia-mcp
+(`radia-mcp serve cubit-mcp`). The server does not import `radia`. `cubit_export_vol` plays the journal in an isolated external Python
+(`-I -B`) that loads the fork NGSolve, then Cubit with the native
+`export netgen` command plugin (`cubit_mesh_export.dll`, built locally from
+`packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
+`RADIA_CUBIT_PLUGIN_DIR`).
 
 ```
 1. Create geometry (Cubit commands or STEP import)
@@ -61,7 +62,7 @@ CUBIT_BLOCKS = """
 
 ## Why Blocks are Required
 
-The curving worker reads mesh data from blocks.
+The export plugin reads mesh data from blocks.
 **No blocks = no export.** This is the most common mistake.
 
 ## Mesh Element Blocks (Recommended)
@@ -1025,8 +1026,12 @@ comment so lint can tell it is intentional.
 
 ## Problem: cubit_export_vol reports kind="environment"
 
-**Cause**: the worker interpreter cannot import `radia_mcp`, its Netgen lacks
-`Mesh.GeometricRefit`, or Cubit was not found.
+**Cause**: the worker interpreter cannot import ngsolve/netgen, the plugin
+DLL is missing, or Cubit was not found.
+
+**Fix**: pass `worker_python` (or `RADIA_CUBIT_WORKER_PYTHON`), `plugin_dir`
+(or `RADIA_CUBIT_PLUGIN_DIR`) and `cubit_bin` (or `RADIA_CUBIT_BIN`).
+`cubit_doctor` reports the `export_worker` check.
 
 **Fix**: pass `worker_python` (or set `RADIA_CUBIT_WORKER_PYTHON`) to an
 interpreter holding radia-mcp and the fork Netgen, and `cubit_bin` (or
@@ -1053,9 +1058,9 @@ CUBIT_DESIGN_PHILOSOPHY = """
 
 ## Core Idea
 
-Curved `.vol` export runs in an external Python worker that drives Cubit's
-Python API and Netgen; the MCP layer starts it isolated and validates its
-artifacts with `check-vol`.
+Curved `.vol` export runs the native `export netgen` plugin inside an
+isolated worker Python; the MCP layer starts it and validates its artifacts
+with `check-vol`.
 
 ## How It Works
 
@@ -1144,7 +1149,7 @@ cubit.cmd('block 2 name "boundary"')
 The export route belongs to radia-mcp:
 
 ```bash
-# Worker interpreter: radia-mcp plus a Netgen with Mesh.GeometricRefit
+# Worker interpreter: the fork NGSolve; plugin_dir: the built cubit_mesh_export.dll
 # Curved .vol export runs outside Cubit: save this model as a journal,
 # then call the MCP tool cubit_export_vol(journal_path, "mesh.vol", order=3).
 ```

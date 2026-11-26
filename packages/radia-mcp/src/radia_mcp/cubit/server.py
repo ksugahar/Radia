@@ -2,7 +2,7 @@
 Cubit MCP server (radia-mcp ``cubit-mcp``).
 
 Provides tools for:
-- Curved Netgen .vol export through the external-Python worker
+- Curved Netgen .vol export through the native plugin in an isolated worker
   (:mod:`radia_mcp.cubit.vol_export`) and the check-vol gate
 - Netgen/NGSolve high-order curving workflows
 - Cubit scripting patterns and best practices
@@ -76,9 +76,9 @@ knowledge corpus.
 
 Distribution owner: radia-mcp, Python namespace radia_mcp.cubit. The server
 does not import radia. Curved Netgen `.vol` export runs only through
-`cubit_export_vol`, which starts the external-Python curving worker
-(radia_mcp.cubit.vol_export) with an explicit interpreter and -I -B. The
-native `export netgen` command plugin is retired; `cubit_exec` rejects it.
+`cubit_export_vol`, which starts the export worker
+(radia_mcp.cubit.vol_export) with an explicit interpreter and -I -B; the
+worker loads the native `export netgen` command plugin (cubit_mesh_export.dll).
 
 Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
@@ -807,25 +807,26 @@ def cubit_export_vol(journal_path: str,
                      order: int = 2,
                      cubit_bin: str = "",
                      worker_python: str = "",
-                     timeout_s: float = 1800.0) -> str:
+                     timeout_s: float = 1800.0,
+                     plugin_dir: str = "",
+                     periodic: dict | None = None,
+                     add_kelvin: bool = False,
+                     kelvin_air: str = "air",
+                     kelvin_block: str = "kelvin",
+                     kelvin_mesh: float | None = None,
+                     kelvin_sym_x: str = "off",
+                     kelvin_sym_y: str = "off",
+                     kelvin_sym_z: str = "off") -> str:
 	"""
-	Export a Cubit journal to a curved Netgen `.vol` through the external worker.
+	Export a Cubit journal to a curved Netgen `.vol` through the native plugin.
 
 	Plays `journal_path` in a fresh batch/nographics Cubit inside an isolated
-	Python subprocess (`python -I -B -m radia_mcp.cubit.vol_export`), curves
-	the mesh with Netgen callback geometry (single-threaded) and writes
-	`out_path` plus `out_path.json`.  The native `export netgen` command
-	plugin is retired and never used.  Fails loudly when Cubit or the Netgen
-	build with `Mesh.GeometricRefit` is missing.  Run `cubit_check_vol` on the
-	result before any solver use.
-
-	Known differences from the retired native 3.1.0 exporter: a curve sideset
-	on a 3D mesh is written as a named BBND edge (3.1.0 failed with "SetCD2Name
-	names vertices of 2D meshes only"); on mixed hex/tet/pyramid meshes at
-	order 3, curved tet and boundary-triangle positions differ by about 1e-6
-	relative (an observed value, not a tolerance), because Cubit Python offers
-	no seeded UV projection.  The .vol has no blank line before
-	`curvedelements`.
+	Python subprocess (`python -I -B -m radia_mcp.cubit.vol_export`) that has
+	loaded the fork NGSolve/Netgen and the `cubit_mesh_export.dll` command
+	plugin, then runs `export netgen "<out_path>" order <order> ... overwrite`.
+	The plugin writes `out_path` plus `out_path.json`.  Fails loudly when Cubit,
+	the worker interpreter or the plugin DLL is missing.  Run `cubit_check_vol`
+	on the result before any solver use.
 
 	Args:
 	    journal_path: Cubit `.jou` that builds, meshes and labels the model.
@@ -835,17 +836,36 @@ def cubit_export_vol(journal_path: str,
 	    worker_python: Absolute worker interpreter (default
 	        $RADIA_CUBIT_WORKER_PYTHON, then this server's interpreter).
 	    timeout_s: Worker wall-clock limit in seconds.
+	    plugin_dir: Directory holding cubit_mesh_export.dll (default
+	        $RADIA_CUBIT_PLUGIN_DIR).
+	    periodic: Optional named periodic request with all nine fields
+	        periodic_name/master/slave/unit/patches/tx/ty/tz/match.
+	    add_kelvin: Add the Kelvin open-boundary sphere before export
+	        (skipped when a `kelvin_block` block already exists).
+	    kelvin_air: Air block name.  A missing or empty air block raises.
+	    kelvin_block: Name of the Kelvin block to create.
+	    kelvin_mesh: Kelvin tet size in m, or None to inherit from the air surface.
+	    kelvin_sym_x, kelvin_sym_y, kelvin_sym_z: off | bn (B.n=0) | ht (Hxn=0)
+	        domain-reduction plane per axis; all off = automatic seam detection.
 
 	Returns:
-	    JSON worker status: {"status": "ok"|"error", "vol", "record", "command",
-	    "worker_probe", "returncode", "stderr_tail"}.
+	    JSON worker status: {"status", "vol", "sha256", "companion",
+	    "export_command", "kelvin", "command", "worker_probe", "returncode"}.
 	"""
 	from radia_mcp.cubit import export_runner as _runner
+	kelvin = None
+	if add_kelvin:
+		kelvin = {"add_kelvin": True, "kelvin_air": kelvin_air, "kelvin_block": kelvin_block,
+		          "kelvin_mesh": kelvin_mesh, "kelvin_sym_x": kelvin_sym_x,
+		          "kelvin_sym_y": kelvin_sym_y, "kelvin_sym_z": kelvin_sym_z}
 	try:
 		result = _runner.run_export(journal_path, out_path, int(order),
 		                            cubit_bin=cubit_bin or None,
 		                            python=worker_python or None,
-		                            timeout_s=float(timeout_s))
+		                            periodic=periodic or None,
+		                            timeout_s=float(timeout_s),
+		                            plugin_dir=plugin_dir or None,
+		                            kelvin=kelvin)
 	except _runner.WorkerRuntimeError as exc:
 		return json.dumps({"status": "error", "stage": "start", "kind": "environment",
 		                   "error": str(exc)})
@@ -2533,8 +2553,8 @@ def cubit_doctor() -> str:
 	errors, exports missing labels). Read-only: starts no Cubit and consumes
 	no license seat; it runs one short isolated Python probe of the worker.
 
-	Checks: Cubit install discovery -> external-Python curving worker
-	(radia_mcp importable under -I, Netgen with Mesh.GeometricRefit) -> live
+	Checks: Cubit install discovery -> export worker (ngsolve/netgen
+	importable under -I, plugin DLL in RADIA_CUBIT_PLUGIN_DIR) -> live
 	owned daemon state -> current stderr diagnostics -> check-vol dependency
 	availability.
 
@@ -2564,15 +2584,16 @@ def cubit_doctor() -> str:
 		           "credential caches"),
 	}
 
-	# --- 3. External-Python curving worker -------------------------------
+	# --- 3. Export worker and native plugin -----------------------------
 	from radia_mcp.cubit import export_runner as _runner
 	try:
-		checks["export_worker"] = {"status": "ok", **_runner.probe_worker()}
+		checks["export_worker"] = {"status": "ok", **_runner.probe_worker(),
+		                           "plugin_dir": str(_runner.resolve_plugin_dir())}
 	except (_runner.WorkerRuntimeError, OSError, ValueError) as exc:
 		checks["export_worker"] = {
 			"status": "error", "detail": str(exc),
-			"fix": ("Set RADIA_CUBIT_WORKER_PYTHON to an interpreter with radia_mcp "
-			        "and the callback-geometry Netgen build (Mesh.GeometricRefit)"),
+			"fix": ("Set RADIA_CUBIT_WORKER_PYTHON to an interpreter with the fork "
+			        "NGSolve and RADIA_CUBIT_PLUGIN_DIR to the built plugin directory"),
 		}
 		problems.append("export worker: not usable")
 

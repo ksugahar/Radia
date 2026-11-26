@@ -129,22 +129,6 @@ def test_retired_snapshot_is_not_advertised():
     assert not hasattr(server, "cubit_snapshot")
 
 
-@pytest.mark.parametrize("line", [
-    'export netgen "a.vol" order 2 overwrite', "  EXPORT Netgen 'b.vol'",
-])
-def test_native_export_plugin_is_rejected_before_any_session_starts(line):
-    """Guards: the retired `export netgen` plugin never reaches Cubit."""
-    sess = session.CubitSession.__new__(session.CubitSession)
-
-    def unexpected_start():
-        raise AssertionError("a rejected command must not start Cubit")
-
-    sess.ensure_started = unexpected_start
-    with pytest.raises(session.CubitSessionError, match="cubit_export_vol"):
-        sess.call("cmd", ["reset", line])
-    session.reject_native_export(["export mesh \"a.e\" overwrite", "reset"])
-
-
 def test_cubit_llm_bridge_names_the_batch_session():
     cubit_source = inspect.getsource(server._cubit_session_or_error)
     daemon_source = Path(session.__file__).with_name("daemon.py").read_text(

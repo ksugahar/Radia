@@ -9,7 +9,6 @@ from __future__ import annotations
 import glob
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -247,23 +246,6 @@ def _cubit_python_exe(bin_dir: Path) -> Path:
     )
 
 
-_NATIVE_EXPORT = re.compile(r"(?i)^\s*export\s+netgen\b")
-
-
-def reject_native_export(commands: list[str]) -> None:
-    """Refuse the retired native ``export netgen`` command plugin.
-
-    Curved ``.vol`` export runs only through the external-Python worker
-    (``cubit_export_vol`` / :mod:`radia_mcp.cubit.export_runner`).
-    """
-    for line in commands:
-        if _NATIVE_EXPORT.search(str(line)):
-            raise CubitSessionError(
-                "The native 'export netgen' command plugin is retired. Save the "
-                "model journal and call cubit_export_vol (external-Python curving "
-                f"worker) instead: {str(line).strip()!r}")
-
-
 # ---------------------------------------------------------------------------
 # Session (singleton per mcp-server process)
 # ---------------------------------------------------------------------------
@@ -409,8 +391,6 @@ class CubitSession:
         A command may have run before its response was lost. Resetting and
         retrying would hide both the unknown outcome and the lost geometry.
         """
-        if op == "cmd":
-            reject_native_export(list(args or []))
         with self._lock:
             if self._retired:
                 raise CubitSessionError(

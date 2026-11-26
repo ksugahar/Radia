@@ -279,7 +279,7 @@ cubit.cmd('nodeset 2 name "corners"')
 ## validation runtime policy: `export` uses blocks only
 
 The `cubit_export_vol`
-route (the radia-mcp curving worker) reads from blocks
+route (the native export plugin) reads from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 
 If you need boundary conditions in the downstream solver:

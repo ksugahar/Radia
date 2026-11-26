@@ -1,7 +1,7 @@
-"""Cubit workflows that run in an external CPython process.
+"""Cubit MCP server, check-vol and the curved ``.vol`` export route.
 
-The curving worker (:mod:`radia_mcp.cubit.vol_export`) imports Cubit's
-Python API and Netgen in one process and writes a curved Netgen ``.vol``.
-It replaces the native Cubit plugin exporter; Cubit itself loads no Radia
-or Netgen code.
+The export worker (:mod:`radia_mcp.cubit.vol_export`) runs in an isolated
+external CPython: it loads the fork NGSolve, Cubit's Python API and the
+native ``export netgen`` command plugin built from
+``packages/radia-mcp/native/cubit_vol_export``.
 """

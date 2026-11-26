@@ -13,8 +13,9 @@ The planned VOL exporter will use `radia-mcp.mesh`.
 
 Cubit MCP belongs to radia-mcp: `radia-mcp serve cubit-mcp` (`radia_mcp.cubit`).
 It does not import `radia`. Curved Netgen `.vol` export runs through the MCP tool
-`cubit_export_vol`, which starts the curving worker in an isolated external
-Python (`-I -B`); the native `export netgen` command plugin is retired.
+`cubit_export_vol`, which runs the native `export netgen` plugin
+(`native/cubit_vol_export`, built locally, not in the wheel) in an isolated
+external Python (`-I -B`).
 `check-vol` is a radia-mcp console script.
 The former `cae-mcp-core` foundation is retired: it is not a dependency or
 shared runtime. radia-mcp owns `radia_mcp.common`/`radia_mcp._shared`.
@@ -267,7 +268,7 @@ explicit seed.
 
 Requires Python ≥ 3.10. The optional `cubit` extra installs the check-vol
 runtime (NGSolve/Netgen); it does not install or license Coreform Cubit. The
-curving worker needs a Netgen build that provides `Mesh.GeometricRefit`. On
+export plugin is built locally against the fork Netgen (`native/cubit_vol_export/build.py`). On
 platforms without Cubit use build123d + Netgen for `.vol` generation.
 generation. Cubit setup and discovery are documented by the exporter.
 

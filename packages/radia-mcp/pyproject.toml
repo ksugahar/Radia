@@ -34,7 +34,7 @@ build123d = [
     "radia>5.3.3",
 ]
 # Cubit MCP and check-vol. Licensed Cubit is found at run time; the curved .vol
-# worker additionally needs a Netgen build that provides Mesh.GeometricRefit.
+# export additionally needs the locally built plugin (native/cubit_vol_export).
 cubit = [
     "numpy>=1.24",
     "ngsolve==6.2.2608",

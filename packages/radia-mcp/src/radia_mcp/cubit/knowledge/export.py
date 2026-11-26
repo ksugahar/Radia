@@ -1,9 +1,9 @@
 """
 Export documentation for the radia-mcp Cubit server.
 
-Curved Netgen ``.vol`` export runs only through the external-Python curving
-worker (``radia_mcp.cubit.vol_export``), started by the MCP tool
-``cubit_export_vol``.  The native ``export netgen`` command plugin is retired.
+Curved Netgen ``.vol`` export runs through the MCP tool ``cubit_export_vol``:
+an isolated worker loads the fork NGSolve, Cubit and the native
+``export netgen`` command plugin.
 """
 
 EXPORT_OVERVIEW = """
@@ -13,34 +13,29 @@ EXPORT_OVERVIEW = """
 
 | Route | Call | Runs in |
 |-------|------|---------|
-| External-Python worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | isolated `python -I -B -m radia_mcp.cubit.vol_export` |
+| Native plugin in an isolated worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | `python -I -B` worker + `cubit_mesh_export.dll` |
 
-The worker plays the journal in a fresh batch/nographics Cubit
-(`-noinitfile`), extracts blocks/sidesets/nodesets, curves the mesh with
-Netgen callback geometry (single-threaded; the callbacks hold the GIL) and
-writes the `.vol` plus `.vol.json`.  It needs a Netgen build that provides
-`Mesh.GeometricRefit`; without it the export fails loudly.  The native
-`export netgen` command plugin is retired and `cubit_exec` rejects it.
+`cubit_export_vol` plays the journal in an isolated external Python
+(`-I -B`) that loads the fork NGSolve, then Cubit with the native
+`export netgen` command plugin (`cubit_mesh_export.dll`, built locally from
+`packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
+`RADIA_CUBIT_PLUGIN_DIR`).  The worker runs `import ngsolve` first so the plugin binds to
+the same nglib, plays the journal in batch/nographics Cubit (`-noinitfile`),
+optionally adds the Kelvin sphere, then runs
+`export netgen "<out>" order N [periodic args] overwrite`.  The plugin writes
+the `.vol` and `.vol.json`; the tool returns the companion record and the
+sha256.  A missing Cubit, worker runtime or plugin DLL fails loudly.
 
 Named periodic export is opt-in and requires all nine `periodic_*` fields: name
 `kt`, exact master/slave boundary labels, coordinate unit `m`, BC patch-pair
 list, translation x/y/z and positive finite matching distance. BC numbers are
 not FaceDescriptor or CAD surface IDs. Every point must match uniquely across
 all incident patches; ambiguity or incomplete coverage fails the export.
-The worker saves group 1 / PERIODIC / kt directly and preserves curved
-geometry. Consumers verify the file; they never add or repair identifications.
-No centroid translation or default distance is inferred. Named periodic exports
-require a fresh path; ordinary export without this request makes no periodic
-readiness claim.
 
-## Differences from the retired native 3.1.0 exporter
-
-- A curve sideset on a 3D mesh becomes a named BBND edge; 3.1.0 failed with
-  "SetCD2Name names vertices of 2D meshes only".
-- On mixed hex/tet/pyramid meshes at order 3, curved tet and boundary-triangle
-  positions differ by about 1e-6 relative (observed value, not a tolerance):
-  Cubit Python has no seeded UV projection, so the projection seeds differ.
-- No blank line is written before `curvedelements`.
+Kelvin open boundary: `add_kelvin=True` (with `kelvin_air`, `kelvin_block`,
+`kelvin_mesh`, `kelvin_sym_x/y/z` = off|bn|ht) adds the exterior sphere before
+export; skipped when a Kelvin block exists; a missing air block or an invalid
+symmetry value raises.
 
 ## Supported Formats
 
@@ -153,20 +148,11 @@ mesh = Mesh(vol_path)
 
 ## How It Works
 
-The worker (`radia_mcp.cubit.vol_export`) runs in an external Python process:
-
-1. Plays the journal in batch/nographics Cubit and reads nodes, block
-   elements, sidesets and nodesets.
-2. Builds a first-order `netgen.meshing.Mesh` with face descriptors per
-   Cubit surface (same-material seams are removed after curving).
-3. Registers a Python `NetgenGeometry` whose callbacks project onto the
-   Cubit surfaces and curves (`closest_point_trimmed`, `u_v_from_position`).
-4. Calls `Mesh.Curve(order)` and, for order >= 3, `Mesh.GeometricRefit()`.
-5. Applies the optional named periodic identification.
-6. Writes the `.vol` (curved coefficients at 17 significant digits) and
-   the companion `.vol.json`.
-
-No STEP files and no OCC geometry are involved.
+The plugin (`ExportNetgenCommand`) extracts blocks/sidesets/nodesets from
+Cubit (`MeshData`), builds the first-order Netgen mesh, curves it with Netgen
+callback geometry projected onto Cubit surfaces and curves (`NetgenCurver`,
+`callbackgeom`, `NetgenGeometricRefit` for order >= 3), applies the optional
+named periodic identification and writes the `.vol` plus `.vol.json`.
 
 ## Compatibility and warnings
 
@@ -284,7 +270,7 @@ Netgen `.vol` is the only mesh output of the Cubit export route.
 
 | Use Case | Command | Why |
 |----------|---------|-----|
-| NGSolve FEM (any order) | `cubit_export_vol(journal, "f.vol", order=N)` | Order 1-5 via Cubit callback geometry |
+| NGSolve FEM (any order) | `cubit_export_vol(journal, "f.vol", order=N)` | Order 1-5 via the native plugin |
 | Cubit-native archival | `export mesh "f.exo"` (Cubit built-in) | Exodus II, Cubit's own command |
 
 The checked `.vol` is the only solver input; run `check-vol` before analysis.
@@ -320,16 +306,16 @@ EXPORT_DECISION_GUIDE = """
 
 | Format | Max Order | 2D | 3D | HO Method |
 |--------|-----------|----|----|-----------|
-| netgen (.vol) | 5 | No | Yes | Netgen callback geometry + Cubit projection |
+| netgen (.vol) | 5 | No | Yes | Native plugin: Netgen callback geometry + Cubit projection |
 
 ## Troubleshooting: High-Order Export
 
 - `kind="environment"` from `cubit_export_vol`: the worker interpreter cannot
-  import `radia_mcp`, Netgen lacks `Mesh.GeometricRefit`, or Cubit was not
-  found.  Run `cubit_doctor` (check `export_worker`).
-- `status="error"` with the worker's message: the journal failed in Cubit,
-  or a label/periodic contract was rejected.  Fix the model, then export to
-  a new path; existing `.vol` files are never overwritten.
+  import ngsolve/netgen, the plugin DLL is missing from `plugin_dir`, or Cubit
+  was not found.  Run `cubit_doctor` (check `export_worker`).
+- `status="error"` with the worker's message: the journal or `export netgen`
+  failed in Cubit, or a label/periodic/Kelvin contract was rejected.  Fix the
+  model, then export to a new path; existing `.vol` files are never overwritten.
 """
 
 

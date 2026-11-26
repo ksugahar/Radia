@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project(cubit_mesh_export_fork CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Cubit REQUIRED CONFIG)
+if(NOT TARGET cubit_geom)
+  find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
+  add_library(cubit_geom ALIAS cubit_cgmcore)
+endif()
+find_package(Netgen REQUIRED CONFIG)
+add_library(cubit_mesh_export_ccm MODULE
+  CubitMeshExportPlugin.cpp MeshData.cpp NetgenCurver.cpp callbackgeom.cpp
+  ExportNetgenCommand.cpp)
+set_target_properties(cubit_mesh_export_ccm PROPERTIES OUTPUT_NAME "cubit_mesh_export" PREFIX "" SUFFIX ".dll")
+target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom nglib ngcore)
+target_compile_definitions(cubit_mesh_export_ccm PRIVATE HAVE_NETGEN CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj /utf-8)

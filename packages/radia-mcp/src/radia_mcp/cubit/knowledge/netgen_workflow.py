@@ -722,7 +722,7 @@ numeric results in
 ## Key Principle
 
 `cubit_export_vol` uses Cubit's ACIS kernel for surface projection via
-callback geometry in the external worker. The mesh curving needs no STEP
+callback geometry in the native plugin. The mesh curving needs no STEP
 files and no OCC geometry, no Python
 dependency. The .vol file contains the curved mesh ready for NGSolve.
 """
@@ -845,7 +845,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2026.8 and a worker Python with radia-mcp and Netgen `Mesh.GeometricRefit`
+- Coreform Cubit 2026.8, a worker Python with the fork NGSolve and the built plugin (`RADIA_CUBIT_PLUGIN_DIR`)
 - NGSolve 6.2.2608 to load the `.vol` (the snapshot is 6.2.2608); curved
   pyramids need its runtime with the apex clamp and the base-edge blend
   (see "Curved pyramids")
