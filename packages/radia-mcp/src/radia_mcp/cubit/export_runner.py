@@ -151,10 +151,29 @@ def run_export(journal: str | os.PathLike[str], out_path: str | os.PathLike[str]
     probe = probe_worker(python)
     lock = _claim(out)
     try:
-        return _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, probe,
-                              periodic, kelvin, timeout_s)
-    finally:
+        result = _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, probe,
+                                periodic, kelvin, timeout_s)
+    except BaseException as exc:
+        release_error = _release(lock)
+        if release_error:
+            exc.add_note(release_error)
+        raise
+    # The outputs are already published and verified; a lock that cannot be
+    # removed is reported with the result, never by discarding that result.
+    release_error = _release(lock)
+    if release_error:
+        result["lock_release_error"] = release_error
+    return result
+
+
+def _release(lock: Path) -> str | None:
+    """Remove the claim lock; return a description of the failure, or None."""
+    try:
         lock.unlink()
+    except OSError as error:
+        return (f"could not remove export lock {lock} ({type(error).__name__}: {error}); "
+                "remove it by hand before exporting to this path again")
+    return None
 
 
 def _claim(out: Path) -> Path:

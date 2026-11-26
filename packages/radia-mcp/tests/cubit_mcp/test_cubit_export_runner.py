@@ -366,3 +366,22 @@ def test_rollback_continues_when_one_unlink_fails(tmp_path):
     assert "locked by another process" in str(info.value), info.value
     assert not dest_vol.exists(), "the .vol must still be removed after the companion unlink fails"
     assert dest_json.exists()
+
+
+def test_lock_release_failure_after_publish_keeps_the_result(tmp_path, monkeypatch):
+    out = tmp_path / "m.vol"
+    lock = tmp_path / "m.vol.lock"
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self == lock:
+            raise PermissionError("lock held by a scanner")
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], {"status": "ok"}))
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+    result = runner.run_export(_journal(tmp_path), out, 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "ok", result
+    assert "lock held by a scanner" in result["lock_release_error"], result
+    assert out.read_bytes() == b"mesh" and (tmp_path / "m.vol.json").exists()
