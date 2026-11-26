@@ -19,8 +19,7 @@ MCP servers for electromagnetic CAE and research workflows: Radia/NGSolve
 analysis, mixed-omega formulations, open-boundary methods, application packs,
 optimization, CAD authoring with build123d, Gmsh inspection and validation.
 Cubit MCP is
-distributed separately by `cubit-mesh-export` and can be installed as an
-optional integration.
+served by `radia-mcp serve cubit-mcp`.
 
 ## Keywords / tags
 
@@ -83,15 +82,15 @@ selecting a server; the live catalog is returned by `radia_mcp_overview()`.
 }
 ```
 
-## Optional Cubit integration
-
-Cubit ownership is deliberately outside this distribution:
+## Cubit integration
 
 ```bash
-pip install cubit-mesh-export
+pip install radia-mcp[cubit]
+radia-mcp serve cubit-mcp
 ```
 
-`cubit-mesh-export` owns `cubit_mesh_export.mcp`, its Cubit MCP entry point, plugin binaries, Cubit-specific tests, and Cubit release CI.
+`radia_mcp.cubit` owns the Cubit MCP server, the curved `.vol` worker and
+`check-vol`; licensed Coreform Cubit is found at run time.
 `radia-mcp` may call that independently installed package for optional
 STEP-to-Cubit workflows, but its own wheel must not contain the retired
 `radia_mcp.cubit` namespace or a Cubit entry point.

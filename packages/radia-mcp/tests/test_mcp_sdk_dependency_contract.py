@@ -38,17 +38,12 @@ def test_public_description_and_optional_cubit_ownership():
 
     project = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert len(project["description"]) <= 512
-    assert "distributed separately in cubit-mesh-export" in project["description"]
+    assert "Cubit MCP, the curved .vol worker and check-vol" in project["description"]
     assert "mcp-server-cubit" not in project["scripts"]
-    for extra in ("cubit", "build123d"):
-        requirements = map(Requirement, project["optional-dependencies"][extra])
-        checker, = (item for item in requirements if item.name == "cubit-mesh-export")
-        for python, platform, expected in (("3.12", "win32", True),
-                                            ("3.13", "win32", False),
-                                            ("3.12", "linux", False)):
-            environment = {"python_version": python, "sys_platform": platform}
-            actual = checker.marker.evaluate(environment)
-            assert actual is expected, (extra, environment, str(checker), actual, expected)
+    assert project["scripts"]["check-vol"] == "radia_mcp.cubit.check:main"
+    for extra, requirements in project["optional-dependencies"].items():
+        names = {Requirement(item).name for item in requirements}
+        assert "cubit-mesh-export" not in names, extra
     readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
     assert "core (Cubit" not in readme
     assert "| **Cubit** | `mcp-server-cubit`" not in readme
@@ -71,7 +66,7 @@ def test_public_description_and_optional_cubit_ownership():
     registry_path = PACKAGE_ROOT / "REGISTRY_SUBMISSION.md"
     if registry_path.exists():
         registry = registry_path.read_text(encoding="utf-8")
-        assert "Cubit MCP is\ndistributed separately" in registry
+        assert "radia-mcp serve cubit-mcp" in registry
         assert "Entry points (3 MCP servers shipped in one wheel)" not in registry
         assert "mcp-server-cubit         # Coreform Cubit" not in registry
     assert not (PACKAGE_ROOT / "docs" / "SHARED_LIB_DESIGN.md").exists()

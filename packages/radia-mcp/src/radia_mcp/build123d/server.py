@@ -2079,12 +2079,12 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
 
         # Hand to the persistent headless Cubit session (lazy-start daemon).
         try:
-            from cubit_mesh_export.mcp import session as _cs
+            from radia_mcp.cubit import session as _cs
         except ImportError as e:
             return _dumps({
                 "status": "error",
                 "stage": "cubit_import",
-                "error": f"cubit_mesh_export.mcp not available: {e}",
+                "error": f"radia_mcp.cubit not available: {e}",
             }, indent=2)
 
         try:
@@ -3410,7 +3410,7 @@ def cadquery_to_cubit_hex(script: str,
     # Step 2: hand off to cubit_mesh_auto (imported lazily — keeps
     # build123d server standalone if user installs without cubit)
     try:
-        from cubit_mesh_export.mcp.server import cubit_mesh_auto
+        from radia_mcp.cubit.server import cubit_mesh_auto
     except ImportError as e:
         return _dumps({
             "status": "error",
@@ -4200,7 +4200,7 @@ def build123d_to_cubit_hex(script: str,
     step_path = exec_info["exported"].replace("\\", "/")
 
     try:
-        from cubit_mesh_export.mcp.server import cubit_mesh_auto
+        from radia_mcp.cubit.server import cubit_mesh_auto
     except ImportError as e:
         return _dumps({"status": "error",
                            "stage": "cubit_import",
@@ -5052,7 +5052,7 @@ def build123d_probe(path: str, query: str = "summary") -> str:
             result["truncated"] = (
                 f"listing capped at {_PROBE_ENTITY_CAP} entities per kind")
     elif q in ("labels", "names"):
-        from cubit_mesh_export.mcp.label_audit import is_strict_label
+        from radia_mcp.cubit.label_audit import is_strict_label
         pairs = _labeled_solids(shape)
         solids = [{"id": i, "label": label}
                   for i, (label, _s) in enumerate(pairs, 1)]
@@ -5131,7 +5131,7 @@ def build123d_doctor() -> str:
                       "cadquery_to_cubit_hex unavailable)"}
 
     try:
-        from cubit_mesh_export.mcp.session import find_cubit_install
+        from radia_mcp.cubit.session import find_cubit_install
         bin_dir = find_cubit_install()
         if bin_dir is None:
             checks["cubit_handoff"] = {

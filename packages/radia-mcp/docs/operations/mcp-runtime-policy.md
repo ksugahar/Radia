@@ -157,8 +157,8 @@ Release-dual names this two-host scope, not a new release_dual.py command.
 
 `cae-mcp-core` is retired and must not return as a dependency, import namespace,
 wheel payload, or hidden shared release gate. radia-mcp owns its internal shared
-runtime under `radia_mcp.common` and `radia_mcp._shared`; cubit-mesh-export owns
-its independent equivalents and Cubit MCP. Cross-package handoffs use explicit
+runtime under `radia_mcp.common` and `radia_mcp._shared`, which also serve the
+Cubit MCP (`radia_mcp.cubit`). Cross-package handoffs use explicit
 artifacts and public contracts rather than importing either distribution as a
 private foundation. A future shared distribution requires an explicit ownership
 and release decision, not restoration of `cae-mcp-core`.

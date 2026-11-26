@@ -29,7 +29,7 @@ def package_data_patterns(pyproject: pathlib.Path = PACKAGE_ROOT / "pyproject.to
     return patterns
 
 
-CONSOLE_SCRIPTS = frozenset({"radia-mcp", "radia-acoustic-fembem-mcp-config"})
+CONSOLE_SCRIPTS = frozenset({"radia-mcp", "radia-acoustic-fembem-mcp-config", "check-vol"})
 
 
 def served_server_modules() -> frozenset:

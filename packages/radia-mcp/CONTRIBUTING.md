@@ -19,8 +19,8 @@ first.
     pyproject.toml    — entry points + extras
     CHANGELOG.md      — append a release entry
   ```
-- `cubit_mesh_export.mcp` owns Cubit in the [cubit-mesh-export repository](https://github.com/ksugahar/cubit-mesh-export).
-  `radia_mcp.common` owns Radia MCP support. Cubit keeps its required helpers in its own wheel.
+- `radia_mcp.cubit` owns the Cubit MCP server, the curved `.vol` worker
+  (`radia_mcp.cubit.vol_export`) and `check-vol`. `radia_mcp.common` owns shared MCP support.
 - Primary workflows are `@mcp.tool()` functions with docstrings. Fine-grained
   validation/identity helpers use a server-local `CoarseToolRegistry` and
   `@_validation.tool()` so production clients see one searchable catalog and
@@ -30,8 +30,11 @@ first.
   server import time. Use `common.lazy_call.lazy_callable` for call-only helper
   dependencies and add a cold-import validation result when changing a large
   server's dependency graph.
-- Cubit execution and its tests belong to `cubit-mesh-export`. Radia MCP
-  consumes artifacts; do not restore a live-Cubit GUI/IPC adapter here.
+- Cubit execution and its tests belong to `radia_mcp.cubit` and
+  `tests/cubit_mcp`. Cubit runs batch/nographics only; curved export runs in the
+  isolated worker subprocess (explicit interpreter, `-I -B`), never through the
+  retired `export netgen` plugin. CI stays Cubit-free; tests needing Cubit skip
+  visibly. Do not add a GUI/toolbar adapter.
 
 ## Consolidation before expansion
 
@@ -108,7 +111,7 @@ solvers (Abaqus / Sierra / OpenFOAM).
 
 ### 3. Lint rules
 
-`cubit_mesh_export.mcp.rules` (cubit) and `radia_mcp.build123d.rules`
+`radia_mcp.cubit.rules` (cubit) and `radia_mcp.build123d.rules`
 (build123d) both follow the same shape: a function taking
 `(filepath, lines: list[str]) -> list[dict]` that returns
 `{line, severity, rule, message}` records. Add the function and

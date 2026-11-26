@@ -240,14 +240,10 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     from radia_mcp.meta.server import radia_mcp_related
     from radia_mcp.meta.catalog import CATALOG, EXTERNAL_PACKAGES
 
-    assert "cubit-mcp" not in CATALOG
-    assert EXTERNAL_PACKAGES["cubit-mcp"]["pypi"] == "cubit-mesh-export"
-    assert EXTERNAL_PACKAGES["cubit-mcp"]["github"] == (
-        "https://github.com/ksugahar/cubit-mesh-export"
-    )
-    assert EXTERNAL_PACKAGES["cubit-mcp"]["subpackage"] == "cubit_mesh_export.mcp"
+    assert CATALOG["cubit-mcp"]["subpackage"] == "radia_mcp.cubit"
+    assert "cubit-mcp" not in EXTERNAL_PACKAGES
 
-    for name in ("build123d-mcp", "gmsh-mcp"):
+    for name in ("build123d-mcp", "gmsh-mcp", "cubit-mcp"):
         related = radia_mcp_related(name)
         names = [r["name"] for r in related["related"]]
         assert "radia-mcp.ngsolve" in names, f"{name} related: {names}"
@@ -273,7 +269,7 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
 
     cubit = radia_mcp_get("cubit-mcp")
     gmsh = radia_mcp_get("gmsh-mcp")
-    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
+    assert cubit["audit_command"] == "radia-mcp serve cubit-mcp --selftest --audit-repo"
     assert gmsh["audit_command"] == "radia-mcp serve gmsh-mcp --selftest --audit-repo"
     assert "audit_command" not in radia_mcp_get("radia-ngsolve")
 
@@ -351,6 +347,7 @@ def test_topics_dispatcher_sync_for_dispatcher_servers():
         "radia_mcp.bem": lambda: importlib.import_module("radia_mcp.bem.server"),
         "radia_mcp.blender": lambda: importlib.import_module("radia_mcp.blender.server"),
         "radia_mcp.build123d": lambda: importlib.import_module("radia_mcp.build123d.server"),
+        "radia_mcp.cubit": lambda: importlib.import_module("radia_mcp.cubit.server"),
         "radia_mcp.data_assimilation": lambda: importlib.import_module("radia_mcp.data_assimilation.server"),
         "radia_mcp.differential_forms": lambda: importlib.import_module("radia_mcp.differential_forms.server"),
         "radia_mcp.electromagnet": lambda: importlib.import_module("radia_mcp.electromagnet.server"),

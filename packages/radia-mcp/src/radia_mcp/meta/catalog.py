@@ -38,6 +38,17 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["cubit-mcp", "gmsh-mcp", "onshape-mcp", "radia-mcp.ngsolve"],
         "tags": ["cad"],
     },
+    "cubit-mcp": {
+        "subpackage": "radia_mcp.cubit",
+        "description": "Headless Coreform Cubit session, journals, mesh races, "
+                       "curved Netgen .vol export through the external-Python "
+                       "worker, and the check-vol gate",
+        "primary_tools": ["cubit_exec", "cubit_probe", "cubit_export_vol",
+                          "cubit_check_vol", "cubit_doctor", "cubit_docs"],
+        "related": ["build123d-mcp", "gmsh-mcp", "radia-mcp.ngsolve"],
+        "audit_command": "radia-mcp serve cubit-mcp --selftest --audit-repo",
+        "tags": ["cad", "mesh"],
+    },
     "onshape-mcp": {
         "subpackage": "radia_mcp.onshape",
         "description": "Research-only, version-pinned Onshape STEP, Parasolid and ACIS export",
@@ -495,20 +506,6 @@ CATALOG: dict[str, dict[str, Any]] = {
 # policy (different repos, different conventions).
 # ============================================================
 EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
-    "cubit-mcp": {
-        "pypi": "cubit-mesh-export",
-        "github": "https://github.com/ksugahar/cubit-mesh-export",
-        "install": "pip install cubit-mesh-export",
-        "subpackage": "cubit_mesh_export.mcp",
-        "selftest_command": "mcp-server-cubit --selftest",
-        "audit_command": "mcp-server-cubit --selftest --audit-repo",
-        "description": (
-            "Independent Cubit APREPRO/headless meshing, export and MCP; no Radia required. "
-            "Direct mesh export uses the Cubit mesh. "
-            "Netgen/NGSolve are used for Python curving and solver-side mesh checks."
-        ),
-        "related": ["build123d-mcp", "gmsh-mcp", "radia-mcp.ngsolve", "topology-optimization"],
-    },
     "optuna-mcp": {
         "pypi": "optuna-mcp",
         "github": "https://github.com/optuna/optuna-mcp",

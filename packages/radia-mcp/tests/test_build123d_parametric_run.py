@@ -89,7 +89,7 @@ def test_regenerated_step_preserves_regions_in_checked_netgen_vol(tmp_path):
     """Guards: STEP-to-Netgen preserves named volumes after a gap edit."""
     if any(importlib.util.find_spec(name) is None for name in ("netgen", "ngsolve")):
         pytest.skip("Netgen and NGSolve are required by the STEP-to-VOL pipeline")
-    pytest.importorskip("cubit_mesh_export.check")
+    pytest.importorskip("radia_mcp.cubit.check")
     from radia_mcp.build123d.pipeline import _stage_mesh_multi
 
     expected_volumes = {"left_block": 120.0, "right_block": 72.0}

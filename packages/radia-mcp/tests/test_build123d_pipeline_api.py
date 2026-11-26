@@ -20,7 +20,7 @@ def test_pipeline_rejects_msh_analysis_before_loading_native_dependencies(entry,
     from radia_mcp.build123d import pipeline
 
     monkeypatch.setitem(sys.modules, 'ngsolve', None)
-    monkeypatch.setitem(sys.modules, 'cubit_mesh_export', None)
+    monkeypatch.setitem(sys.modules, 'radia_mcp.cubit.check', None)
     args = [tmp_path / 'display.msh']
     if entry == '_stage_post':
         args += [tmp_path, 'display']

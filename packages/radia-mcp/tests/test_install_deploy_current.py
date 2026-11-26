@@ -31,7 +31,7 @@ def test_install_deploy_does_not_publish_retired_binary_copy_routes():
     assert "push_pyds_to_mdx" not in INSTALL_DEPLOY
     assert "download_binaries" not in INSTALL_DEPLOY
     assert "manually dropping" in INSTALL_DEPLOY
-    assert "cubit-plugin-install" in get_install_deploy_documentation("cubit")
+    assert "cubit-plugin-install" not in get_install_deploy_documentation("cubit")
 
 
 def test_build_release_manual_matches_the_isolated_mdx_pipeline():
@@ -76,7 +76,7 @@ def test_release_workflow_does_not_restore_coupled_mcp_policy():
     assert "release-quad Phase 8/9 checks" not in quality
     assert "validation-host live-source" in quality
     assert "radia-ngsolve, cubit, build123d" not in RELEASE_WORKFLOW
-    assert "Cubit MCP is distributed by cubit-mesh-export" in overview
+    assert "Cubit MCP and the curved .vol worker" in overview
     assert "CPU-only editable development install" in overview
     assert "binds the installed RECORD hashes to that wheel" in " ".join(overview.split())
     assert "checks NGSolve/Netgen and GPU runtime pins against package metadata" in " ".join(overview.split())

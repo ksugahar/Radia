@@ -80,18 +80,18 @@ to PyPI. Each distribution follows its own declared verification targets:
 | radia             | `v`                     | C++ core (.pyd) + Python/pybind11 support, with   |
 |                   |                         | the Python GPU payload from the Windows GPU lane  |
 | radia-mcp         | `radia-mcp-v`           | MCP guidance and workflows, including mixed omega;|
-|                   |                         | Cubit MCP is distributed by cubit-mesh-export     |
+|                   |                         | Cubit MCP and the curved .vol worker              |
 | radia-simulink | `radia-simulink-v` | Independently released mexcuda, MATLAB, LTspice and Simulink support |
 
-cubit-mesh-export and radia-optuna release from their own repositories and
+radia-optuna releases from its own repository and
 lanes. Packages are independently released. radia-mcp uses release-dual
 (validation host wheel, build host editable). Compatibility is still checked
 where an affected tool uses another package:
 * radia-mcp imports radia at runtime for several tools, and a
   schema mismatch is silent until a tool crashes.
-* cubit-mesh-export owns Cubit meshing, export, and its C++ plugin binaries.
-  Radia consumes the checked `.vol` boundary; it does not couple solver release
-  acceptance to the exporter version.
+* radia-mcp owns Cubit meshing and curved `.vol` export. Radia consumes the
+  checked `.vol` boundary; it does not couple solver release acceptance to the
+  radia-mcp version.
 * The build host keeps the only, CPU-only editable development install in a
   dedicated venv. The validation host runs verified wheels only, never an
   editable install: `release_quad phase8` installs the published-lane wheel
