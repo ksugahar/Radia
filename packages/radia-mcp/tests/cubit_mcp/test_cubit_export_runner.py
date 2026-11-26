@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -242,4 +243,80 @@ def test_concurrent_exports_to_one_path_publish_once(tmp_path, monkeypatch):
         first.join(30)
     assert results["first"]["status"] == "ok", results
     assert out.read_bytes() == b"mesh"
+    assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()
+
+
+def test_worker_cwd_is_destination_parent_with_absolute_staged_outputs(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, calls, {"status": "ok"}))
+    out = tmp_path / "sub" / "m.vol"
+    out.parent.mkdir()
+    result = runner.run_export(_journal(tmp_path), out, 2, cubit_bin=_cubit_bin(tmp_path),
+                               python=sys.executable, plugin_dir=_plugin(tmp_path))
+    assert result["status"] == "ok", result
+    command, kwargs = calls[1]
+    assert kwargs["cwd"] == str(out.parent), (kwargs["cwd"], str(out.parent))
+    for flag in ("--out", "--result", "--journal"):
+        value = command[command.index(flag) + 1]
+        assert Path(value).is_absolute(), (flag, value)
+
+
+def test_companion_planted_before_publish_rolls_back_and_retry_succeeds(tmp_path, monkeypatch):
+    out = tmp_path / "m.vol"
+    planted = tmp_path / "m.vol.json"
+
+    def plant():
+        planted.write_bytes(b'{"other": 1}')
+
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], {"status": "ok"}, before=plant))
+    kwargs = dict(cubit_bin=_cubit_bin(tmp_path), python=sys.executable, plugin_dir=_plugin(tmp_path))
+    with pytest.raises(FileExistsError):
+        runner.run_export(_journal(tmp_path), out, 2, **kwargs)
+    assert not out.exists(), "the .vol this run linked must be rolled back"
+    assert planted.read_bytes() == b'{"other": 1}', "a file this run did not publish must stay"
+    assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()
+    planted.unlink()
+    monkeypatch.setattr(runner.subprocess, "run", _fake_run(GOOD, [], {"status": "ok"}))
+    result = runner.run_export(_journal(tmp_path), out, 2, **kwargs)
+    assert result["status"] == "ok", result
+    assert out.read_bytes() == b"mesh" and planted.read_bytes() == b"{}"
+
+
+def test_worker_error_survives_a_failing_stage_cleanup(tmp_path, monkeypatch):
+    class WorkerBoom(RuntimeError):
+        pass
+
+    def run(command, **kwargs):
+        if "--result" not in command:
+            return SimpleNamespace(returncode=0, stdout=(json.dumps(GOOD) + "\n").encode(), stderr=b"")
+        stage = Path(command[command.index("--out") + 1]).parent
+        (stage / "nested").mkdir()
+        (stage / "nested" / "f").write_bytes(b"x")
+        raise WorkerBoom("worker failed")
+
+    def broken_rmtree(path, *a, **k):
+        raise PermissionError(f"cannot remove {path}")
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    monkeypatch.setattr(runner.shutil, "rmtree", broken_rmtree)
+    with pytest.raises(WorkerBoom, match="worker failed") as info:
+        runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
+                          python=sys.executable, plugin_dir=_plugin(tmp_path))
+    notes = getattr(info.value, "__notes__", [])
+    assert any("staging cleanup failed" in n for n in notes), notes
+    assert not (tmp_path / "m.vol.lock").exists()
+
+
+def test_worker_error_with_stage_subdirectory_cleans_up(tmp_path, monkeypatch):
+    def run(command, **kwargs):
+        if "--result" not in command:
+            return SimpleNamespace(returncode=0, stdout=(json.dumps(GOOD) + "\n").encode(), stderr=b"")
+        stage = Path(command[command.index("--out") + 1]).parent
+        (stage / "nested").mkdir()
+        raise OSError("worker launch failed")
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    with pytest.raises(OSError, match="worker launch failed"):
+        runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
+                          python=sys.executable, plugin_dir=_plugin(tmp_path))
     assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()

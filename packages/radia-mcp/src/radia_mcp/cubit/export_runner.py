@@ -16,9 +16,11 @@ puts the server's own ``radia_mcp`` source root first on the isolated worker's
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import hashlib
+import shutil
 import subprocess
 import uuid
 import sys
@@ -30,6 +32,8 @@ from radia_mcp.cubit.vol_export import PLUGIN_DLL, periodic_arguments
 
 WORKER_MODULE = "radia_mcp.cubit.vol_export"
 ISOLATED_FLAGS = ("-I", "-B")
+
+_LOG = logging.getLogger(__name__)
 
 SOURCE_ROOT = str(Path(__file__).resolve().parents[2])
 _BOOT = ("import sys, runpy; sys.path.insert(0, %r); sys.argv = [%r] + sys.argv[1:]; "
@@ -188,8 +192,11 @@ def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, pr
         command += ["--periodic", json.dumps(periodic)]
     if kelvin.get("add_kelvin"):
         command += ["--kelvin", json.dumps(kelvin)]
+    status: dict[str, Any] | None = None
     try:
-        run = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, cwd=str(stage),
+        # cwd stays the destination's parent so relative paths in the journal
+        # resolve as before; every staged output is passed as an absolute path.
+        run = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, cwd=str(out.parent),
                              timeout=timeout_s, creationflags=_creationflags())
         if status_path.is_file():
             status = json.loads(status_path.read_text(encoding="utf-8"))
@@ -202,19 +209,68 @@ def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, pr
         if status.get("status") == "ok":
             problem = _verify_outputs(status, token, staged, staged_companion, run.returncode)
             if not problem:
-                # Hard links fail when the destination exists, so publication
-                # never replaces bytes another run returned.
-                os.link(staged, out)
-                os.link(staged_companion, companion_path)
-                problem = _verify_outputs(status, token, out, companion_path, 0)
-                status.update({"vol": str(out), "companion_json": str(companion_path)})
+                problem = _publish(status, token, ((staged, out), (staged_companion, companion_path)))
+                if not problem:
+                    status.update({"vol": str(out), "companion_json": str(companion_path)})
             if problem:
                 status.update({"status": "error", "error_type": "WorkerOutputMismatch", "error": problem})
-        return status
-    finally:
-        for leftover in stage.iterdir():
-            leftover.unlink()
-        stage.rmdir()
+    except BaseException as exc:
+        _cleanup_stage(stage, exc, status)
+        raise
+    _cleanup_stage(stage, None, status)
+    return status
+
+
+def _cleanup_stage(stage: Path, exc: BaseException | None, status: dict[str, Any] | None) -> None:
+    """Remove the staging directory best-effort; a failure never replaces ``exc``.
+
+    A cleanup failure is logged; it is attached to ``exc`` as a note when an
+    error is propagating, else recorded in ``status["stage_cleanup_error"]``.
+    """
+    try:
+        shutil.rmtree(stage)
+    except OSError as cleanup:
+        message = f"staging cleanup failed for {stage}: {type(cleanup).__name__}: {cleanup}"
+        _LOG.error(message)
+        if exc is not None:
+            exc.add_note(message)
+        elif status is not None:
+            status["stage_cleanup_error"] = message
+
+
+def _publish(status: dict[str, Any], token: str, pairs: tuple[tuple[Path, Path], ...]) -> str | None:
+    """Hard-link each staged file to its destination, all or nothing.
+
+    Hard links fail when the destination exists, so publication never replaces
+    bytes another run returned.  On any failure after the first link, only the
+    destinations this run linked (same file as the staged source, confirmed
+    before unlinking) are removed, and the original error is re-raised.
+    Returns a verification problem (after rolling back) or None.
+    """
+    published: list[tuple[Path, Path]] = []
+    try:
+        for staged, dest in pairs:
+            os.link(staged, dest)
+            published.append((staged, dest))
+        problem = _verify_outputs(status, token, pairs[0][1], pairs[1][1], 0)
+        if problem:
+            _rollback(published)
+        return problem
+    except BaseException as exc:
+        try:
+            _rollback(published)
+        except OSError as rollback:
+            exc.add_note(f"rollback of published outputs failed: {type(rollback).__name__}: {rollback}")
+        raise
+
+
+def _rollback(published: list[tuple[Path, Path]]) -> None:
+    """Unlink destinations this run published, only when they are still the staged file."""
+    for staged, dest in reversed(published):
+        if dest.exists() and os.path.samefile(staged, dest):
+            dest.unlink()
+        else:
+            raise OSError(f"refusing to remove {dest}: it is no longer the file this run published")
 
 
 def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Path,
