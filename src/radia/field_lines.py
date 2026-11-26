@@ -188,17 +188,29 @@ def _nearest_on_step(p0, t0, p1, t1, target):
     return s, point, float(np.linalg.norm(point - target))
 
 
-def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5):
+def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5,
+                    probe_scales=tuple(10.0 ** -k for k in range(3, 10))):
     """Locate a direction jump on the straight path p0 + s ds t0 and step across it.
 
     Bisection keeps the bracket where the direction passes half its
     end-to-end turn. A jump (a discontinuity of B) keeps at least jump_share
     of that turn across a bracket 2^-iterations of the step wide; a smooth
     field's turn shrinks with the bracket, so the search stops early and
-    returns None. For a jump, a probe 1e-3 ds from the far side along the
-    far direction shows whether the line stays there (a crossing) or falls
-    back (a reversal). Returns None (smooth or no data), ("reversal",) or
-    ("cross", point, B, unit direction).
+    returns None.
+
+    At a jump, probes from the far side along the far direction, at
+    distances probe_scales * ds (largest first, all above the bracket),
+    show whether the line stays on the far side; a curved interface may
+    bend back across a long probe but not a short one. Falling back at every
+    scale is a reversal. The step then runs to the jump and on along the far
+    direction; if its end is not on the far side (the interface curves
+    across the straight piece), the piece is halved down to the probe
+    distance that stayed there, and failing that the crossing is unresolved.
+    A point is on the far side when its direction is nearer the far
+    direction than the near one.
+
+    Returns None (smooth or no data), ("reversal",), ("unresolved",) or
+    ("cross", point, B, unit direction, step length, arc to the jump).
     """
     def direction(point):
         v, nv, st = probe(np.atleast_2d(point))
@@ -228,17 +240,34 @@ def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5):
             lo, u_lo = mid, u
         if turn(u_lo, u_hi) < jump_share * total:
             return None  # the turn spreads over the path: smooth, not a jump
-    far = p0 + hi * ds * t0
-    _, u_probe = direction(far + 1e-3 * ds * u_hi)
-    if u_probe is None:
-        return None
-    if turn(u_probe, u_lo) < turn(u_probe, u_hi):
-        return ("reversal",)  # the far direction leads back to the near side
-    end = p0 + lo * ds * t0 + (1.0 - lo) * ds * u_hi
-    v, u = direction(end)
-    if v is None:
-        return None
-    return ("cross", end, v, u)
+
+    def far_side(point):
+        _, u = direction(point)
+        return None if u is None else turn(u, u_hi) < turn(u, u_lo)
+
+    jump = p0 + hi * ds * t0
+    stays = None
+    for scale in probe_scales:
+        side = far_side(jump + scale * ds * u_hi)
+        if side is None:
+            return None
+        if side:
+            stays = scale * ds
+            break
+    if stays is None:
+        return ("reversal",)  # the far direction leads back at every scale
+    start = p0 + lo * ds * t0
+    length = max((1.0 - lo) * ds, stays)  # at least the probe that stayed across
+    while length >= stays:
+        end = start + length * u_hi
+        side = far_side(end)
+        if side is None:
+            return None
+        if side:
+            v, u = direction(end)
+            return ("cross", end, v, u, lo * ds + length, lo * ds)
+        length *= 0.5
+    return ("unresolved",)  # the interface curves across the far piece at this scale
 
 
 def _unit(values, norm, sign):
@@ -319,6 +348,8 @@ def trace_field_lines(
     angle_max = np.radians(float(max_turn_deg))
     turns = np.zeros(n, dtype=np.int64)
     crossings = np.zeros(n, dtype=np.int64)
+    last_jump = np.full(n, -np.inf)  # arc length at the last crossed jump
+    taken = np.zeros(n)
 
     while np.any(active):
         idx = np.nonzero(active)[0]
@@ -366,12 +397,19 @@ def trace_field_lines(
                     ds[i] = max(ds_min, 0.5 * ds[i])
                     continue
                 jump = _interface_step(probe, p[i], t[i], ds[i], sign[i])
-                if jump is not None and jump[0] == "reversal":
-                    reason[i] = "reversal"  # B meets its reverse across a jump
+                if jump is not None and arc[i] - last_jump[i] <= 1.0001 * ds_min:
+                    # Two jumps within one minimum step: the interface geometry is finer.
+                    reason[i] = "unresolved_turn"
+                    active[i] = False
+                    continue
+                if jump is not None and jump[0] in ("reversal", "unresolved"):
+                    reason[i] = "reversal" if jump[0] == "reversal" else "unresolved_turn"
                     active[i] = False
                     continue
                 if jump is not None:
-                    p_new[j], v_new[j], t_new[j] = jump[1:]
+                    p_new[j], v_new[j], t_new[j] = jump[1:4]
+                    taken[i] = jump[4]
+                    last_jump[i] = arc[i] + jump[5]
                     crossings[i] += 1  # an interface, stepped straight across
                 elif angle[j] >= 0.5 * np.pi or chord[j] < 0.5 * ds[i]:
                     reason[i] = "unresolved_turn"  # smooth, too sharp to guess across
@@ -382,7 +420,8 @@ def trace_field_lines(
             p_old, t_old, v_old = p[i].copy(), t[i].copy(), values[i][-1]
             p[i] = p_new[j]
             t[i] = t_new[j]
-            arc[i] += ds[i]
+            arc[i] += taken[i] if taken[i] > 0 else ds[i]
+            taken[i] = 0.0
             steps[i] += 1
             paths[i].append(p_new[j].copy())
             values[i].append(v_new[j].copy())

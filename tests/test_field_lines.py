@@ -217,6 +217,41 @@ def test_a_near_tangential_interface_is_crossed_without_a_threshold(eps):
     np.testing.assert_allclose(np.diff(upper[:, 2]) / np.diff(upper[:, 0]), -eps, rtol=1e-6)
 
 
+def _curved_interface(p):
+    """Interface z = q^2 (q = min(x, 0)); B = (1, 0, 0) below and (-1, 0, -4q) above.
+
+    Each side is divergence-free and both share the normal component -2q
+    against (-2q, 0, 1), so a line at z = a^2 meets the interface at x = -a
+    and goes on above it along z = 2 x^2 - a^2 (Codex review of dbd26e866).
+    """
+    q = np.minimum(p[:, 0], 0.0)
+    far = p[:, 2] >= q * q
+    return np.column_stack((np.where(far, -1.0, 1.0), np.zeros(len(p)), np.where(far, -4 * q, 0.0)))
+
+
+@pytest.mark.parametrize("a, x0", [(1e-4, -0.0031), (1e-4, -0.0015), (4e-7, -0.0015),
+                                   (4e-7, -0.0031), (1e-8, -0.0008)])
+@pytest.mark.parametrize("step", [0.064, 0.0064])
+def test_a_curved_interface_is_crossed_or_left_unresolved_never_reversed(a, x0, step):
+    """Guards: a traversable jump is never a reversal, and every point after it is on the far side.
+
+    The interface bends back across a straight far piece longer than about 2a:
+    the probe and the far piece shrink to what stays across, and a second jump
+    within one minimum step stops the line as unresolved, not reversed.
+    """
+    lines, record = trace_field_lines(_flat(_curved_interface), [[x0, 0, a * a]], step_m=step,
+                                      max_steps=30, both_directions=False, closure=False)
+    assert lines, record
+    line = lines[0]
+    assert line.end != "reversal", (line.reasons, record)
+    assert line.reasons["forward"] in ("unresolved_turn", "max_steps", "left_extent"), line.reasons
+    pts = line.points_m
+    above = pts[:, 2] >= np.minimum(pts[:, 0], 0) ** 2
+    assert record["interface_crossings"] == 1, record
+    first = int(np.argmax(above))
+    assert first > 0 and np.all(above[first:]), (pts[first:][~above[first:]], record)
+
+
 @pytest.mark.parametrize("step", [1.92, 0.96, 0.192])
 def test_a_coarse_step_never_crosses_a_smooth_separatrix(step):
     """Guards: a smooth turn is no interface; the line stays on its side of x = 0.
