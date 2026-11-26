@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -342,3 +343,26 @@ def test_worker_error_with_stage_subdirectory_cleans_up(tmp_path, monkeypatch):
         runner.run_export(_journal(tmp_path), tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path),
                           python=sys.executable, plugin_dir=_plugin(tmp_path))
     assert not list(tmp_path.glob(".m.vol.*.stage")) and not (tmp_path / "m.vol.lock").exists()
+
+
+def test_rollback_continues_when_one_unlink_fails(tmp_path):
+    staged_vol, staged_json = tmp_path / "s.vol", tmp_path / "s.json"
+    staged_vol.write_bytes(b"mesh")
+    staged_json.write_bytes(b"{}")
+    dest_vol, dest_json = tmp_path / "m.vol", tmp_path / "m.vol.json"
+    os.link(staged_vol, dest_vol)
+    os.link(staged_json, dest_json)
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self == dest_json:
+            raise PermissionError("locked by another process")
+        return real_unlink(self, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "unlink", failing_unlink)
+        with pytest.raises(OSError, match="rollback incomplete") as info:
+            runner._rollback([(staged_vol, dest_vol), (staged_json, dest_json)])
+    assert "locked by another process" in str(info.value), info.value
+    assert not dest_vol.exists(), "the .vol must still be removed after the companion unlink fails"
+    assert dest_json.exists()

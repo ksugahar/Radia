@@ -273,15 +273,17 @@ def _rollback(published: list[tuple[Path, Path]]) -> None:
     A destination replaced by someone else is left untouched, and the rest of
     this run's files are still removed; the refusals are raised at the end.
     """
-    foreign = []
+    problems = []
     for staged, dest in reversed(published):
-        if dest.exists() and os.path.samefile(staged, dest):
-            dest.unlink()
-        elif dest.exists():
-            foreign.append(str(dest))
-    if foreign:
-        raise OSError("refusing to remove files that are no longer this run's output: "
-                      + ", ".join(foreign))
+        try:
+            if dest.exists() and os.path.samefile(staged, dest):
+                dest.unlink()
+            elif dest.exists():
+                problems.append(f"{dest} is no longer this run's output (left in place)")
+        except OSError as error:
+            problems.append(f"{dest}: {type(error).__name__}: {error}")
+    if problems:
+        raise OSError("rollback incomplete: " + "; ".join(problems))
 
 
 def _verify_outputs(status: dict[str, Any], token: str, out: Path, companion: Path,
