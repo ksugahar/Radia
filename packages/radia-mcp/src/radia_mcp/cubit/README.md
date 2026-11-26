@@ -53,13 +53,13 @@ Client setup (stdio transport; the server needs no network port):
 
 ```bash
 # Claude Code
-claude mcp add cubit -- cubit-mcp
+claude mcp add cubit -- radia-mcp serve cubit-mcp
 # remove again with: claude mcp remove cubit
 ```
 
 ```json
 // Claude Desktop / VS Code (mcp.json style)
-{ "mcpServers": { "cubit": { "command": "cubit-mcp" } } }
+{ "mcpServers": { "cubit": { "command": "radia-mcp", "args": ["serve", "cubit-mcp"] } } }
 ```
 
 Environment knobs:

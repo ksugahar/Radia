@@ -59,6 +59,10 @@ class WorkerRuntimeError(RuntimeError):
     """The worker interpreter, Cubit or the native plugin is not usable."""
 
 
+class WorkerProtocolError(RuntimeError):
+    """The worker wrote a status file that is not a JSON object."""
+
+
 def _creationflags() -> int:
     return getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
@@ -170,6 +174,8 @@ def _release(lock: Path) -> str | None:
     """Remove the claim lock; return a description of the failure, or None."""
     try:
         lock.unlink()
+    except FileNotFoundError:
+        return None  # already gone: nothing of ours is left to release
     except OSError as error:
         return (f"could not remove export lock {lock} ({type(error).__name__}: {error}); "
                 "remove it by hand before exporting to this path again")
@@ -180,13 +186,21 @@ def _claim(out: Path) -> Path:
     """Claim ``out`` with an O_EXCL lock file held through publication; refuse existing outputs."""
     lock = Path(str(out) + ".lock")
     try:
-        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         raise FileExistsError(f"another export holds {lock}") from None
-    for existing in (out, Path(str(out) + ".json")):
-        if existing.exists():
-            lock.unlink()
-            raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
+    # From here the lock is ours: any failure releases it and keeps the
+    # primary error, with a failed release attached as a note naming the lock.
+    try:
+        os.close(descriptor)
+        for existing in (out, Path(str(out) + ".json")):
+            if existing.exists():
+                raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
+    except BaseException as exc:
+        release_error = _release(lock)
+        if release_error:
+            exc.add_note(release_error)
+        raise
     return lock
 
 
@@ -199,26 +213,26 @@ def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, pr
     token = uuid.uuid4().hex
     stage = out.parent / f".{out.name}.{token}.stage"
     stage.mkdir()
-    staged = stage / out.name
-    staged_companion = Path(str(staged) + ".json")
-    status_path = stage / "status.json"
-    boot = _BOOT % (SOURCE_ROOT, WORKER_MODULE, WORKER_MODULE)
-    command = [probe["python"], *ISOLATED_FLAGS, "-c", boot, "--cubit-bin", str(bin_dir),
-               "--plugin-dir", str(plugin), "--journal", str(journal_path), "--out", str(staged),
-               "--order", str(int(order)), "--result", str(status_path),
-               "--token", token]
-    if periodic:
-        command += ["--periodic", json.dumps(periodic)]
-    if kelvin.get("add_kelvin"):
-        command += ["--kelvin", json.dumps(kelvin)]
     status: dict[str, Any] | None = None
-    try:
+    try:  # every step after the stage exists runs under the stage-cleanup guard
+        staged = stage / out.name
+        staged_companion = Path(str(staged) + ".json")
+        status_path = stage / "status.json"
+        boot = _BOOT % (SOURCE_ROOT, WORKER_MODULE, WORKER_MODULE)
+        command = [probe["python"], *ISOLATED_FLAGS, "-c", boot, "--cubit-bin", str(bin_dir),
+                   "--plugin-dir", str(plugin), "--journal", str(journal_path), "--out", str(staged),
+                   "--order", str(int(order)), "--result", str(status_path),
+                   "--token", token]
+        if periodic:
+            command += ["--periodic", json.dumps(periodic)]
+        if kelvin.get("add_kelvin"):
+            command += ["--kelvin", json.dumps(kelvin)]
         # cwd stays the destination's parent so relative paths in the journal
         # resolve as before; every staged output is passed as an absolute path.
         run = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, cwd=str(out.parent),
                              timeout=timeout_s, creationflags=_creationflags())
         if status_path.is_file():
-            status = json.loads(status_path.read_text(encoding="utf-8"))
+            status = _read_status(status_path, run.returncode)
         else:
             status = {"status": "error", "error_type": "WorkerCrash",
                       "error": f"worker exited with {run.returncode} and wrote no status file"}
@@ -237,6 +251,20 @@ def _export_locked(journal_path, out, companion_path, order, bin_dir, plugin, pr
         _cleanup_stage(stage, exc, status)
         raise
     _cleanup_stage(stage, None, status)
+    return status
+
+
+def _read_status(status_path: Path, returncode: int) -> dict[str, Any]:
+    """Parse the worker status file; anything but a JSON object is a protocol error."""
+    text = status_path.read_text(encoding="utf-8")
+    try:
+        status = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise WorkerProtocolError(f"worker (rc {returncode}) wrote malformed status JSON to "
+                                  f"{status_path}: {error}") from error
+    if not isinstance(status, dict):
+        raise WorkerProtocolError(f"worker (rc {returncode}) status in {status_path} is a "
+                                  f"{type(status).__name__}, not a JSON object")
     return status
 
 

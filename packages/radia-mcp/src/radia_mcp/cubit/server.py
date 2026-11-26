@@ -867,12 +867,34 @@ def cubit_export_vol(journal_path: str,
 		                            plugin_dir=plugin_dir or None,
 		                            kelvin=kelvin)
 	except _runner.WorkerRuntimeError as exc:
-		return json.dumps({"status": "error", "stage": "start", "kind": "environment",
-		                   "error": str(exc)})
-	except (ValueError, FileNotFoundError, FileExistsError) as exc:
-		return json.dumps({"status": "error", "stage": "input", "kind": "input",
-		                   "error": str(exc)})
+		return _export_error("start", "environment", exc)
+	except _runner.subprocess.TimeoutExpired as exc:
+		return _export_error("worker", "worker_timeout", exc)
+	except _runner.WorkerProtocolError as exc:
+		return _export_error("worker", "worker_protocol", exc)
+	except FileExistsError as exc:
+		return _export_error("claim", "output_exists", exc)
+	except FileNotFoundError as exc:
+		if exc.filename is None:  # the runner's own refusal (missing journal)
+			return _export_error("input", "input", exc)
+		return _export_error("filesystem", "filesystem", exc)
+	except ValueError as exc:
+		return _export_error("input", "input", exc)
+	except OSError as exc:
+		return _export_error("filesystem", "filesystem", exc)
+	if result.get("status") == "error" and result.get("error_type") == "WorkerOutputMismatch":
+		result.setdefault("kind", "worker_protocol")
 	return json.dumps(result, ensure_ascii=False, indent=2, default=str)
+
+
+def _export_error(stage: str, kind: str, exc: BaseException) -> str:
+	"""Error JSON for cubit_export_vol: primary message plus any cleanup/rollback notes."""
+	payload = {"status": "error", "stage": stage, "kind": kind,
+	           "error_type": type(exc).__name__, "error": str(exc)}
+	notes = list(getattr(exc, "__notes__", ()) or ())
+	if notes:
+		payload["notes"] = notes
+	return json.dumps(payload, ensure_ascii=False)
 
 
 @_validation.tool()
