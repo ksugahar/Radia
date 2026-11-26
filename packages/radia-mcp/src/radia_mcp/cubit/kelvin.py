@@ -248,11 +248,10 @@ def _sphere_signature(cubit, face, centre, R):
     return tuple(signature)
 
 
-def _pair_sphere_faces(cubit, air_faces, kelvin_faces, offset, R, reflected_z):
+def _pair_sphere_faces(cubit, air_faces, kelvin_faces, offset, R):
     """Match every air sphere face to the Kelvin face that will carry its mesh.
 
-    Returns ``(pairs, reflected)``: the copy-mesh pairs ``(air, kelvin)`` and
-    the air faces the meshed z-reflection of the exterior supplies instead.
+    Returns the copy-mesh pairs ``(air, kelvin)``.
     Faces are matched by which axis points of their own sphere they contain,
     so a Kelvin face cut on the wrong plane does not match.  A face without a
     partner raises; the former ``min(len(air), len(kelvin))`` dropped it.
@@ -260,22 +259,6 @@ def _pair_sphere_faces(cubit, air_faces, kelvin_faces, offset, R, reflected_z):
     origin = (0.0, 0.0, 0.0)
     air = {face: _sphere_signature(cubit, face, origin, R) for face in air_faces}
     kelvin = {face: _sphere_signature(cubit, face, offset, R) for face in kelvin_faces}
-    if reflected_z:
-        upper = [f for f, s in air.items() if s[4] and not s[5]]
-        lower = [f for f, s in air.items() if s[5] and not s[4]]
-        if len(air) != 2 or len(upper) != 1 or len(lower) != 1:
-            raise RuntimeError(
-                "z-reflected Kelvin needs one upper and one lower air "
-                "hemisphere; found faces %s" % sorted(air))
-        top = air[upper[0]]
-        if air[lower[0]] != top[:4] + (top[5], top[4]):
-            raise RuntimeError("The lower air hemisphere is not the mirror "
-                               "image of the upper one")
-        if len(kelvin) != 1 or next(iter(kelvin.values())) != top:
-            raise RuntimeError(
-                "The Kelvin hemisphere %s does not match the upper air "
-                "hemisphere %d" % (sorted(kelvin), upper[0]))
-        return [(upper[0], next(iter(kelvin)))], lower
     if len(air) != len(kelvin):
         raise RuntimeError("%d air sphere faces but %d Kelvin faces"
                            % (len(air), len(kelvin)))
@@ -287,7 +270,63 @@ def _pair_sphere_faces(cubit, air_faces, kelvin_faces, offset, R, reflected_z):
                                % (face, len(match)))
         pairs.append((face, match[0]))
         del remaining[match[0]]
-    return pairs, []
+    return pairs
+
+
+def _surface_tri_nodes(cubit, surface):
+    return [tuple(cubit.get_connectivity("tri", t))
+            for t in cubit.get_surface_tris(surface)]
+
+
+def _check_translated_copy(cubit, src, dst, offset, R):
+    """Raise unless surface ``dst`` carries ``src``'s mesh moved by ``offset``.
+
+    Every node and triangle of the air face must map one to one onto the
+    Kelvin face, each node within 1e-12 R of its translated position.
+    Returns the largest node deviation.
+    """
+    tol = 1e-12 * R
+    cell = 1e-9 * R
+    src_tris = _surface_tri_nodes(cubit, src)
+    dst_tris = _surface_tri_nodes(cubit, dst)
+    src_nodes = sorted({n for t in src_tris for n in t})
+    dst_nodes = sorted({n for t in dst_tris for n in t})
+    if len(src_tris) != len(dst_tris) or len(src_nodes) != len(dst_nodes):
+        raise RuntimeError(
+            "Kelvin surface %d has %d nodes / %d triangles; air surface %d has "
+            "%d / %d" % (dst, len(dst_nodes), len(dst_tris), src,
+                         len(src_nodes), len(src_tris)))
+    grid = {}
+    for n in dst_nodes:
+        p = cubit.get_nodal_coordinates(n)
+        grid.setdefault(tuple(int(round(c / cell)) for c in p), []).append((n, p))
+    mapping, worst = {}, 0.0
+    for n in src_nodes:
+        q = [c + o for c, o in zip(cubit.get_nodal_coordinates(n), offset)]
+        key = [int(round(c / cell)) for c in q]
+        best = None
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    cand = grid.get((key[0] + dx, key[1] + dy, key[2] + dz), ())
+                    for m, p in cand:
+                        d = max(abs(a - b) for a, b in zip(p, q))
+                        if best is None or d < best[0]:
+                            best = (d, m)
+        if best is None or best[0] > tol:
+            raise RuntimeError(
+                "Air node %d on surface %d has no Kelvin node within %.3g m "
+                "of its translated position on surface %d" % (n, src, tol, dst))
+        worst = max(worst, best[0])
+        mapping[n] = best[1]
+    if len(set(mapping.values())) != len(dst_nodes):
+        raise RuntimeError("Kelvin surface %d node map is not one to one" % dst)
+    dst_set = {frozenset(t) for t in dst_tris}
+    for t in src_tris:
+        if frozenset(mapping[n] for n in t) not in dst_set:
+            raise RuntimeError("Air triangle %s on surface %d has no translated "
+                               "Kelvin triangle on surface %d" % (t, src, dst))
+    return worst
 
 
 def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
@@ -389,37 +428,20 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     sym = set(s.lower() for s in symmetry)
     kelvin_vols = [kelvin_sphere]
 
-    reflect_meshed_kelvin = False
-    if sym == {"z"}:
-        # Keep only the positive-z hemisphere for now.  After it is meshed,
-        # copy the *meshed volume* through z=0.  Meshing both hemispheres
-        # independently breaks reflection symmetry even when their boundary
-        # meshes match.
+    if "z" in sym:
+        # Both hemispheres are kept and each receives a copy of the matching
+        # air hemisphere mesh.  A meshed-and-reflected lower hemisphere is
+        # not used: it matches kelvin_int only when the air mesh itself is
+        # mirror-symmetric, which an independently meshed air domain is not.
         before_cut = set(cubit.parse_cubit_list("volume", "all"))
         cubit.cmd("webcut volume %d with plane zplane" % kelvin_sphere)
-        halves = {kelvin_sphere} | (
-            set(cubit.parse_cubit_list("volume", "all")) - before_cut
-        )
+        halves = sorted({kelvin_sphere} | (
+            set(cubit.parse_cubit_list("volume", "all")) - before_cut))
         if len(halves) != 2:
             raise RuntimeError(
                 "Kelvin z-webcut produced %d volumes instead of two: %s"
-                % (len(halves), sorted(halves)))
-        kelvin_top = max(
-            halves, key=lambda v: cubit.volume(v).centroid()[2])
-        kelvin_bottom_seed = min(
-            halves, key=lambda v: cubit.volume(v).centroid()[2])
-        if cubit.volume(kelvin_top).centroid()[2] <= 0.0:
-            raise RuntimeError("Kelvin z-webcut has no positive-z hemisphere")
-        cubit.cmd("delete volume %d" % kelvin_bottom_seed)
-        kelvin_vols = [kelvin_top]
-        reflect_meshed_kelvin = True
-    elif "z" in sym:
-        # Legacy multi-plane webcut path.  The exact z-only production route
-        # above owns the roundoff-level reflection contract.
-        cubit.cmd("webcut volume %d with plane zplane" % kelvin_sphere)
-        kelvin_top = kelvin_sphere
-        kelvin_bot = cubit.get_last_id("volume")
-        kelvin_vols = [kelvin_top, kelvin_bot]
+                % (len(halves), halves))
+        kelvin_vols = halves
 
     # Imprint + merge kelvin halves (NOT with air volumes!)
     if len(kelvin_vols) > 1:
@@ -437,10 +459,10 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
 
     # ---- 6. Copy mesh: air outer surface -> kelvin surface ----
     # Every air sphere face is matched to the Kelvin face that will carry its
-    # mesh, or -- on the reflected path -- to the reflection that supplies it.
-    pairs, reflected_air = _pair_sphere_faces(
-        cubit, air_outer_surfs, kelvin_outer_surfs, (ox, oy, oz), R,
-        reflect_meshed_kelvin)
+    # mesh; after the volume mesh each pair is checked to be an exact
+    # translated copy.
+    pairs = _pair_sphere_faces(
+        cubit, air_outer_surfs, kelvin_outer_surfs, (ox, oy, oz), R)
     for src, dst in pairs:
 
         src_curves = list(cubit.get_relatives("surface", src, "curve"))
@@ -460,6 +482,9 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
             "source curve %d source vertex %d "
             "target curve %d target vertex %d"
             % (src, dst, src_c, src_v, dst_c, dst_v))
+        if not cubit.is_meshed("surface", dst):
+            raise RuntimeError("Cubit could not copy the mesh of air surface "
+                               "%d onto Kelvin surface %d" % (src, dst))
 
     # ---- 7. Mesh exterior kelvin volumes ----
     # When mesh_size is None (default), let the copied surface mesh
@@ -474,30 +499,8 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
             cubit.cmd("volume %d size %g" % (vid, float(mesh_size)))
     cubit.cmd("mesh volume %s" % k_str)
 
-    if reflect_meshed_kelvin:
-        source = kelvin_vols[0]
-        before_reflect = set(cubit.parse_cubit_list("volume", "all"))
-        cubit.cmd("volume %d copy reflect z" % source)
-        reflected = (
-            set(cubit.parse_cubit_list("volume", "all")) - before_reflect
-        )
-        if len(reflected) != 1:
-            raise RuntimeError(
-                "Kelvin mesh reflection produced %d volumes instead of one: %s"
-                % (len(reflected), sorted(reflected)))
-        kelvin_bottom = next(iter(reflected))
-        bottom_faces = _faces_on_sphere(cubit, kelvin_bottom, (ox, oy, oz), R)
-        if ([_sphere_signature(cubit, f, (ox, oy, oz), R) for f in bottom_faces]
-                != [_sphere_signature(cubit, f, (0.0, 0.0, 0.0), R)
-                    for f in reflected_air]):
-            raise RuntimeError(
-                "The reflected Kelvin hemisphere does not match the lower air "
-                "hemisphere; the exterior would not cover kelvin_int")
-        kelvin_vols = [source, kelvin_bottom]
-        k_str = " ".join(str(v) for v in kelvin_vols)
-        cubit.cmd("imprint volume %s" % k_str)
-        cubit.cmd("merge volume %s" % k_str)
-        cubit.cmd('volume %d rename "kelvin_ext"' % kelvin_bottom)
+    for src, dst in pairs:
+        _check_translated_copy(cubit, src, dst, (ox, oy, oz), R)
 
     # ---- 8. Block assignment ----
     existing_blocks = set(cubit.parse_cubit_list("block", "all"))
@@ -900,139 +903,16 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         f"source curve {a_c} source vertex {a_v} "
         f"target curve {k_c} target vertex {k_v}")
 
-    # ---- 6b. Topology-preserving snap: align Kelvin curved-face nodes
-    # ----     to (air + exact offset).
-    #
-    # Why this exists (2026-04-25): Cubit's `copy mesh ... source/target
-    # curve` aligns one boundary curve and propagates -- for 1/8
-    # reduction (3 boundary curves on the curved cap) the interior
-    # nodes drift by up to ~15mm from a pure translation.  The C++
-    # explicit native periodic matcher must reject non-bijective translated
-    # interfaces. A consumer must not repair missing identifications; supply
-    # the explicit periodic export contract and verify the persisted group.
-    #
-    # Strategy: per-TRIANGLE matching (NOT per-vertex).  For each src
-    # surface triangle, find the dst triangle whose centroid is
-    # nearest to (src_centroid + offset).  Then pair the 3 src
-    # vertices with the 3 dst vertices of that matched dst triangle
-    # by nearest-after-translation, and snap.  This preserves
-    # triangle topology (each src tri maps to one dst tri, vertices
-    # move WITH their tris), so Cubit's tetmesh accepts the result.
-    # Cubit mesh-element keyword: surface tris in a tetmesh are "tri",
-    # not "face" (face is geometric, tri is the mesh element).
-    src_faces = list(cubit.parse_cubit_list("tri", f"in surface {a_curved}"))
-    dst_faces = list(cubit.parse_cubit_list("tri", f"in surface {k_curved}"))
-    if len(src_faces) != len(dst_faces) or not src_faces:
-        print(f"WARNING: snap skipped: src has {len(src_faces)} tris, "
-              f"dst has {len(dst_faces)}; copy-mesh assumed topology-equal.")
-    else:
-        # Cache positions / connectivity.
-        src_conn = {f: cubit.get_connectivity("tri", f) for f in src_faces}
-        dst_conn = {f: cubit.get_connectivity("tri", f) for f in dst_faces}
-        all_src_nodes = set()
-        for c in src_conn.values():
-            all_src_nodes.update(c)
-        all_dst_nodes = set()
-        for c in dst_conn.values():
-            all_dst_nodes.update(c)
-        src_pos = {n: cubit.get_nodal_coordinates(n) for n in all_src_nodes}
-        dst_pos = {n: cubit.get_nodal_coordinates(n) for n in all_dst_nodes}
-
-        def centroid(nodes, pos):
-            xs, ys, zs = 0.0, 0.0, 0.0
-            for n in nodes:
-                p = pos[n]
-                xs += p[0]; ys += p[1]; zs += p[2]
-            k = len(nodes)
-            return (xs / k, ys / k, zs / k)
-
-        # Build dst centroid list.
-        dst_cent = {f: centroid(dst_conn[f], dst_pos) for f in dst_faces}
-
-        # For each src tri, find nearest dst tri by translated centroid.
-        # Vote on src_node -> dst_node mapping: each tri pair contributes
-        # 3 (src, dst) votes; we accept the majority vote per src node.
-        votes = {}  # src_node -> {dst_node: count}
-        for sf in src_faces:
-            sc = centroid(src_conn[sf], src_pos)
-            sc_t = (sc[0] + ox, sc[1] + oy, sc[2] + oz)
-            best_df = None; best_d2 = 1e30
-            for df, dc in dst_cent.items():
-                d2 = ((dc[0] - sc_t[0]) ** 2 + (dc[1] - sc_t[1]) ** 2
-                      + (dc[2] - sc_t[2]) ** 2)
-                if d2 < best_d2:
-                    best_d2 = d2; best_df = df
-            # Pair the 3 vertices of (sf, best_df) by nearest-after-offset.
-            sn_list = src_conn[sf]
-            dn_list = list(dst_conn[best_df])
-            for sn in sn_list:
-                sp = src_pos[sn]
-                expected = (sp[0] + ox, sp[1] + oy, sp[2] + oz)
-                # Among dn_list (= dst tri vertices), pick nearest.
-                best_dn = None; best_d2v = 1e30
-                for dn in dn_list:
-                    dp = dst_pos[dn]
-                    d2v = ((dp[0] - expected[0]) ** 2
-                           + (dp[1] - expected[1]) ** 2
-                           + (dp[2] - expected[2]) ** 2)
-                    if d2v < best_d2v:
-                        best_d2v = d2v; best_dn = dn
-                if best_dn is None:
-                    continue
-                votes.setdefault(sn, {}).setdefault(best_dn, 0)
-                votes[sn][best_dn] += 1
-
-        # Take majority vote per src node.
-        # Verify each src maps to a unique dst (consistency).
-        # For inconsistent pairings (a dst chosen by multiple src),
-        # break ties by preferring the closer translation distance.
-        sn_to_dn = {}
-        used_dn = {}  # dn -> (src_node, distance)
-        ambiguous = 0
-        for sn, dn_counts in votes.items():
-            # Top-voted dn.
-            dn_sorted = sorted(dn_counts.items(), key=lambda kv: -kv[1])
-            for dn, _votes in dn_sorted:
-                sp = src_pos[sn]
-                dp = dst_pos[dn]
-                expected = (sp[0] + ox, sp[1] + oy, sp[2] + oz)
-                d = ((dp[0] - expected[0]) ** 2
-                     + (dp[1] - expected[1]) ** 2
-                     + (dp[2] - expected[2]) ** 2) ** 0.5
-                if dn not in used_dn or used_dn[dn][1] > d:
-                    # Either unused, or this src is closer than the
-                    # previous one -- claim it.
-                    if dn in used_dn:
-                        # Bump the previous claimant; it'll find its
-                        # own dn in a later loop or stay unmatched.
-                        prev_sn, prev_d = used_dn[dn]
-                        ambiguous += 1
-                        if prev_sn in sn_to_dn:
-                            del sn_to_dn[prev_sn]
-                    used_dn[dn] = (sn, d)
-                    sn_to_dn[sn] = dn
-                    break
-
-        # Apply snap: relative move.
-        snapped = 0
-        for sn, dn in sn_to_dn.items():
-            sp = src_pos[sn]
-            dp = dst_pos[dn]
-            mvx = sp[0] + ox - dp[0]
-            mvy = sp[1] + oy - dp[1]
-            mvz = sp[2] + oz - dp[2]
-            cubit.cmd(f"node {dn} move x {mvx:.10g} y {mvy:.10g} "
-                      f"z {mvz:.10g}")
-            snapped += 1
-        print(f"Snap-to-offset (topology-preserving): {snapped}/"
-              f"{len(all_src_nodes)} Kelvin curved-cap nodes set "
-              f"(ambiguous tri-vote conflicts: {ambiguous}).")
+    if not cubit.is_meshed("surface", k_curved):
+        raise RuntimeError("Cubit could not copy the mesh of air surface "
+                           "%d onto Kelvin surface %d" % (a_curved, k_curved))
 
     # ---- 7. Mesh the Kelvin volume ----
     cubit.cmd(f"volume {kelvin_vol} scheme tetmesh")
     if mesh_size is not None:
         cubit.cmd(f"volume {kelvin_vol} size {float(mesh_size):g}")
     cubit.cmd(f"mesh volume {kelvin_vol}")
+    _check_translated_copy(cubit, a_curved, k_curved, (ox, oy, oz), R)
 
     # ---- 8. Block assignment (kelvin) ----
     existing_blocks = set(cubit.parse_cubit_list("block", "all"))
@@ -1278,18 +1158,26 @@ def auto_add_kelvin_from_current_model(air_block="air",
             centroids = [cubit.volume(vid).centroid() for vid in air_vols]
         except Exception:
             centroids = []
+        # Thresholds scale with R.  Vertex coordinates are exact geometry,
+        # so the on-plane test uses a roundoff-level 1e-9 R.  Volume
+        # centroids come from Cubit's numerical integration and carry
+        # errors near 1e-5 R; an air piece on one side of a seam plane has
+        # its centroid a sizeable fraction of R off the plane, so 1e-3 R
+        # separates the two without reacting to integration noise.
+        plane_tol = 1e-9 * R
+        centroid_tol = 1e-3 * R
         symmetry = []
         for axis, name in enumerate(("x", "y", "z")):
             coords = [cubit.vertex(v).coordinates()[axis]
                       for v in all_verts]
             cmin, cmax = min(coords), max(coords)
-            on_plane = any(abs(c) < 1e-6 for c in coords)
+            on_plane = any(abs(c) < plane_tol for c in coords)
             # Case (a): half-domain
-            half_domain = cmin >= -1e-6 and on_plane
+            half_domain = cmin >= -plane_tol and on_plane
             # Case (b): centroids straddle this axis plane.
             cent_coords = [c[axis] for c in centroids]
-            has_pos = any(cc > 1e-6 for cc in cent_coords)
-            has_neg = any(cc < -1e-6 for cc in cent_coords)
+            has_pos = any(cc > centroid_tol for cc in cent_coords)
+            has_neg = any(cc < -centroid_tol for cc in cent_coords)
             webcut_full = on_plane and has_pos and has_neg
             if half_domain or webcut_full:
                 symmetry.append(name)
