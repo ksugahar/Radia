@@ -5,7 +5,8 @@ Assumes analytic fields with exact answers:
 - the straight wire B = mu0 I / (2 pi r) phi_hat: circles of constant r, and
   the plane y = 0, x in [r1, r2], z in [-h/2, h/2] carries
   mu0 I h ln(r2 / r1) / (2 pi);
-- B = z_hat inside the ball |p| < R and no data (NaN) outside it.
+- B = z_hat inside the ball |p| < R and no data (NaN) outside it;
+- a uniformly magnetised ball: 2/3 b_r z_hat inside, a dipole outside.
 """
 
 import numpy as np
@@ -146,6 +147,7 @@ def test_closed_lines_are_written_without_duplicate_nodes(tmp_path):
     ({"step_m": 0}, "step_m"),
     ({"max_steps": 0}, "max_steps"),
     ({"max_turn_deg": 0}, "max_turn_deg"),
+    ({"interface_normal_fraction": 1}, "interface_normal_fraction"),
     ({"extent_m": {"min": [0, 0, 0], "max": [0, 1, 1]}}, "extent_m"),
 ])
 def test_invalid_tracer_inputs_fail_loudly(kwargs, message):
@@ -167,7 +169,13 @@ def _layered(lower, upper):
 
 
 def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
-    """Guards: a turn below 90 degrees at the minimum step is crossed, a reversal stops."""
+    """Guards: refraction is crossed at the minimum step, a head-on reversal stops.
+
+    Across z = 0 with equal Bz, B may turn by 90 degrees or more (tangential B
+    flips, Bz = 0.1 carries on): the line crosses and continues along the upper
+    B. Where B = +x meets B = -x at x = 0 no normal component is shared: the
+    line stops there as a reversal.
+    """
     box = {"min": [-1, -1, -0.1], "max": [1, 1, 0.1]}
     field = _layered([0.0, 0.0, 1.0], [1.0, 0.0, 1.0])
     lines, record = trace_field_lines(field, [[0, 0, -0.05]], step_m=0.01, max_steps=100,
@@ -175,12 +183,59 @@ def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
     assert lines[0].reasons == {"forward": "left_extent"}, record
     assert record["unresolved_turns"] >= 1, record
     assert lines[0].points_m[-1, 2] > 0.09 and lines[0].points_m[-1, 0] > 0.09
+    assert record["interface_turns_ge_90deg"] == 0, record
     lines, record = trace_field_lines(_layered([1.0, 0.0, 0.1], [-1.0, 0.0, 0.1]),
                                       [[0, 0, -0.005]], step_m=0.01,
-                                      max_steps=100, extent_m=box, both_directions=False)
+                                      max_steps=400, extent_m=box, both_directions=False)
+    assert lines[0].reasons == {"forward": "left_extent"}, (lines[0].reasons, record)
+    assert record["interface_turns_ge_90deg"] == 1, record
+    upper = lines[0].points_m[lines[0].points_m[:, 2] > 2 * record["min_step_m"]]
+    assert len(upper) > 5 and np.all(np.diff(upper[:, 0]) < 0)  # along (-1, 0, 0.1)
+    np.testing.assert_allclose(np.diff(upper[:, 2]) / np.diff(upper[:, 0]), -0.1, rtol=1e-9)
+    head_on = _flat(lambda p: np.where((p[:, 0] < 0)[:, None], [1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]))
+    lines, record = trace_field_lines(head_on, [[-0.005, 0, 0]], step_m=0.01, max_steps=100,
+                                      extent_m=box, both_directions=False)
     assert lines[0].reasons == {"forward": "reversal"}, (lines[0].reasons, record)
     assert lines[0].end == "reversal"
-    assert abs(lines[0].points_m[-1, 2]) <= 2 * record["min_step_m"]
+    assert abs(lines[0].points_m[-1, 0]) <= 2 * record["min_step_m"]
+    assert record["interface_turns_ge_90deg"] == 0, record
+
+
+def _magnetised_ball(radius, b_r):
+    """Uniformly magnetised ball: B = 2/3 b_r z_hat inside, the dipole of m = 4/3 pi a^3 b_r / mu0 outside."""
+    @_flat
+    def field(p):
+        r = np.linalg.norm(p, axis=1)
+        out = np.tile([0.0, 0.0, 2.0 * b_r / 3.0], (len(p), 1))
+        o = r >= radius
+        rhat = p[o] / r[o, None]
+        c = b_r * radius ** 3 / (3.0 * r[o] ** 3)
+        out[o] = c[:, None] * (3.0 * rhat * rhat[:, 2:3] - np.array([0.0, 0.0, 1.0]))
+        return out
+    return field
+
+
+def test_lines_cross_a_magnetised_ball_surface_where_tangential_b_flips():
+    """Guards: a line seeded near the equator crosses the surface, turning by 90 degrees or more.
+
+    At polar angle theta the line turns by atan(tan theta) + atan(tan theta / 2),
+    90 degrees or more beyond sin theta = sqrt(2/3); normal B (2/3 b_r cos theta)
+    is shared, so the line goes on outside and returns, closed, through the seed.
+    """
+    a = 0.05
+    seeds = [[0.95 * a, 0, 0], [0.999 * a, 0, 0]]
+    lines, record = trace_field_lines(_magnetised_ball(a, 1.0), seeds, step_m=0.002, max_steps=3000)
+    assert [line.end for line in lines] == ["closed", "closed"], ([l.reasons for l in lines], record)
+    assert record["interface_turns_ge_90deg"] >= 4, record
+    for line, rho in zip(lines, (0.95 * a, 0.999 * a)):
+        inside = line.points_m[np.linalg.norm(line.points_m, axis=1) < a]
+        # Every pass keeps the radius: the kink is located, not smeared over a
+        # step (an RK step across it errs by about the minimum step, 3e-5 m).
+        np.testing.assert_allclose(np.hypot(inside[:, 0], inside[:, 1]), rho,
+                                   atol=1e-3 * record["min_step_m"])
+        top = np.sqrt(a ** 2 - rho ** 2)
+        assert 0 <= top - np.max(np.abs(inside[:, 2])) <= 2 * record["min_step_m"]
+        assert np.linalg.norm(line.points_m, axis=1).max() > a  # it leaves the ball
 
 
 def test_a_low_pitch_helix_is_not_reported_closed():
