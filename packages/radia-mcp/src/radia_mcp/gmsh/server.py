@@ -1174,7 +1174,9 @@ def gmsh_streamlines(msh_path: str, seed_patch: dict | None = None,
     plus either n_lines (balanced bisection: any count, near-square cells;
     sign "auto" | "positive" | "negative" picks one side of a surface the
     flux crosses both ways) or n_u and n_v (two-stage grid, one-signed
-    surface), optional table_nodes and quadrature_order. Lengths in file
+    surface), optional table_nodes (default 33) and quadrature_order
+    (default 3). At most 1000 lines, and at most 100,000 field samples per
+    seeding (table, seed checks and cell check together). Lengths in file
     coordinates, angles in radians. Seed ONE sign: closed lines usually
     cross a surface once each way, so both signs would draw each tube twice.
     seed_line = {start, end, n} instead places n uniform seeds on a

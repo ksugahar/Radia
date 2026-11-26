@@ -453,14 +453,14 @@ def _evaluate(x: NDArray, density: NDArray, cumulative: NDArray, at: NDArray) ->
     return cumulative[rows, seg] + d0 * t + (d1 - d0) * t * t / (2 * h)
 
 
-# Resource guard (not an accuracy limit): field samples in one grid evaluation.
-MAX_FIELD_SAMPLES = 4_000_000
+# Resource guard (not an accuracy limit): field samples per seeding, user-set 2026-11-26.
+MAX_FIELD_SAMPLES = 100_000
 
 
-def _check_budget(n_samples: int, what: str) -> None:
-    if n_samples > MAX_FIELD_SAMPLES:
+def _check_budget(n_samples: int, what: str, limit: int = MAX_FIELD_SAMPLES) -> None:
+    if n_samples > limit:
         raise ValueError(f"{what} needs {n_samples:,} field samples, above the "
-                         f"{MAX_FIELD_SAMPLES:,} limit; reduce the table nodes, the "
+                         f"{limit:,} limit; reduce the table nodes, the "
                          "quadrature order or the number of lines")
 
 
@@ -595,7 +595,8 @@ def cell_flux_quadrature(
     *,
     xi_nodes: ArrayLike,
     eta_nodes: ArrayLike,
-    order: int = 8,
+    order: int = 3,
+    max_samples: int = MAX_FIELD_SAMPLES,
 ) -> dict:
     """Integrate the original density over each placement cell by Gauss rules.
 
@@ -604,10 +605,15 @@ def cell_flux_quadrature(
     The integrand is the caller's flux_density, never the table, so the
     result measures the equal-flux deviation of the placement. The total is
     an independent composite Gauss integral over the whole rectangle.
-    Returns fluxes in Wb with the chart orientation sign.
+    Returns fluxes in Wb with the chart orientation sign. Raises ValueError
+    before evaluating anything when the field samples exceed max_samples.
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     n_u, n_v, sign = seeds.n_u, seeds.n_v, seeds.orientation
+    k = len(_gauss(order)[0])
+    _check_budget(len(xi) * len(eta) + n_v * k * (len(xi) + k * n_u)
+                  + (len(xi) - 1) * k * (len(eta) - 1) * k, "the cell flux quadrature",
+                  max_samples)
     table = _check_rows(_row_density(flux_density, xi, eta), sign, "table", edge_rows=True)
     rho = _cumulative(xi, table)[:, -1]
     marginal = _cumulative(eta, rho[None, :])
@@ -916,22 +922,23 @@ def balanced_cell_flux_quadrature(
     *,
     xi_nodes: ArrayLike,
     eta_nodes: ArrayLike,
-    order: int = 6,
+    order: int = 3,
+    max_samples: int = MAX_FIELD_SAMPLES,
 ) -> dict:
     """Integrate the original one-signed density over each bisection cell.
 
     Each cell is split at the table nodes and integrated by tensor Gauss
     rules of the caller's flux_density clipped to the seeded sign, never the
     table; the total is an independent composite Gauss integral over the
-    table cells. Returns fluxes in Wb with the seeded sign.
+    table cells. Returns fluxes in Wb with the seeded sign. Raises ValueError
+    before evaluating anything when the field samples exceed max_samples.
     """
     xi, eta = _axis(xi_nodes, "xi_nodes"), _axis(eta_nodes, "eta_nodes")
     t, w = _gauss(order)
     pieces = sum((len(_breaks(xi, x0, x1)) - 1) * (len(_breaks(eta, y0, y1)) - 1)
                  for x0, x1, y0, y1 in seeds.cells)
-    _check_budget(pieces * len(t) ** 2, "the cell flux quadrature")
-    _check_budget(((len(xi) - 1) * len(t)) * ((len(eta) - 1) * len(t)),
-                  "the independent total flux quadrature")
+    _check_budget(pieces * len(t) ** 2 + (len(xi) - 1) * len(t) * (len(eta) - 1) * len(t),
+                  "the cell flux quadrature", max_samples)
     xs_q, ys_q, ws_q, owner = [], [], [], []
     for index, (x0, x1, y0, y1) in enumerate(seeds.cells):
         xb, yb = _breaks(xi, x0, x1), _breaks(eta, y0, y1)

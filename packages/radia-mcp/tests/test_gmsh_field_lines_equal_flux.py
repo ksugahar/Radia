@@ -210,9 +210,9 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
 
 @pytest.mark.parametrize("seeding, message", [
     ({"seed_patch": {**PATCH, "n_u": None}}, "seed_patch n_u must be an integer in [1, 1000], got None"),
-    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer in [2, 2000]"),
+    ({"seed_patch": {**PATCH, "table_nodes": None}}, "seed_patch table_nodes must be an integer in [2, 316]"),
     ({"seed_patch": {**PATCH, "quadrature_order": -1}}, "quadrature_order must be an integer in [0, 64]"),
-    ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer in [1, 100000], got True"),
+    ({"seed_patch": {**PLANE_Y0, "n_lines": True}}, "n_lines must be an integer in [1, 1000], got True"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": 2.5}}, "n_lines must be an integer"),
     ({"seed_patch": {**PLANE_Y0, "sign": None}}, "seed_patch sign must be"),
     ({"seed_patch": {**PATCH, "origin": [0, 0]}}, "seed_patch origin must be a list of 3"),
@@ -222,16 +222,17 @@ DISK = {"shape": "annulus", "center": [0, 0, 0], "normal": [0, 0, 1], "r_outer":
     ({"seed_patch": {**DISK, "theta_range": [0]}}, "seed_patch theta_range must be"),
     ({"seed_patch": {**DISK, "shape": ["annulus"]}}, "shape must be one of"),
     ({"seed_line": {"start": [0, 0, 0], "end": [1, 0, 0], "n": None}},
-     "seed_line n must be an integer in [1, 100000], got None"),
+     "seed_line n must be an integer in [1, 1000], got None"),
     ({"seed_line": {"start": None, "end": [1, 0, 0], "n": 2}}, "seed_line start must be a list"),
     ({"seed_line": None, "seed_patch": None}, "exactly one of seed_patch"),
     ({"seed_patch": {**DISK, "r_outer": 2**64 * 10**300}}, "seed_patch r_outer must be a finite number"),
     ({"seed_patch": {**PATCH, "origin": [10**400, 0, 0]}}, "seed_patch origin must be a list of 3"),
     ({"seed_patch": {**PLANE_Y0, "n_lines": 10**400}},
-     "n_lines must be an integer in [1, 100000], got 'a huge integer'"),
-    ({"seed_patch": {**PATCH, "table_nodes": 2**64}}, "table_nodes must be an integer in [2, 2000]"),
-    ({"seed_patch": {**PATCH, "table_nodes": 2000, "quadrature_order": 64}},
-     "needs about 16,371,620,096 field samples"),
+     "n_lines must be an integer in [1, 1000], got 'a huge integer'"),
+    ({"seed_patch": {**PATCH, "table_nodes": 2**64}}, "table_nodes must be an integer in [2, 316]"),
+    ({"seed_patch": {**PATCH, "table_nodes": 300, "quadrature_order": 8}},
+     "needs about 5,811,664 field samples"),
+    ({"seed_patch": {**PATCH, "n_u": 40, "n_v": 30}}, "n_u x n_v = 1200 exceeds 1000 lines"),
 ])
 def test_malformed_values_return_field_errors_before_probing(tmp_path, monkeypatch,
                                                              seeding, message):
@@ -289,3 +290,15 @@ def test_mcp_tool_defaults_to_equal_flux_seeding(tmp_path):
     balanced = {k: v for k, v in PATCH.items() if k not in ("n_u", "n_v")} | {"n_lines": 5}
     placed = place(str(_msh(tmp_path)), balanced)
     assert placed["ok"] is True and placed["layout"] == "balanced" and len(placed["seeds"]) == 5
+
+
+def test_the_seeding_sample_budget_refuses_a_call_before_probing():
+    """Guards: the cumulative field-sample budget shared by table, seed checks and cell check."""
+    from radia_mcp.gmsh.equal_flux import _Budgeted
+    probed = []
+    g = _Budgeted(lambda xi, eta: probed.append(np.broadcast(xi, eta).size) or 0 * xi, 10)
+    g(np.zeros(4), np.zeros(1))
+    g(np.zeros(6), np.zeros(1))
+    with pytest.raises(ValueError, match="more than 10 field samples"):
+        g(np.zeros(1), np.zeros(1))
+    assert probed == [4, 6] and g.used == 10

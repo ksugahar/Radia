@@ -104,6 +104,8 @@ def _check_patch(spec: Any) -> str | None:
         problem = _check_value(key, value)
         if problem:
             return f"seed_patch {key} {problem}"
+    if has_grid and spec["n_u"] * spec["n_v"] > MAX_LINES:
+        return f"seed_patch n_u x n_v = {spec['n_u'] * spec['n_v']} exceeds {MAX_LINES} lines"
     return None
 
 
@@ -114,8 +116,9 @@ COUNT_MINIMUM = {"n_lines": 1, "n_u": 1, "n_v": 1, "n": 1, "table_nodes": 2,
                  "quadrature_order": 0}
 # Resource guards against runaway allocation, not accuracy limits; radia.flux_seeding
 # also bounds the field samples of every grid it evaluates (MAX_FIELD_SAMPLES).
-COUNT_MAXIMUM = {"n_lines": 100_000, "n_u": 1_000, "n_v": 1_000, "n": 100_000,
-                 "table_nodes": 2_000, "quadrature_order": 64}
+MAX_LINES = 1_000  # user-set 2026-11-26: up to about 1000 field lines per seeding
+COUNT_MAXIMUM = {"n_lines": MAX_LINES, "n_u": MAX_LINES, "n_v": MAX_LINES, "n": MAX_LINES,
+                 "table_nodes": 316, "quadrature_order": 64}
 
 
 def _is_number(value: Any) -> bool:
@@ -202,10 +205,10 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
     from radia.flux_seeding import MAX_FIELD_SAMPLES
     path = Path(path)
     table_nodes = spec.get("table_nodes", 33)
-    order = int(spec.get("quadrature_order", 6))
+    order = int(spec.get("quadrature_order", 3))
     balanced = "n_lines" in spec
-    # Probe table plus the independent total quadrature (order^2 points per table cell),
-    # checked before anything is probed; the library checks each grid exactly again.
+    # All probing of one seeding shares MAX_FIELD_SAMPLES. The table and the independent
+    # total quadrature are known before anything is probed; the rest is counted as probed.
     need = int(table_nodes) ** 2 + ((int(table_nodes) - 1) * order) ** 2
     if need > MAX_FIELD_SAMPLES:
         return {"ok": False, "error": f"seed_patch table_nodes={table_nodes} with quadrature_order="
@@ -215,7 +218,8 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
         if int(table_nodes) < 2:
             raise ValueError("table_nodes must be at least 2")
         chart = _chart(spec, scale)
-        g = chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale))
+        g = _Budgeted(chart.flux_density(_probe_b(path, view, time_step, timeout_s, scale)),
+                      MAX_FIELD_SAMPLES)
         nodes = np.linspace(0.0, 1.0, int(table_nodes))
         if balanced:
             seeds = balanced_equal_flux_seeds(g, xi_nodes=nodes, eta_nodes=nodes,
@@ -229,7 +233,8 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
             check_fn = cell_flux_quadrature
         check = None
         if order > 0:
-            q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order)
+            q = check_fn(g, seeds, xi_nodes=nodes, eta_nodes=nodes, order=order,
+                         max_samples=MAX_FIELD_SAMPLES - g.used)
             check = {k: q[k] for k in ("independent_total_flux_Wb",
                                        "max_relative_cell_deviation", "coverage", "order")}
     except (ValueError, RuntimeError) as exc:
@@ -272,6 +277,22 @@ def _place(path, spec, *, view, time_step, length_unit, timeout_s):
                        "sign; no field-line closure or CAD splitting is implied",
     }
     return result, chart, scale
+
+
+class _Budgeted:
+    """Flux density that refuses a call which would exceed the seeding's sample budget."""
+
+    def __init__(self, density, limit: int):
+        self.density, self.limit, self.used = density, int(limit), 0
+
+    def __call__(self, xi, eta):
+        size = int(np.broadcast(np.asarray(xi), np.asarray(eta)).size)
+        if self.used + size > self.limit:
+            raise ValueError(f"the seeding needs more than {self.limit:,} field samples "
+                             f"({self.used:,} used, {size:,} more asked); reduce n_lines, "
+                             "table_nodes or quadrature_order (0 skips the cell check)")
+        self.used += size
+        return self.density(xi, eta)
 
 
 def place_equal_flux_seeds(path: str | Path, seed_patch: dict, *,

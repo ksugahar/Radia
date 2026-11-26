@@ -283,3 +283,20 @@ def test_field_sample_budget_is_checked_before_evaluating():
         balanced_cell_flux_quadrature(density, seeds, xi_nodes=np.linspace(0, 1, 400),
                                       eta_nodes=np.linspace(0, 1, 400), order=64)
     assert calls == []
+
+
+def test_a_thousand_lines_fit_the_sample_budget_at_the_defaults():
+    """Guards: 33 x 33 table, 1000 seeds and an order-3 cell check stay within budget."""
+    from radia.flux_seeding import MAX_FIELD_SAMPLES
+    used = []
+
+    def density(xi, eta):
+        used.append(np.broadcast(xi, eta).size)
+        return 1 + xi * eta + 0 * xi
+
+    seeds = _seed(density, 1000, nodes=33)
+    check = balanced_cell_flux_quadrature(density, seeds, xi_nodes=np.linspace(0, 1, 33),
+                                          eta_nodes=np.linspace(0, 1, 33), order=3,
+                                          max_samples=MAX_FIELD_SAMPLES - sum(used))
+    assert sum(used) <= MAX_FIELD_SAMPLES, used
+    assert check["coverage"] == pytest.approx(1, abs=1e-12)
