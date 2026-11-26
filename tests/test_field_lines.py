@@ -132,8 +132,9 @@ def test_closed_lines_are_written_without_duplicate_nodes(tmp_path):
     lines, _ = trace_field_lines(rotation, [[-0.2, 0, 0]], step_m=0.02, max_steps=400)
     assert lines[0].closed
     out = write_field_lines_msh(tmp_path / "lines.msh", lines, length_scale=1e-3)
-    n = len(lines[0].points_m) - 1
+    n = len(lines[0].points_m)
     assert (out["n_nodes"], out["n_segments"]) == (n, n)
+    assert 0 <= lines[0].closure_gap_m <= 0.02 / 1000
     text = (tmp_path / "lines.msh").read_text(encoding="utf-8")
     assert '"|B| (T)"' in text and '"B (T)"' in text and "$Elements" in text
     # Millimetres: the seed at x = -0.2 m is written as -200.
@@ -166,15 +167,52 @@ def _layered(lower, upper):
 
 
 def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
-    """Guards: a kink below 90 degrees at the minimum step is crossed, a reversal stops."""
+    """Guards: a turn below 90 degrees at the minimum step is crossed, a reversal stops."""
     box = {"min": [-1, -1, -0.1], "max": [1, 1, 0.1]}
     field = _layered([0.0, 0.0, 1.0], [1.0, 0.0, 1.0])
     lines, record = trace_field_lines(field, [[0, 0, -0.05]], step_m=0.01, max_steps=100,
                                       extent_m=box, both_directions=False)
-    assert lines[0].reasons == {"forward": "left_extent"} and record["kinks"] >= 1, record
+    assert lines[0].reasons == {"forward": "left_extent"}, record
+    assert record["unresolved_turns"] >= 1, record
     assert lines[0].points_m[-1, 2] > 0.09 and lines[0].points_m[-1, 0] > 0.09
     lines, record = trace_field_lines(_layered([1.0, 0.0, 0.1], [-1.0, 0.0, 0.1]),
                                       [[0, 0, -0.005]], step_m=0.01,
                                       max_steps=100, extent_m=box, both_directions=False)
-    assert lines[0].reasons == {"forward": "stagnation"}, (lines[0].reasons, record)
+    assert lines[0].reasons == {"forward": "reversal"}, (lines[0].reasons, record)
+    assert lines[0].end == "reversal"
     assert abs(lines[0].points_m[-1, 2]) <= 2 * record["min_step_m"]
+
+
+def test_a_low_pitch_helix_is_not_reported_closed():
+    """Guards: closure needs a near return within closure_tol_m, and nothing is snapped.
+
+    B = (-y, x, 0.001) has helical lines of pitch 2 pi 0.001 m; at step 0.05 m
+    each turn passes 6 mm from the seed, so the line stays open and z keeps
+    increasing.
+    """
+    helix = _flat(lambda p: np.column_stack((-p[:, 1], p[:, 0], np.full(len(p), 1e-3))))
+    lines, record = trace_field_lines(helix, [[1.0, 0, 0]], step_m=0.05, max_steps=300,
+                                      both_directions=False)
+    assert not lines[0].closed and lines[0].reasons == {"forward": "max_steps"}, record
+    assert np.all(np.diff(lines[0].points_m[:, 2]) > 0)
+    loose, _ = trace_field_lines(helix, [[1.0, 0, 0]], step_m=0.05, max_steps=300,
+                                 both_directions=False, closure_tol_m=0.01)
+    assert loose[0].closed and loose[0].closure_gap_m > 0.006  # a tolerance above the pitch
+    assert np.all(np.diff(loose[0].points_m[:, 2]) > 0)  # still not snapped to the seed
+
+
+def test_a_null_met_only_by_a_trial_stage_does_not_stop_the_line():
+    """Guards: stage failures are retried with a shorter step before a line stops.
+
+    B = (-y, x, 0) |p - (1, 0.05, 0)|^2 vanishes off the unit circle through the
+    seed (1, 0, 0); a 0.1 m trial step samples that null at its first midpoint.
+    """
+    def field(p):
+        scale = (p[:, 0] - 1) ** 2 + (p[:, 1] - 0.05) ** 2
+        return np.column_stack((-p[:, 1] * scale, p[:, 0] * scale, 0 * scale))
+
+    lines, record = trace_field_lines(field, [[1.0, 0, 0]], step_m=0.1, max_steps=400,
+                                      both_directions=False)
+    assert len(lines) == 1 and lines[0].closed, (lines, record)
+    np.testing.assert_allclose(np.hypot(lines[0].points_m[:, 0], lines[0].points_m[:, 1]), 1,
+                               atol=1e-3)

@@ -98,7 +98,8 @@ def test_seed_patch_traces_equal_flux_lines(tmp_path):
         xy = lines[index][:, :2]
         np.testing.assert_allclose(xy, np.broadcast_to(seed["point"][:2], xy.shape), atol=1e-9)
     account = result["flux_account"]
-    assert account["lines_by_end"] == {"closed": 0, "open": 6, "truncated": 0, "stagnation": 0}
+    assert account["lines_by_end"] == {"closed": 0, "open": 6, "truncated": 0, "stagnation": 0,
+                                       "reversal": 0}
     assert account["opposite_crossing_flux_ratio"] is None and result["warnings"] == []
 
 

@@ -5,17 +5,28 @@ The field is a callable field_T(points) -> values with points of shape
 point lies outside the field's data. Any source fits: an HDiv-MMM solution
 evaluated by its integral operator in unmeshed air, radia.Fld of a Radia
 object, Biot-Savart of a coil, or an analytic field. Nothing is resampled
-onto a mesh, so an exactly solenoidal field keeps its lines closed.
+onto a mesh.
 
 trace_field_lines integrates all seeds together: each RK4 stage evaluates
 every active line in one call, so an expensive integral field is called
 four times per step, not four times per step and line. The arc-length step
 halves where the direction turns faster than max_turn_deg, and also before
 a line leaves the data or the extent, so lines end within the minimum step
-of the boundary. At the minimum step a turn below 90 degrees is a kink
-where the direction refracts at a material interface and is stepped across
-(counted in the record); a larger turn stops the line as a stagnation.
-A line that returns to its seed is closed exactly.
+of the boundary. A trial step whose RK stages meet a field null or leave
+the data is retried with half the step; only at the minimum step does the
+line stop there. At the minimum step a turn below 90 degrees is accepted as
+an unresolved turn (a material interface, or field detail finer than the
+minimum step: the line is no more accurate there) and counted in the record;
+a turn of 90 degrees or more stops the line as a reversal, distinct from a
+stagnation where |B| vanishes.
+
+A traced line cannot prove that the exact line closes. A line counts as
+closed when, after leaving its seed, a step passes within closure_tol_m of
+the seed in the seed's direction (measured on the cubic Hermite arc of the
+step, not its chord); the line ends at the point of that step nearest the
+seed, not at the seed, and the gap is recorded. A tolerance at
+or above the drift of a non-closing line per turn (a helix of small pitch)
+marks it closed.
 
 flux_account reports how the lines represent the seeded flux: how each
 ended, how often it crosses the seed surface again in the seeded sense
@@ -53,8 +64,8 @@ from numpy.typing import ArrayLike, NDArray
 
 from .flux_seeding import surface_crossings as _surface_crossings
 
-LINE_ENDS = ("closed", "open", "truncated", "stagnation")
-REASONS = ("left_data", "left_extent", "closed", "stagnation", "max_steps")
+LINE_ENDS = ("closed", "open", "truncated", "stagnation", "reversal")
+REASONS = ("left_data", "left_extent", "closed", "stagnation", "reversal", "max_steps")
 _OK, _LEFT_DATA, _LEFT_EXTENT, _STAGNANT = 0, 1, 2, 3
 _STATUS_REASON = {_LEFT_DATA: "left_data", _LEFT_EXTENT: "left_extent",
                   _STAGNANT: "stagnation"}
@@ -68,6 +79,7 @@ class FieldLine:
     ("forward", and "backward" unless the line closed or was traced one way).
     field_T holds B at the points (None when the line came without values,
     e.g. read back from a file; such a line cannot be written).
+    closure_gap_m is the distance by which a closed line misses its seed.
     """
 
     seed_index: int
@@ -76,6 +88,7 @@ class FieldLine:
     seed_vertex: int
     closed: bool
     reasons: dict = field(default_factory=dict)
+    closure_gap_m: float | None = None
 
     @property
     def end(self) -> str:
@@ -86,6 +99,8 @@ class FieldLine:
             return "truncated"
         if "stagnation" in reasons:
             return "stagnation"
+        if "reversal" in reasons:
+            return "reversal"
         return "open"
 
 
@@ -122,6 +137,40 @@ class _Field:
         return values, norm, status
 
 
+def _nearest_on_step(p0, t0, p1, t1, target):
+    """Point of a step nearest target, on the cubic Hermite arc of its end tangents.
+
+    The chord would miss a point of a curved line by its sagitta (step^2
+    curvature / 8); the Hermite arc follows the line to fourth order.
+    Returns (s in [0, 1], point, distance).
+    """
+    length = float(np.linalg.norm(p1 - p0))
+    m0, m1 = length * t0, length * t1
+
+    def arc(s):
+        s = np.atleast_1d(s)[:, None]
+        s2, s3 = s * s, s * s * s
+        return ((2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * m0
+                + (3 * s2 - 2 * s3) * p1 + (s3 - s2) * m1)
+
+    def dist(s):
+        return np.linalg.norm(arc(s) - target, axis=1)
+
+    grid = np.linspace(0.0, 1.0, 17)
+    k = int(np.argmin(dist(grid)))
+    lo, hi = grid[max(k - 1, 0)], grid[min(k + 1, len(grid) - 1)]
+    ratio = (np.sqrt(5.0) - 1) / 2
+    for _ in range(60):  # golden section on the bracketing interval
+        a, b = hi - ratio * (hi - lo), lo + ratio * (hi - lo)
+        if dist(a)[0] <= dist(b)[0]:
+            hi = b
+        else:
+            lo = a
+    s = 0.5 * (lo + hi)
+    point = arc(s)[0]
+    return s, point, float(np.linalg.norm(point - target))
+
+
 def _unit(values, norm, sign):
     return sign[:, None] * values / np.where(norm > 0, norm, 1.0)[:, None]
 
@@ -136,6 +185,7 @@ def trace_field_lines(
     adaptive: bool = True,
     max_turn_deg: float = 10.0,
     closure: bool = True,
+    closure_tol_m: float | None = None,
     extent_m: dict | None = None,
     stagnation_T: float | None = None,
 ) -> tuple[list[FieldLine], dict]:
@@ -144,7 +194,8 @@ def trace_field_lines(
     step_m is the maximum arc-length step (metres); it halves down to
     step_m / 64. extent_m = {"min": [x, y, z], "max": [x, y, z]} stops
     lines at a box. stagnation_T is the |B| at or below which a line stops
-    (default 1e-12 of the median seed |B|). Returns the lines in seed order
+    (default 1e-12 of the median seed |B|). closure_tol_m is the closure
+    tolerance (default step_m / 1000). Returns the lines in seed order
     (seeds that produced no step are left out) and an evaluation record.
     """
     seeds = np.asarray(seeds_m, dtype=float)
@@ -157,6 +208,9 @@ def trace_field_lines(
         raise ValueError("max_steps must be positive")
     if not 0 < float(max_turn_deg) <= 180:
         raise ValueError("max_turn_deg must be in (0, 180]")
+    closure_tol = 1e-3 * step if closure_tol_m is None else float(closure_tol_m)
+    if not (np.isfinite(closure_tol) and closure_tol > 0):
+        raise ValueError("closure_tol_m must be positive")
     if extent_m is not None:
         if not isinstance(extent_m, dict) or set(extent_m) != {"min", "max"}:
             raise ValueError('extent_m must be {"min": [x, y, z], "max": [x, y, z]}')
@@ -190,9 +244,10 @@ def trace_field_lines(
     reason = np.array([("" if ok0[i] else _STATUS_REASON[int(s0[owner[i]])]) for i in range(n)],
                       dtype=object)
     closed = np.zeros(n, dtype=bool)
+    gap = np.full(n, np.nan)
     active = ok0.copy()
     angle_max = np.radians(float(max_turn_deg))
-    kinks = np.zeros(n, dtype=np.int64)
+    turns = np.zeros(n, dtype=np.int64)
 
     while np.any(active):
         idx = np.nonzero(active)[0]
@@ -224,8 +279,9 @@ def trace_field_lines(
         at_min = ds[idx] <= ds_min * 1.0001
         for j, i in enumerate(idx):
             if failed[j] != _OK:
-                if failed[j] in (_LEFT_DATA, _LEFT_EXTENT) and not at_min[j]:
-                    ds[i] = max(ds_min, 0.5 * ds[i])  # approach the boundary
+                if not at_min[j]:
+                    # A stage met a boundary or a null the exact line may miss: retry shorter.
+                    ds[i] = max(ds_min, 0.5 * ds[i])
                     continue
                 reason[i] = _STATUS_REASON[int(failed[j])]
                 active[i] = False
@@ -235,10 +291,11 @@ def trace_field_lines(
                     ds[i] = max(ds_min, 0.5 * ds[i])
                     continue
                 if angle[j] >= 0.5 * np.pi:
-                    reason[i] = "stagnation"  # direction reverses at the minimum step
+                    reason[i] = "reversal"  # direction reverses at the minimum step
                     active[i] = False
                     continue
-                kinks[i] += 1  # refraction at a material interface: step across it
+                turns[i] += 1  # unresolved at the minimum step: accepted, less accurate
+            p_old, t_old, v_old = p[i].copy(), t[i].copy(), values[i][-1]
             p[i] = p_new[j]
             t[i] = t_new[j]
             arc[i] += ds[i]
@@ -248,11 +305,18 @@ def trace_field_lines(
             if adaptive and angle[j] < 0.5 * angle_max and ds[i] < step:
                 ds[i] = min(step, 2.0 * ds[i])
             seed = seeds[owner[i]]
-            if (closure and arc[i] > 4.0 * step
-                    and np.linalg.norm(p[i] - seed) < max(ds[i], 0.75 * step)
-                    and t[i] @ t_start[i] > 0.8):
-                paths[i].append(seed.copy())
-                values[i].append(b0[owner[i]].copy())
+            if (closure and arc[i] > 4.0 * step and t[i] @ t_start[i] > 0.8
+                    and np.linalg.norm(seed - p_old) < 2.0 * np.linalg.norm(p[i] - p_old)):
+                s, nearest, miss = _nearest_on_step(p_old, t_old, p[i], t[i], seed)
+            else:
+                miss = np.inf
+            if miss <= closure_tol:
+                paths[i].pop()
+                values[i].pop()
+                if s > 0:  # end at the point of the step nearest the seed
+                    paths[i].append(nearest)
+                    values[i].append((1 - s) * v_old + s * v_new[j])
+                gap[i] = miss
                 closed[i] = True
                 reason[i] = "closed"
                 active[i] = False
@@ -273,14 +337,15 @@ def trace_field_lines(
         if closed[fwd] or width == 1:
             if len(paths[fwd]) > 1:
                 lines.append(FieldLine(s, np.asarray(paths[fwd]), np.asarray(values[fwd]), 0,
-                                       bool(closed[fwd]), {"forward": str(reason[fwd])}))
+                                       bool(closed[fwd]), {"forward": str(reason[fwd])},
+                                       float(gap[fwd]) if closed[fwd] else None))
             continue
         bwd = fwd + 1
         if closed[bwd]:
             # A loop closed backward: reverse it so the points run along +B.
             pts, vals = np.asarray(paths[bwd])[::-1], np.asarray(values[bwd])[::-1]
             lines.append(FieldLine(s, pts, vals, len(pts) - 1, True,
-                                   {"forward": str(reason[bwd])}))
+                                   {"forward": str(reason[bwd])}, float(gap[bwd])))
             continue
         merged = np.asarray(paths[bwd][::-1] + paths[fwd][1:])
         merged_values = np.asarray(values[bwd][::-1] + values[fwd][1:])
@@ -290,7 +355,7 @@ def trace_field_lines(
     record = {"field_calls": probe.calls, "field_points": probe.points,
               "step_m": step, "min_step_m": ds_min, "stagnation_T": probe.stagnation_T,
               "n_seeds": len(seeds), "n_lines": len(lines),
-              "kinks": int(kinks.sum())}
+              "closure_tol_m": closure_tol, "unresolved_turns": int(turns.sum())}
     return lines, record
 
 
@@ -364,7 +429,8 @@ def write_field_lines_msh(path: str | Path, lines: list[FieldLine], *,
     """Write lines as MSH 4.2 two-node line elements with |B| and B node data.
 
     Each line is its own curve entity in one physical group; a closed line
-    reuses its first node instead of a duplicate. Coordinates are written
+    gets one more element from its last point back to its first, spanning
+    the recorded closure gap. Coordinates are written
     as points_m / length_scale (1e-3 writes millimetres). Returns counts.
     """
     from radia.gmsh_post_export import (DataField, ElementBlock, Entity, NodeBlock,
@@ -380,8 +446,6 @@ def write_field_lines_msh(path: str | Path, lines: list[FieldLine], *,
     for tag, line in enumerate(lines, start=1):
         pts = line.points_m / float(length_scale)
         vals = line.field_T
-        if line.closed:
-            pts, vals = pts[:-1], vals[:-1]
         ids = list(range(next_id, next_id + len(pts)))
         connectivity = [[a, b] for a, b in zip(ids[:-1], ids[1:])]
         if line.closed:
