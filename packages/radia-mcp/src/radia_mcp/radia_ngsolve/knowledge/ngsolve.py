@@ -1324,12 +1324,17 @@ def newton_solve(gfu, a, fes, tol=1e-10, maxiter=20, damping=1.0):
 3. **Symbolic differentiation**: NGSolve automatically differentiates nonlinear CoefficientFunctions
 4. **Damping**: Use `dampfactor < 1.0` for strong nonlinearities (e.g., 0.5 for first few iterations)
 5. **Convergence**: Well-posed problems show quadratic convergence (error squares each iteration)
-6. **Keep the tangent SPD**: write the B-H law as a C1, monotone `nu(B^2)` with
-   `d nu / d(B^2) >= 0`. A kinked or non-monotone fit breaks the Cholesky/CG tangent.
+6. **Tangent definiteness**: the tangent is SPD when the material curve is
+   differentiable with `nu > 0` and `H(B) = nu * B` strictly increasing, that is
+   `nu + 2 * B^2 * d nu / d(B^2) > 0`, and when the gauge or the boundary conditions
+   remove the curl-curl nullspace. `nu > 0` with `d nu / d(B^2) >= 0` is a simple
+   sufficient check. A negative `d nu / d(B^2)` alone does not make the tangent
+   indefinite. A kink in the fit makes the tangent jump and slows Newton.
 7. **Deep saturation**: use a line search on the energy (or Armijo on the residual)
    instead of a fixed damping, and ramp the excitation in steps if Newton still stalls.
-8. **Iterative tangent solves**: keep the AMS hierarchy and topology across Newton
-   steps and refresh only the matrix values (`sparsesolv` topic `compact_ams`).
+8. **Iterative tangent solves**: where the preconditioner supports `Update`, keep the
+   AMS hierarchy across Newton steps and refresh only the matrix values (`sparsesolv`
+   topic `compact_ams`). This does not apply with `auto_line_smoothing`.
 
 ## Nonlinear Material Example (B-H Curve)
 

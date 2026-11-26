@@ -1093,8 +1093,11 @@ coarsened nodal blocks:
 - Keep AMS setup and the outer Krylov loop in C++ under the caller's
   `TaskManager()`. A single-threaded SciPy `gmres`/`splu` wrapper hides the
   thread scaling you are trying to measure.
-- In Newton loops keep the hierarchy and call `Update(new_mat)` with the new
-  tangent values (see above) instead of building a new preconditioner.
+- In Newton loops on a backend and configuration that support it, keep the
+  hierarchy and call `Update(new_mat)` with the new tangent values (see above)
+  instead of building a new preconditioner. Line smoothing excludes
+  `reuse_hierarchy`, so with `auto_line_smoothing=True` build a new preconditioner
+  at each step.
 - GPU runs select the backend explicitly (`Backend="gpu"`), record it and fail
   loudly. There is no implicit CPU fallback.
 
