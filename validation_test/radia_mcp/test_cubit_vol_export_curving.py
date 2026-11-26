@@ -1,8 +1,9 @@
 """Validation: the external-Python Cubit curving worker reproduces exact geometry.
 
 Guards: ``radia_mcp.cubit.vol_export`` run end to end through its CLI on a
-real Cubit unit cylinder (radius 1, height 1, exact volume pi); the curved
-volume error must fall as the geometric order rises from 1 to 2 and 3.
+real Cubit unit cylinder (radius 1, height 1, exact volume pi) with a named
+vertex nodeset; the curved volume error must fall as the geometric order
+rises from 1 to 2 and 3, and the nodeset must arrive as CD3 name 1.
 
 Assumes: a licensed Cubit whose bin directory is in ``RADIA_CUBIT_BIN`` and a
 Netgen/NGSolve build with the callback-geometry bindings.  Without them the
@@ -27,6 +28,8 @@ volume 1 size 0.35
 mesh volume 1
 block 1 volume 1
 block 1 name "body"
+nodeset 1 vertex all
+nodeset 1 name "corners"
 """
 
 
@@ -59,6 +62,7 @@ def test_curved_cylinder_volume_error_falls_with_order(tmp_path):
             capture_output=True, cwd=tmp_path, timeout=1800)
         assert run.returncode == 0, (order, run.returncode, run.stderr[-2000:].decode(errors="replace"))
         assert json.loads(status.read_text(encoding="utf-8"))["status"] == "ok"
+        assert "cd3names\n1\n1\tcorners\n" in out.read_text(encoding="utf-8"), order
         errors[order] = abs(_volume(out, order) - math.pi) / math.pi
     print("relative volume error by order:", errors)
     assert errors[1] > errors[2] > errors[3], errors

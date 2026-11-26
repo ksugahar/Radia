@@ -802,12 +802,16 @@ def export_vol(out_path: str | os.PathLike[str], order: int, *, cubit,
                                   f"'{previous}' and '{label}'.")
     for descriptor, label in edge_labels.items():
         mesh.SetCD2Name(descriptor, label)
-    cd3 = 0
+    # CD3 numbers are 1-based in Mesh::SetCD3Name and Element0D.index; a
+    # repeated nodeset name reuses its number, as Mesh::AddCD3Name does.
+    cd3_index: dict[str, int] = {}
     for ns in md.nodesets:
         if not ns.name or not ns.node_ids:
             continue
-        mesh.SetCD3Name(cd3, ns.name)
-        cd3 += 1
+        cd3 = cd3_index.get(ns.name)
+        if cd3 is None:
+            cd3 = cd3_index[ns.name] = len(cd3_index) + 1
+            mesh.SetCD3Name(cd3, ns.name)
         for nid in ns.node_ids:
             if nid in pid:
                 mesh.Add(ngm.Element0D(pid[nid], index=cd3))
