@@ -1299,51 +1299,72 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
     ox, oy, oz = compute_offset_vector(R, symmetry, offset_dir, offset_dist)
     actual_dir = auto_offset_direction(symmetry) if offset_dir is None else offset_dir
 
-    # ---- 1. Create exterior Kelvin sphere ----
-    ext_sphere = Sphere(Pnt(ox, oy, oz), R)
+    sym = sorted(set(s.lower() for s in symmetry))
+    if actual_dir == "diag" or offset_dir == "diag":
+        raise ValueError(
+            "add_kelvin_occ: no offset lies in all three symmetry planes, so "
+            "the 1/8 Kelvin sphere cannot be a translated copy of the air "
+            "domain; use at most two symmetry planes on the OCC route.")
+
+    # ---- 1. Exterior Kelvin sphere = translated copy of the cut air sphere.
+    # The offset lies in every symmetry plane, so cutting at the origin and
+    # then moving equals cutting at the offset; building it this way keeps
+    # the OCC face split (seams) identical on both sides.
+    # netgen.occ.HalfSpace(p, n) keeps the side n points away from, so the
+    # inward normal keeps the positive side of each plane.
+    ext_sphere = Sphere(Pnt(0, 0, 0), R)
+    for plane_name in sym:
+        normal = _SYM_NORMALS[plane_name]
+        ext_sphere = ext_sphere * HalfSpace(Pnt(0, 0, 0), Dir(*(-c for c in normal)))
+    ext_sphere = ext_sphere.Move((ox, oy, oz))
     ext_sphere.name = "kelvin"
     if maxh_kelvin is not None:
         ext_sphere.maxh = maxh_kelvin
 
-    # ---- 2. Cut with symmetry planes ----
-    sym = set(s.lower() for s in symmetry)
-    for plane_name in sorted(sym):
-        normal = _SYM_NORMALS[plane_name]
-        # Keep the positive side (normal points outward from cut)
-        hs = HalfSpace(Pnt(0, 0, 0), Dir(*normal))
-        ext_sphere = ext_sphere * hs
-        ext_sphere.name = "kelvin"
+    # ---- 2. Pair the sphere faces one by one -------------------------
+    normals = [_SYM_NORMALS[n] for n in sym]
+    tol = 1e-6 * R
 
-    # ---- 3. Identify periodic faces ----
-    # Interior sphere outer face: area ~ expected fraction of 4*pi*R^2
-    n_sym = len(symmetry)
-    expected_area = 4.0 * math.pi * R ** 2 / (2 ** n_sym)
+    def sphere_faces(shape, centre):
+        found = []
+        for f in shape.faces:
+            if not all(abs(math.dist(tuple(v.p), centre) - R) < tol for v in f.vertices):
+                continue
+            c = f.center
+            rel = (c.x - centre[0], c.y - centre[1], c.z - centre[2])
+            if any(abs(sum(r * n for r, n in zip(rel, nn))) < tol for nn in normals):
+                continue  # planar cut face whose rim lies on the sphere
+            found.append(f)
+        return found
 
-    int_face = None
-    for f in air_shape.faces:
-        if abs(f.mass - expected_area) / expected_area < 0.15:
-            f.name = "kelvin_int"
-            int_face = f
-            break
-
-    ext_face = None
-    for f in ext_sphere.faces:
-        if abs(f.mass - expected_area) / expected_area < 0.15:
-            f.name = "kelvin_ext"
-            ext_face = f
-            break
-
-    if int_face is None:
+    int_faces = sphere_faces(air_shape, (0.0, 0.0, 0.0))
+    ext_faces = sphere_faces(ext_sphere, (ox, oy, oz))
+    if not int_faces:
         raise RuntimeError(
-            "Cannot find interior sphere face (expected area ~ %.4f m^2).  "
-            "Make sure air_shape has a spherical outer boundary with "
-            "radius R = %g." % (expected_area, R))
-    if ext_face is None:
+            "Cannot find the interior sphere face(s) of radius R = %g at the "
+            "origin; air_shape must have a spherical outer boundary on the "
+            "positive side of each symmetry plane." % R)
+    pairs = []
+    for fi in int_faces:
+        ci = fi.center
+        match = [fe for fe in ext_faces
+                 if math.dist((fe.center.x, fe.center.y, fe.center.z),
+                              (ci.x + ox, ci.y + oy, ci.z + oz)) < tol]
+        if len(match) != 1:
+            raise RuntimeError(
+                "kelvin_int face at %r has %d translated copies by the offset "
+                "on the Kelvin sphere (need exactly 1); the air domain must "
+                "lie on the positive side of each symmetry plane."
+                % ((ci.x, ci.y, ci.z), len(match)))
+        pairs.append((fi, match[0]))
+    if len(pairs) != len(ext_faces):
         raise RuntimeError(
-            "Cannot find exterior sphere face (expected area ~ %.4f m^2)."
-            % expected_area)
-
-    int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
+            "Kelvin sphere has %d faces but only %d were paired with kelvin_int"
+            % (len(ext_faces), len(pairs)))
+    for fi, fe in pairs:
+        fi.name = "kelvin_int"
+        fe.name = "kelvin_ext"
+        fi.Identify(fe, "kelvin", IdentificationType.PERIODIC)
 
     # A detached OCC Vertex does not constrain a volume-mesh unknown.
     # Scalar users must explicitly attach a connected point gauge after meshing.
@@ -1360,6 +1381,7 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
     print("=== add_kelvin_occ ===")
     print("  R = %g m" % R)
     print("  offset = (%g, %g, %g) m" % (ox, oy, oz))
+    n_sym = len(sym)
     print("  symmetry = %s (1/%d)" % (symmetry, 2 ** n_sym) if n_sym else
           "  symmetry = [] (full)")
     print("  Identify: kelvin_int <-> kelvin_ext")
