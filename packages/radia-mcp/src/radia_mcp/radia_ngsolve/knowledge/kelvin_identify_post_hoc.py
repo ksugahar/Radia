@@ -24,9 +24,10 @@ but **no `Identifications` section yet**, and you need to enable
 `Periodic(H1(mesh, ...))` to couple the two surfaces for the Kelvin
 open-boundary truncation.  Reaching this state typically means:
 
-  - The Cubit C++ exporter (`export netgen`) ran but its
-    all-or-nothing vertex matching skipped due to a single tolerance
-    miss (typical 1/8-octant geometry).
+  - The mesh came from the Cubit route (`add_kelvin_cubit()` +
+    `export netgen`): the exporter writes the `kelvin_int` / `kelvin_ext`
+    labels but no Kelvin identifications, so every Cubit Kelvin mesh
+    needs this step.
   - The mesh came from somewhere outside the Cubit panel pipeline --
     a colleague's `.vol`, a hand-built OCC repro, or a Cubit Python
     script that did NOT call `add_kelvin_cubit()` (just exported
@@ -241,7 +242,7 @@ scale or you want to verify the residual is sub-mm.
 
 ## 5. Identification number `idnr`
 
-Default `idnr=1` matches the Cubit C++ exporter convention.  You only
+Default `idnr=1` is the single-identification convention.  You only
 need to vary this if you plan to add multiple independent identification
 sets to the same mesh (rare; e.g. Kelvin + a separate Periodic BC).
 """

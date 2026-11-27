@@ -8,11 +8,11 @@ Why this exists
 ---------------
 There are three upstream paths that produce a Kelvin-ready `.vol`:
 
-1. **Cubit C++ exporter** (`ExportNetgenCommand.cpp`): writes point-pair
-   identifications during `export netgen` if every kelvin_int
-   vertex matches a kelvin_ext vertex within tolerance after the rigid
-   Kelvin translation.  All-or-nothing: a single unmatched vertex
-   skips the C++ identification entirely.
+1. **Cubit C++ exporter** (`export netgen`): labels the air|kelvin
+   interface `kelvin_int` and the outer Kelvin boundary `kelvin_ext`
+   but writes NO Kelvin identifications (only an explicitly requested
+   named periodic pair is written).  Cubit Kelvin meshes therefore always
+   go through path 3.
 
 2. **NGSolve OCC** + `Identify(IdentificationType.PERIODIC)`: must be
    called AFTER `Glue` and BEFORE `Mesh()`.  Bakes both point pairs
@@ -21,8 +21,7 @@ There are three upstream paths that produce a Kelvin-ready `.vol`:
 3. **This module** (`add_kelvin_identification`): works on an
    ALREADY-LOADED `ngsolve.Mesh` -- no Cubit, no OCC, no re-export.
    Useful when:
-     - the Cubit exporter skipped due to a single tolerance miss
-       (typical 1/8-octant geometry, copy-mesh sub-pixel imprecision)
+     - the mesh came from the Cubit route (path 1)
      - you received a `.vol` from elsewhere without identifications
      - you want to compare a "with-Kelvin" and a "without-Kelvin" run
        on the same mesh without re-running Cubit

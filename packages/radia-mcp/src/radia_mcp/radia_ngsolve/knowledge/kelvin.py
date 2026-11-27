@@ -1528,14 +1528,24 @@ The periodic identification pairs must be embedded in the .vol file.
 Without it, the Kelvin sphere is just a disconnected air domain with
 Neumann BC (silently wrong, looks like a small Dirichlet truncation).
 
-**OCC**: Call `Identify()` before `GenerateMesh()`:
+**OCC**: `radia_mcp.cubit.kelvin.add_kelvin_occ(air, R, symmetry=[...])`
+builds the Kelvin sphere as the translated copy of the cut air sphere
+(positive side of each symmetry plane, at most two planes), pairs every
+sphere face and calls `Identify()` before `GenerateMesh()`:
 ```python
 int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 ```
+Netgen meshes WITHOUT any identification when the faces are not translated
+copies, so check `len(mesh.ngmesh.GetIdentifications()) > 0` after meshing.
+Then attach the scalar gauge with
+`radia.kelvin_geometry.ground_kelvin_scalar_mesh(mesh, info["center"])`.
 
-**Cubit**: The C++ exporter (`export netgen`) reads sideset names
-"kelvin_int" and "kelvin_ext", computes the translation offset, and writes
-`ident.Add()` pairs to the .vol automatically.
+**Cubit**: `add_kelvin_cubit()` makes the Kelvin surface a translated mesh
+copy, and `export netgen` labels the air|kelvin interface `kelvin_int` and
+the outer Kelvin boundary `kelvin_ext`.  The exporter writes NO Kelvin
+identifications; add them after loading with
+`radia.kelvin_identify_ngsolve.add_kelvin_identification(mesh)` (see
+`kelvin_identify_post_hoc`).
 
 **Detection in calc_fem_kelvin.py**:
 ```python

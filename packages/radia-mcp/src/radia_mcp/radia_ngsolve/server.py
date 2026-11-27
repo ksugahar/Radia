@@ -1158,10 +1158,8 @@ def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
 
     Use this when you have a `.vol` file with `kelvin_int` /
     `kelvin_ext` boundary labels but no `Identifications` section yet
-    -- typical when the Cubit C++ exporter's all-or-nothing vertex
-    matching skipped due to a single tolerance miss (1/8-octant
-    geometry), or when the mesh came from outside the Cubit panel
-    pipeline.
+    -- every Cubit Kelvin mesh (`export netgen` writes the labels but no
+    Kelvin identifications), or a mesh from outside the Cubit route.
 
     Read topic="curved_geometry" before applying this to a curved archive.
     In-memory vertex pairing is not geometry/persistence or HCurl qualification;
