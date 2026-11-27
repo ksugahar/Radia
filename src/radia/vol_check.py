@@ -1091,7 +1091,7 @@ def check_consistency(
     constants are intentionally outside this checker and remain owned by the
     application's DesignSpec/configuration contract.
     """
-    from ngsolve import BND, BBND, CF, Integrate, Mesh, TaskManager
+    from ngsolve import BND, BBND, CF, Integrate, Mesh
 
     threshold = float(threshold)
     if not np.isfinite(threshold) or threshold < 0.0:
@@ -1155,74 +1155,73 @@ def check_consistency(
     materials = []
     boundaries = []
     edges = []
-    with TaskManager():
-        for material in labels["materials"]:
-            ng_volume = _finite_measurement(
-                Integrate(CF(1), mesh, definedon=mesh.Materials(
-                    _native_selector(mesh, "GetMaterials", material))),
-                f'volume for material "{material}"',
-            )
-            entry = {"name": material, "ng_volume": ng_volume}
-            if material in cad_volumes:
-                cad_volume = cad_volumes[material]
-                entry["cad_volume"] = cad_volume
-                if cad_volume > 0.0:
-                    error = (ng_volume - cad_volume) / cad_volume * 100.0
-                    entry["error_pct"] = error
-                    if abs(error) > threshold:
-                        warnings.append(
-                            f'Volume "{material}": {error:+.2e}% '
-                            f"(ng={ng_volume:.6e}, cad={cad_volume:.6e})"
-                        )
-            elif material in mesh_only_materials:
-                entry["cad_reference_status"] = "mesh_only_no_cad_volume"
-            materials.append(entry)
+    for material in labels["materials"]:
+        ng_volume = _finite_measurement(
+            Integrate(CF(1), mesh, definedon=mesh.Materials(
+                _native_selector(mesh, "GetMaterials", material))),
+            f'volume for material "{material}"',
+        )
+        entry = {"name": material, "ng_volume": ng_volume}
+        if material in cad_volumes:
+            cad_volume = cad_volumes[material]
+            entry["cad_volume"] = cad_volume
+            if cad_volume > 0.0:
+                error = (ng_volume - cad_volume) / cad_volume * 100.0
+                entry["error_pct"] = error
+                if abs(error) > threshold:
+                    warnings.append(
+                        f'Volume "{material}": {error:+.2e}% '
+                        f"(ng={ng_volume:.6e}, cad={cad_volume:.6e})"
+                    )
+        elif material in mesh_only_materials:
+            entry["cad_reference_status"] = "mesh_only_no_cad_volume"
+        materials.append(entry)
 
-        for boundary in labels["boundaries"]:
-            ng_area = _finite_measurement(
+    for boundary in labels["boundaries"]:
+        ng_area = _finite_measurement(
+            Integrate(
+                CF(1), mesh, BND,
+                definedon=mesh.Boundaries(
+                    _native_selector(mesh, "GetBoundaries", boundary)),
+                order=16,
+            ),
+            f'area for boundary "{boundary}"',
+        )
+        entry = {"name": boundary, "ng_area": ng_area}
+        if boundary in cad_areas:
+            cad_area = cad_areas[boundary]
+            entry["cad_area"] = cad_area
+            if cad_area > 0.0:
+                error = (ng_area - cad_area) / cad_area * 100.0
+                entry["error_pct"] = error
+                if abs(error) > threshold:
+                    warnings.append(
+                        f'Area "{boundary}": {error:+.2e}% '
+                        f"(ng={ng_area:.6e}, cad={cad_area:.6e})"
+                    )
+        boundaries.append(entry)
+
+    edge_error = None
+    total_ng_length = None
+    try:
+        total_ng_length = _finite_measurement(
+            Integrate(CF(1), mesh, BBND), "total BBND length"
+        )
+        for edge in labels["bboundaries"]:
+            ng_length = _finite_measurement(
                 Integrate(
-                    CF(1), mesh, BND,
-                    definedon=mesh.Boundaries(
-                        _native_selector(mesh, "GetBoundaries", boundary)),
-                    order=16,
+                    CF(1), mesh, BBND,
+                    definedon=mesh.BBoundaries(
+                        _native_selector(mesh, "GetBBoundaries", edge)),
                 ),
-                f'area for boundary "{boundary}"',
+                f'length for BBND "{edge}"',
             )
-            entry = {"name": boundary, "ng_area": ng_area}
-            if boundary in cad_areas:
-                cad_area = cad_areas[boundary]
-                entry["cad_area"] = cad_area
-                if cad_area > 0.0:
-                    error = (ng_area - cad_area) / cad_area * 100.0
-                    entry["error_pct"] = error
-                    if abs(error) > threshold:
-                        warnings.append(
-                            f'Area "{boundary}": {error:+.2e}% '
-                            f"(ng={ng_area:.6e}, cad={cad_area:.6e})"
-                        )
-            boundaries.append(entry)
-
-        edge_error = None
-        total_ng_length = None
-        try:
-            total_ng_length = _finite_measurement(
-                Integrate(CF(1), mesh, BBND), "total BBND length"
-            )
-            for edge in labels["bboundaries"]:
-                ng_length = _finite_measurement(
-                    Integrate(
-                        CF(1), mesh, BBND,
-                        definedon=mesh.BBoundaries(
-                            _native_selector(mesh, "GetBBoundaries", edge)),
-                    ),
-                    f'length for BBND "{edge}"',
-                )
-                entry = {"name": edge, "ng_length": ng_length}
-                if edge in cad_lengths:
-                    entry["cad_length"] = cad_lengths[edge]
-                edges.append(entry)
-        except Exception as exc:
-            edge_error = str(exc)
+            entry = {"name": edge, "ng_length": ng_length}
+            if edge in cad_lengths:
+                entry["cad_length"] = cad_lengths[edge]
+            edges.append(entry)
+    except Exception as exc:
+        edge_error = str(exc)
 
     measured_edge_names = {entry["name"] for entry in edges}
     for edge, cad_length in sorted(cad_lengths.items()):
