@@ -40,8 +40,8 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
         del sys.modules["calc_common"]
     from calc_common import detect_kelvin_offset, add_periodic_kelvin
     from ngsolve import (Mesh, H1, Periodic, BilinearForm, LinearForm,
-                         GridFunction, CoefficientFunction, BND, ds,
-                         specialcf, x, y, z,
+                         GridFunction, CoefficientFunction, BND,
+                         x, y, z,
                          grad, dx, sqrt, Integrate, TaskManager)
 
     mu0 = 4 * math.pi * 1e-7
@@ -105,7 +105,8 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     #
     #   a(u, v) = int_dom  mu * grad(u) . grad(v) dx           (all materials)
     #   f(v)    = int_air  mu * grad(gfOmega_lift) . grad(v) dx
-    #           + int_sphere  (-n . Bs) * v ds                 (Neumann fix)
+    #           + int_magnetic  Bs . grad(v) dx                (Neumann fix,
+    #             = int_sphere (n_out . Bs) v ds)
     Omega_s = H0 * z
     Bs = CoefficientFunction((0.0, 0.0, mu0 * H0))
 
@@ -130,8 +131,12 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     fcut = _np.array(f.vec.FV())[fes.FreeDofs()]
     _np.array(f.vec.FV(), copy=False)[fes.FreeDofs()] = fcut
 
-    normal = -specialcf.normal(mesh.dim)
-    f += (normal * Bs) * v * ds("sphere")
+    # Neumann fix int_sphere (n_out . Bs) v ds with n_out leaving the
+    # magnetic region.  Bs is constant (div Bs = 0), so by the divergence
+    # theorem it equals int_magnetic Bs . grad(v) dx, which does not depend
+    # on the orientation the mesh route gives the "sphere" faces (Cubit
+    # sidesets point into the sphere, Netgen OCC faces out of it).
+    f += Bs * grad(v) * dx("magnetic")
     f.Assemble()
 
     print(f"  assembling...")

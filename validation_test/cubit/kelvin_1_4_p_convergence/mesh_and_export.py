@@ -21,35 +21,49 @@ Geometry (units: meters):
   z = free      (no reduction along z -- preserves uniform Hz physics)
   GND vertex    Dirichlet (Omega = 0 at kelvin centre = "infinity")
 
-Run:
-  python mesh_and_export.py [--out-dir DIR] [--orders 1,2,3]
+Run (Cubit Python API, batch, with the radia-mcp command plugin):
+  python mesh_and_export.py --plugin-dir <dir with radia_cubit_export.dll> [--out-dir DIR] [--orders 1,2,3]
 """
 
 import argparse
 import os
 import sys
+from pathlib import Path
 
-# --- Boilerplate to attach to in-tree Cubit + plugin ---
+from radia_mcp.cubit.kelvin import add_kelvin_cubit
+
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_RADIA = os.path.join(THIS_DIR, "..", "..", "..", "src", "radia")
-sys.path.insert(0, SRC_RADIA)
-sys.path.insert(0, os.path.join(SRC_RADIA, "panels"))
-from radia_mcp.cubit.toolbar_install import find_cubit_bin
+cubit = None
 
-_cubit_path = find_cubit_bin()
-if _cubit_path and _cubit_path not in sys.path:
-    sys.path.append(_cubit_path)
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
-    os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
-import cubit
-cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
-            '-commandplugindir', _plugin_dir or ''])
+def init_cubit(plugin_dir, cubit_bin=None):
+    """Start headless Cubit with the radia_cubit_export plugin.
 
-# Import add_kelvin_cubit AFTER cubit is initialised
-from add_kelvin import add_kelvin_cubit
+    Same load order as the production export worker
+    (radia_mcp.cubit.vol_export): the Netgen runtime first, so the plugin
+    binds to the already loaded nglib, then Cubit with CUBIT_PLUGIN_DIR.
+    """
+    global cubit
+    import ngsolve  # noqa: F401
+    import netgen
+
+    if cubit_bin is None:
+        from radia.cubit_locator import find_cubit_bin
+        cubit_bin = find_cubit_bin()
+        if cubit_bin is None:
+            raise SystemExit("Cubit not found: set CUBIT_BIN_DIR or pass --cubit-bin")
+    plugin_dir = Path(plugin_dir).resolve()
+    if not (plugin_dir / "radia_cubit_export.dll").is_file():
+        raise SystemExit(f"radia_cubit_export.dll not found in {plugin_dir}")
+    os.add_dll_directory(os.path.dirname(netgen.__file__))
+    sys.path.append(str(cubit_bin))
+    os.add_dll_directory(str(cubit_bin))
+    os.environ["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
+    import cubit as cubit_module
+
+    cubit_module.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
+    cubit = cubit_module
+    return cubit_module
 
 
 def probe_volumes(label=""):
@@ -178,7 +192,13 @@ if __name__ == "__main__":
     p.add_argument("--out-dir", default=THIS_DIR)
     p.add_argument("--orders", default="1,2,3")
     p.add_argument("--mesh-size", type=float, default=0.025)
+    p.add_argument("--plugin-dir", default=os.environ.get("RADIA_CUBIT_PLUGIN_DIR"),
+                   help="directory holding radia_cubit_export.dll (default $RADIA_CUBIT_PLUGIN_DIR)")
+    p.add_argument("--cubit-bin", default=None)
     args = p.parse_args()
+    if not args.plugin_dir:
+        raise SystemExit("pass --plugin-dir or set RADIA_CUBIT_PLUGIN_DIR")
+    init_cubit(args.plugin_dir, args.cubit_bin)
     orders = tuple(int(x) for x in args.orders.split(","))
     files = build_and_export(args.out_dir, orders=orders,
                              mesh_size=args.mesh_size)
