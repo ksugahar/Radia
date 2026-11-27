@@ -1,11 +1,12 @@
-"""check-vol (radia.vol_check) gives the same verdicts as the former standalone checker.
+"""check-vol (radia.vol_check) keeps its adopted verdicts on fixed good and bad meshes.
 
 Guards: radia.vol_check, the entry gate every solver-bound .vol passes before
 initialization. For each case in tests/fixtures/vol_check/cases.py (committed
 fixtures, label-contract violations and topology violations) the normalized
-report must equal the one recorded with the former standalone checker 3.1.0
-(identified by its RECORD SHA-256 in tests/fixtures/vol_check/expected.json) on
-the same case; input errors must match by type. The schema is radia.vol-check.v1.
+report must equal the adopted baseline (tests/fixtures/vol_check/expected.json,
+recorded from radia.vol_check at its source_sha after it matched the former
+standalone checker on every case); input errors must match by type. The schema
+is radia.vol-check.v1.
 Assumes: NGSolve is importable. Measured floats are compared at 1e-9 relative
 so a different NGSolve build does not change the verdict; every flag, count,
 name and issue list must match exactly.
@@ -46,13 +47,13 @@ def _diff(actual, expected, path="$"):
     return [] if actual == expected else [f"{path}: {actual!r} != {expected!r}"]
 
 
-def test_case_set_matches_the_recorded_oracle():
+def test_case_set_matches_the_baseline():
+    assert EXPECTED["schema"] == "radia.vol-check-baseline.v1", EXPECTED["schema"]
     assert sorted(CASES) == sorted(EXPECTED["cases"]), (sorted(CASES), sorted(EXPECTED["cases"]))
-    assert EXPECTED["oracle"]["former_standalone_checker_version"] == "3.1.0", EXPECTED["oracle"]
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
-def test_vol_check_matches_the_former_checker(name, tmp_path):
+def test_vol_check_matches_the_baseline(name, tmp_path):
     from radia.vol_check import check_consistency
 
     mesh, contract = cases.write_case(tmp_path, name, CASES[name])

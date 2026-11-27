@@ -1,7 +1,7 @@
 """Deterministic check-vol cases: committed fixtures plus small text mutations.
 
-Shared by the check-vol oracle test and the one-time recorder that produced
-``expected.json`` with the former standalone checker 3.1.0.
+Shared by the check-vol contract test and the script that records its
+baseline ``expected.json`` from radia.vol_check.
 Every case is (vol_bytes, vol_suffix, contract_dict_or_None).
 """
 from __future__ import annotations
