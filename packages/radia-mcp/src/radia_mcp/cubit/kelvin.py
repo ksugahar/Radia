@@ -44,6 +44,21 @@ _SYM_NORMALS = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}
 _VALID_BC = ("bn=0", "ht=0")
 
 
+def _cubit_module():
+    """Cubit's Python API; only the Cubit-route helpers need it.
+
+    The OCC and axisymmetric helpers in this module work without Cubit, so
+    the import stays inside the Cubit functions and fails with a clear message.
+    """
+    try:
+        import cubit
+    except ImportError as exc:
+        raise RuntimeError(
+            "this Kelvin helper drives Cubit and needs its Python API: run it "
+            "inside Cubit or after cubit.init()") from exc
+    return cubit
+
+
 def sym_sideset_name(axis, bc):
     """Return the canonical sideset label for a symmetry plane.
 
@@ -377,7 +392,7 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
             'R', 'center', 'symmetry', 'reduction', 'offset_dir',
             'air_vols', 'outer_vols', 'sym_sidesets'
     """
-    import cubit  # Layer 2 only
+    cubit = _cubit_module()
 
     if symmetry is not None and reduction is not None:
         raise ValueError(
@@ -619,7 +634,7 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         cannot coincide with the air cut faces.  Requires a different
         Kelvin mapping (e.g. 7 reflected copies) -- deferred.
     """
-    import cubit
+    cubit = _cubit_module()
 
     # Validate inputs.
     if not isinstance(reduction, dict):
@@ -1071,7 +1086,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
             reduction={"x": "ht=0", "z": "bn=0"} for a 1/4 xz model.
     """
     import math as _m
-    import cubit
+    cubit = _cubit_module()
 
     # --- Step 1: idempotent skip ---
     for bid in cubit.get_block_id_list():
