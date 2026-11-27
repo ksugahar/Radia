@@ -726,7 +726,7 @@ def cubit_check_vol(vol_path: str,
 
 	Lab policy requires every solver-bound `.vol` to pass this gate after
 	mesh export and BEFORE solver or Simulink initialization.  This tool
-	delegates to `radia_mcp.cubit.check.check_consistency` (the same
+	delegates to `radia.vol_check.check_consistency` (the same
 	engine as the `check-vol` CLI): raw DomainIn/DomainOut ownership,
 	NGSolve structural load, label inventory/contract, curved-map quality,
 	and CAD-sidecar consistency
@@ -754,7 +754,7 @@ def cubit_check_vol(vol_path: str,
 	    base-edge blend (quality.curved_pyramid_map).
 	"""
 	try:
-		from radia_mcp.cubit.check import check_consistency
+		from radia.vol_check import check_consistency
 	except ImportError as exc:
 		return json.dumps({
 			"status": "error", "stage": "import", "kind": "environment",
@@ -788,7 +788,7 @@ def cubit_check_vol(vol_path: str,
 			"error": f"{type(exc).__name__}: {exc}",
 		})
 	if report_json:
-		from radia_mcp.cubit.check import _write_report_json
+		from radia.vol_check import _write_report_json
 		rp = Path(report_json)
 		if not rp.is_absolute():
 			rp = PROJECT_ROOT / rp
@@ -2641,7 +2641,7 @@ def cubit_doctor() -> str:
 	# --- 6. check-vol dependency -----------------------------------------
 	try:
 		import ngsolve  # noqa: F401
-		import radia_mcp.cubit.check  # noqa: F401
+		import radia.vol_check  # noqa: F401
 		checks["check_vol_deps"] = {"status": "ok"}
 	except ImportError as exc:
 		checks["check_vol_deps"] = {

@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 maintenance = ["tomlkit>=0.13,<1"]
-# build123d analysis uses check-vol (radia_mcp.cubit.check, no Cubit licence), Netgen,
+# build123d analysis uses check-vol (radia.vol_check, no Cubit licence), Netgen,
 # and the post-migration Radia serializer. Publish that Radia release before
 # distributing this extra: the published 5.3.3 writer has no PayloadV42.
 build123d = [
@@ -33,12 +33,14 @@ build123d = [
     "netgen-mesher==6.2.2608",
     "radia>5.3.3",
 ]
-# Cubit MCP and check-vol. Licensed Cubit is found at run time; the curved .vol
-# export additionally needs the locally built plugin (native/cubit_vol_export).
+# Cubit MCP. Licensed Cubit is found at run time; check-vol comes from radia
+# (radia.vol_check, first released after 5.4.6); the curved .vol export
+# additionally needs the locally built plugin (native/cubit_vol_export).
 cubit = [
     "numpy>=1.24",
     "ngsolve==6.2.2608",
     "netgen-mesher==6.2.2608",
+    "radia>5.4.6",
 ]
 # CadQuery interop: `execute_cadquery` + `cadquery_to_cubit_hex` let
 # users author geometry in either sibling OCCT CAD library and route
@@ -110,7 +112,6 @@ Repository = "https://github.com/ksugahar/Radia"
 # One command; servers are selected by catalog key: radia-mcp serve <key>.
 radia-mcp = "radia_mcp.maintenance:main"
 radia-acoustic-fembem-mcp-config = "radia_mcp.acoustic_fembem.integration:main"
-check-vol = "radia_mcp.cubit.check:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -485,7 +485,7 @@ Cubit execution, journals, meshing and process lifetime are owned by
 The build123d analysis pipeline connects to Netgen and returns a checked
 `.vol` with its versioned label contract and `check-vol` report. Its MSH 4.2
 file is a derived post-processing result, never an analysis input. This path
-uses the `check-vol` checker API (`radia_mcp.cubit.check`) without running or
+uses the `check-vol` checker API (`radia.vol_check`) without running or
 licensing Cubit, and the current Radia `GmshPostExport` writer. A writer that
 does not produce valid MSH 4.2 fails explicitly. Coordinates and mesh sizes
 for analysis are supplied in meters; physical boundary conditions are not

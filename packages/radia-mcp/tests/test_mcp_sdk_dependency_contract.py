@@ -40,7 +40,9 @@ def test_public_description_and_optional_cubit_ownership():
     assert len(project["description"]) <= 512
     assert "Cubit MCP, the curved .vol worker and check-vol" in project["description"]
     assert "mcp-server-cubit" not in project["scripts"]
-    assert project["scripts"]["check-vol"] == "radia_mcp.cubit.check:main"
+    assert "check-vol" not in project["scripts"]  # radia owns check-vol (radia.vol_check)
+    cubit_names = {Requirement(item).name for item in project["optional-dependencies"]["cubit"]}
+    assert "radia" in cubit_names, cubit_names
     for extra, requirements in project["optional-dependencies"].items():
         names = {Requirement(item).name for item in requirements}
         assert "cubit-mesh-export" not in names, extra

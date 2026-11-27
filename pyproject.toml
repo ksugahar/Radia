@@ -74,9 +74,6 @@ gpu = [
     "nvidia-nvjitlink-cu12==12.8.61; sys_platform == 'linux' or sys_platform == 'win32'",
 ]
 optuna = ["optuna==5.0.0"]
-cubit = [
-    "cubit-mesh-export>=2.4.0; python_version == '3.12' and sys_platform == 'win32'",
-]
 topopt-cad = [
     # Density/level-set -> watertight STL -> Cubit mesh regeneration.
     # Kept optional because these packages are not needed by the solver core.
@@ -137,8 +134,9 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 # Desktop PySide and notebook-workbench entry points are retired. Human
 # production operation uses the Radia Simulink library. Python/MCP use the
 # headless calc_*.py and DesignSpec contracts.
-# Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
-# MCP servers: radia-mcp package (pip install radia-mcp)
+# check-vol: the standalone .vol checker (radia.vol_check, no Cubit needed).
+# Cubit MCP, plugin and GUI install: radia-mcp package (pip install "radia-mcp[cubit]")
+check-vol = "radia.vol_check:main"
 
 [tool.setuptools.package-data]
 # Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit

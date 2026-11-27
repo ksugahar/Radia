@@ -24,7 +24,7 @@ __all__ = ["run_pipeline", "run_pipeline_multi", "save_record"]
 
 _DEPENDENCY_HELP = (
     "Install the radia-mcp build123d extra. The canonical check-vol "
-    "checker (radia_mcp.cubit.check) requires NGSolve. Post output also needs a Radia "
+    "checker (radia.vol_check) requires NGSolve. Post output also needs a Radia "
     "release newer than 5.3.3 exposing GmshPostExport and PayloadV42. "
     "The published 5.3.3 writer is unsupported; a current source serializer "
     "can be validated separately until the post-migration Radia release is published."
@@ -152,7 +152,7 @@ def _load_checked_vol(vol_path: Path):
     if contract.get("units") != "m":
         raise ValueError("Netgen solver label contract must declare SI units 'm'")
     try:
-        from radia_mcp.cubit.check import check_consistency
+        from radia.vol_check import check_consistency
         from ngsolve import Mesh
     except ImportError as exc:
         raise RuntimeError(_DEPENDENCY_HELP) from exc

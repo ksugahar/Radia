@@ -1,14 +1,17 @@
 """
 Check Netgen .vol mesh quality, labels, and optional CAD reference values.
 
-Standalone checker -- does NOT require Cubit.
+Standalone checker -- does NOT require Cubit. Part of radia so that solver
+entries (and radia-mcp) use one checker without depending on an MCP package.
 The .vol file is always checked.  A sibling .vol.json CAD reference is used
 when present, but is not required for the structural/label gate.
 
 The report schema name ``cubit-mesh-export.vol-check.v1`` is kept unchanged
-because solver, MATLAB and validation consumers key on it.
+because solver, MATLAB and validation consumers and stored records key on it;
+the checker identity is ``versions.radia``.
 
 Usage:
+    python -m radia.vol_check model.vol
     check-vol model.vol
     check-vol model.vol --strict-labels --contract labels.json
     check-vol model.vol --report-json run/vol_check.json
@@ -71,7 +74,7 @@ def _runtime_metadata():
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "versions": {
-            "radia_mcp": _distribution_version("radia-mcp"),
+            "radia": _distribution_version("radia"),
             "ngsolve": _distribution_version("ngsolve"),
             "python": platform.python_version(),
         },

@@ -1,4 +1,4 @@
-"""Build-host producer using the authoritative installed check-vol distribution.
+"""Build-host producer using the authoritative installed check-vol (radia.vol_check).
 
 This runs only the existing strict-label/default-quality checker. It does not
 approve its own output: an independent artifact manifest must pin the resulting
@@ -19,7 +19,7 @@ import tempfile
 
 
 def distribution_identity():
-    dist = metadata.distribution("cubit-mesh-export")
+    dist = metadata.distribution("radia")
     if dist.version.lower() in ("", "unknown") or json.loads(
             dist.read_text("direct_url.json") or "{}").get("dir_info", {}).get("editable", False):
         raise ValueError("Receipt producer requires an installed, non-editable checker distribution")
@@ -32,7 +32,7 @@ def distribution_identity():
             actual = base64.urlsafe_b64encode(hashlib.new(file.hash.mode, data).digest()).decode().rstrip("=")
             if actual != file.hash.value:
                 raise ValueError("Checker installed RECORD mismatch: " + str(file))
-    return dict(distribution="cubit-mesh-export", version=dist.version,
+    return dict(distribution="radia", version=dist.version,
                 record_sha256=hashlib.sha256(Path(dist.locate_file(records[0])).read_bytes()).hexdigest())
 
 
@@ -53,7 +53,7 @@ def prepare(mesh_path, label_contract, output):
         mesh = Path(directory) / ("mesh" + suffix)
         contract = Path(directory) / "labels.json"
         mesh.write_bytes(mesh_bytes); contract.write_bytes(contract_bytes)
-        argv = [sys.executable, "-m", "cubit_mesh_export.check", str(mesh),
+        argv = [sys.executable, "-m", "radia.vol_check", str(mesh),
                 "--strict-labels", "--contract", str(contract), "--format", "json"]
         env = dict(os.environ, PYTHONNOUSERSITE="1", PYTHONSAFEPATH="1",
                    PYTHONUTF8="1", PYTHONIOENCODING="utf-8")

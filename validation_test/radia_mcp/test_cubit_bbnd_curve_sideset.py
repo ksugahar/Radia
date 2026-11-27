@@ -4,7 +4,7 @@ from pathlib import Path
 import ngsolve as ng
 import pytest
 
-from radia_mcp.cubit.check import check_consistency
+from radia.vol_check import check_consistency
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "packages" / "radia-mcp" / "tests" / "cubit_mcp" / "fixtures"

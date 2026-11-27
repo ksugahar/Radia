@@ -130,7 +130,7 @@ Claude Code (MCP client)
 (license-friendly, <1 ms per command after init); `cubit_batch_try` /
 `cubit_mesh_auto` spawn fresh headless subprocesses for dry-runs.
 `cubit_check_vol` needs **no Cubit at all** — it runs the
-`radia_mcp.cubit.check` engine (NGSolve) in the server's Python 3.12.
+`radia.vol_check` engine (NGSolve) in the server's Python 3.12.
 
 Session robustness (MathWorks MATLAB-MCP patterns, 2026-08-05):
 
