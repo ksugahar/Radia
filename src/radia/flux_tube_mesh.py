@@ -480,8 +480,12 @@ def _bernstein_matrix():
 
 def hex_jacobian_lower_bound(nodes_m: NDArray, hexes: NDArray, chunk: int = 20000) -> NDArray:
     """Lower bound of det(dx/du) over the whole reference cube of every Gmsh-ordered
-    trilinear hex: the smallest Bernstein coefficient of the degree-(2, 2, 2) polynomial.
-    Positive means the Jacobian is positive everywhere inside, not only at corners."""
+    trilinear hex: the smallest Bernstein coefficient of the degree-(2, 2, 2) polynomial,
+    less a floating-point margin. Positive means the Jacobian is positive everywhere inside,
+    not only at corners. Each element is moved to its first node before differentiating, so
+    far-from-origin coordinates do not cancel, and the margin 2048 eps S^3 (S the sum of the
+    node distances from that node, which bounds every Jacobian column) covers the rounding
+    of the derivatives, determinants and Bernstein combination."""
     t = np.array([0.0, 0.5, 1.0])
     U, V, W = (x.ravel() for x in np.meshgrid(t, t, t, indexing="ij"))
     P = np.stack([U, V, W], 1)                                        # (27, 3)
@@ -494,8 +498,10 @@ def hex_jacobian_lower_bound(nodes_m: NDArray, hexes: NDArray, chunk: int = 2000
     out = np.empty(len(hexes))
     for s0 in range(0, len(hexes), chunk):
         h = X[hexes[s0:s0 + chunk]]                                   # (n, 8, 3)
+        h = h - h[:, :1]                                              # translation-free
         J = np.einsum("pna,hnk->hpka", D, h)                          # (n, 27, 3, 3)
-        out[s0:s0 + chunk] = (np.linalg.det(J) @ M.T).min(axis=1)
+        margin = 2048 * np.finfo(float).eps * np.linalg.norm(h, axis=2).sum(axis=1) ** 3
+        out[s0:s0 + chunk] = (np.linalg.det(J) @ M.T).min(axis=1) - margin
     return out
 
 

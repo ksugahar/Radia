@@ -106,6 +106,25 @@ def _grid(xi, eta):
     return np.broadcast_arrays(np.asarray(xi, float), np.asarray(eta, float))
 
 
+def _insert_nearest_points(p: NDArray, d: NDArray) -> tuple[NDArray, NDArray]:
+    """Insert, on every segment, the point where |d| (d linear along the segment) is
+    smallest when it lies strictly inside. |d| is convex there, so each piece is monotone.
+    Returns the points and the new index of each original vertex."""
+    step = np.diff(d, axis=0)
+    length2 = np.einsum("ij,ij->i", step, step)
+    t = np.where(length2 > 0, -np.einsum("ij,ij->i", d[:-1], step)
+                 / np.where(length2 > 0, length2, 1.0), -1.0)
+    inner = np.nonzero((t > 1e-12) & (t < 1 - 1e-12))[0]
+    if not len(inner):
+        return p, np.arange(len(p))
+    feet = p[inner] + t[inner, None] * (p[inner + 1] - p[inner])
+    index = np.arange(len(p)) + np.searchsorted(inner, np.arange(len(p)), side="left")
+    out = np.empty((len(p) + len(inner), 3))
+    out[index] = p
+    out[inner + np.arange(1, len(inner) + 1)] = feet
+    return out, index
+
+
 class _Chart:
     """Common chart interface: chart, area_vector, metric, locate, flux_density."""
 
@@ -280,20 +299,7 @@ class CylindricalPatch(_Chart):
         a segment, so a chord entering and leaving the cylinder gets both roots."""
         p = np.asarray(points_m, dtype=float)
         d = p - self.axis_origin_m
-        perp = d - np.outer(d @ self.axis_unit, self.axis_unit)
-        step = np.diff(perp, axis=0)
-        length2 = np.einsum("ij,ij->i", step, step)
-        t = np.where(length2 > 0, -np.einsum("ij,ij->i", perp[:-1], step)
-                     / np.where(length2 > 0, length2, 1.0), -1.0)
-        inner = np.nonzero((t > 1e-12) & (t < 1 - 1e-12))[0]
-        if not len(inner):
-            return p, np.arange(len(p))
-        feet = p[inner] + t[inner, None] * (p[inner + 1] - p[inner])
-        index = np.arange(len(p)) + np.searchsorted(inner, np.arange(len(p)), side="left")
-        out = np.empty((len(p) + len(inner), 3))
-        out[index] = p
-        out[inner + np.arange(1, len(inner) + 1)] = feet
-        return out, index
+        return _insert_nearest_points(p, d - np.outer(d @ self.axis_unit, self.axis_unit))
 
 
 @dataclass(frozen=True)
@@ -338,6 +344,12 @@ class SphericalCapPatch(_Chart):
         xi = np.arctan2(np.hypot(x, y), z) / self.theta_max
         eta = np.mod(np.arctan2(y, x) - self.theta0, 2 * np.pi) / self.dtheta
         return r - self.radius_m, xi, eta
+
+    def monotone_points(self, points_m):
+        """Add each segment's point nearest the centre: the distance from it is convex
+        along a segment, so a chord crossing the sphere twice gets both roots."""
+        p = np.asarray(points_m, dtype=float)
+        return _insert_nearest_points(p, p - self.center_m)
 
 
 def _offset_root(chart, a: NDArray, b: NDArray, side_a: int) -> NDArray:
@@ -1119,8 +1131,9 @@ def ring_equal_flux_cells(flux_density: Callable, metric: Callable, *, n_lines: 
     the inner ones: n_centre + n_sectors * (n_rings - 1 + rim_factor) = n_lines.
     Ring radii and sector breaks sit at equal steps of the xi- and
     eta-marginal flux of an n_samples^2 midpoint table, so a cell carries
-    exactly the target flux when the density separates in (xi, eta); the
-    table spread of every cell is reported otherwise. n_sectors is even and a
+    exactly the target flux of that table model when the density separates in
+    (xi, eta) (the analytic cell flux differs by the table's quadrature error);
+    the table spread of every cell is reported otherwise. n_sectors is even and a
     multiple of n_centre. Among the admissible (n_rings, n_sectors) the layout
     with the smallest mean |log| physical cell aspect (from metric) is chosen
     unless n_rings is given. transition=True (rim_factor 2) marks the ring

@@ -1,7 +1,8 @@
 """Surrogate contracts for the experimental conforming hex flux-tube mesh.
 
 Guards: ring equal-flux cells (counts, shared sector breaks, cell flux), the
-spherical cap chart, the Bernstein Jacobian bound, and on one coarse sphere
+spherical cap chart and its two-crossing chords, the Bernstein Jacobian bound
+(also far from the origin), and on one coarse sphere
 case with a 2:1 rim: face conformity, the 2:1 seam (every fine face shared
 once, opposite orientation), positive Jacobian bound inside every hex,
 section flux against the analytic tube flux, and native Gmsh readback of the
@@ -21,7 +22,8 @@ import numpy as np
 import pytest
 
 from radia.flux_seeding import (annular_patch, balanced_equal_flux_seeds, planar_patch,
-                                ring_equal_flux_cells, spherical_cap_patch)
+                                ring_equal_flux_cells, spherical_cap_patch,
+                                surface_crossings)
 from radia.flux_tube_mesh import (STATUS, build_flux_tube_mesh, face_census, flux_tube_report,
                                   hex_corner_jacobians, hex_jacobian_lower_bound,
                                   write_flux_tube_msh)
@@ -106,6 +108,68 @@ def test_spherical_cap_chart_area_and_locate():
     s, xi, eta = cap.locate(cap.chart(XI, ET))
     assert np.max(np.abs(s)) < 1e-15 and np.allclose(xi, XI) and np.allclose(eta, ET)
 
+
+def test_a_chord_through_a_sphere_cap_crosses_it_twice():
+    """Guards: the cap splits every segment at its point nearest the centre.
+
+    Both ends of the segment x = -2 -> 2 (z = 0.5) lie outside the unit sphere, so
+    endpoint signs alone see no crossing; the analytic roots x = -+sqrt(0.75) lie on the
+    upper hemisphere, entering (-1) then leaving (+1). Splitting the chord at x = 0
+    by hand must give the same answer.
+    """
+    cap = spherical_cap_patch([0, 0, 0], [0, 0, 1], 1.0, np.pi / 2)
+    chord = np.array([[-3.0, 0, 0.5], [-2.0, 0, 0.5], [2.0, 0, 0.5]])
+    split = np.array([[-3.0, 0, 0.5], [-2.0, 0, 0.5], [0.0, 0, 0.5], [2.0, 0, 0.5]])
+    assert surface_crossings(chord, cap, seed_vertex=0, closed=False) == [-1, 1]
+    assert surface_crossings(split, cap, seed_vertex=0, closed=False) == [-1, 1]
+    below = chord - [0, 0, 1.0]                     # z = -0.5: lower hemisphere only
+    assert surface_crossings(below, cap, seed_vertex=0, closed=False) == []
+
+
+def _sampled_jacobians(X, points):
+    """Direct det(dx/du) of one Gmsh-ordered trilinear hex at reference points."""
+    out = []
+    for q in np.asarray(points, float):
+        f = np.where(UNIT_CUBE > 0, q, 1 - q)
+        d = np.stack([(2 * UNIT_CUBE[:, a] - 1) * np.prod(np.delete(f, a, axis=1), axis=1)
+                      for a in range(3)], 1)                      # (8 nodes, 3 ref axes)
+        out.append(np.linalg.det((X - X[0]).T @ d))
+    return np.array(out)
+
+
+def test_jacobian_bound_sees_an_interior_inversion_far_from_the_origin():
+    """Guards: the bound recentres each hex and keeps a rounding margin.
+
+    All corner determinants are positive, but det < 0 near reference (0.2, 0, 0); far
+    from the origin (1e15 m, spacing 1/8 representable) a bound formed from absolute
+    coordinates came out positive. Oracle: direct sampling of the derivative.
+    """
+    X = np.array([[.75, .125, .375], [.875, -.5, .75], [1, 1, .25], [-.125, 1.25, .375],
+                  [0, 0, 1.25], [1.25, 0, 1], [1.375, 1.125, 1.125], [.25, 1.25, 1.375]])
+    hexes = np.arange(8)[None]
+    probe = [[0.2, 0.0, 0.0], [0.2, 1e-4, 1e-4]]
+    for shift in (0.0, 1e15):
+        Y = X + shift
+        assert np.all(hex_corner_jacobians(Y, hexes) > 0)
+        direct = _sampled_jacobians(Y, probe)
+        bound = hex_jacobian_lower_bound(Y, hexes)[0]
+        assert direct.max() < 0, f"shift {shift}: sampled det {direct}"
+        assert bound <= direct.min(), f"shift {shift}: bound {bound} above sampled {direct}"
+    # Recentring keeps the bound useful far away: the unit cube still certifies det = 1.
+    assert hex_jacobian_lower_bound(UNIT_CUBE + 1e15, hexes)[0] == pytest.approx(1.0, rel=1e-9)
+
+
+def test_jacobian_bound_never_certifies_a_singular_hex():
+    """Guards: the rounding margin. Singular affine hexes have det = 0 exactly everywhere,
+    so the computed Bernstein minimum is rounding noise and sometimes slightly positive;
+    with the margin no such hex may be reported positive."""
+    rng = np.random.default_rng(5)
+    n = 2000
+    A = rng.standard_normal((n, 3, 3))
+    A[:, :, 2] = A[:, :, 0] * np.sqrt(2) - A[:, :, 1] / 3
+    X = np.einsum("vk,nik->nvi", UNIT_CUBE, A) + rng.standard_normal((n, 1, 3))
+    bound = hex_jacobian_lower_bound(X.reshape(-1, 3), np.arange(8 * n).reshape(n, 8))
+    assert np.count_nonzero(bound > 0) == 0, f"max bound {bound.max()}"
 
 def test_jacobian_bound_is_exact_for_affine_and_below_sampled_minimum():
     M = np.array([[2.0, 0.3, 0.0], [0.0, 1.0, 0.2], [0.1, 0.0, 0.5]])
