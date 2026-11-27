@@ -24,13 +24,8 @@ source and boundary choices still belong to the analysis model.
 
 ## Feature demonstrations
 
-Presentation notebook:
-[`docs/cubit_export/cubit_export_showcase.ipynb`](../../docs/cubit_export/cubit_export_showcase.ipynb)
-is the result-saved talk layer. It combines the validation summary JSONs,
-high-order curved-hex NGSolve results, and source excerpts for Q&A. Checked
-evidence is stored under
-[`validation_test/cubit_export`](../../validation_test/cubit_export/),
-not beside the notebook.
+Checked evidence is stored under
+[`validation_test/cubit_export`](../../validation_test/cubit_export/).
 
 Mesh-evaluation demo:
 [`docs/cubit_export/netgen/p_convergence_demo.ipynb`](netgen/p_convergence_demo.ipynb)

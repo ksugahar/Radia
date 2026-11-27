@@ -2,7 +2,8 @@
 
 The original synthetic stepped-bore case passed all declared gates using
 the exact tagged Python source and native payloads from the accepted wheel.
-[Numerical record](results.json), [artifact identity](release-identity.json),
+The numerical record `results.json` was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated
+(the release-candidate run is not reproducible). [Artifact identity](release-identity.json),
 [focused tests](focused.xml), [source verification](source-verification.json).
 
 - Three BEM meshes: 2470, 3778, 6232 nodes.

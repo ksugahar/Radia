@@ -1509,6 +1509,30 @@ PATTERNS: list[dict] = [
                     "element-count-taken-as-mesh-cost"],
     },
     {
+        "id": "block-relative-residual-on-near-zero-rhs",
+        "title": "A per-block relative residual gate fails on a block whose "
+                 "right-hand side is roundoff-sized.",
+        "topics": ["solver", "verification", "gates"],
+        "severity": "medium",
+        "first_seen": "2026-09-11",
+        "last_seen": "2026-09-11",
+        "what": "A block-wise true-residual gate (residual / block RHS) "
+                "reports 0.23 on an iron block although the global solve "
+                "converged and energy checks pass.",
+        "root_cause": "The block RHS norm was 1.0e-15 and its residual "
+                      "2.4e-16: both are roundoff, so their ratio carries "
+                      "no convergence information.",
+        "detection": "Print the block RHS norm next to every block "
+                     "relative residual; a ratio of O(0.1) with an RHS "
+                     "near machine epsilon times the global RHS is this "
+                     "pattern, not divergence.",
+        "prevention": "Normalize block residuals by the global RHS (or "
+                      "add an explicit absolute floor) as a reviewed gate "
+                      "change. Until then record the failed gate and hold "
+                      "the run; never mark it passed quietly.",
+        "related": [],
+    },
+    {
         "id": "element-count-taken-as-mesh-cost",
         "title": "Comparing meshes at equal element count hides the dof "
                  "they cost; boundary-heavy meshes look economical.",

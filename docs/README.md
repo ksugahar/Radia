@@ -30,7 +30,6 @@ For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
 - [Analytical formula examples (IEE Japan Part 1-9)](analytical_formulas/analytical_formulas.ipynb)
 - [AXIFEM notebooks](axifem/README.ipynb)
 - [Background fields: the `ObjBckg` callback API](background_fields/background_fields.ipynb)
-- [Cubit Export Showcase](cubit_export/cubit_export_showcase.ipynb)
 - [GMSH Displacement Animation Artifact](gmsh_animation/gmsh_animation.ipynb) (historical output)
 - [Gmsh Animation Export](gmsh_animation/gmsh_animation_export.ipynb)
 - [EM field-line and isosurface post-processing (gmsh lane)](gmsh_post/em_fieldlines.ipynb)
