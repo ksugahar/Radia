@@ -2871,8 +2871,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
             "elements, so the surface charge sigma = M.n cannot be "
             "represented and the demag operator would be silently wrong. "
             "Re-export the .vol with its skin as boundary faces (Cubit "
-            "Sculpt needs mesh-based geometry with a preserved skin; the "
-            "cubit MCP `cubit_stl_to_vol` tool does this and gates on it).")
+            "Sculpt needs mesh-based geometry with a preserved skin, and "
+            "the exported .vol must be checked for a complete boundary "
+            "skin before solving).")
     if internal_interfaces and not (
             mesh.dim == 3 and (
                 _vtypes == {8}

@@ -81,7 +81,6 @@ For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
 - [Frequency-dependent induction-heating power](esim_spatial/esim_spatial_demo.ipynb)
 - [Bend electron trajectories with a saddle coil](gmsh_post/em_particle_orbits.ipynb)
 - [Isochronous topology optimization on HDiv-MMM: density adjoint, constrained design loop, exact-void verification](hdiv_vim/isochronous_topopt.ipynb)
-- [Isochronous topopt II -- Sculpt + HDiv-MMM shape regeneration](hdiv_vim/isochronous_topopt_shape_regen.ipynb)
 - [Frequency-dependent magnetic lift on a conducting sphere](maglev/maglev_showcase.ipynb)
 - [Constrained CAE optimization with Optuna (RF waveguide design)](optimization/optimization.ipynb)
 - [Section-optics inverse design](section_optics/section_optics_design.ipynb)

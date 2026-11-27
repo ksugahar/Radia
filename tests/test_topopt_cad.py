@@ -2,8 +2,8 @@
 
 Pure-Python contracts (no Cubit): nodal averaging identities, the Exodus
 level-set writer round-trip, and the grid iso-surface route on a known
-body.  The Cubit-coupled halves (`create tri iso`, `cubit_stl_to_vol`)
-are exercised by validation_test/isochronous_topopt/test_shape_regen_lane.py.
+body.  Meshing the resulting STL or volume fractions with Cubit is
+outside this module.
 """
 import numpy as np
 import pytest

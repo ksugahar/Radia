@@ -341,7 +341,7 @@ a claim of live-client synchronization.
 
 `iso_stl_from_grid` now passes positive `nu=0.53` to Trimesh's subtractive
 dilation pass. The existing known-sphere regression now covers 0, 2, 3 and 4
-passes, including the three-pass setting used by `test_shape_regen_lane.py`.
+passes, including the three-pass setting.
 Its coordinate oracle directly performs alternating Laplacian updates; it
 does not read the production coefficient. It also checks finite coordinates,
 watertightness, positive volume, geometric sphere accuracy, the reported volume
@@ -488,15 +488,6 @@ independent reciprocity discrepancy `4.038e-8`, fine-hex/reference discrepancy
 2.2805% (coarse 16.3797%), fine-hex/staircase change -2.9249%, demagnetizing
 factor 0.46275. Field work took approximately 22 minutes. Resolving every facet
 boundary with 16 intervals changed meshing conditions, not acceptance tolerances.
-
-Scientific records are in `validation_test/isochronous_topopt/`:
-`shape_reacceptance_20260914.json`, its separate `_audit.json`, and first-party
-fixture `fixtures/shape_reacceptance_20260914.zip` (SHA-256
-`333a8ba2bdd199b26bea1104c90bff87023e67f4fcd962b6c792a347ae9025ce`).
-The original numerical driver hash `859f26f5...` is preserved. The later audit
-checks parent hashes, phase/UUID completion and actual geometry/mesh hashes;
-it explicitly records that no numerical recomputation occurred. Six additional
-fast tests exercise its non-mutating success and mismatched-evidence failures.
 
 This closes the shape rerun and physical BEM-route items, not all solver-release
 or ver5 acceptance. The remaining NASA question is external: an independent

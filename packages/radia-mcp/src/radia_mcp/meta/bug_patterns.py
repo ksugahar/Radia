@@ -314,20 +314,15 @@ PATTERNS: list[dict] = [
         "detection": "DemagFactor==0 plus an objective equal to the "
                      "mass-only response; count `surfaceelements` in "
                      "the .vol text.  Locked by "
-                     "tests/test_hdiv_vim_boundary_faces.py, the "
-                     "cubit_stl_to_vol `boundary_faces_ok` gate, and "
-                     "the shape-regen lane's demag_factor_z lock.",
+                     "tests/test_hdiv_vim_boundary_faces.py.",
         "prevention": "Bind mesh-based geometry BEFORE export: "
                       "`create mesh geometry hex all feature_angle 135` "
-                      "+ `delete volume with not is_meshed` (what "
-                      "cubit_stl_to_vol scheme=hex now does).  "
+                      "+ `delete volume with not is_meshed`, then check "
+                      "the .vol for a complete boundary skin.  "
                       "vim.build_charge_gram raises on any 3D mesh "
                       "with 0 BND elements.",
-        "related": ["packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py",
-                    "src/radia/vim/_vim.py",
-                    "tests/test_hdiv_vim_boundary_faces.py",
-                    "validation_test/isochronous_topopt/"
-                    "test_shape_regen_lane.py"],
+        "related": ["src/radia/vim/_vim.py",
+                    "tests/test_hdiv_vim_boundary_faces.py"],
     },
     {
         "id": "facet-tet-charge-gram-indefinite-cg-stall",
@@ -441,9 +436,7 @@ PATTERNS: list[dict] = [
                       "test_design_loop_lane.py (golden bands).",
         "related": ["src/radia/isochronous_topopt.py",
                     "validation_test/isochronous_topopt/"
-                    "test_design_loop_lane.py",
-                    "validation_test/isochronous_topopt/"
-                    "test_hex_native_design_lane.py"],
+                    "test_design_loop_lane.py"],
     },
 
     # =====================================================

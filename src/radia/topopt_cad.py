@@ -779,9 +779,9 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
     is a partition, so the per-cell fractions sum to at most 1 and the
     materials meet on a shared interface.  Sculpt then builds a CONFORMAL
     hex interface between them -- the thing an STL route cannot do without
-    booleaning two surfaces -- and the names ride through
-    ``cubit_vfrac_to_vol`` into the ``.vol`` material labels, which is
-    exactly what per-region ``vim.Solve(mesh, mu_r={name: value})``
+    booleaning two surfaces -- and the names become the Sculpt block names,
+    which the ``.vol`` export carries as material labels: exactly what
+    per-region ``vim.Solve(mesh, mu_r={name: value})``
     consumes.  Measured on a concentric two-material sphere: core -1.0 %,
     shell -0.02 % against the closed-form volumes, conformal (shared
     interface nodes).
@@ -817,8 +817,8 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
             0 and the cell size taken from the longest requested edge.
             This is what Sculpt's PERIODIC mode needs: it requires the grid
             to span exactly one period of a periodic geometry, so a guard
-            ring or a shrink-wrapped box would break the periodicity (see
-            ``cubit_vfrac_to_vol(periodic=True)``).
+            ring or a shrink-wrapped box would break the periodicity
+            (Sculpt ``--periodic``).
 
     Returns:
         Dict with the resolved ``path``, per-axis cell counts, cell size,
