@@ -58,9 +58,10 @@ def exact_volume_error(vol, order):
     The geometry Jacobian of an order-p tetrahedron has degree 3(p-1); vol_check's
     CAD gate integrates at NGSolve's default order, which is not exact for p >= 3.
     """
-    from ngsolve import CF, Integrate, Mesh
+    from ngsolve import CF, Integrate, Mesh, TaskManager
 
-    volume = Integrate(CF(1), Mesh(str(vol)), order=3 * order)
+    with TaskManager():
+        volume = Integrate(CF(1), Mesh(str(vol)), order=3 * order)
     return volume / SPHERE_VOLUME - 1.0
 
 
