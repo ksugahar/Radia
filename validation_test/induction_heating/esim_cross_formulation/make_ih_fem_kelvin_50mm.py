@@ -11,7 +11,7 @@ comparison between them isolates the outer-field formulation.
 
 Same coil (gapped torus R=30mm / r=3mm / 355deg sweep), same air
 sphere R=60mm, and the same `add_kelvin_cubit` construction as
-`samples/ih_fem_kelvin_demo.py`; ONLY the workpiece cylinder differs
+`radia_mcp/cubit/samples/ih_fem_kelvin_demo.py`; ONLY the workpiece cylinder differs
 (demo is 20mm x 20mm, this is 50mm dia x 25mm).  The wp cavity
 surface is sized at 3 mm to match the BIE mesh density.
 

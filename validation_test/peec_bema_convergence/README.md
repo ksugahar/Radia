@@ -23,7 +23,7 @@ number is the legacy `.jou-path PEEC` value (released v4.7.0, dropped
 in v4.13.0).  True independent cross-check requires HACApK BEM-A at
 >10k tris OR FEM-Kelvin volumetric solve.
 
-See `src/radia/panels/samples/ih_fem_kelvin_demo.py` (canonical
+See `packages/radia-mcp/src/radia_mcp/cubit/samples/ih_fem_kelvin_demo.py` (canonical
 PEEC-FEM-Kelvin demo, v4.45.0) for the FEM-Kelvin path now that the
 launcher-free `radia.kelvin_identify_ngsolve` helper is shipped.
 

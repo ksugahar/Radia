@@ -122,6 +122,7 @@ where = ["src"]
 "radia_mcp.onshape" = ["knowledge/*.md"]
 "radia_mcp.cubit" = [
     "README.md",
+    "samples/*.py",
     "skills/cubit-command-plugin/SKILL.md",
     "skills/cubit-command-plugin/templates/*",
 ]

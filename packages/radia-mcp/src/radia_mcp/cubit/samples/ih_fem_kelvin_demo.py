@@ -89,8 +89,8 @@ import cubit
 
 # --- Locate add_kelvin_cubit ----------------------------------------------
 # `radia_mcp.cubit.kelvin` is standard-library only at import time, so
-# Cubit's embedded Python imports it from the development tree
-# (<repo>/packages/radia-mcp/src) or from an installed radia-mcp.
+# Cubit's embedded Python imports it from an installed radia-mcp or from the
+# development tree that holds this file (<repo>/packages/radia-mcp/src).
 #
 # `__file__` is set when run as `python script.py`, but NOT when
 # Cubit's `play` (or `coreform_cubit -batch script.py`) executes the
@@ -100,12 +100,14 @@ try:
     _here = os.path.dirname(os.path.abspath(__file__))
 except NameError:
     _here = os.getcwd()
-# This file lives at <repo>/src/radia/panels/samples/.
-_mcp_src = os.path.normpath(
-    os.path.join(_here, "..", "..", "..", "..", "packages", "radia-mcp", "src"))
-if os.path.isdir(os.path.join(_mcp_src, "radia_mcp")) and _mcp_src not in sys.path:
-    sys.path.insert(0, _mcp_src)
-from radia_mcp.cubit.kelvin import add_kelvin_cubit
+try:
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+except ImportError:
+    # This file lives at <src>/radia_mcp/cubit/samples/.
+    sys.path.insert(0, os.path.normpath(os.path.join(_here, "..", "..", "..")))
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+# Outputs go to the working directory, never into the installed package.
+_out = os.getcwd()
 
 
 cubit.cmd("reset")
@@ -158,7 +160,7 @@ cubit.cmd("merge volume %d %d %d %d"
 
 # === 7. Coil-only STEP for the PEEC step ===================================
 # `calc_inductance.py --step` reads this to extract filaments + L_coil.
-out_step = os.path.join(_here, "ih_fem_kelvin_demo_coil.step")
+out_step = os.path.join(_out, "ih_fem_kelvin_demo_coil.step")
 cubit.cmd('export step "%s" volume %d overwrite' % (out_step, coil_vid))
 
 # === 8. Mesh (workpiece NOT meshed -- HOLE policy) ==========================
@@ -222,7 +224,7 @@ info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 # a self-contained .vol that `calc_fem_kelvin.py --require-kelvin`
 # can consume directly.  Order 1 is enough for the demo (the panel
 # tests are at order 1; higher orders are for production p-convergence).
-out_vol = os.path.join(_here, "ih_fem_kelvin_demo.vol").replace("\\", "/")
+out_vol = os.path.join(_out, "ih_fem_kelvin_demo.vol").replace("\\", "/")
 cubit.cmd('export netgen "%s" order 1 overwrite' % out_vol)
 
 print()

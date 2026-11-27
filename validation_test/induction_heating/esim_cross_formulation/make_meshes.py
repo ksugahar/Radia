@@ -6,7 +6,7 @@ All three are regenerated from TRACKED generators (the .vol files
 themselves are gitignored):
 
   1. samples/ih_fem_kelvin_demo.vol   (dia 20 x 20 small cylinder,
-     + ih_fem_kelvin_demo_coil.step)  -- from samples/ih_fem_kelvin_demo.py
+     + ih_fem_kelvin_demo_coil.step)  -- from radia_mcp/cubit/samples/ih_fem_kelvin_demo.py
   2. samples/ih_bem_sample_p1.vol     (dia 50 x 25 BIE surface mesh)
      -- from samples/ih_bem_sample.jou
   3. <lane>/ih_fem_kelvin_50mm.vol    (dia 50 x 25 FEM-Kelvin mesh)
@@ -36,7 +36,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 SAMPLES = os.path.join(REPO, "src", "radia", "panels", "samples")
 
-DEMO_PY = os.path.join(SAMPLES, "ih_fem_kelvin_demo.py")
+MCP_SRC = os.path.join(REPO, "packages", "radia-mcp", "src")
+DEMO_PY = os.path.join(MCP_SRC, "radia_mcp", "cubit", "samples", "ih_fem_kelvin_demo.py")
 DEMO_VOL = os.path.join(SAMPLES, "ih_fem_kelvin_demo.vol")
 BEM_JOU = os.path.join(SAMPLES, "ih_bem_sample.jou")
 BEM_VOL = os.path.join(SAMPLES, "ih_bem_sample_p1.vol")
@@ -69,10 +70,12 @@ def _exec_generator(path, extra_globals=None):
 
 
 def gen_demo(cubit):
-    """samples/ih_fem_kelvin_demo.py writes its outputs next to getcwd()
-    when __file__ is absent; chdir to samples so the .vol + coil .step
-    land in the samples dir."""
+    """radia_mcp/cubit/samples/ih_fem_kelvin_demo.py writes its outputs to
+    getcwd(); chdir to samples so the .vol + coil .step land in the samples
+    dir. The script imports radia_mcp.cubit.kelvin from this checkout."""
     cubit.cmd("reset")
+    if MCP_SRC not in sys.path:
+        sys.path.insert(0, MCP_SRC)
     prev = os.getcwd()
     os.chdir(SAMPLES)
     try:
