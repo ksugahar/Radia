@@ -123,13 +123,16 @@ def test_a_file_that_appears_late_is_not_replaced(tmp_path, monkeypatch):
     import radia.nastran_export as ne
 
     out = tmp_path / "late.bdf"
-    real = ne._comment_text
+    real = ne.os.link
 
-    def appear_then_label(name):
-        if not out.exists():
-            out.write_text("someone else")
-        return real(name)
-    monkeypatch.setattr(ne, "_comment_text", appear_then_label)
+    def publish_after_competitor(stage, target):
+        assert stage.parent == target.parent
+        assert stage.read_bytes().endswith(b"ENDDATA\n")
+        assert not target.exists()
+        target.write_text("someone else")
+        real(stage, target)
+
+    monkeypatch.setattr(ne.os, "link", publish_after_competitor)
     with pytest.raises(FileExistsError):
         write_nastran_bdf(_box(), out, order=2)
     assert out.read_text() == "someone else"
@@ -162,3 +165,74 @@ def test_failed_overwrite_keeps_the_old_file_and_no_stage(tmp_path, monkeypatch)
         write_nastran_bdf(_box(), out, order=2, overwrite=True)
     assert out.read_text() == "old"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["keep.bdf"]
+
+
+@pytest.mark.parametrize("overwrite", [False, True])
+def test_cleanup_failure_preserves_publication_error(tmp_path, monkeypatch, overwrite):
+    import errno
+    from pathlib import Path
+
+    import radia.nastran_export as ne
+
+    out = tmp_path / "output.bdf"
+    if overwrite:
+        out.write_bytes(b"original")
+    primary = OSError(errno.ENOSPC, "publication failed")
+
+    def fail_publish(stage, target):
+        assert stage.read_bytes() == b"complete deck"
+        assert target == out
+        raise primary
+
+    def fail_cleanup(self, **kwargs):
+        raise PermissionError("stage cleanup denied")
+
+    monkeypatch.setattr(ne.os, "replace" if overwrite else "link", fail_publish)
+    monkeypatch.setattr(Path, "unlink", fail_cleanup)
+    with pytest.raises(OSError) as raised:
+        ne._publish(out, b"complete deck", overwrite)
+
+    assert raised.value is primary
+    stage, = tmp_path.glob("*.stage")
+    assert str(stage) in raised.value.__notes__[0]
+    assert "stage cleanup denied" in raised.value.__notes__[0]
+    if overwrite:
+        assert out.read_bytes() == b"original"
+    else:
+        assert not out.exists()
+
+
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_partial_write_only_touches_stage(tmp_path, monkeypatch, close_fails):
+    import errno
+
+    import radia.nastran_export as ne
+
+    out = tmp_path / "output.bdf"
+    real = ne.tempfile.NamedTemporaryFile
+    primary = OSError(errno.ENOSPC, "injected short write")
+
+    class FailingStream:
+        def __init__(self, *args, **kwargs):
+            self.stream = real(*args, **kwargs)
+            self.name = self.stream.name
+
+        def close(self):
+            self.stream.close()
+            if close_fails:
+                raise OSError("stage close failed")
+
+        def write(self, data):
+            self.stream.write(data[:5])
+            self.stream.flush()
+            assert not out.exists()
+            raise primary
+
+    monkeypatch.setattr(ne.tempfile, "NamedTemporaryFile", FailingStream)
+    with pytest.raises(OSError) as raised:
+        ne._publish(out, b"complete deck", False)
+
+    assert raised.value is primary
+    if close_fails:
+        assert "stage close failed" in raised.value.__notes__[0]
+    assert list(tmp_path.iterdir()) == []

@@ -16,8 +16,8 @@ Cards written:
 
 Material and boundary names go into comments beside their property IDs;
 characters outside printable ASCII are written as ``\\uXXXX``.  The output is
-created exclusively (``overwrite=False``) or replaced atomically from a
-same-directory stage file (``overwrite=True``).
+published from a complete same-directory stage file. Exclusive publication
+(``overwrite=False``) requires filesystem hard-link support.
 
 Checked against an independent reader (Gmsh 5): CTETRA10, CTRIA6, CQUAD8,
 CHEXA20 and first-order cards.  CPYRAM13 mid-edge order follows the Nastran
@@ -205,31 +205,41 @@ def _comment_text(name) -> str:
 
 
 def _publish(path: Path, data: bytes, overwrite: bool) -> None:
-    """Write ``data`` to ``path`` without exposing a partial file.
-
-    Without ``overwrite`` the file is created exclusively, so a file that
-    appears after the early check is never replaced.  With ``overwrite`` a
-    uniquely named stage in the same directory is replaced into place.  A
-    failed write removes what this call created.
-    """
+    """Publish a complete deck, preserving the primary error on cleanup failure."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not overwrite:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0))
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(data)
-        except BaseException:
-            path.unlink(missing_ok=True)
-            raise
-        return
-    fd, stage = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".stage")
+    stage = None
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        os.replace(stage, path)
-    except BaseException:
-        Path(stage).unlink(missing_ok=True)
+        stream = tempfile.NamedTemporaryFile(
+            mode="wb", dir=path.parent, prefix=f".{path.name}.", suffix=".stage",
+            delete=False,
+        )
+        stage = Path(stream.name)
+        try:
+            stream.write(data)
+        except BaseException as error:
+            try:
+                stream.close()
+            except OSError as close_error:
+                error.add_note(f"Could not close BDF stage {stage}: {close_error}")
+            raise
+        stream.close()
+        if overwrite:
+            os.replace(stage, path)
+        else:
+            os.link(stage, path)
+    except BaseException as error:
+        if stage is not None:
+            try:
+                stage.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                error.add_note(f"Could not remove BDF stage {stage}: {cleanup_error}")
         raise
+    if not overwrite:
+        try:
+            stage.unlink(missing_ok=True)
+        except OSError as error:
+            error.add_note(f"BDF was published to {path}. Could not remove stage {stage}.")
+            raise
 
 
 def write_nastran_bdf(mesh, path, *, order: int | None = None,
