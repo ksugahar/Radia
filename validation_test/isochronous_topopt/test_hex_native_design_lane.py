@@ -62,7 +62,7 @@ pytestmark = pytest.mark.skipif(not _cubit_available(),
 
 @pytest.fixture(scope="module")
 def hexdesign(tmp_path_factory):
-    from cubit_mesh_export.mcp.server import cubit_stl_to_vol
+    from radia_mcp.cubit.server import cubit_stl_to_vol
 
     out = tmp_path_factory.mktemp("hex_native")
     SetNumThreads(4)

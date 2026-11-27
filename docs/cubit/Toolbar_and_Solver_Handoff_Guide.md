@@ -45,7 +45,7 @@ configuration, not to Cubit UI state.
 
 Every solver-bound `.vol` must satisfy its versioned
 `radia.vol-label-contract.v1` contract before initialization. Keep the
-`cubit-mesh-export.vol-check.v1` report with the run artifacts and reference it
+`radia.vol-check.v1` report with the run artifacts and reference it
 from `result.json`.
 
 ## Labeling Rules

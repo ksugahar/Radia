@@ -1,4 +1,5 @@
 {
+ "call": "check_consistency(mesh, strict_labels=True, contract=labels) or check_consistency(mesh)",
  "cases": {
   "affine_field_tetra": {
    "report": {
@@ -184,7 +185,6 @@
      "volume_element_count": 1,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -381,7 +381,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -584,7 +583,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "missing materials: coil"
@@ -785,7 +783,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "unexpected boundaries: exterior"
@@ -992,7 +989,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "missing materials: body",
@@ -1006,7 +1002,7 @@
     "boundaries": [
      {
       "name": "Surface_2",
-      "ng_area": 3.1415635919114107
+      "ng_area": 3.14156359191141
      },
      {
       "name": "Surface_3",
@@ -1014,11 +1010,11 @@
      },
      {
       "name": "Surface_5",
-      "ng_area": 6.283157652221931
+      "ng_area": 6.283157652221932
      },
      {
       "name": "Surface_7",
-      "ng_area": 6.283165895344116
+      "ng_area": 6.283165895344114
      }
     ],
     "boundary_domain_ownership": {
@@ -1075,7 +1071,7 @@
     "edges": [
      {
       "name": "default",
-      "ng_length": 18.849471325157797
+      "ng_length": 18.8494713251578
      }
     ],
     "labels": {
@@ -1150,7 +1146,7 @@
     "materials": [
      {
       "name": "body",
-      "ng_volume": 6.283137448179973
+      "ng_volume": 6.283137448179977
      }
     ],
     "mesh": {
@@ -1210,7 +1206,6 @@
      "volume_element_count": 877,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -1220,7 +1215,7 @@
     "boundaries": [
      {
       "name": "exterior",
-      "ng_area": 21.277270853548362
+      "ng_area": 21.27727085354835
      }
     ],
     "boundary_domain_ownership": {
@@ -1350,7 +1345,7 @@
     "materials": [
      {
       "name": "magnetic_body",
-      "ng_volume": 8.232312603994716
+      "ng_volume": 8.232312603994725
      }
     ],
     "mesh": {
@@ -1407,7 +1402,6 @@
      "volume_element_count": 1338,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -1417,7 +1411,7 @@
     "boundaries": [
      {
       "name": "exterior",
-      "ng_area": 8.11039614765079
+      "ng_area": 8.110396147650793
      }
     ],
     "boundary_domain_ownership": {
@@ -1604,7 +1598,6 @@
      "volume_element_count": 3,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -1805,7 +1798,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "surface connectivity exported more than once: 11"
@@ -2004,7 +1996,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -2201,7 +2192,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": []
    }
@@ -2405,7 +2395,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "surface rows reference unknown volume domains: 3"
@@ -2625,7 +2614,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "unexpected materials: default",
@@ -2832,7 +2820,6 @@
      "volume_element_count": 2,
      "warnings": []
     },
-    "schema": "cubit-mesh-export.vol-check.v1",
     "threshold_pct": 1.0,
     "warnings": [
      "surface rows with no owning domain (0->0): 1"
@@ -2840,11 +2827,8 @@
    }
   }
  },
- "oracle": {
-  "call": "check_consistency(mesh, strict_labels=True, contract=labels) or check_consistency(mesh)",
-  "distribution": "cubit-mesh-export",
-  "ngsolve": "6.2.2608+radia.df1d60e42.cpu",
-  "version": "3.1.0"
- },
- "schema": "radia.vol-check-oracle.v1"
+ "equivalence": "matched the former standalone checker on every case before adoption",
+ "report_fields": "normalized; schema and run-specific fields removed",
+ "schema": "radia.vol-check-baseline.v1",
+ "source_sha": "aedfa801590b0171d9497cd92b258e29923f3e5b"
 }

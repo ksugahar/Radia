@@ -12,7 +12,7 @@ async def main():
     if args.plugin_dir:
         env['CUBIT_PLUGIN_DIR'] = str(args.plugin_dir.resolve())
     env['CUBIT_MCP_TEMP'] = str(work)
-    params = StdioServerParameters(command=sys.executable,args=['-m','cubit_mesh_export.mcp.server'],env=env)
+    params = StdioServerParameters(command=sys.executable,args=['-m','radia_mcp.cubit.server'],env=env)
     results = {}
     async with stdio_client(params) as (read,write):
         async with ClientSession(read,write) as session:

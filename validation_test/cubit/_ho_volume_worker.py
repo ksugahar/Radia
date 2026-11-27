@@ -13,7 +13,7 @@ import platform
 
 import cubit_mesh_export
 import ngsolve
-from cubit_mesh_export.check import check_mesh_quality
+from radia.vol_check import check_mesh_quality
 from ngsolve import BND, CF, Integrate, Mesh, TaskManager
 
 

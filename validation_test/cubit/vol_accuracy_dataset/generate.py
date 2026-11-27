@@ -190,7 +190,7 @@ def _package_version(distribution: str) -> str:
 
 
 def _collect_rows(work_dir: Path, cases: list[dict], orders: list[int]) -> list[dict]:
-    from cubit_mesh_export.check import REPORT_SCHEMA, check_consistency
+    from radia.vol_check import REPORT_SCHEMA, check_consistency
 
     rows = []
     for case in cases:

@@ -155,7 +155,7 @@ check-vol model.vol --report-json run/vol_check.json
 ```
 
 ```python
-from cubit_mesh_export.check import check_consistency, check_label_contract
+from radia.vol_check import check_consistency, check_label_contract
 ```
 
 The checker runs after export and before solver/Simulink initialization. It

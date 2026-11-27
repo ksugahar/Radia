@@ -40,7 +40,7 @@ def main(args):
         with ng.TaskManager():generated=ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh))
         generated.ngmesh.SetMaterial(1,'domain')
         vol=out/'model.vol';generated.ngmesh.Save(str(vol))
-        from cubit_mesh_export.check import check_consistency
+        from radia.vol_check import check_consistency
         checked=check_consistency(vol,contract=Path(__file__).with_name('native_hcurl_labels.json'),strict_labels=True)
         (out/'vol_check.json').write_text(json.dumps(checked,indent=2)+'\n',encoding='utf-8')
         if not checked['passed']:raise RuntimeError('check-vol topology/quality/label gate failed')

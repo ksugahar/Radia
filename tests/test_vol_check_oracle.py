@@ -3,8 +3,9 @@
 Guards: radia.vol_check, the entry gate every solver-bound .vol passes before
 initialization. For each case in tests/fixtures/vol_check/cases.py (committed
 fixtures, label-contract violations and topology violations) the normalized
-report must equal the one recorded with cubit-mesh-export 3.1.0 on the same
-case (tests/fixtures/vol_check/expected.json); input errors must match by type.
+report must equal the one recorded with the former standalone checker 3.1.0
+(identified by its RECORD SHA-256 in tests/fixtures/vol_check/expected.json) on
+the same case; input errors must match by type. The schema is radia.vol-check.v1.
 Assumes: NGSolve is importable. Measured floats are compared at 1e-9 relative
 so a different NGSolve build does not change the verdict; every flag, count,
 name and issue list must match exactly.
@@ -47,7 +48,7 @@ def _diff(actual, expected, path="$"):
 
 def test_case_set_matches_the_recorded_oracle():
     assert sorted(CASES) == sorted(EXPECTED["cases"]), (sorted(CASES), sorted(EXPECTED["cases"]))
-    assert EXPECTED["oracle"]["version"] == "3.1.0", EXPECTED["oracle"]
+    assert EXPECTED["oracle"]["former_standalone_checker_version"] == "3.1.0", EXPECTED["oracle"]
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
@@ -62,6 +63,8 @@ def test_vol_check_matches_the_former_checker(name, tmp_path):
             check_consistency(str(mesh), **kwargs)
         assert type(caught.value).__name__ == expected["error"], (type(caught.value).__name__, expected)
         return
-    actual = cases.normalize(json.loads(json.dumps(check_consistency(str(mesh), **kwargs))))
+    report = json.loads(json.dumps(check_consistency(str(mesh), **kwargs)))
+    assert report.pop("schema") == "radia.vol-check.v1"
+    actual = cases.normalize(report)
     differences = _diff(actual, expected["report"])
     assert not differences, "\n".join(differences[:20])

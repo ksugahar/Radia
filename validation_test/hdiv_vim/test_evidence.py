@@ -10,7 +10,7 @@ REPORT = HERE / "c_type_three_formulation_mixed_omega_iron.vol-check.json"
 def test_c_type_iron_mesh_preflight_evidence():
     report = json.loads(REPORT.read_text(encoding="utf-8"))
 
-    assert report["schema"] == "cubit-mesh-export.vol-check.v1"
+    assert report["schema"] == "radia.vol-check.v1"
     assert report["passed"] is True
     assert report["labels"]["passed"] is True
     assert report["labels"]["materials"] == ["iron"]

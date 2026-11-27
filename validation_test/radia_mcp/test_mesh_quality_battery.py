@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _compare(step, **kw):
-    from cubit_mesh_export.mcp.server import cubit_netgen_quality_compare
+    from radia_mcp.cubit.server import cubit_netgen_quality_compare
     out = json.loads(cubit_netgen_quality_compare(str(step), **kw))
     assert out["status"] == "ok", out
     return {r["route"]: r for r in out["rows"]}

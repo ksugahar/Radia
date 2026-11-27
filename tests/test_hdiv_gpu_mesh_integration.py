@@ -59,7 +59,7 @@ def fixture(tmp_path,compressed=False):
     labels=dict(schema="radia.vol-label-contract.v1",required=dict(materials=["body"],boundaries=["exterior"]),allowed=dict(materials=["body"],boundaries=["exterior"]))
     contract.write_text(json.dumps(labels))
     producer="C:/producer/input/mesh.vol"+(".gz" if compressed else "")
-    report=dict(schema="cubit-mesh-export.vol-check.v1",passed=True,warnings=[],vol_file=producer,json_file=None,
+    report=dict(schema="radia.vol-check.v1",passed=True,warnings=[],vol_file=producer,json_file=None,
         cad_reference=dict(available=False,auto_discovered=False),
         labels=dict(schema=labels['schema'],passed=True,strict_labels=True,warnings=[],required=labels['required'],allowed=labels['allowed']),
         quality=dict(passed=True,warnings=[]),boundary_domain_ownership=dict(issues=[]),

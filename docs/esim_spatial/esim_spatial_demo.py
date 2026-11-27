@@ -4,7 +4,7 @@ import json
 import hashlib
 import numpy as np
 import ngsolve as ng
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 
 
 def load_fields(data_dir, sample_dir):

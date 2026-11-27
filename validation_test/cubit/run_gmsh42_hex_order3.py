@@ -15,7 +15,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from cubit_mesh_export._layout import runtime_environment
+from radia_mcp.cubit.layout import runtime_environment
 from cubit_mesh_export._gmsh_runtime import probe_gmsh5
 from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume
 from cubit_mesh_export.mcp.gmsh_v42 import summarize_gmsh_v42_ascii

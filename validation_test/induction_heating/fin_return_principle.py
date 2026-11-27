@@ -248,7 +248,7 @@ def make_mesh(folder, maxh, padding):
         required=dict(materials=['air', *('copper_'+r for r in REGIONS)], boundaries=['outer', 'source', 'sink', 'interface']),
         allowed=dict(materials=['air', *('copper_'+r for r in REGIONS)], boundaries=['outer', 'source', 'sink', 'interface']))
     write(folder/'labels.json', labels)
-    args = [sys.executable, '-B', '-m', 'cubit_mesh_export.check', str(path), '--contract', str(folder/'labels.json'),
+    args = [sys.executable, '-B', '-m', 'radia.vol_check', str(path), '--contract', str(folder/'labels.json'),
             '--report-json', str(folder/'check-vol.json'), '--format', 'json']
     with (folder/'check-vol.log').open('wb') as log:
         rc = subprocess.run(args, stdout=log, stderr=subprocess.STDOUT).returncode

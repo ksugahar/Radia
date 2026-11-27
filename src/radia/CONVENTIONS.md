@@ -23,7 +23,7 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   run reaches those stages.
 - Every solver-bound `.vol` is checked after export and before application
   initialization. Production application/mode meshes use a versioned strict
-  label contract, and the `cubit-mesh-export.vol-check.v1` report stays in the
+  label contract, and the `radia.vol-check.v1` report stays in the
   run artifact directory. Mesh labels identify regions; material constants are
   validated by the DesignSpec/configuration and are never guessed from names.
 - A run that computes a spatial field writes a runner-owned GMSH `.msh v4.2`

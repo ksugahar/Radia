@@ -177,12 +177,12 @@ def run_phase(args):
                 def iso_batch(_step, commands, timeout_s=900):
                     checked_journal(commands, timeout_s=timeout_s, working_directory=out)
                     return {'status': 'ok'}
-                with patch('cubit_mesh_export.mcp.server._run_batch', iso_batch):
+                with patch('radia_mcp.cubit.server._run_batch', iso_batch):
                     iso_union = lane.validate_cubit_iso_union(out / 'design_lsd.exo', out)
             (out / "mesh-export.json").write_text(json.dumps({
                 "mesh_results": regen.mesh_results, "timings": regen.timings}, indent=2), encoding="utf-8")
         lane.test_stl_to_vol_gates(regen)
-        from cubit_mesh_export.mcp.server import cubit_check_vol
+        from radia_mcp.cubit.server import cubit_check_vol
         checks = {}
         for name in regen.mesh_results:
             checks[name] = json.loads(cubit_check_vol(

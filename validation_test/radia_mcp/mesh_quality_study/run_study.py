@@ -31,7 +31,7 @@ sys.path.insert(0, str(_REPO_ROOT / "packages" / "radia-mcp" / "src"))
 from build123d import (Box, Compound, Cylinder, Pos, Sphere,
                        export_step)
 from radia_mcp.build123d.archetypes import c_core, halbach_ring, slotted_stator
-from cubit_mesh_export.mcp.server import _netgen_mesh_to_msh, _run_batch
+from radia_mcp.cubit.server import _netgen_mesh_to_msh, _run_batch
 from radia_mcp.gmsh.msh_inspect import mesh_quality
 
 _HERE = os.path.dirname(os.path.abspath(__file__))

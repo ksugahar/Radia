@@ -52,7 +52,7 @@ installation is replaced. A build receipt is not evidence of GPU execution.
 Supply a checked `.vol`, its label contract, a checked-mesh receipt, its externally
 approved SHA256 and the approved provenance manifest. On the build role,
 `tools/prepare_hdiv_mesh_receipt.py` executes the installed
-`cubit_mesh_export.check` with strict labels and default quality checks. It binds
+`radia.vol_check` with strict labels and default quality checks. It binds
 the installed checker's version and RECORD hash, exact argv, NGSolve version,
 mesh and contract bytes, and the exact emitted report bytes. Its proposed
 provenance file requires independent approval before consumption.

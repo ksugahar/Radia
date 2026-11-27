@@ -97,7 +97,7 @@ def validate_post_request(source: Path, output: str, checked_report: str,
             or handoff.get('source_sha256') != source_sha256.lower()):
         raise ValueError('Checked handoff must bind the check-vol report to this source SHA256')
     report = handoff.get('report', {})
-    if (report.get('schema') != 'cubit-mesh-export.vol-check.v1'
+    if (report.get('schema') != 'radia.vol-check.v1'
             or report.get('passed') is not True
             or report.get('labels', {}).get('passed') is not True
             or report.get('labels', {}).get('schema') != 'radia.vol-label-contract.v1'):

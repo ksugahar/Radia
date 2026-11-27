@@ -15,7 +15,7 @@ from cubit_mesh_export.mcp.gmsh_v42 import (
     gmsh_v42_mixed_order_series_gate,
     summarize_gmsh_v42_ascii,
 )
-from cubit_mesh_export.mcp.vol_inventory import summarize_netgen_vol_inventory
+from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 

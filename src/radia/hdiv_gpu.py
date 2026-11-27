@@ -504,7 +504,7 @@ def _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes, expected_sha
     if value.get("report_sha256") != hashlib.sha256(raw_report).hexdigest():
         raise ValueError("Checked-mesh raw report SHA256 mismatch")
     report = _strict_json(raw_report)
-    if (report.get("schema") != "cubit-mesh-export.vol-check.v1" or report.get("passed") is not True
+    if (report.get("schema") != "radia.vol-check.v1" or report.get("passed") is not True
             or report.get("warnings") != [] or report.get("vol_file") != argv[3]):
         raise ValueError("Checked-mesh authoritative report did not pass")
     cad = report.get("cad_reference", {})

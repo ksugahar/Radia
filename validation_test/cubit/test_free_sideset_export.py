@@ -15,10 +15,10 @@ import pytest
 pytest.importorskip("gmsh")
 ng = pytest.importorskip("ngsolve")
 
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 from cubit_mesh_export.mcp import session
-from cubit_mesh_export.mcp.server import _vol_surface_element_count
-from cubit_mesh_export.mcp.vol_inventory import summarize_netgen_vol_inventory
+from radia_mcp.cubit.server import _vol_surface_element_count
+from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory
 from radia_mcp.gmsh.msh_inspect import mesh_quality, mesh_total_volume
 
 pytestmark = pytest.mark.skipif(

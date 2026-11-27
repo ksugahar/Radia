@@ -17,7 +17,7 @@ def load_solver_mesh():
     if units != "m" or ("units" in contract and contract["units"] != "m"):
         raise ValueError("PEEC solver .vol contract must declare SI units 'm'")
     from ngsolve import Mesh
-    from cubit_mesh_export.check import check_label_contract
+    from radia.vol_check import check_label_contract
     mesh = Mesh(str(args.mesh))
     report = check_label_contract(mesh, contract=contract)
     if not report["passed"]:

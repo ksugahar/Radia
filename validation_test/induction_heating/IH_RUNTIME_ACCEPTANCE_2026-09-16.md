@@ -37,7 +37,7 @@ was not relaxed. Curvature was applied by the exporter while CAD was live,
 not by calling `Curve()` after loading a `.vol`.
 
 The legacy MCP `cubit_check_vol` call timed out after 300 seconds. The canonical
-`python -m cubit_mesh_export.check` CLI completed and produced the accepted
+`python -m radia.vol_check` CLI completed and produced the accepted
 report with the production label contract. This is CLI checker acceptance,
 not a claim that the legacy MCP transport was repaired.
 

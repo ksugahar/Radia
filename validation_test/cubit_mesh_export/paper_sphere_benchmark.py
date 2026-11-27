@@ -23,7 +23,7 @@ from ngsolve import (
     LinearForm, Mesh, TaskManager, cos, dx, grad, sin, sqrt, x, y, z,
 )
 from netgen.occ import Pnt, Sphere
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 
 
 EXPECTED_VOLUME = 4 * math.pi / 3

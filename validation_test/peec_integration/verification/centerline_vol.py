@@ -34,7 +34,7 @@ def _validate_centerline_contract(nodes, edges, expected):
 
 def read_centerline(path):
     from netgen.meshing import Mesh
-    from cubit_mesh_export.check import check_label_contract
+    from radia.vol_check import check_label_contract
     path = Path(path)
     if path.suffix.lower() != ".vol":
         raise ValueError("PEEC solver centerlines require Netgen .vol input")

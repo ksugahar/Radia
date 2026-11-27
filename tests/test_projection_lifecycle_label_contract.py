@@ -8,7 +8,7 @@ import pytest
 
 def test_projection_lifecycle_quality_options_match_checker():
     root = Path(__file__).resolve().parents[1]
-    from cubit_mesh_export import check as checker
+    from radia import vol_check as checker
     contract = json.loads((root / "validation_test/hmatrix_cuda/affine_projection_lifecycle.contract.json").read_text())
     checker._load_label_contract(contract)
     signature = inspect.signature(checker.check_mesh_quality)

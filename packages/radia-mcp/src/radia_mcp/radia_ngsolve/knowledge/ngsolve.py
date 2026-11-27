@@ -862,7 +862,7 @@ NGSOLVE_BEM_VOL_50 = """
 `.vol` is Radia's solver-facing Netgen/NGSolve mesh format, not the public
 post-processing format. Do not install a Radia desktop viewer or a Windows
 double-click association for `.vol` or `.sol`. Before a solve, run `check-vol`
-and retain its `cubit-mesh-export.vol-check.v1` JSON report with the run. The
+and retain its `radia.vol-check.v1` JSON report with the run. The
 headless preflight owns element counts, labels, bounding box, orientation, and
 source digest.
 

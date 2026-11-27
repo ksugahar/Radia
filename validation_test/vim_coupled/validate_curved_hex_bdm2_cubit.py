@@ -20,7 +20,7 @@ from pathlib import Path
 
 import ngsolve as ng
 import numpy as np
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 
 import radia
 from radia.vim import FieldFromSolution, MagnetizationSource, Solve

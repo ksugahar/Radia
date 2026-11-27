@@ -17,7 +17,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 from netgen.occ import Pnt, Sphere
 from ngsolve import (
     BND, VOL, BilinearForm, CoefficientFunction, GridFunction, H1, Integrate,

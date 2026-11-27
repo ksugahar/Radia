@@ -172,7 +172,7 @@ def _child(args):
 
 def _postprocess(args, child_report):
     import ngsolve as ng
-    from cubit_mesh_export.check import check_consistency
+    from radia.vol_check import check_consistency
     from radia.ffag_topopt import (
         build_ffag_cyclic_density_map,
         identify_ffag_cyclic_sector_vertices,

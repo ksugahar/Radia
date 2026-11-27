@@ -26,8 +26,8 @@ from ngsolve import (
     BND, H1, VOL, BilinearForm, CoefficientFunction, GridFunction, IntegrationRule,
     Integrate, LinearForm, Mesh, TaskManager, cos, dx, grad, sin, sqrt, x, y, z,
 )
-from cubit_mesh_export.check import check_consistency
-from cubit_mesh_export._layout import runtime_environment
+from radia.vol_check import check_consistency
+from radia_mcp.cubit.layout import runtime_environment
 
 ORDERS = (1, 2, 3, 4, 5)
 FIELD_ORDERS = (1, 2, 3, 4)

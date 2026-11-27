@@ -6,9 +6,8 @@ entries (and radia-mcp) use one checker without depending on an MCP package.
 The .vol file is always checked.  A sibling .vol.json CAD reference is used
 when present, but is not required for the structural/label gate.
 
-The report schema name ``cubit-mesh-export.vol-check.v1`` is kept unchanged
-because solver, MATLAB and validation consumers and stored records key on it;
-the checker identity is ``versions.radia``.
+The report schema is ``radia.vol-check.v1``; the checker identity is
+``versions.radia``.
 
 Usage:
     python -m radia.vol_check model.vol
@@ -34,7 +33,7 @@ import sys
 import numpy as np
 
 
-REPORT_SCHEMA = "cubit-mesh-export.vol-check.v1"
+REPORT_SCHEMA = "radia.vol-check.v1"
 LABEL_CONTRACT_SCHEMA = "radia.vol-label-contract.v1"
 # Pyramids are supported only on a Netgen 6.2.2608 runtime that carries both
 # pyramid fixes (Netgen upstream 13b47c3a9 apex clamp, and the base-edge blend

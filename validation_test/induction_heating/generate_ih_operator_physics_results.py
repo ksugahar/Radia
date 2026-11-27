@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import importlib.metadata
-from cubit_mesh_export import check as mesh_checker
+from radia import vol_check as mesh_checker
 import os
 import platform
 import socket

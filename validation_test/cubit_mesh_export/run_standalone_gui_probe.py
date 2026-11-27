@@ -9,7 +9,7 @@ import sys
 assert importlib.util.find_spec('radia') is None, 'Use the isolated wheel venv'
 import cubit_mesh_export
 from cubit_mesh_export.install import _running_cubit_processes
-from cubit_mesh_export._layout import runtime_environment
+from radia_mcp.cubit.layout import runtime_environment
 from cubit_mesh_export.toolbar_smoke import _find_cubit_exe
 active = _running_cubit_processes()
 if active:

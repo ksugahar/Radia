@@ -257,7 +257,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         assert "from radia_simulink.simulink" in (ROOT / path).read_text(encoding="utf-8")
     adapter = (ROOT / "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
     assert "radia.panels" in adapter
-    assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
+    assert "radia.vol_check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
     # radia-simulink LTspice tests no longer import radia-mcp; the LTspice MCP lives outside this repo.
     gpu_ltspice_tests = list((ROOT / "packages/radia-simulink/tests/ltspice").glob("test_*.py"))
     assert gpu_ltspice_tests

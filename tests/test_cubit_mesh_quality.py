@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 
-from cubit_mesh_export import check as CHECK_MODULE
+from radia import vol_check as CHECK_MODULE
 
 VERIFY_FILE = (
     Path(__file__).resolve().parents[1]

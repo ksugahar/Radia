@@ -20,7 +20,7 @@
       "checker": "check-vol",
       "timing": "after mesh export and before solver initialization",
       "label_contract_schema": "radia.vol-label-contract.v1",
-      "report_schema": "cubit-mesh-export.vol-check.v1",
+      "report_schema": "radia.vol-check.v1",
       "report_location": "application run directory",
       "required_when": "the selected mode consumes one or more .vol meshes",
       "material_constants": "validated by DesignSpec/configuration, never inferred from labels"
