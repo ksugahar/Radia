@@ -53,8 +53,9 @@ def prepare(mesh_path, label_contract, output):
         mesh = Path(directory) / ("mesh" + suffix)
         contract = Path(directory) / "labels.json"
         mesh.write_bytes(mesh_bytes); contract.write_bytes(contract_bytes)
-        argv = [sys.executable, "-m", "radia.vol_check", str(mesh),
-                "--strict-labels", "--contract", str(contract), "--format", "json"]
+        # "/" paths, as check-vol writes them into its report (vol_file == argv[3]).
+        argv = [sys.executable, "-m", "radia.vol_check", mesh.as_posix(),
+                "--strict-labels", "--contract", contract.as_posix(), "--format", "json"]
         env = dict(os.environ, PYTHONNOUSERSITE="1", PYTHONSAFEPATH="1",
                    PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
         env.pop("PYTHONPATH", None); env.pop("PYTHONHOME", None)
