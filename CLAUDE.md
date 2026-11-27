@@ -6,7 +6,7 @@ Radia is AI-native, AI-operable electromagnetic CAE through MCP. Users set analy
 Scope: (1) complete and validate HDiv-MMM topology optimization; (2) improve repository and `radia-mcp` quality, validation, build, CI, packaging and release operation.
 Do not add unrelated features. No backward compatibility: keep only the latest design; delete legacy paths, aliases, flags, shims and old releases; repository health comes first.
 ## Repository Boundaries
-Radia, Simulink and MCP release here. Cubit export, MATLAB Optuna and EqnEdit64 release separately. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
+Radia, Simulink and MCP (including Cubit MCP, export and GUI in `radia-mcp`) release here. MATLAB Optuna and EqnEdit64 release separately. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 `radia`: Python/pybind11 CPU and GPU, Windows and Linux; its code and tests never import `radia_simulink`. `packages/radia-simulink`: all MATLAB/Simulink/LTspice source, build and distribution, depending on `radia` one-way (the retired `radia-gpu` name is not published). `radia-mcp`: cross-package knowledge/tools, optional GPU backend. `radia-optuna` stays independent. `radia` wheels exclude MATLAB/MEX, LTspice and Simulink artifacts; each distribution keeps its CI lane, yet releases wait for all four lane receipts.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
@@ -34,7 +34,7 @@ Prefer established public abstractions over proprietary plumbing.
 - CPU FE work follows caller-owned `ngsolve.TaskManager()`. CPU exceptions: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned. GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback. GPU-route CPU work retains CPU rules.
 - Fail loudly on unsupported geometry, labels, ABI, convergence or backend state. Never silently substitute a numerically different route.
 ## Interfaces
-Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `cubit-mesh-export` toolbar, and normal Radia Python must not depend on Qt.
+Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `radia_mcp.cubit.gui` exporter menu/toolbar, and normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
 - radia-mcp releases independently of Radia (deployment below), never to JMAG or retired targets; isolated CI is not deployment.
@@ -66,9 +66,9 @@ The bibliography is managed separately (private). Adopted validation records cit
 
 ## Mesh And CAD
 STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver boundary is a checked `.vol` regardless of the creation route.
-- Cubit-generated `.vol` files belong to `cubit-mesh-export` on a licensed Cubit machine; build123d + Netgen is the explicit alternative. radia CI consumes committed fixtures: a missing required fixture fails the test; only explicitly optional validation inputs may skip visibly.
-- Drive Cubit headless (APREPRO/Python CLI) and export through `cubit-mesh-export`. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; only `cubit-mesh-export` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
-- `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; each distribution owns its runtime helpers and requires neither the other MCP package nor a shared private distribution. Cubit export stays in the C++ `.ccm` backend; the only Radia-owned VTK export surface is `cubit-mesh-export`.
+- Cubit-generated `.vol` files belong to `radia-mcp` (`radia_mcp.cubit`) on a licensed Cubit machine; build123d + Netgen is the explicit alternative. radia CI consumes committed fixtures: a missing required fixture fails the test; only explicitly optional validation inputs may skip visibly.
+- Drive Cubit headless (APREPRO/Python CLI) and export through `radia_mcp.cubit`. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; only `radia_mcp.cubit.gui` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
+- `radia_mcp.cubit` owns Cubit MCP/APIs, the native `export netgen` plugin, GUI and installer; `radia` owns check-vol (`radia.vol_check`), which radia-mcp uses one-way. Cubit export stays in the C++ plugin backend; the only Radia-owned VTK export surface is `radia_mcp.cubit`.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label contract before solver or Simulink initialization. Label checks validate topology/naming; DesignSpec validates physical data. Preserve canonical CAD, mesh, contracts and generation sources; remove only verified scratch or superseded output.
 
 ## Evidence And CI
@@ -77,9 +77,9 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 **POLICY** (radia, radia-optuna, NGSolve forks; 2026-11-19): CPU build and CPU CI run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` fast contracts. The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution. Supercomputer GPU debug is outside CI. `gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs.
 Release order (2026-11-18): CPU candidate on build; from that SHA, in parallel, Linux Python GPU (supercomputer), Windows Python GPU and MATLAB/MEX (validation); publish once all four receipts pass.
-Deployment follows release: radia and radia-mcp use editable development installs on the build role and verified wheels on the validation role, never an editable install there; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
+Deployment follows release: radia and radia-mcp use editable development installs on the build role and verified wheels on the validation role, never an editable install there; the Cubit plugin and GUI are build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
 Build owns CPU preflight/native builds; validation GPU/MATLAB builds. Consumers use source-bound artifacts. NGSolve: metadata pin on its fork.
-NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
+NGSolve starts from checked exported .vol files; validation has no Cubit.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
 
 CI scope begins at the independently released distribution boundary. The checked `radia_mcp.meta` catalog and each server's live `tools/list` response are the tool-discovery source of truth. Generated tool inventory snapshots are local diagnostics, not committed artifacts or CI oracles. normal pull-request and main-push CI runs a stable compact contract set, tests selected from the changed source/test paths, and only the affected server selftests. The complete package pytest suite, all-server selftests, and live-catalog audit belong to an explicit full-audit workflow.
@@ -105,7 +105,7 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation. Validation isolates jobs from QA/runtime; no Cubit/cme. JMAG runs no Radia. Timings are diagnostic.
+Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation. Validation isolates jobs from QA/runtime; no Cubit. JMAG runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
 CPU/GPU jobs: build-host CPU <=8 physical cores/job and <=6 host-wide is unconditional: no admission, owner-pool, idle-core or load gates. Count all CI/build/validation/research trees, not compiler children; <=6 TOTAL. GPU jobs run only on the validation host (<=1 at a time), never on the build host; record host CPU use, avoid oversubscription. Keep artifact/architecture/ABI/runtime/owner scope; no install/config or unverified substitution. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame CPU and other remote, environment, deployment/publication actions retain authorization.
 Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.

@@ -190,8 +190,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install "setuptools>=77" build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install --only-binary=:all: --no-deps cubit-mesh-export==3.1.0
-          if ($LASTEXITCODE -ne 0) { throw "Standalone mesh checker install failed" }
           # The full release numerical contracts include STEP coil tests, so the
           # declared STEP CAD extra is installed into this same isolated venv.
           $cadPins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")

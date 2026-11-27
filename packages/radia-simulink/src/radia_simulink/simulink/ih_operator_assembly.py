@@ -340,13 +340,7 @@ def _check_vol(
     workpiece: bool,
     workpiece_label: str,
 ) -> dict[str, Any]:
-    try:
-        from cubit_mesh_export.check import check_consistency
-    except ImportError as exc:
-        raise RuntimeError(
-            "cubit-mesh-export is required for the mandatory check-vol gate; "
-            "install radia[cubit]"
-        ) from exc
+    from radia.vol_check import check_consistency
 
     keyword: dict[str, Any] = {
         "contract": contract_path,
