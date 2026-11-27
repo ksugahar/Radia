@@ -799,7 +799,7 @@ mean the EM panel path, not the benchmark path.
 | Panel mode | Sample location | Purpose | Reductions |
 |------------|----------------|---------|------------|
 | **EM panel FEM/HDiv-VIM** | `panels/samples/em/em_1-{1,2,4,8}.jou` | Production C-yoke dipole / quad analysis | 1/1, 1/2, 1/4, **1/8** |
-| **EM panel "Kelvin Benchmark"** | `panels/samples/kelvin_benchmark_sphere_1_{2,4}.vol` | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/2, 1/4 only |
+| **EM panel "Kelvin Benchmark"** | generated: `validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py` (no .vol shipped) | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/4 (no maintained 1/2 build) |
 
 The Kelvin Benchmark mode does **NOT** ship a 1/8 reduction because
 the magnetic-sphere-in-uniform-Hz BVP is fundamentally not

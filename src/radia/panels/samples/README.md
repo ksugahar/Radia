@@ -61,9 +61,9 @@ Top-level canonical trio (all shipped):
 | BH | `em_sample_bh.txt` (or built-in `STEEL_BH`) | `--bh-file` |
 
 Kelvin Benchmark mode (`Electromagnet` block / `EMDesignSpec` formulation = "Kelvin
-Benchmark"): bundled `kelvin_benchmark_sphere_1_2.vol` (1/2
-model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model). The independent
-numerical regression is
+Benchmark"): no `.vol` is bundled; generate the 1/4 model with
+`validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py` on a
+licensed Cubit machine. The independent numerical regression is
 `validation_test/cubit/test_kelvin_1_4_p_convergence.py` (quarter model,
 ±1.5% at p=2 and ±1.0% at p=3); Simulink tests own only interface routing.
 

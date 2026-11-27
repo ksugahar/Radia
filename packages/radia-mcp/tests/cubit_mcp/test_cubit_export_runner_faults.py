@@ -162,9 +162,12 @@ def test_lock_already_absent_at_release_is_not_a_warning(tmp_path):
     (lambda out: out.write_bytes(b"x"), "output_exists"),
     (lambda out: Path(str(out) + ".lock").write_bytes(b""), "output_exists"),
 ])
-def test_tool_labels_existing_output_and_held_lock(tmp_path, make, kind):
+def test_tool_labels_existing_output_and_held_lock(tmp_path, monkeypatch, make, kind):
     journal, kw = _setup(tmp_path)
     make(tmp_path / "m.vol")
+    # Refused before the runtime is probed: the label must not depend on
+    # whether a worker interpreter exists here.
+    monkeypatch.setattr(runner, "probe_worker", lambda *a, **k: pytest.fail("probed before refusal"))
     out = _tool(journal, tmp_path / "m.vol", kw)
     assert out["kind"] == kind and out["error_type"] == "FileExistsError", out
 

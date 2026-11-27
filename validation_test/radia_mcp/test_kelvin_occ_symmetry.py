@@ -12,6 +12,9 @@ import math
 
 import pytest
 
+# NGSolve parallel state is caller-owned: the shared fixture wraps the module.
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 occ = pytest.importorskip("netgen.occ")
 ngsolve = pytest.importorskip("ngsolve")
 

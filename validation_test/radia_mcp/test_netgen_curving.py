@@ -67,6 +67,9 @@ def _load():
     return module
 
 
+# NGSolve parallel state is caller-owned: the shared fixture wraps the module.
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 nc = _load()
 from netgen.csg import CSGeometry, Pnt, Sphere  # noqa: E402
 from netgen.meshing import NetgenGeometry, Vec  # noqa: E402

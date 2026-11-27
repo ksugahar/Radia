@@ -147,9 +147,15 @@ def run_export(journal: str | os.PathLike[str], out_path: str | os.PathLike[str]
     if out.suffix != ".vol":
         raise ValueError(f"output must end in .vol: {out}")
     companion_path = Path(str(out) + ".json")
-    for existing in (out, companion_path):  # early refusal; _claim re-checks under the lock
+    # Early refusal before any runtime probe, so the answer for an existing
+    # output or a held lock never depends on the environment; _claim
+    # re-checks both atomically under the lock.
+    for existing in (out, companion_path):
         if existing.exists():
             raise FileExistsError(f"refusing to overwrite an existing export output: {existing}")
+    held = Path(str(out) + ".lock")
+    if os.path.lexists(held):
+        raise FileExistsError(f"another export holds {held}")
     bin_dir = resolve_cubit_bin(cubit_bin)
     plugin = resolve_plugin_dir(plugin_dir)
     probe = probe_worker(python)
