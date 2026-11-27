@@ -2,6 +2,8 @@
 #define CUBIT_PERIODIC_CURVED_GEOMETRY_HPP
 
 #include "NamedPeriodicMeshAdapter.hpp"
+#include "netgen_curving/curved_access.hpp"
+#include "netgen_curving/periodic_copy.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -91,16 +93,14 @@ inline std::vector<PeriodicCurvedTransfer> synchronize_periodic_curvature(
   for (const auto &element : mesh.VolumeElements())
     if (element.GetType() != netgen::TET || element.GetNP() != 4)
       throw std::runtime_error("Periodic export requires linear tetrahedral connectivity");
-  if (curved.PeriodicRational())
+  if (radia_netgen_curving::CurvedAccess{curved}.rational())
     throw std::runtime_error("Rational periodic geometry is unsupported");
   if (!curved.IsHighOrder()) return {};
-  netgen::Array<std::array<int, 3>> master, slave;
-  for (const auto &pair : triangles) { master.Append(pair.master); slave.Append(pair.slave); }
+  std::vector<std::array<int, 3>> master, slave;
+  for (const auto &pair : triangles) { master.push_back(pair.master); slave.push_back(pair.slave); }
   std::vector<PeriodicCurvedTransfer> plan;
-  for (const auto &row : curved.CopyPeriodicCoefficients(master, slave))
-    plan.push_back({row.face, row.master, row.slave, row.mode, row.sign,
-                    {row.original(0), row.original(1), row.original(2)},
-                    {row.expected(0), row.expected(1), row.expected(2)}});
+  for (const auto &row : radia_netgen_curving::copy_periodic_coefficients(mesh, master, slave))
+    plan.push_back({row.face, row.master, row.slave, row.mode, row.sign, row.original, row.expected});
   return plan;
 }
 

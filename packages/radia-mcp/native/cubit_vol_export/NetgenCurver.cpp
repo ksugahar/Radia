@@ -26,10 +26,8 @@ cubit_mesh_export::CurveIdentity NetgenCurver::curve_identities(
 
 #include "MeshData.hpp"
 #include "callbackgeom.hpp"
-#pragma push_macro("NT")
-#undef NT
-#include <meshing/geometric_refit.hpp>
-#pragma pop_macro("NT")
+#include "netgen_curving/geometric_refit.hpp"
+#include "netgen_curving/curved_access.hpp"
 
 // Avoid Cubit/Netgen name clashes by aliasing Netgen element types
 namespace ng = netgen;
@@ -1194,7 +1192,7 @@ bool NetgenCurver::curve_and_extract(int order)
     return false;
   }
 
-  netgen::GeometricRefitStats rs = netgen::GeometricRefit(*ng_mesh_);
+  radia_netgen_curving::RefitStats rs = radia_netgen_curving::geometric_refit(*ng_mesh_);
   PRINT_INFO("NetgenCurver: geometric refit - edges %d/%d accepted "
              "(%d failed, %d kept to avoid distortion), max distance %.3e -> %.3e; "
              "faces %d/%d accepted (%d failed, %d kept to avoid distortion), "
@@ -1217,7 +1215,7 @@ bool NetgenCurver::curve_and_extract(int order)
       const auto ei = ng::ElementIndex::FromNr0(e);
       if ((*ng_mesh_)[ei].GetType() != ng::PYRAMID) continue;
       for (auto edge : top.GetEdges(ei))
-        if (curved.NumEdgeCoefficients(edge.Nr0()) > 0) { curved_pyramids++; break; }
+        if (radia_netgen_curving::CurvedAccess{curved}.edge_count(edge.Nr0()) > 0) { curved_pyramids++; break; }
     }
     if (curved_pyramids > 0)
       PRINT_WARNING("NetgenCurver: %d pyramids have curved edges. Read this "

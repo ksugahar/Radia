@@ -77,7 +77,7 @@ from p=2 to p=3 and from p=4 to p=5.  This holds for Netgen 6.2.2606, 6.2.2607
 and the 2607 pre-release alike (OCC sphere, maxh=0.8: edge error 5.7e-4 at
 p=2, 6.0e-4 at p=3).  `cubit_export_vol` therefore refits Netgen's edge and face
 coefficients by minimising the distance to the CAD geometry
-(`NetgenGeometricRefit.cpp`), keeping Netgen's basis and `.vol` layout.  A
+(`native/cubit_vol_export/netgen_curving/geometric_refit.cpp`), keeping Netgen's basis and `.vol` layout.  A
 refit is kept only when the sampled distance decreases and the element
 Jacobian does not degenerate; the export log reports accepted/tried counts and
 the maximum distance before and after.  For the unit sphere

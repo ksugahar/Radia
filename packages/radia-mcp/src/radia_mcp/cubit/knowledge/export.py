@@ -151,7 +151,7 @@ mesh = Mesh(vol_path)
 The plugin (`ExportNetgenCommand`) extracts blocks/sidesets/nodesets from
 Cubit (`MeshData`), builds the first-order Netgen mesh, curves it with Netgen
 callback geometry projected onto Cubit surfaces and curves (`NetgenCurver`,
-`callbackgeom`, `NetgenGeometricRefit` for order >= 3), applies the optional
+`callbackgeom`, `netgen_curving/geometric_refit` for order >= 3), applies the optional
 named periodic identification and writes the `.vol` plus `.vol.json`.
 
 ## Compatibility and warnings
