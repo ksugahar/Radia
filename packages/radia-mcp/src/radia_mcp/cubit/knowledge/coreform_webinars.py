@@ -806,7 +806,7 @@ reads it). Mesh quality sets the explicit time step -> a few tiny elements cost 
 ### Coreform Cubit Learn / Associate (free non-commercial edition)
 The FULL Cubit tool suite (CAD import/cleanup, hex+tet meshing, U-splines, Python API) free for
 non-commercial use; the **ONLY cap = 50,000 elements on EXPORT** (mesh/visualize freely).
-Academic licenses (sales@coreform.com / resellers) lift the cap. Fits a free pipeline: Cubit
+Academic licenses (Coreform sales or resellers) lift the cap. Fits a free pipeline: Cubit
 Learn (mesh) -> MOOSE/FEniCS/CalculiX/OpenFOAM (solve) + Dakota (DOE/optimization via Cubit's
 Python black-box API) -> ParaView (view), Exodus as the interchange format.
 
@@ -1018,7 +1018,7 @@ the seat to your license. The free edition (Coreform Cubit Learn, also called As
 access to the entire tool suite for hobbyists/students/researchers with one functional cap: mesh export
 is limited to 50,000 elements (some videos quote ~50k; an older slide said 50k for non-commercial use),
 with no 30-day clock. The separate 30-day free trial has no export limit but expires. Academics needing
-more can get heavily discounted academic licenses (email sales@coreform.com to lift the export cap).
+more can get heavily discounted academic licenses (ask Coreform sales to lift the export cap).
 Where it fits a free student FEA pipeline: choose a solver (application-focused like MOOSE, CalculiX,
 OpenFOAM, FEBio, code_aster vs extensible frameworks like deal.II, FreeFEM, MFEM), model-prep/optimization
 tools (Octave/Python/Julia/spreadsheets, and Dakota for design-of-experiments/optimization via Cubit's

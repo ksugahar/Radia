@@ -3,7 +3,7 @@
 Builds ``tests/`` (named periodic matcher, curve identity through the callback
 geometry, periodic curved coefficients) and the ``_netgen_curving`` test
 module against the Netgen SDK of the running Python, runs them with CTest, then
-runs ``tests/cubit_mcp/test_netgen_curving.py`` in strict mode.  No Cubit is
+runs ``validation_test/radia_mcp/test_netgen_curving.py`` in strict mode.  No Cubit is
 needed.  Run from an MSVC 14.44 x64 developer environment with CMake and Ninja
 on PATH, using the Python whose netgen/ngsolve the tests must load:
 
@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parents[1]
-CURVING_TEST = PACKAGE / "tests" / "cubit_mcp" / "test_netgen_curving.py"
+CURVING_TEST = PACKAGE.parents[1] / "validation_test" / "radia_mcp" / "test_netgen_curving.py"
 
 
 def netgen_cmake_dir() -> Path:
