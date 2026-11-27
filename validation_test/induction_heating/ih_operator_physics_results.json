@@ -1,24 +1,28 @@
 {
   "schema": "radia.validation.ih-operator-physics.v1",
-  "generated_at_utc": "2026-10-01T00:24:26.805713+00:00",
+  "generated_at_utc": "2026-11-27T11:08:20.749448+00:00",
   "provenance": {
     "command": "python validation_test/induction_heating/generate_ih_operator_physics_results.py",
     "python": "3.12.10",
-    "ngsolve": "6.2.2607",
-
-    "commit": "24a3f19cdfeeac0d1f956ccac329cdd58306f844",
-    "dirty": true,
+    "ngsolve": "6.2.2608",
+    "platform_class": "Windows",
+    "commit": "91168d8454a74c6f65709c28bb4363304c683845",
+    "dirty": false,
     "source_sha256": {
-      "src/radia/simulink/ih_operator_assembly.py": "438446ccc07cc30ecf942dbedb8166f425aa572e60f135d75745bf04cd1a548b",
-      "validation_test/induction_heating/test_ih_operator_physics_golden.py": "84afca40a0312d5e3d3d5d67619d1836ebbef45b73f11c1462b2d5a80c6fefec",
-      "validation_test/induction_heating/generate_ih_operator_physics_results.py": "a2eac60603f794e5b29dbe1ac8660c39d44daa0724db064cf1db956dddba1a0b",
-      "packages/cubit-mesh-export/src/cubit_mesh_export/check.py": "b5253f7ad2971a9b300f54a97ef9cc89fb91b42cbc398e48a4090ccdfabc4692"
+      "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py": "4a5299be04fa05340f3094db633b492c6b6e4ff9fec2bc9f314fdee5a95121d7",
+      "validation_test/induction_heating/test_ih_operator_physics_golden.py": "12442e9b5c3275460e6a135481d303c89fb57b4407a6519421cb4e8b19f8aa8c",
+      "validation_test/induction_heating/generate_ih_operator_physics_results.py": "9b4ff0f99d90981eb1ce65aae9a64bca0eb972f998b4af56979470209b20d168"
+    },
+    "mesh_checker": {
+      "distribution": "radia",
+      "version": "5.4.6",
+      "module_sha256": "97924bf3fba7c8c792103f8c4928af8745b120fba9b3a533a270d3e1c9614586"
     },
     "native_runtime": {
-      "distribution_version": "5.1.0",
-      "build_commit": "cc8f4b8752d34b79e8914a6bd47a0a4d98ce262b",
-      "module_sha256": "32486195d84799c7c41c1736533b645c6d0cb59be9ab1aa612273933c08d3732",
-      "wheel_sha256": "2f5633376a33582a8bffaa2a696e24f9da6abb3b801eb4c6bd388755e334d22b"
+      "distribution_version": "5.4.6",
+      "build_commit": "4f7d8761e9e610c504c26ed2eb5e9607f6962d51",
+      "module_sha256": "930efe3d2401b098e609e63439dde59be6c6a170805a4f194b60fbe26d60ecab",
+      "wheel_sha256": "a253e05ec55c641ae297d7951ebd82d730d16611e03ba6dacf30e8ba9ee8beb3"
     }
   },
   "configuration": {
@@ -31,7 +35,7 @@
     "workpiece_box_volume_m3": 1e-06,
     "workpiece_box_area_m2": 0.0006
   },
-  "runtime_seconds": 5.9047648000123445,
+  "runtime_seconds": 10.150465500017162,
   "thresholds": {
     "electromagnetic_power_W_minimum": 5.656410577146e-06,
     "electromagnetic_power_W_maximum": 5.887284478254001e-06,
@@ -43,18 +47,18 @@
     "temperature_weight_row_sum_relative_error_maximum": 1e-10
   },
   "observed": {
-    "electromagnetic_power_W": 5.771847527664258e-06,
-    "thermal_source_power_W": 5.771847527664282e-06,
-    "relative_power_error": 4.109069480689857e-15,
-    "heat_projection_closure_W": 5.771847527664282e-06,
-    "mass_sum_J_per_K": 3.6426000000000007,
-    "stiffness_constant_nullspace_maximum": 2.220446049250313e-16,
-    "stiffness_maximum_absolute_entry": 1.3980000000000004,
+    "electromagnetic_power_W": 5.771847527664283e-06,
+    "thermal_source_power_W": 5.771847527664283e-06,
+    "relative_power_error": 0.0,
+    "heat_projection_closure_W": 5.771847527664283e-06,
+    "mass_sum_J_per_K": 3.6426000000000003,
+    "stiffness_constant_nullspace_maximum": 5.551115123125783e-17,
+    "stiffness_maximum_absolute_entry": 1.398,
     "convection_sum_m2": 0.0006000000000000001,
     "temperature_weight_minimum_J_per_K": 0.01897187500000004,
     "temperature_weight_sum_J_per_K": 3.6426000000000007,
-    "temperature_weight_row_sum_maximum_relative_error": 1.219154478649392e-16,
-    "direct_calc_inductance_power_W": 5.771847527664258e-06,
+    "temperature_weight_row_sum_maximum_relative_error": 1.4629853735930047e-16,
+    "direct_calc_inductance_power_W": 5.771847527664283e-06,
     "assembler_to_direct_power_relative_difference": 0.0,
     "operator_basis": "exact-single-current-linear-response",
     "surrogate": false,
