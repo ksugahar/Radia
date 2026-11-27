@@ -26,22 +26,40 @@ import sys
 
 import pytest
 
-netgen_meshing = pytest.importorskip("netgen.meshing")
+# With RADIA_REQUIRE_NETGEN_CURVING=1 nothing here may skip: a missing Netgen,
+# OCC or test module fails, and the module must come from RADIA_NETGEN_CURVING_DIR.
+REQUIRED = os.environ.get("RADIA_REQUIRE_NETGEN_CURVING") == "1"
+
+
+def _require(name):
+    if REQUIRED:
+        return importlib.import_module(name)
+    return pytest.importorskip(name)
+
+
+netgen_meshing = _require("netgen.meshing")
 
 
 def _load():
     where = os.environ.get("RADIA_NETGEN_CURVING_DIR")
+    if REQUIRED and not where:
+        raise RuntimeError("RADIA_REQUIRE_NETGEN_CURVING=1 needs RADIA_NETGEN_CURVING_DIR")
     if where:
         sys.path.insert(0, where)
     try:
-        return importlib.import_module("_netgen_curving")
+        module = importlib.import_module("_netgen_curving")
     except ImportError as exc:
-        if os.environ.get("RADIA_REQUIRE_NETGEN_CURVING") == "1":
+        if REQUIRED:
             raise
         pytest.skip(f"_netgen_curving not built: {exc}")
     finally:
         if where:
             sys.path.remove(where)
+    if where:
+        built = os.path.normcase(os.path.realpath(where))
+        loaded = os.path.normcase(os.path.realpath(os.path.dirname(module.__file__)))
+        assert loaded == built, (loaded, built)
+    return module
 
 
 nc = _load()
@@ -179,7 +197,7 @@ def test_refit_matches_the_fork_bit_for_bit(tmp_path, order):
 
 def _periodic_box(order):
     """Box with a cylindrical hole; the two end faces are identified periodic."""
-    occ = pytest.importorskip("netgen.occ")
+    occ = _require("netgen.occ")
     box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
     hole = occ.Cylinder(occ.Pnt(0.5, 0.5, 0), occ.Z, r=0.25, h=1)
     shape = box - hole
@@ -297,3 +315,16 @@ def test_periodic_copy_sign_matches_the_fork_bit_for_bit(tmp_path):
     assert a.CopyPeriodicCurvedCoefficients([master], [slave]) == \
         nc.copy_periodic_coefficients(b, [master], [slave])
     assert _lines(a, tmp_path, "fork_sign.vol") == _lines(b, tmp_path, "moved_sign.vol")
+
+
+def test_coefficient_helpers_reject_bad_edges():
+    m = _curved_sphere()
+    with pytest.raises(IndexError):
+        nc.edge_coefficients(m, -1)
+    with pytest.raises(IndexError):
+        nc.edge_coefficients(m, 10 ** 7)
+    g = CSGeometry()
+    g.Add(Sphere(Pnt(0, 0, 0), 1))
+    flat = g.GenerateMesh(maxh=0.6)   # never curved
+    with pytest.raises(RuntimeError, match="not curved"):
+        nc.edge_coefficients(flat, 0)

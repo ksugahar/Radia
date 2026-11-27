@@ -11,6 +11,18 @@
 namespace py = pybind11;
 namespace nc = radia_netgen_curving;
 
+// Test helpers only: range- and storage-check an edge index before touching
+// coefficient storage (polynomial orders 1..3, as ValidatePeriodicStorage requires).
+static void checked_edge(netgen::Mesh & mesh, int edge)
+{
+  const auto & top = mesh.GetTopology();
+  if (!mesh.GetCurvedElements().IsHighOrder())
+    throw std::runtime_error("edge coefficients: the mesh is not curved (call Curve first)");
+  if (edge < 0 || size_t(edge) >= top.GetNEdges())
+    throw std::out_of_range("edge coefficients: edge index out of range");
+  nc::curved_access(mesh).validate(top.GetNEdges(), top.GetNFaces());
+}
+
 PYBIND11_MODULE(_netgen_curving, m)
 {
   py::module_::import("netgen.meshing");   // registers netgen::Mesh
@@ -53,6 +65,7 @@ PYBIND11_MODULE(_netgen_curving, m)
 
   // Test-only helpers: locate a topology edge by its 1-based end points, and
   // read or overwrite its coefficients so a test can plant known values.
+  // Every edge index is range-checked against the topology and the storage.
   m.def("edge_number", [](netgen::Mesh & mesh, int a, int b)
         {
           const auto & top = mesh.GetTopology();
@@ -68,6 +81,7 @@ PYBIND11_MODULE(_netgen_curving, m)
         }, py::arg("mesh"), py::arg("a"), py::arg("b"));
   m.def("edge_coefficients", [](netgen::Mesh & mesh, int edge)
         {
+          checked_edge(mesh, edge);
           auto access = nc::curved_access(mesh);
           py::list out;
           const int n = access.edge_count(edge);
@@ -81,6 +95,7 @@ PYBIND11_MODULE(_netgen_curving, m)
   m.def("set_edge_coefficients", [](netgen::Mesh & mesh, int edge,
                                     std::vector<std::array<double, 3>> values)
         {
+          checked_edge(mesh, edge);
           auto access = nc::curved_access(mesh);
           if (int(values.size()) != access.edge_count(edge))
             throw std::runtime_error("set_edge_coefficients: wrong number of coefficients");
