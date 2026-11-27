@@ -14,6 +14,12 @@ While the fork still carries its own copies (``Mesh.GeometricRefit``,
 ``Mesh.CopyPeriodicCurvedCoefficients``), the parity tests require the moved
 code to give the same coefficients bit for bit.
 
+The odd edge mode sign of the periodic copy is checked against an independent
+oracle for every vertex permutation by the native contract
+``native/cubit_vol_export/tests/periodic_curved_contract.cpp``; this module
+does not repeat it.  ``native/cubit_vol_export/run_contracts.py`` builds the
+module, runs those contracts and then this file in strict mode.
+
 Guards: the refit and periodic copy keep the fork's results and exception
 safety after the move out of Netgen.
 Assumes: a Netgen runtime with the coefficient accessors used by
@@ -273,9 +279,8 @@ def test_periodic_copy_makes_slave_coefficients_equal_the_master(tmp_path):
 
 
 def _box_with_planted_master(order=3):
-    """Curved sphere mesh; returns it with a master triangle whose edge
-    coefficients carry known values and a disjoint slave triangle listed so
-    that every image edge runs against the master's numbering."""
+    """Curved sphere mesh with planted master edge coefficients and a disjoint
+    slave triangle whose image edges all run against the master's numbering."""
     g = CSGeometry()
     g.Add(Sphere(Pnt(0, 0, 0), 1))
     m = g.GenerateMesh(maxh=0.6)
@@ -295,18 +300,6 @@ def _box_with_planted_master(order=3):
             nc.set_edge_coefficients(m, e, vals)
             planted[(a, b)] = vals
     return m, master, slave, planted
-
-
-def test_periodic_copy_flips_odd_edge_modes_against_the_numbering():
-    m, master, slave, planted = _box_with_planted_master(3)
-    rows = nc.copy_periodic_coefficients(m, [master], [slave])
-    assert any(r["sign"] == -1 for r in rows), rows
-    for (a, b), vals in planted.items():
-        sign = (1 if slave[a] < slave[b] else -1) * (1 if master[a] < master[b] else -1)
-        assert sign == -1
-        got = nc.edge_coefficients(m, nc.edge_number(m, slave[a], slave[b]))
-        want = [tuple((sign if k % 2 else 1) * x for x in v) for k, v in enumerate(vals)]
-        assert got == want, ((a, b), got, want)
 
 
 @fork_periodic

@@ -72,6 +72,11 @@
       "target": "github-hosted",
       "legacy_100": false
     },
+    "radia-mcp-matrix.yml:cubit-export-native": {
+      "owner": "radia-mcp",
+      "target": "ci-native",
+      "legacy_100": true
+    },
     "radia-mcp-matrix.yml:minimum-sdk": {
       "owner": "radia-mcp",
       "target": "github-hosted",
