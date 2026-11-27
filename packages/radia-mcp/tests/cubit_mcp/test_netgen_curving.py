@@ -39,13 +39,10 @@ import pytest
 REQUIRED = os.environ.get("RADIA_REQUIRE_NETGEN_CURVING") == "1"
 
 
-def _require(name):
-    if REQUIRED:
-        return importlib.import_module(name)
-    return pytest.importorskip(name)
-
-
-netgen_meshing = _require("netgen.meshing")
+if REQUIRED:
+    import netgen.meshing as netgen_meshing
+else:
+    netgen_meshing = pytest.importorskip("netgen.meshing")
 
 
 def _load():
@@ -205,7 +202,10 @@ def test_refit_matches_the_fork_bit_for_bit(tmp_path, order):
 
 def _periodic_box(order):
     """Box with a cylindrical hole; the two end faces are identified periodic."""
-    occ = _require("netgen.occ")
+    if REQUIRED:
+        import netgen.occ as occ
+    else:
+        occ = pytest.importorskip("netgen.occ")
     box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
     hole = occ.Cylinder(occ.Pnt(0.5, 0.5, 0), occ.Z, r=0.25, h=1)
     shape = box - hole
