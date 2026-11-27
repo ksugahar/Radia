@@ -492,20 +492,6 @@ def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch,
     assert json.loads(kwargs['env']['RADIA_MCP_CI_SELECTION_JSON']) == selectors
 
 
-def test_host_roles_agree_across_deployment_skills():
-    root = ROOT
-    cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
-    guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
-    assert "https://github.com/ksugahar/cubit-mesh-export" in cubit
-    assert not (root / "tools/release_cubit_dual.py").exists()
-    # Both release agents use the same portable acceptance/cleanup contract.
-    import re
-    links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))
-    assert any((guide.parent / link).resolve() ==
-               (root / ".agents/skills/cubit-toolbar-acceptance/SKILL.md").resolve()
-               and (guide.parent / link).is_file() for link in links)
-
-
 def _text_eol_module():
     spec = importlib.util.spec_from_file_location(
         "tracked_text_eol_contract", ROOT / "tools/check_text_line_endings.py")

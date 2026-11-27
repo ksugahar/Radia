@@ -1,9 +1,9 @@
 """mesh_quality's cost-axis / anisotropy report.
 
-The mesh-quality study (validation_test/radia_mcp/mesh_quality_study)
-established that minSICN alone cannot rank meshes: the discriminating
-axes are dof (not element count), the interior-node fraction, and
-stretching. These lock the contract of the numbers that carry those.
+A mesher comparison at matched dof established that minSICN alone
+cannot rank meshes: the discriminating axes are dof (not element
+count), the interior-node fraction, and stretching. These lock the
+contract of the numbers that carry those.
 
 The dof identities asserted here are structural, not conventions:
 lowest-order H1 / HCurl / HDiv have exactly one dof per node / edge /

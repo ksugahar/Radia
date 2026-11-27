@@ -928,18 +928,6 @@ print(mesh.GetBoundaries())  # e.g., ('conductor', 'conductor', ...)
 L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
 ```
 
-### Using Old API Instead of export netgen
-```python
-# OLD (DELETED): Do not use export_NetgenMesh or set_*_geominfo
-# set_torus_geominfo(ngmesh, ...)  # DELETED
-
-# NEW: Single APREPRO command handles everything
-import tempfile
-vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
-mesh = Mesh(vol_path)
-```
-
 ## use_fmm: FMM vs Dense (No H-matrix in ngsolve.bem)
 
 **ngsolve.bem has FMM only. H-matrix (ACA) is NOT implemented.**

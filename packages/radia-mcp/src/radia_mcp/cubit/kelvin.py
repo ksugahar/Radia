@@ -344,9 +344,7 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     Creates a fresh exterior sphere at the offset position, webcutted
     for symmetry, with 1:1 mesh copy from the air sphere outer surface.
 
-    Strategy (matches the preserved validation fixture
-    validation_test/induction_heating/demoted_samples_legacy/
-    ih_fem_kelvin_sample.py):
+    Strategy:
       1. Find the existing air volumes and their outer spherical surfaces
       2. Create a fresh ACIS sphere at the offset position
       3. Webcut the exterior sphere for z-symmetry (equator curves)

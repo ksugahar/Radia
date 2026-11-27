@@ -5,13 +5,9 @@
 ## See README.md for rationale.
 ##
 ## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
-## KELVIN IS *NOT* ADDED by this journal.  To add Kelvin you must either:
-##   (a) playback the companion ih_fem_kelvin_sample.py instead
-##       (it creates the same geometry AND calls add_kelvin_cubit())
-##   (b) after playing this .jou, run these Cubit Python commands:
-##           python "from add_kelvin import add_kelvin_cubit"
-##           python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-##       then export: export netgen "foo.vol" order 1 overwrite
+## KELVIN IS *NOT* ADDED by this journal.  Add it at export time with the
+## MCP tool cubit_export_vol(<this .jou>, "foo.vol", order=1, add_kelvin=True)
+## or the Kelvin option of the Netgen Export menu.
 ##
 ## Running this .jou alone produces a .vol WITHOUT the 'kelvin' material,
 ## so calc_fem_coilmesh.py falls back to Dirichlet A=0 (truncation error,
@@ -34,8 +30,8 @@
 ##   Workpiece: cylinder R = 0.025 m, H = 0.025 m (centered in the coil bore)
 ##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
-## After playback + add_kelvin, export via:
-##   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+## Export with Kelvin via:
+##   cubit_export_vol(<this .jou>, "ih_fem_kelvin_sample.vol", order=1, add_kelvin=True)
 ##
 ## Run via: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
 
@@ -109,8 +105,4 @@ sideset 3 name "sibc"
 volume {air_top} {air_bot} visibility off
 
 # === Next step: add Kelvin yourself (this .jou does NOT do it) ================
-# In Cubit:
-#   python "from add_kelvin import add_kelvin_cubit"
-#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
-# Or play the companion .py (does everything in one shot).
+#   cubit_export_vol(<this .jou>, "ih_fem_kelvin_sample.vol", order=1, add_kelvin=True)

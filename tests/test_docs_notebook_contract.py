@@ -390,8 +390,6 @@ def test_migrated_docs_use_installed_dependencies():
         ROOT / "docs" / "gmsh_animation" / "moving_body_demo.py",
         ROOT / "docs" / "kelvin" / "dtn_spectrum_coarse_mesh_demo.py",
         ROOT / "docs" / "kelvin" / "Supplement" / "experiment_cg_smoother_equilibration.py",
-        ROOT / "docs" / "cubit_mesh_export" / "gmsh" / "gmsh_export_example.py",
-        ROOT / "docs" / "cubit_mesh_export" / "nastran" / "nastran_export_example.py",
     ]
     forbidden = ("build-msvc", "install_ngsolve", "packages/radia-mcp/src", "src/radia")
     offenders = []

@@ -35,7 +35,7 @@ from ngsolve import TaskManager
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
             '-commandplugindir', _plugin_dir or ''])
-import gmsh
+from radia.vol_check import check_mesh_quality
 
 OUT_DIR = os.path.join(_test_dir, 'sweep_torus_test')
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -77,25 +77,11 @@ print(f"V_exact = {V_exact:.6e} m^3")
 print()
 
 
-def check_jacobians(msh_path):
-    """Check for negative Jacobians using GMSH API."""
-    from cubit_mesh_export._gmsh_runtime import preflight_native_mesh_input
-    preflight_native_mesh_input(msh_path)
-    try:
-        gmsh.initialize()
-        gmsh.option.setNumber("General.Verbosity", 0)
-        gmsh.open(msh_path)
-        etypes, etags, ntags = gmsh.model.mesh.getElements(dim=3)
-        neg_det = 0
-        for et in etypes:
-            lc, w = gmsh.model.mesh.getIntegrationPoints(int(et), "Gauss4")
-            jac, det, pts = gmsh.model.mesh.getJacobians(int(et), lc)
-            neg_det += sum(1 for d in det if d < 0)
-        gmsh.finalize()
-        return neg_det
-    except Exception:
-        gmsh.finalize()
-        return -1
+def check_jacobians(vol_path):
+    """Count folded curved-map samples of the exported .vol (sign flips or invalid)."""
+    report = check_mesh_quality(vol_path)
+    return (report["orientation_flip_sample_count"]
+            + report["invalid_jacobian_sample_count"])
 
 
 def volume_from_vol(vol_path, order):
@@ -110,7 +96,7 @@ def volume_from_vol(vol_path, order):
 # ============================================================
 print("=" * 75)
 print("Path A (C++ plugin) p-convergence")
-print(f"{'Method':<16} {'Order':>5} {'V_ngsolve':>14} {'Error%':>12} {'neg_det':>8}")
+print(f"{'Method':<16} {'Order':>5} {'V_ngsolve':>14} {'Error%':>12} {'folded':>8}")
 print("-" * 60)
 
 all_passed = True
@@ -122,20 +108,17 @@ for method_name, commands in torus_methods:
     prev_err = None
     for order in orders:
         vol_path = os.path.join(OUT_DIR, f"{method_name}_A_order{order}.vol")
-        msh_path = os.path.join(OUT_DIR, f"{method_name}_A_order{order}.msh")
 
         cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
-        cubit.cmd(f'export gmsh "{msh_path}" order {order} overwrite')
 
         V_ng = volume_from_vol(vol_path, order)
         err_pct = (V_ng - V_exact) / V_exact * 100.0
-        neg = check_jacobians(msh_path)
+        neg = check_jacobians(vol_path)
 
-        neg_str = str(neg) if neg >= 0 else "n/a"
-        print(f"{method_name:<16} {order:>5} {V_ng:>14.6e} {err_pct:>+12.2e}% {neg_str:>8}")
+        print(f"{method_name:<16} {order:>5} {V_ng:>14.6e} {err_pct:>+12.2e}% {neg:>8}")
 
         if neg > 0:
-            print(f"  ** FAIL: negative Jacobians detected!")
+            print(f"  ** FAIL: folded curved elements detected!")
             all_passed = False
         if prev_err is not None and abs(err_pct) > abs(prev_err) and not math.isclose(err_pct, 0, abs_tol=1e-6):
             print(f"  ** WARN: p-convergence not monotonic")
@@ -145,7 +128,7 @@ for method_name, commands in torus_methods:
 
 print("=" * 75)
 if all_passed:
-    print("ALL PASSED: no negative Jacobians, p-convergence OK")
+    print("ALL PASSED: no folded curved elements, p-convergence OK")
 else:
     print("FAILED: see details above")
     sys.exit(1)

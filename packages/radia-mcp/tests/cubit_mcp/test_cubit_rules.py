@@ -13,12 +13,9 @@ from radia_mcp.cubit.rules import (
     check_missing_cubit_init,
     check_wrong_connectivity_for_2nd_order,
     check_element_type_before_add,
-    check_nodeset_sideset_usage,
-    check_missing_step_reimport,
     check_hardcoded_absolute_paths,
     check_missing_boundary_block,
     check_ambiguous_face_block,
-    check_export_file_extension,
     check_curve_without_setgeominfo,
     check_missing_block_names,
     check_no_pyqt5_imports,
@@ -42,7 +39,7 @@ class TestMissingBlockRegistration:
     def test_detects_export_without_block(self):
         code = (
             'import cubit\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         findings = _run(check_missing_block_registration, code)
         assert len(findings) == 1
@@ -52,7 +49,7 @@ class TestMissingBlockRegistration:
         code = (
             'import cubit\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_block_registration, code) == []
 
@@ -68,7 +65,7 @@ class TestMissingMeshCommand:
     def test_detects_export_without_mesh(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         findings = _run(check_missing_mesh_command, code)
         assert len(findings) == 1
@@ -78,7 +75,7 @@ class TestMissingMeshCommand:
         code = (
             'cubit.cmd("mesh volume all")\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_mesh_command, code) == []
 
@@ -158,36 +155,6 @@ class TestElementTypeBeforeAdd:
         assert _run(check_element_type_before_add, code) == []
 
 
-class TestNodesetSidesetUsage:
-    def test_detects_nodeset_with_non_exodus(self):
-        code = (
-            'cubit.cmd("nodeset 1 add node all")\n'
-            'cme.export_netgen(cubit, "output.vol")\n'
-        )
-        findings = _run(check_nodeset_sideset_usage, code)
-        assert len(findings) == 1
-        assert findings[0]['severity'] == 'HIGH'
-
-    def test_no_finding_without_export(self):
-        code = 'cubit.cmd("nodeset 1 add node all")\n'
-        assert _run(check_nodeset_sideset_usage, code) == []
-
-
-class TestMissingStepReimport:
-    def test_detects_deleted_api(self):
-        code = (
-            'cme.export_netgen(cubit, geometry=True)\n'
-        )
-        findings = _run(check_missing_step_reimport, code)
-        assert len(findings) >= 1
-
-    def test_allows_native_export_netgen(self):
-        code = (
-            'mesh = cubit.cmd("export netgen output.vol order 2")\n'
-        )
-        assert _run(check_missing_step_reimport, code) == []
-
-
 class TestCubitHardcodedAbsolutePaths:
     def test_detects_windows_path(self):
         code = "sys.path.insert(0, r'D:\\myproject\\lib')"
@@ -247,18 +214,6 @@ class TestAmbiguousFaceBlock:
         assert _run(check_ambiguous_face_block, code) == []
 
 
-class TestExportFileExtension:
-    def test_detects_wrong_extension(self):
-        code = 'cme.export_exodus(cubit, "output.txt")\n'
-        findings = _run(check_export_file_extension, code)
-        assert len(findings) == 1
-        assert '.txt' in findings[0]['message']
-
-    def test_allows_correct_extension(self):
-        code = 'cme.export_exodus(cubit, "output.exo")\n'
-        assert _run(check_export_file_extension, code) == []
-
-
 class TestCurveWithoutSetGeomInfo:
     def test_detects_manual_curve_without_native_export_netgen(self):
         code = (
@@ -286,7 +241,7 @@ class TestMissingBlockNames:
     def test_detects_unnamed_blocks(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         findings = _run(check_missing_block_names, code)
         assert len(findings) == 1
@@ -296,7 +251,7 @@ class TestMissingBlockNames:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 1 name \\"domain\\"")\n'
-            'cme.export_exodus(cubit, "output.exo")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_block_names, code) == []
 
@@ -325,8 +280,7 @@ class TestNoPyQt5Imports:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        # The Gmsh export rule is retired with the Gmsh export; 20 active rules remain.
-        assert len(ALL_RULES) == 20
+        assert len(ALL_RULES) == 17, len(ALL_RULES)
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:

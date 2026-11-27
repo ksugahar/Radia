@@ -1,6 +1,9 @@
 """Which faces add_kelvin_cubit treats as the Kelvin interface, without Cubit.
 
-A fake ``cubit`` object answers the few queries the selection and pairing
+Guards: radia_mcp.cubit.kelvin keeps only the air faces on the origin sphere
+in kelvin_int and pairs every one of them with an exterior face.
+
+Assumes: a fake ``cubit`` object answers the few queries the selection and pairing
 helpers make.  The regression: the largest face of EVERY air volume used to go
 into kelvin_int, so the faces of gap slabs inside the air did too, and the
 exterior mesh was paired by ``min(len(air), len(kelvin))``, which silently
@@ -10,7 +13,7 @@ import math
 
 import pytest
 
-from cubit_mesh_export.cubit_helpers import add_kelvin
+from radia_mcp.cubit import kelvin
 
 R = 0.22
 OFFSET = (3 * R, 0.0, 0.0)
@@ -101,7 +104,7 @@ def _layered_air():
 
 def test_gap_slab_and_foreign_sphere_faces_are_not_kelvin_int():
     cubit = _layered_air()
-    faces = add_kelvin._air_sphere_faces(cubit, [100, 101, 102, 103], R, "air")
+    faces = kelvin._air_sphere_faces(cubit, [100, 101, 102, 103], R, "air")
     assert sorted(faces) == [1, 4]
 
 
@@ -109,7 +112,7 @@ def test_air_block_without_a_face_on_the_sphere_is_rejected():
     cubit = FakeCubit({200: ((-0.1, -0.1, -0.1, 0.1, 0.1, 0.1), [1, 2])},
                       {1: PlaneFace(), 2: PlaneFace()})
     with pytest.raises(RuntimeError, match="No face"):
-        add_kelvin._air_sphere_faces(cubit, [200], R, "air")
+        kelvin._air_sphere_faces(cubit, [200], R, "air")
 
 
 def test_air_sphere_off_the_origin_is_rejected_not_half_supported():
@@ -117,45 +120,18 @@ def test_air_sphere_off_the_origin_is_rejected_not_half_supported():
     cubit = FakeCubit({300: ((-R + 0.01, -R, -R, R + 0.01, R, R), [1])},
                       {1: SphereFace(shifted)})
     with pytest.raises(NotImplementedError, match="origin"):
-        add_kelvin._air_sphere_faces(cubit, [300], R, "air")
+        kelvin._air_sphere_faces(cubit, [300], R, "air")
 
 
-def _pairing_cubit(kelvin_faces):
-    faces = {1: SphereFace(ORIGIN, z_low=0.0), 4: SphereFace(ORIGIN, z_high=0.0)}
-    faces.update(kelvin_faces)
-    return FakeCubit({}, faces)
-
-
-def test_reflected_pairing_copies_the_upper_face_and_reflects_the_lower():
-    cubit = _pairing_cubit({50: SphereFace(OFFSET, z_low=0.0)})
-    pairs, reflected = add_kelvin._pair_sphere_faces(
-        cubit, [1, 4], [50], OFFSET, R, reflected_z=True)
-    assert pairs == [(1, 50)] and reflected == [4]
-
-
-def test_reflected_pairing_rejects_a_kelvin_face_that_does_not_match():
-    cubit = _pairing_cubit({50: SphereFace(OFFSET, z_high=0.0)})
-    with pytest.raises(RuntimeError):
-        add_kelvin._pair_sphere_faces(cubit, [1, 4], [50], OFFSET, R, reflected_z=True)
-
-
-def test_reflected_pairing_rejects_an_exterior_cut_off_its_centre():
-    # the exterior sphere cut on a plane that does not pass through its centre
-    cubit = _pairing_cubit({50: SphereFace(OFFSET, z_low=0.05)})
-    with pytest.raises(RuntimeError):
-        add_kelvin._pair_sphere_faces(cubit, [1, 4], [50], OFFSET, R, reflected_z=True)
-
-
-def test_reflected_pairing_rejects_a_missing_lower_face():
-    cubit = _pairing_cubit({50: SphereFace(OFFSET, z_low=0.0)})
-    with pytest.raises(RuntimeError):
-        add_kelvin._pair_sphere_faces(cubit, [1], [50], OFFSET, R, reflected_z=True)
-
-
-def test_unreflected_pairing_needs_a_partner_for_every_face():
+def test_pairing_needs_a_partner_for_every_face():
     cubit = FakeCubit({}, {1: SphereFace(ORIGIN), 50: SphereFace(OFFSET)})
-    pairs, reflected = add_kelvin._pair_sphere_faces(
-        cubit, [1], [50], OFFSET, R, reflected_z=False)
-    assert pairs == [(1, 50)] and reflected == []
+    assert kelvin._pair_sphere_faces(cubit, [1], [50], OFFSET, R) == [(1, 50)]
     with pytest.raises(RuntimeError):
-        add_kelvin._pair_sphere_faces(cubit, [1], [], OFFSET, R, reflected_z=False)
+        kelvin._pair_sphere_faces(cubit, [1], [], OFFSET, R)
+
+
+def test_pairing_rejects_a_kelvin_face_cut_on_another_plane():
+    cubit = FakeCubit({}, {1: SphereFace(ORIGIN, z_low=0.0),
+                           50: SphereFace(OFFSET, z_high=0.0)})
+    with pytest.raises(RuntimeError, match="matching Kelvin faces"):
+        kelvin._pair_sphere_faces(cubit, [1], [50], OFFSET, R)

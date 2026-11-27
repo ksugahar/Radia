@@ -1470,9 +1470,7 @@ PATTERNS: list[dict] = [
                      "and leaves curl/div essentially untouched (0.658 "
                      "-> 0.657 and 0.973 -> 0.967 across the rotation). "
                      "An L2 advantage with no matching seminorm "
-                     "advantage is the signature. "
-                     "validation_test/radia_mcp/mesh_quality_study/"
-                     "run_rotation_control.py is the standing control.",
+                     "advantage is the signature.",
         "prevention": "Never verify or benchmark a structured mesh with "
                       "an axis-aligned separable exact solution. Rotate "
                       "the field (cheaper and cleaner than rotating the "
@@ -1480,9 +1478,109 @@ PATTERNS: list[dict] = [
                       "identity), or headline the derivative seminorm. "
                       "Treat any order-of-magnitude mesh-comparison gap "
                       "as an artifact until a control says otherwise.",
-        "related": ["validation_test/radia_mcp/mesh_quality_study/run_rotation_control.py",
-                    "validation_test/radia_mcp/mesh_quality_study/run_vector_elements.py",
-                    ],
+        "related": [],
+    },
+    {
+        "id": "single-worst-element-sample-ranks-meshers",
+        "title": "One worst-element quality number per mesher is a random "
+                 "sample, not a mesher property, and does not predict the "
+                 "solve.",
+        "topics": ["mesh", "verification", "benchmark"],
+        "severity": "medium",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "Two meshers are ranked on one minSICN `min` value each, "
+                "or refinement is expected to improve the worst element "
+                "monotonically.",
+        "root_cause": "At a fixed size target a mesher is bit-exactly "
+                      "reproducible, but moving the target by ~0.1 % moved "
+                      "the worst element by ~0.1 in minSICN for both a "
+                      "Delaunay and an advancing-front tet mesher; about a "
+                      "third of refinement steps made it worse.  At these "
+                      "levels a 0.2 deficit in `min` left CG iterations and "
+                      "the L2/H1 error unchanged.",
+        "detection": "Sweep several nearby size targets and compare the "
+                     "BAND of `min` values; check whether the observable the "
+                     "analysis needs (error, iterations) moves with it.",
+        "prevention": "Gate meshes on inverted elements (negative Jacobian "
+                      "count > 0), not on one `min`.  Compare `min` only as "
+                      "bands over sizes, never as a single call per mesher.",
+        "related": ["axis-aligned-manufactured-solution-fake-superconvergence",
+                    "element-count-taken-as-mesh-cost"],
+    },
+    {
+        "id": "element-count-taken-as-mesh-cost",
+        "title": "Comparing meshes at equal element count hides the dof "
+                 "they cost; boundary-heavy meshes look economical.",
+        "topics": ["mesh", "benchmark", "fem"],
+        "severity": "medium",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "A mesher with half the elements at equal h, or a hex mesh "
+                "with 5-8x fewer elements, looks more accurate or cheaper "
+                "than it is.",
+        "root_cause": "The linear system is sized by dof, not elements.  At "
+                      "matched dof the convergence RATES agreed; the mesher "
+                      "with more boundary nodes (interior-node fraction "
+                      "2-49 % against 19-77 %) had a 1.1-1.9x larger L2 "
+                      "error, and an equal-element pair quietly used 1.5x "
+                      "the dof of its partner.",
+        "detection": "Report dof and the interior-node fraction beside every "
+                     "mesh comparison (mesh_quality's mesh_stats carries "
+                     "both) and interpolate errors to matched dof.",
+        "prevention": "Rank meshes on error versus dof.  Report the energy "
+                      "seminorm and iteration count separately from L2: a "
+                      "mesh can win conditioning and the energy norm while "
+                      "L2 is a tie.",
+        "related": ["single-worst-element-sample-ranks-meshers",
+                    "zero-free-dof-flat-convergence-curve"],
+    },
+    {
+        "id": "zero-free-dof-flat-convergence-curve",
+        "title": "A convergence study whose every node lies on a Dirichlet "
+                 "boundary solves nothing and prints a flat error curve.",
+        "topics": ["verification", "fem", "benchmark"],
+        "severity": "high",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "Several meshers appear to tie with a constant error across "
+                "refinements, or a fitted convergence rate is off.",
+        "root_cause": "On a thin plate meshed with one element through the "
+                      "thickness every node sat on a Dirichlet face: zero "
+                      "free dofs, so the 'error' was pure interpolation "
+                      "error of the boundary data.  Coarse points with few "
+                      "interior nodes silently bent a fitted slope the same "
+                      "way.",
+        "detection": "Count free dofs and the interior-node fraction for "
+                     "every point of the study before fitting.",
+        "prevention": "Raise when free dofs are zero.  Exclude points below "
+                      "a stated interior-node fraction (20 % was used) from "
+                      "rate fits and say so in the result.",
+        "related": ["element-count-taken-as-mesh-cost"],
+    },
+    {
+        "id": "cubit-plugin-directory-silently-substituted",
+        "title": "A relative or second Cubit plugin directory makes Cubit "
+                 "run a different exporter than the candidate under test.",
+        "topics": ["cubit", "mesh-export", "validation"],
+        "severity": "high",
+        "first_seen": "2026-10-15",
+        "last_seen": "2026-10-15",
+        "what": "A benchmark of a candidate command plugin reports results "
+                "that actually came from the installed plugin, or the "
+                "export commands register twice.",
+        "root_cause": "Cubit rejects a relative plugin directory ('Invalid "
+                      "Plugin Directory') and silently loads the installed "
+                      "plugin instead; a host with an installed plugin "
+                      "loads it in addition to an explicit directory, so "
+                      "the same command names register twice.",
+        "detection": "Require a log line or version string that only the "
+                     "candidate emits, and hash the loaded plugin path, "
+                     "before accepting any exported file.",
+        "prevention": "Pass the plugin directory as an absolute path; never "
+                      "infer which binary ran from disk-file equality or a "
+                      "successful export.",
+        "related": [],
     },
 ]
 

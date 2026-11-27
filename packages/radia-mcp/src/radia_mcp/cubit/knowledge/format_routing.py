@@ -112,14 +112,12 @@ production tool for this is Coreform Cubit, accessed through
 the radia-mcp Cubit export route:
 
 ```
-cubit_export_vol(journal, "model.vol", order=N) \\
-    [add_kelvin] \\
-    [kelvin_mesh <m>] \\
-    [kelvin_sym_x|y|z {off|bn|ht}] \\
-    [overwrite]
+cubit_export_vol(journal, "model.vol", order=N,
+                 add_kelvin=False, kelvin_mesh=None,
+                 kelvin_sym_x="off", kelvin_sym_y="off", kelvin_sym_z="off")
 ```
 
-Single command, single round trip:
+`kelvin_sym_x|y|z` take `off`, `bn` or `ht`. Single tool call, single round trip:
 
   - blocks -> materials
   - sidesets -> BND
@@ -156,7 +154,7 @@ Need labels (material / BND / BBBND) ?
 |           Use it for PEEC, label-free CAD inspection, geometry sharing.
 +-- Yes  -> .vol is required.
             Route through the radia-mcp Cubit export route:
-                cubit_export_vol(journal, "model.vol", order=N) [add_kelvin] [...]
+                cubit_export_vol(journal, "model.vol", order=N, add_kelvin=...)
             Then hand the .vol to the appropriate radia-* domain tool.
 ```
 

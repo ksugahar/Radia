@@ -82,31 +82,6 @@ For a hybrid HEX/TET mesh whose receiver cannot import CPYRAM:
 cubit.cmd('export nastran_bdf "hybrid.bdf" dimension 3 nopyramid overwrite')
 ```
 
-## Validation
-
-The real-Cubit regression covers TET, HEX, WEDGE, PYRAMID, TRI, QUAD,
-off-plane 2D coordinates, property-ID collisions, SET1 nodesets, the historical
-alias, and rejection of volume-only `dimension 2` output:
-
-```powershell
-python validation_test\cubit\test_nastran_export.py
-python validation_test\cubit\test_export_combinations.py
-```
-
-The second script creates an order/dimension corpus. Parse that corpus with an
-independent reader and save a JSON report with:
-
-```powershell
-python -m pip install "pyNastran==1.4.1"
-python validation_test\cubit\validate_nastran_with_pynastran.py `
-  --output-json private-runtime-path
-```
-
-The independent gate checks GRID coordinates, element-to-node references,
-element-to-property references, property kinds, and SET1 cards. Missing MAT
-cards are reported as the expected boundary between a mesh-interchange deck and
-a complete structural analysis deck.
-
 ## See also
 
 - [export_Gmsh.md](export_Gmsh.md)

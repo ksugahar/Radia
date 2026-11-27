@@ -1851,7 +1851,7 @@ try:
         })
         if want_stats and by_type:
             # ---- cost axis + anisotropy -------------------------------
-            # Measured (validation_test/radia_mcp/mesh_quality_study):
+            # Measured in a mesher comparison at matched dof:
             # element COUNT is not the cost -- the linear system is sized
             # by dof, and the share of INTERIOR nodes is what separated
             # the meshers at matched dof. minSICN alone reports neither.

@@ -18,12 +18,11 @@ Run Cubit journal (.jou) files and test the `.vol` export orders.
 | Argument | Action |
 |----------|--------|
 | `<path/to/file.jou>` | Run a single .jou file with full export test suite |
-| `test` or `tests` | Run all tests in `tests/cubit/export_mixed_test/` |
-| `test 100` | Run tests on 100号機 via SSH |
+| `<path/to/file.jou> 100` | Run it on 100号機 via SSH |
 
 ## Full Export Test Suite (per .jou)
 
-For EVERY .jou file tested, run ALL of these export formats:
+For EVERY .jou file tested, export every order:
 
 ```bash
 CUBIT="C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"
@@ -58,26 +57,10 @@ ssh 100 '& "C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe" -bat
 # Verify: all lines show "Exported" or "succeeded", no "Interrupt"
 ```
 
-## Existing test suite
-
-```bash
-# Run all registered tests (local)
-python tests/cubit/export_mixed_test/run_test.py
-
-# Tests included:
-# 1. Mixed hex+tet+pyramid: order 1+2, gmsh+nastran+vol
-# 2. Hex cylinder: order 2, gmsh+nastran (HEX20 = 20 nodes check)
-# 3. Sphere p-convergence: order 1-5, vol
-```
-
 ## Export commands (APREPRO)
 
 | Command | Format | Orders | Notes |
 |---------|--------|--------|-------|
-| `export gmsh "f.msh" order N overwrite` | MSH 4.2 post-processing | 1-4 | Solver input is checked `.vol`. |
-| `export radia_nastran "f.bdf" order N` | Nastran BDF | 1-2 | NOT `export nastran` (built-in conflict) |
-| `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | |
-| `export meg "f.meg"` | MEG/ELF | 1 only | |
 | `export netgen "f.vol" order N` | Netgen Vol | 1-5 | p-convergence test |
 | `coil "script.py"` | CoilBuilder STEP | -- | subprocess Python 3.12 |
 

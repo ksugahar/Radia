@@ -506,24 +506,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 element type tetra10")
 ```
 
-## 5. HIGH: Using Deleted APIs (export_netgen, SetGeomInfo)
-
-```python
-# WRONG: These functions no longer exist
-geo = OCCGeometry("cyl.step")
-ngmesh = export_netgen(cubit, geometry=geo)       # DELETED
-set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
-
-# RIGHT: Use cubit_export_vol APREPRO command — no STEP, no OCC
-import tempfile
-from ngsolve import Mesh
-vol_path = tempfile.mktemp(suffix='.vol')
-# Curved .vol export runs outside Cubit: save this model as a journal,
-# then call the MCP tool cubit_export_vol(journal_path, "{vol_path}", order=3).
-mesh = Mesh(vol_path)
-```
-
-## 6. MODERATE: Missing Boundary Element Block
+## 5. MODERATE: Missing Boundary Element Block
 
 ```python
 # INCOMPLETE: Volume block only
@@ -534,7 +517,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")   # Needed for boundary conditions
 ```
 
-## 7. CRITICAL: Block Registration Order for Source/Sink (BEM Inductance)
+## 6. CRITICAL: Block Registration Order for Source/Sink (BEM Inductance)
 
 When using `set duplicate block elements on` with source/sink blocks for BEM
 inductance extraction, register source/sink BEFORE the boundary block.
@@ -570,7 +553,7 @@ order determines which label an element gets:
 Best practice: register source/sink LAST (highest block ID), or
 register boundary block first then source/sink blocks after.
 
-## 8. MODERATE: Hardcoded Absolute Paths
+## 7. MODERATE: Hardcoded Absolute Paths
 
 ```python
 # WRONG: Breaks on other machines
@@ -581,7 +564,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ```
 
-## 9. LOW: Using 'modify mesh volume X order 2'
+## 8. LOW: Using 'modify mesh volume X order 2'
 
 ```python
 # WRONG: May not work reliably
@@ -888,25 +871,6 @@ n1 = len(cubit.get_connectivity("tet", tet_id))
 n2 = len(cubit.get_expanded_connectivity("tet", tet_id))
 print(f"1st order nodes: {n1}, Actual nodes: {n2}")
 # If n1 == n2 == 4, still 1st order. If n2 == 10, it's 2nd order.
-```
-
-## Problem: Using Old SetGeomInfo / export_netgen APIs
-
-**These APIs have been deleted.** Use `cubit_export_vol` instead.
-
-```python
-# OLD (DELETED - does not work):
-# geo = OCCGeometry("geometry.step")
-# ngmesh = export_netgen(cubit, geometry=geo)   # DELETED
-# set_cylinder_geominfo(ngmesh, ...)            # DELETED
-
-# NEW: Single APREPRO command
-import tempfile
-from ngsolve import Mesh
-vol_path = tempfile.mktemp(suffix='.vol')
-# Curved .vol export runs outside Cubit: save this model as a journal,
-# then call the MCP tool cubit_export_vol(journal_path, "{vol_path}", order=3).
-mesh = Mesh(vol_path)
 ```
 
 ## Problem: Mesh Quality Too Low
@@ -3647,8 +3611,7 @@ cubit_export_vol "private-runtime-path" overwrite
 # -> writes 22,521 bytes on the reference sphere test
 ```
 
-Regression guard: `tests/cubit/test_ho_volume_all_formats.py` covers
-ASCII paths; a dedicated Japanese-path smoke test is run in the the development runtime
+A dedicated Japanese-path smoke test is run in the development runtime
 deploy phase (not in CI because CI runners do not have Cubit installed).
 
 ## See also

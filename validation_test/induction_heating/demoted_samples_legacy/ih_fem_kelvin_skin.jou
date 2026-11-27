@@ -20,8 +20,8 @@
 ##   Workpiece: cylinder R = 0.025 m, H = 0.025 m (centered in the coil bore)
 ##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
-## After playback + add_kelvin, export via:
-##   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
+## Export with Kelvin via:
+##   cubit_export_vol(<this .jou>, "ih_fem_kelvin_skin.vol", order=1, add_kelvin=True)
 ##
 ## Also exports STEP for PEEC comparison:
 ##   File -> Export -> ih_fem_kelvin_skin_coil.step (coil volume only)
@@ -106,8 +106,6 @@ volume {air_top} {air_bot} visibility off
 
 # === Next step: add Kelvin yourself (this .jou does NOT do it) ================
 # Preserved under validation_test/induction_heating/demoted_samples_legacy/
-# on 2026-06-29. See README.md. Play ih_fem_kelvin_skin.py instead to get
-# Kelvin added automatically, or run these Cubit Python commands manually:
-#   python "from add_kelvin import add_kelvin_cubit"
-#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
+# on 2026-06-29. See README.md. Export with Kelvin through the MCP tool
+#   cubit_export_vol(<this .jou>, "ih_fem_kelvin_skin.vol", order=1, add_kelvin=True)
+# or the Kelvin option of the Netgen Export menu.

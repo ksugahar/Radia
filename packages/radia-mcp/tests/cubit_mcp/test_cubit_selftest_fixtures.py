@@ -20,7 +20,7 @@ def test_cubit_selftest_runs_without_examples(tmp_path, monkeypatch):
 def test_bad_cubit_has_findings():
     findings = _lint_file(str(FIXTURES_DIR / "bad_cubit_script.py"))
     rules_found = {f["rule"] for f in findings}
-    assert "deleted-api-usage" in rules_found
+    assert "missing-mesh-command" in rules_found
     assert "hardcoded-absolute-path" in rules_found
     assert len(findings) >= 4
 

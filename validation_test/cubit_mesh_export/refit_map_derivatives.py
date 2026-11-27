@@ -16,7 +16,8 @@ Frobenius norm of D^k F divided by h_K^k, h_K the corner diameter.
 
     python refit_map_derivatives.py --netgen DIR --refit DIR
 
-DIR holds {tet,hex}_o{p}.vol as written by geometric_refit_benchmark.py.
+DIR holds {tet,hex}_o{p}.vol exported from the same Cubit meshes, without
+(--netgen) and with (--refit) the geometric refit.
 The result JSON is written next to this script.
 """
 

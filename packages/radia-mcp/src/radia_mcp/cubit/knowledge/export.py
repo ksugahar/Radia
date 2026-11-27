@@ -196,45 +196,25 @@ nodes are placed exactly on ACIS CAD surfaces by BuildCurvedElements(order).
 
 For high-order curving, see `netgen_workflow_guide()` tool.
 For simple 2nd order without geometry, use `cubit_export_vol(journal, "mesh.vol", order=2)`.
-
-## Deleted Predecessors
-
-`export_NetgenMesh()`, `export_netgen()`, `export_netgen_with_names()`,
-`set_*_geominfo()`, `name_occ_faces()` are all removed.
-`cubit_export_vol` replaces all of them.
 """
 
 EXPORT_EXODUS = """
-# Exodus II Export
+# Exodus II Export (Cubit built-in)
+
+Exodus II is Cubit's native format.  Cubit's own `export mesh` command writes
+it with full fidelity, including all element types, blocks, nodesets and
+sidesets; the Cubit export route adds nothing on top of it.
 
 ```python
-export_exodus(cubit, FileName, overwrite=True, large_model=False)
+cubit.cmd('export mesh "mesh.exo" overwrite')
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .exo file path |
-| `overwrite` | bool | True | Overwrite existing file |
-| `large_model` | bool | False | Use 64-bit integers for large meshes |
+## Large models
 
-## How It Works (Exception to Design Philosophy)
-
-Unlike other export functions, `export_exodus()` uses Cubit's **built-in**
-`export mesh` command internally:
-```python
-cubit.cmd('export mesh "filename.exo" overwrite')
-```
-
-This is because Exodus II is Cubit's native format, and the built-in command
-provides full fidelity including all element types, nodesets, sidesets, etc.
-
-## large_model Parameter
-
-| Value | Integer Size | Max Nodes/Elements | Use When |
-|-------|-------------|-------------------|----------|
-| `False` | 32-bit | ~2 billion | Most meshes |
-| `True` | 64-bit | Unlimited | Very large meshes (>2B nodes/elements) |
+| Command | Integer Size | Max Nodes/Elements | Use When |
+|---------|-------------|-------------------|----------|
+| `export mesh "f.exo"` | 32-bit | ~2 billion | Most meshes |
+| `export mesh "f.exo" large` | 64-bit | Unlimited | Very large meshes (>2B nodes/elements) |
 
 ```python
 # Standard export
@@ -296,10 +276,10 @@ EXPORT_DECISION_GUIDE = """
 
 ## "I need multi-physics (MOOSE, Sierra)"
 
--> Use `export_exodus()`
+-> Use Cubit's built-in `export mesh "mesh.exo" overwrite`
 - Supports all element types and orders
 - Full block definitions preserved
-- Large model support: `export_exodus(cubit, "mesh.exo", large_model=True)`
+- Large model support: `export mesh "mesh.exo" overwrite large`
 - Cubit-native format with highest fidelity
 
 ## Performance & Feature Summary

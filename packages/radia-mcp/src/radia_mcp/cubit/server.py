@@ -1587,7 +1587,6 @@ def netgen_workflow_guide(workflow: str = "overview") -> str:
 	        "kelvin_auto"       - Kelvin auto-add (auto R, symmetry, mesh copy)
 	        "vol_2nd_order"     - Simplest 2nd order .vol workflow
 	        "troubleshooting"   - Common errors and fixes
-	        "deleted_apis"      - Migration guide from old APIs
 	"""
 	return get_netgen_documentation(workflow)
 
@@ -2087,41 +2086,6 @@ def get_lint_rules() -> str:
 			'fix': 'Add elements first, then set element type',
 		},
 		{
-			'rule': 'deleted-api-usage',
-			'severity': 'CRITICAL',
-			'description': 'Deleted API (export_netgen, set_*_geominfo, name_occ_faces) detected.',
-			'trigger': 'Any usage of export_netgen, export_NetgenMesh, set_*_geominfo, name_occ_faces',
-			'fix': 'Use cubit_export_vol(journal, "f.vol", order=N)',
-		},
-		{
-			'rule': 'nodeset-sideset-usage',
-			'severity': 'HIGH',
-			'description': 'nodeset/sideset commands found with non-Exodus export. Blocks-only policy.',
-			'trigger': 'nodeset/sideset with non-Exodus export',
-			'fix': 'Use blocks: cubit.cmd("block 2 add tri all in surface 1")',
-		},
-		{
-			'rule': 'deleted-api-usage',
-			'severity': 'CRITICAL',
-			'description': '(See above) Catches all deleted API usage.',
-			'trigger': 'export_netgen_with_names, name_occ_faces',
-			'fix': 'Use cubit_export_vol(journal, "f.vol", order=N)',
-		},
-		{
-			'rule': 'deleted-api-usage',
-			'severity': 'CRITICAL',
-			'description': '(See above) Catches export_netgen and other deleted APIs.',
-			'trigger': 'export_netgen(cubit, geometry=geo)',
-			'fix': 'Use cubit_export_vol(journal, "f.vol", order=N)',
-		},
-		{
-			'rule': 'deleted-api-noheal',
-			'severity': 'INFO',
-			'description': 'Name-based workflow (name_occ_faces + noheal) is deleted. Use cubit_export_vol.',
-			'trigger': 'name_occ_faces(shape) + STEP import',
-			'fix': 'Use cubit_export_vol - no STEP needed',
-		},
-		{
 			'rule': 'hardcoded-absolute-path',
 			'severity': 'MODERATE',
 			'description': 'Hardcoded absolute paths in sys.path (except Coreform Cubit/NGSolve).',
@@ -2143,18 +2107,11 @@ def get_lint_rules() -> str:
 			'fix': 'Use tri for tet boundaries, quad for hex boundaries, or add an explicit mixed tri/quad comment.',
 		},
 		{
-			'rule': 'wrong-file-extension',
+			'rule': 'curve-without-export-netgen',
 			'severity': 'MODERATE',
-			'description': 'Export file extension does not match the format.',
-			'trigger': 'export_exodus(cubit, "mesh.vtk") (wrong extension)',
-			'fix': 'Use correct extension: .exo, .vol',
-		},
-		{
-			'rule': 'curve-without-export-curved',
-			'severity': 'MODERATE',
-			'description': 'Manual mesh.Curve() is not needed. cubit_export_vol embeds curving in .vol.',
-			'trigger': 'mesh.Curve(3) without cubit_export_vol',
-			'fix': 'Use cubit.cmd(\'cubit_export_vol(journal, "mesh.vol", order=3)\') then mesh = Mesh("mesh.vol")',
+			'description': 'Manual mesh.Curve() is not needed. export netgen embeds curving in .vol.',
+			'trigger': 'mesh.Curve(3) without export netgen',
+			'fix': 'cubit.cmd(\'export netgen "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
 		},
 		{
 			'rule': 'missing-block-names',

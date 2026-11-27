@@ -153,6 +153,11 @@ for pre-existing MAT files. Fast tests cover missing/invalid axes, sample order,
 real MAT parsing, unknown cycle selectors, and preservation of caller files.
 Historical CSV values and notebook outputs remain unchanged.
 
+The remaining NASA question is external: an independent frequency record and
+redistribution permission have not been established. Consumers reject the
+undocumented axis; raw data removal from the public tree awaits the user's
+decision, and no Git-history rewrite is authorized.
+
 ## Focused companion citation reconciliation
 
 The stream-function and Dowell executable companions now declare selected
@@ -477,20 +482,3 @@ exactly symmetric. All four cases were rerun with this implementation: reduced
 asymmetry is at most 4.55e-8 and KKT residual at most 3.29e-16. The reported
 inductance uses the original quadratic form (the skew part contributes zero).
 Four algebraic tests now include nonsymmetric and indefinite rejection cases.
-
-## Shape-lane numerical closure (2026-09-14)
-
-The post-Taubin staged run completed on worker-b with the identified candidate
-wheel, process-local CAD overlay and licensed validation host Cubit meshes. The 26,948-tet
-reference and 235/1,461-cell hex meshes passed their existing gates. All original
-field tests passed: maximum native/NGSolve discrepancy `6.272e-10`, maximum
-independent reciprocity discrepancy `4.038e-8`, fine-hex/reference discrepancy
-2.2805% (coarse 16.3797%), fine-hex/staircase change -2.9249%, demagnetizing
-factor 0.46275. Field work took approximately 22 minutes. Resolving every facet
-boundary with 16 intervals changed meshing conditions, not acceptance tolerances.
-
-This closes the shape rerun and physical BEM-route items, not all solver-release
-or ver5 acceptance. The remaining NASA question is external: an independent
-frequency record and redistribution permission have not been established.
-Consumers reject the undocumented axis; raw data removal from the public tree
-awaits the user's decision, and no Git-history rewrite is authorized.

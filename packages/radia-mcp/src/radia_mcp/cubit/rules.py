@@ -9,15 +9,14 @@ import re
 import os
 from typing import List, Dict
 
+# The APREPRO export command the rules key on: cubit.cmd('export netgen "f.vol" ...').
+_NETGEN_EXPORT = re.compile(r'export\s+netgen\s')
+
 
 def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called without any block registration."""
 	findings = []
-	export_pattern = re.compile(
-		r'export_'
-		r'(?:curved|exodus)\s*\('
-		r'|export\s+netgen\s'
-	)
+	export_pattern = _NETGEN_EXPORT
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 
 	export_line = None
@@ -187,40 +186,6 @@ def check_element_type_before_add(filepath: str, lines: List[str]) -> List[Dict]
 	return findings
 
 
-def check_missing_step_reimport(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Deprecated API usage detection."""
-	findings = []
-	# Detect usage of deleted APIs
-	deleted_apis = [
-		('export_netgen', 'export netgen'),
-		('export_NetgenMesh', 'export netgen'),
-		('export_netgen_with_names', 'export netgen'),
-		('name_occ_faces', 'export netgen (no OCC needed)'),
-		('set_cylinder_geominfo', 'export netgen'),
-		('set_sphere_geominfo', 'export netgen'),
-		('set_torus_geominfo', 'export netgen'),
-		('set_cone_geominfo', 'export netgen'),
-	]
-	for i, line in enumerate(lines, 1):
-		stripped = line.strip()
-		if stripped.startswith('#'):
-			continue
-		for old_api, replacement in deleted_apis:
-			if old_api in stripped:
-				findings.append({
-					'line': i,
-					'severity': 'CRITICAL',
-					'rule': 'deleted-api-usage',
-					'message': (
-						f'{old_api}() has been DELETED. '
-						f'Use {replacement}() instead. '
-						'See: netgen_workflow_guide("deleted_apis")'
-					),
-				})
-				break
-	return findings
-
-
 def check_hardcoded_absolute_paths(filepath: str, lines: List[str]) -> List[Dict]:
 	"""MODERATE: Hardcoded absolute paths in sys.path or path assignments."""
 	findings = []
@@ -338,10 +303,7 @@ def check_ambiguous_face_block(filepath: str, lines: List[str]) -> List[Dict]:
 def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called but no mesh command found."""
 	findings = []
-	export_pattern = re.compile(
-		r'export_'
-		r'(?:curved|exodus)\s*\('
-	)
+	export_pattern = _NETGEN_EXPORT
 	mesh_pattern = re.compile(
 		r'cubit\.cmd\s*\(\s*["\'].*\b(?:mesh\s+(?:volume|surface|curve)|tetmesh|trimesh)\b',
 		re.IGNORECASE
@@ -372,40 +334,6 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
-def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Export file extension doesn't match format."""
-	findings = []
-	# Map export functions to expected extensions
-	extension_map = {
-				r'export_exodus': ['.exo', '.e', '.ex2'],
-	}
-
-	for i, line in enumerate(lines, 1):
-		stripped = line.strip()
-		if stripped.startswith('#'):
-			continue
-		for func_pattern, valid_exts in extension_map.items():
-			match = re.search(
-				rf'{func_pattern}\s*\(\s*cubit\s*,\s*["\']([^"\']+)["\']',
-				stripped
-			)
-			if match:
-				filename = match.group(1)
-				_, ext = os.path.splitext(filename)
-				ext = ext.lower()
-				if ext and ext not in valid_exts:
-					findings.append({
-						'line': i,
-						'severity': 'MODERATE',
-						'rule': 'wrong-file-extension',
-						'message': (
-							f'File "{filename}" has extension "{ext}" but '
-							f'expected {" or ".join(valid_exts)} for this export format.'
-						),
-					})
-	return findings
-
-
 def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
 	"""MODERATE: Manual mesh.Curve() without export netgen (legacy pattern)."""
 	findings = []
@@ -432,51 +360,12 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 		findings.append({
 			'line': curve_line,
 			'severity': 'MODERATE',
-			'rule': 'curve-without-export-curved',
+			'rule': 'curve-without-export-netgen',
 			'message': (
-				'mesh.Curve() called but no export netgen() found. '
-				'For Cubit meshes, use export netgen(cubit, order=N) which '
-				'handles curving automatically via ACIS CallbackGeometry. '
-				'See: netgen_workflow_guide("export netgen")'
-			),
-		})
-	return findings
-
-
-def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: nodeset/sideset used with non-Exodus export functions."""
-	findings = []
-	nodeset_pattern = re.compile(
-		r'cubit\.cmd\s*\(\s*["\'].*\b(?:nodeset|sideset)\b', re.IGNORECASE
-	)
-	non_exodus_export = re.compile(
-		r'export_'
-		r'(?:NetgenMesh|netgen|netgen_with_names)\s*\('
-	)
-
-	nodeset_lines = []
-	has_non_exodus_export = False
-
-	for i, line in enumerate(lines, 1):
-		stripped = line.strip()
-		if stripped.startswith('#'):
-			continue
-		if nodeset_pattern.search(stripped):
-			nodeset_lines.append(i)
-		if non_exodus_export.search(stripped):
-			has_non_exodus_export = True
-
-	if nodeset_lines and has_non_exodus_export:
-		findings.append({
-			'line': nodeset_lines[0],
-			'severity': 'HIGH',
-			'rule': 'nodeset-sideset-usage',
-			'message': (
-				'nodeset/sideset commands found but export uses '
-				'blocks-only policy. Nodesets and sidesets are ignored by '
-				'non-Exodus export functions. Use blocks for boundary conditions: '
-				'cubit.cmd("block N add tri all in surface X"). '
-				'See: cubit_scripting_guide("blocks_only_policy")'
+				'mesh.Curve() called but no export netgen command found. '
+				'For Cubit meshes, use cubit.cmd(\'export netgen "f.vol" order N overwrite\'), '
+				'which curves through ACIS CallbackGeometry. '
+				'See: netgen_workflow_guide("cubit_export_vol")'
 			),
 		})
 	return findings
@@ -486,10 +375,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	"""LOW: Blocks registered without names (best practice)."""
 	findings = []
 	# Only check files that have export calls
-	export_pattern = re.compile(
-		r'export_'
-		r'(?:curved|exodus)\s*\('
-	)
+	export_pattern = _NETGEN_EXPORT
 	has_export = any(
 		export_pattern.search(line) for line in lines
 		if not line.strip().startswith('#')
@@ -814,12 +700,9 @@ ALL_RULES = [
 	check_missing_cubit_init,
 	check_wrong_connectivity_for_2nd_order,
 	check_element_type_before_add,
-	check_nodeset_sideset_usage,
-	check_missing_step_reimport,
 	check_hardcoded_absolute_paths,
 	check_missing_boundary_block,
 	check_ambiguous_face_block,
-	check_export_file_extension,
 	check_curve_without_setgeominfo,
 	check_missing_block_names,
 	check_non_ascii_bytes,

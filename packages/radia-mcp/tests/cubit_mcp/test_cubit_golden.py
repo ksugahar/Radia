@@ -8,20 +8,16 @@ from radia_mcp.cubit.server import _lint_file
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "bad_cubit_script.py"
 
-# Locked 2026-08-05 against the committed fixture.  Assert only
+# Locked 2026-11-27 against the committed fixture.  Assert only
 # (rule, line) membership so rule WORDING can change freely; a rule
 # deletion or a fixture edit must consciously update this set.
 _EXPECTED_RULE_LINES = {
-    ("deleted-api-usage", 11),
-    ("deleted-api-usage", 43),
-    ("missing-mesh-command", 47),
-    ("geometry-block-2nd-order", 29),
-    ("element-type-before-add", 32),
-    ("wrong-connectivity-2nd-order", 36),
-    ("nodeset-sideset-usage", 39),
+    ("missing-mesh-command", 36),
+    ("geometry-block-2nd-order", 25),
+    ("element-type-before-add", 28),
+    ("wrong-connectivity-2nd-order", 32),
     ("missing-boundary-block", 1),
-    ("hardcoded-absolute-path", 23),
-    ("wrong-file-extension", 47),
+    ("hardcoded-absolute-path", 19),
     ("missing-block-names", 1),
 }
 

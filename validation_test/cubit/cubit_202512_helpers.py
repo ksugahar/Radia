@@ -89,14 +89,6 @@ def init_cubit():
     return cubit
 
 
-def add_cubit_mesh_curver_to_path() -> None:
-    """Expose the low-level pybind module for module-shape tests only."""
-    import cubit_mesh_export
-    package_dir = str(Path(cubit_mesh_export.__file__).parent)
-    if package_dir not in sys.path:
-        sys.path.insert(0, package_dir)
-
-
 def export_netgen(cubit, stem: str, order: int = 1) -> Path:
     """Run the public 2025.12 Netgen export command and return the .vol path."""
     out_dir = Path(tempfile.mkdtemp(prefix="cubit_export_test_"))

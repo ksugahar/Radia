@@ -43,8 +43,6 @@ documentation demo, not a Cubit menu action or engineering design panel.
 
 | Folder | Format | Description |
 |--------|--------|-------------|
-| [gmsh/](gmsh/) | Gmsh (.msh) | v4.2, order 1-3 |
-| [nastran/](nastran/) | Nastran BDF (.bdf) | CTETRA/CHEXA/CTRIA, order 1-2 |
 | [other_formats/](other_formats/) | Custom formats | FreeFEM, ANSYS CDB, Lukas 2D |
 
 ## Validation examples
@@ -91,26 +89,13 @@ python validation_test/radia_mcp/validation_vol_material_interface.py
 python validation_test/radia_mcp/validation_vol_boundary_tet_face_incidence.py
 ```
 
-Each folder contains:
-- Example Python scripts (using `cubit.cmd('export ...')`)
-- Pre-generated sample output files
-- README.md with format-specific documentation
-
-## Running Examples
-
-```powershell
-python <folder>/<script>.py
-```
-
-Requires Cubit installed with the radia plugin (`radia-setup`).
-
-## Export Commands (C++ .ccm plugin)
+## Export Command (C++ command plugin)
 
 ```
-export gmsh "file.msh" [order {1|2}] [dimension {2|3}] [overwrite]
-export nastran_bdf "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
-export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
+export netgen "file.vol" order {1..5} [overwrite]
 ```
+
+The plugin is installed with `python -m radia_mcp.cubit.install`.
 
 ## See Also
 

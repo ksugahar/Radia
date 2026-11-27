@@ -200,8 +200,7 @@ cubit.cmd('sideset 2 name "sink"')
 # subtracted wp volume).  After subtract + imprint + merge, these
 # faces are shared between wp_vid and air_top/air_bot; tagging on
 # wp_vid propagates correctly to the BND triangles exported with
-# the air block (verified by the legacy validation fixture
-# ih_fem_kelvin_sample.py, which uses this exact predicate).
+# the air block.
 cubit.cmd("sideset 3 add surface in volume %d" % wp_vid)
 cubit.cmd('sideset 3 name "sibc"')
 

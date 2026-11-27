@@ -1325,96 +1325,6 @@ The worker and the MCP daemon start Cubit with `-noinitfile`, so user or
 site startup files (including retired GUI toolbar shims) are never played.
 """
 
-DELETED_APIS = """
-# Deleted APIs (Replaced by cubit_export_vol APREPRO command)
-
-The following APIs have been **completely removed**.
-Do NOT use them — they no longer exist.
-
-## Removed Functions
-
-| Function | Replacement |
-|----------|-------------|
-| `export_NetgenMesh()` | `cubit_export_vol` APREPRO command |
-| `export_netgen()` (alias) | `cubit_export_vol` APREPRO command |
-| `export_netgen_with_names()` | `cubit_export_vol` APREPRO command |
-| `extract_curved_mesh()` | `cubit_export_vol` APREPRO command |
-| `name_occ_faces()` | Not needed (no OCC geometry) |
-| `set_cylinder_geominfo()` | Not needed (ACIS handles curving) |
-| `set_sphere_geominfo()` | Not needed |
-| `set_torus_geominfo()` | Not needed |
-| `set_cone_geominfo()` | Not needed |
-| `compute_cylinder_uv()` | Not needed |
-| `compute_sphere_uv()` | Not needed |
-| `compute_torus_uv()` | Not needed |
-| `compute_cone_uv()` | Not needed |
-
-## Why They Were Removed
-
-The old workflow required multiple steps:
-1. STEP export from Cubit (ACIS -> STEP)
-2. STEP reimport into Cubit (to match OCC face topology)
-3. OCC geometry loading (OCCGeometry(step_file))
-4. Mesh export with geometry reference (export_netgen(geometry=geo))
-5. Per-shape UV computation (set_*_geominfo())
-6. Manual mesh.Curve(order)
-
-`cubit_export_vol` replaces ALL of these steps with a single APREPRO command.
-It uses CallbackGeometry to delegate surface projection to Cubit's ACIS
-kernel directly, without any STEP file exchange or OCC geometry.
-
-## Migration Guide
-
-### Old Code (REMOVED)
-```python
-# This code NO LONGER WORKS — all these functions are deleted
-geo = OCCGeometry("cylinder.step")
-ngmesh = export_netgen(cubit, geometry=geo)    # DELETED
-set_cylinder_geominfo(ngmesh, radius=R, height=H)  # DELETED
-mesh = Mesh(ngmesh)
-mesh.Curve(3)
-```
-
-### New Code
-```python
-import tempfile
-from ngsolve import Mesh
-# Single APREPRO command replaces everything
-vol_path = tempfile.mktemp(suffix='.vol')
-# Curved .vol export runs outside Cubit: save this model as a journal,
-# then call the MCP tool cubit_export_vol(journal_path, "{vol_path}", order=3).
-mesh = Mesh(vol_path)
-```
-
-### Old Complex Workflow (REMOVED)
-```python
-# This code NO LONGER WORKS
-name_occ_faces(shape)
-shape.WriteStep("geometry.step")
-geo = OCCGeometry("geometry.step")
-cubit.cmd('import step "geometry.step" noheal')
-ngmesh = export_netgen_with_names(cubit, geo)
-set_cylinder_geominfo(ngmesh, radius=R_HOLE, height=H)
-mesh = Mesh(ngmesh)
-mesh.Curve(3)
-```
-
-### New Code
-```python
-import tempfile
-from ngsolve import Mesh
-# Create geometry directly in Cubit, no OCC needed
-cubit.cmd("create brick x 2 y 2 z 2")
-cubit.cmd("create cylinder height 4 radius 0.3")
-cubit.cmd("subtract volume 2 from volume 1")
-# ... mesh and blocks ...
-vol_path = tempfile.mktemp(suffix='.vol')
-# Curved .vol export runs outside Cubit: save this model as a journal,
-# then call the MCP tool cubit_export_vol(journal_path, "{vol_path}", order=3).
-mesh = Mesh(vol_path)
-```
-"""
-
 
 def get_netgen_documentation(workflow: str = "overview") -> str:
 	"""Return Netgen workflow documentation by topic."""
@@ -1424,19 +1334,20 @@ def get_netgen_documentation(workflow: str = "overview") -> str:
 
 ## Overview
 
-Kelvin open-boundary geometry is requested explicitly in the native headless
-export command. Only the MCP tool exposes these options, and
-LLM automation uses APREPRO/journal playback and never depends on a solver GUI.
+Kelvin open-boundary geometry is requested explicitly, before the plain
+`export netgen` command, which carries no Kelvin keywords. The MCP tool and the
+Netgen Export menu both run `radia_mcp.cubit.kelvin` inside Cubit; LLM
+automation uses APREPRO/journal playback and never depends on a solver GUI.
 
 ## How It Works (`cubit_export_vol`)
 
 1. User creates physical geometry (coil + air + optional workpiece hole)
-2. Run `cubit_export_vol(journal, "model.vol", order=N) add_kelvin` and, when needed,
-   declare `kelvin_air`, `kelvin_block`, `kelvin_mesh`, and
-   `kelvin_sym_x|y|z {off|bn|ht}`.
-3. The native command writes an owned JSON handoff, calls the packaged
-   `auto_kelvin_entry.py`, and adds Kelvin geometry only when requested.
-4. The same command exports `.vol` with Kelvin periodic identification.
+2. Run `cubit_export_vol(journal, "model.vol", order=N, add_kelvin=True)` and,
+   when needed, set `kelvin_air`, `kelvin_block`, `kelvin_mesh`, and
+   `kelvin_sym_x|y|z` (`off|bn|ht`).
+3. The export worker calls `radia_mcp.cubit.kelvin.apply_options` in Cubit,
+   which adds Kelvin geometry unless the Kelvin block already exists.
+4. `export netgen` writes the `.vol` with Kelvin periodic identification.
 5. Run `check-vol` before handing the artifact to any solver.
 
 ## Auto-Detection Logic
@@ -1517,12 +1428,6 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 		"kelvin_auto": KELVIN_AUTO,
 		"vol_2nd_order": WORKFLOW_VOL_2ND_ORDER,
 		"troubleshooting": TROUBLESHOOTING,
-		"deleted_apis": DELETED_APIS,
-		# Legacy aliases that redirect to new content
-		"setgeominfo_api": DELETED_APIS,
-		"seam_problem": DELETED_APIS,
-		"tolerance_tuning": DELETED_APIS,
-		"uv_math": DELETED_APIS,
 		"multi_surface": WORKFLOW_COMPLEX,
 		"freeform": WORKFLOW_COMPLEX,
 		"simple_cone": WORKFLOW_EXPORT_CURVED,
@@ -1534,7 +1439,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 			WORKFLOW_OVERVIEW, WORKFLOW_EXPORT_CURVED,
 			WORKFLOW_CYLINDER, WORKFLOW_SPHERE, WORKFLOW_TORUS,
 			WORKFLOW_COMPLEX, WORKFLOW_VOL_2ND_ORDER,
-			WORKFLOW_ACCURACY, WORKFLOW_FIELD_SOLVE, TROUBLESHOOTING, DELETED_APIS,
+			WORKFLOW_ACCURACY, WORKFLOW_FIELD_SOLVE, TROUBLESHOOTING,
 		]
 		return "\n\n".join(main_topics)
 	elif workflow in topics:

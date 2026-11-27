@@ -150,7 +150,7 @@ mesh's element maps; this is not implemented for the P1 loop extension.
 | `radia-vol-mesh-into-curved-route` | HIGH | a mesh from a plain `Mesh(".vol")`, `Mesh(path)` or `.Load` passed to a call with `curve_order` of 2 or more |
 | `netgen-scale-after-generate` | HIGH | `.Scale()` anywhere in a scope on a name that is ever bound to a `GenerateMesh` result (or its alias); flow-insensitive, so a name reused for a shape is reported too |
 | `ngsbem-missing-curvaturesafety` | MODERATE | ngsbem meshes without `curvaturesafety` |
-| `curve-without-export-curved` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export |
+| `curve-without-export-netgen` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export |
 
 The `.vol` rule cannot see `Mesh(vol_file)` with a variable whose value comes
 from a function argument; route such code through `ensure_curve_order`.
