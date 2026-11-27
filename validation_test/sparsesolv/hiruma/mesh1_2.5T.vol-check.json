@@ -1,9 +1,9 @@
 {
-  "schema": "cubit-mesh-export.vol-check.v1",
-  "generated_at_utc": "2026-09-11T04:48:02.251862+00:00",
+  "schema": "radia.vol-check.v1",
+  "generated_at_utc": "2026-11-27T10:39:50.145692+00:00",
   "versions": {
-    "cubit_mesh_export": "0.14.17",
-    "ngsolve": "6.2.2606",
+    "radia": "5.4.6",
+    "ngsolve": "6.2.2608",
     "python": "3.12.10"
   },
   "passed": true,
@@ -159,7 +159,17 @@
         "vacuum"
       ]
     },
+    "curved_pyramid_map": {
+      "pyramid_count": 0,
+      "max_relative_deviation": 0.0,
+      "tolerance": 1e-08
+    },
     "warnings": []
+  },
+  "curved_pyramid_map": {
+    "pyramid_count": 0,
+    "max_relative_deviation": 0.0,
+    "tolerance": 1e-08
   },
   "boundary_domain_ownership": {
     "passed": true,
@@ -212,7 +222,7 @@
     },
     {
       "name": "cond",
-      "ng_volume": 1.1207265445399298e-05
+      "ng_volume": 1.12072654453993e-05
     },
     {
       "name": "core",
@@ -222,15 +232,15 @@
   "boundaries": [
     {
       "name": "dirichlet",
-      "ng_area": 2.1903757025105923
+      "ng_area": 2.1903757025105914
     },
     {
       "name": "gamma_in",
-      "ng_area": 1.2148744695217816e-05
+      "ng_area": 1.2148744695217814e-05
     },
     {
       "name": "gamma_out",
-      "ng_area": 1.2148744695227001e-05
+      "ng_area": 1.2148744695227e-05
     },
     {
       "name": "interface_1_3",
@@ -238,7 +248,7 @@
     },
     {
       "name": "interface_2_3",
-      "ng_area": 0.011496418717339826
+      "ng_area": 0.011496418717339824
     }
   ],
   "edges": [],

@@ -1,18 +1,18 @@
 {
-  "schema": "cubit-mesh-export.vol-check.v1",
-  "generated_at_utc": "2026-09-15T14:22:15.320866+00:00",
+  "schema": "radia.vol-check.v1",
+  "generated_at_utc": "2026-11-27T11:05:03.759638+00:00",
   "versions": {
-    "cubit_mesh_export": "0.14.15",
-    "ngsolve": "6.2.2606",
+    "radia": "5.4.6",
+    "ngsolve": "6.2.2608",
     "python": "3.12.10"
   },
   "passed": true,
-  "vol_file": "validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol",
-  "json_file": "validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol.json",
+  "vol_file": "validation_test\\esim_spatial\\inputs\\ih_bem_sample_p1.vol",
+  "json_file": "validation_test\\esim_spatial\\inputs\\ih_bem_sample_p1.vol.json",
   "threshold_pct": 10.0,
   "cad_reference": {
     "available": true,
-    "file": "validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol.json",
+    "file": "validation_test\\esim_spatial\\inputs\\ih_bem_sample_p1.vol.json",
     "auto_discovered": true,
     "mesh_only_materials": [],
     "metadata_checks": {
@@ -157,7 +157,17 @@
         "vacuum"
       ]
     },
+    "curved_pyramid_map": {
+      "pyramid_count": 0,
+      "max_relative_deviation": 0.0,
+      "tolerance": 1e-08
+    },
     "warnings": []
+  },
+  "curved_pyramid_map": {
+    "pyramid_count": 0,
+    "max_relative_deviation": 0.0,
+    "tolerance": 1e-08
   },
   "boundary_domain_ownership": {
     "passed": true,
@@ -206,21 +216,21 @@
   "materials": [
     {
       "name": "air",
-      "ng_volume": 0.0019769733139763028,
+      "ng_volume": 0.0019769733139763036,
       "cad_volume": 0.0020903176352947113,
-      "error_pct": -5.422349187731379
+      "error_pct": -5.422349187731338
     },
     {
       "name": "coil",
-      "ng_volume": 4.811741387752962e-06,
+      "ng_volume": 4.811741387752965e-06,
       "cad_volume": 5.255564343580093e-06,
-      "error_pct": -8.444820133717531
+      "error_pct": -8.444820133717466
     },
     {
       "name": "workpiece",
-      "ng_volume": 4.8995294520490916e-05,
+      "ng_volume": 4.8995294520490896e-05,
       "cad_volume": 4.9087385212340514e-05,
-      "error_pct": -0.18760561690388428
+      "error_pct": -0.18760561690392571
     }
   ],
   "boundaries": [
@@ -232,15 +242,15 @@
     },
     {
       "name": "outer",
-      "ng_area": 0.07808201606782175,
+      "ng_area": 0.07808201606782178,
       "cad_area": 0.0804247719318987,
-      "error_pct": -2.9129779392607125
+      "error_pct": -2.9129779392606783
     },
     {
       "name": "sibc",
-      "ng_area": 0.007842663140783817,
+      "ng_area": 0.007842663140783815,
       "cad_area": 0.007853981633974483,
-      "error_pct": -0.14411153117172723
+      "error_pct": -0.14411153117174932
     },
     {
       "name": "sink",
@@ -286,7 +296,7 @@
   "warnings": [],
   "total_edge_length": {
     "cad": 0.35185837720205687,
-    "ng": 0.35123812909064916,
-    "error_pct": -0.17627777298919473
+    "ng": 0.3512381290906491,
+    "error_pct": -0.1762777729892105
   }
 }
