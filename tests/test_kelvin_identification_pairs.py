@@ -103,3 +103,42 @@ def test_ensure_refuses_partial_and_curved_meshes(tmp_path):
     with pytest.raises(ValueError, match="curve order 2"):
         ensure_kelvin_identification(curved)
     assert not tuple(curved.ngmesh.GetIdentifications())
+
+
+def _true_pairs(tmp_path, name, inner):
+    """The exported (inner, outer) point pairs, oriented by ``inner``."""
+    (tmp_path / name).mkdir()
+    paired = _kelvin_box_mesh(tmp_path / name, strip=False)
+    rows = [(r[0].nr, r[1].nr) for r in paired.ngmesh.GetIdentifications()]
+    return sorted((a, b) if a in inner else (b, a) for a, b in rows)
+
+
+@pytest.mark.usefixtures("ngsolve_taskmanager")  # caller-owned TaskManager
+@pytest.mark.parametrize("split_groups", [True, False])
+def test_ensure_refuses_a_covering_but_wrong_kelvin_mapping(tmp_path, split_groups):
+    from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+    from radia.kelvin_identify_ngsolve import _boundary_vertex_ids
+    (tmp_path / "w").mkdir()
+    wrong = _kelvin_box_mesh(tmp_path / "w", strip=True)
+    pairs = _true_pairs(tmp_path, "t", _boundary_vertex_ids(wrong, "kelvin_int"))
+    if split_groups:   # true partners, but split over identification numbers 1 and 2
+        rows = [(a, b, 1 + (i >= len(pairs) // 2)) for i, (a, b) in enumerate(pairs)]
+    else:              # one group, every vertex covered, partners rotated
+        outers = [b for _, b in pairs]
+        rows = [(a, b, 1) for (a, _), b in zip(pairs, outers[1:] + outers[:1])]
+    for a, b, nr in rows:
+        wrong.ngmesh.AddPointIdentification(a, b, identnr=nr, type=2)
+    assert has_kelvin_identification(wrong)  # coverage alone would accept it
+    with pytest.raises(ValueError, match="identification numbers" if split_groups else "one translation"):
+        ensure_kelvin_identification(wrong)
+
+
+@pytest.mark.usefixtures("ngsolve_taskmanager")  # caller-owned TaskManager
+def test_incomplete_pairing_registers_nothing(tmp_path):
+    from radia.kelvin_identify_ngsolve import add_kelvin_identification
+    (tmp_path / "s").mkdir()
+    bare = _kelvin_box_mesh(tmp_path / "s", strip=True)
+    with pytest.raises(ValueError, match="no pair was registered"):
+        add_kelvin_identification(bare, kelvin_offset=(3.0, 0.0, 0.4), point_tolerance=1e-3,
+                                  skip_if_existing=False, require_complete=True)
+    assert not tuple(bare.ngmesh.GetIdentifications())

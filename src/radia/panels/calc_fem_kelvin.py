@@ -538,10 +538,8 @@ def solve_fem(vol_file="", fes_order=1,
     #
     # Three real cases for the HCurl A solve:
     #   (A) kelvin material + Periodic identifications
-    #          -> Periodic Kelvin closes the far field.  Gauge null-
-    #             space is fixed by the interior Kelvin edge forest and
-    #             physical-domain reg*nu0*u*v
-    #             (+ j*omega*sigma*A in AC), NOT by Dirichlet.
+    #          -> Periodic Kelvin closes the far field. The direct DC PEEC
+    #             solve uses the regularized system's original equations.
     #   (B) "outer" boundary face, no kelvin
     #          -> Dirichlet A=0 on outer face (the only Dirichlet
     #             that actually constrains HCurl edge DOFs).
@@ -553,8 +551,7 @@ def solve_fem(vol_file="", fes_order=1,
         dirichlet_bnd = "outer"
 
     if has_kelvin and has_kelvin_periodic:
-        _log("FARFIELD:Periodic Kelvin (open boundary; gauge by "
-             "Kelvin gradient gauge + physical-domain reg)")
+        _log("FARFIELD:Periodic Kelvin (open boundary)")
     elif dirichlet_bnd == "outer":
         _log("FARFIELD:Dirichlet A=0 on 'outer' boundary "
              "(truncation error if outer is too close to coil)")
@@ -598,7 +595,10 @@ def solve_fem(vol_file="", fes_order=1,
     direct_free = fes.FreeDofs()
     kelvin_gauge_dofs = 0
     wirebasket_dofs_returned = None     # set by the BDDC route only
-    if has_kelvin and has_kelvin_periodic:
+    # In regularized DC PEEC the exterior edge rows carry the mass term.
+    # Pinning them constrains that system and leaves those equations unsolved.
+    regularized_dc_peec = use_peec and frequency == 0 and reg > 0
+    if has_kelvin and has_kelvin_periodic and not regularized_dc_peec:
         direct_free, kelvin_gauge_dofs = _kelvin_gradient_gauge(fes, mesh)
     u, v = fes.TnT()
 
@@ -1656,9 +1656,10 @@ def solve_fem(vol_file="", fes_order=1,
     # ============================================================
     delta_skin = mat.skin_depth(frequency)
 
-    # PEEC: L from port impedance (mesh-independent, validated)
+    # PEEC: use the AC port impedance for this optional diagnostic. At DC
+    # the FEM energy still supplies L, but Im(Z)/(2*pi*f) is undefined.
     L_peec = None
-    if use_peec and 'topo' in dir():
+    if use_peec and frequency > 0 and 'topo' in dir():
         peec_solver_obj = topo.get("solver")
         if peec_solver_obj is not None:
             Z_port = peec_solver_obj.compute_port_impedance(frequency)

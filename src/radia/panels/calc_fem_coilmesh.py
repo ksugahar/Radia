@@ -309,7 +309,13 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
         dists = np.linalg.norm(coords - kelvin_center[None, :], axis=1)
         a_kelvin = float(np.max(dists))
-        has_kelvin_periodic = mesh.ngmesh.GetNrIdentifications() > 0
+        # The .vol pairs, or a flat mesh paired after load; anything else
+        # is refused instead of solving without the Kelvin closure.
+        from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+        kelvin_pairs = ensure_kelvin_identification(mesh)
+        if kelvin_pairs["source"] == "post_hoc":
+            mesh = Mesh(mesh.ngmesh)  # new point pairs: rebuild the topology
+        has_kelvin_periodic = True
         progress("FEM",
                  f"Kelvin R={a_kelvin*1e3:.1f}mm periodic={has_kelvin_periodic}")
 

@@ -203,8 +203,12 @@ def add_kelvin_identification(
     idnr: int | None = None,
     point_tolerance: Optional[float] = None,
     skip_if_existing: bool = True,
+    require_complete: bool = False,
 ) -> dict:
     """Add Kelvin Periodic point-pair identification to an existing mesh.
+
+    With ``require_complete`` an unmatched vertex raises ``ValueError``
+    before any pair is registered, so a refused mesh is left unchanged.
 
     Walks the BND surface elements, collects vertices on `inner_bnd`
     and `outer_bnd`, translates the inner set by `kelvin_offset` (auto-
@@ -378,6 +382,13 @@ def add_kelvin_identification(
             else:
                 n_unmatched += 1
 
+    if require_complete and (n_unmatched or len(pairs) != len(outer_pids)):
+        raise ValueError(
+            f"pairing after load left {n_unmatched} unmatched {inner_bnd} "
+            f"vertices ({len(pairs)} pairs for {len(inner_pids)} {inner_bnd} / "
+            f"{len(outer_pids)} {outer_bnd} vertices, tolerance "
+            f"{point_tolerance:.3e} m); no pair was registered")
+
     # --- Register identifications -------------------------------------------
     ngmesh = mesh.ngmesh
     for p1, p2 in pairs:
@@ -407,7 +418,7 @@ def ensure_kelvin_identification(mesh, *, inner_bnd: str = "kelvin_int",
     and any unmatched vertex.
     """
     if has_kelvin_identification(mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd):
-        return {"source": "vol", "n_pairs": len(tuple(mesh.ngmesh.GetIdentifications()))}
+        return {"source": "vol", **_kelvin_group(mesh, inner_bnd, outer_bnd)}
     if tuple(mesh.ngmesh.GetIdentifications()):
         raise ValueError(
             f"the mesh has identifications that do not pair every {inner_bnd} "
@@ -427,11 +438,49 @@ def ensure_kelvin_identification(mesh, *, inner_bnd: str = "kelvin_int",
                          f"{outer_bnd} (got {offset})")
     info = add_kelvin_identification(
         mesh, kelvin_offset=offset, inner_bnd=inner_bnd, outer_bnd=outer_bnd,
-        point_tolerance=1e-6 * off_len, skip_if_existing=False)
-    if info["n_unmatched"] or not has_kelvin_identification(
-            mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd):
-        raise ValueError(
-            f"pairing after load left {info['n_unmatched']} unmatched "
-            f"{inner_bnd} vertices (tolerance {info['point_tolerance']:.3e} m); "
-            f"{outer_bnd} must be a translated copy of {inner_bnd}")
-    return {"source": "post_hoc", **info}
+        point_tolerance=1e-6 * off_len, skip_if_existing=False,
+        require_complete=True)
+    return {"source": "post_hoc", **info, **_kelvin_group(mesh, inner_bnd, outer_bnd)}
+
+
+def _kelvin_group(mesh, inner_bnd: str, outer_bnd: str) -> dict:
+    """Check that the Kelvin pairs form one usable periodic group.
+
+    Coverage alone is not enough: the pairs must sit in one identification
+    number, be one-to-one between all ``inner_bnd`` and all ``outer_bnd``
+    vertices, and share one translation (within 1e-6 of its length).
+    """
+    inner = _boundary_vertex_ids(mesh, inner_bnd)
+    outer = _boundary_vertex_ids(mesh, outer_bnd)
+    groups: set = set()
+    seen_in: set[int] = set()
+    seen_out: set[int] = set()
+    shifts = []
+    for entry in mesh.ngmesh.GetIdentifications():
+        a, b = _identified_point_pairs([entry])[0]
+        if a in outer and b in inner:
+            a, b = b, a
+        if not (a in inner and b in outer):
+            continue
+        groups.add(int(entry[2]) if len(entry) == 3 else None)
+        if a in seen_in or b in seen_out:
+            raise ValueError(f"a {inner_bnd} or {outer_bnd} vertex is paired twice "
+                             f"(points {a}, {b}); the Kelvin pairs are not one-to-one")
+        seen_in.add(a)
+        seen_out.add(b)
+        pa, pb = mesh.vertices[a - 1].point, mesh.vertices[b - 1].point
+        shifts.append(tuple(pb[k] - pa[k] for k in range(3)))
+    if len(groups) != 1:
+        raise ValueError(f"the Kelvin pairs span identification numbers {sorted(groups, key=str)}; "
+                         "expected one Kelvin group")
+    if seen_in != inner or seen_out != outer:
+        raise ValueError(f"the Kelvin pairs cover {len(seen_in)}/{len(inner)} {inner_bnd} and "
+                         f"{len(seen_out)}/{len(outer)} {outer_bnd} vertices; expected all")
+    mean = tuple(sum(s[k] for s in shifts) / len(shifts) for k in range(3))
+    length = math.sqrt(sum(c * c for c in mean))
+    spread = max(math.sqrt(sum((s[k] - mean[k]) ** 2 for k in range(3))) for s in shifts)
+    if not (length > 0 and spread <= 1e-6 * length):
+        raise ValueError(f"the Kelvin pairs do not share one translation (mean {mean}, "
+                         f"spread {spread:.3e} m); {outer_bnd} is not a translated copy")
+    return {"n_pairs": len(shifts), "idnr": next(iter(groups)), "translation": mean,
+            "translation_spread": spread}
