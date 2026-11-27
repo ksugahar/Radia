@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 from pathlib import Path
 
 _DEFAULT_PATTERNS = (
     "C:/Program Files/Coreform Cubit */bin",
     "/opt/Coreform-Cubit-*/bin",
 )
+
+
+def _version_key(bin_dir: str) -> tuple[int, ...]:
+    # "Coreform Cubit 2026.10/bin" -> (2026, 10): numeric, so 2026.10 > 2026.9.
+    name = Path(bin_dir).parent.name
+    return tuple(int(part) for part in re.findall(r"\d+", name))
 
 
 def _has_cubit_python(bin_dir: Path) -> bool:
@@ -35,7 +42,7 @@ def find_cubit_bin() -> str | None:
                 raise FileNotFoundError(f"{name}={value}: no Cubit Python package under {path}")
             return str(path.resolve())
     for pattern in _DEFAULT_PATTERNS:
-        for found in sorted(glob.glob(pattern), reverse=True):
+        for found in sorted(glob.glob(pattern), key=_version_key, reverse=True):
             if _has_cubit_python(Path(found)):
                 return str(Path(found).resolve())
     return None
