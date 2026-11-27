@@ -153,8 +153,11 @@ class TestFEMPEECCubitIntegration:
         """air + kelvin materials and Kelvin labels that pair completely.
 
         The exporter writes the kelvin_int/kelvin_ext labels but no Kelvin
-        identifications; the solver adds them after loading, so check that
-        every kelvin_int vertex pairs with its translated copy.
+        identifications. This test pairs them after loading and checks that
+        every kelvin_int vertex pairs with its translated copy. The solver
+        entry points (calc_fem_kelvin.solve_fem, calc_fem_coilmesh
+        --require-kelvin) still require the pairs inside the .vol, so
+        test_solve_fem_peec_inductance fails until that contract is settled.
         """
         from ngsolve import Mesh
         from radia.kelvin_identify_ngsolve import add_kelvin_identification

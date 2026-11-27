@@ -463,6 +463,29 @@ def test_repo_json_reads_follow_path_joins():
                                       "validation_test/showcase/results/motor.json"]
 
 
+def _unreadable_json(rels, tracked, root):
+    """Paths that are not both tracked by Git and present in the working tree."""
+    bad = []
+    for rel in rels:
+        if rel not in tracked:
+            bad.append(f"{rel} (not tracked)")
+        elif not (root / rel).is_file():
+            bad.append(f"{rel} (tracked but missing)")
+    return bad
+
+
+def test_unreadable_json_needs_tracked_and_present(tmp_path):
+    (tmp_path / "validation_test").mkdir()
+    (tmp_path / "validation_test" / "ok.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "validation_test" / "untracked.json").write_text("{}", encoding="utf-8")
+    tracked = {"validation_test/ok.json", "validation_test/gone.json"}
+    rels = ["validation_test/ok.json", "validation_test/gone.json",
+            "validation_test/untracked.json"]
+    assert _unreadable_json(rels, tracked, tmp_path) == [
+        "validation_test/gone.json (tracked but missing)",
+        "validation_test/untracked.json (not tracked)"]
+
+
 def test_docs_notebooks_read_tracked_result_json_that_exists():
     tracked = set(subprocess.check_output(
         ["git", "ls-files", "-z"], cwd=ROOT).decode("utf-8").split("\0"))
@@ -472,7 +495,7 @@ def test_docs_notebooks_read_tracked_result_json_that_exists():
         for cell in data["cells"]:
             if cell.get("cell_type") != "code":
                 continue
-            for rel in _repo_json_reads("".join(cell.get("source", ""))):
-                if rel not in tracked:
-                    missing.append(f"{path.relative_to(ROOT).as_posix()}: {rel}")
-    assert not missing, "notebook code reads untracked or moved JSON: " + "; ".join(missing)
+            rels = _repo_json_reads("".join(cell.get("source", "")))
+            for bad in _unreadable_json(rels, tracked, ROOT):
+                missing.append(f"{path.relative_to(ROOT).as_posix()}: {bad}")
+    assert not missing, "notebook code reads JSON it cannot open: " + "; ".join(missing)
