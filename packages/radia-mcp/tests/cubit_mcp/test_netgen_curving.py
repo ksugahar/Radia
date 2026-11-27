@@ -250,3 +250,50 @@ def test_periodic_copy_makes_slave_coefficients_equal_the_master(tmp_path):
     again = nc.copy_periodic_coefficients(m, master, slave)
     for r in again:   # a second copy finds every slave already equal
         assert r["original"] == r["expected"], r
+
+
+def _box_with_planted_master(order=3):
+    """Curved sphere mesh; returns it with a master triangle whose edge
+    coefficients carry known values and a disjoint slave triangle listed so
+    that every image edge runs against the master's numbering."""
+    g = CSGeometry()
+    g.Add(Sphere(Pnt(0, 0, 0), 1))
+    m = g.GenerateMesh(maxh=0.6)
+    _set(m, UnitSphere())
+    m.Curve(order)
+    tris = [sorted(int(p.nr) for p in el.vertices) for el in m.Elements2D()]
+    master = tris[0]
+    slave = next(t for t in tris if not set(t) & set(master))
+    slave = slave[::-1]   # master ascending, slave descending: every sign is -1
+    planted = {}
+    for a in range(3):
+        for b in range(a + 1, 3):
+            e = nc.edge_number(m, master[a], master[b])
+            n = len(nc.edge_coefficients(m, e))
+            assert n == order - 1, (e, n)
+            vals = [(1.0 + e + 0.25 * k, -2.0 * k - 0.5, 0.125 * (e + k + 1)) for k in range(n)]
+            nc.set_edge_coefficients(m, e, vals)
+            planted[(a, b)] = vals
+    return m, master, slave, planted
+
+
+def test_periodic_copy_flips_odd_edge_modes_against_the_numbering():
+    m, master, slave, planted = _box_with_planted_master(3)
+    rows = nc.copy_periodic_coefficients(m, [master], [slave])
+    assert any(r["sign"] == -1 for r in rows), rows
+    for (a, b), vals in planted.items():
+        sign = (1 if slave[a] < slave[b] else -1) * (1 if master[a] < master[b] else -1)
+        assert sign == -1
+        got = nc.edge_coefficients(m, nc.edge_number(m, slave[a], slave[b]))
+        want = [tuple((sign if k % 2 else 1) * x for x in v) for k, v in enumerate(vals)]
+        assert got == want, ((a, b), got, want)
+
+
+@fork_periodic
+def test_periodic_copy_sign_matches_the_fork_bit_for_bit(tmp_path):
+    a, master, slave, _ = _box_with_planted_master(3)
+    b, master_b, slave_b, _ = _box_with_planted_master(3)
+    assert (master, slave) == (master_b, slave_b)
+    assert a.CopyPeriodicCurvedCoefficients([master], [slave]) == \
+        nc.copy_periodic_coefficients(b, [master], [slave])
+    assert _lines(a, tmp_path, "fork_sign.vol") == _lines(b, tmp_path, "moved_sign.vol")

@@ -51,6 +51,40 @@ PYBIND11_MODULE(_netgen_curving, m)
         "Copy curved coefficients from master triangles (1-based point numbers) "
         "to their periodic images; returns the applied transfers.");
 
-  m.def("edge_coefficient_count", [](netgen::Mesh & mesh, int edge)
-        { return nc::curved_access(mesh).edge_count(edge); }, py::arg("mesh"), py::arg("edge"));
+  // Test-only helpers: locate a topology edge by its 1-based end points, and
+  // read or overwrite its coefficients so a test can plant known values.
+  m.def("edge_number", [](netgen::Mesh & mesh, int a, int b)
+        {
+          const auto & top = mesh.GetTopology();
+          if (a > b) std::swap(a, b);
+          for (size_t e = 0; e < top.GetNEdges(); e++)
+            {
+              auto v = top.GetEdgeVertices(netgen::IndexBASE<netgen::EdgeIndex>() + e);
+              int p = v[0].Nr1(), q = v[1].Nr1();
+              if (p > q) std::swap(p, q);
+              if (p == a && q == b) return int(e);
+            }
+          throw std::runtime_error("edge_number: no topology edge between the given points");
+        }, py::arg("mesh"), py::arg("a"), py::arg("b"));
+  m.def("edge_coefficients", [](netgen::Mesh & mesh, int edge)
+        {
+          auto access = nc::curved_access(mesh);
+          py::list out;
+          const int n = access.edge_count(edge);
+          for (int i = 0; i < n; i++)
+            {
+              const auto & c = access.edge_coeffs(edge)[i];
+              out.append(py::make_tuple(c(0), c(1), c(2)));
+            }
+          return out;
+        }, py::arg("mesh"), py::arg("edge"));
+  m.def("set_edge_coefficients", [](netgen::Mesh & mesh, int edge,
+                                    std::vector<std::array<double, 3>> values)
+        {
+          auto access = nc::curved_access(mesh);
+          if (int(values.size()) != access.edge_count(edge))
+            throw std::runtime_error("set_edge_coefficients: wrong number of coefficients");
+          for (size_t i = 0; i < values.size(); i++)
+            for (int k = 0; k < 3; k++) access.edge_coeffs(edge)[i](k) = values[i][k];
+        }, py::arg("mesh"), py::arg("edge"), py::arg("values"));
 }
