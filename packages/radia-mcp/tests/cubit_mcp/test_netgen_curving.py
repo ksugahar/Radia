@@ -26,8 +26,10 @@ import sys
 
 import pytest
 
-# With RADIA_REQUIRE_NETGEN_CURVING=1 nothing here may skip: a missing Netgen,
-# OCC or test module fails, and the module must come from RADIA_NETGEN_CURVING_DIR.
+# With RADIA_REQUIRE_NETGEN_CURVING=1 a missing test dependency (Netgen, OCC or
+# the test module) fails instead of skipping, and the module must come from
+# RADIA_NETGEN_CURVING_DIR. The parity tests against the old fork API still skip
+# where that API is gone (r18 and later); they are optional move-fidelity oracles.
 REQUIRED = os.environ.get("RADIA_REQUIRE_NETGEN_CURVING") == "1"
 
 
@@ -51,7 +53,7 @@ def _load():
     except ImportError as exc:
         if REQUIRED:
             raise
-        pytest.skip(f"_netgen_curving not built: {exc}")
+        pytest.skip(f"_netgen_curving not built: {exc}", allow_module_level=True)
     finally:
         if where:
             sys.path.remove(where)
