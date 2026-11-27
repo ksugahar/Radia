@@ -20,10 +20,8 @@ SCHEMA = "radia-mcp.cubit-toolbar-probe.v1"
 EXPECTED_ACTIONS = [
     "Export Netgen (.vol)...",
 ]
-RESULT_PATH = os.environ.get(
-    "RADIA_MCP_CUBIT_TOOLBAR_PROBE_RESULT",
-    r"C:\temp\radia_mcp_cubit_toolbar_probe_result.json",
-)
+# Set by toolbar_smoke; a probe started any other way fails loudly here.
+RESULT_PATH = os.environ["RADIA_MCP_CUBIT_TOOLBAR_PROBE_RESULT"]
 TIMEOUT_SECONDS = float(os.environ.get("RADIA_MCP_CUBIT_TOOLBAR_PROBE_TIMEOUT", "20"))
 
 _started = time.monotonic()

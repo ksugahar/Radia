@@ -226,7 +226,7 @@ if (!iface->initialize_export()) { PRINT_ERROR("initialize_export failed
   the supported version (rebuild and rerun the regression); it does not
   add a second one.
 - Debug logging: write to a per-user file (for example
-  `C:\temp\<plugin>_%USERNAME%.log`). A shared file at `C:\` is not
+  `%TEMP%\<plugin>_%USERNAME%.log`). A shared file at `C:\` is not
   writable for non-admin users.
 
 ## Failure table

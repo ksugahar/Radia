@@ -3,7 +3,7 @@
 
 // Cubit passes file names as std::string holding UTF-8.  On Japanese
 // Windows (cp932) std::filesystem::path(std::string) decodes them as cp932,
-// so a path like C:\temp\日本語\a.vol fails to open.  Convert via UTF-16.
+// so a path like %TEMP%\日本語\a.vol fails to open.  Convert via UTF-16.
 // UTF-8 is the input contract: an empty or invalid name is rejected rather
 // than reinterpreted in the active code page.
 
