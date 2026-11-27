@@ -14,8 +14,8 @@
   reachability test.
 - Require Gmsh 5 in the Radia Gmsh launchers and reject failed version probes.
 - Integrate the source field in reduced-A `solve_nonlinear_newton` with the
-  same quadrature as `solve_linear`, and accept `bonus_intorder` with the
-  same meaning. Per-element iron B from the Newton path previously differed
+  same quadrature as `solve_linear` on every element type, and accept
+  `bonus_intorder` with the same meaning. Per-element iron B from the Newton path previously differed
   from the linear path in high-permeability iron; the iron mean agreed.
 
 
