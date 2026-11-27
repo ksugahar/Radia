@@ -1071,7 +1071,7 @@
     "edges": [
      {
       "name": "default",
-      "ng_length": 18.849471325157804
+      "ng_length": 18.849472089953444
      }
     ],
     "labels": {
@@ -2829,6 +2829,14 @@
  },
  "equivalence": "matched the former standalone checker on every case before adoption",
  "report_fields": "normalized; schema and run-specific fields removed",
+ "revisions": [
+  {
+   "baseline": 18.849471325157804,
+   "current": 18.849472089953444,
+   "path": "cases.mixed_cylinder_o2.report.edges[0].ng_length",
+   "reason": "edge lengths are now integrated at order max(16, 3p) instead of NGSolve's default 5; the new value equals the order-30 integral to 1e-15. Every other measure moved by at most 2.4e-14 relative and no flag, count or warning changed."
+  }
+ ],
  "schema": "radia.vol-check-baseline.v1",
  "source_sha": "8ea5fd780c36fedd9993290d72bc80f26ec682f3"
 }

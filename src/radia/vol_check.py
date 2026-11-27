@@ -1069,6 +1069,18 @@ def _finite_measurement(value, description):
     return number
 
 
+def _measure_orders(mesh):
+    """Quadrature orders for the CAD-gate volume and boundary/edge measures.
+
+    The Jacobian determinant of an order-p geometry map is a polynomial of
+    degree 3(p-1) on tetrahedra and at most 3p-1 per direction on tensor
+    elements, so order 3p integrates every volume exactly. Areas and lengths
+    integrate a square root and cannot be exact; they use at least order 16.
+    """
+    curve_order = max(1, int(mesh.GetCurveOrder()))
+    return 3 * curve_order, max(16, 3 * curve_order)
+
+
 def check_consistency(
     vol_path,
     json_path=None,
@@ -1155,10 +1167,12 @@ def check_consistency(
     materials = []
     boundaries = []
     edges = []
+    volume_order, measure_order = _measure_orders(mesh)
     for material in labels["materials"]:
         ng_volume = _finite_measurement(
             Integrate(CF(1), mesh, definedon=mesh.Materials(
-                _native_selector(mesh, "GetMaterials", material))),
+                _native_selector(mesh, "GetMaterials", material)),
+                order=volume_order),
             f'volume for material "{material}"',
         )
         entry = {"name": material, "ng_volume": ng_volume}
@@ -1183,7 +1197,7 @@ def check_consistency(
                 CF(1), mesh, BND,
                 definedon=mesh.Boundaries(
                     _native_selector(mesh, "GetBoundaries", boundary)),
-                order=16,
+                order=measure_order,
             ),
             f'area for boundary "{boundary}"',
         )
@@ -1205,7 +1219,7 @@ def check_consistency(
     total_ng_length = None
     try:
         total_ng_length = _finite_measurement(
-            Integrate(CF(1), mesh, BBND), "total BBND length"
+            Integrate(CF(1), mesh, BBND, order=measure_order), "total BBND length"
         )
         for edge in labels["bboundaries"]:
             ng_length = _finite_measurement(
@@ -1213,6 +1227,7 @@ def check_consistency(
                     CF(1), mesh, BBND,
                     definedon=mesh.BBoundaries(
                         _native_selector(mesh, "GetBBoundaries", edge)),
+                    order=measure_order,
                 ),
                 f'length for BBND "{edge}"',
             )
