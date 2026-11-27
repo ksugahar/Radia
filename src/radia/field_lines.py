@@ -31,10 +31,12 @@ curvature), and its end must lie on the far side: the far piece is halved
 down to the probe distance that stayed there. The jump is kept as a vertex
 of the line (its B is the near-side limit), so drawn lines and surface
 crossings follow the broken path, and closure is tested on each piece.
-Crossings are counted in the record; a reversal stops the line. There is no threshold on the normal
-component. A second jump within one minimum step of a crossing (an interface
-curving back across the step) stops the line as an unresolved turn. Without
-a jump the turn is smooth detail finer than the minimum step: below 90
+Crossings are counted in the record; a reversal stops the line. There is no
+threshold on the normal component. A jump located in a step that starts
+within one minimum step of arc after a crossed jump (an interface curving
+back across the step) stops the line as an unresolved turn; the
+jump-to-jump distance may be longer, so the rule is conservative. Without a
+jump the turn is smooth detail finer than the minimum step: below 90
 degrees the RK step is accepted and counted as an unresolved turn (less
 accurate there); at 90 degrees or more the line stops as an unresolved turn
 rather than guess across it (near a field null or a separatrix).
