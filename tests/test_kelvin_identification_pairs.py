@@ -123,14 +123,54 @@ def test_ensure_refuses_a_covering_but_wrong_kelvin_mapping(tmp_path, split_grou
     pairs = _true_pairs(tmp_path, "t", _boundary_vertex_ids(wrong, "kelvin_int"))
     if split_groups:   # true partners, but split over identification numbers 1 and 2
         rows = [(a, b, 1 + (i >= len(pairs) // 2)) for i, (a, b) in enumerate(pairs)]
-    else:              # one group, every vertex covered, partners rotated
-        outers = [b for _, b in pairs]
-        rows = [(a, b, 1) for (a, _), b in zip(pairs, outers[1:] + outers[:1])]
-    for a, b, nr in rows:
-        wrong.ngmesh.AddPointIdentification(a, b, identnr=nr, type=2)
+        for a, b, nr in rows:
+            wrong.ngmesh.AddPointIdentification(a, b, identnr=nr, type=2)
+        wrong = _reloaded(wrong, tmp_path / "w" / "wrong.vol")
+    else:              # one group, every vertex covered, one partner moved 1e-3
+        # (Netgen cannot even load a permuted mapping, so move a vertex instead.)
+        import ngsolve
+        path = tmp_path / "t" / "k.vol"
+        lines = path.read_text().split("\n")
+        start = lines.index("points") + 2   # 1-based point b is lines[start + b - 1]
+        b = pairs[0][1]
+        xyz = [float(c) for c in lines[start + b - 1].split()]
+        lines[start + b - 1] = " ".join(repr(c) for c in (xyz[0] + 1e-3, xyz[1], xyz[2]))
+        moved = tmp_path / "t" / "moved.vol"
+        moved.write_text("\n".join(lines))
+        wrong = ngsolve.Mesh(str(moved))
     assert has_kelvin_identification(wrong)  # coverage alone would accept it
-    with pytest.raises(ValueError, match="identification numbers" if split_groups else "one translation"):
+    with pytest.raises(ValueError, match="periodic groups" if split_groups else "one translation"):
         ensure_kelvin_identification(wrong)
+
+
+def _reloaded(mesh, path):
+    """Save and load, as a solver reads the .vol."""
+    import ngsolve
+    mesh.ngmesh.Save(str(path))
+    return ngsolve.Mesh(str(path))
+
+
+@pytest.mark.usefixtures("ngsolve_taskmanager")  # caller-owned TaskManager
+def test_ensure_refuses_pairs_the_solver_does_not_see(tmp_path):
+    """The right pairs stored with a non-periodic identification type: the
+    raw entries cover everything, the solver's periodic pairs are empty."""
+    import ngsolve
+    from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+    (tmp_path / "g").mkdir()
+    good = _kelvin_box_mesh(tmp_path / "g", strip=False)
+    assert len(good.GetPeriodicNodePairs(ngsolve.VERTEX)) == len(_pairs(good))
+    text = (tmp_path / "g" / "k.vol").read_text()
+    head, sep, tail = text.partition("identificationtypes\n")
+    count, types = tail.split("\n", 1)
+    first, rest = types.split("\n", 1)
+    assert sep and count.strip() == "1" and first.strip() == "2", (count, first)
+    bad_path = tmp_path / "g" / "undefined_type.vol"
+    bad_path.write_text(head + sep + count + "\n 1\n" + rest)
+    bad = ngsolve.Mesh(str(bad_path))
+    assert has_kelvin_identification(bad)  # the raw entries still cover it
+    assert len(bad.GetPeriodicNodePairs(ngsolve.VERTEX)) == 0
+    with pytest.raises(ValueError, match="solver sees 0 periodic groups"):
+        ensure_kelvin_identification(bad)
 
 
 @pytest.mark.usefixtures("ngsolve_taskmanager")  # caller-owned TaskManager

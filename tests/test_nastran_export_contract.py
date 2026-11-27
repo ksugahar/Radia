@@ -116,3 +116,49 @@ def test_cli_reports_refusals_with_exit_2(tmp_path, capsys):
     assert main([str(vol), str(tmp_path / "o.bdf"), "--order", "2"]) == 2
     assert "curve order 1" in capsys.readouterr().err
     assert main([str(vol), str(tmp_path / "o.bdf")]) == 0
+
+
+def test_a_file_that_appears_late_is_not_replaced(tmp_path, monkeypatch):
+    """The output is created exclusively, not checked once and replaced."""
+    import radia.nastran_export as ne
+
+    out = tmp_path / "late.bdf"
+    real = ne._comment_text
+
+    def appear_then_label(name):
+        if not out.exists():
+            out.write_text("someone else")
+        return real(name)
+    monkeypatch.setattr(ne, "_comment_text", appear_then_label)
+    with pytest.raises(FileExistsError):
+        write_nastran_bdf(_box(), out, order=2)
+    assert out.read_text() == "someone else"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["late.bdf"]
+
+
+def test_labels_are_written_as_ascii_comments(tmp_path):
+    from netgen.occ import Box, OCCGeometry, Pnt
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    box.mat("鉄心\nPSOLID")
+    mesh = ng.Mesh(OCCGeometry(box).GenerateMesh(maxh=0.6))
+    out = tmp_path / "u.bdf"
+    write_nastran_bdf(mesh, out, order=1)
+    text = out.read_bytes().decode("ascii")
+    assert r"$ material \u9244\u5fc3\u000aPSOLID" in text, text[-300:]
+    assert sum(line.startswith("PSOLID") for line in text.splitlines()) == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["u.bdf"]
+
+
+def test_failed_overwrite_keeps_the_old_file_and_no_stage(tmp_path, monkeypatch):
+    import radia.nastran_export as ne
+
+    out = tmp_path / "keep.bdf"
+    out.write_text("old")
+
+    def fail(*_args):
+        raise OSError("replace failed")
+    monkeypatch.setattr(ne.os, "replace", fail)
+    with pytest.raises(OSError, match="replace failed"):
+        write_nastran_bdf(_box(), out, order=2, overwrite=True)
+    assert out.read_text() == "old"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["keep.bdf"]

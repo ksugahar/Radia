@@ -14,7 +14,15 @@ Cards written:
     CTRIA3/6, CQUAD4/8              boundary faces, or the elements of a 2-D mesh
     PSOLID / PSHELL                 one property per material / boundary name
 
-Material and boundary names go into comments beside their property IDs.
+Material and boundary names go into comments beside their property IDs;
+characters outside printable ASCII are written as ``\\uXXXX``.  The output is
+created exclusively (``overwrite=False``) or replaced atomically from a
+same-directory stage file (``overwrite=True``).
+
+Checked against an independent reader (Gmsh 5): CTETRA10, CTRIA6, CQUAD8,
+CHEXA20 and first-order cards.  CPYRAM13 mid-edge order follows the Nastran
+card definition only (Gmsh reads it as 5 nodes), and no reader roundtrip
+covers a curved CPENTA15.
 
 Nastran has no face or centre nodes: CHEXA20, CPENTA15, CPYRAM13 and CQUAD8
 carry the vertices and mid-edge nodes only.  A curved order-2 Netgen hex also
@@ -35,6 +43,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 import numpy as np
 
@@ -190,6 +199,39 @@ def _fields(name: str, values) -> list[str]:
     return lines
 
 
+def _comment_text(name) -> str:
+    """A label as one ASCII comment line: non-ASCII and controls escaped."""
+    return "".join(c if " " <= c <= "~" else f"\\u{ord(c):04x}" for c in str(name))
+
+
+def _publish(path: Path, data: bytes, overwrite: bool) -> None:
+    """Write ``data`` to ``path`` without exposing a partial file.
+
+    Without ``overwrite`` the file is created exclusively, so a file that
+    appears after the early check is never replaced.  With ``overwrite`` a
+    uniquely named stage in the same directory is replaced into place.  A
+    failed write removes what this call created.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not overwrite:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
+        return
+    fd, stage = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".stage")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(stage, path)
+    except BaseException:
+        Path(stage).unlink(missing_ok=True)
+        raise
+
+
 def write_nastran_bdf(mesh, path, *, order: int | None = None,
                       boundaries: bool = True, overwrite: bool = False) -> dict:
     """Write ``mesh`` to ``path`` as a Nastran BDF and return a summary.
@@ -321,17 +363,14 @@ def write_nastran_bdf(mesh, path, *, order: int | None = None,
         counts[card] = counts.get(card, 0) + 1
 
     for n in solid_names:
-        lines.append(f"$ material {n}")
+        lines.append(f"$ material {_comment_text(n)}")
         lines += _fields("PSOLID", [pid_solid[n], pid_solid[n]])
     for n in shell_names:
-        lines.append(f"$ {'material' if m.dim == 2 else 'boundary'} {n}")
+        lines.append(f"$ {'material' if m.dim == 2 else 'boundary'} {_comment_text(n)}")
         lines += _fields("PSHELL", [pid_shell[n], pid_shell[n]])
     lines.append("ENDDATA")
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out_path.with_name(out_path.name + ".tmp")
-    tmp.write_text("\n".join(lines) + "\n", encoding="ascii", newline="\n")
-    os.replace(tmp, out_path)
+    _publish(out_path, ("\n".join(lines) + "\n").encode("ascii"), overwrite)
 
     return {"path": str(out_path), "order": order, "curve_order": curve_order,
             "n_grid": nv + len(mid), "n_vertices": nv, "n_mid_edge": len(mid),
