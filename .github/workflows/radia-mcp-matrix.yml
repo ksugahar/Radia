@@ -53,6 +53,8 @@ on:
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'src/radia/hdiv_gpu.py'
+      - 'tools/ci_fork_wheels.py'
+      - 'tools/ci_fork_wheels.json'
   pull_request:
     branches: [main]
     paths:
@@ -86,6 +88,8 @@ on:
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'src/radia/hdiv_gpu.py'
+      - 'tools/ci_fork_wheels.py'
+      - 'tools/ci_fork_wheels.json'
   workflow_dispatch:
 
 concurrency:
@@ -213,9 +217,10 @@ jobs:
           changed_files_json=$(printf '%s\n' "$files" | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
           # The Cubit export native source and its curving tests build against
-          # the locked Netgen fork on the native runner.
+          # the locked Netgen fork on the native runner; a change to the fork
+          # lock (tools/ci_fork_wheels.*) reruns them too.
           native_cubit_export=false
-          if [[ "$mode" == "full" ]] || grep -qE '^packages/radia-mcp/(native/cubit_vol_export/|tests/cubit_mcp/test_netgen_curving\.py$)|^\.github/workflows/radia-mcp-matrix\.yml$' <<<"$files"; then
+          if [[ "$mode" == "full" ]] || grep -qE '^packages/radia-mcp/(native/cubit_vol_export/|tests/cubit_mcp/test_netgen_curving\.py$)|^tools/ci_fork_wheels\.(py|json)$|^\.github/workflows/radia-mcp-matrix\.yml$' <<<"$files"; then
             native_cubit_export=true
           fi
           echo "native_cubit_export=$native_cubit_export" >> "$GITHUB_OUTPUT"
