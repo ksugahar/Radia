@@ -411,8 +411,15 @@ try:
                           (i / (n_seeds - 1) if n_seeds > 1 else 0.0)
                           for k in range(3)] for i in range(n_seeds)]
             both = bool(cfg.get("both_directions", True))
+            extent = cfg.get("extent")
+            box_lo = box_hi = None
+            if extent is not None:
+                box_lo, box_hi = extent["min"], extent["max"]
 
             def _sample(q):
+                if box_lo is not None and any(
+                        q[k] < box_lo[k] or q[k] > box_hi[k] for k in range(3)):
+                    return None, 0.0, "left_extent"
                 values, dist = gmsh.view.probe(tag, q[0], q[1], q[2],
                                                step=step)
                 # dist > 0 = outside the data (list-based vector views
@@ -489,11 +496,8 @@ try:
                                 else "incoherent"
                             break
                         ds *= 0.5
-                    if outcome == "left_data":
-                        reason = "left_data"
-                        break
-                    if outcome == "stagnation":
-                        reason = "stagnation"
+                    if outcome in ("left_data", "left_extent", "stagnation"):
+                        reason = outcome
                         break
                     if outcome == "incoherent":
                         # ds_min reached and the direction still flips:
@@ -522,13 +526,18 @@ try:
                 return path, norms, reason, closed
 
             polylines = []
+            # (seed index, index of the seed vertex in the polyline); every
+            # polyline runs along +v, so the seed vertex splits backward and
+            # forward parts.
+            owners = []
             skipped_seeds = 0
-            for seed in seeds:
+            for seed_index, seed in enumerate(seeds):
                 fwd_path, fwd_norms, fwd_reason, closed = _trace(seed, 1)
                 if closed or not both:
                     if len(fwd_path) > 1:
                         polylines.append((fwd_path, fwd_norms, closed,
                                           {"forward": fwd_reason}))
+                        owners.append((seed_index, 0))
                     else:
                         skipped_seeds += 1
                     continue
@@ -540,6 +549,7 @@ try:
                     polylines.append((merged, merged_norms, False,
                                       {"forward": fwd_reason,
                                        "backward": bwd_reason}))
+                    owners.append((seed_index, len(bwd_path) - 1))
                 else:
                     skipped_seeds += 1
 
@@ -592,15 +602,17 @@ try:
                 "step_size": ds0,
                 "lines": [
                     {"n_points": len(path), "closed": cl, "reasons": rs,
+                     "seed_index": own[0], "seed_vertex": own[1],
                      "arc_length": sum(
                          sum((path[i + 1][k] - path[i][k]) ** 2
                              for k in range(3)) ** 0.5
                          for i in range(len(path) - 1))}
-                    for path, _norms, cl, rs in polylines],
+                    for (path, _norms, cl, rs), own in zip(polylines, owners)],
                 "polylines": [
                     {"points": path, "field_norms": norms,
-                     "closed": cl, "reasons": rs}
-                    for path, norms, cl, rs in polylines
+                     "closed": cl, "reasons": rs,
+                     "seed_index": own[0], "seed_vertex": own[1]}
+                    for (path, norms, cl, rs), own in zip(polylines, owners)
                 ] if cfg.get("return_points") else None,
             })
 
@@ -1803,6 +1815,7 @@ def streamlines(path: str | Path, seed_start: list[float] | None = None,
                 adaptive: bool = True, closure: bool = True,
                 max_turn_deg: float = 10.0, arrows_every: int = 0,
                 return_points: bool = False,
+                extent: dict | None = None,
                 out_file: str | Path | None = None,
                 timeout_s: float = 600.0) -> dict[str, Any]:
     """Trace field lines of a vector view from seeds on a line segment.
@@ -1817,9 +1830,12 @@ def streamlines(path: str | Path, seed_start: list[float] | None = None,
     closed exactly and reported as such instead of overdrawing or
     stopping mid-loop.  One merged polyline per seed (backward +
     forward), local |v| as the line color, per-line termination
-    reasons (left_data | closed | stagnation | max_steps), and
-    optional direction arrows every arrows_every-th point as a
+    reasons (left_data | left_extent | closed | stagnation | max_steps),
+    and optional direction arrows every arrows_every-th point as a
     companion VP view.  return_points=True returns the coordinates.
+    extent = {"min": [x, y, z], "max": [x, y, z]} stops lines at that box
+    (reason left_extent).  Each line records the index of its seed and of
+    the seed vertex in its polyline; polylines run along +v.
     """
     err = _check_input(path)
     if err:
@@ -1841,6 +1857,14 @@ def streamlines(path: str | Path, seed_start: list[float] | None = None,
         clean_step = (None if step_size is None else
                       _finite_float(step_size, "step_size"))
         clean_turn = _finite_float(max_turn_deg, "max_turn_deg")
+        clean_extent = None
+        if extent is not None:
+            if not isinstance(extent, dict) or set(extent) != {"min", "max"}:
+                raise ValueError('extent must be {"min": [x, y, z], "max": [x, y, z]}')
+            clean_extent = {key: _finite_vector(extent[key], f"extent {key}", 3)
+                            for key in ("min", "max")}
+            if any(lo >= hi for lo, hi in zip(clean_extent["min"], clean_extent["max"])):
+                raise ValueError("extent min must be below max in every coordinate")
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     if clean_step is not None and clean_step <= 0.0:
@@ -1869,6 +1893,7 @@ def streamlines(path: str | Path, seed_start: list[float] | None = None,
                       "max_turn_deg": clean_turn,
                       "arrows_every": int(arrows_every),
                       "return_points": bool(return_points),
+                      "extent": clean_extent,
                       "out_file": _default_out(path, out_file, "stream")},
                      timeout_s)
 

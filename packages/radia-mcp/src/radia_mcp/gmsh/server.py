@@ -70,7 +70,6 @@ from .post_process import (
     resample_grid,
     select,
     smooth_to_nodes,
-    streamlines,
     streamlines_2d,
     threshold,
     time_series,
@@ -1154,34 +1153,57 @@ def gmsh_harmonic_to_time(msh_path: str, n_steps: int = 20,
 
 
 @mcp.tool()
-def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
-                     n_seeds: int = 10, view_name: str | None = None,
+def gmsh_streamlines(msh_path: str, seed_patch: dict | None = None,
+                     seed_line: dict | None = None, view_name: str | None = None,
                      step_size: float | None = None, max_steps: int = 400,
                      both_directions: bool = True,
                      adaptive: bool = True, closure: bool = True,
                      max_turn_deg: float = 10.0, arrows_every: int = 0,
-                     time_step: int = 0,
-                     return_points: bool = False,
+                     time_step: int = 0, length_unit: str = "m",
+                     extent: dict | None = None, return_points: bool = False,
                      out_file: str | None = None) -> dict:
     """
-    Trace field lines of a vector view from seeds on a line segment.
+    Trace 3D field lines of a vector view; seeds carry EQUAL FLUX by default.
 
-    Probe-driven arc-length RK4 with curvature ADAPTIVITY (step_size is
-    the MAXIMUM step; it halves wherever the turn per step exceeds
-    max_turn_deg) and CLOSED-LOOP detection: a magnetic field line that
-    returns to its seed closes exactly instead of overdrawing or
-    stopping mid-loop. One merged polyline per seed (backward+forward),
-    |v| as line color, per-line termination reasons (left_data | closed
-    | stagnation | max_steps) for solution debugging, and optional
-    direction arrows as a companion VP view. (This gmsh build's
-    Plugin(StreamLines) only re-emits seed points.)
+    seed_patch is a seed surface whose lines each carry the same flux
+    (radia.flux_seeding), so line density follows the field:
+      shape "parallelogram" (default): origin, e_xi, e_eta;
+      shape "annulus": center, normal, r_outer [, r_inner, theta_range, reference];
+      shape "cylinder": axis_origin, axis (spans the height), radius
+        [, theta_range, reference];
+    plus either n_lines (balanced bisection: any count, near-square cells;
+    sign "auto" | "positive" | "negative" picks one side of a surface the
+    flux crosses both ways) or n_u and n_v (two-stage grid, one-signed
+    surface), optional table_nodes (default 33) and quadrature_order
+    (default 3). At most 1000 lines, and at most 100,000 field samples per
+    seeding (table, seed checks and cell check together). Lengths in file
+    coordinates, angles in radians. Seed ONE sign: closed lines usually
+    cross a surface once each way, so both signs would draw each tube twice.
+    seed_line = {start, end, n} instead places n uniform seeds on a
+    segment; it is NOT flux-weighted and the result says so. Give exactly one.
+
+    Probe-driven arc-length RK4 with curvature ADAPTIVITY and CLOSED-LOOP
+    detection. One merged polyline per seed (backward+forward), |v| as
+    line color, per-line termination reasons (left_data | left_extent |
+    closed | stagnation | max_steps) and optional direction arrows.
+    extent {"min": [x,y,z], "max": [x,y,z]} stops lines at a box. For
+    equal flux the result adds "flux_account": flux by line end (closed,
+    open, truncated, stagnation), repeat crossings of the seed surface and
+    the share of the opposite-sign flux the returning lines draw, plus
+    "warnings" where line density stops standing for flux (truncated lines,
+    repeated crossings, untraced seeds).
+
+    Units: flux_per_line_Wb is the signed nominal flux of each seed's cell
+    on the seed surface (a mathematical line has no area of its own).
+    step_size, extent, returned polyline points and arc lengths are in the
+    file's coordinates (length_unit); seeds also give point_m in metres;
+    fluxes are in Wb.
 
     Args:
-        msh_path: .msh with a vector view.
-        seed_start: Seed segment start [x, y, z].
-        seed_end: Seed segment end [x, y, z].
-        n_seeds: Number of seeds along the segment.
-        view_name: Vector view (default: first).
+        msh_path: .msh with a 3-component vector view (B in tesla).
+        seed_patch: Equal-flux seed surface (the default choice).
+        seed_line: Uniform seeds on a segment (explicit, not flux-weighted).
+        view_name: Vector view (default: first), for placement and tracing.
         step_size: Maximum arc-length step (default: bbox diag / 200).
         max_steps: Max integration steps per direction.
         both_directions: Trace backward as well as forward.
@@ -1189,74 +1211,55 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
         closure: Detect and exactly close returning loops.
         max_turn_deg: Adaptive turn-angle bound per step.
         arrows_every: Emit a direction arrow every k-th point (0=off).
+        time_step: View step for placement and tracing.
+        length_unit: Unit of the file's coordinates, "m" or "mm"; it scales
+            only the reported fluxes (Wb), not the picture.
+        extent: Optional box that stops the lines.
         return_points: Include polyline coordinates in the result.
         out_file: Output path (default: <stem>_stream.pos).
     """
-    p = Path(msh_path)
-    if not p.is_absolute():
-        p = PROJECT_ROOT / p
-    out = None
-    if out_file is not None:
-        out = Path(out_file)
-        if not out.is_absolute():
-            out = PROJECT_ROOT / out
-    return streamlines(p, seed_start, seed_end, n_seeds=n_seeds,
-                       view=view_name, step_size=step_size,
-                       max_steps=max_steps, both_directions=both_directions,
-                       adaptive=adaptive, closure=closure,
-                       max_turn_deg=max_turn_deg, arrows_every=arrows_every,
-                       time_step=time_step,
-                       return_points=return_points, out_file=out)
+    from .equal_flux import trace_field_lines
+
+    out = _abs_path(out_file)
+    options = {"step_size": step_size, "max_steps": max_steps,
+               "both_directions": both_directions, "adaptive": adaptive,
+               "closure": closure, "max_turn_deg": max_turn_deg,
+               "arrows_every": arrows_every, "return_points": return_points,
+               "extent": extent, "out_file": out}
+    return trace_field_lines(_abs_path(msh_path), seed_patch=seed_patch,
+                             seed_line=seed_line, view=view_name, time_step=time_step,
+                             length_unit=length_unit, **options)
 
 
 @mcp.tool()
-def gmsh_equal_flux_seeds(msh_path: str, origin: list, e_xi: list, e_eta: list,
-                          n_u: int, n_v: int, table_nodes: int = 33,
+def gmsh_equal_flux_seeds(msh_path: str, seed_patch: dict,
                           view_name: str | None = None, time_step: int = 0,
-                          quadrature_order: int = 6, trace: bool = False,
-                          trace_options: dict | None = None) -> dict:
+                          length_unit: str = "m") -> dict:
     """
-    Place equal-flux field-line seeds on a planar patch of a B view.
+    Place equal-flux field-line seeds on a seed surface of a B view (no tracing).
 
-    The patch is origin + xi*e_xi + eta*e_eta for xi, eta in [0, 1]
-    (metres). B is probed on a table_nodes^2 grid and on each seed row;
-    radia.flux_seeding inverts the normalized marginal V(eta), then the
-    conditional U(xi|eta) at that exact eta, so each of the n_u*n_v cells
-    carries total/(n_u*n_v) Wb. Returns stable seed IDs, physical and
-    flux coordinates, signed total and target cell flux, orientation,
-    placement residuals, an independent Gauss check of the cell fluxes
-    (quadrature_order=0 skips it) and provenance. trace=True feeds the
-    seeds to the 3D streamline tracer with the same view and time_step.
-    trace_options may set step_size, max_steps, both_directions,
-    adaptive, closure, max_turn_deg, arrows_every, return_points,
-    out_file and timeout_s; any other key (including view, time_step or
-    seeds) is rejected. Fails on a sign-changing, zero or out-of-data
-    patch.
+    seed_patch is the same dict as for gmsh_streamlines (parallelogram,
+    annulus or cylinder; n_lines with sign, or n_u and n_v). B is probed
+    on a table_nodes^2 chart table; radia.flux_seeding then places the
+    seeds so each seed's cell carries total/n_lines Wb (flux_per_line_Wb,
+    signed and nominal: the line itself has no area). Returns stable seed IDs, file
+    and metre coordinates, chart coordinates, the seeded signed total, both
+    flux parts, flux per line, orientation, placement diagnostics (cell
+    aspect ratios), an independent Gauss check of the cell fluxes
+    (quadrature_order=0 skips it) and provenance. To draw the lines, call
+    gmsh_streamlines with the same seed_patch.
 
     Args:
         msh_path: .msh with a 3-component B view in tesla.
-        origin: Patch corner [x, y, z] in metres.
-        e_xi: First edge vector in metres.
-        e_eta: Second edge vector in metres; e_xi x e_eta orients the flux.
-        n_u: Seeds per flux row.
-        n_v: Flux rows.
-        table_nodes: Table samples per chart direction.
-        view_name: Vector view for probing and tracing (default: first).
-        time_step: View step for probing and tracing.
-        quadrature_order: Gauss order of the cell-flux check (0 = off).
-        trace: Trace field lines from the seeds.
-        trace_options: Allowed tracer keywords (see above).
+        seed_patch: Seed surface and seed count.
+        view_name: Vector view to probe (default: first).
+        time_step: View step to probe.
+        length_unit: Unit of the file's coordinates, "m" or "mm".
     """
-    from .equal_flux import equal_flux_seeds_on_plane
+    from .equal_flux import place_equal_flux_seeds
 
-    p = Path(msh_path)
-    if not p.is_absolute():
-        p = PROJECT_ROOT / p
-    return equal_flux_seeds_on_plane(p, origin, e_xi, e_eta, n_u=n_u, n_v=n_v,
-                                     table_nodes=table_nodes, view=view_name,
-                                     time_step=time_step,
-                                     quadrature_order=quadrature_order, trace=trace,
-                                     trace_options=trace_options)
+    return place_equal_flux_seeds(_abs_path(msh_path), seed_patch, view=view_name,
+                                  time_step=time_step, length_unit=length_unit)
 
 
 def _abs_path(path_str: str | None) -> Path | None:

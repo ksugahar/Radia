@@ -45,7 +45,8 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
         output.write_bytes(b'mesh')
         receipt.update(schema='radia.mesh-post-view.v1',output=str(output),
             sha256=post_view.sha256(output),source_sha256=digest,group_scope='materials',
-            solver_input=False,staging=argv[argv.index('--staging-dir')+1],physical_groups=[[3,'iron']])
+            solver_input=False,staging=argv[argv.index('--staging-dir')+1],physical_groups=[[3,'iron']],
+            native_readback={'unreferenced_nodes':0})
         Path(argv[-1]).write_text(json.dumps(receipt),encoding='utf-8')
         events.append('verified')
     async def preflight(argv, **kwargs):
@@ -74,7 +75,8 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('broken', [
-    'schema','output','source_sha256','group_scope','solver_input','sha256','staging','missing target'])
+    'schema','output','source_sha256','group_scope','solver_input','sha256','staging','native_readback',
+    'missing target'])
 def test_real_receipt_binding_rejects_wrong_worker_result(tmp_path,monkeypatch,broken):
     source=tmp_path/'input.vol';source.write_bytes(b'source')
     destination=tmp_path/'post';destination.mkdir()
@@ -88,10 +90,12 @@ def test_real_receipt_binding_rejects_wrong_worker_result(tmp_path,monkeypatch,b
         if broken!='missing target':output.write_bytes(b'mesh')
         receipt={'schema':'radia.mesh-post-view.v1','output':str(output),
             'source_sha256':digest,'group_scope':'materials','solver_input':False,
-            'sha256':'a'*64,'staging':assigned['staging'],'physical_groups':[[3,'iron']]}
+            'sha256':'a'*64,'staging':assigned['staging'],'physical_groups':[[3,'iron']],
+            'native_readback':{'unreferenced_nodes':0}}
         changes={'schema':'other.schema','output':str(destination/'other.msh'),
             'source_sha256':'0'*64,'group_scope':'boundaries','solver_input':True,
-            'sha256':'not-a-sha256','staging':str(tmp_path/'foreign-untrusted-staging')}
+            'sha256':'not-a-sha256','staging':str(tmp_path/'foreign-untrusted-staging'),
+            'native_readback':{'unreferenced_nodes':1}}
         if broken in changes:receipt[broken]=changes[broken]
         Path(argv[-1]).write_text(json.dumps(receipt),encoding='utf-8')
     async def forbidden_preflight(*args,**kwargs):pytest.fail('Preflight before receipt binding')
@@ -125,7 +129,8 @@ def digest_case(tmp_path,monkeypatch):
     receipt={'schema':'radia.mesh-post-view.v1','output':str(target),
         'source_sha256':hashlib.sha256(b'source').hexdigest(),'group_scope':'materials',
         'solver_input':False,'sha256':hashlib.sha256(b'mesh').hexdigest(),
-        'staging':'retained staging','physical_groups':[[3,'iron']]}
+        'staging':'retained staging','physical_groups':[[3,'iron']],
+        'native_readback':{'unreferenced_nodes':0}}
     locations=[]
     async def worker(argv,**kwargs):
         if '--hash-output' in argv:

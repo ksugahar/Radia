@@ -167,6 +167,12 @@ def main(argv=None) -> int:
             if any((args.checked_report, args.source_sha256, args.group_scope)):
                 raise ValueError('Post-view options require post-output')
             identity = {**runtime_identity(path), **desktop}
+            if args.check and path.suffix.lower() == '.msh' and not args.expected_sha256:
+                # A post-view output (bound by --expected-sha256) was already read back
+                # natively during conversion; any other MSH is read back here so the
+                # preflight fails before a GUI that would only show a message box.
+                from radia_mcp.gmsh.readback import require_native_readback
+                identity['native_readback'] = require_native_readback(path)
         if args.check:
             print(json.dumps(identity, ensure_ascii=True))
         else:

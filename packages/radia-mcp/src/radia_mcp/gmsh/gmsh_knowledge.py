@@ -1430,8 +1430,8 @@ tools below.  The supported contracts have analytic tests
 | Transform | gmsh_transform_view | coordinates only -- data rewrite via value_expressions |
 | Warp By Vector | gmsh_warp | Plugin(Warp) MOVES THE MODEL NODES (in place) |
 | Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
-| Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons |
-| (no ParaView filter) | gmsh_equal_flux_seeds | equal-flux 3D seeds on a planar patch (two-stage inverse of the flux CDF); optional trace through gmsh_streamlines |
+| Stream Tracer | gmsh_streamlines | equal-flux seeds on a seed surface by default (seed_patch: parallelogram, annulus or cylinder); uniform segment seeds only on request (seed_line); adaptive RK4 + CLOSED-LOOP detection + termination reasons + flux account |
+| (no ParaView filter) | gmsh_equal_flux_seeds | the equal-flux seed placement alone (balanced bisection or two-stage grid), for inspection |
 | Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
 | Particle Tracer / ParticlePath | gmsh_particle_trace | BEYOND parity: ParaView advects massless tracers along a velocity field; this integrates the relativistic LORENTZ DYNAMICS dp/dt = q(E + v x B) (Boris pusher), which ParaView has no native filter for |
 | (no ParaView filter) | gmsh_poincare | BEYOND parity: plane-piercing section of the orbits, interpolated between samples |
@@ -1476,7 +1476,27 @@ decreasing exactness -- always prefer the highest one that applies:
    the |B| information in the line color).  EXACT field lines when
    the plane is a symmetry plane (B.n = 0); otherwise the standard
    projected-field portrait -- say so in captions.
-3. **True 3D lines -> gmsh_streamlines.**  Curvature-adaptive RK4
+3. **True 3D lines -> gmsh_streamlines.**  Seed with seed_patch: each
+   line then carries the same flux through the seed surface
+   (radia.flux_seeding), so line density encodes |B| wherever the lines
+   run complete.  Choose the surface across the flux path: a parallelogram,
+   an annulus/disk (a coil bore, a pole face) or a cylinder sector (an air
+   gap).  n_lines uses balanced bisection (any count, near-square cells);
+   n_u x n_v is the two-stage grid for a one-signed surface.  A surface
+   the flux crosses both ways (a magnet mid-plane) needs sign "positive" or
+   "negative": seed ONE side, because each closed line crosses it once
+   each way and both sides would draw every tube twice.  Read the result's
+   flux_account: opposite_crossing_flux_ratio counts the observed returns,
+   flux weighted; near 1 the returning lines meet about the other side's
+   flux, but it is a count, not a coverage (a line may return twice, or a
+   part of the other side may be missed); truncated lines (max_steps),
+   repeat crossings (helical or multi-pass lines) and untraced seeds are
+   warned because there density no longer stands for flux.  extent stops
+   lines at a box; lines ending there are complete inside the box only.
+   The picture does not depend on the unit; length_unit ("m" or "mm") only
+   scales the reported fluxes to Wb.  seed_line (uniform seeds on a
+   segment) is not flux-weighted and the result says so.
+   Curvature-adaptive RK4
    (step halves above max_turn_deg per step), closed loops detected
    and closed exactly, per-line termination reasons.  A line that
    reports "stagnation" INSIDE the domain marks a field zero (or a
@@ -1852,8 +1872,10 @@ boundaries and near nulls; check step refinement and field interpolation.
 Equal crossing flux does not give uniform screen density. Projection,
 occlusion and field strength affect density; a closed line can cross the
 seed plane twice, so 120 seeds need not mean 120 distinct flux tubes.
-For general 3D fields, distribute seeds over a surface and trace the full
-vector field. Revolve a meridian only when the physical solution is axisymmetric.
+For general 3D fields, give gmsh_streamlines a seed_patch: it places
+equal-flux seeds on that seed surface, traces the full vector field and
+counts the opposite-sign crossings, so a closed line seen twice on the seed
+plane is reported rather than seeded twice. Revolve a meridian only when the physical solution is axisymmetric.
 
 ## Time resolution and moving meshes
 Save and render every required physical step. At dt=0.2 ms there are 100

@@ -128,6 +128,10 @@ def post_case(post_inputs, monkeypatch):
     monkeypatch.setattr(msh_inspect, 'inspect_msh', lambda _: {
         'physical_names': [{'dim': 3, 'name': 'iron'}],
         'elements': {'count': 6, 'parse_complete': True}, 'parse_errors': []})
+    from radia_mcp.gmsh import readback
+    monkeypatch.setattr(readback, 'require_native_readback', lambda path, **kwargs: {
+        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0,
+        'sha256': post_view.sha256(Path(path))})
     writes = []
     class Exporter:
         def __init__(self, mesh, boundary): self.boundary = boundary
@@ -273,9 +277,22 @@ def test_publication_never_overwrites_a_racing_output(tmp_path):
     staged = tmp_path / 'staged.msh'; staged.write_bytes(b'new mesh')
     target = tmp_path / 'output.msh'; target.write_bytes(b'other producer')
     with pytest.raises(FileExistsError):
-        post_view._publish_mesh(staged, target)
+        post_view._publish_mesh(staged, target, post_view.sha256(staged))
     assert target.read_bytes() == b'other producer'
     assert list(tmp_path.glob('.*.partial')) == []
+
+
+def test_readback_digest_mismatch_never_publishes(post_case, monkeypatch):
+    source, output, receipt, digest, _ = post_case
+    from radia_mcp.gmsh import readback
+    monkeypatch.setattr(readback, 'require_native_readback', lambda path, **kwargs: {
+        'nodes': 8, 'elements': {'3': 6}, 'physical_groups': [[3, 'iron']], 'unreferenced_nodes': 0, 'views': 0,
+        'sha256': '0' * 64})
+    with pytest.raises(ValueError, match='native Gmsh read back'):
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials',
+                                    staging_dir=assigned_stage(output))
+    # No target and no temporary copy: a retry starts from a clean destination.
+    assert not output.exists() and list(output.parent.glob('.*.partial')) == []
 
 
 def test_post_fails_on_unpreserved_groups_and_never_creates_final_output(post_case):
@@ -338,7 +355,8 @@ def test_conversion_process_is_separate_and_uses_a_bound_receipt(post_case, monk
         Path(argv[-1]).write_text(json.dumps({'schema':'radia.mesh-post-view.v1',
             'output':str(output),'sha256':post_view.sha256(output),
             'source_sha256':digest,'group_scope':'materials','solver_input':False,
-            'staging':argv[argv.index('--staging-dir')+1],'physical_groups':[[3,'iron']]}))
+            'staging':argv[argv.index('--staging-dir')+1],'physical_groups':[[3,'iron']],
+            'native_readback':{'unreferenced_nodes':0}}))
     monkeypatch.setattr(post_view, 'run_worker', run)
     monkeypatch.setitem(sys.modules, 'ngsolve', None)
     result = post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
