@@ -13,11 +13,11 @@ EXPORT_OVERVIEW = """
 
 | Route | Call | Runs in |
 |-------|------|---------|
-| Native plugin in an isolated worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | `python -I -B` worker + `cubit_mesh_export.dll` |
+| Native plugin in an isolated worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | `python -I -B` worker + `radia_cubit_export.dll` |
 
 `cubit_export_vol` plays the journal in an isolated external Python
 (`-I -B`) that loads the fork NGSolve, then Cubit with the native
-`export netgen` command plugin (`cubit_mesh_export.dll`, built locally from
+`export netgen` command plugin (`radia_cubit_export.dll`, built locally from
 `packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).  The worker runs `import ngsolve` first so the plugin binds to
 the same nglib, plays the journal in batch/nographics Cubit (`-noinitfile`),

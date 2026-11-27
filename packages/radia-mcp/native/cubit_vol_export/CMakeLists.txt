@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
-project(cubit_mesh_export_fork CXX)
+project(radia_cubit_export CXX)
 set(CMAKE_CXX_STANDARD 17)
 # CUBIT_VOL_EXPORT_PLUGIN builds the Cubit command plugin (needs the Cubit SDK).
 # NETGEN_CURVING_PYMODULE builds _netgen_curving, the Python test module for
 # netgen_curving/ (needs only the Netgen SDK, no Cubit).
-option(CUBIT_VOL_EXPORT_PLUGIN "Build cubit_mesh_export.dll" ON)
+option(CUBIT_VOL_EXPORT_PLUGIN "Build radia_cubit_export.dll" ON)
 option(NETGEN_CURVING_PYMODULE "Build the _netgen_curving test module" OFF)
 find_package(Netgen REQUIRED CONFIG)
 
@@ -22,13 +22,13 @@ if(CUBIT_VOL_EXPORT_PLUGIN)
     find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
     add_library(cubit_geom ALIAS cubit_cgmcore)
   endif()
-  add_library(cubit_mesh_export_ccm MODULE
+  add_library(radia_cubit_export_plugin MODULE
     CubitMeshExportPlugin.cpp MeshData.cpp NetgenCurver.cpp callbackgeom.cpp
     ExportNetgenCommand.cpp)
-  set_target_properties(cubit_mesh_export_ccm PROPERTIES OUTPUT_NAME "cubit_mesh_export" PREFIX "" SUFFIX ".dll")
-  target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
-  target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-  target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj /utf-8)
+  set_target_properties(radia_cubit_export_plugin PROPERTIES OUTPUT_NAME "radia_cubit_export" PREFIX "" SUFFIX ".dll")
+  target_link_libraries(radia_cubit_export_plugin cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
+  target_compile_definitions(radia_cubit_export_plugin PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+  target_compile_options(radia_cubit_export_plugin PRIVATE /bigobj /utf-8)
 endif()
 
 if(NETGEN_CURVING_PYMODULE)

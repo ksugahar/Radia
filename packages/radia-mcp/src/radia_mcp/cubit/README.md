@@ -29,7 +29,7 @@ This server, the Cubit Python API/reference and the curved `.vol` worker
 belong to `radia_mcp.cubit`; the server does not import `radia`. Curved
 `.vol` export: `cubit_export_vol` plays the journal in an isolated external Python
 (`-I -B`) that loads the fork NGSolve, then Cubit with the native
-`export netgen` command plugin (`cubit_mesh_export.dll`, built locally from
+`export netgen` command plugin (`radia_cubit_export.dll`, built locally from
 `packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).
 `check-vol` is a radia-mcp

@@ -7,7 +7,7 @@ Python.  Order of operations:
 1. ``import ngsolve`` first, so the fork nglib the plugin was built against is
    the one already loaded in the process;
 2. add the Netgen package and Cubit ``bin`` directories to the DLL search path;
-3. point ``CUBIT_PLUGIN_DIR`` at the directory holding ``cubit_mesh_export.dll``;
+3. point ``CUBIT_PLUGIN_DIR`` at the directory holding ``radia_cubit_export.dll``;
 4. ``import cubit`` and ``cubit.init([... '-noinitfile'])``;
 5. play the journal line by line;
 6. optionally add the Kelvin open-boundary sphere (:mod:`radia_mcp.cubit.kelvin`);
@@ -28,7 +28,7 @@ import time
 import traceback
 from pathlib import Path
 
-PLUGIN_DLL = "cubit_mesh_export.dll"  # same name as layout.COMMAND_PLUGIN
+PLUGIN_DLL = "radia_cubit_export.dll"  # same name as layout.COMMAND_PLUGIN
 PERIODIC_FIELDS = ("periodic_name", "periodic_master", "periodic_slave", "periodic_unit",
                    "periodic_patches", "periodic_tx", "periodic_ty", "periodic_tz", "periodic_match")
 _PERIODIC_TEXT = {"periodic_name", "periodic_master", "periodic_slave", "periodic_unit", "periodic_patches"}

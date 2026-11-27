@@ -81,7 +81,7 @@ def test_all_entry_points_agree_on_the_release(tmp_path, monkeypatch, name, buil
 
 def test_plugin_is_deployed_under_the_loader_directory(tmp_path):
     root = _install_root(tmp_path, "renamed-cubit", "short=2026.8\n")
-    assert layout.command_plugin_path(root / "bin") == root / "plugins" / "cubit_mesh_export.dll"
+    assert layout.command_plugin_path(root / "bin") == root / "plugins" / "radia_cubit_export.dll"
     assert layout.COMMAND_PLUGIN == install.COMMAND_PLUGIN
 
 
@@ -96,9 +96,9 @@ def test_install_requires_a_built_plugin_directory(tmp_path, monkeypatch):
     monkeypatch.delenv("RADIA_CUBIT_PLUGIN_DIR", raising=False)
     with pytest.raises(RuntimeError, match="plugin directory not set"):
         install.resolve_plugin_dir(None)
-    with pytest.raises(RuntimeError, match="cubit_mesh_export.dll not found"):
+    with pytest.raises(RuntimeError, match="radia_cubit_export.dll not found"):
         install.resolve_plugin_dir(tmp_path)
-    (tmp_path / "cubit_mesh_export.dll").write_bytes(b"MZ")
+    (tmp_path / "radia_cubit_export.dll").write_bytes(b"MZ")
     assert install.resolve_plugin_dir(tmp_path) == tmp_path.resolve()
 
 

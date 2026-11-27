@@ -178,7 +178,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.
   // The exporter bypasses the cap and completes successfully, so
   // the ERROR line is misleading noise confusing users in logs.
-  cubit_mesh_export::ScopedLearnEditionFilter _lef_guard;
+  radia_cubit_export::ScopedLearnEditionFilter _lef_guard;
 
   auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -196,7 +196,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     return false;
   }
 
-  cubit_mesh_export::NamedPeriodicContract periodic;
+  radia_cubit_export::NamedPeriodicContract periodic;
   std::string periodic_patch_text;
   const bool periodic_fields[] = {
       data.get_string("periodic_name", periodic.name),
@@ -217,8 +217,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
   if (has_periodic) {
     try {
-      cubit_mesh_export::require_fresh_named_periodic_output(
-          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename)));
+      radia_cubit_export::require_fresh_named_periodic_output(
+          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename)));
       std::istringstream patches(periodic_patch_text);
       std::string patch;
       while (std::getline(patches, patch, ',')) {
@@ -239,7 +239,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       return false;
     }
   }
-  cubit_mesh_export::NamedPeriodicResult periodic_result;
+  radia_cubit_export::NamedPeriodicResult periodic_result;
 
   // Extract linear mesh from Cubit (MeshData)
   MeshData md;
@@ -707,7 +707,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // No centroid/tolerance inference and no solver-side repair fallback.
   if (has_periodic) {
     try {
-      periodic_result = cubit_mesh_export::apply_named_periodic_identification(*ng_mesh, periodic);
+      periodic_result = radia_cubit_export::apply_named_periodic_identification(*ng_mesh, periodic);
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic export rejected: %s\n", error.what());
       return false;
@@ -725,7 +725,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
   if (!has_periodic) {
-    cubit_mesh_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
+    radia_cubit_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
   }
 
   int ne = ng_mesh->GetNE();
@@ -895,12 +895,12 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   };
   if (has_periodic) {
     try {
-      cubit_mesh_export::save_named_periodic_bundle(
+      radia_cubit_export::save_named_periodic_bundle(
           *ng_mesh, u8_string_to_path(filename), write_companion);
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic bundle publication failed: %s\n", error.what());
-      PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
-          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
+      PRINT_ERROR("%s\n", radia_cubit_export::named_periodic_retry_guidance(
+          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
       return false;
     }
   } else {

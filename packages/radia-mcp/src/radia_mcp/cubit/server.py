@@ -81,7 +81,7 @@ Distribution owner: radia-mcp, Python namespace radia_mcp.cubit. The server
 does not import radia. Curved Netgen `.vol` export runs only through
 `cubit_export_vol`, which starts the export worker
 (radia_mcp.cubit.vol_export) with an explicit interpreter and -I -B; the
-worker loads the native `export netgen` command plugin (cubit_mesh_export.dll).
+worker loads the native `export netgen` command plugin (radia_cubit_export.dll).
 
 Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
@@ -774,7 +774,7 @@ def cubit_check_vol(vol_path: str,
 	    strict_labels: Enforce strict label naming (production modes).
 	    threshold_pct: CAD volume/area error threshold in percent (default 1.0).
 	    quality: Also run the curved-mapping quality check (default True).
-	    report_json: If given, write the `cubit-mesh-export.vol-check.v1`
+	    report_json: If given, write the `radia.vol-check.v1`
 	        report there (index it from result.json in production runs).
 
 	Returns:
@@ -853,7 +853,7 @@ def cubit_export_vol(journal_path: str,
 
 	Plays `journal_path` in a fresh batch/nographics Cubit inside an isolated
 	Python subprocess (`python -I -B -m radia_mcp.cubit.vol_export`) that has
-	loaded the fork NGSolve/Netgen and the `cubit_mesh_export.dll` command
+	loaded the fork NGSolve/Netgen and the `radia_cubit_export.dll` command
 	plugin, then runs `export netgen "<out_path>" order <order> ... overwrite`.
 	The plugin writes `out_path` plus `out_path.json`.  Fails loudly when Cubit,
 	the worker interpreter or the plugin DLL is missing.  Run `cubit_check_vol`
@@ -867,7 +867,7 @@ def cubit_export_vol(journal_path: str,
 	    worker_python: Absolute worker interpreter (default
 	        $RADIA_CUBIT_WORKER_PYTHON, then this server's interpreter).
 	    timeout_s: Worker wall-clock limit in seconds.
-	    plugin_dir: Directory holding cubit_mesh_export.dll (default
+	    plugin_dir: Directory holding radia_cubit_export.dll (default
 	        $RADIA_CUBIT_PLUGIN_DIR).
 	    periodic: Optional named periodic request with all nine fields
 	        periodic_name/master/slave/unit/patches/tx/ty/tz/match.

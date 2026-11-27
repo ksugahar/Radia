@@ -24,7 +24,7 @@ test-client path. This does not start Cubit or change its licensing requirements
 The Cubit MCP server and the export route belong to radia-mcp
 (`radia-mcp serve cubit-mcp`). The server does not import `radia`. `cubit_export_vol` plays the journal in an isolated external Python
 (`-I -B`) that loads the fork NGSolve, then Cubit with the native
-`export netgen` command plugin (`cubit_mesh_export.dll`, built locally from
+`export netgen` command plugin (`radia_cubit_export.dll`, built locally from
 `packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).
 
@@ -1149,7 +1149,7 @@ cubit.cmd('block 2 name "boundary"')
 The export route belongs to radia-mcp:
 
 ```bash
-# Worker interpreter: the fork NGSolve; plugin_dir: the built cubit_mesh_export.dll
+# Worker interpreter: the fork NGSolve; plugin_dir: the built radia_cubit_export.dll
 # Curved .vol export runs outside Cubit: save this model as a journal,
 # then call the MCP tool cubit_export_vol(journal_path, "mesh.vol", order=3).
 ```

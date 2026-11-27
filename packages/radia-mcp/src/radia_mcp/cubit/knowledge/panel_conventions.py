@@ -78,7 +78,7 @@ loading, sampled curved mappings, label names/relations, and required labels.
 It auto-discovers `.vol.json` for CAD volume/area/total-edge and mesh-metadata
 comparison when available. Production application/mode meshes use a versioned
 `radia.vol-label-contract.v1` contract with strict labels, and retain the
-`cubit-mesh-export.vol-check.v1` JSON report with the run artifacts.
+`radia.vol-check.v1` JSON report with the run artifacts.
 
 The `.vol` checker validates topology and semantic names. It does not infer
 conductivity, permeability, BH data, frequency, or other material constants

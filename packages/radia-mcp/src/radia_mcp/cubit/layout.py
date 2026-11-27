@@ -68,7 +68,7 @@ def console_executable(bin_dir: Path) -> Path | None:
     return None
 
 
-COMMAND_PLUGIN = 'cubit_mesh_export.dll'
+COMMAND_PLUGIN = 'radia_cubit_export.dll'
 
 
 def command_plugin_path(install_dir: Path) -> Path:

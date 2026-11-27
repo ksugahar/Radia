@@ -15,7 +15,7 @@ description: |
 # cubit-command-plugin
 
 Distilled from the radia-mcp Netgen `export netgen` native plugin
-(`cubit_mesh_export.dll`, 2026) and verified against the Coreform Cubit
+(`radia_cubit_export.dll`, 2026) and verified against the Coreform Cubit
 2026.8 SDK. The template under `templates/` builds and passes `smoke.ps1`
 on Cubit 2026.8 with MSVC 14.44.35207, so start from it instead of from
 memory.

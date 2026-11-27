@@ -30,7 +30,7 @@
                     // std::shared_ptr<CubitMessageHandler> and made them
                     // non-static. See ScopedLearnEditionFilter below.
 
-namespace cubit_mesh_export {
+namespace radia_cubit_export {
 
 class LearnEditionFilter : public CubitMessageHandler {
  public:
@@ -137,4 +137,4 @@ class ScopedLearnEditionFilter {
   int saved_error_count_ = 0;
 };
 
-}  // namespace cubit_mesh_export
+}  // namespace radia_cubit_export

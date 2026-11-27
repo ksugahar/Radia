@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-namespace cubit_mesh_export {
+namespace radia_cubit_export {
 
 // BC numbers are one-based boundary-condition properties, never FD indices.
 struct NamedPeriodicContract {
@@ -432,5 +432,5 @@ inline void save_named_periodic_bundle(const netgen::Mesh &mesh,
   publish_named_periodic_bundle(paths, record);
 }
 
-} // namespace cubit_mesh_export
+} // namespace radia_cubit_export
 #endif

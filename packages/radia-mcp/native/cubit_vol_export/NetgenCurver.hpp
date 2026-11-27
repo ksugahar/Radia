@@ -31,7 +31,7 @@ namespace netgen {
   class CallbackGeometry;
   class NetgenGeometry;
 }
-namespace cubit_mesh_export { class CurveIdentity; }
+namespace radia_cubit_export { class CurveIdentity; }
 
 
 class NetgenCurver
@@ -46,7 +46,7 @@ public:
   bool build(const MeshData &md, int order);
 
   // Shared production mapping entry; also exercised without loading Cubit CAD.
-  static cubit_mesh_export::CurveIdentity curve_identities(
+  static radia_cubit_export::CurveIdentity curve_identities(
       const netgen::Mesh & mesh, const std::unordered_map<int, int> & curve_descriptors);
   std::string edge_diagnostics_json() const;
 

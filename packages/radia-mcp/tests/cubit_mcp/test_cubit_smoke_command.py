@@ -59,7 +59,7 @@ def test_solver_ready_gate_is_radia_vol_check(monkeypatch, tmp_path):
 
     seen = {}
     fake = types.ModuleType("radia.vol_check")
-    fake.REPORT_SCHEMA = "cubit-mesh-export.vol-check.v1"
+    fake.REPORT_SCHEMA = "radia.vol-check.v1"
 
     def check_consistency(path, **kwargs):
         seen.update(path=Path(path), **kwargs)

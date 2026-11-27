@@ -1,7 +1,7 @@
 """
 Cubit plugin installer for radia-mcp.
 
-Deploys the ``export netgen`` command plugin (``cubit_mesh_export.dll``,
+Deploys the ``export netgen`` command plugin (``radia_cubit_export.dll``,
 built from ``packages/radia-mcp/native/cubit_vol_export`` with ``build.py``)
 into the Coreform Cubit 2026.8 plugin directory, then registers the Netgen
 Export toolbar and menu (:mod:`radia_mcp.cubit.gui`) through
@@ -9,7 +9,7 @@ Export toolbar and menu (:mod:`radia_mcp.cubit.gui`) through
 
 The radia-mcp wheel ships no native plugin.  The built plugin directory is
 ``--plugin-dir``, else ``$RADIA_CUBIT_PLUGIN_DIR`` (the directory the export
-worker also uses), and must hold ``cubit_mesh_export.dll``::
+worker also uses), and must hold ``radia_cubit_export.dll``::
 
     python -m radia_mcp.cubit.install --plugin-dir <dir>              # current user
     python -m radia_mcp.cubit.install --plugin-dir <dir> --all-users  # every profile (admin)

@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace cubit_mesh_export {
+namespace radia_cubit_export {
 // The geometric EdgeNr is distinct from the 1-based descriptor table index.
 // Surface pairs are deliberately NOT keys: split smooth faces share >1 curve.
 struct CurveBinding {
