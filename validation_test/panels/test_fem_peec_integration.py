@@ -3,12 +3,13 @@
 Tests the full Cubit pipeline:
   1. Cubit: create torus coil + air sphere
   2. Subtract coil from air (hole), mesh air
-  3. add_kelvin_cubit() → Kelvin sphere with copy mesh + periodic BC
+  3. add_kelvin_cubit() → Kelvin sphere with copy mesh (labels; pairing after load)
   4. export netgen → .vol, export step → coil.step
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
-Requires: Cubit license, NGSolve, radia_cubit_export.dll plugin.
+Requires: Cubit license, NGSolve, the radia_cubit_export.dll plugin
+(RADIA_CUBIT_PLUGIN_DIR; skipped visibly when unset).
 """
 
 import math
@@ -43,19 +44,38 @@ def _grover_L(R, a):
 
 
 def _setup_cubit():
-    """Initialize Cubit with plugin."""
-    from radia_mcp.cubit.toolbar_install import find_cubit_bin
-    cubit_path = find_cubit_bin()
-    if cubit_path and cubit_path not in sys.path:
-        sys.path.append(cubit_path)
-    plugin_dir = os.path.join(os.path.dirname(cubit_path), "bin", "plugins") \
-        if cubit_path else None
-    if plugin_dir and os.path.isdir(plugin_dir):
-        os.environ["CUBIT_PLUGIN_DIR"] = plugin_dir
+    """Start headless Cubit with the radia_cubit_export plugin.
 
+    Same load order as the production export worker
+    (radia_mcp.cubit.vol_export): the Netgen runtime first, then Cubit with
+    CUBIT_PLUGIN_DIR.  Skips visibly without RADIA_CUBIT_PLUGIN_DIR.
+    """
+    plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
+    if not plugin_dir:
+        pytest.skip("RADIA_CUBIT_PLUGIN_DIR (directory holding "
+                    "radia_cubit_export.dll) is not set; needs licensed Cubit")
+    if not os.path.isfile(os.path.join(plugin_dir, "radia_cubit_export.dll")):
+        raise FileNotFoundError(f"radia_cubit_export.dll not found in {plugin_dir}")
+    import ngsolve  # noqa: F401
+    import netgen
+    from radia.cubit_locator import find_cubit_bin
+
+    cubit_bin = find_cubit_bin()
+    if cubit_bin is None:
+        raise RuntimeError("Cubit not found: set CUBIT_BIN_DIR")
+    os.add_dll_directory(os.path.dirname(netgen.__file__))
+    # validation_test/ is on sys.path for this package, and its cubit/
+    # folder would shadow Cubit's module: put Cubit first and drop a shadow.
+    if cubit_bin in sys.path:
+        sys.path.remove(cubit_bin)
+    sys.path.insert(0, cubit_bin)
+    if not hasattr(sys.modules.get("cubit"), "init"):
+        sys.modules.pop("cubit", None)
+    os.add_dll_directory(cubit_bin)
+    os.environ["CUBIT_PLUGIN_DIR"] = os.path.abspath(plugin_dir)
     import cubit
-    cubit.init(["cubit", "-nojournal", "-batch",
-                "-commandplugindir", plugin_dir or ""])
+
+    cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
     return cubit
 
 
@@ -67,45 +87,47 @@ def peec_cubit_model():
 
     cubit.cmd("reset")
 
-    # --- 1. Air sphere (volume 1) ---
+    # --- 1. Air sphere with a toroidal hole, then the coil ---
+    # `subtract ... keep` keeps both originals and adds the result as a new
+    # volume, so subtract without keep and create the coil again.
     cubit.cmd(f"create sphere radius {R_AIR}")
-
-    # --- 2. Coil torus (volume 2) ---
+    air = cubit.get_last_id("volume")
     cubit.cmd(f"create torus major radius {R_COIL} minor radius {A_COIL}")
+    torus = cubit.get_last_id("volume")
+    cubit.cmd(f"subtract volume {torus} from volume {air}")
+    air = cubit.get_last_id("volume")   # the difference gets a new id
+    cubit.cmd(f"create torus major radius {R_COIL} minor radius {A_COIL}")
+    coil = cubit.get_last_id("volume")
 
-    # --- 3. Subtract coil from air (hole approach) ---
-    # After subtract: volume 1 = air-with-hole, volume 2 = coil (kept)
-    cubit.cmd("subtract volume 2 from volume 1 keep")
-    # volume 1 is now the air with a toroidal hole
+    # --- 2. Webcut the air at the equator (Kelvin z symmetry) ---
+    before = set(cubit.parse_cubit_list("volume", "all"))
+    cubit.cmd(f"webcut volume {air} with plane zplane")
+    air_vols = sorted({air} | (set(cubit.parse_cubit_list("volume", "all")) - before))
+    assert len(air_vols) == 2, air_vols
+    air_str = " ".join(map(str, air_vols))
 
-    # --- 4. Webcut air for Kelvin symmetry (equator cut) ---
-    cubit.cmd("webcut volume 1 with plane zplane")
-    # Now: volume 1 = air top half, volume 3 = air bottom half
+    # --- 3. Imprint + merge air halves, mesh the air ---
+    cubit.cmd(f"imprint volume {air_str}")
+    cubit.cmd(f"merge volume {air_str}")
+    cubit.cmd(f"volume {air_str} size {MAXH_AIR}")
+    cubit.cmd(f"volume {air_str} scheme tetmesh")
+    cubit.cmd(f"mesh volume {air_str}")
 
-    # --- 5. Imprint + merge air halves ---
-    cubit.cmd("imprint volume 1 3")
-    cubit.cmd("merge volume 1 3")
-
-    # --- 6. Mesh air ---
-    cubit.cmd(f"volume 1 3 size {MAXH_AIR}")
-    cubit.cmd("volume 1 3 scheme tetmesh")
-    cubit.cmd("mesh volume 1 3")
-
-    # --- 7. Assign air block ---
-    cubit.cmd("block 1 add volume 1 3")
+    # --- 4. Assign air block ---
+    cubit.cmd(f"block 1 add volume {air_str}")
     cubit.cmd('block 1 name "air"')
 
-    # --- 8. Add Kelvin sphere via add_kelvin_cubit() ---
-    from add_kelvin import add_kelvin_cubit
+    # --- 5. Add Kelvin sphere via add_kelvin_cubit() ---
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     kelvin_info = add_kelvin_cubit(
         R=R_AIR, air_block="air", symmetry=["z"])
 
-    # --- 9. Export ---
+    # --- 6. Export ---
     vol_path = os.path.join(tmpdir, "model.vol")
     step_path = os.path.join(tmpdir, "coil.step")
 
     cubit.cmd(f'export netgen "{vol_path}" order 1 overwrite')
-    cubit.cmd(f'export step "{step_path}" volume 2 overwrite')
+    cubit.cmd(f'export step "{step_path}" volume {coil} overwrite')
 
     return {
         "vol_path": vol_path,
@@ -128,14 +150,23 @@ class TestFEMPEECCubitIntegration:
         assert os.path.isfile(peec_cubit_model["step_path"])
 
     def test_vol_has_kelvin(self, peec_cubit_model):
-        """Mesh should have air + kelvin with periodic identification."""
+        """air + kelvin materials and Kelvin labels that pair completely.
+
+        The exporter writes the kelvin_int/kelvin_ext labels but no Kelvin
+        identifications; the solver adds them after loading, so check that
+        every kelvin_int vertex pairs with its translated copy.
+        """
         from ngsolve import Mesh
+        from radia.kelvin_identify_ngsolve import add_kelvin_identification
         mesh = Mesh(peec_cubit_model["vol_path"])
         mats = set(mesh.GetMaterials())
         assert "air" in mats, f"Missing 'air', got {mats}"
         assert "kelvin" in mats, f"Missing 'kelvin', got {mats}"
-        n_ident = mesh.ngmesh.GetNrIdentifications()
-        assert n_ident > 0, "No periodic identification in .vol"
+        bnds = set(mesh.GetBoundaries())
+        assert {"kelvin_int", "kelvin_ext"} <= bnds, f"Kelvin labels missing: {bnds}"
+        info = add_kelvin_identification(mesh, skip_if_existing=False)
+        assert info["n_pairs"] > 0 and info["n_unmatched"] == 0, info
+        assert info["max_dist"] < 1e-10, info
 
     def test_solve_fem_peec_inductance(self, peec_cubit_model):
         """Solve FEM with PEEC filament source, verify L vs Grover."""

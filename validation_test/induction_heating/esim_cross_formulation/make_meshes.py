@@ -17,11 +17,8 @@ surface).  Meshes (2) and (3) are INDEPENDENT surface discretisations
 of the same 50 mm cylinder -- comparing P_wp across them isolates the
 outer-field formulation from the mesh.
 
-NOTE (validation runtime / runtime host): `coreform_cubit -batch <script>` fails here with
-an RLM license error (-102) in headless batch, but the in-process
-Cubit Python API (`cubit.init([... , '-commandplugindir', plugins])`)
-authenticates correctly.  This script therefore drives everything in a
-single cubit.init() session rather than spawning batch subprocesses.
+Cubit runs in-process through its Python API (one cubit.init() session)
+with the radia-mcp command plugin from RADIA_CUBIT_PLUGIN_DIR.
 
 Usage:
     python make_meshes.py                # regenerate all that are missing
@@ -44,17 +41,27 @@ BEM_VOL = os.path.join(SAMPLES, "ih_bem_sample_p1.vol")
 FEM50_PY = os.path.join(HERE, "make_ih_fem_kelvin_50mm.py")
 FEM50_VOL = os.path.join(HERE, "ih_fem_kelvin_50mm.vol")
 
-CUBIT_BIN = os.environ.get(
-    "CUBIT_BIN", r"C:\Program Files\Coreform Cubit 2025.12\bin")
-CUBIT_PLUGINS = os.path.join(CUBIT_BIN, "plugins")
-
-
 def _init_cubit():
-    if CUBIT_BIN not in sys.path:
-        sys.path.insert(0, CUBIT_BIN)
+    """Headless Cubit with the radia_cubit_export plugin, in the production
+    worker's load order (radia_mcp.cubit.vol_export): Netgen runtime first,
+    then Cubit with CUBIT_PLUGIN_DIR = $RADIA_CUBIT_PLUGIN_DIR."""
+    plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
+    if not plugin_dir or not os.path.isfile(os.path.join(plugin_dir, "radia_cubit_export.dll")):
+        raise SystemExit("set RADIA_CUBIT_PLUGIN_DIR to the directory holding radia_cubit_export.dll")
+    import ngsolve  # noqa: F401
+    import netgen
+    from radia.cubit_locator import find_cubit_bin
+
+    cubit_bin = find_cubit_bin()
+    if cubit_bin is None:
+        raise SystemExit("Cubit not found: set CUBIT_BIN_DIR")
+    os.add_dll_directory(os.path.dirname(netgen.__file__))
+    if cubit_bin not in sys.path:
+        sys.path.insert(0, cubit_bin)
+    os.add_dll_directory(cubit_bin)
+    os.environ["CUBIT_PLUGIN_DIR"] = os.path.abspath(plugin_dir)
     import cubit
-    cubit.init(["cubit", "-nojournal", "-batch", "-nographics",
-                "-commandplugindir", CUBIT_PLUGINS])
+    cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
     return cubit
 
 

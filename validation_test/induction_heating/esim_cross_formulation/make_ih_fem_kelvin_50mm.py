@@ -25,26 +25,14 @@ Output: <lane>/ih_fem_kelvin_50mm.vol  (gitignored; regenerated on
 demand).  Coil STEP is NOT re-exported -- the shared
 `samples/ih_fem_kelvin_demo_coil.step` is the identical coil.
 
-The Kelvin helper is imported from the DEPLOYED Cubit plugin
-(`<Cubit>/bin/plugins/cubit_helpers/add_kelvin.py`), which is the
-self-contained, Cubit-embedded-Python version.  Set
+The Kelvin helper is radia_mcp.cubit.kelvin.add_kelvin_cubit.  Set
 `RADIA_50MM_VOL_OUT` to override the output path.
 """
 import os
-import sys
 
 import cubit
 
-_HELPERS = os.path.join(
-    os.environ.get("CUBIT_PLUGIN_DIR",
-                   r"C:\Program Files\Coreform Cubit 2025.12\bin\plugins"),
-    "cubit_helpers")
-if os.path.isdir(_HELPERS) and _HELPERS not in sys.path:
-    sys.path.insert(0, _HELPERS)
-try:
-    from add_kelvin import add_kelvin_cubit
-except ImportError:
-    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+from radia_mcp.cubit.kelvin import add_kelvin_cubit
 
 # `__file__` is undefined when this script is exec()'d by make_meshes.py
 # inside a single cubit.init session; RADIA_50MM_VOL_OUT then supplies
