@@ -215,7 +215,7 @@
         "tools/check_ninja_msvc_deps.py",
         "tools/check_native_module_abi.py"
       ],
-      "audit_sha256": "8973ada0109e8a48cf3990393e0ecbdf0dd05f7a7c75329285b55907ed2b1186",
+      "audit_sha256": "6728997ecec0d73442d16d0586904eb3495b82916104ccd5b5bb38be06cf5736",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
