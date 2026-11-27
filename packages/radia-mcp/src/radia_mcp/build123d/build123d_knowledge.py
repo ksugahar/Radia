@@ -844,7 +844,7 @@ analytical helix and NOT extracted from existing CAD.
 Counterparts:
 - `coil_modeling` (this file) — analytical helix with `loft()` over
   parametric sections.
-- `cubit_mesh_export.mcp` `coil_from_polyline` topic — same algorithm, Cubit
+- `radia_mcp.cubit` `coil_from_polyline` topic — same algorithm, Cubit
   flavour (creates one body per station, lofts pairwise).
 - `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
 
@@ -1030,7 +1030,7 @@ Pipeline downstream is identical: STEP export →
 ## Cubit Flavour — Same Algorithm, Different Engine
 
 Identical math; different engine. See the `coil_from_polyline` topic
-in `cubit_mesh_export.mcp` for the Cubit version. Key engine differences:
+in `radia_mcp.cubit` for the Cubit version. Key engine differences:
 
 | Aspect              | build123d                    | Cubit                       |
 |---------------------|------------------------------|-----------------------------|
@@ -1605,7 +1605,7 @@ like quantities.
 
 The `build123d` extra declares the CAD, Netgen/NGSolve, canonical `check-vol`
 and current Radia post-exporter dependencies. This requires the standalone
-`cubit_mesh_export.check` API, not a licensed Cubit process. Radia must provide
+`radia.vol_check` API, not a licensed Cubit process. Radia must provide
 `PayloadV42`; the published 5.3.3 exporter does not. The extra's updated Radia
 requirement needs a post-capable release before public installation can resolve.
 A missing capability stops the pipeline explicitly; there is no older-format

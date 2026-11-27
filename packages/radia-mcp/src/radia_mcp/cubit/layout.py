@@ -45,6 +45,37 @@ def has_python_binding(bin_dir: Path) -> bool:
             and (bin_dir / 'cubit/_cubit3.pyd').is_file())
 
 
+def install_root(path: Path) -> Path:
+    """The Cubit install root for either the root itself or its ``bin``."""
+    root = Path(path)
+    return root.parent if root.name.lower() == 'bin' else root
+
+
+def plugin_directory(install_dir: Path) -> Path:
+    """The directory Cubit scans for command plugins."""
+    root = install_root(install_dir)
+    if (root / 'bin/cubitx.exe').is_file():
+        return root / 'plugins'
+    return root / 'bin/plugins'
+
+
+def console_executable(bin_dir: Path) -> Path | None:
+    """Cubit's headless console executable under ``bin_dir``, or None."""
+    for name in ('cubitx.exe', 'coreform_cubit.com', 'coreform_cubit', 'cubit'):
+        candidate = Path(bin_dir) / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+COMMAND_PLUGIN = 'cubit_mesh_export.dll'
+
+
+def command_plugin_path(install_dir: Path) -> Path:
+    """Where the installer deploys the ``export netgen`` command plugin."""
+    return plugin_directory(install_dir) / COMMAND_PLUGIN
+
+
 def runtime_environment(bin_dir: Path) -> dict[str, str]:
     """Process environment for Cubit's bundled Python (ACIS DLLs on PATH)."""
     env = os.environ.copy()

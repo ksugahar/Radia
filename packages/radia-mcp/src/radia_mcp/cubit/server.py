@@ -39,6 +39,9 @@ from radia_mcp.cubit.knowledge.netgen_workflow import get_netgen_documentation
 from radia_mcp.cubit.knowledge.scripting import get_cubit_documentation
 from radia_mcp.cubit.forum_tips import get_forum_tips
 from radia_mcp.cubit.api_reference import get_api_reference
+from radia_mcp.cubit.knowledge.panel_conventions import PANEL_CONVENTIONS, LABEL_GUIDE
+from radia_mcp.cubit.knowledge.custom_toolbar import get_toolbar_documentation, generate_toolbar_skeleton, generate_dialog_skeleton
+from radia_mcp.cubit.knowledge.cpp_sdk import get_cpp_sdk_documentation
 from radia_mcp.cubit.knowledge.mesh_diagnostics import get_diagnostics_documentation
 from radia_mcp.cubit.knowledge.license import get_license_documentation
 from radia_mcp.cubit.knowledge.format_routing import get_format_routing_documentation
@@ -571,6 +574,7 @@ def cubit_docs(topic: str = "all") -> str:
 	        "scripting_initialization" - Cubit Python init boilerplate
 	        "scripting_mixed_elements" - Mixed element types and warnings
 	        "scripting_common_mistakes" - Frequent Cubit API pitfalls
+	        "scripting_command_forms"   - Rotate/reflect/scale/webcut/sideset command forms
 	        "scripting_hex_workflow"    - Hexahedral mesh generation
 	        "scripting_tet_workflow"    - Tetrahedral mesh generation
 	        "scripting_2d_mesh"         - 2D surface meshing and export
@@ -586,6 +590,17 @@ def cubit_docs(topic: str = "all") -> str:
 	        "api_entity_classes"     - Volume, Surface, Curve, Vertex
 	        "api_graphics_selection" - Graphics control, selection
 	        "api_advanced"           - Merge detection, geometry analysis
+	        --- Optional Radia solver handoff ---
+	        "panel_conventions"      - Simulink/application mesh-label handoff
+	        "panel_labels"           - Label guide (blocks/sidesets -> .vol -> NGSolve)
+	        --- Custom GUI extension paths (Python vs C++) ---
+	        "cpp_sdk_*"              - C++ SDK plugin path (advanced).
+	                                   Subtopics: overview, prerequisites,
+	                                   install_and_load, components_example,
+	                                   custom_commands, troubleshooting,
+	                                   command_plugin, command_plugin_templates.
+	                                   For the Python path see the dedicated
+	                                   `cubit_toolbar_guide` tool.
 	        --- Cubit license (multi-user lab) ---
 	        "license_per_user"       - Each user activates Cubit through the official UI
 	                                   in their own Windows account.
@@ -609,7 +624,9 @@ def cubit_docs(topic: str = "all") -> str:
 			"Use topic prefixes to navigate:\n"
 			"- `export_*` - Export format documentation (netgen, exodus, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
-			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n\n"
+			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
+			"- `panel_*` - optional Radia solver handoff conventions\n"
+			"- `cpp_sdk_*` - C++ SDK plugin path (Python toolbar: `cubit_toolbar_guide`)\n\n"
 			+ get_export_documentation("overview")
 		)
 
@@ -624,6 +641,19 @@ def cubit_docs(topic: str = "all") -> str:
 	# API topics: strip prefix
 	if topic.startswith("api_"):
 		return get_api_reference(topic[4:])  # remove "api_"
+
+	# Panel topics
+	if topic == "panel_conventions":
+		return PANEL_CONVENTIONS
+	if topic == "panel_labels":
+		return LABEL_GUIDE
+
+	# C++ SDK plugin topics: strip the prefix and dispatch to the cpp_sdk
+	# knowledge module, which owns its own subtopic alias map.
+	if topic.startswith("cpp_sdk_"):
+		return get_cpp_sdk_documentation(topic[len("cpp_sdk_"):])
+	if topic == "cpp_sdk":
+		return get_cpp_sdk_documentation("overview")
 
 	# License topics use canonical names only; retired authentication aliases
 	# must not become compatibility routes.
@@ -661,8 +691,9 @@ def cubit_docs(topic: str = "all") -> str:
 		return result
 
 	return (
-		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
-		f"Examples: export_overview, scripting_blocks, api_core"
+		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*, "
+		f"panel_*, cpp_sdk_*. "
+		f"Examples: export_overview, scripting_blocks, api_core, cpp_sdk_overview"
 	)
 
 
@@ -5297,6 +5328,273 @@ def cubit_element_types_reference() -> str:
 
 
 # ============================================================
+# Custom Toolbar / In-Cubit PySide6 (Coreform 2025 GUI webinar)
+# ============================================================
+
+@mcp.tool()
+def cubit_toolbar_guide(topic: str = "overview") -> str:
+	"""
+	Get documentation on building custom in-Cubit PySide6 toolbars.
+
+	Covers the Coreform 2025 custom-toolbar workflow: Python script
+	conventions (shebang, namespace, import gotchas), the Claro parent
+	helper, LLM prompt templates for generating dialogs, packaging as
+	.tar.gz, encapsulation patterns (tire cross-section example), and
+	quality convergence loops.
+
+	This is DIFFERENT from the Radia Simulink application handoff, which
+	runs outside Cubit in its own processes. For that, use
+	`cubit_docs topic=panel_conventions`.
+
+	Args:
+		topic: Topic to document. Options:
+			"all"                    - All sections
+			"overview"               - When to use, entry points, button types
+			"python_conventions"     - Shebang, _coreform_cubit namespace,
+			                           import parens gotcha, cubit.cmd idioms
+			"claro"                  - find_claro() parent-window helper
+			"llm_prompt"             - LLM prompt template for dialogs
+			"packaging"              - .tar.gz layout + Cubit import
+			"encapsulation"          - Multi-step workflow -> one button
+			                           (tire cross-section case study)
+			"quality_convergence"    - Mesh -> query quality -> refine loop
+			"troubleshooting"        - Common failure modes
+			"menu_bar"               - One module-owned menu-bar QAction:
+			                           deferred attach, generation guard,
+			                           removal on aboutToQuit
+			"external_jobs"          - Long-running work in an external
+			                           interpreter (-I -B), JSON job files,
+			                           QTimer polling
+
+	Aliases: import_gotcha, find_claro, prompt_template, tar_gz,
+	         tire_example, auto_refine, debug, menu, async_subprocess.
+	"""
+	return get_toolbar_documentation(topic)
+
+
+@mcp.tool()
+def cubit_cpp_sdk_guide(topic: str = "overview") -> str:
+	"""
+	Get documentation on building Cubit C++ SDK plugins.
+
+	Covers the Coreform 2026 "Advanced customization" webinar workflow:
+	when to reach for the C++ SDK instead of the Python toolbar path,
+	CMake + Qt6 + MSVC/GCC prerequisites, the SDK ``components`` example
+	(Claro main-window handle, menu_manager, toolbar_manager, panel
+	factory, navigation-node tree), how to register new command-line
+	verbs that integrate with Cubit's command parser, and Tools->Plugins
+	loading semantics (folder-not-DLL + mandatory restart).
+
+	This is DIFFERENT from two adjacent topics:
+	  * `cubit_toolbar_guide` -- the in-process Python / PySide6 path.
+	    Prefer that whenever it suffices.
+	  * `cubit_docs topic=panel_conventions` -- the Radia Simulink
+	    application handoff outside Cubit (unrelated to the SDK).
+
+	Args:
+		topic: Topic to document.  Options:
+			"all"               - All sections
+			"overview"          - When the SDK is the right choice
+			"prerequisites"     - CMake / Qt6 / MSVC / GCC versions
+			"install_and_load"  - Tools->Plugins folder + restart
+			"components_example"- SDK components/ anatomy, Claro, menu/
+			                      toolbar/panel managers, factory pattern
+			"custom_commands"   - Register new command verbs + hotkeys
+			"troubleshooting"   - Debug/Release mismatch, MOC/UIC,
+			                      hotkey gotchas
+			"command_plugin"    - Packaged skill: verified recipe for a
+			                      native command plugin (API, build,
+			                      loading, headless smoke, shipping)
+			"command_plugin_templates" - The skill's template sources
+
+	Aliases: cmake, qt6, build, load, restart, claro, menu, toolbar,
+	         panel, navigation_nodes, hotkey, shortcut, moc, uic,
+	         crash, debug.
+
+	Source: https://www.youtube.com/watch?v=u7GIqTKId98
+	        ("Advanced customization in Coreform Cubit using the C++
+	        SDK", Carl McKelvey).
+	"""
+	return get_cpp_sdk_documentation(topic)
+
+
+@mcp.tool()
+def cubit_scaffold_command_plugin(out_dir: str, name: str = "my_cubit_plugin") -> str:
+	"""
+	Copy the verified Cubit C++ command-plugin template to a new directory.
+
+	Writes <out_dir>/<name>/ with SKILL.md, CMakeLists.txt, a plugin class,
+	two example commands (`myplugin hello`, `export nodecount`),
+	utf8_path.hpp, build.ps1 (Release, pinned MSVC toolset) and smoke.ps1
+	(stages the DLL into a disposable headless Cubit and runs both verbs).
+	The template builds and passes smoke.ps1 on Coreform Cubit 2026.8.
+	Read `cubit_cpp_sdk_guide topic=command_plugin` for the recipe.
+
+	Args:
+		out_dir: Existing parent directory.
+		name: New directory name (letters, digits, '_' or '-'); must not exist.
+
+	Returns:
+		The written files and the next commands to run.
+	"""
+	from radia_mcp.cubit.knowledge.command_plugin_skill import scaffold_command_plugin
+
+	if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name or ""):
+		return "ERROR: name must be 1-64 letters, digits, '_' or '-'"
+	if not out_dir:
+		return "ERROR: out_dir is required"
+	parent = Path(out_dir).expanduser().resolve()
+	if not parent.is_dir():
+		return f"ERROR: out_dir does not exist: {parent}"
+	try:
+		written = scaffold_command_plugin(parent / name)
+	except (FileExistsError, FileNotFoundError) as exc:
+		return f"ERROR: {exc}"
+	target = parent / name
+	return (
+		f"Command-plugin template written to: {target}\n\nFiles:\n"
+		+ "\n".join(f"  {p}" for p in written)
+		+ "\n\nNext steps:\n"
+		"  1. Rename MyPlugin / the verbs / my_cubit_plugin (see SKILL.md)\n"
+		f"  2. pwsh -File \"{target / 'build.ps1'}\"\n"
+		f"  3. pwsh -File \"{target / 'smoke.ps1'}\"\n"
+	)
+
+
+@mcp.tool()
+def cubit_scaffold_toolbar(toolbar_name: str, buttons_json: str,
+                            out_dir: str = "") -> str:
+	"""
+	Generate a complete Coreform-Cubit custom-toolbar skeleton on disk.
+
+	Writes:
+		<out_dir>/<toolbar_name>/
+			toolbar.xml                  - Toolbar definition (buttons, icons)
+			scripts/cubit_util.py        - Shared find_claro() helper
+			scripts/<button>.py or .jou  - One per button
+			resources/icons/             - Place button PNGs here
+			package-win.ps1              - Windows packaging -> .tgz
+			package-linux.sh             - Linux packaging -> .tgz
+			README.md                    - Layout + install instructions
+
+	All Python scripts include the correct `#!python` shebang,
+	`_coreform_cubit` namespace guard, `find_claro()` parent lookup, and
+	backslash-continuation imports (avoiding the Cubit importer
+	parenthesis bug).
+
+	Args:
+		toolbar_name: Name of the toolbar, e.g. "radia_ih_helpers". Used
+		    as the directory name and toolbar namespace inside Cubit.
+		buttons_json: JSON array of button specs. Each element:
+		    {
+		      "label": "Clean + Mesh",          # required, shown in UI
+		      "kind": "python" | "cubit_script", # default "python"
+		      "script_basename": "clean_and_mesh", # default "button"
+		      "body": "cubit.cmd('...')"         # initial script body
+		    }
+		out_dir: Parent directory to write into. Defaults to the current
+		    working directory. Must exist. The scaffolder creates
+		    `<out_dir>/<toolbar_name>/`.
+
+	Returns:
+		Summary of files written, with absolute paths.
+	"""
+	try:
+		buttons = json.loads(buttons_json) if buttons_json else []
+	except json.JSONDecodeError as exc:
+		return f"ERROR: buttons_json is not valid JSON: {exc}"
+	if not isinstance(buttons, list):
+		return "ERROR: buttons_json must be a JSON array"
+
+	parent = Path(out_dir).expanduser().resolve() if out_dir else Path.cwd()
+	if not parent.exists():
+		return f"ERROR: out_dir does not exist: {parent}"
+
+	try:
+		files = generate_toolbar_skeleton(toolbar_name, buttons)
+	except Exception as exc:
+		return f"ERROR: skeleton generation failed: {type(exc).__name__}: {exc}"
+	target = parent / toolbar_name
+	if target.exists():
+		return f"ERROR: refusing to overwrite an existing toolbar: {target}"
+
+	target.mkdir(exist_ok=False)
+	(target / "scripts").mkdir(exist_ok=True)
+	(target / "resources" / "icons").mkdir(parents=True, exist_ok=True)
+
+	written = []
+	for rel, content in files.items():
+		full = target / rel
+		full.parent.mkdir(parents=True, exist_ok=True)
+		full.write_text(content, encoding='utf-8')
+		written.append(str(full))
+
+	return (
+		f"Toolbar scaffold written to: {target}\n\n"
+		"Files:\n"
+		+ "\n".join(f"  {p}" for p in written)
+		+ "\n\nNext steps:\n"
+		f"  1. Add button icons under {target / 'resources' / 'icons'}\n"
+		f"  2. Flesh out the script bodies under {target / 'scripts'}\n"
+		f"  3. Package:  pwsh {target / 'package-win.ps1'}\n"
+		f"              (or:  bash {target / 'package-linux.sh'})\n"
+		f"  4. Open Cubit -> right-click toolbar panel -> Import "
+		f"{toolbar_name}.tgz\n"
+	)
+
+
+@mcp.tool()
+def cubit_generate_dialog(title: str, fields_json: str,
+                           commands_json: str) -> str:
+	"""
+	Generate a single complete PySide6 dialog script for a Cubit toolbar
+	button.
+
+	The returned script follows every Cubit in-process Python
+	convention: `#!python` shebang, no `import cubit`,
+	`_coreform_cubit` namespace guard, `find_claro()` parent lookup,
+	backslash-continuation imports, try/except around float conversion,
+	and QMessageBox error UX. Paste the output directly into a custom
+	toolbar Python-button or save it under `scripts/` in a toolbar
+	scaffold.
+
+	Args:
+		title: Dialog window title, e.g. "Create Parameterized Brick".
+		fields_json: JSON array of field specs. Each:
+		    {
+		      "name": "size",       # attribute name (-> self.size_edit)
+		      "label": "Brick size", # label shown next to QLineEdit
+		      "default": "1.0",     # default text in the edit
+		      "kind": "float"       # "float" | "int" | "text"
+		    }
+		commands_json: JSON array of Cubit command strings. Each may use
+		    `{<field_name>}` placeholders that are f-string substituted
+		    at runtime. Example:
+		      ["create brick x {size}",
+		       "create cylinder radius {radius} height {size}",
+		       "subtract volume 2 from volume 1"]
+
+	Returns:
+		Complete Python script as a string, ready to paste into Cubit.
+	"""
+	try:
+		fields = json.loads(fields_json) if fields_json else []
+		commands = json.loads(commands_json) if commands_json else []
+	except json.JSONDecodeError as exc:
+		return f"ERROR: JSON parse error: {exc}"
+	if not isinstance(fields, list):
+		return "ERROR: fields_json must be a JSON array"
+	if not isinstance(commands, list):
+		return "ERROR: commands_json must be a JSON array"
+
+	try:
+		script = generate_dialog_skeleton(title, fields, commands)
+	except Exception as exc:
+		return f"ERROR: dialog generation failed: {type(exc).__name__}: {exc}"
+	return script
+
+
+# ============================================================
 # Mesh Diagnostics (Coreform 2025 "first 15 minutes" webinar)
 # ============================================================
 
@@ -5437,6 +5735,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_export_vol",
+	"cubit_scaffold_toolbar", "cubit_scaffold_command_plugin",
 	"cubit_session_journal", "cubit_validation_run",
 	"cubit_probe", "cubit_mesh_diagnose", "cubit_suggest_next",
 }

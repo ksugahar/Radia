@@ -167,7 +167,7 @@ crashes the NEXT import otherwise). Result: a facet geometry you can still add s
 
 ### Packaging scripts for reuse
 - **Custom toolbar button** (Tools -> Custom Toolbar Editor): add a script button (icon
-  optional) pointing at a `.py`; clicking runs it. (The retired `custom_toolbar` knowledge.)
+  optional) pointing at a `.py`; clicking runs it. (Details: `cubit_toolbar_guide`.)
 - **Custom command panel:** build the UI in Qt Designer, wire via XML, adapt the script
   into an "apply" routine (docs: Customizing the User Experience -> Adding Command Panels).
 

@@ -121,7 +121,17 @@ where = ["src"]
 "radia_mcp.ih" = ["prompts/*.md"]
 "radia_mcp.peec" = ["prompts/*.md"]
 "radia_mcp.onshape" = ["knowledge/*.md"]
-"radia_mcp.cubit" = ["README.md"]
+"radia_mcp.cubit" = [
+    "README.md",
+    "skills/cubit-command-plugin/SKILL.md",
+    "skills/cubit-command-plugin/templates/*",
+]
+"radia_mcp.cubit.gui" = [
+    "solver_ready_sample.jou",
+    "cubit_toolbar/icons/*.svg",
+    "cubit_toolbar/scripts/*.py",
+    "cubit_toolbar/toolbars/*.ttb.tmpl",
+]
 "radia_mcp.matlab" = [
     "skill.md",
     "extensions/*.json",

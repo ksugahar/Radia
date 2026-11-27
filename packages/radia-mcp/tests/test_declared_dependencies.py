@@ -28,6 +28,9 @@ PROVIDED_BY = {
     # Cubit-embedded runtime: the daemon runs under Cubit's bundled Python and
     # imports its sibling files by path, so these are not distributions.
     "cubit": None, "probe_ops": None, "label_audit": None,
+    # The Cubit menu runs in Cubit's embedded Python, which ships PySide6;
+    # register_toolbar imports its sibling cubit_export_menu by path.
+    "PySide6": None, "cubit_export_menu": None,
 }
 
 

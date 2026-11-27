@@ -2716,6 +2716,21 @@ webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
 
 This creates separate thin volumes at the boundary that can be independently
 meshed with high resolution.
+
+## Prism-only layers on every wall of a volume (Cubit 2026.8, tetmesh)
+
+- Put all wall surfaces of the volume in ONE boundary layer and set `continuity on`.
+  Every junction then becomes a `side` type and the result is wedges and tets only.
+- With the automatic types (`continuity off`): three layered walls meeting at a box corner fail with
+  "Boundary layer on surface N is invalid"; two adjacent walls put hexes in the corner; an `end` type
+  where a plane meets a cylinder also gives hexes.
+- Two boundary layers in one volume leave hexes where they meet, so one thickness per wall is not
+  possible without hexes. Use one uniform height per volume, taken from the finest wall it touches.
+- A total layer thickness about the mesh size can fail where a plane meets a cylindrical hole (edges
+  intersect near the layer top). Halve the first height, retry, and record the thickness used.
+- A block holding tets and wedges is exported as one Exodus block per element type.
+- A surface shared by a fine and a coarse volume is meshed at the coarse size once layers are on:
+  set `surface <id> size <finer size>` on every such shared surface.
 """
 
 CUBIT_RESULTS_VISUALIZATION = """\
@@ -3762,6 +3777,29 @@ captured `air_id` points at the wrong (un-carved) volume.
 """
 
 
+CUBIT_COMMAND_FORMS = """# Cubit command forms that are easy to get wrong (Cubit 2026.8)
+
+- Rotation about a point: `rotate body N angle a about origin x y z direction dx dy dz`.
+  Without `origin ...` the rotation is about the global origin.
+- Mirror: `body N reflect origin x y z direction dx dy dz` (not `reflect body N ...`).
+- Anisotropic scale: `body N scale x sx y sy z sz` (ellipsoid = sphere of radius a, then scale y b/a, z c/a).
+- Plane cut: `webcut body N with general plane location x y z direction dx dy dz`.
+  `webcut ... with plane location ...` is accepted but cuts nothing: check the body count afterwards.
+- Regular polygon prism/pyramid: `create prism height h sides n radius r`,
+  `create pyramid height h sides n radius r top r2`; cone/frustum: `create frustum height h radius r top r2`.
+- Intersect of sheet bodies may keep the tool's id: read the surviving id from the body list.
+- Sweep of a surface: `sweep surface s direction dx dy dz distance L`; about an axis add `angle`.
+- A boolean can return several disconnected pieces: `split body N` and give each piece its own block.
+- Imported CAD keeps its construction ids only by accident: after imprint/merge, find faces by bounding
+  box and area, not by id. A sheet body that does not lie on a solid face cannot become a side set.
+- Side sets on a merged interface: `sideset N surface <ids> wrt volume <volume>` says which side owns
+  the faces. Without `wrt`, Cubit picks a side, which may not be the one the solver reads.
+- Edge loads and constraints: side sets carry faces only. Use `nodeset N curve <ids>`; imprinting may
+  split a CAD edge, so the curve lengths must add up to the edge length.
+- Learn/Student edition (2026.8, observed): Parasolid x_t import is not licensed, and export is refused
+  above about 50k elements, surface triangles included.
+"""
+
 def get_cubit_documentation(topic: str = "all") -> str:
 	"""Return Cubit scripting documentation by topic."""
 	topics = {
@@ -3778,6 +3816,7 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"initialization": CUBIT_INITIALIZATION,
 		"mixed_elements": CUBIT_MIXED_ELEMENTS,
 		"common_mistakes": CUBIT_COMMON_MISTAKES,
+		"command_forms": CUBIT_COMMAND_FORMS,
 		"hex_workflow": CUBIT_HEX_WORKFLOW,
 		"tet_workflow": CUBIT_TET_WORKFLOW,
 		"2d_mesh": CUBIT_2D_MESH_WORKFLOW,

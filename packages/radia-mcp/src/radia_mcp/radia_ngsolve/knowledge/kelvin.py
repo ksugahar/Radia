@@ -534,12 +534,11 @@ centroid mu sampling, Curve(2) trade-off).
 confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
 correct.
 
-**Helper function** (canonical:
-`cubit_mesh_export.cubit_helpers.add_kelvin (standalone exporter)`;
-back-compat shim at `src/radia/panels/add_kelvin.py`):
+**Helper function** (`radia_mcp.cubit.kelvin`, the single home of the
+Kelvin helpers):
 
 ```python
-from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_2d_axisym
+from radia_mcp.cubit.kelvin import add_kelvin_2d_axisym
 # interior_shape: your 2D OCC face on x>=0 with outer arc named "kelvin_int"
 shape, info = add_kelvin_2d_axisym(interior_shape, R=0.10, z_offset=0.25)
 # info['axis_labels']  -> "axis|axis_ext" (pass to H1 dirichlet=...)

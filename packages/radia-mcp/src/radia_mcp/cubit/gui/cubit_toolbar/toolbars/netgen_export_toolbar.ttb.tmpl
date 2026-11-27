@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WorkflowToolbar version="1.0" name="Netgen Export" visible="true">
+  <description>High-order mesh export tools for Coreform Cubit.</description>
+  <WTButton visible="true">
+    <WPythonScriptAction>
+      <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_netgen.py</filename>
+      <UIfilename></UIfilename>
+      <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
+      <WAction name="Export Netgen (.vol)...">
+        <icon>@TOOLBAR_INSTALL_DIR@/icons/netgen_export.svg</icon>
+        <description>Export a checked curved Netgen .vol mesh.</description>
+      </WAction>
+    </WPythonScriptAction>
+  </WTButton>
+</WorkflowToolbar>

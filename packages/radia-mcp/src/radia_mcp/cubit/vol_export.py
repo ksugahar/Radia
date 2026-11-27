@@ -28,7 +28,7 @@ import time
 import traceback
 from pathlib import Path
 
-PLUGIN_DLL = "cubit_mesh_export.dll"
+PLUGIN_DLL = "cubit_mesh_export.dll"  # same name as layout.COMMAND_PLUGIN
 PERIODIC_FIELDS = ("periodic_name", "periodic_master", "periodic_slave", "periodic_unit",
                    "periodic_patches", "periodic_tx", "periodic_ty", "periodic_tz", "periodic_match")
 _PERIODIC_TEXT = {"periodic_name", "periodic_master", "periodic_slave", "periodic_unit", "periodic_patches"}
