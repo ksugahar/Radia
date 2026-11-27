@@ -2506,20 +2506,17 @@ The 1/8 variant (`{"x":"bn=0","y":"bn=0","z":"ht=0"}`, offset along
 x) is intentionally NOT shipped: the kelvin_far Dirichlet plane
 passes through r' = 0 (Kelvin centre), where the reluctivity
 Mu = mu0*(R/r')^2 is singular, and the linear solve gives Hz ~ 0
-(~-101% error) instead of analytical.  The build script
-`panels/samples/kelvin_benchmark_sphere_1_8_build.py` is kept for
-research; the .vol is omitted until the singularity is fixed.
+(~-101% error) instead of analytical; the .vol is omitted until
+the singularity is fixed.
 
-Build scripts:
-- `panels/samples/kelvin_benchmark_sphere_1_2_build.py` (thin wrapper)
-- `panels/samples/kelvin_benchmark_sphere_1_4_build.py` (thin wrapper)
-- `panels/samples/kelvin_benchmark_sphere_1_8_build.py` (research-only)
-- `panels/samples/kelvin_benchmark_sphere_build.py` (parameterised core,
-  `--frac 1_2|1_4|1_8`)
+The former build scripts (`panels/samples/kelvin_benchmark_sphere_*build.py`)
+were removed: they imported the retired standalone `add_kelvin` helper.
+The maintained Cubit build of the 1/4 case is
+`validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py`
+(radia_mcp.cubit.kelvin.add_kelvin_cubit + the Radia Cubit plugin;
+mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m).
 
-All four scripts mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m.
-
-## Two non-obvious Cubit fixes embedded in the build core
+## Two non-obvious Cubit fixes found while building these samples
 
 1. `subtract A from B keep` does NOT carve B in Cubit 2025.3.
    Workaround: drop `keep`, then re-create A as a fresh primitive.

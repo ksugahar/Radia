@@ -871,10 +871,8 @@ multi-hour debug trail (rho_min sweep + h-refinement both
 disproved numerical-issue hypotheses) before the BVP-symmetry
 realisation landed.
 
-The build script `panels/samples/kelvin_benchmark_sphere_1_8_build.py`
-exists for parameterised-core completeness (`--frac 1_2|1_4|1_8`)
-but the resulting `.vol` is intentionally NOT in the wheel and
-NOT in `panels/samples/`.
+No 1/8 `.vol` is shipped in the wheel or in `panels/samples/`.
+`radia_mcp.cubit.kelvin.add_kelvin_occ` refuses 1/8 for the same reason.
 """
 
 
