@@ -337,3 +337,23 @@ def test_ring_centre_cells_get_one_even_eta_count():
     exact = R * 2 * np.pi * (R - np.sqrt(R * R - b * b))
     total = np.sum([s["section_flux_Wb"] for s in mesh.tubes], axis=0) / exact
     assert np.all(np.abs(total - 1) < 0.03), total
+
+
+def test_skewed_centre_sectors_settle_and_unequal_centre_xi_is_rejected():
+    """Guards: a centre cell far below the common even eta count gets its whole deficit in one
+    pass (three 0.01-wide sectors beside a 0.97 one used to exhaust the pass limit at m = 40),
+    and collapsed centre cells with different outer xi fail loudly instead of oscillating."""
+    from radia.flux_tube_mesh import _Canon, _conforming_lattice
+
+    def lattice(cells, m):
+        key = _Canon()
+        c = np.array([[key(v) for v in row] for row in cells])
+        return _conforming_lattice(c, m, True, True, max(1, m // 2), None, (), key)
+
+    skewed = [[0, .4, 0, .01], [0, .4, .01, .02], [0, .4, .02, .03], [0, .4, .03, 1],
+              [.4, 1, 0, .25], [.4, 1, .25, .5], [.4, 1, .5, .75], [.4, 1, .75, 1]]
+    _, Y, _ = lattice(skewed, 40)
+    counts = {len(Y[i]) - 1 for i in range(4)}
+    assert len(counts) == 1 and next(iter(counts)) % 2 == 0, counts
+    with pytest.raises(ValueError, match="share one outer xi"):
+        lattice([[0, .4, 0, .5], [0, .6, .5, 1], [.4, 1, 0, .5], [.6, 1, .5, 1]], 4)

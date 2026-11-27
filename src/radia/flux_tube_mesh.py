@@ -124,6 +124,10 @@ def _conforming_lattice(cells, m, periodic_eta, collapsed_xi0, b_split, grading,
         return None
 
     n = len(cells)
+    centre = [i for i in range(n) if collapsed_xi0 and abs(cells[i][0]) < EPS]
+    if len({cells[i][1] for i in centre}) > 1:
+        raise ValueError("collapsed centre cells must share one outer xi; got "
+                         f"{sorted({float(cells[i][1]) for i in centre})}")
     for _ in range(100):
         changed = False
         for i in range(n):
@@ -145,17 +149,20 @@ def _conforming_lattice(cells, m, periodic_eta, collapsed_xi0, b_split, grading,
                     if add:
                         Y[i] |= add
                         changed = True
-        centre = [i for i in range(n) if collapsed_xi0 and abs(cells[i][0]) < EPS]
         if centre:
-            # Collapsed cells share their xi nodes, so they need one even eta count: halve the
-            # longest segment of every cell below the largest even count.
+            # Collapsed cells share their xi nodes, so they need one even eta count: fill each
+            # cell's whole deficit to the largest even count by halving its longest segment.
             target = max(len(Y[i]) - 1 for i in centre)
             target += target % 2
             for i in centre:
-                if len(Y[i]) - 1 < target:
+                while len(Y[i]) - 1 < target:
                     ys = np.array(sorted(Y[i]))
                     k = int(np.argmax(np.diff(ys)))
+                    before = len(Y[i])
                     Y[i].add(key(0.5 * (ys[k] + ys[k + 1])))
+                    if len(Y[i]) == before:
+                        raise RuntimeError(f"collapsed cell {i}: eta segment [{ys[k]}, {ys[k + 1]}] "
+                                           "is too short to split")
                     changed = True
         for i in centre:
             ny = len(Y[i]) - 1
@@ -181,7 +188,8 @@ def _conforming_lattice(cells, m, periodic_eta, collapsed_xi0, b_split, grading,
                                        "segments; a 2:1 layer needs an even coarse count")
                 YF[i] = f
             return [np.array(sorted(x)) for x in X], [np.array(sorted(y)) for y in Y], YF
-    raise RuntimeError("the seed lattice did not settle")
+    raise RuntimeError("the seed lattice did not settle in 100 passes; eta counts "
+                       f"{[len(y) - 1 for y in Y]}")
 
 
 def _merge_points(points, tol):
