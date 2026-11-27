@@ -2,9 +2,10 @@
 
 Plays sphere_p_convergence.jou through Cubit's Python API (batch,
 nographics) with the Radia command plugin loaded the same way as the
-production export worker, in a child process, then checks each exported .vol with radia.vol_check (labels,
-curved-map quality, finite measures). Exit 1 on any missing file or failed
-check.
+production export worker, in a child process, then checks each exported
+.vol with radia.vol_check (labels, curved-map quality, CAD gate against the
+companion .vol.json written by the same export). Exit 1 on any missing or
+stale file, failed check, unevaluated CAD measure or nonfinite error.
 
 Usage:
     python run_test.py --command-plugin-dir <dir with radia_cubit_export.dll> [--cubit-bin <Cubit bin dir>]
@@ -52,11 +53,15 @@ def play_journal(cubit_bin, plugin_dir, journal):
     return 0
 
 
+def _finite(value):
+    return isinstance(value, (int, float)) and math.isfinite(value)
+
+
 def exact_volume_error(vol, order):
     """Relative sphere-volume error with quadrature exact for the order-p map.
 
-    The geometry Jacobian of an order-p tetrahedron has degree 3(p-1); vol_check's
-    CAD gate integrates at NGSolve's default order, which is not exact for p >= 3.
+    The geometry Jacobian of a polynomial order-p tetrahedron has degree 3(p-1),
+    so order 3p integrates it exactly; measured here independently of check-vol.
     """
     from ngsolve import CF, Integrate, Mesh, TaskManager
 
@@ -82,6 +87,9 @@ def main(argv=None):
     run_jou.write_text(journal.replace("{DIR}", args.out.as_posix()), encoding="utf-8")
     for order in range(1, 6):
         (args.out / f"sphere_o{order}.vol").unlink(missing_ok=True)
+        (args.out / f"sphere_o{order}.vol.json").unlink(missing_ok=True)
+    # Both outputs of every order were deleted above (unlink raises if it cannot),
+    # so a file present after playback was written by this run.
     run = subprocess.run(
         [sys.executable, str(Path(__file__).resolve()), "--cubit-bin", str(cubit_bin),
          "--command-plugin-dir", str(plugin_dir), "--out", str(args.out), "--play", str(run_jou)],
@@ -90,11 +98,13 @@ def main(argv=None):
     rows = []
     for order in range(1, 6):
         vol = args.out / f"sphere_o{order}.vol"
-        if not vol.is_file():
-            rows.append({"order": order, "passed": False, "error": "not created"})
+        companion = Path(str(vol) + ".json")
+        missing = [p.name for p in (vol, companion) if not p.is_file()]
+        if missing:
+            rows.append({"order": order, "passed": False, "error": f"not written by this run: {missing}"})
             continue
         check = subprocess.run(
-            [sys.executable, "-m", "radia.vol_check", str(vol), "--strict-labels",
+            [sys.executable, "-m", "radia.vol_check", str(vol), "--json", str(companion), "--strict-labels",
              "--required-materials", "sphere", "--required-boundaries", "surface",
              "--integration-order", str(max(4, 2 * order + 2)),
              "--threshold", str(LINEAR_THRESHOLD_PCT if order == 1 else CURVED_THRESHOLD_PCT),
@@ -102,13 +112,21 @@ def main(argv=None):
             capture_output=True, text=True)
         report = json.loads(check.stdout) if check.stdout.strip().startswith("{") else {}
         material = next((m for m in report.get("materials", []) if m.get("name") == "sphere"), {})
-        rows.append({"order": order, "passed": check.returncode == 0 and report.get("passed") is True,
+        surface = next((b for b in report.get("boundaries", []) if b.get("name") == "surface"), {})
+        cad_errors = [material.get("error_pct"), surface.get("error_pct")]
+        cad_evaluated = (report.get("cad_reference", {}).get("available") is True
+                         and all(_finite(e) for e in cad_errors))
+        volume_error = exact_volume_error(vol, order)
+        rows.append({"order": order,
+                     "passed": (check.returncode == 0 and report.get("passed") is True
+                                and cad_evaluated and _finite(volume_error)),
                      "n_elements": report.get("n_elements"), "ng_volume": material.get("ng_volume"),
-                     "volume_error": exact_volume_error(vol, order)})
+                     "cad_volume_error_pct": cad_errors[0], "cad_area_error_pct": cad_errors[1],
+                     "volume_error": volume_error})
     for row in rows:
         print(json.dumps(row))
     failed = [row["order"] for row in rows if not row["passed"]]
-    errors = [abs(row["volume_error"]) for row in rows if row.get("volume_error") is not None]
+    errors = [abs(row["volume_error"]) for row in rows if _finite(row.get("volume_error"))]
     if len(errors) != 5 or any(later >= earlier for earlier, later in zip(errors, errors[1:])):
         failed.append("volume error not strictly decreasing with order")
     print(f"cubit exit {run.returncode}; failed orders: {failed or 'none'}")
