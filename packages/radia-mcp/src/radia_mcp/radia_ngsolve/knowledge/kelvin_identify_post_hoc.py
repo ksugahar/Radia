@@ -24,10 +24,14 @@ but **no `Identifications` section yet**, and you need to enable
 `Periodic(H1(mesh, ...))` to couple the two surfaces for the Kelvin
 open-boundary truncation.  Reaching this state typically means:
 
-  - The mesh came from the Cubit route (`add_kelvin_cubit()` +
-    `export netgen`): the exporter writes the `kelvin_int` / `kelvin_ext`
-    labels but no Kelvin identifications, so every Cubit Kelvin mesh
-    needs this step.
+  - The Cubit route normally does NOT need this: `export netgen` with
+    `kelvin_tx/ty/tz kelvin_match` writes the pairs itself.  The helper
+    stays the independent check of those pairs (same pairs on a stripped
+    copy) and the route for a `.vol` that has labels but no pairs.
+    `calc_fem_kelvin` / `calc_fem_coilmesh` call
+    `radia.kelvin_identify_ngsolve.ensure_kelvin_identification`, which
+    pairs such a flat mesh after load and refuses curved or partly
+    identified meshes.
   - The mesh came from somewhere outside the Cubit panel pipeline --
     a colleague's `.vol`, a hand-built OCC repro, or a Cubit Python
     script that did NOT call `add_kelvin_cubit()` (just exported

@@ -38,6 +38,25 @@ python validation_test/induction_heating/generate_ih_operator_physics_results.py
 The generator owns `ih_operator_physics_results.json`; do not edit its
 numerical values by hand.
 
+Rerun record (2026-11-27, regenerated on NGSolve 6.2.2608 and radia 5.4.6;
+previous record NGSolve 6.2.2607, radia native 5.1.0). Thresholds unchanged,
+PASS. Every difference is below its threshold by orders of magnitude:
+
+- Thermal entries (row-sum error, stiffness maximum and nullspace, mass):
+  cause identified. Netgen 6.2.2608 places one interior box node 2.1e-11 m
+  away from its 6.2.2607 position, and the summation order changes with it.
+  An A/B swap of element order and node coordinate selects the old bit
+  pattern by the coordinate alone; the remaining spread is run-to-run.
+- Electromagnetic power (and the thermal source power and
+  `relative_power_error` derived from it): 5.771847527664258e-06 W before,
+  5.771847527664283e-06 W now (25 ulp, 4.3e-15 relative). Cause not
+  identified. Twelve runs on both meshes and both swapped meshes stay within
+  5.771847527664280e-06 to 5.771847527664285e-06 W, so the mesh does not
+  explain the old value. The remaining candidates (radia native 5.1.0 vs
+  5.4.6, the old uncommitted source, the NGSolve runtime under the EM route)
+  cannot be separated, because radia native 5.1.0 is no longer available.
+  The new value is recorded as measured; no threshold was changed.
+
 ## Demoted Sample Legacy Fixtures
 
 `demoted_samples_legacy/` contains the old IH Cubit journals and Cubit-side

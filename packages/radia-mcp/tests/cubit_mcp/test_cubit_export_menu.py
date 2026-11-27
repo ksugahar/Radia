@@ -81,9 +81,11 @@ def test_verification_runs_radia_vol_check_isolated(menu):
                        "--format", "json", "--report-json", "o:/m.vol.check.json"], command
 
 
-def test_export_command_carries_no_kelvin_keywords(menu):
-    # The native plugin has no add_kelvin keyword: Kelvin runs before export.
+def test_export_command_carries_only_the_kelvin_pair_fields(menu):
+    # Kelvin is built before export; the export only gets the pair fields.
     assert menu.export_command("o:/m.vol", 3) == 'export netgen "o:/m.vol" order 3 overwrite'
+    fields = kelvin.export_arguments({"R": 0.3, "center": (0, 0, 0.6)})
+    assert menu.export_command("o:/m.vol", 2, fields) == f'export netgen "o:/m.vol" order 2 {fields} overwrite'
 
 
 @pytest.mark.parametrize("environment", [None, "python", "Z:/no/such/python.exe"])

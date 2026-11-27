@@ -131,6 +131,7 @@ int main(int argc, char **argv) {
   try {
     if (argc != 1) return q3_input_contract(argc, argv);
     named_periodic_contract_test();
+    kelvin_periodic_contract_test();
     Mesh mesh;
     const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4)).Nr1();
     const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4)).Nr1();

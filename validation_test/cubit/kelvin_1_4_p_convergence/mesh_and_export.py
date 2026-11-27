@@ -30,7 +30,7 @@ import os
 import sys
 from pathlib import Path
 
-from radia_mcp.cubit.kelvin import add_kelvin_cubit
+from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 cubit = None
@@ -168,7 +168,7 @@ def build_and_export(out_dir, orders=(1, 2, 3),
     cubit.cmd('block 2 name "air"')
 
     # === Step 7: Kelvin sphere via add_kelvin_cubit (1/4 reduction) ===
-    add_kelvin_cubit(
+    kelvin_info = add_kelvin_cubit(
         R=R_air, air_block="air",
         reduction={"x": "bn=0", "y": "bn=0"},
         offset_dir="z", offset_dist=3.0 * R_air,
@@ -181,7 +181,11 @@ def build_and_export(out_dir, orders=(1, 2, 3),
     for order in orders:
         out_path = os.path.join(out_dir, f"sphere_1_4_p{order}.vol").replace(
             "\\", "/")
-        cubit.cmd(f'export netgen "{out_path}" order {order} overwrite')
+        # The plugin writes the Kelvin pairs; it needs a fresh output path.
+        cubit.cmd(f'export netgen "{out_path}" order {order} '
+                  f'{export_arguments(kelvin_info)} overwrite')
+        if not os.path.isfile(out_path):
+            raise RuntimeError(f"export netgen wrote no file: {out_path}")
         saved.append(out_path)
         print(f"  Exported order={order}: {out_path}")
     return saved

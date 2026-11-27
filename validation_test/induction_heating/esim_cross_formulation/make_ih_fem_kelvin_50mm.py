@@ -32,7 +32,7 @@ import os
 
 import cubit
 
-from radia_mcp.cubit.kelvin import add_kelvin_cubit
+from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
 
 # `__file__` is undefined when this script is exec()'d by make_meshes.py
 # inside a single cubit.init session; RADIA_50MM_VOL_OUT then supplies
@@ -118,7 +118,10 @@ cubit.cmd('sideset 3 name "sibc"')
 info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 
 # === 11. Export ===
-cubit.cmd('export netgen "%s" order 1 overwrite' % OUT_VOL)
+# The plugin writes the Kelvin pairs and needs a fresh output path.
+cubit.cmd('export netgen "%s" order 1 %s overwrite' % (OUT_VOL, export_arguments(info)))
+if not os.path.isfile(OUT_VOL):
+    raise RuntimeError("export netgen wrote no file: %s" % OUT_VOL)
 
 print()
 print("make_ih_fem_kelvin_50mm.py: done")

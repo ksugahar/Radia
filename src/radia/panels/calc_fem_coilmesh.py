@@ -954,12 +954,18 @@ def main():
                         f"(materials = {mats}). The IH panel's FEM-full "
                         f"method requires a Kelvin-extended mesh: re-run "
                         f"the Cubit .jou with add_kelvin enabled."}
-            if probe_mesh.ngmesh.GetNrIdentifications() == 0:
+            # The solver uses the .vol pairs or pairs a flat mesh after
+            # load; probe the same rule here (in memory only).
+            from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+            try:
+                ensure_kelvin_identification(probe_mesh)
+            except ValueError as exc:
                 return {"error":
                         f"--require-kelvin: .vol has 'kelvin' material but "
-                        f"no periodic identifications. Ensure the .jou "
-                        f"sidesets kelvin_int / kelvin_ext are paired via "
-                        f"'copy mesh surface' in the Cubit script."}
+                        f"no usable Kelvin pairs: {exc}. Export it with the "
+                        f"Kelvin pairs (export netgen ... kelvin_tx/ty/tz "
+                        f"kelvin_match; radia_mcp.cubit.kelvin."
+                        f"export_arguments(info))."}
         if args.impedance_model == "esim" and not args.bh_file:
             return {
                 "error": "--impedance-model esim requires --bh-file "

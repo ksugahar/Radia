@@ -14,8 +14,8 @@ examples -> validation_test promotion target.  Runs:
   2. `solve_p_convergence.py` -- loads each .vol, runs the
      Omega-Reduced Omega + Kelvin solver, probes Hz at the origin.
      Asserts:
-       - the post-hoc Kelvin identification pairs every kelvin_int vertex
-         (unmatched = 0, max_dist < 1e-10 m) at each order
+       - each exported .vol carries the Kelvin pairs, equal to an independent
+         post-hoc pairing of its bare copy (unmatched = 0, max_dist < 1e-10 m)
        - Hz at p=1 within +/-10% of analytical
        - Hz at p=2 within +/-1.5% of analytical 3 / (mu_r + 2) * H0
        - Hz at p=3 within +/-1.0% of analytical
@@ -28,7 +28,6 @@ Cubit 2025.3's `subtract ... keep` bug.
 
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -62,8 +61,8 @@ def _run(script, args):
     return out.stdout
 
 
-PAIR_LINE = re.compile(
-    r"\[add_periodic_kelvin/manual\] (\d+) point pairs \(max_dist=([^,]+), unmatched=(\d+)")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import kelvin_pair_oracle  # noqa: E402
 
 
 class TestCubitKelvin14PConvergence(unittest.TestCase):
@@ -89,16 +88,20 @@ class TestCubitKelvin14PConvergence(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_mesh_machine_precision_pairing(self):
-        """Every order pairs all kelvin_int/kelvin_ext vertices at machine precision."""
-        # The exporter writes no Identifications for Kelvin; the solver adds
-        # them post hoc (radia.kelvin_identify_ngsolve) and logs one line per order.
-        found = PAIR_LINE.findall(self.solve_log)
-        self.assertEqual(len(found), 3, f"expected 3 pairing lines, got {found}")
-        for n, max_dist, unmatched in found:
-            self.assertGreater(int(n), 0, found)
-            self.assertEqual(int(unmatched), 0, f"unmatched Kelvin vertices: {found}")
-            self.assertLess(float(max_dist), 1e-10,
-                            f"Kelvin pairing not at machine precision: {found}")
+        """Every order's .vol carries the Kelvin pairs the post-hoc oracle finds."""
+        for order in (1, 2, 3):
+            vol = os.path.join(self.tmp.name, f"sphere_1_4_p{order}.vol")
+            info = kelvin_pair_oracle.compare(vol, self.tmp.name)
+            self.assertEqual(info["groups"], 1, info)
+            self.assertTrue(info["covers_kelvin"], info)
+            self.assertEqual(info["bare_groups_before_pairing"], 0, info)
+            self.assertEqual(info["posthoc_unmatched"], 0, info)
+            self.assertLess(info["posthoc_max_dist"], 1e-10, info)
+            self.assertGreater(info["exported_pairs"], 0, info)
+            self.assertEqual(info["exported_pairs"], info["posthoc_pairs"], info)
+            self.assertEqual(info["differing_pairs"], 0, info)
+            self.assertLess(max(abs(a - b) for a, b in zip(info["posthoc_offset"], (0.0, 0.0, 0.6))),
+                            1e-9, info)
 
     def test_solver_p_convergence_within_tolerance(self):
         """Hz at origin matches analytical within tolerance at p=1, 2 and 3."""

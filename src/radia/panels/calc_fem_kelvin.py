@@ -337,6 +337,7 @@ def solve_fem(vol_file="", fes_order=1,
     a_kelvin = 0.0
     mats_pre = mesh.GetMaterials()
     has_kelvin_periodic = False
+    kelvin_pairs_source = None
     if "kelvin" in mats_pre:
         kelvin_center = detect_kelvin_offset(mesh)
 
@@ -359,20 +360,26 @@ def solve_fem(vol_file="", fes_order=1,
         dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
         a_kelvin = float(np.max(dists))  # sphere radius R
 
-        # Periodic identification comes from C++ export (translation-based).
-        # The .vol must contain identification pairs from ident.Add().
-        n_ident = mesh.ngmesh.GetNrIdentifications()
-        if n_ident == 0:
+        # The Cubit export writes the Kelvin pairs (kelvin_int -> kelvin_ext);
+        # a flat mesh without any identification is paired after load.
+        from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+        try:
+            kelvin_pairs = ensure_kelvin_identification(mesh)
+        except ValueError as exc:
             return {"error":
-                    "Mesh has 'kelvin' material but no periodic "
-                    "identification in the .vol file. Ensure the .jou/.py "
-                    "sets sideset 'kelvin_int' (interior sphere outer "
-                    "boundary) and 'kelvin_ext' (exterior sphere boundary), "
-                    "and uses 'copy mesh surface' for 1:1 correspondence. "
-                    "The C++ exporter writes identification via translation "
-                    "offset matching."}
+                    f"Mesh has 'kelvin' material but no usable Kelvin pairs: "
+                    f"{exc}. Export it with the Kelvin pairs: export netgen "
+                    f"... kelvin_tx/ty/tz <offset> kelvin_match <distance> "
+                    f"(radia_mcp.cubit.kelvin.export_arguments(info) after "
+                    f"add_kelvin_cubit)."}
+        kelvin_pairs_source = kelvin_pairs["source"]
+        if kelvin_pairs_source == "post_hoc":
+            # new point pairs: rebuild the NGSolve topology from the mesh
+            mesh = ngsolve.Mesh(mesh.ngmesh)
+        n_ident = mesh.ngmesh.GetNrIdentifications()
         has_kelvin_periodic = True
-        _log(f"PERIODIC:from_vol ({n_ident} ident(s), a={a_kelvin:.4f})")
+        _log(f"PERIODIC:{kelvin_pairs_source} ({kelvin_pairs['n_pairs']} pairs, "
+             f"{n_ident} ident(s), a={a_kelvin:.4f})")
 
     t_mesh = time.perf_counter() - t0
 
@@ -1662,6 +1669,7 @@ def solve_fem(vol_file="", fes_order=1,
         "linear_solver": solver,
         "linear_solver_requested": solver_requested,
         "kelvin_gradient_gauge_dofs": kelvin_gauge_dofs,
+        "kelvin_pairs_source": kelvin_pairs_source,
         "linear_true_relative_residual": relative_residual,
         "linear_true_residual_limit": LINEAR_TRUE_RESIDUAL_LIMIT,
         "linear_krylov_iterations": krylov_iterations,
@@ -1833,14 +1841,17 @@ def main():
                         f"mesh: re-run the Cubit .jou with "
                         f"add_kelvin enabled, OR switch to a method "
                         f"that doesn't need the open boundary."}
-            if probe_mesh.ngmesh.GetNrIdentifications() == 0:
+            # Same rule as solve_fem (in memory only): the .vol pairs, or a
+            # flat mesh without identifications paired after load.
+            from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+            try:
+                ensure_kelvin_identification(probe_mesh)
+            except ValueError as exc:
                 return {"error":
                         f"--require-kelvin: .vol has 'kelvin' material but "
-                        f"no periodic identifications. The Kelvin pair "
-                        f"sidesets (kelvin_int, kelvin_ext) need 'copy "
-                        f"mesh surface' in the Cubit .jou so the C++ "
-                        f"exporter can write Netgen identification "
-                        f"records."}
+                        f"no usable Kelvin pairs: {exc}. Export it with the "
+                        f"Kelvin pairs (export netgen ... kelvin_tx/ty/tz "
+                        f"kelvin_match)."}
         return solve_fem(
             vol_file=args.vol,
             fes_order=args.fes_order,

@@ -6,6 +6,7 @@ verdicts, the periodic/Kelvin argument contract and the input refusals only.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -118,6 +119,49 @@ def test_periodic_contract_rejects(periodic, message):
 def test_kelvin_contract_rejects(options, message):
     with pytest.raises(ValueError, match=message):
         kelvin.validate_options(options)
+
+
+def test_kelvin_export_arguments_carry_the_offset_into_the_command(tmp_path):
+    fields = kelvin.export_arguments({"R": 0.3, "center": (0.0, 0.0, 0.6)})
+    assert fields == "kelvin_tx 0 kelvin_ty 0 kelvin_tz 0.59999999999999998 kelvin_match 2.9999999999999999e-07"
+    assert kelvin.export_arguments({"R": 0.3, "center": (1, 2, 3)}, match=1e-5).endswith(" kelvin_match 1.0000000000000001e-05")
+    command = vol_export.export_command(tmp_path / "a.vol", 2, None, fields)
+    assert command.endswith(f" order 2 {fields} overwrite"), command
+
+
+@pytest.mark.parametrize("info, match", [
+    (None, None), ({"R": 0.3}, None), ({"R": 0, "center": (0, 0, 1)}, None),
+    ({"R": 0.3, "center": (0, 0)}, None), ({"R": 0.3, "center": (0, 0, float("nan"))}, None),
+    ({"R": 0.3, "center": (0, 0, 1)}, 0.0),
+])
+def test_kelvin_export_arguments_reject(info, match):
+    with pytest.raises(ValueError):
+        kelvin.export_arguments(info, match=match)
+
+
+def _worker_args(tmp_path, out, periodic=None, kelvin_options=None):
+    (tmp_path / "plugin").mkdir(exist_ok=True)
+    (tmp_path / "plugin" / vol_export.PLUGIN_DLL).write_bytes(b"")
+    return argparse.Namespace(out=str(out), plugin_dir=str(tmp_path / "plugin"), order=2,
+                              periodic=json.dumps(periodic) if periodic else "",
+                              kelvin=json.dumps(kelvin_options) if kelvin_options else "",
+                              cubit_bin=str(tmp_path), journal=str(tmp_path / "m.jou"))
+
+
+def test_worker_refuses_kelvin_with_periodic(tmp_path):
+    args = _worker_args(tmp_path, tmp_path / "a.vol", PERIODIC, {"add_kelvin": True})
+    with pytest.raises(ValueError, match="cannot be combined"):
+        vol_export.run(args)
+
+
+@pytest.mark.parametrize("suffix", ["", ".json", ".partial.vol"])
+def test_worker_kelvin_export_needs_a_fresh_path(tmp_path, suffix):
+    out = tmp_path / "a.vol"
+    planted = Path(str(out) + suffix)
+    planted.write_bytes(b"other")
+    with pytest.raises(FileExistsError, match="fresh output path"):
+        vol_export.run(_worker_args(tmp_path, out, None, {"add_kelvin": True}))
+    assert planted.read_bytes() == b"other"
 
 
 def test_kelvin_symmetry_maps_to_reduction():

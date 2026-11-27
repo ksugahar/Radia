@@ -38,7 +38,6 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     """Solve Omega-reduced + Kelvin and return Hz at origin."""
     if "calc_common" in sys.modules:
         del sys.modules["calc_common"]
-    from calc_common import detect_kelvin_offset, add_periodic_kelvin
     from ngsolve import (Mesh, H1, Periodic, BilinearForm, LinearForm,
                          GridFunction, CoefficientFunction, BND,
                          x, y, z,
@@ -52,12 +51,14 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     print(f"  ne={mesh.ne}, materials={mesh.GetMaterials()}")
     print(f"  boundaries={mesh.GetBoundaries()}")
 
-    # Add periodic identification (handles unmatched pair via fresh IDPB)
+    # The exported .vol carries the Kelvin pairs; nothing is paired here.
+    from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
     offset = detect_kelvin_offset(mesh)
     print(f"  detect_kelvin_offset = {offset}")
-    if add_periodic_kelvin(mesh, offset):
-        import ngsolve
-        mesh = ngsolve.Mesh(mesh.ngmesh)
+    if not has_kelvin_identification(mesh):
+        raise RuntimeError(f"{vol_path}: the .vol does not pair kelvin_int with kelvin_ext; "
+                           "export it with the Kelvin pairs")
+    print(f"  Kelvin pairs in .vol: {len(mesh.ngmesh.GetIdentifications())}")
 
     # Curve the mesh for high-order geometry
     mesh.Curve(order)

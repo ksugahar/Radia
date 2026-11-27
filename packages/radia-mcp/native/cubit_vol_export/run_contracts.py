@@ -22,7 +22,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parents[1]
-CURVING_TEST = PACKAGE.parents[1] / "validation_test" / "radia_mcp" / "test_netgen_curving.py"
+REPO = PACKAGE.parents[1]
+CURVING_TEST = REPO / "validation_test" / "radia_mcp" / "test_netgen_curving.py"
 
 
 def netgen_cmake_dir() -> Path:
@@ -56,7 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     run(["cmake", "--build", str(build), "-j", str(args.jobs)])
     run(["ctest", "--test-dir", str(build), "--output-on-failure", "--no-tests=error"])
     env = dict(os.environ, RADIA_REQUIRE_NETGEN_CURVING="1", RADIA_NETGEN_CURVING_DIR=str(build))
-    run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(CURVING_TEST)], env=env)
+    # validation_test/conftest.py imports the repository's tests package.
+    run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(CURVING_TEST)],
+        env=env, cwd=REPO)
     return 0
 
 

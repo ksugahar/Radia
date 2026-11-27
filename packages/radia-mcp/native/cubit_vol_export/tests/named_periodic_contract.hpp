@@ -200,3 +200,82 @@ inline void named_periodic_contract_test()
       throw std::runtime_error("Failed export guidance omitted an exact leftover path");
   std::cerr << "named periodic save contract: native Save/rename passed; existing final/temp/sidecar preserved\n";
 }
+
+// Guards: Kelvin pairs come from the final kelvin_int/kelvin_ext labels and the
+// explicit offset; every kelvin_int BC maps to exactly one translated
+// kelvin_ext BC, and a wrong offset, a moved point or a missing label fails.
+// Assumes: two-patch planar fixture (seam-split surface), offset (0, 0, 5).
+inline void kelvin_periodic_contract_test()
+{
+  using namespace netgen;
+  using namespace radia_cubit_export;
+  const std::array<double, 3> offset{0.0, 0.0, 5.0};
+  // Points 1-6: kelvin_int grid x in {0,1,2}, y in {0,1}; 7-12: the same + offset.
+  auto fixture = [&](const char *last_label) {
+    auto mesh = std::make_unique<Mesh>();
+    mesh->SetDimension(3);
+    for (int side = 0; side < 2; ++side)
+      for (int x = 0; x < 3; ++x)
+        for (int y = 0; y < 2; ++y)
+          mesh->AddPoint(Point<3>(x, y, side * offset[2]));
+    // FD order differs from BC numbers. BC1/BC2: kelvin_int x in [1,2]/[0,1];
+    // BC4/BC3: their kelvin_ext copies.
+    struct Patch { int bc; const char *label; int base; };
+    const Patch patches[] = {{2, "kelvin_int", 1}, {1, "kelvin_int", 3},
+                             {4, "kelvin_ext", 9}, {3, last_label, 7}};
+    for (const auto &patch : patches) {
+      FaceDescriptor descriptor;
+      descriptor.SetBCProperty(patch.bc);
+      descriptor.SetBCName(patch.label);
+      const auto fd = mesh->AddFaceDescriptor(descriptor);
+      const int b = patch.base;
+      for (auto points : {std::array<int,3>{b, b+2, b+1}, std::array<int,3>{b+1, b+2, b+3}}) {
+        Element2d triangle(TRIG);
+        triangle.SetIndex(fd);
+        for (int j = 0; j < 3; ++j) triangle[j] = periodic_point_index(points[j]);
+        mesh->AddSurfaceElement(triangle);
+      }
+    }
+    return mesh;
+  };
+  auto must_reject = [](auto action) {
+    bool failed = false;
+    try { action(); } catch (const std::runtime_error &) { failed = true; }
+    if (!failed) throw std::runtime_error("Invalid Kelvin fixture was accepted");
+  };
+
+  auto mesh = fixture("kelvin_ext");
+  const auto contract = kelvin_periodic_contract(*mesh, offset, 1e-9);
+  const std::vector<std::pair<int, int>> expected_patches{{1, 4}, {2, 3}};
+  if (contract.name != "kelvin" || contract.master_label != "kelvin_int" ||
+      contract.slave_label != "kelvin_ext" || contract.boundary_pairs != expected_patches)
+    throw std::runtime_error("Kelvin BC pairing differs: actual " +
+        std::to_string(contract.boundary_pairs.size()) + " patches, expected (1,4),(2,3)");
+  const auto result = apply_named_periodic_identification(*mesh, contract);
+  if (result.point_pairs.size() != 6)
+    throw std::runtime_error("Kelvin pair count differs: actual " +
+        std::to_string(result.point_pairs.size()) + ", expected 6");
+  for (int i = 0; i < 6; ++i)
+    if (result.point_pairs[i] != std::make_pair(i + 1, i + 7))
+      throw std::runtime_error("Kelvin pair direction/indices differ");
+  auto &ident = mesh->GetIdentifications();
+  if (ident.GetMaxNr() != 1 || ident.GetName(1) != "kelvin" ||
+      ident.GetType(1) != Identifications::PERIODIC)
+    throw std::runtime_error("Kelvin group name/type differs");
+
+  auto wrong_offset = fixture("kelvin_ext");
+  must_reject([&]{kelvin_periodic_contract(*wrong_offset, {0.0, 0.0, 4.0}, 1e-9);});
+  auto moved = fixture("kelvin_ext");
+  moved->Point(periodic_point_index(12))(0) += 1e-6;
+  must_reject([&]{kelvin_periodic_contract(*moved, offset, 1e-9);});
+  auto unlabelled = fixture("air_outer");
+  must_reject([&]{kelvin_periodic_contract(*unlabelled, offset, 1e-9);});
+  auto zero = fixture("kelvin_ext");
+  must_reject([&]{kelvin_periodic_contract(*zero, {0.0, 0.0, 0.0}, 1e-9);});
+  must_reject([&]{kelvin_periodic_contract(*zero, offset, 0.0);});
+  auto renamed = fixture("kelvin_ext");
+  auto other_name = kelvin_periodic_contract(*renamed, offset, 1e-9);
+  other_name.name = "exterior";
+  must_reject([&]{apply_named_periodic_identification(*renamed, other_name);});
+  std::cerr << "kelvin periodic contract: 6 pairs, wrong offset/moved point/missing label rejected\n";
+}

@@ -11,7 +11,9 @@ Python.  Order of operations:
 4. ``import cubit`` and ``cubit.init([... '-noinitfile'])``;
 5. play the journal line by line;
 6. optionally add the Kelvin open-boundary sphere (:mod:`radia_mcp.cubit.kelvin`);
-7. ``export netgen "<out>" order <p> [periodic args] overwrite``.
+7. ``export netgen "<out>" order <p> [periodic or Kelvin args] overwrite``;
+   after the Kelvin step the command carries ``kelvin.export_arguments(info)``
+   and the plugin writes the ``kelvin`` periodic group (fresh output only).
 
 The plugin writes ``<out>`` and the companion ``<out>.json``.  The worker
 writes a status JSON (``--result``) with the companion record and the sha256
@@ -53,8 +55,9 @@ def periodic_arguments(periodic: dict | None) -> str:
     return " ".join(parts)
 
 
-def export_command(out: Path, order: int, periodic: dict | None) -> str:
-    extra = periodic_arguments(periodic)
+def export_command(out: Path, order: int, periodic: dict | None, kelvin: str = "") -> str:
+    """``kelvin`` is ``radia_mcp.cubit.kelvin.export_arguments(info)`` for a Kelvin mesh."""
+    extra = " ".join(part for part in (periodic_arguments(periodic), kelvin) if part)
     return f'export netgen "{out.as_posix()}" order {int(order)} ' + (extra + " " if extra else "") + "overwrite"
 
 
@@ -66,7 +69,17 @@ def run(args: argparse.Namespace) -> dict:
     periodic = json.loads(args.periodic) if args.periodic else None
     kelvin_options = json.loads(args.kelvin) if args.kelvin else {}
     from radia_mcp.cubit import kelvin as _kelvin
-    _kelvin.validate_options(kelvin_options)
+    wants_kelvin = _kelvin.validate_options(kelvin_options)["add_kelvin"]
+    if wants_kelvin and periodic:
+        raise ValueError("one named periodic group per export: kt periodic fields and "
+                         "Kelvin pairs cannot be combined")
+    if wants_kelvin or periodic:
+        # Named periodic groups publish only to a fresh path; never delete files.
+        existing = [str(p) for p in (out, Path(str(out) + ".json"), Path(str(out) + ".partial.vol"))
+                    if os.path.lexists(p)]
+        if existing:
+            raise FileExistsError(f"a periodic (Kelvin or kt) export needs a fresh output path; "
+                                  f"these already exist: {existing}")
     command = export_command(out, args.order, periodic)
 
     import ngsolve  # noqa: F401  -- load the fork nglib before the plugin binds to it
@@ -85,6 +98,11 @@ def run(args: argparse.Namespace) -> dict:
     if not cubit.cmd(f'playback "{journal.as_posix()}"'):
         raise RuntimeError(f"Cubit journal playback failed: {journal}")
     kelvin_info = _kelvin.apply_options(kelvin_options) if kelvin_options else None
+    if wants_kelvin:
+        if not kelvin_info:
+            raise RuntimeError("the journal already built a Kelvin block, so its offset is unknown "
+                               "here; leave the Kelvin step to the export options")
+        command = export_command(out, args.order, None, _kelvin.export_arguments(kelvin_info))
     cubit.cmd(command)
     if not out.is_file():
         raise RuntimeError(f"export netgen wrote no file: {command}")

@@ -38,11 +38,10 @@ the launcher's add_kelvin step manually.
 
 Workflow once this script is played in Cubit (GUI or batch):
 
-    # Step 1: play this script in Cubit (builds + add_kelvin + ready for export)
+    # Step 1: play this script in Cubit: builds the model, adds the Kelvin
+    # sphere and exports ih_fem_kelvin_demo.vol with its Kelvin pairs
+    # (export netgen ... kelvin_tx/ty/tz kelvin_match; fresh output path).
     play "ih_fem_kelvin_demo.py"
-
-    # Step 2: export .vol (Cubit APREPRO command from the Radia plugin)
-    export netgen "ih_fem_kelvin_demo.vol" order 1 overwrite
 
     # Step 3: outside Cubit -- PEEC coil L+R from the .step.
     # Use the canonical `_peec_ind.json` output suffix so the .gitignore
@@ -101,11 +100,11 @@ try:
 except NameError:
     _here = os.getcwd()
 try:
-    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
 except ImportError:
     # This file lives at <src>/radia_mcp/cubit/samples/.
     sys.path.insert(0, os.path.normpath(os.path.join(_here, "..", "..", "..")))
-    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
 # Outputs go to the working directory, never into the installed package.
 _out = os.getcwd()
 
@@ -225,7 +224,7 @@ info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 # can consume directly.  Order 1 is enough for the demo (the panel
 # tests are at order 1; higher orders are for production p-convergence).
 out_vol = os.path.join(_out, "ih_fem_kelvin_demo.vol").replace("\\", "/")
-cubit.cmd('export netgen "%s" order 1 overwrite' % out_vol)
+cubit.cmd('export netgen "%s" order 1 %s overwrite' % (out_vol, export_arguments(info)))
 
 print()
 print("ih_fem_kelvin_demo.py: done")

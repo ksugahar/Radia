@@ -404,9 +404,14 @@ class ExportDialog(QDialog):
         self.accept()
 
 
-def export_command(path, order):
-    """The native plugin command for one curved ``.vol`` export."""
-    return f'export netgen "{path}" order {int(order)} overwrite'
+def export_command(path, order, kelvin_arguments=""):
+    """The native plugin command for one curved ``.vol`` export.
+
+    ``kelvin_arguments`` is ``kelvin.export_arguments(info)`` after Auto-Kelvin;
+    the plugin then writes the Kelvin pairs and needs a fresh output path.
+    """
+    extra = f"{kelvin_arguments} " if kelvin_arguments else ""
+    return f'export netgen "{path}" order {int(order)} {extra}overwrite'
 
 
 def kelvin_options(enabled, mesh_size, sym_x, sym_y, sym_z):
@@ -539,13 +544,29 @@ def _run_netgen_export(cubit_mod, parent):
         print(f"Export not started: {exc}")
         QMessageBox.warning(parent, "Export not started", str(exc))
         return
+    if kelvin is not None:
+        # The Kelvin pairs publish only to a fresh path; never delete user files.
+        existing = [p for p in (vol_path, vol_path + ".json", vol_path + ".partial.vol")
+                    if os.path.lexists(p)]
+        if existing:
+            message = ("A Kelvin export needs a fresh output path. These files already "
+                       "exist; choose another name or remove them yourself:\n" + "\n".join(existing))
+            print(f"Export not started: {message}")
+            QMessageBox.warning(parent, "Export not started", message)
+            return
     cubit_mod.cmd(f'cd "{out_dir}"')
 
     # --- Phase 0: optional Kelvin open-boundary sphere (fails loudly) ---
+    command = dlg.cubit_command()
     if kelvin is not None:
         print("Adding the Kelvin open-boundary sphere...")
         try:
-            print(f"Kelvin: {kelvin.apply_options(options)}")
+            info = kelvin.apply_options(options)
+            print(f"Kelvin: {info}")
+            if not info:
+                raise RuntimeError("the model already has a Kelvin block, so its offset is "
+                                   "unknown here; rebuild it from the journal")
+            command = export_command(vol_path, order, kelvin.export_arguments(info))
         except Exception as exc:
             print(f"Kelvin FAILED: {type(exc).__name__}: {exc}")
             QMessageBox.warning(parent, "Kelvin failed",
@@ -554,7 +575,7 @@ def _run_netgen_export(cubit_mod, parent):
 
     # --- Phase 1: C++ export .vol + companion JSON ---
     print(f"Exporting Netgen .vol (order {order})...")
-    cubit_mod.cmd(dlg.cubit_command())
+    cubit_mod.cmd(command)
 
     if not os.path.isfile(vol_path):
         QMessageBox.warning(

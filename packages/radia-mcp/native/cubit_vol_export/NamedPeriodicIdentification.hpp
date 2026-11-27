@@ -81,10 +81,17 @@ inline std::string periodic_geometry_serialization(const netgen::Mesh &mesh)
   return geometry.str();
 }
 
+// The two named groups the exporter writes: "kt" (explicit BC patches) and
+// "kelvin" (kelvin_int -> kelvin_ext, translated by the Kelvin offset).
+inline bool supported_periodic_group(const std::string &name)
+{
+  return name == "kt" || name == "kelvin";
+}
+
 inline NamedPeriodicResult apply_named_periodic_identification(
     netgen::Mesh &mesh, const NamedPeriodicContract &contract)
 {
-  if (contract.name != "kt" || contract.coordinate_unit != "m" ||
+  if (!supported_periodic_group(contract.name) || contract.coordinate_unit != "m" ||
       contract.master_label.empty() || contract.slave_label.empty() ||
       contract.master_label == contract.slave_label ||
       !std::isfinite(contract.matching_distance) ||
@@ -206,12 +213,89 @@ inline NamedPeriodicResult apply_named_periodic_identification(
     ident.Add(periodic_point_index(pair.first), periodic_point_index(pair.second), 1);
   ident.SetType(1, netgen::Identifications::PERIODIC);
   ident.SetName(1, contract.name);
-  if (ident.GetMaxNr() != 1 || ident.GetName(1) != "kt" ||
+  if (ident.GetMaxNr() != 1 || ident.GetName(1) != contract.name ||
       ident.GetType(1) != netgen::Identifications::PERIODIC)
     throw std::runtime_error("Named periodic metadata insertion failed");
   if (periodic_geometry_serialization(mesh) != geometry_before)
     throw std::runtime_error("Periodic insertion changed serialized geometry");
   return result;
+}
+
+// Kelvin pairing contract from the final labels and the explicit Kelvin
+// offset. Every kelvin_int BC must have exactly one kelvin_ext BC whose point
+// set is its translated copy (within matching_distance), and every kelvin_ext
+// BC must be used once. The offset is never inferred from the mesh.
+inline NamedPeriodicContract kelvin_periodic_contract(
+    const netgen::Mesh &mesh, const std::array<double, 3> &translation,
+    double matching_distance)
+{
+  if (!std::isfinite(matching_distance) || matching_distance <= 0)
+    throw std::runtime_error("Kelvin matching distance must be positive and finite");
+  double length = 0;
+  for (double value : translation) {
+    if (!std::isfinite(value)) throw std::runtime_error("Nonfinite Kelvin offset");
+    length += value * value;
+  }
+  if (std::sqrt(length) <= matching_distance)
+    throw std::runtime_error("Kelvin offset must be longer than the matching distance");
+
+  std::map<int, std::set<int>> points;
+  std::set<int> inner, outer;
+  for (int fd = 1; fd <= mesh.GetNFD(); ++fd) {
+    const int bc = mesh.GetFaceDescriptor(periodic_face_index(fd)).BCProperty();
+    const auto &label = periodic_boundary_label(mesh, bc);
+    if (label == "kelvin_int") inner.insert(bc);
+    else if (label == "kelvin_ext") outer.insert(bc);
+  }
+  if (inner.empty() || outer.empty())
+    throw std::runtime_error("Kelvin pairing needs both kelvin_int and kelvin_ext boundaries");
+  for (const auto &surface : mesh.SurfaceElements()) {
+    const int fd = periodic_face_number(surface.GetIndex());
+    const int bc = mesh.GetFaceDescriptor(periodic_face_index(fd)).BCProperty();
+    if (!inner.count(bc) && !outer.count(bc)) continue;
+    for (int j = 0; j < surface.GetNP(); ++j)
+      points[bc].insert(periodic_point_number(surface[j]));
+  }
+
+  auto is_translated_copy = [&](int source, int target) {
+    const auto &sp = points[source];
+    const auto &tp = points[target];
+    if (sp.size() != tp.size() || sp.empty()) return false;
+    for (int pi : sp) {
+      const auto &p = mesh.Point(periodic_point_index(pi));
+      bool hit = false;
+      for (int qi : tp) {
+        const auto &q = mesh.Point(periodic_point_index(qi));
+        if (std::hypot(q(0) - (p(0) + translation[0]), q(1) - (p(1) + translation[1]),
+                       q(2) - (p(2) + translation[2])) <= matching_distance) {
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) return false;
+    }
+    return true;
+  };
+
+  NamedPeriodicContract contract{"kelvin", "kelvin_int", "kelvin_ext", "m",
+                                 translation, matching_distance, {}};
+  std::set<int> used;
+  for (int bc : inner) {
+    std::vector<int> candidates;
+    for (int target : outer)
+      if (is_translated_copy(bc, target)) candidates.push_back(target);
+    if (candidates.size() != 1)
+      throw std::runtime_error("kelvin_int BC " + std::to_string(bc) + " has " +
+                               std::to_string(candidates.size()) +
+                               " translated kelvin_ext copies (expected 1)");
+    if (!used.insert(candidates[0]).second)
+      throw std::runtime_error("kelvin_ext BC " + std::to_string(candidates[0]) +
+                               " is the copy of more than one kelvin_int BC");
+    contract.boundary_pairs.emplace_back(bc, candidates[0]);
+  }
+  if (used != outer)
+    throw std::runtime_error("Some kelvin_ext boundaries are not the copy of any kelvin_int boundary");
+  return contract;
 }
 
 struct NamedPeriodicOutputPaths {

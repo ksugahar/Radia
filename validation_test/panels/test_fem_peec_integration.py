@@ -1,10 +1,10 @@
 """End-to-end test: Cubit peec block → STEP + .vol → FEM + PEEC filament.
 
 Tests the full Cubit pipeline:
-  1. Cubit: create torus coil + air sphere
-  2. Subtract coil from air (hole), mesh air
-  3. add_kelvin_cubit() → Kelvin sphere with copy mesh (labels; pairing after load)
-  4. export netgen → .vol, export step → coil.step
+  1. Cubit: create air sphere (solid) + torus coil (STEP only)
+  2. Mesh the air; the coil filament lies inside it
+  3. add_kelvin_cubit() → Kelvin sphere with copy mesh
+  4. export netgen (with the Kelvin pairs) → .vol, export step → coil.step
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
@@ -23,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 SRC = os.path.join(REPO_ROOT, "src", "radia")
 PANELS = os.path.join(SRC, "panels")
-for p in (SRC, PANELS):
+ORACLE_DIR = os.path.join(REPO_ROOT, "validation_test", "cubit")
+for p in (SRC, PANELS, ORACLE_DIR):
     if p in sys.path:
         sys.path.remove(p)
     sys.path.insert(0, p)
@@ -87,15 +88,12 @@ def peec_cubit_model():
 
     cubit.cmd("reset")
 
-    # --- 1. Air sphere with a toroidal hole, then the coil ---
-    # `subtract ... keep` keeps both originals and adds the result as a new
-    # volume, so subtract without keep and create the coil again.
+    # --- 1. Solid air sphere; the coil torus is only the STEP source ---
+    # calc_fem_kelvin's PEEC route integrates the filament line source over
+    # the air elements, so the coil must lie inside the air mesh: no hole.
+    # The torus is not meshed and not in a block, so export netgen skips it.
     cubit.cmd(f"create sphere radius {R_AIR}")
     air = cubit.get_last_id("volume")
-    cubit.cmd(f"create torus major radius {R_COIL} minor radius {A_COIL}")
-    torus = cubit.get_last_id("volume")
-    cubit.cmd(f"subtract volume {torus} from volume {air}")
-    air = cubit.get_last_id("volume")   # the difference gets a new id
     cubit.cmd(f"create torus major radius {R_COIL} minor radius {A_COIL}")
     coil = cubit.get_last_id("volume")
 
@@ -118,7 +116,7 @@ def peec_cubit_model():
     cubit.cmd('block 1 name "air"')
 
     # --- 5. Add Kelvin sphere via add_kelvin_cubit() ---
-    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
     kelvin_info = add_kelvin_cubit(
         R=R_AIR, air_block="air", symmetry=["z"])
 
@@ -126,7 +124,7 @@ def peec_cubit_model():
     vol_path = os.path.join(tmpdir, "model.vol")
     step_path = os.path.join(tmpdir, "coil.step")
 
-    cubit.cmd(f'export netgen "{vol_path}" order 1 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 1 {export_arguments(kelvin_info)} overwrite')
     cubit.cmd(f'export step "{step_path}" volume {coil} overwrite')
 
     return {
@@ -150,26 +148,31 @@ class TestFEMPEECCubitIntegration:
         assert os.path.isfile(peec_cubit_model["step_path"])
 
     def test_vol_has_kelvin(self, peec_cubit_model):
-        """air + kelvin materials and Kelvin labels that pair completely.
+        """The exported .vol carries the complete Kelvin pairs.
 
-        The exporter writes the kelvin_int/kelvin_ext labels but no Kelvin
-        identifications. This test pairs them after loading and checks that
-        every kelvin_int vertex pairs with its translated copy. The solver
-        entry points (calc_fem_kelvin.solve_fem, calc_fem_coilmesh
-        --require-kelvin) still require the pairs inside the .vol, so
-        test_solve_fem_peec_inductance fails until that contract is settled.
+        Oracle: the same .vol with its identification sections removed, paired
+        after load by add_kelvin_identification (offset detected from the
+        mesh, assignment by distance). The exporter's pairs must equal that
+        set, and the detected offset must equal the offset passed to export.
         """
         from ngsolve import Mesh
-        from radia.kelvin_identify_ngsolve import add_kelvin_identification
-        mesh = Mesh(peec_cubit_model["vol_path"])
+        import kelvin_pair_oracle
+        vol = peec_cubit_model["vol_path"]
+        mesh = Mesh(vol)
         mats = set(mesh.GetMaterials())
         assert "air" in mats, f"Missing 'air', got {mats}"
         assert "kelvin" in mats, f"Missing 'kelvin', got {mats}"
         bnds = set(mesh.GetBoundaries())
         assert {"kelvin_int", "kelvin_ext"} <= bnds, f"Kelvin labels missing: {bnds}"
-        info = add_kelvin_identification(mesh, skip_if_existing=False)
-        assert info["n_pairs"] > 0 and info["n_unmatched"] == 0, info
-        assert info["max_dist"] < 1e-10, info
+        info = kelvin_pair_oracle.compare(vol, peec_cubit_model["tmpdir"])
+        assert info["groups"] == 1 and info["covers_kelvin"], info
+        assert info["bare_groups_before_pairing"] == 0, info
+        assert info["posthoc_unmatched"] == 0 and info["posthoc_max_dist"] < 1e-10, info
+        assert info["exported_pairs"] == info["posthoc_pairs"] > 0, info
+        assert info["differing_pairs"] == 0, info
+        center = peec_cubit_model["kelvin_info"]["center"]
+        assert max(abs(a - b) for a, b in zip(info["posthoc_offset"], center)) < 1e-9, (
+            info["posthoc_offset"], center)
 
     def test_solve_fem_peec_inductance(self, peec_cubit_model):
         """Solve FEM with PEEC filament source, verify L vs Grover."""

@@ -8,11 +8,10 @@ Why this exists
 ---------------
 There are three upstream paths that produce a Kelvin-ready `.vol`:
 
-1. **Cubit C++ exporter** (`export netgen`): labels the air|kelvin
-   interface `kelvin_int` and the outer Kelvin boundary `kelvin_ext`
-   but writes NO Kelvin identifications (only an explicitly requested
-   named periodic pair is written).  Cubit Kelvin meshes therefore always
-   go through path 3.
+1. **Cubit C++ exporter** (`export netgen ... kelvin_tx/ty/tz
+   kelvin_match`): labels the air|kelvin interface `kelvin_int` and the
+   outer Kelvin boundary `kelvin_ext` and writes every point pair as the
+   periodic group `kelvin`.  Path 3 checks those pairs independently.
 
 2. **NGSolve OCC** + `Identify(IdentificationType.PERIODIC)`: must be
    called AFTER `Glue` and BEFORE `Mesh()`.  Bakes both point pairs
@@ -21,7 +20,7 @@ There are three upstream paths that produce a Kelvin-ready `.vol`:
 3. **This module** (`add_kelvin_identification`): works on an
    ALREADY-LOADED `ngsolve.Mesh` -- no Cubit, no OCC, no re-export.
    Useful when:
-     - the mesh came from the Cubit route (path 1)
+     - you check the pairs path 1 wrote (pair a stripped copy, compare)
      - you received a `.vol` from elsewhere without identifications
      - you want to compare a "with-Kelvin" and a "without-Kelvin" run
        on the same mesh without re-running Cubit
@@ -90,6 +89,7 @@ import numpy as np
 __all__ = [
     "add_kelvin_identification",
     "detect_kelvin_offset",
+    "ensure_kelvin_identification",
     "has_kelvin_identification",
 ]
 
@@ -392,3 +392,46 @@ def add_kelvin_identification(
         "point_tolerance": float(point_tolerance),
         "was_pre_existing": False,
     }
+
+
+def ensure_kelvin_identification(mesh, *, inner_bnd: str = "kelvin_int",
+                                 outer_bnd: str = "kelvin_ext") -> dict:
+    """Use the Kelvin pairs of the ``.vol``, or pair a mesh that has none.
+
+    The Cubit export writes the pairs (``source == "vol"``).  A mesh with the
+    Kelvin labels and no identification at all is paired after load
+    (``source == "post_hoc"``), with every vertex matched within
+    ``1e-6 * |offset|``.  Refused, never repaired: a mesh with some other or
+    incomplete identification, a curved mesh (``GetCurveOrder() > 1``; only
+    the export synchronises the curved coefficients of the paired faces),
+    and any unmatched vertex.
+    """
+    if has_kelvin_identification(mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd):
+        return {"source": "vol", "n_pairs": len(tuple(mesh.ngmesh.GetIdentifications()))}
+    if tuple(mesh.ngmesh.GetIdentifications()):
+        raise ValueError(
+            f"the mesh has identifications that do not pair every {inner_bnd} "
+            f"vertex with a {outer_bnd} vertex; re-export it with the Kelvin "
+            "pairs instead of adding more")
+    curve_order = int(mesh.ngmesh.GetCurveOrder())
+    if curve_order > 1:
+        raise ValueError(
+            f"the curved mesh (curve order {curve_order}) has no Kelvin pairs; "
+            "pairing after load would leave the paired faces' curved "
+            "coefficients unsynchronised. Export it with the Kelvin pairs "
+            "(export netgen ... kelvin_tx/ty/tz kelvin_match)")
+    offset = detect_kelvin_offset(mesh)
+    off_len = math.sqrt(sum(c * c for c in offset))
+    if not (off_len > 0 and math.isfinite(off_len)):
+        raise ValueError(f"no Kelvin offset could be detected from {inner_bnd}/"
+                         f"{outer_bnd} (got {offset})")
+    info = add_kelvin_identification(
+        mesh, kelvin_offset=offset, inner_bnd=inner_bnd, outer_bnd=outer_bnd,
+        point_tolerance=1e-6 * off_len, skip_if_existing=False)
+    if info["n_unmatched"] or not has_kelvin_identification(
+            mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd):
+        raise ValueError(
+            f"pairing after load left {info['n_unmatched']} unmatched "
+            f"{inner_bnd} vertices (tolerance {info['point_tolerance']:.3e} m); "
+            f"{outer_bnd} must be a translated copy of {inner_bnd}")
+    return {"source": "post_hoc", **info}

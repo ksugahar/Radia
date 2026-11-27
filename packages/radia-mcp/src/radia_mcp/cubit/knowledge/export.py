@@ -22,7 +22,7 @@ EXPORT_OVERVIEW = """
 `RADIA_CUBIT_PLUGIN_DIR`).  The worker runs `import ngsolve` first so the plugin binds to
 the same nglib, plays the journal in batch/nographics Cubit (`-noinitfile`),
 optionally adds the Kelvin sphere, then runs
-`export netgen "<out>" order N [periodic args] overwrite`.  The plugin writes
+`export netgen "<out>" order N [periodic args | Kelvin args] overwrite`.  The plugin writes
 the `.vol` and `.vol.json`; the tool returns the companion record and the
 sha256.  A missing Cubit, worker runtime or plugin DLL fails loudly.
 
@@ -34,8 +34,15 @@ all incident patches; ambiguity or incomplete coverage fails the export.
 
 Kelvin open boundary: `add_kelvin=True` (with `kelvin_air`, `kelvin_block`,
 `kelvin_mesh`, `kelvin_sym_x/y/z` = off|bn|ht) adds the exterior sphere before
-export; skipped when a Kelvin block exists; a missing air block or an invalid
-symmetry value raises.
+export; a missing air block or an invalid symmetry value raises. The export
+then writes the Kelvin pairs (`kelvin_int` -> `kelvin_ext`, translation = the
+Kelvin offset) as the named periodic group `kelvin`, with
+`kelvin_tx/ty/tz <offset> kelvin_match <distance>` from
+`radia_mcp.cubit.kelvin.export_arguments(info)`. The plugin refuses a mesh
+with Kelvin labels but no Kelvin fields (and the reverse), Kelvin together
+with `kt` fields, and an existing output path: the `.vol` is always
+self-contained. A journal that builds its own Kelvin block must pass the
+fields itself (`add_kelvin=True` then raises, because the offset is unknown).
 
 ## Supported Formats
 

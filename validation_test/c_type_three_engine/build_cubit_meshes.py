@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import platform
@@ -120,7 +121,15 @@ def _write_journal(
             encoding="utf-8",
         )
         lines.append(f'play "{kelvin_script.as_posix()}"')
-        export = f'export netgen "{output.as_posix()}" order {int(curve_order)} overwrite'
+        # Same offset as add_kelvin_cubit(symmetry=["z"]): the plugin writes the pairs.
+        spec = importlib.util.spec_from_file_location("_radia_c_type_kelvin_args", helper)
+        kelvin_args = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(kelvin_args)
+        radius = float(kelvin_radius_m)
+        kelvin_fields = kelvin_args.export_arguments(
+            {"R": radius, "center": kelvin_args.compute_offset_vector(radius, ["z"])})
+        export = (f'export netgen "{output.as_posix()}" order {int(curve_order)} '
+                  f'{kelvin_fields} overwrite')
     lines.extend([export, "exit"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

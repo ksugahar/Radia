@@ -15,7 +15,9 @@ Cubit 3D semantics: create an exterior sphere of the air radius at an
 offset, handle the symmetry cuts (mesh-seam or domain-reduction mode), copy
 the air outer-surface mesh 1:1, tet-mesh the Kelvin volume, assign the
 ``kelvin`` block, sidesets and the GND nodeset.  The plugin labels the shared
-air|kelvin faces ``kelvin_int`` and the outer Kelvin faces ``kelvin_ext``.
+air|kelvin faces ``kelvin_int`` and the outer Kelvin faces ``kelvin_ext``, and
+writes their ``kelvin`` periodic group when the export command carries
+``export_arguments(info)`` (the plugin refuses a Kelvin mesh without them).
 
 Change from the retired plugin: a missing or empty air block, an invalid per-axis
 symmetry value or an unusable air surface now raises instead of warning and
@@ -1257,6 +1259,28 @@ def validate_options(options):
         out["kelvin_mesh"] = mesh
     out["reduction"] = reduction_from_sym(out["kelvin_sym_x"], out["kelvin_sym_y"], out["kelvin_sym_z"])
     return out
+
+
+def export_arguments(info, match=None):
+    """``export netgen`` arguments that make the plugin write the Kelvin pairs.
+
+    ``info`` is the dict ``add_kelvin_cubit`` returns; its ``center`` is the
+    Kelvin sphere offset, the translation from each ``kelvin_int`` point to its
+    ``kelvin_ext`` copy.  ``match`` is the pairing distance in m (default
+    ``1e-6 * R``).  The plugin rejects a Kelvin mesh exported without these
+    fields, so the ``.vol`` always carries its ``kelvin`` periodic group.
+    """
+    if not info or "center" not in info or "R" not in info:
+        raise ValueError("Kelvin export arguments need the add_kelvin_cubit info (R, center)")
+    R = float(info["R"])
+    offset = [float(c) for c in info["center"]]
+    tol = 1e-6 * R if match is None else float(match)
+    if not (R > 0 and math.isfinite(R) and tol > 0 and math.isfinite(tol)
+            and len(offset) == 3 and all(math.isfinite(c) for c in offset)):
+        raise ValueError(f"invalid Kelvin export geometry: R={info['R']!r}, "
+                         f"center={info['center']!r}, match={match!r}")
+    return ("kelvin_tx %.17g kelvin_ty %.17g kelvin_tz %.17g kelvin_match %.17g"
+            % (offset[0], offset[1], offset[2], tol))
 
 
 def apply_options(options):

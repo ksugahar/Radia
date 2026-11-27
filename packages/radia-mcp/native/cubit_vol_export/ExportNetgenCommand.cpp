@@ -141,7 +141,11 @@ std::vector<std::string> ExportNetgenCommand::get_syntax()
     "[periodic_tx <value:label='periodic_tx'>] "
     "[periodic_ty <value:label='periodic_ty'>] "
     "[periodic_tz <value:label='periodic_tz'>] "
-    "[periodic_match <value:label='periodic_match'>]"
+    "[periodic_match <value:label='periodic_match'>] "
+    "[kelvin_tx <value:label='kelvin_tx'>] "
+    "[kelvin_ty <value:label='kelvin_ty'>] "
+    "[kelvin_tz <value:label='kelvin_tz'>] "
+    "[kelvin_match <value:label='kelvin_match'>]"
   );
   return syntax_list;
 }
@@ -167,6 +171,10 @@ std::vector<std::string> ExportNetgenCommand::get_help()
     "  periodic_master/slave <BC label>, periodic_unit m,\n"
     "  periodic_patches <masterBC:slaveBC,...>, periodic_tx/ty/tz <translation>,\n"
     "  periodic_match <positive geometric distance>. Fresh output required.\n"
+    "Kelvin meshes (kelvin_int/kelvin_ext labels) require kelvin_tx/ty/tz\n"
+    "  <Kelvin sphere offset> and kelvin_match <positive distance>; the export\n"
+    "  writes the 'kelvin' periodic group. Fresh output required.\n"
+    "One named periodic group per export (kt or kelvin).\n"
     "No inferred pairs or consumer repair; q3 geometry is preserved.\n"
     "\n"
   );
@@ -215,6 +223,35 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     PRINT_ERROR("Named periodic export requires all nine explicit periodic fields.\n");
     return false;
   }
+  std::array<double, 3> kelvin_translation{};
+  double kelvin_match = 0;
+  const bool kelvin_fields[] = {
+      data.get_value("kelvin_tx", kelvin_translation[0]),
+      data.get_value("kelvin_ty", kelvin_translation[1]),
+      data.get_value("kelvin_tz", kelvin_translation[2]),
+      data.get_value("kelvin_match", kelvin_match)};
+  int kelvin_present = 0;
+  for (bool present : kelvin_fields) kelvin_present += present ? 1 : 0;
+  const bool has_kelvin = kelvin_present != 0;
+  if (has_kelvin && kelvin_present != 4) {
+    PRINT_ERROR("Kelvin export requires all four fields: kelvin_tx, kelvin_ty, kelvin_tz, kelvin_match.\n");
+    return false;
+  }
+  if (has_kelvin && has_periodic) {
+    PRINT_ERROR("One named periodic group per export: kt and kelvin pairs cannot be combined.\n");
+    return false;
+  }
+  // Both named groups publish through the same fresh-output bundle.
+  const bool named_output = has_periodic || has_kelvin;
+  if (has_kelvin) {
+    try {
+      radia_cubit_export::require_fresh_named_periodic_output(
+          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename)));
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Kelvin export rejected: %s\n", error.what());
+      return false;
+    }
+  }
   if (has_periodic) {
     try {
       radia_cubit_export::require_fresh_named_periodic_output(
@@ -248,12 +285,12 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   if (!md.extract(build_order)) {
     PRINT_ERROR("Mesh extraction failed.\n");
     auto failed = md.get_netgen_curver();
-    if (failed && !has_periodic) {
+    if (failed && !named_output) {
       std::ofstream failure(u8_string_to_path(filename + ".json"));
       if (failure) failure << "{\"export_passed\":false,\"curving\":"
                            << failed->edge_diagnostics_json() << "}\n";
     }
-    if (has_periodic && failed)
+    if (named_output && failed)
       PRINT_ERROR("Named periodic curving failed: %s\n", failed->edge_diagnostics_json().c_str());
     return false;
   }
@@ -705,13 +742,41 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
   // Explicit metadata only, after curving and final descriptor/BC labeling.
   // No centroid/tolerance inference and no solver-side repair fallback.
-  if (has_periodic) {
+  // A Kelvin mesh is exported only with its pairs, so the .vol is self-contained.
+  bool kelvin_labelled = false;
+  for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
+    const auto &name = ng_mesh->GetBCName(fi - 1);
+    if (name == "kelvin_int" || name == "kelvin_ext") kelvin_labelled = true;
+  }
+  if (kelvin_labelled && !has_kelvin) {
+    PRINT_ERROR("Kelvin boundaries (kelvin_int/kelvin_ext) need their pairs: pass kelvin_tx, "
+                "kelvin_ty, kelvin_tz (the Kelvin sphere offset; add_kelvin_cubit returns it "
+                "as 'center') and kelvin_match.\n");
+    return false;
+  }
+  if (has_kelvin && !kelvin_labelled) {
+    PRINT_ERROR("kelvin_* fields given, but the mesh has no kelvin_int/kelvin_ext boundaries.\n");
+    return false;
+  }
+  if (has_kelvin) {
+    try {
+      periodic = radia_cubit_export::kelvin_periodic_contract(
+          *ng_mesh, kelvin_translation, kelvin_match);
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Kelvin pairing rejected: %s\n", error.what());
+      return false;
+    }
+  }
+  if (named_output) {
     try {
       periodic_result = radia_cubit_export::apply_named_periodic_identification(*ng_mesh, periodic);
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic export rejected: %s\n", error.what());
       return false;
     }
+    PRINT_INFO("Periodic group '%s': %d point pairs, max distance %.3e m\n",
+               periodic.name.c_str(), (int)periodic_result.point_pairs.size(),
+               periodic_result.maximum_distance);
   }
 
   // Detach CallbackGeometry — it has function pointers, not serializable.
@@ -724,7 +789,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Pass as std::filesystem::path built from UTF-8 so Unicode / Japanese
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
-  if (!has_periodic) {
+  if (!named_output) {
     radia_cubit_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
   }
 
@@ -737,8 +802,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       jf << std::setprecision(16);
       jf << "{\n";
       jf << "  \"export_passed\": true,\n";
-      if (has_periodic) {
-        jf << "  \"periodic_identification\": {\"name\":\"kt\",\"nr\":1,\"type\":"
+      if (named_output) {
+        jf << "  \"periodic_identification\": {\"name\":\"" << periodic.name
+           << "\",\"nr\":1,\"type\":"
            << static_cast<int>(netgen::Identifications::PERIODIC) << ","
            << "\"pair_count\":" << periodic_result.point_pairs.size()
            << ",\"max_distance\":" << std::setprecision(17) << periodic_result.maximum_distance
@@ -893,7 +959,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       jf << "  \"export_time_s\": " << std::fixed << std::setprecision(3) << t_sec << "\n";
       jf << "}\n";
   };
-  if (has_periodic) {
+  if (named_output) {
     try {
       radia_cubit_export::save_named_periodic_bundle(
           *ng_mesh, u8_string_to_path(filename), write_companion);
