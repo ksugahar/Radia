@@ -34,8 +34,9 @@ hex, and a face census (faces used more than twice, shared faces with equal
 orientation, boundary faces whose nodes all belong to another tube).
 
 Observable failure modes (raised): a lattice that does not settle, a
-transition cell whose outer side is not an exact 2:1 refinement, a collapsed
-cell with an odd eta count, untraced walls (reported per tube). Reported:
+transition cell whose outer side is not an exact 2:1 refinement, untraced
+walls (reported per tube). Collapsed centre cells are brought to one common
+even eta count by halving their longest segments. Reported:
 closed walls that do not make one turn of angle_fn, angle decreasing along a
 wall, hexes with a non-positive Jacobian bound.
 
@@ -144,15 +145,26 @@ def _conforming_lattice(cells, m, periodic_eta, collapsed_xi0, b_split, grading,
                     if add:
                         Y[i] |= add
                         changed = True
-        for i in range(n):
-            if collapsed_xi0 and abs(cells[i][0]) < EPS:
-                ny = len(Y[i]) - 1
-                if ny % 2:
-                    raise RuntimeError(f"collapsed cell {i} has an odd eta count {ny}")
-                nx = ny // 2 + b_split
-                if len(X[i]) - 1 != nx:
-                    X[i] = set(map(key, np.linspace(cells[i][0], cells[i][1], nx + 1)))
+        centre = [i for i in range(n) if collapsed_xi0 and abs(cells[i][0]) < EPS]
+        if centre:
+            # Collapsed cells share their xi nodes, so they need one even eta count: halve the
+            # longest segment of every cell below the largest even count.
+            target = max(len(Y[i]) - 1 for i in centre)
+            target += target % 2
+            for i in centre:
+                if len(Y[i]) - 1 < target:
+                    ys = np.array(sorted(Y[i]))
+                    k = int(np.argmax(np.diff(ys)))
+                    Y[i].add(key(0.5 * (ys[k] + ys[k + 1])))
                     changed = True
+        for i in centre:
+            ny = len(Y[i]) - 1
+            if ny % 2 or ny != max(len(Y[j]) - 1 for j in centre):
+                continue
+            nx = ny // 2 + b_split
+            if len(X[i]) - 1 != nx:
+                X[i] = set(map(key, np.linspace(cells[i][0], cells[i][1], nx + 1)))
+                changed = True
         if not changed:
             YF = {}
             for i in transition:

@@ -306,3 +306,34 @@ def test_wire_tubes_on_balanced_cells():
     flux = sign * np.concatenate([s["section_flux_Wb"] for s in mesh.tubes]) / analytic
     assert 0.95 < flux.min() and flux.max() < 1.05, (flux.min(), flux.max())
     assert np.all(hex_corner_jacobians(mesh.nodes_m, mesh.hexes) > 0)
+
+
+def test_ring_centre_cells_get_one_even_eta_count():
+    """Guards: collapsed centre cells whose wall nodes give an odd or unequal eta count are
+    brought to one even count (halving their longest segments) instead of raising.
+    Assumes: an iron ring with a toroidal winding, B = R/rho e_phi (R = 0.1 m, minor radius
+    b = 0.03 m), so the flux through a half-plane section is R 2 pi (R - sqrt(R^2 - b^2))."""
+    R, b = 0.1, 0.03
+
+    def field(p):
+        p = np.asarray(p, float)
+        s = R / (p[..., 0] ** 2 + p[..., 1] ** 2)
+        return np.stack([-p[..., 1] * s, p[..., 0] * s, 0 * s], axis=-1)
+
+    patch = annular_patch([R, 0, 0], [0, 1, 0], b, r_inner_m=0.0)
+    seeds = ring_equal_flux_cells(patch.flux_density(field), patch.metric, n_lines=8)
+    mesh = build_flux_tube_mesh(
+        field, patch, seeds, angle_fn=lambda p: np.arctan2(np.asarray(p)[..., 1], np.asarray(p)[..., 0]),
+        n_sections=4, step_m=0.002, max_steps=3000, extent_m={"min": [-1.0] * 3, "max": [1.0] * 3},
+        cells_per_side=4, periodic_eta=True, collapsed_xi0=True)
+    rep = flux_tube_report(mesh)
+    assert rep["untraced_tubes"] == 0 and rep["nonpositive_jacobian_bound_hex"] == 0, rep
+    assert rep["faces"]["faces_used_more_than_twice"] == 0, rep["faces"]
+    assert rep["faces"]["interior_faces_same_orientation"] == 0, rep["faces"]
+    assert rep["faces"]["boundary_faces_on_another_tube"] == 0, rep["faces"]
+    assert mesh.info["closed_walls_not_one_turn"] == 0, mesh.info
+    ny = {s["grid_nx_ny"][1] for s in mesh.tubes if s["cell"] < seeds.n_centre}
+    assert len(ny) == 1 and next(iter(ny)) % 2 == 0, ny
+    exact = R * 2 * np.pi * (R - np.sqrt(R * R - b * b))
+    total = np.sum([s["section_flux_Wb"] for s in mesh.tubes], axis=0) / exact
+    assert np.all(np.abs(total - 1) < 0.03), total
