@@ -52,6 +52,30 @@ fields itself (`add_kelvin=True` then raises, because the offset is unknown).
 
 Order 2+ uses Netgen `Mesh.Curve` with Cubit surface/curve projection callbacks.
 
+## Other formats, written from the .vol
+
+The plugin writes only `.vol`. Other formats are converted from the checked
+`.vol`, or from the same mesh in memory (`ngsolve.Mesh` or
+`netgen.meshing.Mesh`), and keep its curved geometry:
+
+| Target | Call | Orders |
+|--------|------|--------|
+| Gmsh MSH 4.2 (post-processing) | `GmshPostExport(mesh).write_mesh("f.msh")` (`radia.gmsh_post_export`) | the mesh curve order, 1-5 (prism up to 2) |
+| Nastran BDF | `write_nastran_bdf(mesh, "f.bdf", order=2)` (`radia.nastran_export`), or `python -m radia.nastran_export f.vol f.bdf` | 1-2 |
+
+- `GmshPostExport` writes the volume elements per material; pass
+  `boundary=True` for a boundary-face file instead. It needs the `gmsh`
+  module for curved output and raises without it.
+- `write_nastran_bdf` writes GRID*, CTETRA/CHEXA/CPENTA/CPYRAM, boundary faces
+  as CTRIA/CQUAD with one PSHELL per boundary name, and PSOLID per material.
+  Order 2 refuses a straight mesh (curve order 1) instead of writing straight
+  mid-edge nodes, and refuses element maps that disagree on a shared edge.
+  Nastran has no face or centre nodes, so a curved CHEXA20 is slightly off
+  the .vol volume (about 1e-4 relative on a coarse swept cylinder); tets are exact.
+- Gmsh reads these BDF files with two quirks: a 13-node CPYRAM is read as a
+  5-node pyramid, and a full 8-field CPENTA or CTRIA6 line is taken to need a
+  continuation line.
+
 ## API
 
 ```python
@@ -369,6 +393,14 @@ with boundary layers on curved surfaces can produce elements that
 NetgenCurver cannot process.
 
 **Workaround**: Use tet meshing with BL (creates wedge prisms instead).
+
+## Known Issue: Order-2 Swept Wedges Bend Some Vertical Edges
+
+On a swept wedge cylinder (r 0.5, h 1, size 0.2, 240 wedges) exported at
+order 2, 80 of the 720 element vertical edges are bent by 6.6e-5 in one
+element while the neighbour keeps the same edge straight, so the curved
+mesh has a small gap. The cause (plugin curving or Netgen prism curving) is
+not identified. `write_nastran_bdf` refuses such a mesh; order 1 is unaffected.
 
 ## BND Integrate Area Mismatch
 

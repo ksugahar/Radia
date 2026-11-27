@@ -10,6 +10,7 @@ field data lands as GMSH post-processing views. Pure NGSolve + gmsh (no Cubit).
 """
 import math
 import os
+import sys
 
 import numpy as np
 import pytest
@@ -138,6 +139,23 @@ def _shear(x, y, z):
     # while every element becomes asymmetric (catches orientation and
     # high-order node placement bugs that symmetric cubes can hide).
     return (x + 0.3 * y * y, y, z + 0.2 * x)
+
+
+def test_curved_export_without_gmsh_fails_loudly(tmp_path, monkeypatch):
+    """Guards: without the gmsh module a curved export raises; it must not
+    fall back to another node layout (that wrote inverted Tet10 and
+    unreadable Tet20 files)."""
+    from netgen.occ import OCCGeometry, Sphere
+    from netgen.occ import Pnt as OccPnt
+    from ngsolve import Mesh
+
+    mesh = Mesh(OCCGeometry(Sphere(OccPnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.8))
+    curve_mesh(mesh, 2)
+    monkeypatch.setitem(sys.modules, "gmsh", None)
+    out = tmp_path / "no_gmsh.msh"
+    with pytest.raises(RuntimeError, match="needs the gmsh module"):
+        GmshPostExport(mesh).write_mesh(str(out))
+    assert not out.exists()
 
 
 def test_volume_element_orientation_tet_hex_prism():
