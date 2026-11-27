@@ -73,8 +73,8 @@ case is not itself a device-field solve.
 
 Run from the repository root on a licensed Cubit host:
 
-    python validation_test/cubit_mesh_export/paper_sphere_benchmark.py --repeats 2
-    python validation_test/cubit_mesh_export/paper_capacitor_benchmark.py --repeats 2
+    python validation_test/cubit_export/paper_sphere_benchmark.py --repeats 2
+    python validation_test/cubit_export/paper_capacitor_benchmark.py --repeats 2
 
 This table establishes high-order geometry transfer, label preservation,
 solver convergence, and local rerun reproducibility for these cases. It does
