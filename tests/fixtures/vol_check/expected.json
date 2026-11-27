@@ -6,7 +6,7 @@
     "boundaries": [
      {
       "name": "boundary",
-      "ng_area": 35.27457468982216
+      "ng_area": 35.27457468982215
      }
     ],
     "boundary_domain_ownership": {
@@ -1002,19 +1002,19 @@
     "boundaries": [
      {
       "name": "Surface_2",
-      "ng_area": 3.14156359191141
+      "ng_area": 3.1415635919114107
      },
      {
       "name": "Surface_3",
-      "ng_area": 3.1415644904495297
+      "ng_area": 3.1415644904495292
      },
      {
       "name": "Surface_5",
-      "ng_area": 6.283157652221932
+      "ng_area": 6.283157652221931
      },
      {
       "name": "Surface_7",
-      "ng_area": 6.283165895344114
+      "ng_area": 6.283165895344116
      }
     ],
     "boundary_domain_ownership": {
@@ -1071,7 +1071,7 @@
     "edges": [
      {
       "name": "default",
-      "ng_length": 18.8494713251578
+      "ng_length": 18.849471325157804
      }
     ],
     "labels": {
@@ -1146,7 +1146,7 @@
     "materials": [
      {
       "name": "body",
-      "ng_volume": 6.283137448179977
+      "ng_volume": 6.283137448179975
      }
     ],
     "mesh": {
@@ -1215,7 +1215,7 @@
     "boundaries": [
      {
       "name": "exterior",
-      "ng_area": 21.27727085354835
+      "ng_area": 21.277270853548355
      }
     ],
     "boundary_domain_ownership": {
@@ -1411,7 +1411,7 @@
     "boundaries": [
      {
       "name": "exterior",
-      "ng_area": 8.110396147650793
+      "ng_area": 8.11039614765079
      }
     ],
     "boundary_domain_ownership": {
@@ -2830,5 +2830,5 @@
  "equivalence": "matched the former standalone checker on every case before adoption",
  "report_fields": "normalized; schema and run-specific fields removed",
  "schema": "radia.vol-check-baseline.v1",
- "source_sha": "aedfa801590b0171d9497cd92b258e29923f3e5b"
+ "source_sha": "8ea5fd780c36fedd9993290d72bc80f26ec682f3"
 }
