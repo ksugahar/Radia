@@ -34,7 +34,7 @@ Sidesets become boundary labels. Block names become material labels.
 
 ## How It Works
 
-The C++ plugin (`cubit_mesh_export.ccm`) performs the entire export without Python:
+The C++ plugin (`radia_cubit_export.dll`) performs the entire export without Python:
 
 1. **Extract** — `MeshData::extract(order)` reads linear mesh from Cubit's `MeshExportInterface`
 2. **Curve** — `NetgenCurver` builds a `netgen.meshing.Mesh` and calls `BuildCurvedElements(order)` using an ACIS `CallbackGeometry` that projects nodes onto the exact CAD surfaces
@@ -208,14 +208,10 @@ The plugin resolves `FaceDescriptor.DomainIn`/`DomainOut` from Cubit's surface-v
 
 ## In-Memory Curving
 
-The old top-level `cubit_mesh_export.extract_curved_mesh` helper is retired
-from the public API.  Use `export netgen` for production workflows; it handles
-curving, labels, Kelvin detection, and companion JSON in one Cubit command.
-
-The low-level `cubit_mesh_curver.build_curved_mesh` pybind module remains an
-internal implementation detail of the `.ccm` plugin.  It expects already
-extracted mesh arrays plus geometry callbacks and is not the user-facing
-entry point.
+Use `export netgen`; it handles curving, labels, Kelvin detection, and the
+companion JSON in one Cubit command.  The plugin curves in-process from the
+extracted mesh arrays and Cubit geometry callbacks; there is no separate
+Python curving entry point.
 
 ## Troubleshooting
 

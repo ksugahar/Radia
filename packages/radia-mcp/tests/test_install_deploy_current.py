@@ -22,7 +22,6 @@ def test_install_deploy_topics_match_current_machine_roles():
     assert "verified wheels only" in overview
     for retired in (r"\bLAB\b", "md" + "x", "hi" + "bino", "on-demand GPU worker"):
         assert not re.search(retired, INSTALL_DEPLOY), retired
-    assert "editable `radia`, `cubit-mesh-export`, `radia-mcp`" not in overview
     assert "impact-selected" in ci_compute
     assert "validation_test/" in ci_compute
 

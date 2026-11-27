@@ -1,19 +1,19 @@
 # Cubit: geometry, mesh and checked solver inputs
 
-Explore mesh export and validation capabilities of the independent
-`cubit-mesh-export` package. This page introduces saved demonstrations and
+Explore the Cubit mesh export of `radia-mcp` (`radia_mcp.cubit`, the
+`export netgen` plugin `radia_cubit_export.dll`) and the `check-vol` gate of
+`radia` (`radia.vol_check`). This page introduces saved demonstrations and
 connects them to executable validation samples.
 
 ## Human–AI collaboration
 
 Humans work with geometry and mesh controls in Cubit; AI-driven operations run
-headlessly through the package's MCP/Python interface. Saved geometry, journals,
+headlessly through the `cubit-mcp` server (`radia-mcp serve cubit-mcp`). Saved geometry, journals,
 mesh files and check reports provide the handoff. Named regions and boundaries
 connect the mesh to the physical model you define.
 
-Use the [owning package guide](https://github.com/ksugahar/cubit-mesh-export) for
-installation and supported operations. Cubit's MCP server is distributed with
-that package, independently of `radia-mcp`. Continue with
+Use the [`radia_mcp.cubit` guide](../../packages/radia-mcp/src/radia_mcp/cubit/README.md)
+for installation and supported operations. Continue with
 [Radia MCP](../../packages/radia-mcp/README.md) or the
 [Simulink library](../../packages/radia-gpu/matlab/README.md) for supported analysis workflows.
 
@@ -114,7 +114,7 @@ export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 
 ## See Also
 
-- [src/cubit_plugin/](https://github.com/ksugahar/cubit-mesh-export/tree/main/src/cubit_plugin) - C++ plugin source
+- [packages/radia-mcp/native/cubit_vol_export/](../../packages/radia-mcp/native/cubit_vol_export/) - C++ plugin source
 - [validation_test/cubit/](../../validation_test/cubit/) - Cubit validation cases; see each case's execution requirements and recorded evidence
 
 The solver-independent analytic examples now live in `validation_test/radia_mcp/`. Saved showcase records retain the source paths from their original revision; their adjacent historical JSON files remain unchanged.

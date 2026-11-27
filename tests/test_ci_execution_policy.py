@@ -111,7 +111,6 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
 
     for independent_path in (
         "packages/radia-mcp/**",
-        "packages/cubit-mesh-export/**",
         "packages/radia-optuna/**",
     ):
         assert independent_path not in fast
@@ -309,11 +308,11 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert ("Deployment follows release: radia and radia-mcp use editable development installs on the build role "
             "and verified wheels on the validation role, never an editable install there") in normalized
     assert "isolated exact-wheel QA" not in normalized
-    assert "cubit-mesh-export is build-only" in normalized
+    assert "the Cubit plugin and GUI are build-only" in normalized
     assert "The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution" in normalized
     assert "`gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs" in normalized
     assert "retired targets stay excluded" in normalized
-    assert "validation has no Cubit/cme" in normalized
+    assert "validation has no Cubit." in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
@@ -351,7 +350,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
     assert "Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation" in normalized
     assert "Build owns CI/formal artifacts" not in normalized
-    assert "Validation isolates jobs from QA/runtime; no Cubit/cme" in normalized
+    assert "Validation isolates jobs from QA/runtime; no Cubit." in normalized
     assert "JMAG runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
     assert "Timings are diagnostic" in normalized

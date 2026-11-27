@@ -20,7 +20,7 @@ examples -> validation_test promotion target.  Runs:
          (sanity that high-order coupling is in effect)
 
 This test is the regression guard for the ANCHOR-DETERMINISTIC fix in
-`_add_kelvin_cubit_reduction` (`src/radia/panels/add_kelvin.py`,
+`_add_kelvin_cubit_reduction` (`radia_mcp.cubit.kelvin`,
 2026-04-25) and the `subtract WITHOUT keep + recreate` workaround for
 Cubit 2025.3's `subtract ... keep` bug.
 """

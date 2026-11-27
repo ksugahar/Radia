@@ -163,7 +163,6 @@ def run(mesh_path: Path) -> dict:
             "radia": getattr(radia, "__version__", "unknown"),
             "ngsolve": getattr(ng, "__version__", "unknown"),
             "python": platform.python_version(),
-            "cubit_mesh_export": mesh_check["versions"]["cubit_mesh_export"],
         },
         "mesh": {
             "path": str(mesh_path),

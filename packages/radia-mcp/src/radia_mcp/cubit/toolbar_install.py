@@ -13,10 +13,6 @@ The startup shim is generated outside the Python package:
 This avoids mutating the package or editable source tree during install,
 while still baking in the absolute
 ``register_toolbar.py`` path Cubit needs.
-
-The installer replaces the toolbar of the retired cubit-mesh-export
-distribution: its ``.cubit`` startup block, its Cubit.ini toolbar entry and
-its exact startup/toolbar files are removed (one-way; nothing is forwarded).
 """
 
 from __future__ import annotations
@@ -40,18 +36,10 @@ from radia_mcp.cubit.session import find_cubit_install
 _MARKER_BEGIN = "## BEGIN radia-mcp cubit toolbar"
 _MARKER_END = "## END radia-mcp cubit toolbar"
 
-# Startup block of the retired cubit-mesh-export distribution: removed, never written.
-_LEGACY_MARKERS = [
-    ("## BEGIN cubit-mesh-export toolbar", "## END cubit-mesh-export toolbar"),
-]
-
 _PRODUCT_DIR = "radia-mcp"
-_LEGACY_PRODUCT_DIR = "cubit-mesh-export"
 _TOOLBAR_NAME = "netgen_export_toolbar"
 _TOOLBAR_FILE = _TOOLBAR_NAME + ".ttb"
-# Cubit.ini entry of the retired distribution's toolbar, replaced in place.
-_LEGACY_TOOLBAR_FILE = "cubit_mesh_export_toolbar.ttb"
-_OWNED_TOOLBAR_SUFFIXES = ("/" + _TOOLBAR_FILE, "/" + _LEGACY_TOOLBAR_FILE)
+_OWNED_TOOLBAR_SUFFIXES = ("/" + _TOOLBAR_FILE,)
 
 
 def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
@@ -141,74 +129,6 @@ def _startup_dir(all_users=False):
             base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
         return os.path.join(base, _PRODUCT_DIR, "Cubit")
     return os.path.join(os.path.expanduser("~"), "." + _PRODUCT_DIR, "cubit")
-
-
-def _legacy_artifacts(all_users=False):
-    """Exact files/directories the retired cubit-mesh-export toolbar installed."""
-    local_roots = []
-    local = os.environ.get("LOCALAPPDATA")
-    if local:
-        local_roots.append(Path(local))
-    if sys.platform == "win32" and all_users:
-        local_roots.extend(
-            Path(user) / "AppData" / "Local"
-            for user in _iter_windows_user_dirs(include_default=True)
-        )
-    startup_roots = [root / _LEGACY_PRODUCT_DIR / "Cubit" for root in local_roots]
-    if sys.platform == "win32" and all_users:
-        startup_roots.append(
-            Path(os.environ.get("ProgramData", r"C:\ProgramData"))
-            / _LEGACY_PRODUCT_DIR / "Cubit"
-        )
-
-    roaming_roots = []
-    appdata = os.environ.get("APPDATA")
-    if appdata:
-        roaming_roots.append(Path(appdata))
-    if sys.platform == "win32" and all_users:
-        roaming_roots.extend(
-            Path(user) / "AppData" / "Roaming"
-            for user in _iter_windows_user_dirs(include_default=True)
-        )
-
-    legacy_toolbar = Path(_LEGACY_TOOLBAR_FILE).stem
-    files = []
-    directories = []
-    for root in startup_roots:
-        files.extend((
-            root / "startup.py",
-            root / (legacy_toolbar + ".tar.gz"),
-        ))
-        directories.extend((
-            root / "Toolbars" / legacy_toolbar,
-            root / "imported" / legacy_toolbar,
-        ))
-    files.extend(root / _LEGACY_PRODUCT_DIR / "export_settings.json"
-                 for root in roaming_roots)
-    return files, directories
-
-
-def _remove_legacy_artifacts(all_users=False):
-    """Delete only obsolete files/directories owned by the old exporter UI."""
-    removed, errors = [], []
-    files, directories = _legacy_artifacts(all_users=all_users)
-    for path in files:
-        if not path.exists():
-            continue
-        try:
-            path.unlink()
-            removed.append(path)
-        except OSError as exc:
-            errors.append(f"could not remove legacy file {path}: {exc}")
-    for path in directories:
-        if not path.exists():
-            continue
-        try:
-            shutil.rmtree(path)
-            removed.append(path)
-        except OSError as exc:
-            errors.append(f"could not remove legacy directory {path}: {exc}")
-    return removed, errors
 
 
 def build_official_toolbar_package(output_dir=None):
@@ -461,7 +381,7 @@ def _remove_existing_block(lines):
     An unmatched marker is corruption, not permission to discard the rest of
     the user's startup file.  Fail before writing so the original is preserved.
     """
-    markers = [(_MARKER_BEGIN, _MARKER_END)] + _LEGACY_MARKERS
+    markers = [(_MARKER_BEGIN, _MARKER_END)]
     result = []
     active_end = None
     for line in lines:
@@ -722,10 +642,6 @@ def verify_panel_installation(all_users=False, verbose=True):
             issues.append(
                 f"startup script {play_path} does not load {register_norm}"
             )
-        cubit_text = _read_text(cubit_file)
-        for begin, end in _LEGACY_MARKERS:
-            if begin in cubit_text or end in cubit_text:
-                issues.append(f"legacy toolbar marker remains in {cubit_file}")
 
     if cubit_bin:
         plugin_dir = str(plugin_directory(Path(cubit_bin)))
@@ -831,12 +747,6 @@ def install_panels(all_users=False):
         print("=== Installation FAILED; backups above preserve original startup files ===")
         return False
 
-    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
-        all_users=all_users)
-    for path in removed_legacy:
-        print(f"Removed retired exporter asset: {path}")
-    errors.extend(cleanup_errors)
-
     plugin_dir = str(plugin_directory(Path(cubit_bin)))
     for ini_path in _get_cubit_ini_paths(all_users=all_users):
         try:
@@ -869,7 +779,7 @@ def install_panels(all_users=False):
 
 
 def uninstall_panels(all_users=False):
-    """Remove the Netgen Export toolbar registration and retired assets."""
+    """Remove the Netgen Export toolbar registration."""
     print("=== Coreform Cubit - Panel Uninstaller ===\n")
     for ini_path in _get_cubit_ini_paths(all_users=all_users):
         _unregister_official_toolbar(ini_path)
@@ -895,13 +805,6 @@ def uninstall_panels(all_users=False):
             print(f"Removed startup script: {startup_script}")
         except OSError as exc:
             print(f"ERROR: could not remove {startup_script}: {exc}")
-
-    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
-        all_users=all_users)
-    for path in removed_legacy:
-        print(f"Removed retired exporter asset: {path}")
-    for error in cleanup_errors:
-        print(f"ERROR: {error}")
 
     print("Restart Cubit to apply changes.")
     return True

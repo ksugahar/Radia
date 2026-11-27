@@ -2,7 +2,7 @@
 
 The generated order-2 Netgen ``.vol`` is temporary input for
 ``validate_curved_hex_bdm2_cubit.py``.  Cubit/ACIS owns the cylinder geometry
-and ``cubit-mesh-export`` owns the high-order node placement.  No mesh artifact
+and ``export netgen`` (``radia_mcp.cubit``) owns the high-order node placement.  No mesh artifact
 is tracked in Git.
 """
 
@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 
 DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
 

@@ -22,9 +22,6 @@ import cubit
 # hardcoded-absolute-path: absolute Windows path
 sys.path.insert(0, r'D:\MyProject\custom_lib')
 
-# Import cubit_mesh_export for export functions
-import cubit_mesh_export as cme
-
 # missing-cubit-init: no cubit.init() call anywhere
 
 # geometry-block-2nd-order: block adds geometry then sets element type
@@ -43,11 +40,11 @@ cubit.cmd("nodeset 1 add node all")
 cubit.cmd("sideset 1 add tri all")
 
 # deleted-api-usage: usage of removed export_netgen API
-cme.export_netgen(cubit, "output.vol")
+export_netgen(cubit, "output.vol")
 
 # missing-mesh-command + missing-block-registration:
 # export called but no mesh command and no proper block registration
-cme.export_exodus(cubit, "output.vtk")
+export_exodus(cubit, "output.vtk")
 # wrong-file-extension: .vtk extension for Exodus export
 
 # missing-boundary-block + missing-block-names:

@@ -44,7 +44,7 @@ if os.path.isdir(_HELPERS) and _HELPERS not in sys.path:
 try:
     from add_kelvin import add_kelvin_cubit
 except ImportError:
-    from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
 
 # `__file__` is undefined when this script is exec()'d by make_meshes.py
 # inside a single cubit.init session; RADIA_50MM_VOL_OUT then supplies

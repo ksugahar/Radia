@@ -339,7 +339,7 @@ Returns `(geometry, info)` where info contains `center`, `R_K`,
 | Module | Description |
 |--------|-------------|
 | `calc_fem_kelvin.py` | 3D FEM-SIBC solver for Radia-NGSolve Cubit panel |
-| `add_kelvin.py` | Automate Kelvin exterior for Cubit 3D, OCC 3D, 2D axisym |
+| `radia_mcp.cubit.kelvin` | Automate Kelvin exterior for Cubit 3D, OCC 3D, 2D axisym |
 
 ---
 
@@ -1131,7 +1131,7 @@ case, but Kelvin transformation handles both cases uniformly.
 | `src/radia/kelvin_solver.py` | L3 | Full-A and reduced-A FEM drivers |
 | `src/radia/kelvin_validate.py` | L4 | End-to-end validation harness |
 | `src/radia/panels/calc_fem_kelvin.py` | Panel | 3D FEM-SIBC Cubit panel solver |
-| `src/radia/panels/add_kelvin.py` | Panel | Kelvin exterior automation |
+| `packages/radia-mcp/src/radia_mcp/cubit/kelvin.py` | radia-mcp | Kelvin exterior automation |
 
 ### Documentation
 

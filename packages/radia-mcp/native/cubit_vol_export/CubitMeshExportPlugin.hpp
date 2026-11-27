@@ -1,5 +1,5 @@
-#ifndef CUBIT_MESH_EXPORT_PLUGIN_HPP
-#define CUBIT_MESH_EXPORT_PLUGIN_HPP
+#ifndef RADIA_CUBIT_EXPORT_PLUGIN_HPP
+#define RADIA_CUBIT_EXPORT_PLUGIN_HPP
 
 #include "CubitCommandInterface.hpp"
 #include "CubitPluginExport.hpp"

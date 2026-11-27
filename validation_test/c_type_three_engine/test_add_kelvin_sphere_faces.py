@@ -49,10 +49,9 @@ cubit.init(["cubit", "-nojournal", "-batch", "-nographics"])
 
 reflection = _load("c_type_reflection_under_test",
                    REPO / "validation_test" / "c_type_three_engine" / "cubit_reflection_mesh.py")
-from cubit_mesh_export import __file__ as exporter_file
 add_kelvin = _load("add_kelvin_under_test",
-                   Path(exporter_file).parent
-                   / "cubit_helpers" / "add_kelvin.py")
+                   REPO / "packages" / "radia-mcp" / "src" / "radia_mcp"
+                   / "cubit" / "kelvin.py")
 
 R = 0.22
 

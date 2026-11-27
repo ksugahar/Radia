@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 
 _cubit_path = None
 try:
-    from cubit_mesh_export.toolbar_install import find_cubit_bin
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin
     _cubit_path = find_cubit_bin()
 except Exception:
     _cubit_path = None

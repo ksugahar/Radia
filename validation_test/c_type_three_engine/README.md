@@ -218,7 +218,7 @@ therefore built, imprinted, merged, meshed and reflected in a working frame
 scaled by 1000 and scaled back to metres; the unlayered path keeps the
 historical commands and rebuilds byte-identical.  Every slab face except the
 symmetry plane must be merged, and every volume meshed, before export.
-`add_kelvin_cubit` (cubit-mesh-export) was made to select only faces on the
+`add_kelvin_cubit` (`radia_mcp.cubit.kelvin`) was made to select only faces on the
 air sphere: it used to take the largest face of every air volume, which with
 slabs put interior faces into `kelvin_int`.
 

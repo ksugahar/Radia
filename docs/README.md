@@ -243,7 +243,7 @@ has already passed the bibliography audit.
 ## Cubit Mesh Export
 
 - [Function_Reference.md](cubit/Function_Reference.md) - All plugin commands and Python API reference
-- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why cubit-mesh-export is the single chokepoint for labeled .vol.
+- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why Cubit `export netgen` is the single chokepoint for labeled .vol.
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
 - [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.2 export (order 1-3)

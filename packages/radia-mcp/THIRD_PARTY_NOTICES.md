@@ -39,7 +39,6 @@ the JSON); values are unchanged.
 | radia | ngsolve | runtime |
 | radia | netgen-mesher | runtime |
 | radia | optuna | optuna |
-| radia | cubit-mesh-export | cubit |
 | radia | scikit-image | topopt-cad |
 | radia | trimesh | topopt-cad |
 | radia | netCDF4 | topopt-cad |
@@ -60,17 +59,13 @@ the JSON); values are unchanged.
 | radia | pytest-cov | dev |
 | radia | setuptools | dev |
 | radia | matplotlib | dev |
-| cubit-mesh-export | mcp | runtime |
-| cubit-mesh-export | netgen-mesher | runtime |
-| cubit-mesh-export | ngsolve | runtime |
-| cubit-mesh-export | numpy | runtime |
-| cubit-mesh-export | gmsh | mesh-quality |
-| cubit-mesh-export | netCDF4 | sculpt |
-| cubit-mesh-export | youtube-transcript-api | youtube |
 | radia-mcp | mcp | runtime |
 | radia-mcp | tomlkit | maintenance |
 | radia-mcp | build123d | build123d |
-| radia-mcp | cubit-mesh-export | cubit |
+| radia-mcp | numpy | cubit |
+| radia-mcp | ngsolve | cubit |
+| radia-mcp | netgen-mesher | cubit |
+| radia-mcp | radia | cubit |
 | radia-mcp | cadquery | cadquery |
 | radia-mcp | gmsh | gmsh |
 | radia-mcp | numpy | gmsh |
@@ -78,7 +73,6 @@ the JSON); values are unchanged.
 | radia-mcp | matplotlib | gmsh |
 | radia-mcp | numpy | numeric |
 | radia-mcp | scipy | numeric |
-| radia-mcp | cubit-mesh-export | shape-regeneration |
 | radia-mcp | radia | shape-regeneration |
 | radia-mcp | scipy | shape-regeneration |
 | radia-mcp | gmsh | shape-regeneration |

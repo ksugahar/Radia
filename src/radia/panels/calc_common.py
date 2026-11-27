@@ -85,10 +85,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
         cubit module (or None if Cubit unavailable)
     """
     setup_paths()
-    try:
-        from cubit_mesh_export.toolbar_install import find_cubit_bin
-    except ImportError:
-        return None
+    from radia.cubit_locator import find_cubit_bin
 
     cubit_path = find_cubit_bin()
     if not cubit_path:

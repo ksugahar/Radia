@@ -136,8 +136,8 @@ def main() -> int:
                 )
             },
             "mesh_checker": {
-                "distribution": "cubit-mesh-export",
-                "version": importlib.metadata.version("cubit-mesh-export"),
+                "distribution": "radia",
+                "version": importlib.metadata.version("radia"),
                 "module_sha256": _sha256(Path(mesh_checker.__file__)),
             },
             "native_runtime": {

@@ -353,7 +353,7 @@ def _write_dataset(
             "platform": platform.platform(),
             "python": platform.python_version(),
             "ngsolve": _package_version("ngsolve"),
-            "cubit_mesh_export": _package_version("cubit-mesh-export"),
+            "radia_mcp": _package_version("radia-mcp"),
             "cubit_executable": run["executable"],
         },
         "run": {

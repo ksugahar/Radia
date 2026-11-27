@@ -168,7 +168,7 @@ def main() -> None:
         "environment": {"python": platform.python_version(),
                         "platform": platform.platform(),
                         "ngsolve": importlib.metadata.version("ngsolve"),
-                        "cubit_mesh_export": importlib.metadata.version("cubit-mesh-export")},
+                        "radia_mcp": importlib.metadata.version("radia-mcp")},
         "cubit_exe": str(args.cubit_exe), "rows": rows,
     }
     for route in ("cubit_export_netgen", "netgen_occ_native"):

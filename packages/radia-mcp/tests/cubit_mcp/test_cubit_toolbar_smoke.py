@@ -56,7 +56,7 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
         (lambda data: data.update(toolbar_menu_has_entry=False),
          "absent from Cubit's toolbar menu"),
         (lambda data: data.update(toolbar_owner="QToolBar"), "not owned by Coreform"),
-        (lambda data: data.update(schema="cubit-mesh-export.toolbar-probe.v2"),
+        (lambda data: data.update(schema="other.toolbar-probe.v2"),
          "unexpected probe schema"),
     ],
 )

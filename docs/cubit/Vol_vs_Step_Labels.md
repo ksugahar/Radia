@@ -1,9 +1,10 @@
 # Mesh Format Routing: `.vol` vs `.step` — and why labels live in `.vol`
 
 This document explains the two file formats that radia-* domain tools
-accept as input, why labels live in `.vol`, and why
-[`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export) is
-the single recommended chokepoint for producing labeled `.vol` files.
+accept as input, why labels live in `.vol`, and why the Cubit
+`export netgen` command (`radia_cubit_export.dll`, owned by
+`radia_mcp.cubit`) is the single recommended chokepoint for producing
+labeled `.vol` files.
 
 ## TL;DR
 
@@ -16,7 +17,7 @@ the single recommended chokepoint for producing labeled `.vol` files.
   drop them on round-trip, and there is no `sideset` / `nodeset`
   hierarchy. Use it only for label-free workflows (PEEC filament
   centerline extraction).
-- `cubit-mesh-export` exists to be the **single chokepoint** for
+- `export netgen` (`radia_mcp.cubit`) is the **single chokepoint** for
   producing labeled `.vol`. STEP-with-extra-tricks alternatives are
   uniformly worse than just routing through Cubit.
 
@@ -92,38 +93,34 @@ are intrinsically asymmetric:
 This split is forced by what each format can carry, not by a
 solver-side preference.
 
-## Why `cubit-mesh-export` is the single chokepoint
+## Why `export netgen` is the single chokepoint
 
 Producing a labeled `.vol` requires a meshing tool that lets the
 human (or an AI authoring `.jou`) attach **named blocks**, **named
 sidesets**, and **named nodesets** to mesh entities. The lab's
-production tool for this is Coreform Cubit, accessed through
-[`cubit-mesh-export`](https://github.com/ksugahar/cubit-mesh-export):
+production tool for this is Coreform Cubit with the `export netgen`
+command plugin of `radia_mcp.cubit`:
 
 ```
-export netgen "model.vol" order N \
-    [add_kelvin] \
-    [kelvin_mesh <m>] \
-    [kelvin_sym_x|y|z {off|bn|ht}] \
-    [overwrite]
+export netgen "model.vol" order N [overwrite] [periodic_* ...]
 ```
 
 Single command, single round trip: blocks → materials, sidesets →
-BND, nodesets → BBBND, optional Kelvin geometry + sidesets, optional
-symmetry-plane BC labels. Companion `.vol.json` is written next to
+BND, nodesets → BBBND. Kelvin geometry and sidesets are added before
+the export by `radia_mcp.cubit.kelvin` (`cubit_export_vol(...,
+add_kelvin=True)` or the Export Netgen menu). Companion `.vol.json` is written next to
 the `.vol` with CAD-reference Volume / Area / Length so a downstream
 solver can sanity-check the mesh.
 
-This is **the** reason cubit-mesh-export exists. Stripping it back
-to "just the mesh export" loses the labeling layer that the rest of
-the toolchain depends on.
+The labeling layer is the point of this route. Stripping it back to
+"just the mesh export" loses what the rest of the toolchain depends on.
 
 ## Why STEP-with-extra-tricks workarounds are not preferred
 
 Three theoretical paths to "STEP + labels", all worse than routing
-through `cubit-mesh-export`:
+through `export netgen`:
 
-| Workaround                                           | Why it loses to `cubit-mesh-export`                                                                 |
+| Workaround                                           | Why it loses to `export netgen`                                                                     |
 |------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | OCC face name regex (`dir_gnd__face_3` etc.)         | CAD tools drop names on round-trip; humans + AIs find regex names hard to read; no group support    |
 | STEP + sidecar JSON (`coil.step` + `coil.labels.json`) | Two-file pairing breaks if either is moved; no schema enforcement; reinvents `.vol` poorly         |
@@ -139,17 +136,16 @@ Need labels (material / BND / BBBND) ?
 ├── No   → .step is enough.
 │         Use it for PEEC, label-free CAD inspection, geometry sharing.
 └── Yes  → .vol is required.
-          Route through `cubit-mesh-export`:
-              export netgen "model.vol" order N [add_kelvin] [...]
+          Route through Cubit `export netgen`:
+              export netgen "model.vol" order N [overwrite]
           Then hand the .vol to the appropriate radia-* domain tool.
 ```
 
 ## See also
 
-- [`cubit-mesh-export README`](https://github.com/ksugahar/cubit-mesh-export)
-  — APREPRO surface, label-name conventions (BND / BBND / BBBND tables),
-  Kelvin / symmetry options.
+- [`radia_mcp.cubit` README](../../packages/radia-mcp/src/radia_mcp/cubit/README.md)
+  — export route, label-name conventions, Kelvin options.
 - [`docs/cubit/export_NetgenMesh.md`](export_NetgenMesh.md) —
   details of the .vol writer.
-- `cubit_mesh_export.mcp.knowledge.format_routing` — same content as this
+- `radia_mcp.cubit.knowledge.format_routing` — same content as this
   document, exposed via `cubit_docs("format_routing")` for AI lookups.

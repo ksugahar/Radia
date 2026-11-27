@@ -3475,12 +3475,12 @@ KELVIN_CURVED_GEOMETRY = """
 Keep the pinned Netgen/NGSolve runtime unchanged. Do not rebuild or monkeypatch
 Netgen to compensate for an unqualified artifact or persistence route. Netgen/
 NGSolve owns spaces, Piola maps, orientations, quadrature and assembly;
-cubit-mesh-export owns Cubit export and its high-order geometry. MCP consumes
+`radia_mcp.cubit` owns Cubit export and its high-order geometry. MCP consumes
 checked artifacts through the existing tools; it does not implement a second
 mesher or coefficient repair pipeline.
 
-Consult the owning cubit-mesh-export README, "Explicit named periodic export",
-and its installed artifact provenance before selecting that producer route.
+Consult `cubit_docs(topic="export_curved")` (named periodic export) and the
+deployed `radia_cubit_export.dll` provenance before selecting that producer route.
 The named-curved integration contract is one translation, name `kt`, group 1,
 type PERIODIC, for polynomial q1/q2/q3 tetrahedra with linear triangular/tetrahedral
 connectivity. This contract is not a claim that an older installed exporter has

@@ -66,5 +66,5 @@ Tracked outputs:
   model/order/material.
 
 These values are empirical observations, not handwritten truth. Regenerate
-them after changing Cubit, `cubit-mesh-export`, Netgen, NGSolve, CAD projection,
+them after changing Cubit, the `export netgen` plugin, Netgen, NGSolve, CAD projection,
 or the case definitions.

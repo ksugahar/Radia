@@ -131,16 +131,9 @@ def _file_is_locked(path: Path) -> str:
         return f"OSError: {e}"
 
 
-# Files the installer replaces or removes: the plugin itself and the exact
-# command-plugin payloads of the retired cubit-mesh-export distribution.
-_RETIRED_PLUGIN_FILES = ("cubit_mesh_export.ccm", "cubit_mesh_export.ccl")
-_RETIRED_HELPERS_DIR = "cubit_helpers"
-
-
 def _critical_plugin_files(cubit_dir: Path):
     """Files whose state gates a safe install."""
-    plugins = plugin_directory(cubit_dir)
-    return [command_plugin_path(cubit_dir)] + [plugins / name for name in _RETIRED_PLUGIN_FILES]
+    return [command_plugin_path(cubit_dir)]
 
 
 def verify_deployment(plugin_dir: Path, cubit_dir: Path, *, verbose: bool = True):
@@ -165,12 +158,6 @@ def verify_deployment(plugin_dir: Path, cubit_dir: Path, *, verbose: bool = True
         issues.append(f"sha256 mismatch: {dst} != {src}")
     elif verbose:
         print(f"    [OK] {dst.name}  ({dst.stat().st_size} bytes, sha256 match)")
-    plugins = plugin_directory(cubit_dir)
-    for name in _RETIRED_PLUGIN_FILES:
-        if (plugins / name).is_file():
-            issues.append(f"retired plugin payload remains: {plugins / name}")
-    if (plugins / _RETIRED_HELPERS_DIR).exists():
-        issues.append(f"retired helper directory remains: {plugins / _RETIRED_HELPERS_DIR}")
     if verbose:
         for issue in issues:
             print(f"    [FAIL] {issue}")
@@ -205,12 +192,11 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
 # ============================================================
 
 def _clean_old_plugins(cubit_dir: Path):
-    """Remove the deployed plugin and the retired distribution's exact payloads.
+    """Remove the deployed plugin.
 
     Returns:
         (removed: int, errors: list[str])
     """
-    plugins = plugin_directory(cubit_dir)
     removed = 0
     errors = []
     for path in _critical_plugin_files(cubit_dir):
@@ -220,13 +206,6 @@ def _clean_old_plugins(cubit_dir: Path):
                 removed += 1
             except OSError as e:
                 errors.append(f"Could not delete {path}: {e}")
-    helpers = plugins / _RETIRED_HELPERS_DIR
-    if helpers.is_dir():
-        try:
-            shutil.rmtree(helpers)
-            removed += 1
-        except OSError as e:
-            errors.append(f"Could not delete {helpers}: {e}")
     return removed, errors
 
 

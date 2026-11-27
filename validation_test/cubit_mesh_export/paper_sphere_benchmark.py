@@ -149,8 +149,8 @@ def run_label_case(exe: Path, run_dir: Path, timeout: int) -> dict:
     """Check nontrivial sideset/block labels on the bundled EM sample."""
     run_dir.mkdir(parents=True, exist_ok=True)
     sample = (Path(__file__).resolve().parents[2] / "packages" /
-              "cubit-mesh-export" / "src" / "cubit_mesh_export" /
-              "cubit_gui" / "solver_ready_sample.jou")
+              "radia-mcp" / "src" / "radia_mcp" / "cubit" /
+              "gui" / "solver_ready_sample.jou")
     if not sample.is_file():
         raise FileNotFoundError(sample)
     vol = run_dir / "em_sample_o2.vol"
@@ -230,7 +230,7 @@ def main() -> None:
         "environment": {"python": platform.python_version(),
                         "platform": platform.platform(),
                         "ngsolve": importlib.metadata.version("ngsolve"),
-                        "cubit_mesh_export": importlib.metadata.version("cubit-mesh-export")},
+                        "radia_mcp": importlib.metadata.version("radia-mcp")},
         "cubit_exe": str(args.cubit_exe), "rows": rows,
         "multi_label_rows": label_rows,
     }

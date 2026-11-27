@@ -8,7 +8,7 @@
 # remain in the mesh; the seam is needed by `add_kelvin_cubit`'s
 # copy-mesh step to align the Kelvin shell 1:1 with the air outer
 # surface (see CLAUDE.md "AI-Driven Cubit: Probe, Don't Guess" and
-# `cubit_mesh_export.cubit_helpers.add_kelvin`).
+# `radia_mcp.cubit.kelvin`).
 #
 # Use this variant when running FEM A-V on 3turnCoil with proper
 # open-boundary truncation (Kelvin instead of the few-percent-error

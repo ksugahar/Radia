@@ -931,7 +931,7 @@ L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
 ### Using Old API Instead of export netgen
 ```python
 # OLD (DELETED): Do not use export_NetgenMesh or set_*_geominfo
-# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)  # DELETED
+# set_torus_geominfo(ngmesh, ...)  # DELETED
 
 # NEW: Single APREPRO command handles everything
 import tempfile

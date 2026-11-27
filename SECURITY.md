@@ -33,7 +33,7 @@ Instead, contact the maintainers privately:
 
 This policy covers:
 - The Radia Python package (`radia`)
-- The `radia-mcp` and `cubit-mesh-export` packages in this monorepo
+- The `radia-mcp` package in this monorepo, including its Cubit plugin
 - C++ core library (`src/core/`)
 - Build scripts and CI/CD workflows
 - Example scripts (if they demonstrate insecure patterns)

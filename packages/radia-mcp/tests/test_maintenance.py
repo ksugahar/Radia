@@ -142,10 +142,10 @@ def test_cubit_catalog_launcher_is_valid_and_never_added_by_default(tmp_path):
     assert "cubit-mcp" not in json.loads(fresh)["mcpServers"], report
 
 
-def test_external_cubit_is_preserved_and_never_added_by_radia(tmp_path):
+def test_user_owned_cubit_entry_is_preserved_and_never_added_by_radia(tmp_path):
     path = tmp_path / "client.json"
     external = {"command": sys.executable,
-                "args": ["-s", "-m", "cubit_mesh_export.mcp.server"],
+                "args": ["-s", "-m", "site_tools.cubit_server"],
                 "disabled": True, "tools": {"cubit_exec": {"approval_policy": "always"}}}
     path.write_text(json.dumps({"mcpServers": {"radia-cubit": external}}), encoding="utf-8")
     _, after, report = m.plan_config(path, sys.executable)

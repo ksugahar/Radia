@@ -18,9 +18,9 @@
 CUBIT_PLUGIN(CubitMeshExportPlugin)
 
 static void dbglog(const char* msg) {
-  // Optional plugin-load trace: written only when CUBIT_MESH_EXPORT_DEBUG_LOG
+  // Optional plugin-load trace: written only when RADIA_CUBIT_EXPORT_DEBUG_LOG
   // names a file; no fixed machine path is used.
-  const char* path = std::getenv("CUBIT_MESH_EXPORT_DEBUG_LOG");
+  const char* path = std::getenv("RADIA_CUBIT_EXPORT_DEBUG_LOG");
   if (!path || !*path) return;
   FILE* f = fopen(path, "a");
   if (f) { fprintf(f, "%s\n", msg); fclose(f); }

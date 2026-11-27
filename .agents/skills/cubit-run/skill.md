@@ -1,18 +1,17 @@
 ---
 name: cubit-run
-description: Run Cubit .jou files in Cubit 2025.12 and export mesh via the current Cubit .ccm export commands
+description: Run Cubit .jou files and export curved .vol meshes via the radia-mcp `export netgen` command plugin
 allowed-tools: Bash(python *), Bash(*coreform_cubit*), Bash(ssh *), Bash(cp *), Bash(sed *), Bash(cat *), Read, Glob, Write
 ---
 
 # Cubit .jou Runner & Tester
 
-> **CURRENT POLICY (2026-07-06)**: target Coreform Cubit 2025.12 and the
-> `cubit_mesh_export.ccm` APREPRO commands (`export netgen/gmsh/vtk/...`
-> and `export nastran_bdf`). The old `radia_export ...` verb and Cubit
-> 2025.3 paths are historical. Prefer
-> `C:\temp` for temporary journals and outputs.
+> **CURRENT POLICY**: the only export command is `export netgen` from
+> `radia_cubit_export.dll` (`radia_mcp.cubit`, deployed by
+> `python -m radia_mcp.cubit.install`). Prefer `C:\temp` for temporary
+> journals and outputs.
 
-Run Cubit journal (.jou) files and test all export formats.
+Run Cubit journal (.jou) files and test the `.vol` export orders.
 
 ## Arguments
 
@@ -33,12 +32,6 @@ CUBIT="C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"
 # The user's .jou should contain geometry + mesh + blocks only (no export)
 # Append these export lines with output to a temp directory:
 
-export gmsh "{DIR}/test.msh" order 1 overwrite
-export gmsh "{DIR}/test_o2.msh" order 2 overwrite
-export nastran_bdf "{DIR}/test.bdf" order 1 overwrite
-export nastran_bdf "{DIR}/test_o2.bdf" order 2 overwrite
-export vtk "{DIR}/test.vtk" order 1 overwrite
-export vtk "{DIR}/test_o2.vtk" order 2 overwrite
 export netgen "{DIR}/test_o1.vol" order 1 overwrite
 export netgen "{DIR}/test_o2.vol" order 2 overwrite
 export netgen "{DIR}/test_o3.vol" order 3 overwrite
@@ -49,7 +42,7 @@ export netgen "{DIR}/test_o5.vol" order 5 overwrite
 ### Verification checklist (per file)
 
 1. **File exists** and size > minimum threshold
-2. **HEX20/TET10 connectivity**: for order 2 .msh, verify element node count matches GMSH type (type 17 = 20 nodes, type 11 = 10 nodes)
+2. **check-vol**: every .vol passes `check-vol --strict-labels`
 3. **p-convergence monotonic**: .vol file sizes should increase with order (order N+1 > order N)
 4. **No "Interrupt Detected"** in Cubit output
 

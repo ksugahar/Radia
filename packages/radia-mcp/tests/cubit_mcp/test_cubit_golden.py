@@ -13,15 +13,15 @@ _FIXTURE = Path(__file__).parent / "fixtures" / "bad_cubit_script.py"
 # deletion or a fixture edit must consciously update this set.
 _EXPECTED_RULE_LINES = {
     ("deleted-api-usage", 11),
-    ("deleted-api-usage", 46),
-    ("missing-mesh-command", 50),
-    ("geometry-block-2nd-order", 32),
-    ("element-type-before-add", 35),
-    ("wrong-connectivity-2nd-order", 39),
-    ("nodeset-sideset-usage", 42),
+    ("deleted-api-usage", 43),
+    ("missing-mesh-command", 47),
+    ("geometry-block-2nd-order", 29),
+    ("element-type-before-add", 32),
+    ("wrong-connectivity-2nd-order", 36),
+    ("nodeset-sideset-usage", 39),
     ("missing-boundary-block", 1),
     ("hardcoded-absolute-path", 23),
-    ("wrong-file-extension", 50),
+    ("wrong-file-extension", 47),
     ("missing-block-names", 1),
 }
 

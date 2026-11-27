@@ -511,8 +511,8 @@ cubit.cmd("block 1 element type tetra10")
 ```python
 # WRONG: These functions no longer exist
 geo = OCCGeometry("cyl.step")
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)       # DELETED
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
+ngmesh = export_netgen(cubit, geometry=geo)       # DELETED
+set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
 
 # RIGHT: Use cubit_export_vol APREPRO command — no STEP, no OCC
 import tempfile
@@ -897,8 +897,8 @@ print(f"1st order nodes: {n1}, Actual nodes: {n2}")
 ```python
 # OLD (DELETED - does not work):
 # geo = OCCGeometry("geometry.step")
-# ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)   # DELETED
-# cubit_mesh_export.set_cylinder_geominfo(ngmesh, ...)            # DELETED
+# ngmesh = export_netgen(cubit, geometry=geo)   # DELETED
+# set_cylinder_geominfo(ngmesh, ...)            # DELETED
 
 # NEW: Single APREPRO command
 import tempfile

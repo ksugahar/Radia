@@ -192,7 +192,7 @@ def provenance():
         source_dirty=bool(subprocess.check_output(['git','-c','safe.directory=*','status','--porcelain','--','src'],cwd=ROOT,text=True).strip()),
         utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         installed_native_distribution=importlib.metadata.version('radia'),
-        mesh_checker_version=importlib.metadata.version('cubit-mesh-export'),
+        mesh_checker_version=importlib.metadata.version('radia'),
         python=platform.python_version(),ngsolve=ng.__version__,numpy=np.__version__,
         scipy=scipy.__version__,platform_class=platform.system(),threads=2,
         radia_import='src/radia/__init__.py')

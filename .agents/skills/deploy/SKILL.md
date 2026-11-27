@@ -18,7 +18,7 @@ receives verified wheels only. Resolve explicit host/interpreter bindings
 before mutation; preserve existing environments, other packages and active jobs.
 
 MCP follows its [independent runtime policy](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
-Cubit follows `release-cubit-mesh-export` on its licensed build role only.
+Cubit deploys its plugin and menu with `python -m radia_mcp.cubit.install` on its licensed build role only.
 Simulink follows `simulink-app-health` and its package-owned release gates.
 A Radia release does not install or certify these independent packages.
 

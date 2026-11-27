@@ -30,7 +30,7 @@ def test_mcp_sdk_dependency_declares_supported_floor():
     assert project["license-files"] == ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
     from packaging.requirements import Requirement
     names = {Requirement(item).name for item in project['dependencies']}
-    assert not {'cae-mcp-core', 'cubit-mesh-export', 'radia'}.intersection(names)
+    assert not {'cae-mcp-core', 'radia'}.intersection(names)
 
 
 def test_public_description_and_optional_cubit_ownership():
@@ -43,9 +43,6 @@ def test_public_description_and_optional_cubit_ownership():
     assert "check-vol" not in project["scripts"]  # radia owns check-vol (radia.vol_check)
     cubit_names = {Requirement(item).name for item in project["optional-dependencies"]["cubit"]}
     assert "radia" in cubit_names, cubit_names
-    for extra, requirements in project["optional-dependencies"].items():
-        names = {Requirement(item).name for item in requirements}
-        assert "cubit-mesh-export" not in names, extra
     readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
     assert "core (Cubit" not in readme
     assert "| **Cubit** | `mcp-server-cubit`" not in readme

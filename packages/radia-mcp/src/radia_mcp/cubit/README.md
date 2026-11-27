@@ -32,8 +32,7 @@ belong to `radia_mcp.cubit`; the server does not import `radia`. Curved
 `export netgen` command plugin (`radia_cubit_export.dll`, built locally from
 `packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).
-`check-vol` is a radia-mcp
-console script.
+`check-vol` is the `radia` console script (`radia.vol_check`).
 
 Cubit failure logs and documentation caches use `CUBIT_MCP_STATE_DIR`, or the
 platform's radia-mcp state directory by default.

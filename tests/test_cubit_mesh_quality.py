@@ -589,9 +589,9 @@ def test_curved_pyramids_map_consistently_on_the_patched_runtime():
     """Guards: the CI runtime evaluates curved pyramids exactly; the checker passes the order-2 export.
 
     Assumes: the test venv carries the locked Netgen fork (apex clamp + base-edge blend). The stock library integrates a unit pyramid off by ~3e-11 and maps
-    the 18 rim pyramids of this cylinder inconsistently by ~3.5e-2; cubit-mesh-export refuses both.
+    the 18 rim pyramids of this cylinder inconsistently by ~3.5e-2; the checker refuses both.
     """
-    # cubit-mesh-export 2.4.0 export: radius-1, height-2 cylinder, hexes above
+    # Cubit `export netgen` export: radius-1, height-2 cylinder, hexes above
     # z=0, tets below, 37 transition pyramids, order 2, LF line endings.
     from importlib.metadata import version
     if version("netgen-mesher") == "6.2.2608":

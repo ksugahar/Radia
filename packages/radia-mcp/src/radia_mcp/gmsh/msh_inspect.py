@@ -25,8 +25,8 @@ from typing import Any
 from radia_mcp.gmsh._gmsh_subprocess import run_gmsh_json_subprocess
 
 # MSH element type registry: code -> (name, nodes_per_element, dim, order).
-# Covers every type emitted by cubit-mesh-export (order 1-3 gmsh export),
-# GmshPostExport (Tri3..Tri21), and the standard linear/quadratic families.
+# Covers GmshPostExport (Tri3..Tri21) and the standard linear/quadratic
+# families up to order 3.
 ELEMENT_TYPES: dict[int, tuple[str, int, int, int]] = {
     1: ("line2", 2, 1, 1),
     2: ("tri3", 3, 2, 1),

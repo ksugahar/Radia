@@ -286,7 +286,7 @@ def test_solver_triggers_only_cpu_inputs_and_declared_consumers():
         assert "paths-ignore" not in projection
         for path in ("src/radia/__init__.py", "Build.ps1", "tests/test_wheel_package_policy.py", "tools/run_test_tier.py"):
             assert CONTRACT.selected(path, projection), path
-        for path in ("packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
+        for path in ("packages/radia-mcp/src/radia_mcp/cubit/__init__.py",
                       "README.md"):
             assert not CONTRACT.selected(path, projection), path
 

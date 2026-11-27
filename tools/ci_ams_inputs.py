@@ -29,7 +29,7 @@ def _python_inputs(root):
             pending.extend(profiles[profile].get('paths', []))
             profile = profiles[profile].get('extends')
     source_roots = [root / 'src', *(root / 'packages' / package / 'src' for package in
-        ('radia-simulink', 'radia-mcp', 'cubit-mesh-export')), root]
+        ('radia-simulink', 'radia-mcp')), root]
     # Conservative floor: dynamically imported solver modules and file-loaded data
     # cannot all be proven by static Python import traversal.
     floor = {p.relative_to(root).as_posix() for p in (root / 'src/radia').rglob('*.py')}

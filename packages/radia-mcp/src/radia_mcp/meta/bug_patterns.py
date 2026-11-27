@@ -1,6 +1,6 @@
 """
 bug_patterns.py -- learned catalog of bug patterns observed in real
-Radia / radia-mcp / cubit-mesh-export incidents.
+Radia / radia-mcp incidents.
 
 Entries record historical incidents; their ``prevention`` field is the current
 rule. Historical ``what`` and ``root_cause`` text is evidence, not an active
@@ -548,8 +548,7 @@ PATTERNS: list[dict] = [
         "root_cause": "Bumped pyproject.toml but forgot to bump "
                       "src/<pkg>/__init__.py's __version__ in the "
                       "same commit.  Both are read by different tools.",
-        "detection": "release.yml / release-cubit-mesh-export.yml / "
-                     "release-radia-mcp.yml all check version "
+        "detection": "release.yml / release-radia-mcp.yml both check version "
                      "consistency in the 'Verify wheel' step.  "
                      "Catches at PUBLISH time, not at commit time.",
         "prevention": "Bump both files in the owning distribution's "
@@ -629,7 +628,7 @@ PATTERNS: list[dict] = [
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
         "what": "First push after Tier-2 (Cubit plugin .pyd/.ccm moved "
-                "OUT of src/radia into the cubit-mesh-export package) + "
+                "OUT of src/radia into the Cubit export package) + "
                 "the de-radia rename turned build-test CI RED at the "
                 "'fetch cubit_mesh_curver.pyd from binaries' step (6 "
                 "download attempts, exit 1).  Job died before tests -> "
@@ -637,8 +636,8 @@ PATTERNS: list[dict] = [
         "root_cause": "build-test.yml fetched the .pyd to src/radia and "
                       "the wheel-build step copied .pyd/.ccm FROM "
                       "src/radia -- but Build.ps1 now propagates them "
-                      "into packages/cubit-mesh-export/src/cubit_mesh_"
-                      "export.  The renamed curver asset was also not yet "
+                      "into the Cubit export package.  The renamed curver "
+                      "asset was also not yet "
                       "in the binaries release.",
         "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
                      "download cubit_mesh_curver.pyd after 6 attempts'.",
@@ -677,8 +676,8 @@ PATTERNS: list[dict] = [
                      "the smoke temp dir; --verify-only is green.",
         "prevention": "Treat an Administrator-profile license failure as "
                       "different from package deployment evidence. Use the "
-                      "independent cubit-mesh-export release-dual and verify "
-                      "the plugin/hash contract; run licensed GUI smoke only "
+                      "radia_mcp.cubit.install --verify-only plugin/hash "
+                      "contract; run licensed GUI smoke only "
                       "under a licensed user. Do not weaken radia-mcp gates.",
         "related": [".claude/skills/cubit-license/SKILL.md",
                     ],
@@ -692,7 +691,7 @@ PATTERNS: list[dict] = [
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
         "what": "After renaming the Cubit plugin "
-                "(radia_cubit.*->cubit_mesh_export.*/cubit_mesh_curver) + "
+                "(radia_cubit.* -> a new plugin/curver name) + "
                 "the command verb (radia_export->export, nastran-> "
                 "jmag_nastran), the deploy/release-quad/build skills "
                 "still listed the OLD cmake targets (radia_cubit_ccm), "

@@ -297,7 +297,7 @@ the extension carries its CPython ABI tag. No CUDA DLL is bundled. Runtime
 redistribution and complete distribution qualification remain separate gates.
 These CSR results do not establish HDiv, AMS, nonlinear or large-model parity.
 
-The Python HDiv GPU solver and pybind build belong to `radia.hdiv_gpu`; see the Radia [development build preparation](../../docs/compilation/python-hdiv-gpu.md). This distribution owns mexcuda and the thin MATLAB host publisher only. The Python workflow requires the optional pure-Python `cubit-mesh-export` checker for strict `check-vol` validation; Cubit itself is not required.
+The Python HDiv GPU solver and pybind build belong to `radia.hdiv_gpu`; see the Radia [development build preparation](../../docs/compilation/python-hdiv-gpu.md). This distribution owns mexcuda and the thin MATLAB host publisher only. The Python workflow uses `radia.vol_check` (`check-vol`) for strict validation; Cubit itself is not required.
 
 HDiv solves take a checked setup in one of two ways, and neither builds a matrix on the host:
 

@@ -21,7 +21,6 @@ def test_curated_python_roundtrips_json_values(monkeypatch, tmp_path):
     for key in record:
         assert restored[key] == record[key]
     assert 'consented via' not in output.read_text()
-    assert 'cubit-mesh-export' not in response['next_step']
 
 
 def test_manual_does_not_reintroduce_radia_install_or_compute_host_deploy():
@@ -30,5 +29,4 @@ def test_manual_does_not_reintroduce_radia_install_or_compute_host_deploy():
     assert 'pip install radia[cubit]' not in text
     assert 'Radia adds optional toolbar integration' not in text
     assert '`release_quad.py phase8e` installs PyPI wheels for `radia` and' not in text
-    assert 'pip install cubit-mesh-export' not in text
     assert 'cubit_export_vol' in text

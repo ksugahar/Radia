@@ -80,8 +80,7 @@ coefficients by minimising the distance to the CAD geometry
 (`native/cubit_vol_export/netgen_curving/geometric_refit.cpp`), keeping Netgen's basis and `.vol` layout.  A
 refit is kept only when the sampled distance decreases and the element
 Jacobian does not degenerate; the export log reports accepted/tried counts and
-the maximum distance before and after.  For the unit sphere
-(`validation_test/cubit_mesh_export/geometric_refit_benchmark.py`) the radial
+the maximum distance before and after.  For the unit sphere the radial
 L2 error of the 32-HEX mesh drops from 1.2e-3 to 9.8e-7 at p=3, from
 1.8e-5 to 8.6e-10 at p=4 and from 3.3e-5 to 7.3e-11 at p=5; log10(error)
 is close to linear in p (volume error about 2.6 decades per order).  Three
@@ -95,9 +94,7 @@ settles in a worse minimum than the one the hierarchical basis contains.
 Order 2 is exported with Netgen's coefficients unchanged: an order-2 triangle
 has no face coefficients, so an edge refit bends its interior (torus: up to
 9x worse inside), and keeping every triangle within Netgen's distance cost
-about 35x Netgen's export time.  Set
-`CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
-comparison.
+about 35x Netgen's export time.
 
 ### Pyramids require the patched Netgen 6.2.2608 runtime
 
@@ -1372,8 +1369,8 @@ kernel directly, without any STEP file exchange or OCC geometry.
 ```python
 # This code NO LONGER WORKS — all these functions are deleted
 geo = OCCGeometry("cylinder.step")
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)    # DELETED
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=R, height=H)  # DELETED
+ngmesh = export_netgen(cubit, geometry=geo)    # DELETED
+set_cylinder_geominfo(ngmesh, radius=R, height=H)  # DELETED
 mesh = Mesh(ngmesh)
 mesh.Curve(3)
 ```
@@ -1392,12 +1389,12 @@ mesh = Mesh(vol_path)
 ### Old Complex Workflow (REMOVED)
 ```python
 # This code NO LONGER WORKS
-cubit_mesh_export.name_occ_faces(shape)
+name_occ_faces(shape)
 shape.WriteStep("geometry.step")
 geo = OCCGeometry("geometry.step")
 cubit.cmd('import step "geometry.step" noheal')
-ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=R_HOLE, height=H)
+ngmesh = export_netgen_with_names(cubit, geo)
+set_cylinder_geominfo(ngmesh, radius=R_HOLE, height=H)
 mesh = Mesh(ngmesh)
 mesh.Curve(3)
 ```

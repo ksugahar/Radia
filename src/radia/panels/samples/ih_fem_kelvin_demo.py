@@ -9,7 +9,7 @@ sidesets that `calc_fem_kelvin.py --require-kelvin` insists on.
 Why a `.py` and not a `.jou`: Cubit journal files cannot import
 Python modules.  The `add_kelvin_cubit()` helper that builds the
 Kelvin shell + 1:1 copy-mesh + GND nodeset is a Python function in
-`cubit-mesh-export`, so any sample that needs Kelvin must be a `.py`
+`radia_mcp.cubit.kelvin`, so any sample that needs Kelvin must be a `.py`
 script that runs in Cubit's embedded Python.  See
 `validation_test/induction_heating/demoted_samples_legacy/README.md` for the
 .jou-vs-.py rationale (2026-04-23 demotion of confusing .jou+.py
@@ -88,12 +88,9 @@ import sys
 import cubit
 
 # --- Locate add_kelvin_cubit ----------------------------------------------
-# Two resolution paths (matching the demoted-samples loader pattern):
-#   1. Repo-relative `src/radia/panels/` (development tree)
-#   2. Installed `radia.panels.add_kelvin` shim (pip-installed PyPI radia)
-# In Cubit-embedded Python, `radia` is usually NOT importable, so we
-# fall back to the deployed `<Cubit>/bin/plugins/cubit_helpers/` path
-# which the .ccm command prepends to sys.path at panel startup.
+# `radia_mcp.cubit.kelvin` is standard-library only at import time, so
+# Cubit's embedded Python imports it from the development tree
+# (<repo>/packages/radia-mcp/src) or from an installed radia-mcp.
 #
 # `__file__` is set when run as `python script.py`, but NOT when
 # Cubit's `play` (or `coreform_cubit -batch script.py`) executes the
@@ -103,26 +100,12 @@ try:
     _here = os.path.dirname(os.path.abspath(__file__))
 except NameError:
     _here = os.getcwd()
-# This file lives at <repo>/src/radia/panels/samples/, so the panels
-# directory is exactly its parent (one level up).
-_panels_repo = os.path.dirname(_here)
-if os.path.isfile(os.path.join(_panels_repo, "add_kelvin.py")):
-    if _panels_repo not in sys.path:
-        sys.path.insert(0, _panels_repo)
-# Also try the deployed Cubit plugin location -- the .ccm prepends
-# this to sys.path at panel startup, but in headless batch we may
-# have started without that path being injected.
-_cubit_plugin_helpers = os.path.join(
-    os.environ.get("CUBIT_PLUGIN_DIR",
-                   r"C:\Program Files\Coreform Cubit 2025.12\bin\plugins"),
-    "cubit_helpers")
-if os.path.isdir(_cubit_plugin_helpers) and _cubit_plugin_helpers not in sys.path:
-    sys.path.insert(0, _cubit_plugin_helpers)
-try:
-    from add_kelvin import add_kelvin_cubit
-except ImportError:
-    # Last-resort fallback for pip-installed cubit-mesh-export
-    from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_cubit
+# This file lives at <repo>/src/radia/panels/samples/.
+_mcp_src = os.path.normpath(
+    os.path.join(_here, "..", "..", "..", "..", "packages", "radia-mcp", "src"))
+if os.path.isdir(os.path.join(_mcp_src, "radia_mcp")) and _mcp_src not in sys.path:
+    sys.path.insert(0, _mcp_src)
+from radia_mcp.cubit.kelvin import add_kelvin_cubit
 
 
 cubit.cmd("reset")

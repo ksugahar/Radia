@@ -103,11 +103,11 @@ def _write_journal(
         helper = (
             HERE.parents[1]
             / "packages"
-            / "cubit-mesh-export"
+            / "radia-mcp"
             / "src"
-            / "cubit_mesh_export"
-            / "cubit_helpers"
-            / "add_kelvin.py"
+            / "radia_mcp"
+            / "cubit"
+            / "kelvin.py"
         )
         kelvin_script = path.with_suffix(".kelvin.py")
         kelvin_script.write_text(
@@ -612,7 +612,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         else None
     )
     if command_plugin_dir is not None:
-        command_plugin = command_plugin_dir / "cubit_mesh_export.ccm"
+        command_plugin = command_plugin_dir / "radia_cubit_export.dll"
         if not command_plugin.is_file():
             raise FileNotFoundError(command_plugin)
 
@@ -783,7 +783,7 @@ def main() -> None:
     parser.add_argument(
         "--command-plugin-dir",
         type=Path,
-        help="Cubit command-plugin directory containing cubit_mesh_export.ccm",
+        help="Cubit command-plugin directory containing radia_cubit_export.dll",
     )
     parser.add_argument("--iron-size", type=float, default=0.010)
     parser.add_argument("--air-size", type=float, default=0.015)

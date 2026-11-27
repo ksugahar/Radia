@@ -8,13 +8,8 @@ same discovery rules:
      (version-aware sort: 2026.8 > 2026.6).
   3. Returns None + logs a warning if nothing found.
 
-Replaces the prior hardcoded path pattern in
-``cubit_mesh_export.mcp.daemon`` and ``cubit_mesh_export.toolbar_install``:
+Usage::
 
-    # OLD (hardcoded -- breaks on Cubit upgrade):
-    candidates = [r"C:\\Program Files\\Coreform Cubit 2025.3\\bin", ...]
-
-    # NEW (auto-discovery):
     from tools.find_cubit import find_cubit_bin
     cubit_bin = find_cubit_bin()
 

@@ -26,19 +26,16 @@ All commands are available in journal files (.jou) and the Cubit command line.
 
 ### Build & Installation
 
-The plugin is built with **compact_netgen** (static link, no nglib.dll dependency):
+The plugin `radia_cubit_export.dll` is built from
+`packages/radia-mcp/native/cubit_vol_export` against the fork Netgen:
 
 ```bash
-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.12/cmake" \
-  -DNETGEN_SRC_DIR="C:/netgen_build/netgen_fork" \
-  src/cubit_plugin
-
-cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
-# The packaged cubit_export_menu.py toolbar is the sole GUI entry point.
+python packages/radia-mcp/native/cubit_vol_export/build.py \
+  --cubit-sdk "<Cubit>/cmake" --netgen-dir "<venv>/Lib/site-packages/netgen/cmake" --out <plugin_dir>
+# The packaged Export Netgen menu (radia_mcp.cubit.gui) is the sole GUI entry point.
 ```
 
-Installation: `pip install cubit-mesh-export && cubit-plugin-install`
+Installation: `python -m radia_mcp.cubit.install --plugin-dir <plugin_dir>`
 
 ---
 
@@ -134,18 +131,16 @@ Creates directory with `in.dat`, `sin.dat.B`, `sina.dat`, and `d3`.
 
 ### In-Memory Curving
 
-The old top-level `cubit_mesh_export.extract_curved_mesh` Python helper is
-not part of the current public API.  Use the Cubit command instead:
+Curved meshes come from the Cubit command:
 
 ```python
 cubit.cmd('export netgen "model.vol" order 3 overwrite')
 ```
 
-The low-level `cubit_mesh_curver.build_curved_mesh` pybind module is an
-implementation detail used by the `.ccm` plugin after Cubit has supplied
-linear mesh arrays and geometry callbacks.
+The plugin curves the mesh in-process after Cubit has supplied linear
+mesh arrays and geometry callbacks.
 
-### check_consistency (cubit-mesh-export package)
+### check_consistency (radia.vol_check)
 
 ```bash
 check-vol model.vol                         # Full .vol gate; sidecar optional
@@ -170,21 +165,16 @@ are not inferred from `.vol` label strings.
 ## GUI Menu Structure
 
 ```
-Menu bar: ... Export Mesh  Help
+Menu bar: ... Export Netgen  Help
 
-Export Mesh (PySide6):
-  Netgen Vol (.vol)...
-  GMSH...
-  Nastran BDF...
-  VTK...
-  MEG...
-  FEMEEM...
+Export Netgen (PySide6):
+  Export Netgen (.vol)...
 ```
 
-- **Export Mesh**: PySide6 dialogs with settings persistence (`%APPDATA%/cubit-mesh-export/export_settings.json`)
+- **Export Netgen**: PySide6 dialog with settings persistence (`%APPDATA%/radia-mcp/export_settings.json`)
 - Solver orchestration is intentionally outside the Cubit plugin. Downstream
   applications consume the exported mesh through their own process boundary.
-- **Mesh p-convergence demo**: documented under `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`; it is not an engineering design panel or Cubit menu action.
+- **Mesh p-convergence demo**: a saved notebook under `docs/`; it is not an engineering design panel or Cubit menu action.
 
 ---
 

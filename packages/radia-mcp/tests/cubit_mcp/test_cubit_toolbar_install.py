@@ -1,7 +1,7 @@
 """Guards: installer, toolbar installer and MCP session agree on the supported Cubit
 release; the toolbar payload is self-contained (menu, Kelvin helper, launcher, icon);
-the startup shim resolves radia_mcp's GUI through RADIA_MCP_CUBIT_PYTHON; and the
-retired distribution's startup block and Cubit.ini toolbar entry are replaced.
+the startup shim resolves radia_mcp's GUI through RADIA_MCP_CUBIT_PYTHON; and a
+reinstall replaces its own startup block and Cubit.ini toolbar entry.
 
 Assumes: a fake Cubit install tree and profile under tmp_path; no Cubit runs and
 no real user profile is touched (HOME/APPDATA/LOCALAPPDATA point into tmp_path).
@@ -131,7 +131,7 @@ def test_startup_shim_resolves_the_gui_through_the_recorded_python(profile):
     path = Path(toolbar_install._generate_startup_script(toolbar_install._get_panels_dir()))
     assert path.parent == profile / "AppData/Local/radia-mcp/Cubit", path
     text = path.read_text(encoding="utf-8")
-    assert "RADIA_MCP_CUBIT_PYTHON" in text and "CUBIT_MESH_EXPORT" not in text
+    assert "RADIA_MCP_CUBIT_PYTHON" in text
     register = (CUBIT / "gui" / "register_toolbar.py").as_posix()
     assert register in text.replace("\\\\", "/"), text
     # The resolver probe, run by the recorded interpreter, finds this checkout's GUI.
@@ -140,18 +140,18 @@ def test_startup_shim_resolves_the_gui_through_the_recorded_python(profile):
     assert any(isinstance(n, ast.Constant) and "find_spec" in str(n.value) for n in ast.walk(probe))
 
 
-def test_retired_startup_block_and_ini_entry_are_replaced(profile):
+def test_owned_startup_block_and_ini_entry_are_replaced(profile):
     cubit_file = profile / ".cubit"
-    cubit_file.write_bytes(b"journal off\n## BEGIN cubit-mesh-export toolbar\nplay \"x\"\n"
-                           b"## END cubit-mesh-export toolbar\nkeep me\n")
+    cubit_file.write_bytes(b"journal off\n## BEGIN radia-mcp cubit toolbar\nplay \"x\"\n"
+                           b"## END radia-mcp cubit toolbar\nkeep me\n")
     lines, _, _ = toolbar_install._read_startup_for_edit(cubit_file)
     assert "".join(lines) == "journal off\nkeep me\n", lines
     ini = profile / "AppData/Roaming/Coreform/Cubit.ini"
     ini.parent.mkdir(parents=True)
     ini.write_text("[workflow]\nconverted_old=true\n"
                    "toolbars\\0=C:/other/toolbars/other.ttb\n"
-                   "toolbars\\1=C:/u/AppData/Local/cubit-mesh-export/Cubit/Toolbars/"
-                   "cubit_mesh_export_toolbar/toolbars/cubit_mesh_export_toolbar.ttb\n",
+                   "toolbars\\1=C:/u/AppData/Local/radia-mcp/Cubit/Toolbars/"
+                   "netgen_export_toolbar/toolbars/netgen_export_toolbar.ttb\n",
                    encoding="utf-8")
     assert toolbar_install._register_official_toolbar(str(ini)) is True
     _, entries = toolbar_install._workflow_toolbar_entries(ini.read_text(encoding="utf-8"))

@@ -14,8 +14,6 @@ Exodus II export uses Cubit's built-in export command directly:
 cubit.cmd('export mesh "output.exo" overwrite')
 ```
 
-> **Note**: The old `cubit_mesh_export.export_exodus()` Python function has been removed. Use Cubit's native `export mesh` command instead.
-
 ## Why no Cubit Mesh Export command for Exodus?
 
 Exodus II is Cubit's native format and already supports arbitrary

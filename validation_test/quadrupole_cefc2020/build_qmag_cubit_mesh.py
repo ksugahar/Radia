@@ -67,7 +67,7 @@ def main(argv=None) -> int:
             raise RuntimeError(f"{vol}: non-conforming mesh {conformity}")
         check_vol = shutil.which("check-vol")
         if check_vol is None:
-            raise RuntimeError("check-vol (cubit-mesh-export) is not on PATH")
+            raise RuntimeError("check-vol (radia.vol_check) is not on PATH")
         check = subprocess.run([check_vol, str(vol), "--report-json", str(out / f"{tag}.vol-check.json")],
                                capture_output=True, text=True, check=False)
         if check.returncode != 0:

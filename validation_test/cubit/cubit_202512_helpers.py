@@ -4,9 +4,7 @@ These tests exercise the current public Cubit path:
 
     cubit.cmd('export netgen "model.vol" order N overwrite')
 
-The old top-level ``extract_curved_mesh`` Python helper is retired from the
-public API.  ``cubit_mesh_curver`` remains a low-level pybind module used by
-the .ccm plugin.
+The plugin (``radia_cubit_export.dll``) curves the mesh in-process.
 """
 
 from __future__ import annotations
@@ -28,7 +26,7 @@ def find_cubit_bin() -> Path:
     """Return the supported Coreform Cubit 2025.12+ bin directory."""
     if str(RADIA_SRC) not in sys.path:
         sys.path.insert(0, str(RADIA_SRC))
-    from cubit_mesh_export.toolbar_install import find_cubit_bin as _find_cubit_bin
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin as _find_cubit_bin
 
     cubit_bin = _find_cubit_bin()
     if not cubit_bin:
@@ -101,7 +99,7 @@ def add_cubit_mesh_curver_to_path() -> None:
 
 def export_netgen(cubit, stem: str, order: int = 1) -> Path:
     """Run the public 2025.12 Netgen export command and return the .vol path."""
-    out_dir = Path(tempfile.mkdtemp(prefix="cubit_mesh_export_test_"))
+    out_dir = Path(tempfile.mkdtemp(prefix="cubit_export_test_"))
     out = out_dir / f"{stem}_o{order}.vol"
     cmd_path = str(out).replace("\\", "/")
     cubit.cmd(f'export netgen "{cmd_path}" order {order} overwrite')

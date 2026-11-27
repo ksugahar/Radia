@@ -11,15 +11,15 @@ Mesh components:
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> NGSolve mesh (direct via export_NGSolveCurvedMesh) -> Radia PEEC + HDiv-VIM/reduced FEM
+    Cubit geometry -> `export netgen` .vol -> NGSolve mesh -> Radia PEEC + HDiv-VIM/reduced FEM
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      Use cubit_mesh_export.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
+      The Cubit `export netgen` command (radia_cubit_export.dll) writes the .vol.
 
 Requirements:
     - Coreform Cubit 2025.8+
-    - cubit_mesh_export module (via radia package)
+    - radia_cubit_export.dll deployed by `python -m radia_mcp.cubit.install`
 
 Author: Radia Development Team
 Date: 2026-01-16
@@ -28,7 +28,7 @@ Date: 2026-01-16
 import sys
 
 # Auto-detect Cubit installation
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
@@ -38,11 +38,20 @@ if _cubit_path and _cubit_path not in sys.path:
 # Check if Cubit is available
 try:
     import cubit
-    from cubit_mesh_export import extract_curved_mesh
     CUBIT_AVAILABLE = True
 except ImportError:
     CUBIT_AVAILABLE = False
     print("Warning: Cubit not available. Using pre-generated mesh files.")
+
+
+def _export_vol_mesh(name, order=1):
+    """Export the current Cubit mesh with `export netgen` and load it in NGSolve."""
+    import os
+    import tempfile
+    from ngsolve import Mesh
+    path = os.path.join(tempfile.mkdtemp(prefix="wpt_"), name + ".vol").replace("\\", "/")
+    cubit.cmd(f'export netgen "{path}" order {order} overwrite')
+    return Mesh(path)
 
 
 def create_wpt_geometry_cubit():
@@ -51,7 +60,7 @@ def create_wpt_geometry_cubit():
 
     Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Uses cubit_mesh_export.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
+    Exports each assembly with `export netgen` and loads the .vol in NGSolve.
     """
     if not CUBIT_AVAILABLE:
         return None
@@ -127,7 +136,7 @@ def create_wpt_geometry_cubit():
     # Export Tx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Tx assembly to NGSolve mesh...")
     with TaskManager():
-        tx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
+        tx_mesh = _export_vol_mesh("tx", order=1)
 
         # ============================================================
         # Create Rx Assembly (mirror of Tx)
@@ -169,7 +178,7 @@ def create_wpt_geometry_cubit():
 
         # Export Rx assembly to NGSolve directly (no Nastran intermediate)
         print("Exporting Rx assembly to NGSolve mesh...")
-        rx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
+        rx_mesh = _export_vol_mesh("rx", order=1)
 
         return {
             'tx_mesh': tx_mesh,
@@ -183,7 +192,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        mesh: NGSolve Mesh object (from cubit_mesh_export.extract_curved_mesh())
+        mesh: NGSolve Mesh object (from an `export netgen` .vol)
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -245,7 +254,7 @@ def analyze_wpt_system():
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Ensure cubit_mesh_export module is available")
+        print("  2. Deploy radia_cubit_export.dll: python -m radia_mcp.cubit.install")
         return
 
     # Load meshes into Radia via Netgen
@@ -311,7 +320,7 @@ def main():
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Ensure cubit_mesh_export module is available")
+        print("  2. Deploy radia_cubit_export.dll: python -m radia_mcp.cubit.install")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
     # Analyze system

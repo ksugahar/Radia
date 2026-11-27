@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from cubit_mesh_export.mcp import session as cs
+from radia_mcp.cubit import session as cs
 
 pytestmark = pytest.mark.skipif(
     cs.find_cubit_install() is None,

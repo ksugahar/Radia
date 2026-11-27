@@ -50,7 +50,6 @@ def test_required_keys_match_both_actual_probe_file_lists():
                      if isinstance(node, ast.For) and isinstance(node.iter, ast.List))
         assert {"SHA radia/" + path for path in paths} == {
             key for key in quad._PHASE9_FIELDS if key.startswith("SHA radia/")}
-        assert "cubit_mesh_export" not in script
         assert "radia-mcp" not in script
     assert set(quad._parse_phase9_probe("validation", probe())) == set(quad._PHASE9_FIELDS)
 
@@ -101,7 +100,6 @@ def test_phase9_rejects_malformed_probe_even_when_all_hosts_agree(
 
 
 def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
-    assert "VER cubit-mesh-export" not in quad._PHASE9_FIELDS
     assert "VER radia-mcp" not in quad._PHASE9_FIELDS
     monkeypatch.setattr(quad, "_probe", lambda _label, *_args: probe())
     assert quad.cmd_phase9(None) == 0

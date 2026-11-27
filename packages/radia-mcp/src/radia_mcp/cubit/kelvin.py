@@ -1,7 +1,6 @@
 """Kelvin open-boundary helpers: Cubit 3D, OCC 3D and OCC 2D axisymmetric.
 
-The single home of the Kelvin helpers of the retired cubit-mesh-export
-distribution.  The module is standard-library only at import time; each entry
+The module is standard-library only at import time; each entry
 imports ``cubit`` or ``netgen.occ`` inside its body, so the Cubit menu loads
 this file by path inside Cubit's embedded Python.
 

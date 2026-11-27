@@ -32,11 +32,11 @@ DEFAULT_CUBIT = Path(
 DEFAULT_KELVIN_HELPER = (
     REPOSITORY_ROOT
     / "packages"
-    / "cubit-mesh-export"
+    / "radia-mcp"
     / "src"
-    / "cubit_mesh_export"
-    / "cubit_helpers"
-    / "add_kelvin.py"
+    / "radia_mcp"
+    / "cubit"
+    / "kelvin.py"
 )
 
 

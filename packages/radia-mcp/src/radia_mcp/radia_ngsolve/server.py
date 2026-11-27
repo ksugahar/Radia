@@ -11,7 +11,7 @@ Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
 
 App-specific knowledge is in separate servers:
 - ih: Induction heating (SIBC, ESIM, Karl iteration)
-- mcp-server-cubit: external Cubit scripting/mesh export from cubit-mesh-export
+- cubit-mcp: Cubit scripting/mesh export (radia_mcp.cubit)
 - gmsh-mcp: GMSH post-processing
 
 Usage:

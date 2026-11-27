@@ -11,8 +11,8 @@ import argparse
 import json
 import platform
 
-import cubit_mesh_export
 import ngsolve
+import radia
 from radia.vol_check import check_mesh_quality
 from ngsolve import BND, CF, Integrate, Mesh, TaskManager
 
@@ -35,7 +35,7 @@ def main() -> int:
     print(json.dumps({
         "versions": {
             "ngsolve": ngsolve.__version__,
-            "cubit_mesh_export": cubit_mesh_export.__version__,
+            "radia": radia.__version__,
             "python": platform.python_version(),
         },
         "ngsolve_volume": volume,

@@ -2701,7 +2701,7 @@ radia CPU: Build.ps1 / CMake (supported MSVC + MKL + NGSolve)
 
 radia-gpu: independent package-owned MATLAB mexcuda targets
 radia-optuna: standalone repository and release; not built here
-cubit-mesh-export: independent Cubit export-backend build
+radia-mcp: Cubit export plugin (radia_cubit_export.dll), built locally
 ```
 
 CPU `radia` contains Python/pybind11 artifacts only. CPU MEX is unsupported;

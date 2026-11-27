@@ -14,7 +14,7 @@ def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Di
 	"""CRITICAL: Export called without any block registration."""
 	findings = []
 	export_pattern = re.compile(
-		r'(?:cubit_mesh_export\.|cme\.)?export_'
+		r'export_'
 		r'(?:curved|exodus)\s*\('
 		r'|export\s+netgen\s'
 	)
@@ -339,7 +339,7 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called but no mesh command found."""
 	findings = []
 	export_pattern = re.compile(
-		r'(?:cubit_mesh_export\.|cme\.)?export_'
+		r'export_'
 		r'(?:curved|exodus)\s*\('
 	)
 	mesh_pattern = re.compile(
@@ -386,7 +386,7 @@ def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
 			continue
 		for func_pattern, valid_exts in extension_map.items():
 			match = re.search(
-				rf'(?:cubit_mesh_export\.|cme\.)?{func_pattern}\s*\(\s*cubit\s*,\s*["\']([^"\']+)["\']',
+				rf'{func_pattern}\s*\(\s*cubit\s*,\s*["\']([^"\']+)["\']',
 				stripped
 			)
 			if match:
@@ -450,7 +450,7 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 		r'cubit\.cmd\s*\(\s*["\'].*\b(?:nodeset|sideset)\b', re.IGNORECASE
 	)
 	non_exodus_export = re.compile(
-		r'(?:cubit_mesh_export\.|cme\.)?export_'
+		r'export_'
 		r'(?:NetgenMesh|netgen|netgen_with_names)\s*\('
 	)
 
@@ -487,7 +487,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	# Only check files that have export calls
 	export_pattern = re.compile(
-		r'(?:cubit_mesh_export\.|cme\.)?export_'
+		r'export_'
 		r'(?:curved|exodus)\s*\('
 	)
 	has_export = any(

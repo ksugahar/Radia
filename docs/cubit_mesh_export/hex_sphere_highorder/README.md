@@ -1,6 +1,6 @@
 # High-order curved HEX mesh in NGSolve
 
-Demonstrates the `cubit-mesh-export` capability that Netgen alone does not provide:
+Demonstrates the Cubit `export netgen` capability that Netgen alone does not provide:
 **curved, high-order hexahedral meshes consumed by NGSolve.**
 
 A sphere meshed with 56 hexes (`volume scheme sphere` in Coreform Cubit) is exported to a

@@ -23,7 +23,7 @@ Usage:
         then checks non-editable registration, import origin, RECORD hashes
         bound to the candidate wheel, metadata-pinned NGSolve/Netgen and GPU
         runtime pins, and pip check. The CPU-only build host is never a
-        target. Never change radia-mcp or cubit-mesh-export.
+        target. Never change radia-mcp or the Cubit plugin.
 
     python tools/release_quad.py phase9
         Read-only verified-wheel runtime consistency probe.

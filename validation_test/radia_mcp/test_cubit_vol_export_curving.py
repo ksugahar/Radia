@@ -1,6 +1,6 @@
 """Validation: curved .vol export through the native Cubit plugin, end to end.
 
-Guards: ``cubit_export_vol`` (isolated worker + ``cubit_mesh_export.dll``)
+Guards: ``cubit_export_vol`` (isolated worker + ``radia_cubit_export.dll``)
 on a real Cubit unit cylinder (radius 1, height 1, exact volume pi) with a
 named vertex nodeset: the curved volume error must fall as the geometric order
 rises from 1 to 2 and 3, the nodeset must arrive as CD3 name 1, and the result

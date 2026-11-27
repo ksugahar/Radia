@@ -142,13 +142,9 @@ check-vol = "radia.vol_check:main"
 # Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit
 # embedded Export Mesh toolbar remains package data; normal Radia Python uses
 # headless workflows and does not depend on PySide6.
-# Note (Tier-2, 2026-06-01): the Cubit plugin binaries (cubit_mesh_export.ccm,
-# cubit_mesh_curver.pyd) are NO LONGER bundled in the radia wheel.  They are
-# shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
-# cubit-mesh-export release fully independently.  "*.ccm" is dropped here;
-# cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
-# _radia_pybind.pyd / peec_matrices.pyd /
-# sparsesolv_ngsolve.pyd).
+# The Cubit plugin (radia_cubit_export.dll) is built and deployed by radia-mcp,
+# never shipped in the radia wheel.  The "*.pyd" glob ships only
+# _radia_pybind.pyd / peec_matrices.pyd / sparsesolv_ngsolve.pyd.
 radia = [
     "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyd.build.json", "*.so.build.json", "*.pyi", "*.png", "*.ico",
     "resources/*.png", "resources/*.ico",
@@ -167,9 +163,8 @@ radia = [
     # non-Python data assets are).  panels/cub5_to_vol.py is therefore
     # not in this repo at all — the reference implementation lives in
     # to_developers/ngsolve/cub5_to_vol.py (gitignored, LAB local).
-    # Tier-2 (2026-06-01): the Cubit plugin .pyd is shipped only by the
-    # cubit-mesh-export package, never by radia -- exclude it from the
-    # "*.pyd" glob in case a stale build artifact lingers in src/radia/.
+    # Cubit plugin binaries never ship in radia -- exclude a stale curver
+    # build artifact in src/radia/ from the "*.pyd" glob.
     "cubit_mesh_curver.pyd",
     # Retired equation backend must not return through a stale local build.
     "_equation*.pyd", "_equation*.so", "_equation*.dylib",

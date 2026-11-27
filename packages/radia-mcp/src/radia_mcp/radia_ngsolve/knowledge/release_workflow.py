@@ -16,7 +16,7 @@ historically tripped releases, and the recovery patterns.
 Read this when:
 * The user asks for a release / version bump / PyPI publish.
 * CI on a tag ref fails after `git push --tags`.
-* You see "Release / Release radia-mcp / Release cubit-mesh-export"
+* You see "Release / Release radia-mcp"
   workflows skip in `gh run list` (means CI never went green).
 * The user reports "is X.Y.Z on PyPI yet?" and propagation seems
   stuck.
@@ -142,7 +142,7 @@ the AI-readable summary; independent package lanes are excluded.
 | 5 | Create the Radia solver tag | always | package tags are created only in their owning independent lane |
 | 6 | Push approved main and the solver tag | after solver gates | Radia tag CI uploads `ci-release-context` but leaves PyPI on HOLD; other packages retain independent publication gates |
 | 7 | Monitor the exact solver CI run | always | use ci-monitor skill |
-| 8 | `phase8 --source-sha SHA --manifest FILE`: install and verify the exact hash-verified release wheel on the validation role | when the runtime must move | never an editable install; the CPU-only build host is never a target; this phase does not install radia-mcp or cubit-mesh-export |
+| 8 | `phase8 --source-sha SHA --manifest FILE`: install and verify the exact hash-verified release wheel on the validation role | when the runtime must move | never an editable install; the CPU-only build host is never a target; this phase does not install radia-mcp |
 | 9 | `phase9`: read-only verified-wheel runtime consistency probe | after phase 8 | refuses an editable install or a non-release version; package-independent MCP state is outside this probe |
 | DoD | `done --source-sha SHA --manifest FILE`: verify the four lane receipts and exact artifacts, then write the public lane summary | always | read-only; does not deploy. Only exit 0 authorizes the release-owner handoff. The release source (the controller by default, or `--release-source`) must be the exact tracked-clean release SHA. A later validation runtime change deploys a newer verified release wheel; never restore an older tree or an editable source. |
 
@@ -257,7 +257,6 @@ release gate rather than tracked as a stale package-local JSON snapshot.
 | `gh release download ... no assets match the file pattern`              | binaries-release upload race vs tag-CI start                     | (CI has 6-attempt retry as of v4.26)| v4.25.1, v4.27.0|
 | `Basic tests failed` w/ collected 0 tests                               | pytest config conflict (pyproject.toml vs pytest.ini)            | Gate 2 (collect-only sweep)    | (rare)       |
 | `_radia_pybind import failure: DLL load failed`                         | Radia native extension built against the wrong Python/NGSolve ABI | clean solver rebuild in the owning environment | solver native CI |
-| `cubit_mesh_curver import failure: DLL load failed`                    | cubit-mesh-export native extension built against the wrong Python ABI | independent Cubit native provenance/build gate | cubit-mesh-export CI |
 | PyPI version appears although its release-tag CI did not pass           | an earlier successful main CI looked up tags by SHA after tags were added | exact per-run `ci-release-context` artifact + workflow contract tests | 4.95.30 / 1.4.24 |
 
 ## ===

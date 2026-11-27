@@ -51,8 +51,6 @@ GMSH GUI:
 - Post-processing launch artifact: `case.geo` that merges the .msh/.step data
 - Exact option sidecars: `case.geo.opt` for normal launch and `case.msh.opt`
   for raw mesh/data inspection. A plain `case.opt` is not auto-loaded.
-- `cubit-mesh-export` `export gmsh "case.msh"` should attach `case.geo`,
-  `case.geo.opt`, and `case.msh.opt`; open `case.geo` for normal review.
 - For acoustic/FEM-BEM post artifacts, use the shared
   `gmsh_post_display_contract` / `write_gmsh_post_launch_artifact` pattern:
   one MSH v4.2 data file, a `.geo` launch file, exact `.geo.opt` and
@@ -786,7 +784,7 @@ reference coordinates. H1 GridFunction approach is unreliable for p>=4.
 GMSH_RADIA_WORKFLOW = """
 # Gmsh 5 / MSH 4.2 post-processing workflow
 
-Start with an existing result file exported by Radia or cubit-mesh-export.
+Start with an existing result file exported by Radia.
 Keep the original checked solver `.vol`, its label contract and result
 provenance. Gmsh does not create or import the solver mesh in this workflow.
 The calls below are MCP tools, using absolute paths for files.

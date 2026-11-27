@@ -8,7 +8,7 @@ Tests the full Cubit pipeline:
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
-Requires: Cubit license, NGSolve, cubit_mesh_export.ccm plugin.
+Requires: Cubit license, NGSolve, radia_cubit_export.dll plugin.
 """
 
 import math
@@ -44,7 +44,7 @@ def _grover_L(R, a):
 
 def _setup_cubit():
     """Initialize Cubit with plugin."""
-    from cubit_mesh_export.toolbar_install import find_cubit_bin
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin
     cubit_path = find_cubit_bin()
     if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)

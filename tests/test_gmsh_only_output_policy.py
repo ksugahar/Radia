@@ -79,7 +79,7 @@ def test_non_cubit_code_has_no_vtk_output_path() -> None:
             violations.append(match)
 
     assert not violations, (
-        "Only cubit-mesh-export may produce VTK. Use GmshPostExport and checked "
+        "Only the Cubit export boundary may produce VTK. Use GmshPostExport and checked "
         ".msh v4.2 output elsewhere:\n" + "\n".join(violations)
     )
 
