@@ -21,7 +21,8 @@ way. The model is exact when g is bilinear in (xi, eta).
 
 Supported geometry. Any one-to-one chart. planar_patch builds the planar
 parallelogram, annular_patch a planar annulus or disk sector in polar
-coordinates, cylindrical_patch a circular cylinder sector. Each chart also
+coordinates, cylindrical_patch a circular cylinder sector, spherical_cap_patch
+a sphere cap about an axis (polar angle and azimuth). Each chart also
 gives its metric (physical length per unit chart coordinate) and locate(),
 the signed offset from the surface and the chart coordinates of a point.
 
@@ -31,7 +32,12 @@ coordinate singularity). balanced_equal_flux_seeds places any number of
 seeds by recursive equal-flux bisection: every split cuts the longer
 physical side of a chart rectangle so that each part carries flux in
 proportion to its seed count (a one-dimensional inverse of the marginal),
-so cells stay near square where the grid gives thin strips. It seeds one
+so cells stay near square where the grid gives thin strips.
+ring_equal_flux_cells lays out cells on a chart whose eta is periodic and
+whose xi = 0 side is one point (a disk or a cap): centre sectors, then rings
+with shared sector breaks, so neighbouring cells meet without T-junctions;
+it is exact when the flux density separates in (xi, eta). Balanced seeding
+seeds one
 sign of a sign-changing surface: in a field with closed lines a surface is
 usually crossed once in each direction, so seeding both signs would draw
 each flux tube twice. Seed generation is separate from trajectory
@@ -290,6 +296,50 @@ class CylindricalPatch(_Chart):
         return out, index
 
 
+@dataclass(frozen=True)
+class SphericalCapPatch(_Chart):
+    """Sphere cap |x - c| = R about an axis: polar angle xi * theta_max from the
+    axis, azimuth theta0 + eta * dtheta (measured like AnnularPatch). The area
+    normal points away from the centre."""
+
+    center_m: NDArray[np.float64]
+    axis_unit: NDArray[np.float64]
+    e1: NDArray[np.float64]
+    e2: NDArray[np.float64]
+    radius_m: float
+    theta_max: float
+    theta0: float
+    dtheta: float
+
+    def _unit(self, xi, eta):
+        xi, eta = _grid(xi, eta)
+        th, ph = xi * self.theta_max, self.theta0 + eta * self.dtheta
+        return (np.sin(th)[..., None] * (np.cos(ph)[..., None] * self.e1
+                                         + np.sin(ph)[..., None] * self.e2)
+                + np.cos(th)[..., None] * self.axis_unit), th
+
+    def chart(self, xi, eta):
+        u, _ = self._unit(xi, eta)
+        return self.center_m + self.radius_m * u
+
+    def area_vector(self, xi, eta):
+        u, th = self._unit(xi, eta)
+        return (self.radius_m ** 2 * np.sin(th) * self.theta_max * self.dtheta)[..., None] * u
+
+    def metric(self, xi, eta):
+        xi, _ = _grid(xi, eta)
+        return (np.full(xi.shape, self.radius_m * self.theta_max),
+                self.radius_m * np.sin(xi * self.theta_max) * self.dtheta)
+
+    def locate(self, points_m):
+        d = np.asarray(points_m, dtype=float) - self.center_m
+        r = np.linalg.norm(d, axis=-1)
+        z, x, y = d @ self.axis_unit, d @ self.e1, d @ self.e2
+        xi = np.arctan2(np.hypot(x, y), z) / self.theta_max
+        eta = np.mod(np.arctan2(y, x) - self.theta0, 2 * np.pi) / self.dtheta
+        return r - self.radius_m, xi, eta
+
+
 def _offset_root(chart, a: NDArray, b: NDArray, side_a: int) -> NDArray:
     """Point where the signed offset changes sign on a monotone segment a -> b."""
     lo, hi = 0.0, 1.0
@@ -390,6 +440,22 @@ def cylindrical_patch(axis_origin_m: ArrayLike, axis_m: ArrayLike, radius_m: flo
         raise ValueError("radius_m must be positive")
     return CylindricalPatch(o, a, e1, e2, float(np.linalg.norm(np.asarray(axis_m, float))),
                             radius, *_theta_range(theta_range))
+
+
+def spherical_cap_patch(center_m: ArrayLike, axis: ArrayLike, radius_m: float, theta_max: float,
+                        *, theta_range=(0.0, 2 * np.pi),
+                        reference: ArrayLike | None = None) -> SphericalCapPatch:
+    """Build a sphere cap chart: polar angle 0..theta_max (0 < theta_max <= pi) from axis."""
+    c = np.asarray(center_m, dtype=float)
+    if c.shape != (3,) or not np.all(np.isfinite(c)):
+        raise ValueError("center_m must be a finite 3-vector")
+    a, e1, e2 = _frame(axis, reference)
+    radius, tmax = float(radius_m), float(theta_max)
+    if not (np.isfinite(radius) and radius > 0):
+        raise ValueError("radius_m must be positive")
+    if not (np.isfinite(tmax) and 0 < tmax <= np.pi):
+        raise ValueError("theta_max must satisfy 0 < theta_max <= pi")
+    return SphericalCapPatch(c, a, e1, e2, radius, tmax, *_theta_range(theta_range))
 
 
 def _axis(values: ArrayLike, name: str) -> NDArray[np.float64]:
@@ -1017,3 +1083,122 @@ def balanced_cell_flux_quadrature(
         "coverage": float(cell.sum() / total),
         "order": int(order),
     }
+
+
+@dataclass(frozen=True)
+class RingFluxCells:
+    """Equal-flux cells of a disk-like chart (eta periodic, xi = 0 one point).
+
+    cells are chart rectangles (xi0, xi1, eta0, eta1): the centre sectors
+    first, then ring by ring outward. transition_cells are the indices of the
+    ring just inside a refined rim (empty unless requested): their outer side
+    meets twice as many rim cells.
+    """
+
+    cells: NDArray[np.float64]
+    n_lines: int
+    n_centre: int
+    n_rings: int
+    n_sectors: int
+    rim_factor: int
+    transition_cells: tuple
+    orientation: int
+    total_flux_Wb: float
+    target_cell_flux_Wb: float
+    diagnostics: dict = field(default_factory=dict)
+
+
+def ring_equal_flux_cells(flux_density: Callable, metric: Callable, *, n_lines: int,
+                          n_centre: int = 4, rim_factor: int = 1, n_rings: int | None = None,
+                          transition: bool = False, n_samples: int = 300) -> RingFluxCells:
+    """Equal-flux cells of a disk-like chart without T-junctions.
+
+    n_centre centre sectors (xi in [0, x0]) carry one cell flux each; then
+    n_rings rings, every inner ring with the same n_sectors sector breaks and
+    the outermost (rim) ring with rim_factor * n_sectors, its breaks including
+    the inner ones: n_centre + n_sectors * (n_rings - 1 + rim_factor) = n_lines.
+    Ring radii and sector breaks sit at equal steps of the xi- and
+    eta-marginal flux of an n_samples^2 midpoint table, so a cell carries
+    exactly the target flux when the density separates in (xi, eta); the
+    table spread of every cell is reported otherwise. n_sectors is even and a
+    multiple of n_centre. Among the admissible (n_rings, n_sectors) the layout
+    with the smallest mean |log| physical cell aspect (from metric) is chosen
+    unless n_rings is given. transition=True (rim_factor 2) marks the ring
+    inside the rim for a 2:1 transition layer.
+    """
+    n_lines, n_centre, r_ = int(n_lines), int(n_centre), int(rim_factor)
+    if n_centre < 1 or r_ < 1 or n_lines <= n_centre:
+        raise ValueError("need n_centre >= 1, rim_factor >= 1 and n_lines > n_centre")
+    if transition and r_ != 2:
+        raise ValueError("a 2:1 transition needs rim_factor = 2")
+    _check_budget(int(n_samples) ** 2, "the ring flux table")
+    t = (np.arange(n_samples) + 0.5) / n_samples
+    grid = np.linspace(0, 1, n_samples + 1)
+    XI, ET = np.meshgrid(t, t, indexing="ij")
+    dens = np.asarray(flux_density(XI.ravel(), ET.ravel()), float).reshape(XI.shape)
+    orientation = int(np.sign(dens.sum()))
+    if orientation == 0:
+        raise ValueError("the flux through the patch is zero")
+    dens = dens * orientation
+    if np.any(dens < 0):
+        raise ValueError("the flux density changes sign on the patch; ring cells need one sign")
+    total = float(dens.sum()) / n_samples ** 2
+    cumx = np.r_[0.0, np.cumsum(dens.sum(axis=1))]
+    cumx /= cumx[-1]
+    f0 = n_centre / n_lines
+    x0 = float(np.interp(f0, cumx, grid))
+    rest = n_lines - n_centre
+    cumy = np.r_[0.0, np.cumsum(dens[t > x0].sum(axis=0))]
+    cumy /= cumy[-1]
+    best = None
+    for nx in range(1, rest + 1):
+        if rest % (nx - 1 + r_) or (n_rings is not None and nx != int(n_rings)):
+            continue
+        if transition and nx < 2:
+            continue
+        ny = rest // (nx - 1 + r_)
+        if ny % 2 or ny % n_centre:
+            continue
+        cnt = np.r_[0, np.cumsum([ny] * (nx - 1) + [r_ * ny])] / rest
+        bx = np.interp(f0 + (1 - f0) * cnt, cumx, grid)
+        bx[0] = x0
+        by = np.interp(np.arange(ny + 1) / ny, cumy, grid)
+        byr = np.interp(np.arange(r_ * ny + 1) / (r_ * ny), cumy, grid)
+        dx, dy = [], []
+        for i in range(nx):
+            b_ = byr if i == nx - 1 else by
+            cy = 0.5 * (b_[:-1] + b_[1:])
+            fx, fy = metric(np.full_like(cy, 0.5 * (bx[i] + bx[i + 1])), cy)
+            dx.append((bx[i + 1] - bx[i]) * np.asarray(fx))
+            dy.append(np.diff(b_) * np.asarray(fy))
+        score = float(np.mean(np.abs(np.log(np.concatenate(dx) / np.concatenate(dy)))))
+        if best is None or score < best[0]:
+            best = (score, nx, ny, bx, by)
+    if best is None:
+        raise ValueError(f"n_lines = {n_lines} has no ring layout with an even sector count "
+                         f"that is a multiple of n_centre = {n_centre}")
+    score, nx, ny, bx, by = best
+    cy0 = np.r_[0.0, np.cumsum(dens[t <= x0].sum(axis=0))]
+    cy0 /= cy0[-1]
+    b0 = np.interp(np.arange(n_centre + 1) / n_centre, cy0, grid)
+    if np.max(np.abs(b0 - by[::ny // n_centre])) < 1e-6:
+        b0 = by[::ny // n_centre]      # centre breaks on the ring breaks (axisymmetric flux)
+    byr = np.interp(np.arange(r_ * ny + 1) / (r_ * ny), cumy, grid)
+    if r_ > 1:
+        if np.max(np.abs(byr[::r_] - by)) >= 1e-6:
+            raise ValueError("the rim sector breaks do not contain the ring breaks; "
+                             "the eta-marginal flux differs between rings")
+        byr[::r_] = by
+    cells = [[0.0, x0, b0[j], b0[j + 1]] for j in range(n_centre)]
+    for i in range(nx):
+        b_ = byr if i == nx - 1 else by
+        cells += [[bx[i], bx[i + 1], b_[j], b_[j + 1]] for j in range(len(b_) - 1)]
+    fl = np.array([dens[np.ix_((t >= c[0]) & (t < c[1]), (t >= c[2]) & (t < c[3]))].sum()
+                   for c in cells]) / n_samples ** 2 * n_lines / total
+    trans = tuple(range(n_centre + (nx - 2) * ny, n_centre + (nx - 1) * ny)) if transition else ()
+    return RingFluxCells(
+        cells=np.array(cells), n_lines=n_lines, n_centre=n_centre, n_rings=nx, n_sectors=ny,
+        rim_factor=r_, transition_cells=trans, orientation=orientation,
+        total_flux_Wb=orientation * total, target_cell_flux_Wb=orientation * total / n_lines,
+        diagnostics={"mean_abs_log_aspect": score, "field_samples": int(n_samples) ** 2,
+                     "cell_flux_over_target_table": [float(fl.min()), float(fl.max())]})

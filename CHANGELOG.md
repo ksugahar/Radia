@@ -23,6 +23,11 @@
   same quadrature as `solve_linear` on every element type, and accept
   `bonus_intorder` with the same meaning. Per-element iron B from the Newton path previously differed
   from the linear path in high-permeability iron; the iron mean agreed.
+- Add experimental conforming hexahedral flux tubes for Gmsh post-processing
+  (`radia.flux_tube_mesh`), including a conforming 2:1 transition layer at a
+  refined rim. Add ring equal-flux cells and a spherical cap chart to
+  `radia.flux_seeding`. Tested on a uniformly magnetized sphere and a straight
+  wire. The tubes show where the field runs; they are not an analysis mesh.
 
 
 ## 5.4.5 - 2026-11-13
