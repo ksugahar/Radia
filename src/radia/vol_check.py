@@ -1072,10 +1072,13 @@ def _finite_measurement(value, description):
 def _measure_orders(mesh):
     """Quadrature orders for the CAD-gate volume and boundary/edge measures.
 
-    The Jacobian determinant of an order-p geometry map is a polynomial of
-    degree 3(p-1) on tetrahedra and at most 3p-1 per direction on tensor
-    elements, so order 3p integrates every volume exactly. Areas and lengths
-    integrate a square root and cannot be exact; they use at least order 16.
+    For a polynomial order-p geometry map with a Jacobian of one sign, the
+    Jacobian determinant is a polynomial of degree 3(p-1) on tetrahedra and at
+    most 3p-1 per direction on tensor elements, so order 3p integrates the
+    volume exactly. Rational maps (pyramids) or sign-changing Jacobians are
+    not covered by that statement; the quality check reports the latter.
+    Areas and lengths integrate a square root and cannot be exact; they use at
+    least order 16.
     """
     curve_order = max(1, int(mesh.GetCurveOrder()))
     return 3 * curve_order, max(16, 3 * curve_order)
