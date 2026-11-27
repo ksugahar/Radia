@@ -14,7 +14,7 @@ WORKFLOW_OVERVIEW = """
 
 ## Discover the capability before choosing an export route
 
-`docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb` contains saved
+`docs/cubit_export/cubit_export_showcase.ipynb` contains saved
 WebGUI views of historical Cubit-exported 56-HEX spheres at geometry orders
 1, 2 and 3, plus a manufactured Poisson field on the cubic mesh. This is
 the discovery/evidence page; this MCP guide remains the operating manual.

@@ -10,10 +10,6 @@ Run with system Python (not Cubit Python):
 """
 
 import sys
-import os
-
-# Add parent directory to path for cubit_mesh_curver
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 
 # Check NGSolve first
 try:

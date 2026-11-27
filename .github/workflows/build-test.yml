@@ -436,7 +436,7 @@ jobs:
           $pytestArgs = @(
             'validation_test/',
             '--ignore=validation_test/radia_mcp',
-            '--ignore=validation_test/cubit_mesh_export',
+            '--ignore=validation_test/cubit_export',
             '-v',
             '--tb=short',
             '-r', 'aR',

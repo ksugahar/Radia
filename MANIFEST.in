@@ -35,7 +35,6 @@ recursive-include src/radia *.ccm
 prune examples
 
 # Match wheel exclusions: stale local binaries are not source-release inputs.
-exclude src/radia/cubit_mesh_curver.pyd
 recursive-exclude src/radia _equation*.pyd _equation*.so _equation*.dylib
 prune src/radia/equation
 recursive-exclude src/radia *.locked-old.pyd *.lockedold.pyd *.pre_*.pyd *.backup*.pyd

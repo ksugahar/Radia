@@ -1,6 +1,6 @@
 # 3-turn coil journal file (Z-axis height, handedness preserved) --
 # add_kelvin variant: air SPHERE + z=0 mesh seam, ready for the
-# launcher's "Add Kelvin open boundary (auto)" Step.
+# Export Netgen dialog's "Add Kelvin" option.
 #
 # Differs from `3turnCoil_work.jou` only in the workpiece+air domain
 # (lines ~1190+): replaces the 30 cm brick + `outer` Dirichlet sideset
@@ -15,12 +15,12 @@
 # `outer=A=0` brick face).  PEEC+BEM does NOT need this variant --
 # it only reads `_coil.step` and the wp surface.
 #
-# Companion `radia_launcher_config.json` sets
-#   {"add_kelvin": true, "kelvin_air_block": "air",
-#    "kelvin_block_name": "kelvin"}
-# which triggers add_kelvin_cubit AFTER this .jou is played.  Do NOT
-# create the Kelvin shell volume in this .jou itself -- the launcher
-# owns it (mesh-seam anchor + sphere creation + 1:1 copy-mesh).
+# Tick "Add Kelvin" (air block "air", symmetry reduction off) in the
+# Export Netgen dialog; the export worker then calls
+# radia_mcp.cubit.kelvin.auto_add_kelvin_from_current_model() AFTER
+# this .jou is played.  Do NOT create the Kelvin shell volume in this
+# .jou itself -- the export worker owns it (mesh-seam anchor + sphere
+# creation + 1:1 copy-mesh).
 #
 # Transform: (x,y,z) -> (x, -z_old, y_old)
 # Total points: 383, Loft volumes: 382
@@ -1227,7 +1227,7 @@ compress
 # tall (3-turn helix), workpiece is +/-0.075 m in z; the required
 # sphere radius to contain both is sqrt(0.135^2 + 0.075^2) ~ 0.155 m,
 # so R=0.20 m gives ~4.5 cm radial clearance outside the active
-# sources.  The Kelvin shell added by the launcher (auto) doubles
+# sources.  The Kelvin shell added by the export worker doubles
 # this to an effective R~0.40 m far-field truncation.
 #
 # Why a sphere (vs the brick in 3turnCoil_work.jou): FEM A-V on the
@@ -1315,12 +1315,12 @@ sideset 3 name "sibc"
 # `3turnCoil_work.jou` has a sideset 4 named "outer" tagging the 6
 # outer brick faces for `dirichlet_bnd="outer"` (A=0 truncation).
 # In this add_kelvin variant the Kelvin sphere REPLACES that
-# truncation: `add_kelvin_cubit` (called by the launcher AFTER this
+# truncation: `add_kelvin_cubit` (called by the export worker AFTER this
 # .jou plays) copy-meshes a second air hemisphere pair offset along
 # the +x auto-detected direction and links them via the Kelvin
 # transformation, so the far-field error drops to 1e-7 instead of
 # a few percent.  No sideset "outer" is created; the GND nodeset
-# the launcher places at the Kelvin centre fixes the A gauge.
+# the export worker places at the Kelvin centre fixes the A gauge.
 
 # ============================================================
 # Blocks (NO 'work' block per WP HOLE policy)

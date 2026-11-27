@@ -412,7 +412,7 @@
       ]
     },
     {
-      "pattern": "docs/cubit_mesh_export/**",
+      "pattern": "docs/cubit_export/**",
       "owners": [
         "radia"
       ]
@@ -430,7 +430,7 @@
       ]
     },
     {
-      "pattern": "validation_test/cubit_mesh_export/**",
+      "pattern": "validation_test/cubit_export/**",
       "owners": [
         "radia"
       ]

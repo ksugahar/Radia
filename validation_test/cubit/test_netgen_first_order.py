@@ -1,6 +1,6 @@
 """Current first-order Netgen export contract for Cubit 2025.12."""
 
-from tests.cubit.cubit_202512_helpers import (
+from validation_test.cubit.cubit_202512_helpers import (
     export_netgen,
     init_cubit,
     load_ngsolve_mesh,

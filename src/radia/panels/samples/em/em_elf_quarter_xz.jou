@@ -57,7 +57,8 @@ mesh volume {air_id}
 block 2 add volume {air_id}
 block 2 name "air"
 
-# Kelvin (FEM only): from the Export Mesh dialog set "Symmetry
-# reduction" x = bn0, z = ht0 (matches ELF IMA='+x-z' convention).
-# Auto-Kelvin then writes kelvin_reduction = {x: bn=0, z: ht=0}
-# in launcher_config.json and add_kelvin_cubit handles the rest.
+# Kelvin (FEM only): in the Export Netgen dialog tick "Add Kelvin" and
+# set "Symmetry reduction" x = bn, z = ht (matches ELF IMA='+x-z'
+# convention).  The export worker forwards that reduction to
+# radia_mcp.cubit.kelvin.auto_add_kelvin_from_current_model() and
+# add_kelvin_cubit handles the rest.

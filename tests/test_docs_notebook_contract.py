@@ -162,8 +162,8 @@ def test_docs_do_not_restore_completed_migration_ledgers():
 def test_docs_do_not_restore_retired_result_bookkeeping():
     retired = {
         ROOT / "docs" / "axifem" / "axifem_element_evidence.json",
-        ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
-        ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
+        ROOT / "docs" / "cubit_export" / "cubit_export_showcase_results.json",
+        ROOT / "docs" / "cubit_export" / "netgen" / "p_convergence_demo_results.json",
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo_results.json",
         ROOT / "docs" / "clebsch_hodograph" / "excitation_invariant_field.json",
         ROOT / "docs" / "clebsch_hodograph" / "hodograph_bending_sy.json",

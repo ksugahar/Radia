@@ -630,7 +630,7 @@ PATTERNS: list[dict] = [
         "what": "First push after Tier-2 (Cubit plugin .pyd/.ccm moved "
                 "OUT of src/radia into the Cubit export package) + "
                 "the de-radia rename turned build-test CI RED at the "
-                "'fetch cubit_mesh_curver.pyd from binaries' step (6 "
+                "'fetch the curver .pyd from binaries' step (6 "
                 "download attempts, exit 1).  Job died before tests -> "
                 "no junit XML.  Build + tests themselves were fine.",
         "root_cause": "build-test.yml fetched the .pyd to src/radia and "
@@ -640,7 +640,7 @@ PATTERNS: list[dict] = [
                       "asset was also not yet "
                       "in the binaries release.",
         "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
-                     "download cubit_mesh_curver.pyd after 6 attempts'.",
+                     "download <curver>.pyd after 6 attempts'.",
         "prevention": "When relocating OR renaming a bundled binary, "
                       "grep ALL .github/workflows/*.yml (build-test + "
                       "release-*) for the old path/name and fix: fetch "

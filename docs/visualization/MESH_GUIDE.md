@@ -576,12 +576,11 @@ mesh.Save('test.vol')
 - **All mesh generation**: Coreform Cubit (tet, hex, wedge, pyramid, boundary layers)
 - **High-order curving**: `export netgen` (order 1-5 via ACIS CallbackGeometry)
 - **Simple test geometries**: Netgen OCC (code generation, automatic meshing)
-- **GMSH**: Visualization only (not mesh generation). Use `export gmsh` for export.
+- **GMSH**: Visualization only (not mesh generation); field results via `GmshPostExport`.
 
 ### GMSH Role in Radia
 
 GMSH is used **only** for visualization and post-processing:
-- View mesh exported via `export gmsh "mesh.msh"`
 - View field results exported via `GmshPostExport.write("results.msh")`
 - GMSH is NOT used for mesh generation (GmshBuilder was removed)
 
@@ -620,7 +619,7 @@ GMSH is used **only** for visualization and post-processing:
 
 | File | Description |
 |---------|------|
-| `docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py` | Curved high-order `.vol` mesh loaded through NGSolve |
+| `docs/cubit_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py` | Curved high-order `.vol` mesh loaded through NGSolve |
 | `docs/peec_integration/demos/demo_gmsh_surface_mesh.py` | Surface mesh (PEEC conductor) |
 | `docs/visualization/_gmsh_display.geo` | Minimal GMSH display companion |
 
@@ -648,7 +647,7 @@ High-order curving (Cubit):
 2. **Mesh types**: Magnetic material = volume, Conductor = surface (PEEC) or analytical
 3. **Input format**: `.vol` is the only input to NGSolve/Radia
 4. **High-order curving**: Automatic via `export netgen` + NetgenCurver + ACIS
-5. **GMSH**: Visualization only (view mesh via `export gmsh`, view fields via `GmshPostExport`)
+5. **GMSH**: Visualization only (view fields via `GmshPostExport`)
 
 ### External Links
 

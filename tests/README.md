@@ -18,7 +18,7 @@ For larger physics and application samples, use
 [validation_test/](../validation_test/README.md). The
 [documentation](../docs/README.md) introduces features and saved results.
 Actual CAE operation uses [MCP](../packages/radia-mcp/README.md), or human–AI
-collaboration through [Cubit](../docs/cubit_mesh_export/README.md) and
+collaboration through [Cubit](../docs/cubit_export/README.md) and
 [Simulink](../packages/radia-simulink/matlab/README.md).
 
 ## Select a small sample

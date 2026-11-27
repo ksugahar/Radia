@@ -44,8 +44,7 @@ EXTERNAL = set(sys.stdlib_module_names) | {
     'torch', 'kan', 'build123d', 'OCP', 'cubit', 'netCDF4', 'PySide6',
     'skimage', 'trimesh',  # Upstream optional CAD/inspection packages; not local code.
 }
-NATIVE_MODULES = {'_radia_pybind', 'sparsesolv_ngsolve', 'peec_matrices', 'axifem',
-                  'cubit_mesh_curver'}
+NATIVE_MODULES = {'_radia_pybind', 'sparsesolv_ngsolve', 'peec_matrices', 'axifem'}
 
 
 def git(root, *args):

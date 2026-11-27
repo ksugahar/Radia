@@ -11,7 +11,7 @@ export netgen "filename.vol" [order <1-5>] [overwrite]
 No block assignment required — all meshed elements are exported automatically.
 Sidesets become boundary labels. Block names become material labels.
 
-> **NOTE**: `export netgen` is provided by the Cubit Mesh Export plugin.
+> **NOTE**: `export netgen` is provided by the `radia_cubit_export.dll` command plugin of `radia_mcp.cubit`.
 > Cubit has no built-in Netgen exporter, so there is no command conflict.
 
 ### Options
@@ -227,12 +227,6 @@ ABI mismatch between the plugin's Netgen and a separately installed Netgen DLL. 
 
 Check that sidesets are defined before export. Surfaces not in any sideset get auto-generated names (`surface_N`).
 
-### Hex Boundary Layer Failure
-
-If `export netgen` fails on hex boundary layers, export as Gmsh order 1 (`export gmsh "mesh.msh"`) as a fallback.
-
 ## See Also
 
-- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.2 export (order 1-3)
-- [export_Nastran.md](export_Nastran.md) — Nastran BDF export (order 1-2)
-- [Function_Reference.md](Function_Reference.md) — All plugin commands
+- [Function_Reference.md](Function_Reference.md) — Export command and checker reference

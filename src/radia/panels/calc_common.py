@@ -78,8 +78,8 @@ def setup_cubit(cub5_path=None, load_plugins=False):
 
     Args:
         cub5_path: Optional .cub5 file to open after init.
-        load_plugins: If True, set CUBIT_PLUGIN_DIR so radia .ccm
-            plugin commands (export gmsh/nastran/vtk) are available.
+        load_plugins: If True, set CUBIT_PLUGIN_DIR so the
+            `export netgen` command plugin is available.
 
     Returns:
         cubit module (or None if Cubit unavailable)
@@ -94,7 +94,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
     if cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
-    # Set CUBIT_PLUGIN_DIR before cubit.init() so .ccm plugins are loaded
+    # Set CUBIT_PLUGIN_DIR before cubit.init() so command plugins are loaded
     if load_plugins:
         plugin_dir = os.path.join(cubit_path, "plugins")
         if os.path.isdir(plugin_dir):

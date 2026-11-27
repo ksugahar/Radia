@@ -4,7 +4,7 @@ import math
 
 from ngsolve import BND, CF, Integrate, TaskManager
 
-from tests.cubit.cubit_202512_helpers import (
+from validation_test.cubit.cubit_202512_helpers import (
     export_netgen,
     init_cubit,
     load_ngsolve_mesh,

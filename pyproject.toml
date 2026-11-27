@@ -50,9 +50,8 @@ dependencies = [
     #     HACApK and dense BLAS/LAPACK performance.
     #     (Verified 2026-05-28: `pip show ngsolve` Requires = netgen-mesher,
     #     ngsolve-openblas; no mkl.  libngsolve.dll BLAS string = openblas.dll.)
-    #   * ABI change: `_radia_pybind.pyd`, axifem, sparsesolv_ngsolve,
-    #     and cubit_mesh_curver MUST be rebuilt against
-    #     2608. The Cubit .ccm embeds Compact Netgen and is independent.
+    #   * ABI change: `_radia_pybind.pyd`, axifem and sparsesolv_ngsolve
+    #     MUST be rebuilt against 2608. The Cubit .ccm embeds Compact Netgen and is independent.
     #   * HTool callback bridge (NGSolve commit d90c59ea) is added in
     #     2604 but Radia does NOT integrate with it.  Radia has no
     #     ngsolve-side H-matrix path: `rad.RadiaField(...)` has no
@@ -163,9 +162,6 @@ radia = [
     # non-Python data assets are).  panels/cub5_to_vol.py is therefore
     # not in this repo at all — the reference implementation lives in
     # to_developers/ngsolve/cub5_to_vol.py (gitignored, LAB local).
-    # Cubit plugin binaries never ship in radia -- exclude a stale curver
-    # build artifact in src/radia/ from the "*.pyd" glob.
-    "cubit_mesh_curver.pyd",
     # Retired equation backend must not return through a stale local build.
     "_equation*.pyd", "_equation*.so", "_equation*.dylib",
     # Local lock-release and pre-change native backups must never enter a

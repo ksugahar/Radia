@@ -26,7 +26,7 @@ from build123d import Box, Pos
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SRC = REPO / "packages" / "radia-mcp" / "src"
-CUBIT_VALIDATION = REPO / "validation_test" / "cubit_mesh_export"
+CUBIT_VALIDATION = REPO / "validation_test" / "cubit_export"
 for path in (SRC, CUBIT_VALIDATION):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

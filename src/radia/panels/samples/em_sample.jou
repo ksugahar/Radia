@@ -1,6 +1,6 @@
 # C-type dipole yoke -- half model (Z symmetry), HEX yoke + tet air
 # Canonical geometry: ELF CEFC 2020 C-Type model (yoke.jou -> yoke.step),
-# mirrored about x=0 to recover full depth so the Add Kelvin launcher
+# mirrored about x=0 to recover full depth so the Export Netgen "Add Kelvin" option
 # can reduce only the single (z>=0) half and use the IH-style zplane
 # seam to copy the air sphere mesh onto the Kelvin exterior 1:1.
 # Units: meters
@@ -74,7 +74,8 @@ block 1 name "yoke"
 block 2 add volume 4 5
 block 2 name "air"
 
-# Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
-# boundary (auto)" checkbox with "Quarter (X,Z)" symmetry.  The
-# launcher injects add_kelvin_cubit(symmetry=["x","z"]) via
-# auto_kelvin_entry.py just before export netgen.
+# Kelvin (FEM only): tick "Add Kelvin" in the Export Netgen dialog
+# and leave every "Symmetry reduction" axis off.  Just before
+# export netgen the export worker calls
+# radia_mcp.cubit.kelvin.auto_add_kelvin_from_current_model(), which
+# detects the x=0 / z=0 mesh seams and builds the Kelvin shell.

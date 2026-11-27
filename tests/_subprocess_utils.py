@@ -2,7 +2,7 @@
 
 Encapsulates the three lessons learned while building the Cubit
 p-convergence / mesh-evaluation subprocess path used by validation tests
-and docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb, so other tests
+and docs/cubit_export/netgen/p_convergence_demo.ipynb, so other tests
 do not re-discover them painfully.
 
 Lesson 1 -- PySide6 (Qt6) ⊗ Cubit ``_cubit3.pyd`` (Qt6) DLL conflict.

@@ -18,22 +18,22 @@ for installation and supported operations. Continue with
 [Simulink library](../../packages/radia-gpu/matlab/README.md) for supported analysis workflows.
 
 For executable mesh cases and evidence, use
-[validation_test/cubit_mesh_export](../../validation_test/cubit_mesh_export/).
+[validation_test/cubit_export](../../validation_test/cubit_export/).
 Passing a mesh check establishes its declared mesh contract; physical material,
 source and boundary choices still belong to the analysis model.
 
 ## Feature demonstrations
 
 Presentation notebook:
-[`docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb`](../../docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
+[`docs/cubit_export/cubit_export_showcase.ipynb`](../../docs/cubit_export/cubit_export_showcase.ipynb)
 is the result-saved talk layer. It combines the validation summary JSONs,
 high-order curved-hex NGSolve results, and source excerpts for Q&A. Checked
 evidence is stored under
-[`validation_test/cubit_mesh_export`](../../validation_test/cubit_mesh_export/),
+[`validation_test/cubit_export`](../../validation_test/cubit_export/),
 not beside the notebook.
 
 Mesh-evaluation demo:
-[`docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`](netgen/p_convergence_demo.ipynb)
+[`docs/cubit_export/netgen/p_convergence_demo.ipynb`](netgen/p_convergence_demo.ipynb)
 is the result-saved p-convergence demonstration. It records a Cubit batch run
 that calls APREPRO export commands through `cubit.cmd(...)` and evaluates the
 exported `.vol` files with `src/radia/panels/calc_mesh_eval.py`. This is a

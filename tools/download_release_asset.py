@@ -12,7 +12,7 @@ Usage:
     python tools/download_release_asset.py \
         --repo ksugahar/Radia \
         --tag  binaries \
-        --name cubit_mesh_curver.pyd \
+        --name <asset-file-name> \
         --dest src/radia
 
 Exit codes:

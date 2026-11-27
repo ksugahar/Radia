@@ -72,7 +72,6 @@ def test_sdist_manifest_excludes_retired_and_backup_payloads():
         str(Path("src/radia/panels/cubit_toolbar/icons/export.svg")),
     }
     excluded = {
-        str(Path("src/radia/cubit_mesh_curver.pyd")),
         str(Path("src/radia/_equation.pyd")),
         str(Path("src/radia/_equation.cpython-312-x86_64-linux-gnu.so")),
         str(Path("src/radia/equation/__init__.py")),

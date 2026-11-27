@@ -15,7 +15,7 @@ design run or a recorded MCP session.
 
 These pages introduce what Radia can do. For actual operation, use
 [MCP tools](../packages/radia-mcp/README.md) or collaborate with AI through
-[Cubit](cubit_mesh_export/README.md) and [Simulink](../packages/radia-gpu/matlab/README.md).
+[Cubit](cubit_export/README.md) and [Simulink](../packages/radia-gpu/matlab/README.md).
 For executable samples, begin with [small test cases](../tests/README.md) or
 [physics and application validation cases](../validation_test/README.md).
 Each case retains its dependencies, assertions and demonstrated scope.

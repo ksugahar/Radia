@@ -26,7 +26,7 @@ driver and evidence; do not treat all entries as independent executable gates.
 | `clebsch_hodograph/public_demo.ipynb` | [Notebook](../docs/clebsch_hodograph/public_demo.ipynb) | Presentation retained; dependency review precedes relocation |
 | `cohomology/loop_dof_cut_selection.ipynb` | [Notebook](../docs/cohomology/loop_dof_cut_selection.ipynb) | Presentation retained; dependency review precedes relocation |
 | `cohomology/tomega_wire.ipynb` | [Notebook](../docs/cohomology/tomega_wire.ipynb) | Presentation retained; dependency review precedes relocation |
-| `cubit_mesh_export/netgen/p_convergence_demo.ipynb` | [Notebook](../docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb) | Presentation retained; dependency review precedes relocation |
+| `cubit_export/netgen/p_convergence_demo.ipynb` | [Notebook](../docs/cubit_export/netgen/p_convergence_demo.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electric_machine/em_reference_audit.ipynb` | [Notebook](../docs/electric_machine/em_reference_audit.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electric_machine/planar_vim_motor.ipynb` | [Notebook](../docs/electric_machine/planar_vim_motor.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electrostatics/electrostatics.ipynb` | [Notebook](../docs/electrostatics/electrostatics.ipynb) | Presentation retained; dependency review precedes relocation |

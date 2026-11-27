@@ -597,7 +597,7 @@ Start with the path closest to your task:
 - [Gmsh post-processing](docs/gmsh_post/README.md)
 - [MATLAB and Simulink](packages/radia-simulink/matlab/README.md)
 - [MCP servers and tools](packages/radia-mcp/README.md)
-- [Cubit mesh export](docs/cubit_mesh_export/README.md)
+- [Cubit mesh export](docs/cubit_export/README.md)
 
 ## Contributing
 

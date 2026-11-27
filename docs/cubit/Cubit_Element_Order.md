@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Cubit Mesh Export plugin commands (`export <fmt>`).
+This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the `export netgen` command plugin of `radia_mcp.cubit`.
 
 ## Creating 2nd Order Elements
 
@@ -85,14 +85,13 @@ print(f"get_expanded_connectivity: {len(nodes_2nd)} nodes")  # 10
 
 ## Impact on Export Functions
 
-All plugin `export <fmt>` commands internally extract 1st order elements only, then use
+`export netgen` internally extracts 1st order elements only, then uses
 **NetgenCurver** (CallbackGeometry + ACIS projection) to generate high-order nodes
 at the requested order. Block element type settings (`tetra10`, etc.) are ignored.
 
 ```python
 # The order parameter controls high-order curving — not the block element type
 cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
-cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
 ```
 
 ## Design Philosophy
@@ -101,7 +100,7 @@ cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
 2. **NetgenCurver's role**: Add high-order nodes projected onto ACIS CAD surfaces
 
 This separation provides:
-- Arbitrary curve orders (1-5 for .vol, 1-3 for .msh, 1-2 for .bdf/.vtk)
+- Arbitrary curve orders (1-5 for .vol)
 - Nodes placed exactly on CAD geometry
 - No Cubit-Netgen node ordering conversion needed for high-order nodes
 
@@ -134,8 +133,8 @@ tet_id = cubit.get_block_tets(1)[0]
 print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id))}")
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
-# Export 1st order Gmsh
-cubit.cmd('export gmsh "sphere_1st.msh" overwrite')
+# Export 1st order Netgen
+cubit.cmd('export netgen "sphere_1st.vol" order 1 overwrite')
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -145,8 +144,8 @@ cubit.cmd("block 2 element type tri6")
 print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id))}")
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
-# Export 2nd order Gmsh
-cubit.cmd('export gmsh "sphere_2nd.msh" overwrite')
+# Export 2nd order Netgen (the order argument, not tetra10, sets the order)
+cubit.cmd('export netgen "sphere_2nd.vol" order 2 overwrite')
 ```
 
 Output:
@@ -162,12 +161,6 @@ Output:
 | Export Function | High-Order Method | Max Order |
 |----------------|-------------------|-----------|
 | `export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
-| `export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
-| `export nastran_bdf "f.bdf" order N` | NetgenCurver | 1-2 |
-| `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
-
-> **Note**: use `export nastran_bdf` (not Cubit's built-in `export nastran`).
-> No alternate spelling is registered.
 
 ## See Also
 
