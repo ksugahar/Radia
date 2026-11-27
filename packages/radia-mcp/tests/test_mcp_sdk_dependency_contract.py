@@ -33,6 +33,19 @@ def test_mcp_sdk_dependency_declares_supported_floor():
     assert not {'cae-mcp-core', 'radia'}.intersection(names)
 
 
+def test_checker_extras_exclude_radia_without_vol_check():
+    """Guards: extras whose code imports radia.vol_check cannot resolve to a
+    Radia release that predates it (5.4.6 and earlier)."""
+    from packaging.requirements import Requirement
+
+    extras = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"]["optional-dependencies"]
+    for extra in ("cubit", "build123d"):
+        radia = [Requirement(item) for item in extras[extra] if Requirement(item).name == "radia"]
+        assert len(radia) == 1, (extra, extras[extra])
+        assert not radia[0].specifier.contains("5.4.6", prereleases=True), (extra, str(radia[0]))
+
+
 def test_public_description_and_optional_cubit_ownership():
     from packaging.requirements import Requirement
 

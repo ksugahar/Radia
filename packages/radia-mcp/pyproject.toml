@@ -23,15 +23,14 @@ dependencies = [
 
 [project.optional-dependencies]
 maintenance = ["tomlkit>=0.13,<1"]
-# build123d analysis uses check-vol (radia.vol_check, no Cubit licence), Netgen,
-# and the post-migration Radia serializer. Publish that Radia release before
-# distributing this extra: the published 5.3.3 writer has no PayloadV42.
+# build123d analysis uses check-vol (radia.vol_check, first released after
+# 5.4.6; no Cubit licence), Netgen and the post-migration Radia serializer.
 build123d = [
     "build123d>=0.6",
     "Pillow>=10.0",
     "ngsolve==6.2.2608",
     "netgen-mesher==6.2.2608",
-    "radia>5.3.3",
+    "radia>5.4.6",
 ]
 # Cubit MCP. Licensed Cubit is found at run time; check-vol comes from radia
 # (radia.vol_check, first released after 5.4.6); the curved .vol export
