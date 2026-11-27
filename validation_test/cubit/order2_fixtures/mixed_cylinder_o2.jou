@@ -1,0 +1,25 @@
+#!python
+# Radius 1 m, total height 2 m. Sweep the top before tet meshing the bottom.
+def cmd(text):
+    if not cubit.cmd(text):
+        raise RuntimeError(text)
+
+cmd("reset")
+cmd("create cylinder height 2 radius 1")
+cmd("webcut volume 1 with plane zplane offset 0 imprint merge")
+volumes = sorted(cubit.get_entities("volume"), key=lambda i: cubit.get_center_point("volume", i)[2])
+assert len(volumes) == 2
+bottom, top = volumes
+assert cubit.get_center_point("volume", bottom)[2] < 0 < cubit.get_center_point("volume", top)[2]
+cmd(f"volume {top} scheme sweep")
+cmd(f"volume {top} size 0.35")
+cmd(f"mesh volume {top}")
+cmd(f"volume {bottom} scheme tetmesh")
+cmd(f"volume {bottom} size 0.35")
+cmd(f"mesh volume {bottom}")
+for kind in ("hex", "tet", "pyramid"):
+    assert cubit.parse_cubit_list(kind, "all"), f"missing {kind}"
+cmd("block 1 add volume all")
+cmd('block 1 name "body"')
+cmd('save as "model.cub5"')
+cmd('export netgen "order2.vol" order 2')

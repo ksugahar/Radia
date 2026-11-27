@@ -1,0 +1,16 @@
+#!python
+# Radius 1 m, nominal target mesh size 0.55 m.
+def cmd(text):
+    if not cubit.cmd(text):
+        raise RuntimeError(text)
+
+cmd("reset")
+cmd("create sphere radius 1")
+cmd("volume 1 scheme tetmesh")
+cmd("volume 1 size 0.55")
+cmd("mesh volume 1")
+assert cubit.parse_cubit_list("tet", "all"), "missing tetrahedra"
+cmd("block 1 add volume 1")
+cmd('block 1 name "body"')
+cmd('save as "model.cub5"')
+cmd('export netgen "order2.vol" order 2')
