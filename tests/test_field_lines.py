@@ -15,6 +15,7 @@ import pytest
 from radia.field_lines import (flux_account, surface_crossings, trace_field_lines,
                                write_field_lines_msh)
 from radia.flux_seeding import balanced_equal_flux_seeds, planar_patch
+from radia.flux_seeding import surface_crossings as _seeding_crossings
 
 MU0 = 4e-7 * np.pi
 
@@ -199,6 +200,51 @@ def test_lines_step_across_refraction_but_stop_where_the_direction_reverses():
     assert record["interface_crossings"] == 0, record
 
 
+def test_the_interface_corner_is_a_vertex_and_both_crossings_count():
+    """Guards: a crossed jump is kept in the polyline (Codex review of cbfab66c1).
+
+    B = (1, 0, eps) below z = 0 and (-1, 0, eps) above, seed (-0.5 mm, 0, -2.5 um):
+    the exact line runs to the corner (0, 0, 0) and back along -x, crossing the
+    plane x = -0.25 mm once each way. Without the corner vertex the chord from
+    the seed to the far end crosses that plane not at all.
+    """
+    eps = 0.005
+    seed = [-0.0005, 0.0, -0.0005 * eps]
+    lines, record = trace_field_lines(_layered([1.0, 0.0, eps], [-1.0, 0.0, eps]), [seed],
+                                      step_m=0.064, max_steps=1, both_directions=False,
+                                      closure=False)
+    pts, b = lines[0].points_m, lines[0].field_T
+    assert record["interface_crossings"] == 1 and len(pts) == 3, (pts, record)
+    np.testing.assert_allclose(pts[1], [0.0, 0.0, 0.0], atol=1e-12)  # the corner
+    np.testing.assert_allclose(b[1], [1.0, 0.0, eps])                 # its near-side B
+    assert pts[2, 2] > 0 and pts[2, 0] < -0.00025
+    plane = planar_patch([-0.00025, -0.01, -0.01], [0, 0.02, 0], [0, 0, 0.02])  # normal +x
+    # A point before the seed on the incoming ray keeps the seed's own segment
+    # counted (the crossing at a seed vertex is excluded by design).
+    before = np.asarray(seed) - 1e-4 * np.array([1.0, 0.0, eps])
+    path = np.vstack([before, pts])
+    assert _seeding_crossings(path, plane, seed_vertex=0, closed=False) == [1, -1]
+    assert _seeding_crossings(np.vstack([before, pts[[0, 2]]]), plane, seed_vertex=0,
+                              closed=False) == []  # the chord alone misses both
+
+
+def test_a_crossing_with_a_tiny_normal_advance_still_lands_on_the_far_side():
+    """Guards: the far piece starts where the side probe starts (Codex review of cbfab66c1).
+
+    B = (0, 0, 1) below z = 5e-4 and (1e13, 0, 1) above: normal B is continuous but
+    the far direction advances 1e-13 per unit length, less than the bisection
+    bracket; a far piece started on the near end of the bracket ended near-side.
+    """
+    field = _flat(lambda p: np.where((p[:, 2] >= 5e-4)[:, None], [1e13, 0.0, 1.0], [0.0, 0.0, 1.0]))
+    lines, record = trace_field_lines(field, [[0, 0, 0]], step_m=0.064, max_steps=3,
+                                      both_directions=False, closure=False)
+    pts = lines[0].points_m
+    assert record["interface_crossings"] == 1, (lines[0].reasons, record)
+    assert lines[0].reasons == {"forward": "max_steps"}
+    after = pts[np.argmax(pts[:, 0] > 0):]
+    assert len(after) >= 2 and np.all(after[:, 2] >= 5e-4) and np.all(np.diff(after[:, 0]) > 0)
+
+
 @pytest.mark.parametrize("eps", [0.005, 1e-6])
 def test_a_near_tangential_interface_is_crossed_without_a_threshold(eps):
     """Guards: any shared normal B crosses; only the far side's direction decides.
@@ -311,7 +357,12 @@ def test_lines_cross_a_magnetised_ball_surface_where_tangential_b_flips():
         np.testing.assert_allclose(np.hypot(inside[:, 0], inside[:, 1]), rho,
                                    atol=1e-3 * record["min_step_m"])
         top = np.sqrt(a ** 2 - rho ** 2)
-        assert 0 <= top - np.max(np.abs(inside[:, 2])) <= 2 * record["min_step_m"]
+        # Each crossing is a vertex on the surface; the radius tolerance grows
+        # by rho / z in height where the line meets the surface obliquely.
+        tol = 1e-3 * record["min_step_m"]
+        on_surface = np.abs(np.linalg.norm(line.points_m, axis=1) - a) <= tol
+        assert np.sum(on_surface) >= 2, record
+        assert -tol * rho / top <= top - np.max(np.abs(inside[:, 2])) <= tol * rho / top
         assert np.linalg.norm(line.points_m, axis=1).max() > a  # it leaves the ball
 
 

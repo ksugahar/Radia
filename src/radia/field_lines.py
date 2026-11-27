@@ -28,8 +28,10 @@ equator of a magnetised ball) or reverses (every probe falls back to the
 near side, as where B meets its reverse head-on). A crossing runs straight
 to the jump and on along the new direction (an error of order step^2
 curvature), and its end must lie on the far side: the far piece is halved
-down to the probe distance that stayed there. Crossings are counted in the
-record; a reversal stops the line. There is no threshold on the normal
+down to the probe distance that stayed there. The jump is kept as a vertex
+of the line (its B is the near-side limit), so drawn lines and surface
+crossings follow the broken path, and closure is tested on each piece.
+Crossings are counted in the record; a reversal stops the line. There is no threshold on the normal
 component. A second jump within one minimum step of a crossing (an interface
 curving back across the step) stops the line as an unresolved turn. Without
 a jump the turn is smooth detail finer than the minimum step: below 90
@@ -212,12 +214,14 @@ def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5,
     scale is a reversal. The step then runs to the jump and on along the far
     direction; if its end is not on the far side (the interface curves
     across the straight piece), the piece is halved down to the probe
-    distance that stayed there, and failing that the crossing is unresolved.
+    distance that stayed there; the far piece starts where the probes start,
+    so that distance is known to stay.
     A point is on the far side when its direction is nearer the far
     direction than the near one.
 
-    Returns None (smooth or no data), ("reversal",), ("unresolved",) or
-    ("cross", point, B, unit direction, step length, arc to the jump).
+    Returns None (smooth or no data), ("reversal",) or ("cross", point, B,
+    unit direction, step length, arc to the jump, jump point, near-side B at
+    the jump, far direction). The jump point becomes a vertex of the line.
     """
     def direction(point):
         v, nv, st = probe(np.atleast_2d(point))
@@ -263,18 +267,22 @@ def _interface_step(probe, p0, t0, ds, sign, iterations=40, jump_share=0.5,
             break
     if stays is None:
         return ("reversal",)  # the far direction leads back at every scale
-    start = p0 + lo * ds * t0
-    length = max((1.0 - lo) * ds, stays)  # at least the probe that stayed across
-    while length >= stays:
-        end = start + length * u_hi
-        side = far_side(end)
+    b_near, _ = direction(p0 + lo * ds * t0)
+    if b_near is None:
+        return None
+    length = max((1.0 - hi) * ds, stays)
+    while length > stays:
+        side = far_side(jump + length * u_hi)
         if side is None:
             return None
         if side:
-            v, u = direction(end)
-            return ("cross", end, v, u, lo * ds + length, lo * ds)
-        length *= 0.5
-    return ("unresolved",)  # the interface curves across the far piece at this scale
+            break
+        length = max(0.5 * length, stays)
+    end = jump + length * u_hi
+    v, u = direction(end)
+    if v is None:
+        return None
+    return ("cross", end, v, u, hi * ds + length, hi * ds, jump, b_near, u_hi)
 
 
 def _unit(values, norm, sign):
@@ -357,6 +365,7 @@ def trace_field_lines(
     crossings = np.zeros(n, dtype=np.int64)
     last_jump = np.full(n, -np.inf)  # arc length at the last crossed jump
     taken = np.zeros(n)
+    kink = None
 
     while np.any(active):
         idx = np.nonzero(active)[0]
@@ -409,14 +418,15 @@ def trace_field_lines(
                     reason[i] = "unresolved_turn"
                     active[i] = False
                     continue
-                if jump is not None and jump[0] in ("reversal", "unresolved"):
-                    reason[i] = "reversal" if jump[0] == "reversal" else "unresolved_turn"
+                if jump is not None and jump[0] == "reversal":
+                    reason[i] = "reversal"
                     active[i] = False
                     continue
                 if jump is not None:
                     p_new[j], v_new[j], t_new[j] = jump[1:4]
                     taken[i] = jump[4]
                     last_jump[i] = arc[i] + jump[5]
+                    kink = jump[6:9]
                     crossings[i] += 1  # an interface, stepped straight across
                 elif angle[j] >= 0.5 * np.pi or chord[j] < 0.5 * ds[i]:
                     reason[i] = "unresolved_turn"  # smooth, too sharp to guess across
@@ -424,28 +434,42 @@ def trace_field_lines(
                     continue
                 else:
                     turns[i] += 1  # smooth detail below the minimum step: less accurate
-            p_old, t_old, v_old = p[i].copy(), t[i].copy(), values[i][-1]
+            # Pieces of the step (start, direction, B, end, direction, B): a crossed
+            # jump splits it at the jump, kept as a vertex with the near-side B.
+            if kink is not None:
+                k_point, k_near, k_far = kink
+                pieces = [(p[i].copy(), t[i].copy(), values[i][-1], k_point, t[i].copy(), k_near),
+                          (k_point, k_far, k_near, p_new[j].copy(), t_new[j].copy(),
+                           v_new[j].copy())]
+            else:
+                pieces = [(p[i].copy(), t[i].copy(), values[i][-1], p_new[j].copy(),
+                           t_new[j].copy(), v_new[j].copy())]
+            kink = None
             p[i] = p_new[j]
             t[i] = t_new[j]
+            walked = arc[i]
             arc[i] += taken[i] if taken[i] > 0 else ds[i]
             taken[i] = 0.0
             steps[i] += 1
-            paths[i].append(p_new[j].copy())
-            values[i].append(v_new[j].copy())
             if adaptive and angle[j] < 0.5 * angle_max and ds[i] < step:
                 ds[i] = min(step, 2.0 * ds[i])
             seed = seeds[owner[i]]
-            if (closure and arc[i] > 4.0 * step and t[i] @ t_start[i] > 0.8
-                    and np.linalg.norm(seed - p_old) < 2.0 * np.linalg.norm(p[i] - p_old)):
-                s, nearest, miss = _nearest_on_step(p_old, t_old, p[i], t[i], seed)
-            else:
-                miss = np.inf
+            miss = np.inf
+            for pa, ta, va, pb, tb, vb in pieces:
+                paths[i].append(np.array(pb, dtype=float))
+                values[i].append(np.array(vb, dtype=float))
+                walked += float(np.linalg.norm(pb - pa))
+                if (closure and walked > 4.0 * step and tb @ t_start[i] > 0.8
+                        and np.linalg.norm(seed - pa) < 2.0 * np.linalg.norm(pb - pa)):
+                    s, nearest, miss = _nearest_on_step(pa, ta, pb, tb, seed)
+                    if miss <= closure_tol:
+                        break
             if miss <= closure_tol:
                 paths[i].pop()
                 values[i].pop()
-                if s > 0:  # end at the point of the step nearest the seed
+                if s > 0:  # end at the point of the piece nearest the seed
                     paths[i].append(nearest)
-                    values[i].append((1 - s) * v_old + s * v_new[j])
+                    values[i].append((1 - s) * va + s * vb)
                 gap[i] = miss
                 closed[i] = True
                 reason[i] = "closed"
