@@ -160,10 +160,10 @@ def test_gapped_torus_order3_map_stays_unfolded():
     """Guards: the coarse and refined 355-degree sweeps keep valid order-2 and
     order-3 maps in the dataset (no invalid or flipped Jacobian samples) and
     their volume errors stay within the dataset bounds.
-    Assumes: the current Cubit mesh of these twins. The fold once recorded
-    for them came from an older Cubit mesh; an on/off A/B on the current mesh
-    showed no fold with or without the geometric refit, so this is a
-    structural guard on the dataset, not a refit test."""
+    Assumes: the current Cubit mesh of these twins. A fold was observed in
+    the older record; neither arm of an on/off refit A/B folds on the
+    current mesh, so this is a structural guard on the dataset, not a
+    refit test."""
     _, dataset, _ = _load()
     rows = dataset["rows"]
     twins = {
