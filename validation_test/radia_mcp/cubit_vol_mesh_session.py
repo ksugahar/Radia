@@ -87,18 +87,28 @@ try:
     result["recurve_back_to_2_on_z0"] = float(back[on_z0].max(initial=0.0))
     result["coordinate_scale"] = float(abs(first_two).max())
 
-    # A moved or changed Cubit model must be refused, not curved on stale geometry.
-    def refused(command):
-        if not cubit.cmd(command):
-            raise RuntimeError(f"Cubit refused {command!r}")
+    # Each edit of the Cubit model after a build must be refused, not curved on
+    # stale geometry or labels: a fresh mesh is built, the model edited, and
+    # curving that mesh again must raise.
+    def refused(*commands):
+        probe = ng.Mesh(vol_mesh.mesh_from_cubit(2, kelvin=kelvin_info, plugin_dir=plugin_dir))
+        for command in commands:
+            if not cubit.cmd(command):
+                raise RuntimeError(f"Cubit refused {command!r}")
         try:
-            vol_mesh.curve(mesh, 3)
-            return False, ""
+            vol_mesh.curve(probe, 3)
+            return {"refused": False, "message": ""}
         except RuntimeError as error:
-            return "changed" in str(error), str(error)
-    result["moved_model_refused"], result["moved_model_message"] = refused("volume all move x 0.001")
-    cubit.cmd("volume all move x -0.001")
-    cubit.cmd("create brick x 0.01")
+            return {"refused": "changed" in str(error), "message": str(error)}
+    surface = min(cubit.get_entities("surface"))
+    block = min(cubit.get_block_id_list())
+    result["edits"] = {
+        "move": refused("volume all move x 0.001"),
+        "surface_normal": refused(f"surface {surface} normal opposite"),
+        "block_name": refused(f'block {block} name "renamed_material"'),
+        "new_volume": refused("create brick x 0.01"),
+    }
+    # The first mesh was built before all of these edits.
     try:
         vol_mesh.curve(mesh, 3)
         result["changed_model_refused"] = False

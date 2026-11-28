@@ -20,9 +20,10 @@ another order, for a p-convergence study without exporting again:
 Runs only in an external CPython that imported ``cubit`` (the export worker's
 environment), never inside the MCP server or Cubit's embedded Python.  The
 geometry lives as long as that Cubit session: :func:`curve` refuses a mesh
-whose Cubit model has changed since it was built (entity ids, vertex positions,
-curve lengths, surface areas, volumes and node coordinates, compared bit for
-bit).  Do not call NGSolve's ``mesh.Curve(p)`` on it: that also queries the
+whose Cubit model has changed since it was built: entity ids, vertex positions,
+curve lengths, surface areas and normals, volumes, node coordinates and the
+block, sideset, nodeset, surface and volume labels are compared bit for bit.
+A geometry edit that keeps every one of these quantities is not detected.  Do not call NGSolve's ``mesh.Curve(p)`` on it: that also queries the
 Cubit geometry but skips the model check, the geometric refit (order >= 3) and
 the periodic coefficient copy.  A saved ``.vol`` keeps the order it was saved at.
 

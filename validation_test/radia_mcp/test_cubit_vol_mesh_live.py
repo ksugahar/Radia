@@ -7,8 +7,9 @@ tetrahedron's points where the ``export vol`` file of the same order, written
 in the same Cubit session, maps them (difference <= 1e-12 of the coordinate
 scale), with the same counts, labels and Kelvin periodic pairs (the same
 vertex pairs and groups).  Curving back to order 2 reproduces the first
-order-2 mesh, the cylinder volume error falls from order 1 to 3, and a moved
-or changed Cubit model is refused.
+order-2 mesh, the cylinder volume error falls from order 1 to 3, and curving
+again is refused after a move, a flipped surface normal, a renamed block or a
+new volume.
 
 The full-sphere Kelvin model has a same-material webcut seam at z = 0.  The
 export curves with the seam triangles and then removes them, so the file's
@@ -78,7 +79,7 @@ def test_live_mesh_matches_export_vol_at_every_order(tmp_path, case, journal):
     else:
         error = {row["order"]: abs(row["volume"] - math.pi) / math.pi for row in result["orders"]}
         assert error[1] > error[2] > error[3], error
-    assert result["moved_model_refused"], result.get("moved_model_message")
+    assert all(edit["refused"] for edit in result["edits"].values()), result["edits"]
     assert result["changed_model_refused"], result.get("changed_model_message")
 
 
@@ -92,5 +93,5 @@ def test_seam_model_matches_export_vol_off_the_removed_seam(tmp_path):
         assert row["live"]["periodic_pairs"] > 0, row
         assert row["max_off_z0"] <= tol, (row["order"], row["max_off_z0"], tol)
     assert result["recurve_back_to_2_off_z0"] <= tol, result
-    assert result["moved_model_refused"], result.get("moved_model_message")
+    assert all(edit["refused"] for edit in result["edits"].values()), result["edits"]
     assert result["changed_model_refused"], result.get("changed_model_message")

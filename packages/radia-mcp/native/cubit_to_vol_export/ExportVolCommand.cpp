@@ -184,11 +184,12 @@ std::vector<std::string> ExportVolCommand::get_help()
   return help;
 }
 
-// What the callbacks of an in-memory mesh query: re-curving refuses a changed model.
-// The state a live mesh was built from: the entity ids, the exact geometry
-// (vertex positions, curve lengths, surface areas, volume sizes) and the exact
-// node coordinates and element counts.  Any move, transform, geometry edit or
-// remesh changes it; the doubles are hashed bit for bit.
+// The Cubit state an in-memory mesh was built from; re-curving refuses any
+// change to it.  Hashed bit for bit: entity ids; vertex positions, curve
+// lengths, surface areas and normals, volume sizes and centers; every node's
+// coordinates; and the labels the export reads (block, sideset and nodeset
+// ids, names and members, and explicit surface and volume names).  A geometry
+// edit that keeps all of these quantities is not detected.
 static std::string cubit_model_fingerprint()
 {
   std::uint64_t hash = 1469598103934665603ull;            // FNV-1a
@@ -200,13 +201,22 @@ static std::string cubit_model_fingerprint()
     }
   };
   auto mix_double = [&mix](double value) { mix(&value, sizeof value); };
+  auto mix_int = [&mix](int value) { mix(&value, sizeof value); };
+  auto mix_text = [&mix, &mix_int](const std::string &value) {
+    mix_int((int)value.size());
+    mix(value.data(), value.size());
+  };
+  auto mix_ids = [&mix_int](const std::vector<int> &ids) {
+    mix_int((int)ids.size());
+    for (int id : ids) mix_int(id);
+  };
   std::ostringstream text;
   for (const char *kind : {"volume", "surface", "curve", "vertex"}) {
     const auto ids = CubitInterface::get_entities(kind);
     long long sum = 0;
     for (int id : ids) {
       sum += id;
-      mix(&id, sizeof id);
+      mix_int(id);
       const std::string type(kind);
       if (type == "vertex") {
         for (double c : CubitInterface::get_center_point("vertex", id)) mix_double(c);
@@ -214,16 +224,38 @@ static std::string cubit_model_fingerprint()
         mix_double(CubitInterface::get_curve_length(id));
       } else if (type == "surface") {
         mix_double(CubitInterface::get_surface_area(id));
+        for (double c : CubitInterface::get_surface_normal(id)) mix_double(c);
+        mix_text(explicit_surface_label(id));
       } else {
         mix_double(CubitInterface::get_volume_volume(id));
         for (double c : CubitInterface::get_center_point("volume", id)) mix_double(c);
+        mix_text(CubitInterface::get_entity_name("volume", id));
       }
     }
     text << kind << ' ' << ids.size() << ':' << sum << ' ';
   }
   for (int id : CubitInterface::parse_cubit_list("node", "all")) {
-    mix(&id, sizeof id);
+    mix_int(id);
     for (double c : CubitInterface::get_nodal_coordinates(id)) mix_double(c);
+  }
+  for (int id : CubitInterface::parse_cubit_list("block", "all")) {
+    mix_int(id);
+    mix_text(CubitInterface::get_block_name(id));
+    mix_ids(CubitInterface::get_block_volumes(id));
+    for (const char *element : {"tet", "hex", "wedge", "pyramid"})
+      mix_ids(CubitInterface::parse_cubit_list(element, "in block " + std::to_string(id)));
+  }
+  for (int id : CubitInterface::parse_cubit_list("sideset", "all")) {
+    mix_int(id);
+    mix_text(CubitInterface::get_entity_name("sideset", id));
+    mix_ids(CubitInterface::get_sideset_surfaces(id));
+    mix_ids(CubitInterface::get_sideset_tris(id));
+    mix_ids(CubitInterface::get_sideset_quads(id));
+  }
+  for (int id : CubitInterface::parse_cubit_list("nodeset", "all")) {
+    mix_int(id);
+    mix_text(CubitInterface::get_entity_name("nodeset", id));
+    mix_ids(CubitInterface::parse_cubit_list("node", "in nodeset " + std::to_string(id)));
   }
   text << "state " << std::hex << hash << std::dec << ' ';
   text << "nodes " << CubitInterface::get_node_count()
