@@ -21,10 +21,10 @@ The plugin `cubit_to_vol_export.dll` is built from
 ```bash
 python packages/radia-mcp/native/cubit_to_vol_export/build.py \
   --cubit-sdk "<Cubit>/cmake" --netgen-dir "<venv>/Lib/site-packages/netgen/cmake" --out <plugin_dir>
-# The packaged Export Vol menu (radia_mcp.cubit.gui) is the sole GUI entry point.
 ```
 
-Installation: `python -m radia_mcp.cubit.install --plugin-dir <plugin_dir>`
+The plugin is not installed into Cubit. The external export worker loads
+`<plugin_dir>` through `RADIA_CUBIT_PLUGIN_DIR` (headless `export vol`).
 
 ---
 

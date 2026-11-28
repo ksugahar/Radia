@@ -1,7 +1,7 @@
 """
 End-to-end smoke test for the radia-mcp curved ``.vol`` export route.
 
-Exports the bundled ``gui/solver_ready_sample.jou`` through the same isolated
+Exports the bundled ``samples/solver_ready_sample.jou`` through the same isolated
 worker the MCP server uses (:func:`radia_mcp.cubit.export_runner.run_export`:
 external CPython, fork NGSolve, Cubit's Python API in ``-nographics -batch``
 mode and the native ``export vol`` plugin).  The result must then pass the
@@ -9,7 +9,7 @@ production :mod:`radia.vol_check` gate used before solver initialization:
 strict labels, complete DomainIn/DomainOut ownership, NGSolve reload,
 curved-map Jacobian sampling, tetrahedral topology, CAD-sidecar metadata, and
 positive required material / boundary measures.  Run it after
-``python -m radia_mcp.cubit.install`` to prove the route is solver-ready
+``build.py`` to prove the route is solver-ready
 rather than merely file-producing.
 
 Usage::
@@ -48,7 +48,7 @@ def _find_sample_jou(override: str = "") -> Path:
             raise RuntimeError(f"--jou argument does not exist: {p}")
         return p
 
-    candidate = Path(__file__).parent / "gui" / "solver_ready_sample.jou"
+    candidate = Path(__file__).parent / "samples" / "solver_ready_sample.jou"
     if not candidate.is_file():
         raise RuntimeError(f"Bundled smoke-test fixture missing: {candidate}")
     return candidate

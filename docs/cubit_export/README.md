@@ -90,7 +90,8 @@ python validation_test/radia_mcp/validation_vol_boundary_tet_face_incidence.py
 export vol "file.vol" order {1..5} [overwrite]
 ```
 
-The plugin is installed with `python -m radia_mcp.cubit.install`.
+The plugin is not installed into Cubit; the external export worker loads it
+through `RADIA_CUBIT_PLUGIN_DIR`.
 
 ## See Also
 

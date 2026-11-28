@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from radia_mcp.cubit.layout import export_plugin_directory
-from radia_mcp.cubit.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.session import find_cubit_bin
 
 DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
 

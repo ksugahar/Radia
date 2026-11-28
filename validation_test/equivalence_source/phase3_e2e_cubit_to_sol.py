@@ -98,7 +98,7 @@ def step1_cubit_mesh():
     # Locate Cubit
     install_helper = REPO / "src" / "radia" / "install_panels.py"
     sys.path.insert(0, str(install_helper.parent))
-    from radia_mcp.cubit.toolbar_install import find_cubit_bin
+    from radia_mcp.cubit.session import find_cubit_bin
     cubit_bin = find_cubit_bin()
     if cubit_bin is None:
         print("  Cubit not found -- SKIP (will use OCC fallback)")

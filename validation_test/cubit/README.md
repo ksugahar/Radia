@@ -19,7 +19,7 @@ no Python curving module.
 ## Running Tests
 
 Set `RADIA_RUN_CUBIT_TESTS=1` explicitly. The helper auto-detects Coreform
-Cubit 2025.12+ through the same `radia_mcp.cubit.toolbar_install.find_cubit_bin()` path used by
+Cubit 2025.12+ through the same `radia_mcp.cubit.session.find_cubit_bin()` path used by
 the installer. `CUBIT_PATH` can override discovery when needed.
 
 ```powershell

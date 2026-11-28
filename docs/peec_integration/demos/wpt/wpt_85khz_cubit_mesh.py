@@ -19,7 +19,7 @@ Note: Netgen alone cannot create 3D hexahedral meshes.
 
 Requirements:
     - Coreform Cubit 2025.8+
-    - cubit_to_vol_export.dll deployed by `python -m radia_mcp.cubit.install`
+    - cubit_to_vol_export.dll built with build.py, its directory in RADIA_CUBIT_PLUGIN_DIR
 
 Author: Radia Development Team
 Date: 2026-01-16
@@ -28,7 +28,7 @@ Date: 2026-01-16
 import sys
 
 # Auto-detect Cubit installation
-from radia_mcp.cubit.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.session import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
@@ -254,7 +254,7 @@ def analyze_wpt_system():
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Deploy cubit_to_vol_export.dll: python -m radia_mcp.cubit.install")
+        print("  2. Set RADIA_CUBIT_PLUGIN_DIR to the built cubit_to_vol_export.dll directory")
         return
 
     # Load meshes into Radia via Netgen
@@ -320,7 +320,7 @@ def main():
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Deploy cubit_to_vol_export.dll: python -m radia_mcp.cubit.install")
+        print("  2. Set RADIA_CUBIT_PLUGIN_DIR to the built cubit_to_vol_export.dll directory")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
     # Analyze system

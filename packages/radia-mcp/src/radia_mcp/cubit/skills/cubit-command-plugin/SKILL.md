@@ -170,9 +170,9 @@ if (!iface->initialize_export()) { PRINT_ERROR("initialize_export failed
   the install's plugin directory. In 2026.8 that directory is
   `<install>/plugins`, beside `bin/` (`bin/cubitx.exe` exists). Older
   releases use `bin/plugins`.
-- The 2026.8 SDK example builds a normal MODULE (`.dll`), and the
-  radia-mcp installer (`python -m radia_mcp.cubit.install`) deploys the
-  Netgen export plugin as `.dll` on 2026.8.
+- The 2026.8 SDK example builds a normal MODULE (`.dll`); the radia-mcp
+  Netgen export plugin is a `.dll` on 2026.8, loaded by its export worker
+  through `CUBIT_PLUGIN_DIR`.
   Older releases also loaded `.ccm` files and took `-commandplugindir`
   (Coreform forum, "Example plugin not loading", 2023). Whether 2026.8
   still accepts `.ccm` has not been tested, so deploy `.dll`. A package

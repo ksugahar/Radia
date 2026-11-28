@@ -27,21 +27,15 @@ NOTE: This is *different* from two adjacent topics:
 TOOLBAR_OVERVIEW = """
 # In-Cubit Custom Toolbar Overview (Coreform Cubit 2026.8)
 
-The radia-mcp Cubit GUI packages its menu and toolbar assets under
-`radia_mcp.cubit.gui`; the installer is `python -m radia_mcp.cubit.install`.
-Check the installed distribution before claiming this capability is deployed.
+This is general Cubit toolbar knowledge. radia-mcp itself installs no Cubit
+menu, toolbar or plugin (retired 2026-11-28); its export runs headless.
 LLM production remains APREPRO/headless; launch the GUI only for the explicitly
 scoped GUI release test or a human workflow.
 The Export Vol entry is one module-owned menu-bar QAction; never traverse
 Cubit-owned menus from PySide, and remove the action before Python shutdown
 (aboutToQuit). See `cubit_toolbar_guide topic=menu_bar` for the recipe and
 `topic=external_jobs` for long-running work.
-Legacy GUI paths and compatibility bridges are removed. radia-mcp owns the
-smoke tests (`python -m radia_mcp.cubit.smoke_test` and
-`python -m radia_mcp.cubit.toolbar_smoke`) and their embedded probes as well as
-the GUI. Re-run `python -m radia_mcp.cubit.install` from the selected external
-interpreter (`RADIA_MCP_CUBIT_PYTHON`) and restart Cubit to replace old startup
-references; do not restore shims at removed paths.
+Do not restore removed radia-mcp GUI paths or shims.
 The GUI cold-start command is an explicitly scoped release test, never an LLM
 production execution route. Publication goes through the radia-mcp release.
 Netgen GUI exports run the standalone checker (`python -m radia.vol_check`)
@@ -628,9 +622,8 @@ TOOLBAR_TROUBLESHOOTING = """
 
 - Parenthesized multi-line imports break Cubit's importer. Switch to
   backslash continuations or single-line imports.
-- The radia-mcp Cubit GUI targets Coreform Cubit 2026.8. Do not add a PyQt5
-  fallback or patch older Cubit bundles; upgrade Cubit and re-run
-  `python -m radia_mcp.cubit.install`.
+- Target Coreform Cubit 2026.8. Do not add a PyQt5 fallback or patch older
+  Cubit bundles; upgrade Cubit.
 
 ## Symptom: "cubit.cmd raises 'not initialized'"
 

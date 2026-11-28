@@ -70,7 +70,7 @@ def _load_cases(path: Path = CASES_PATH) -> dict:
 def _find_cubit_exe() -> Path:
     """Cubit's console executable, found as radia_mcp's session finds Cubit."""
     from radia_mcp.cubit.layout import console_executable
-    from radia_mcp.cubit.toolbar_install import find_cubit_bin
+    from radia_mcp.cubit.session import find_cubit_bin
     bin_dir = find_cubit_bin()
     exe = console_executable(Path(bin_dir)) if bin_dir else None
     if exe is None:

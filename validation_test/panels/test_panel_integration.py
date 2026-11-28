@@ -22,7 +22,7 @@ import pytest
 # Skip outside the explicit Cubit integration environment.
 def _cubit_available():
     try:
-        from radia_mcp.cubit.toolbar_install import find_cubit_bin
+        from radia_mcp.cubit.session import find_cubit_bin
         return find_cubit_bin() is not None
     except Exception:
         return False
@@ -55,7 +55,7 @@ def _find_python():
 
 def _find_cubit():
     try:
-        from radia_mcp.cubit.toolbar_install import find_cubit_bin
+        from radia_mcp.cubit.session import find_cubit_bin
         return find_cubit_bin()
     except ImportError:
         return os.environ.get("CUBIT_PATH")

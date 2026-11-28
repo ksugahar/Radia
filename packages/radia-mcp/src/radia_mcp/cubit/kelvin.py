@@ -6,8 +6,7 @@ this file by path inside Cubit's embedded Python.
 
 * ``add_kelvin_cubit`` / ``auto_add_kelvin_from_current_model`` /
   ``apply_options``: Cubit Python, after the journal is played and before
-  ``export vol``; called by the external curved-export worker and by the
-  Vol Export menu (:mod:`radia_mcp.cubit.gui.cubit_export_menu`).
+  ``export vol``; called by the external curved-export worker.
 * ``add_kelvin_occ`` / ``add_kelvin_2d_axisym``: NGSolve/OCC geometry, before
   meshing, in a normal Python with ``netgen``.
 

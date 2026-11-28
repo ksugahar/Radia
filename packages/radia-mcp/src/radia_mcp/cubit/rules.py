@@ -462,7 +462,7 @@ def check_non_ascii_bytes(filepath: str, lines: List[str]) -> List[Dict]:
 
 	Cubit's embedded Python uses cp932 on Japanese Windows.
 	Any non-ASCII byte (em dash, smart quotes, etc.) causes
-	UnicodeDecodeError when startup.py reads register_toolbar.py.
+	UnicodeDecodeError when Cubit plays or reads the script.
 	"""
 	findings = []
 	try:
