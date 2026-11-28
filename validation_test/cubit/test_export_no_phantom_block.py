@@ -61,6 +61,7 @@ if _plugin_dir:
 
 _cubit_import_err = None
 try:
+    import ngsolve  # noqa: F401  -- the fork nglib the export plugin links, loaded before Cubit
     import cubit
     _cubit_available = True
 except ImportError as e:
@@ -78,7 +79,7 @@ pytestmark = pytest.mark.skipif(
 def _ensure_cubit_inited():
     if not getattr(_ensure_cubit_inited, "_done", False):
         cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
-                    '-commandplugindir', _plugin_dir or ''])
+                    '-noinitfile'])
         _ensure_cubit_inited._done = True
 
 

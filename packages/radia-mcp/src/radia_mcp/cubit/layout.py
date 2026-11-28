@@ -77,7 +77,11 @@ def command_plugin_path(install_dir: Path) -> Path:
 
 
 def export_plugin_directory(install_dir: Path) -> Path:
-    """The directory to pass as ``-commandplugindir`` for ``export vol``.
+    """The directory to put in ``CUBIT_PLUGIN_DIR`` for ``export vol``.
+
+    Cubit 2026.8 reads ``CUBIT_PLUGIN_DIR`` at startup; it has no
+    ``-commandplugindir`` option, and ``import ngsolve`` must come before
+    ``import cubit`` so the plugin binds to the fork nglib.
 
     ``$RADIA_CUBIT_PLUGIN_DIR`` (a ``build.py`` output) when set, else the
     installed plugin directory; either must hold the command plugin.

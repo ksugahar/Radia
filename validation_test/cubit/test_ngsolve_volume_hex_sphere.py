@@ -38,7 +38,7 @@ if _plugin_dir:
 import cubit
 
 cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 OUT_DIR = os.path.join(_test_dir, "ngsolve_hex_sphere_test")
 os.makedirs(OUT_DIR, exist_ok=True)

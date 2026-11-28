@@ -34,9 +34,10 @@ _plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
 if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
+import ngsolve  # noqa: F401  -- the fork nglib the export plugin links, loaded before Cubit
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 # Check if NGSolve is available
 try:

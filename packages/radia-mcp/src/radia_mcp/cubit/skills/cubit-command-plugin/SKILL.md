@@ -184,10 +184,13 @@ if (!iface->initialize_export()) { PRINT_ERROR("initialize_export failed
   - Close stdin. Under an MCP stdio server, stdin is the JSON-RPC pipe,
     and Cubit waits on it.
   - `-noinitfile` keeps the user's init file out of the run.
-- Python started with `cubit.init([...])` (the in-process daemon) does
-  not load C++ command plugins. Run plugin verbs through the console
-  launcher. cubit-mcp's `session.run_headless_journal(commands,
-  command_plugin_directory=dir)` does the staging for you.
+- Python `cubit.init([...])` (an external CPython that imported `cubit`)
+  loads the plugins in `CUBIT_PLUGIN_DIR` when it is set before
+  `import cubit`; `-commandplugindir` is not an option in 2026.8. A plugin
+  that links nglib (the `export vol` plugin) also needs `import ngsolve`
+  before `import cubit`, as in `radia_mcp.cubit.vol_export`. The console
+  launcher route is cubit-mcp's `session.run_headless_journal(commands,
+  command_plugin_directory=dir)`.
 - Test a rebuilt plugin from a staged copy, never by overwriting the
   deployed DLL. Another user's Cubit may have it open, and Windows locks
   loaded DLLs.

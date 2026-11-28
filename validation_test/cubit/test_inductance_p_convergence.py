@@ -35,7 +35,7 @@ import scipy.sparse  # noqa: F401 — must import before cubit.init()
 # Cubit
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 # Inductance extractor
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia', 'panels'))

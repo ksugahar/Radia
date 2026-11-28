@@ -35,7 +35,7 @@ from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 from radia.vol_check import check_mesh_quality
 
 OUT_DIR = os.path.join(_test_dir, 'sweep_torus_test')

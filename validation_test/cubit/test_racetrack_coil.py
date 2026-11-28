@@ -29,7 +29,7 @@ from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 OUT_DIR = os.path.join(_test_dir, 'racetrack_test')
 os.makedirs(OUT_DIR, exist_ok=True)

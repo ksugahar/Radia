@@ -40,7 +40,7 @@ if _plugin_dir:
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 # ============================================================
 # Parameters
