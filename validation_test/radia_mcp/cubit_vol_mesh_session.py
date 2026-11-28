@@ -95,19 +95,38 @@ try:
         for command in commands:
             if not cubit.cmd(command):
                 raise RuntimeError(f"Cubit refused {command!r}")
+        # The refusal comes before any curving: the order stays at 2.
         try:
             vol_mesh.curve(probe, 3)
-            return {"refused": False, "message": ""}
+            return {"refused": False, "message": "", "order_after": probe.GetCurveOrder()}
         except RuntimeError as error:
-            return {"refused": "changed" in str(error), "message": str(error)}
+            return {"refused": "changed" in str(error) and probe.GetCurveOrder() == 2,
+                    "message": str(error), "order_after": probe.GetCurveOrder()}
     surface = min(cubit.get_entities("surface"))
+    curve = min(cubit.get_entities("curve"))
     block = min(cubit.get_block_id_list())
-    result["edits"] = {
-        "move": refused("volume all move x 0.001"),
-        "surface_normal": refused(f"surface {surface} normal opposite"),
-        "block_name": refused(f'block {block} name "renamed_material"'),
-        "new_volume": refused("create brick x 0.01"),
+    # (edit, undo): a few edits make the model unexportable (a reversed arc, a
+    # Kelvin sideset under another name), so each is undone before the next build.
+    edits = {
+        "move": ("volume all move x 0.001", None),
+        "surface_normal": (f"surface {surface} normal opposite", None),
+        "curve_sense": (f"curve {curve} tangent opposite", f"curve {curve} tangent opposite"),
+        "block_name": (f'block {block} name "renamed_material"', None),
     }
+    if cubit.get_sideset_id_list():
+        sideset = min(cubit.get_sideset_id_list())
+        name = cubit.get_exodus_entity_name("sideset", sideset)
+        edits["sideset_name"] = (f'sideset {sideset} name "renamed_side"', f'sideset {sideset} name "{name}"')
+    if cubit.get_nodeset_id_list():
+        nodeset = min(cubit.get_nodeset_id_list())
+        name = cubit.get_exodus_entity_name("nodeset", nodeset)
+        edits["nodeset_name"] = (f'nodeset {nodeset} name "renamed_points"', f'nodeset {nodeset} name "{name}"')
+    edits["new_volume"] = ("create brick x 0.01", None)
+    result["edits"] = {}
+    for label, (edit, undo) in edits.items():
+        result["edits"][label] = refused(edit)
+        if undo and not cubit.cmd(undo):
+            raise RuntimeError(f"Cubit refused {undo!r}")
     # The first mesh was built before all of these edits.
     try:
         vol_mesh.curve(mesh, 3)

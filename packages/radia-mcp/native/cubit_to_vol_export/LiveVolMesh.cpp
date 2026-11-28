@@ -24,14 +24,24 @@ void recurve(netgen::Mesh &mesh, int order)
                              "mesh_from_cubit can be curved again");
   if (!geometry->model_fingerprint)
     throw std::runtime_error("the live Cubit geometry has no model fingerprint");
+  if (!geometry->failure.empty())
+    throw std::runtime_error("an earlier curving of this mesh failed (" + geometry->failure +
+                             "); build the mesh again");
   const std::string now = geometry->model_fingerprint();
   if (now != geometry->built_fingerprint)
     throw std::runtime_error("the Cubit model changed since this mesh was built (" +
                              geometry->built_fingerprint + " -> " + now +
                              "); build the mesh again");
-  curve_mesh(mesh, order);
-  if (!geometry->periodic_triangles.empty())
-    synchronize_periodic_curvature(mesh, geometry->periodic_triangles);
+  try {
+    curve_mesh(mesh, order);
+    if (!geometry->periodic_triangles.empty())
+      synchronize_periodic_curvature(mesh, geometry->periodic_triangles);
+  } catch (const std::exception &error) {
+    geometry->failure = error.what();
+    throw std::runtime_error(std::string("curving at order ") + std::to_string(order) +
+                             " failed and left this mesh unusable (" + error.what() +
+                             "); build the mesh again");
+  }
 }
 
 }  // namespace cubit_to_vol_export

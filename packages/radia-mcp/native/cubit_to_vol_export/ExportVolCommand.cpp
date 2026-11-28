@@ -18,6 +18,10 @@
 // Cubit geometry for CAD reference values (companion JSON)
 #include "RefFace.hpp"
 #include "RefEdge.hpp"
+#include "RefVertex.hpp"
+#include "CubitVector.hpp"
+#include "MeshExportInterface.hpp"
+#include "CubitRefAccessor.hpp"
 #include "RefVolume.hpp"
 #include "GeometryQueryTool.hpp"
 
@@ -27,6 +31,8 @@
 
 #include <fstream>
 #include <map>
+#include <memory>
+#include <stdexcept>
 #include <set>
 #include "utf8_path.hpp"
 
@@ -186,10 +192,13 @@ std::vector<std::string> ExportVolCommand::get_help()
 
 // The Cubit state an in-memory mesh was built from; re-curving refuses any
 // change to it.  Hashed bit for bit: entity ids; vertex positions, curve
-// lengths, surface areas and normals, volume sizes and centers; every node's
+// lengths and senses (end vertices and the tangent at the start vertex),
+// surface areas and normals, volume sizes and centers; every node's
 // coordinates; and the labels the export reads (block, sideset and nodeset
-// ids, names and members, and explicit surface and volume names).  A geometry
-// edit that keeps all of these quantities is not detected.
+// ids, names and members, and explicit surface and volume names).  Sideset
+// and nodeset names come from the same MeshExport interface the export reads
+// them through.  A geometry edit that keeps all of these quantities is not
+// detected.
 static std::string cubit_model_fingerprint()
 {
   std::uint64_t hash = 1469598103934665603ull;            // FNV-1a
@@ -222,6 +231,16 @@ static std::string cubit_model_fingerprint()
         for (double c : CubitInterface::get_center_point("vertex", id)) mix_double(c);
       } else if (type == "curve") {
         mix_double(CubitInterface::get_curve_length(id));
+        RefEdge *edge = cubit_to_vol_export::cubit_get_ref_edge(id);
+        if (!edge || !edge->start_vertex() || !edge->end_vertex())
+          throw std::runtime_error("Cubit curve " + std::to_string(id) + " has no end vertices");
+        mix_int(edge->start_vertex()->id());
+        mix_int(edge->end_vertex()->id());
+        CubitVector tangent;
+        edge->tangent(edge->start_vertex()->coordinates(), tangent);
+        mix_double(tangent.x());
+        mix_double(tangent.y());
+        mix_double(tangent.z());
       } else if (type == "surface") {
         mix_double(CubitInterface::get_surface_area(id));
         for (double c : CubitInterface::get_surface_normal(id)) mix_double(c);
@@ -245,16 +264,43 @@ static std::string cubit_model_fingerprint()
     for (const char *element : {"tet", "hex", "wedge", "pyramid"})
       mix_ids(CubitInterface::parse_cubit_list(element, "in block " + std::to_string(id)));
   }
+  // Sideset and nodeset names, through the interface the export uses.
+  std::map<int, std::string> sideset_names, nodeset_names;
+  {
+    CubitBaseInterface *raw = CubitInterface::get_interface("MeshExport");
+    const auto release = [](CubitBaseInterface *iface) { CubitInterface::release_interface(iface); };
+    std::unique_ptr<CubitBaseInterface, decltype(release)> owner(raw, release);
+    auto *iface = dynamic_cast<MeshExportInterface *>(raw);
+    if (!iface) throw std::runtime_error("unable to get the Cubit MeshExport interface");
+    iface->set_use_sequential_ids(false);
+    iface->initialize_export();
+    std::vector<SidesetHandle> sidesets;
+    iface->get_sideset_list(sidesets);
+    for (auto &handle : sidesets)
+      sideset_names[iface->id_from_handle(handle)] = iface->get_sideset_name(handle);
+    std::vector<NodesetHandle> nodesets;
+    iface->get_nodeset_list(nodesets);
+    for (auto &handle : nodesets)
+      nodeset_names[iface->id_from_handle(handle)] = iface->get_nodeset_name(handle);
+  }
+  auto set_name = [](const std::map<int, std::string> &names, const char *kind, int id) {
+    auto found = names.find(id);
+    if (found == names.end())
+      throw std::runtime_error(std::string("Cubit ") + kind + " " + std::to_string(id) +
+                               " is missing from the MeshExport interface");
+    return found->second;
+  };
   for (int id : CubitInterface::parse_cubit_list("sideset", "all")) {
     mix_int(id);
-    mix_text(CubitInterface::get_entity_name("sideset", id));
+    mix_text(set_name(sideset_names, "sideset", id));
     mix_ids(CubitInterface::get_sideset_surfaces(id));
+    mix_ids(CubitInterface::get_sideset_curves(id));
     mix_ids(CubitInterface::get_sideset_tris(id));
     mix_ids(CubitInterface::get_sideset_quads(id));
   }
   for (int id : CubitInterface::parse_cubit_list("nodeset", "all")) {
     mix_int(id);
-    mix_text(CubitInterface::get_entity_name("nodeset", id));
+    mix_text(set_name(nodeset_names, "nodeset", id));
     mix_ids(CubitInterface::parse_cubit_list("node", "in nodeset " + std::to_string(id)));
   }
   text << "state " << std::hex << hash << std::dec << ' ';

@@ -30,14 +30,18 @@ public:
   // The Cubit model the callbacks query; checked before every re-curving.
   std::function<std::string()> model_fingerprint;
   std::string built_fingerprint;
+  // Set when a curving of this mesh threw: its curved data is then partial.
+  std::string failure;
 };
 
 // BuildCurvedElements(order) and, for order >= 3, the geometric refit.
 // Throws when order >= 2 produces no high-order data.
 radia_netgen_curving::RefitStats curve_mesh(netgen::Mesh &mesh, int order);
 
-// Curve an in-memory mesh again at `order` (1..5).  Throws when the mesh has
-// no LiveCubitGeometry or the Cubit model changed since the mesh was built.
+// Curve an in-memory mesh again at `order` (1..5).  Throws, before touching the
+// mesh, when it has no LiveCubitGeometry, the Cubit model changed since it was
+// built, or an earlier curving of it failed.  A curving that throws marks the
+// mesh failed: its curved data may be partial, so it must be built again.
 void recurve(netgen::Mesh &mesh, int order);
 
 }  // namespace cubit_to_vol_export
