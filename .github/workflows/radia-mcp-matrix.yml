@@ -273,7 +273,7 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           $scripts = Join-Path $env:RADIA_CI_VENV 'Scripts'
           $build = Join-Path $env:RUNNER_TEMP "cubit-export-native-build-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          & cmd.exe /d /c "call `"$vcvars`" -vcvars_ver=14.44 > nul && set `"PATH=$scripts;%PATH%`" && python -B packages/radia-mcp/native/cubit_to_vol_export/run_contracts.py --build-dir `"$build`" --jobs 6"
+          & cmd.exe /d /v:on /c "call `"$vcvars`" -vcvars_ver=14.44 > nul && set `"PATH=$scripts;!PATH!`" && python -B packages/radia-mcp/native/cubit_to_vol_export/run_contracts.py --build-dir `"$build`" --jobs 6"
           exit $LASTEXITCODE
 
   minimum-sdk:
