@@ -480,19 +480,18 @@ def solve_fem(vol_file="", fes_order=1,
     non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
 
     def add_gauge_mass(form, trial, test, eps):
-        """Add eps * (Kelvin-mapped) NU_0 * trial * test over every region.
-
-        Without the Kelvin-domain term the lowest-order gradients of the
-        exterior vertices are a null space of the curl-curl block, and a
-        SparseCholesky factorization meets them as zero pivots.
-        """
+        """Regularize the physical domain and any ungauged Kelvin gradients."""
         if not kelvin_mass:
             form += eps * NU_0 * trial * test * dx
             return
         if non_kelvin_mats:
             form += eps * NU_0 * trial * test * dx("|".join(non_kelvin_mats))
-        for mat, weight in kelvin_mass.items():
-            form += eps * weight * trial * test * dx(mat, bonus_intorder=4)
+        # A forest-eliminated gradient must remain a null direction of the
+        # assembled operator so its original equation follows from the
+        # retained equations. Iterative routes solve all free rows.
+        if not kelvin_gauge_dofs:
+            for mat, weight in kelvin_mass.items():
+                form += eps * weight * trial * test * dx(mat, bonus_intorder=4)
     if has_kelvin:
         _log(f"KELVIN:a={a_kelvin}, center=({kx},{ky},{kz})")
 
@@ -538,8 +537,10 @@ def solve_fem(vol_file="", fes_order=1,
     #
     # Three real cases for the HCurl A solve:
     #   (A) kelvin material + Periodic identifications
-    #          -> Periodic Kelvin closes the far field. The direct DC PEEC
-    #             solve uses the regularized system's original equations.
+    #          -> Periodic Kelvin closes the far field.  Gauge null-
+    #             space is fixed by the interior Kelvin edge forest and
+    #             physical-domain reg*nu0*u*v
+    #             (+ j*omega*sigma*A in AC), NOT by Dirichlet.
     #   (B) "outer" boundary face, no kelvin
     #          -> Dirichlet A=0 on outer face (the only Dirichlet
     #             that actually constrains HCurl edge DOFs).
@@ -551,7 +552,8 @@ def solve_fem(vol_file="", fes_order=1,
         dirichlet_bnd = "outer"
 
     if has_kelvin and has_kelvin_periodic:
-        _log("FARFIELD:Periodic Kelvin (open boundary)")
+        _log("FARFIELD:Periodic Kelvin (open boundary; gauge by "
+             "Kelvin gradient gauge + physical-domain reg)")
     elif dirichlet_bnd == "outer":
         _log("FARFIELD:Dirichlet A=0 on 'outer' boundary "
              "(truncation error if outer is too close to coil)")
@@ -595,10 +597,7 @@ def solve_fem(vol_file="", fes_order=1,
     direct_free = fes.FreeDofs()
     kelvin_gauge_dofs = 0
     wirebasket_dofs_returned = None     # set by the BDDC route only
-    # In regularized DC PEEC the exterior edge rows carry the mass term.
-    # Pinning them constrains that system and leaves those equations unsolved.
-    regularized_dc_peec = use_peec and frequency == 0 and reg > 0
-    if has_kelvin and has_kelvin_periodic and not regularized_dc_peec:
+    if solver == "sparsecholesky" and has_kelvin and has_kelvin_periodic:
         direct_free, kelvin_gauge_dofs = _kelvin_gradient_gauge(fes, mesh)
     u, v = fes.TnT()
 
@@ -1656,15 +1655,22 @@ def solve_fem(vol_file="", fes_order=1,
     # ============================================================
     delta_skin = mat.skin_depth(frequency)
 
-    # PEEC: use the AC port impedance for this optional diagnostic. At DC
-    # the FEM energy still supplies L, but Im(Z)/(2*pi*f) is undefined.
+    # PEEC: AC port reactance or DC magnetic energy at one ampere.
     L_peec = None
-    if use_peec and frequency > 0 and 'topo' in dir():
+    if use_peec and 'topo' in dir():
         peec_solver_obj = topo.get("solver")
         if peec_solver_obj is not None:
-            Z_port = peec_solver_obj.compute_port_impedance(frequency)
-            L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
-            _log(f"PEEC:L_peec={L_peec*1e9:.3f}nH (Z_port)")
+            if frequency == 0:
+                # At DC, Z is real. For this resistive filament bundle, the
+                # first-order port reactance is the inductive quadratic form
+                # of the DC branch currents normalized to unit port current.
+                dc_currents = peec_solver_obj.compute_branch_currents(0, [1.0])
+                L_peec = float(np.vdot(dc_currents, peec_solver_obj.L @ dc_currents).real)
+                _log(f"PEEC:L_peec={L_peec*1e9:.3f}nH (DC magnetic energy)")
+            else:
+                Z_port = peec_solver_obj.compute_port_impedance(frequency)
+                L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
+                _log(f"PEEC:L_peec={L_peec*1e9:.3f}nH (Z_port)")
 
     result = {
         "linear_solver": solver,
