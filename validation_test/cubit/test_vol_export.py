@@ -4,7 +4,7 @@ import pytest
 from ngsolve import H1, TaskManager
 
 from validation_test.cubit.cubit_202512_helpers import (
-    export_netgen,
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
@@ -28,7 +28,7 @@ def test_basic_tet_export_loads_in_ngsolve():
     cubit.cmd("block 2 add tri all in surface all")
     cubit.cmd('block 2 name "boundary"')
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "brick", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "brick", order=1))
     assert mesh.ne == len(cubit.get_block_tets(1))
     assert tuple(mesh.GetMaterials()) == ("solid",)
     assert "boundary" in tuple(mesh.GetBoundaries())
@@ -52,5 +52,5 @@ def test_multiple_material_blocks_survive_export():
     cubit.cmd("block 3 add tri all in surface all")
     cubit.cmd('block 3 name "boundary"')
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "two_regions", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "two_regions", order=1))
     assert set(mesh.GetMaterials()) == {"region1", "region2"}

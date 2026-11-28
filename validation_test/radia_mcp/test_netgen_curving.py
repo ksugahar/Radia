@@ -1,10 +1,10 @@
 """netgen_curving: GeometricRefit and the periodic coefficient copy outside Netgen.
 
 Both moved from the Radia Netgen fork into
-``native/cubit_vol_export/netgen_curving``.  The ``_netgen_curving`` test module
+``native/cubit_to_vol_export/netgen_curving``.  The ``_netgen_curving`` test module
 is built from the same sources with the Netgen SDK only (no Cubit):
 
-    cmake -S native/cubit_vol_export -B <build> -DCUBIT_VOL_EXPORT_PLUGIN=OFF
+    cmake -S native/cubit_to_vol_export -B <build> -DCUBIT_TO_VOL_EXPORT_PLUGIN=OFF
           -DNETGEN_CURVING_PYMODULE=ON -DNetgen_DIR=<venv>/Lib/site-packages/netgen/cmake
 
 Point ``RADIA_NETGEN_CURVING_DIR`` at the directory holding the built module.
@@ -16,8 +16,8 @@ code to give the same coefficients bit for bit.
 
 The odd edge mode sign of the periodic copy is checked against an independent
 oracle for every vertex permutation by the native contract
-``native/cubit_vol_export/tests/periodic_curved_contract.cpp``; this module
-does not repeat it.  ``native/cubit_vol_export/run_contracts.py`` builds the
+``native/cubit_to_vol_export/tests/periodic_curved_contract.cpp``; this module
+does not repeat it.  ``native/cubit_to_vol_export/run_contracts.py`` builds the
 module, runs those contracts and then this file in strict mode.
 
 Guards: the refit and periodic copy keep the fork's results and exception

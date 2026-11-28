@@ -233,7 +233,7 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
         "2. Export the yoke STEP and run the coil/yoke clearance audit\n"
         "   - fail on overlap or insufficient manufacturing clearance\n"
         "3. Create yoke + air + Kelvin domain in Cubit\n"
-        "   - export netgen 'model.vol' order 2 overwrite\n"
+        "   - export vol 'model.vol' order 2 overwrite\n"
         "4. NGSolve FEM solve (Omega-reduced scalar potential)\n"
         "   - electromagnet_usage('kelvin_workflow') for full code\n"
         "5. Visualize with GmshPostExport + coil STEP overlay\n"

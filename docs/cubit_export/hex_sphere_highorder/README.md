@@ -1,10 +1,10 @@
 # High-order curved HEX mesh in NGSolve
 
-Demonstrates the Cubit `export netgen` capability that Netgen alone does not provide:
+Demonstrates the Cubit `export vol` capability that Netgen alone does not provide:
 **curved, high-order hexahedral meshes consumed by NGSolve.**
 
 A sphere meshed with 56 hexes (`volume scheme sphere` in Coreform Cubit) is exported to a
-high-order Netgen `.vol` (`block 1 add hex all; export netgen "hexsph_oN.vol" order N`).
+high-order Netgen `.vol` (`block 1 add hex all; export vol "hexsph_oN.vol" order N`).
 NGSolve loads each `.vol` and integrates the volume; the curved hex boundary makes it
 converge to the analytic `4/3 pi r^3`:
 
@@ -38,5 +38,5 @@ the right call only for meshes built from an in-memory CAD object (e.g. `netgen.
 ```
 volume 1 size 0.012 ; volume 1 scheme sphere ; mesh volume 1
 block 1 add hex all
-export netgen "hexsph_oN.vol" order N overwrite
+export vol "hexsph_oN.vol" order N overwrite
 ```

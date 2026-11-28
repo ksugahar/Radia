@@ -1,13 +1,13 @@
 ---
 name: cubit-run
-description: Run Cubit .jou files and export curved .vol meshes via the radia-mcp `export netgen` command plugin
+description: Run Cubit .jou files and export curved .vol meshes via the radia-mcp `export vol` command plugin
 allowed-tools: Bash(python *), Bash(*coreform_cubit*), Bash(ssh *), Bash(cp *), Bash(sed *), Bash(cat *), Read, Glob, Write
 ---
 
 # Cubit .jou Runner & Tester
 
-> **CURRENT POLICY**: the only export command is `export netgen` from
-> `radia_cubit_export.dll` (`radia_mcp.cubit`, deployed by
+> **CURRENT POLICY**: the only export command is `export vol` from
+> `cubit_to_vol_export.dll` (`radia_mcp.cubit`, deployed by
 > `python -m radia_mcp.cubit.install`). Prefer `C:\temp` for temporary
 > journals and outputs.
 
@@ -31,11 +31,11 @@ CUBIT="C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"
 # The user's .jou should contain geometry + mesh + blocks only (no export)
 # Append these export lines with output to a temp directory:
 
-export netgen "{DIR}/test_o1.vol" order 1 overwrite
-export netgen "{DIR}/test_o2.vol" order 2 overwrite
-export netgen "{DIR}/test_o3.vol" order 3 overwrite
-export netgen "{DIR}/test_o4.vol" order 4 overwrite
-export netgen "{DIR}/test_o5.vol" order 5 overwrite
+export vol "{DIR}/test_o1.vol" order 1 overwrite
+export vol "{DIR}/test_o2.vol" order 2 overwrite
+export vol "{DIR}/test_o3.vol" order 3 overwrite
+export vol "{DIR}/test_o4.vol" order 4 overwrite
+export vol "{DIR}/test_o5.vol" order 5 overwrite
 ```
 
 ### Verification checklist (per file)
@@ -61,7 +61,7 @@ ssh 100 '& "C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe" -bat
 
 | Command | Format | Orders | Notes |
 |---------|--------|--------|-------|
-| `export netgen "f.vol" order N` | Netgen Vol | 1-5 | p-convergence test |
+| `export vol "f.vol" order N` | Netgen Vol | 1-5 | p-convergence test |
 | `coil "script.py"` | CoilBuilder STEP | -- | subprocess Python 3.12 |
 
 ## Troubleshooting

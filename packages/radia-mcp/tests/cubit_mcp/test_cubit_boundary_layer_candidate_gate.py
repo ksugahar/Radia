@@ -33,7 +33,7 @@ def candidate(height: float, minimum_scaled_jacobian: float, count: int) -> dict
             "geometry_and_webcut": 0.13,
             "boundary_layer_recovery": 0.03,
             "sweep_mesh_and_rotation": 0.37,
-            "netgen_export_and_parse": 0.28,
+            "vol_export_and_parse": 0.28,
         },
     }
 
@@ -66,7 +66,7 @@ def recovery_summary() -> dict:
             }
             for code in (4, 3)
         ],
-        "block_registered_netgen_export": True,
+        "block_registered_vol_export": True,
         "public_gate_status": "ok",
     }
 

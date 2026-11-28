@@ -7,7 +7,7 @@
 ## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
 ## KELVIN IS *NOT* ADDED by this journal.  Add it at export time with the
 ## MCP tool cubit_export_vol(<this .jou>, "foo.vol", order=1, add_kelvin=True)
-## or the Kelvin option of the Netgen Export menu.
+## or the Kelvin option of the Vol Export menu.
 ##
 ## Running this .jou alone produces a .vol WITHOUT the 'kelvin' material,
 ## so calc_fem_coilmesh.py falls back to Dirichlet A=0 (truncation error,

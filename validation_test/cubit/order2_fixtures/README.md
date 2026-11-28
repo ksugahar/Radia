@@ -3,7 +3,7 @@
 `mixed_cylinder_o2.jou` produces `tests/fixtures/cubit/mixed_cylinder_o2.vol.gz`; `tet_sphere_o2.jou` is a
 second order-2 case with no committed fixture.
 Run each journal in a separate empty directory using Coreform Cubit 2026.8 with the radia-mcp
-`export netgen` command plugin installed. Use Cubit's batch console:
+`export vol` command plugin installed. Use Cubit's batch console:
 
 ```powershell
 & "$cubit\bin\cubitx.exe" -batch -nographics -nojournal -noinitfile -workingdir "$PWD" -input mixed_cylinder_o2.jou

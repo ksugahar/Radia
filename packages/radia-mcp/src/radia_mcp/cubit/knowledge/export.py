@@ -3,7 +3,7 @@ Export documentation for the radia-mcp Cubit server.
 
 Curved Netgen ``.vol`` export runs through the MCP tool ``cubit_export_vol``:
 an isolated worker loads the fork NGSolve, Cubit and the native
-``export netgen`` command plugin.
+``export vol`` command plugin.
 """
 
 EXPORT_OVERVIEW = """
@@ -13,16 +13,16 @@ EXPORT_OVERVIEW = """
 
 | Route | Call | Runs in |
 |-------|------|---------|
-| Native plugin in an isolated worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | `python -I -B` worker + `radia_cubit_export.dll` |
+| Native plugin in an isolated worker | `cubit_export_vol(journal, "mesh.vol", order=N)` | `python -I -B` worker + `cubit_to_vol_export.dll` |
 
 `cubit_export_vol` plays the journal in an isolated external Python
 (`-I -B`) that loads the fork NGSolve, then Cubit with the native
-`export netgen` command plugin (`radia_cubit_export.dll`, built locally from
-`packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
+`export vol` command plugin (`cubit_to_vol_export.dll`, built locally from
+`packages/radia-mcp/native/cubit_to_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).  The worker runs `import ngsolve` first so the plugin binds to
 the same nglib, plays the journal in batch/nographics Cubit (`-noinitfile`),
 optionally adds the Kelvin sphere, then runs
-`export netgen "<out>" order N [periodic args | Kelvin args] overwrite`.  The plugin writes
+`export vol "<out>" order N [periodic args | Kelvin args] overwrite`.  The plugin writes
 the `.vol` and `.vol.json`; the tool returns the companion record and the
 sha256.  A missing Cubit, worker runtime or plugin DLL fails loudly.
 
@@ -179,7 +179,7 @@ mesh = Mesh(vol_path)
 
 ## How It Works
 
-The plugin (`ExportNetgenCommand`) extracts blocks/sidesets/nodesets from
+The plugin (`ExportVolCommand`) extracts blocks/sidesets/nodesets from
 Cubit (`MeshData`), builds the first-order Netgen mesh, curves it with Netgen
 callback geometry projected onto Cubit surfaces and curves (`NetgenCurver`,
 `callbackgeom`, `netgen_curving/geometric_refit` for order >= 3), applies the optional
@@ -324,7 +324,7 @@ EXPORT_DECISION_GUIDE = """
 - `kind="environment"` from `cubit_export_vol`: the worker interpreter cannot
   import ngsolve/netgen, the plugin DLL is missing from `plugin_dir`, or Cubit
   was not found.  Run `cubit_doctor` (check `export_worker`).
-- `status="error"` with the worker's message: the journal or `export netgen`
+- `status="error"` with the worker's message: the journal or `export vol`
   failed in Cubit, or a label/periodic/Kelvin contract was rejected.  Fix the
   model, then export to a new path; existing `.vol` files are never overwritten.
 """

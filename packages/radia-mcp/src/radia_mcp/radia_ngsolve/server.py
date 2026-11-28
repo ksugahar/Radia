@@ -1158,7 +1158,7 @@ def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
 
     Use this when you have a `.vol` file with `kelvin_int` /
     `kelvin_ext` boundary labels but no `Identifications` section yet
-    -- every Cubit Kelvin mesh (`export netgen` writes the labels but no
+    -- every Cubit Kelvin mesh (`export vol` writes the labels but no
     Kelvin identifications), or a mesh from outside the Cubit route.
 
     Read topic="curved_geometry" before applying this to a curved archive.
@@ -1571,7 +1571,7 @@ def ngsbem_inductance(topic: str = "all") -> str:
     on high-order curved surface elements.
 
     Key workflow:
-      Cubit mesh -> export netgen "mesh.vol" order N -> LaplaceSL BEM -> L extraction
+      Cubit mesh -> export vol "mesh.vol" order N -> LaplaceSL BEM -> L extraction
 
     Sources:
       - https://docu.ngsolve.org/latest/how_to/ngsbem.html

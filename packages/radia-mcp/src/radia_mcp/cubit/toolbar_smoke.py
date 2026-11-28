@@ -1,4 +1,4 @@
-"""Cold-start smoke test for the persistent Netgen Export Cubit toolbar.
+"""Cold-start smoke test for the persistent Vol Export Cubit toolbar.
 
 Unlike the static toolbar-package tests, this command starts the real Cubit
 GUI and asks Cubit's embedded PySide6 runtime what is actually visible.  It
@@ -29,9 +29,9 @@ from radia_mcp.cubit.layout import is_supported_cubit_root, runtime_environment
 
 SCHEMA = "radia-mcp.cubit-toolbar-smoke.v1"
 PROBE_SCHEMA = "radia-mcp.cubit-toolbar-probe.v1"
-TOOLBAR_TITLE = "Netgen Export"
+TOOLBAR_TITLE = "Vol Export"
 EXPECTED_ACTIONS = [
-    "Export Netgen (.vol)...",
+    "Export .vol...",
 ]
 
 

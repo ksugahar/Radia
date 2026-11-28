@@ -99,7 +99,7 @@ def _write_journal(
     )
     lines = [positive_cad, "", f'play "{physical_script.as_posix()}"']
     if air_size_m is None:
-        export = f'export netgen "{output.as_posix()}" order 1 overwrite'
+        export = f'export vol "{output.as_posix()}" order 1 overwrite'
     else:
         helper = (
             HERE.parents[1]
@@ -128,7 +128,7 @@ def _write_journal(
         radius = float(kelvin_radius_m)
         kelvin_fields = kelvin_args.export_arguments(
             {"R": radius, "center": kelvin_args.compute_offset_vector(radius, ["z"])})
-        export = (f'export netgen "{output.as_posix()}" order {int(curve_order)} '
+        export = (f'export vol "{output.as_posix()}" order {int(curve_order)} '
                   f'{kelvin_fields} overwrite')
     lines.extend([export, "exit"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -621,7 +621,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         else None
     )
     if command_plugin_dir is not None:
-        command_plugin = command_plugin_dir / "radia_cubit_export.dll"
+        command_plugin = command_plugin_dir / "cubit_to_vol_export.dll"
         if not command_plugin.is_file():
             raise FileNotFoundError(command_plugin)
 
@@ -792,7 +792,7 @@ def main() -> None:
     parser.add_argument(
         "--command-plugin-dir",
         type=Path,
-        help="Cubit command-plugin directory containing radia_cubit_export.dll",
+        help="Cubit command-plugin directory containing cubit_to_vol_export.dll",
     )
     parser.add_argument("--iron-size", type=float, default=0.010)
     parser.add_argument("--air-size", type=float, default=0.015)

@@ -268,7 +268,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     // Cache RefFace pointers per surface
     std::unordered_map<int, RefFace*> rf_cache;
     for (int sid : surface_ids)
-      rf_cache[sid] = radia_cubit_export::cubit_get_ref_face(sid);
+      rf_cache[sid] = cubit_to_vol_export::cubit_get_ref_face(sid);
 
     // Cache per-surface periodicity. Seam shift (below) is applied only to
     // surfaces that ACIS flags as actually periodic in that parameter
@@ -518,7 +518,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     // Sculpt and imported Exodus meshes can carry boundary faces directly in
     // a sideset without associating them with a geometric surface.  Add those
     // free faces under one synthetic FaceDescriptor per sideset.  Negative
-    // BCProperty values are an internal handoff to ExportNetgenCommand, which
+    // BCProperty values are an internal handoff to ExportVolCommand, which
     // restores the sideset name after all descriptors are made contiguous.
     int free_face_count = 0;
     int free_descriptor_count = 0;
@@ -623,7 +623,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       const auto edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(ed);
 
       // Get curve length for dist normalization
-      RefEdge* re = radia_cubit_export::cubit_get_ref_edge(cid);
+      RefEdge* re = cubit_to_vol_export::cubit_get_ref_edge(cid);
       double crv_length = re ? re->measure() : 1.0;
       double u_start = re ? re->start_param() : 0.0;
 
@@ -816,7 +816,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {x, y, z, u_hint, v_hint};
     }
 
-    RefFace* rf = radia_cubit_export::cubit_get_ref_face(cubit_sid);
+    RefFace* rf = cubit_to_vol_export::cubit_get_ref_face(cubit_sid);
     if (!rf) return {x, y, z, u_hint, v_hint};
 
     // Early reject: if the query point lies noticeably outside this
@@ -966,7 +966,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {0.0, 0.0, 1.0};
 
     int cubit_sid = it->second;
-    RefFace* rf = radia_cubit_export::cubit_get_ref_face(cubit_sid);
+    RefFace* rf = cubit_to_vol_export::cubit_get_ref_face(cubit_sid);
     if (!rf) return {0.0, 0.0, 1.0};
 
     CubitVector loc(x, y, z);
@@ -979,7 +979,7 @@ bool NetgenCurver::attach_callback_geometry()
   auto edge_bindings = curve_identities(*ng_mesh_, cubit_curve_to_ng_edge_);
   auto curve_for_edge = [edge_bindings](int edge, int face1, int face2) -> RefEdge* {
     const auto & b = edge_bindings.lookup(edge, face1, face2);
-    RefEdge* re = radia_cubit_export::cubit_get_ref_edge(b.curve);
+    RefEdge* re = cubit_to_vol_export::cubit_get_ref_edge(b.curve);
     if (!re || !re->get_curve_ptr())
       throw std::invalid_argument("Missing Cubit curve " + std::to_string(b.curve) +
                                   " for Netgen geometric edge " + std::to_string(edge));

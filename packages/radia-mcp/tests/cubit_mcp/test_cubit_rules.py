@@ -39,7 +39,7 @@ class TestMissingBlockRegistration:
     def test_detects_export_without_block(self):
         code = (
             'import cubit\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         findings = _run(check_missing_block_registration, code)
         assert len(findings) == 1
@@ -49,7 +49,7 @@ class TestMissingBlockRegistration:
         code = (
             'import cubit\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         assert _run(check_missing_block_registration, code) == []
 
@@ -65,7 +65,7 @@ class TestMissingMeshCommand:
     def test_detects_export_without_mesh(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         findings = _run(check_missing_mesh_command, code)
         assert len(findings) == 1
@@ -75,7 +75,7 @@ class TestMissingMeshCommand:
         code = (
             'cubit.cmd("mesh volume all")\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         assert _run(check_missing_mesh_command, code) == []
 
@@ -174,7 +174,7 @@ class TestMissingBoundaryBlock:
     def test_detects_missing_surface_block(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         findings = _run(check_missing_boundary_block, code)
         assert len(findings) == 1
@@ -183,7 +183,7 @@ class TestMissingBoundaryBlock:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 2 add tri all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         assert _run(check_missing_boundary_block, code) == []
 
@@ -215,7 +215,7 @@ class TestAmbiguousFaceBlock:
 
 
 class TestCurveWithoutSetGeomInfo:
-    def test_detects_manual_curve_without_native_export_netgen(self):
+    def test_detects_manual_curve_without_native_export_vol(self):
         code = (
             'mesh = Mesh("output.vol")\n'
             'mesh.Curve(3)\n'
@@ -223,9 +223,9 @@ class TestCurveWithoutSetGeomInfo:
         findings = _run(check_curve_without_setgeominfo, code)
         assert len(findings) == 1
 
-    def test_allows_native_export_netgen(self):
+    def test_allows_native_export_vol(self):
         code = (
-            'cubit.cmd("export netgen output.vol order 3")\n'
+            'cubit.cmd("export vol output.vol order 3")\n'
         )
         assert _run(check_curve_without_setgeominfo, code) == []
 
@@ -241,7 +241,7 @@ class TestMissingBlockNames:
     def test_detects_unnamed_blocks(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         findings = _run(check_missing_block_names, code)
         assert len(findings) == 1
@@ -251,7 +251,7 @@ class TestMissingBlockNames:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 1 name \\"domain\\"")\n'
-            'cubit.cmd("export netgen output.vol order 2")\n'
+            'cubit.cmd("export vol output.vol order 2")\n'
         )
         assert _run(check_missing_block_names, code) == []
 

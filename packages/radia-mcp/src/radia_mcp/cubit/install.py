@@ -1,15 +1,15 @@
 """
 Cubit plugin installer for radia-mcp.
 
-Deploys the ``export netgen`` command plugin (``radia_cubit_export.dll``,
-built from ``packages/radia-mcp/native/cubit_vol_export`` with ``build.py``)
+Deploys the ``export vol`` command plugin (``cubit_to_vol_export.dll``,
+built from ``packages/radia-mcp/native/cubit_to_vol_export`` with ``build.py``)
 into the Coreform Cubit 2026.8 plugin directory, then registers the Netgen
 Export toolbar and menu (:mod:`radia_mcp.cubit.gui`) through
 :mod:`radia_mcp.cubit.toolbar_install`.
 
 The radia-mcp wheel ships no native plugin.  The built plugin directory is
 ``--plugin-dir``, else ``$RADIA_CUBIT_PLUGIN_DIR`` (the directory the export
-worker also uses), and must hold ``radia_cubit_export.dll``::
+worker also uses), and must hold ``cubit_to_vol_export.dll``::
 
     python -m radia_mcp.cubit.install --plugin-dir <dir>              # current user
     python -m radia_mcp.cubit.install --plugin-dir <dir> --all-users  # every profile (admin)
@@ -18,7 +18,7 @@ worker also uses), and must hold ``radia_cubit_export.dll``::
 
 The plugin links the fork ``nglib``/``ngcore`` it was built against
 (``build.py --netgen-dir``).  Those DLLs are not copied: Cubit must be able to
-load them for the GUI menu's in-process ``export netgen``.  The headless export
+load them for the GUI menu's in-process ``export vol``.  The headless export
 route (:mod:`radia_mcp.cubit.export_runner`) loads them itself.
 
 Safety policy:
@@ -354,7 +354,7 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         prog="python -m radia_mcp.cubit.install", allow_abbrev=False,
         description="Install the radia-mcp Cubit command plugin "
-                    f"({COMMAND_PLUGIN}) and the Netgen Export toolbar.")
+                    f"({COMMAND_PLUGIN}) and the Vol Export toolbar.")
     parser.add_argument("--plugin-dir", default=None,
                         help="directory holding the built plugin (build.py --out); "
                              "default $RADIA_CUBIT_PLUGIN_DIR")

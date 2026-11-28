@@ -9,7 +9,7 @@ Validation-class Netgen .vol surface triangle quality example.
 
 Coreform Cubit 2026.6 emphasizes stronger triangle/tet meshing and richer
 quality assessment.  This public-safe example keeps the downstream side honest:
-after a Cubit/Coreform ``export netgen`` run, radia can independently inspect
+after a Cubit/Coreform ``export vol`` run, radia can independently inspect
 the boundary triangles that become scalar-BEM/RWG trace elements.
 
 Run:

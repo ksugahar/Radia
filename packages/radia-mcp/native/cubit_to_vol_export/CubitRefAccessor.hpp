@@ -19,9 +19,9 @@
 //
 // Usage:
 //   #include "CubitRefAccessor.hpp"
-//   RefFace*   rf = radia_cubit_export::cubit_get_ref_face(sid);
-//   RefEdge*   re = radia_cubit_export::cubit_get_ref_edge(cid);
-//   RefVolume* rv = radia_cubit_export::cubit_get_ref_volume(vid);
+//   RefFace*   rf = cubit_to_vol_export::cubit_get_ref_face(sid);
+//   RefEdge*   re = cubit_to_vol_export::cubit_get_ref_edge(cid);
+//   RefVolume* rv = cubit_to_vol_export::cubit_get_ref_volume(vid);
 //
 // All accessors return nullptr if the ID does not resolve (same contract as
 // the old GeometryQueryTool methods).  Callers MUST null-check.
@@ -39,7 +39,7 @@ class RefFace;
 class RefEdge;
 class RefVolume;
 
-namespace radia_cubit_export {
+namespace cubit_to_vol_export {
 
 inline RefEntityFactory* cubit_factory() {
 #if __has_include("CubitCoreModel.hpp")
@@ -69,4 +69,4 @@ inline RefVolume* cubit_get_ref_volume(int id) {
   return f ? f->get_ref_volume(id) : nullptr;
 }
 
-}  // namespace radia_cubit_export
+}  // namespace cubit_to_vol_export

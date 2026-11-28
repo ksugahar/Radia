@@ -39,4 +39,4 @@ elif case != "valid":
     raise ValueError(case)
 output = os.environ["BBND_OUTPUT"].replace("\\", "/")
 order = int(os.environ.get("BBND_ORDER", "2"))
-cubit.cmd(f'export netgen "{output}" order {order} overwrite')
+cubit.cmd(f'export vol "{output}" order {order} overwrite')

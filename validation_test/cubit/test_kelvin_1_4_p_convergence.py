@@ -71,7 +71,7 @@ class TestCubitKelvin14PConvergence(unittest.TestCase):
         plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
         if not plugin_dir:
             raise unittest.SkipTest(
-                "RADIA_CUBIT_PLUGIN_DIR (directory holding radia_cubit_export.dll) "
+                "RADIA_CUBIT_PLUGIN_DIR (directory holding cubit_to_vol_export.dll) "
                 "is not set; this validation needs licensed Cubit and the plugin")
         cls.tmp = tempfile.TemporaryDirectory()
         out = cls.tmp.name

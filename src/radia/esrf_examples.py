@@ -1227,7 +1227,7 @@ def export_esrf_cubit_assets(number: int, output_dir: str | Path,
             "list volume with not is_meshed",
         ])
         lines.extend([
-            f'export netgen "{vol_path.as_posix()}" order {int(order)} overwrite',
+            f'export vol "{vol_path.as_posix()}" order {int(order)} overwrite',
             f'save as "{cub_path.as_posix()}" overwrite',
             "exit",
         ])
@@ -1271,7 +1271,7 @@ def export_esrf_cubit_assets(number: int, output_dir: str | Path,
             f"volume all scheme {mesh_policy['cad_volume_scheme']}",
             f"volume all size {float(fixed_magnetization_source_mesh_size_m):.12g}",
             "mesh volume all",
-            f'export netgen "{source_vol.as_posix()}" order {int(order)} overwrite',
+            f'export vol "{source_vol.as_posix()}" order {int(order)} overwrite',
             f'save as "{source_cubit_model.as_posix()}" overwrite',
             "exit",
         ])

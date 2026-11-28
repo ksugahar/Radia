@@ -53,7 +53,7 @@ static int q3_input_contract(int argc, char **argv) {
     require(used == text.size() && value > 0, "Invalid explicit boundary number");
     return value;
   };
-  radia_cubit_export::NamedPeriodicContract contract;
+  cubit_to_vol_export::NamedPeriodicContract contract;
   contract.name = args.at("--name");
   contract.master_label = args.at("--master");
   contract.slave_label = args.at("--slave");
@@ -84,7 +84,7 @@ static int q3_input_contract(int argc, char **argv) {
           mesh.GetCurvedElements().IsHighOrder(), "Existing curved q3 volume mesh required; no Curve is allowed");
   auto serialize = [&] { std::ostringstream stream; mesh.Save(stream); return stream.str(); };
   const auto before = serialize();
-  const auto geometry_before = radia_cubit_export::periodic_geometry_serialization(mesh);
+  const auto geometry_before = cubit_to_vol_export::periodic_geometry_serialization(mesh);
   require(std::filesystem::create_directory(output), "Cannot create fresh output directory");
   auto write = [&](const char *name, const std::string &data) {
     std::ofstream stream(output / name, std::ios::binary | std::ios::out);
@@ -95,16 +95,16 @@ static int q3_input_contract(int argc, char **argv) {
   };
   write("before.vol", before);
   write("before.geometry", geometry_before);
-  const auto result = radia_cubit_export::apply_named_periodic_identification(mesh, contract);
+  const auto result = cubit_to_vol_export::apply_named_periodic_identification(mesh, contract);
   const auto after = serialize();
-  const auto geometry_after = radia_cubit_export::periodic_geometry_serialization(mesh);
+  const auto geometry_after = cubit_to_vol_export::periodic_geometry_serialization(mesh);
   write("after.vol", after);
   write("after.geometry", geometry_after);
   require(geometry_before == geometry_after, "q3 input geometry serialization changed");
   std::ostringstream table;
   table << "fd\tbc\tlabel\n";
   for (const auto &entry : result.descriptor_to_boundary) {
-    const auto label = radia_cubit_export::periodic_boundary_label(mesh, entry.second);
+    const auto label = cubit_to_vol_export::periodic_boundary_label(mesh, entry.second);
     require(label.find_first_of("\t\r\n") == std::string::npos, "Unsupported control character in label");
     table << entry.first << '\t' << entry.second << '\t' << label << '\n';
   }

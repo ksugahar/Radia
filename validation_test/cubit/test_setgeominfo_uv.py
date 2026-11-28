@@ -1,17 +1,17 @@
-"""Curved cylinder accuracy through Cubit 2025.12 export netgen."""
+"""Curved cylinder accuracy through Cubit 2025.12 export vol."""
 
 import math
 
 from ngsolve import BND, CF, Integrate, TaskManager
 
 from validation_test.cubit.cubit_202512_helpers import (
-    export_netgen,
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
 
 
-def test_export_netgen_uses_geometry_info_for_curved_cylinder():
+def test_export_vol_uses_geometry_info_for_curved_cylinder():
     cubit = init_cubit()
     radius = 0.5
     height = 2.0
@@ -29,9 +29,9 @@ def test_export_netgen_uses_geometry_info_for_curved_cylinder():
     cubit.cmd('block 2 name "boundary"')
 
     with TaskManager():
-        mesh1 = load_ngsolve_mesh(export_netgen(cubit, "cylinder_uv", order=1))
+        mesh1 = load_ngsolve_mesh(export_vol(cubit, "cylinder_uv", order=1))
         vol1 = Integrate(CF(1), mesh1)
-        mesh3 = load_ngsolve_mesh(export_netgen(cubit, "cylinder_uv", order=3))
+        mesh3 = load_ngsolve_mesh(export_vol(cubit, "cylinder_uv", order=3))
         vol3 = Integrate(CF(1), mesh3)
         area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
 

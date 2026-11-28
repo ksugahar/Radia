@@ -7,7 +7,7 @@ PANEL_CONVENTIONS = r"""
 
 ```text
 Cubit 2026.8 embedded Python/PySide6
-  -> C++ export netgen
+  -> C++ export vol
   -> self-contained .vol/.sol files
   -> Radia Simulink application block (separate MATLAB process)
   -> DesignSpec + headless calc_*.py (separate Python 3.12 process)
@@ -92,7 +92,7 @@ LABEL_GUIDE = r"""
 ## How labels flow
 
 ```text
-Cubit blocks/sidesets -> export netgen -> .vol SetMaterial/SetBCName
+Cubit blocks/sidesets -> export vol -> .vol SetMaterial/SetBCName
                                           -> NGSolve Materials/Boundaries
 ```
 

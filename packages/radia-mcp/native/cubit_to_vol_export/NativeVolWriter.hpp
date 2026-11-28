@@ -15,7 +15,7 @@
 
 #include <meshing.hpp>
 
-namespace radia_cubit_export {
+namespace cubit_to_vol_export {
 
 inline void save_native_mesh(const netgen::Mesh &mesh, const std::filesystem::path &path)
 {
@@ -37,4 +37,4 @@ inline void save_native_mesh(const netgen::Mesh &mesh, const std::filesystem::pa
   if (!out) throw std::runtime_error("Incomplete .vol output: " + path.u8string());
 }
 
-}  // namespace radia_cubit_export
+}  // namespace cubit_to_vol_export

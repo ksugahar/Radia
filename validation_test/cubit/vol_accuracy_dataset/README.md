@@ -1,7 +1,7 @@
 # Complex Cubit `.vol` volume-accuracy dataset
 
 This validation lane measures whether moderately complex Cubit CAD survives
-`export netgen` as the same geometric volume in NGSolve. It is not an analytic
+`export vol` as the same geometric volume in NGSolve. It is not an analytic
 primitive test. The eight cases deliberately exercise failure-prone CAD and
 meshing operations:
 
@@ -66,5 +66,5 @@ Tracked outputs:
   model/order/material.
 
 These values are empirical observations, not handwritten truth. Regenerate
-them after changing Cubit, the `export netgen` plugin, Netgen, NGSolve, CAD projection,
+them after changing Cubit, the `export vol` plugin, Netgen, NGSolve, CAD projection,
 or the case definitions.

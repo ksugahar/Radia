@@ -1083,7 +1083,7 @@ through Cubit (preferred for hex) or Netgen (tet):
 #   import "coil.step"; mesh volume all
 #   sideset 1 add surface <source_id>; sideset 1 name "source"
 #   sideset 2 add surface <sink_id>;   sideset 2 name "sink"
-#   export netgen "coil.vol" overwrite
+#   export vol "coil.vol" overwrite
 
 # Option 2: Netgen tet mesh from build123d directly
 from build123d import export_step
@@ -1923,7 +1923,7 @@ their intended role-to-scheme mapping with
 `shape_cubit_meshing_scheme_intent_gate`: for example
 `hex_region -> map`, `mesh_transition -> tetmesh`, and
 `tet_region -> tetmesh`.  Also carry the downstream meshing trace id, required
-command fragments such as `imprint all`, `merge all`, and `export netgen`, and
+command fragments such as `imprint all`, `merge all`, and `export vol`, and
 the expected export order.  This is still CAD-side intent only: Cubit owns
 volume ids, command digest, and actual `.vol` inventory, while build123d keeps
 the intended scheme contract tied to the STEP and measurement rows.

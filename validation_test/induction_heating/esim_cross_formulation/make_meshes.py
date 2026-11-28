@@ -42,12 +42,12 @@ FEM50_PY = os.path.join(HERE, "make_ih_fem_kelvin_50mm.py")
 FEM50_VOL = os.path.join(HERE, "ih_fem_kelvin_50mm.vol")
 
 def _init_cubit():
-    """Headless Cubit with the radia_cubit_export plugin, in the production
+    """Headless Cubit with the cubit_to_vol_export plugin, in the production
     worker's load order (radia_mcp.cubit.vol_export): Netgen runtime first,
     then Cubit with CUBIT_PLUGIN_DIR = $RADIA_CUBIT_PLUGIN_DIR."""
     plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
-    if not plugin_dir or not os.path.isfile(os.path.join(plugin_dir, "radia_cubit_export.dll")):
-        raise SystemExit("set RADIA_CUBIT_PLUGIN_DIR to the directory holding radia_cubit_export.dll")
+    if not plugin_dir or not os.path.isfile(os.path.join(plugin_dir, "cubit_to_vol_export.dll")):
+        raise SystemExit("set RADIA_CUBIT_PLUGIN_DIR to the directory holding cubit_to_vol_export.dll")
     import ngsolve  # noqa: F401
     import netgen
     from radia.cubit_locator import find_cubit_bin
@@ -95,7 +95,7 @@ def gen_demo(cubit):
 def gen_bem(cubit):
     cubit.cmd("reset")
     cubit.cmd('play "%s"' % BEM_JOU.replace("\\", "/"))
-    cubit.cmd('export netgen "%s" order 1 overwrite'
+    cubit.cmd('export vol "%s" order 1 overwrite'
               % BEM_VOL.replace("\\", "/"))
     _require(BEM_VOL, "BEM (dia 50 BIE surface mesh)")
 

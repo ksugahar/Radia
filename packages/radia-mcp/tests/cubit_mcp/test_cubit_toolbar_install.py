@@ -81,7 +81,7 @@ def test_all_entry_points_agree_on_the_release(tmp_path, monkeypatch, name, buil
 
 def test_plugin_is_deployed_under_the_loader_directory(tmp_path):
     root = _install_root(tmp_path, "renamed-cubit", "short=2026.8\n")
-    assert layout.command_plugin_path(root / "bin") == root / "plugins" / "radia_cubit_export.dll"
+    assert layout.command_plugin_path(root / "bin") == root / "plugins" / "cubit_to_vol_export.dll"
     assert layout.COMMAND_PLUGIN == install.COMMAND_PLUGIN
 
 
@@ -96,9 +96,9 @@ def test_install_requires_a_built_plugin_directory(tmp_path, monkeypatch):
     monkeypatch.delenv("RADIA_CUBIT_PLUGIN_DIR", raising=False)
     with pytest.raises(RuntimeError, match="plugin directory not set"):
         install.resolve_plugin_dir(None)
-    with pytest.raises(RuntimeError, match="radia_cubit_export.dll not found"):
+    with pytest.raises(RuntimeError, match="cubit_to_vol_export.dll not found"):
         install.resolve_plugin_dir(tmp_path)
-    (tmp_path / "radia_cubit_export.dll").write_bytes(b"MZ")
+    (tmp_path / "cubit_to_vol_export.dll").write_bytes(b"MZ")
     assert install.resolve_plugin_dir(tmp_path) == tmp_path.resolve()
 
 
@@ -107,10 +107,10 @@ def test_toolbar_package_is_self_contained(tmp_path):
     with tarfile.open(package) as archive:
         names = sorted(m.name for m in archive.getmembers() if m.isfile())
         mappings = archive.extractfile(".mappings").read().decode()
-        toolbar = archive.extractfile("toolbars/netgen_export_toolbar.ttb").read().decode()
-    assert names == [".mappings", "icons/netgen_export.svg", "scripts/cubit_export_menu.py",
-                     "scripts/export_netgen.py", "scripts/kelvin.py",
-                     "toolbars/netgen_export_toolbar.ttb"], names
+        toolbar = archive.extractfile("toolbars/vol_export_toolbar.ttb").read().decode()
+    assert names == [".mappings", "icons/vol_export.svg", "scripts/cubit_export_menu.py",
+                     "scripts/export_vol.py", "scripts/kelvin.py",
+                     "toolbars/vol_export_toolbar.ttb"], names
     assert "./scripts/kelvin.py => scripts/kelvin.py" in mappings, mappings
     assert "@TOOLBAR_INSTALL_DIR@" not in toolbar
 
@@ -151,13 +151,13 @@ def test_owned_startup_block_and_ini_entry_are_replaced(profile):
     ini.write_text("[workflow]\nconverted_old=true\n"
                    "toolbars\\0=C:/other/toolbars/other.ttb\n"
                    "toolbars\\1=C:/u/AppData/Local/radia-mcp/Cubit/Toolbars/"
-                   "netgen_export_toolbar/toolbars/netgen_export_toolbar.ttb\n",
+                   "vol_export_toolbar/toolbars/vol_export_toolbar.ttb\n",
                    encoding="utf-8")
     assert toolbar_install._register_official_toolbar(str(ini)) is True
     _, entries = toolbar_install._workflow_toolbar_entries(ini.read_text(encoding="utf-8"))
     values = [value for _, value, _ in entries]
     target = (toolbar_install._profile_toolbar_dir(str(ini)) / "toolbars"
-              / "netgen_export_toolbar.ttb").as_posix()
+              / "vol_export_toolbar.ttb").as_posix()
     assert values == ["C:/other/toolbars/other.ttb", target], values
     assert toolbar_install._ini_has_official_toolbar(str(ini))
     assert toolbar_install._register_official_toolbar(str(ini)) is False  # idempotent

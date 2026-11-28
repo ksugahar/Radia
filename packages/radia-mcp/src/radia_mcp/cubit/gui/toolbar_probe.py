@@ -1,5 +1,5 @@
 #!python
-"""Probe the Coreform-owned Netgen Export toolbar in a real Cubit GUI.
+"""Probe the Coreform-owned Vol Export toolbar in a real Cubit GUI.
 
 This file is executed inside Cubit's embedded Python by
 ``radia_mcp.cubit.toolbar_smoke``. Keep it standalone: importing
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar
 
 SCHEMA = "radia-mcp.cubit-toolbar-probe.v1"
 EXPECTED_ACTIONS = [
-    "Export Netgen (.vol)...",
+    "Export .vol...",
 ]
 # Set by toolbar_smoke; a probe started any other way fails loudly here.
 RESULT_PATH = os.environ["RADIA_MCP_CUBIT_TOOLBAR_PROBE_RESULT"]
@@ -70,8 +70,8 @@ def _snapshot():
 
     candidates = [
         toolbar for toolbar in main.findChildren(QToolBar)
-        if _plain(toolbar.objectName()) == "Netgen Export"
-        or _plain(toolbar.windowTitle()) == "Netgen Export"
+        if _plain(toolbar.objectName()) == "Vol Export"
+        or _plain(toolbar.windowTitle()) == "Vol Export"
     ]
     toolbar = candidates[0] if candidates else None
     actions = list(toolbar.actions()) if toolbar is not None else []
@@ -96,7 +96,7 @@ def _snapshot():
         name: bool(action.isEnabled())
         for name, action in zip(action_names, actions)
     }
-    toolbar_menu_has = toggle is not None and _plain(toggle.text()) == "Netgen Export"
+    toolbar_menu_has = toggle is not None and _plain(toggle.text()) == "Vol Export"
 
     payload = {
         "main_window_visible": bool(main.isVisible()),

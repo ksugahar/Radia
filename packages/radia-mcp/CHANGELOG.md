@@ -19,6 +19,12 @@ crystallized as its own package.
     with the same `radia_acoustic_usage`, `radia_acoustic_capabilities`,
     `radia_acoustic_fsi_preflight` and `radia_acoustic_cq_grid` tools.
   Use the destination's status and reload tools or its capability-pack status.
+- Rename the Cubit `.vol` exporter after what it does. The Cubit command is
+  `export vol` (was `export netgen`), the plugin is `cubit_to_vol_export.dll`
+  (was `radia_cubit_export.dll`), its source is `native/cubit_to_vol_export`,
+  and the menu, toolbar and action are `Export Vol` / `Vol Export` /
+  `Export .vol...`. Journals using `export netgen` must be updated; the old
+  names are not kept.
 
 ## [2.0.3] - 2026-11-21
 

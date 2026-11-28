@@ -1,11 +1,11 @@
 """
 Test Radia-NGSolve volume panel pipeline with hex sphere mesh.
 
-Creates a hex-meshed sphere in Cubit, exports via `export netgen`
+Creates a hex-meshed sphere in Cubit, exports via `export vol`
 at order=1,2,3, integrates volume in NGSolve, compares with analytical.
 
 This tests the FULL panel pipeline:
-  Cubit hex mesh -> export netgen order=N -> NGSolve Integrate
+  Cubit hex mesh -> export vol order=N -> NGSolve Integrate
 
 Usage:
   python validation_test/cubit/test_ngsolve_volume_hex_sphere.py
@@ -104,7 +104,7 @@ def _evaluate_volume(mesh_type, build_func, mesh_size, orders):
     for order in orders:
         out = os.path.join(OUT_DIR, f"{mesh_type.lower()}_sphere_o{order}.vol")
         try:
-            cubit.cmd(f'export netgen "{out.replace(os.sep, "/")}" order {order} overwrite')
+            cubit.cmd(f'export vol "{out.replace(os.sep, "/")}" order {order} overwrite')
             mesh = NGMesh(out)
             vol = Integrate(CF(1), mesh)
             err = (vol - V_EXACT) / V_EXACT * 100

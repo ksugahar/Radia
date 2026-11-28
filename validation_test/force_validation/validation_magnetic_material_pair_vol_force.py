@@ -221,7 +221,7 @@ block 2 add volume 2
 block 2 name "target_magnetic"
 block 3 add tri all
 block 3 name "boundary"
-export netgen "{_rel(vol_path)}" order 1 overwrite
+export vol "{_rel(vol_path)}" order 1 overwrite
 exit
 """
     path.write_text(text, encoding="ascii")

@@ -1,7 +1,7 @@
 """
 High-order HEX finite-element convergence in NGSolve (the radia differentiator).
 
-The flagship Cubit `export netgen` path feeds Cubit hex meshes into NGSolve at high polynomial
+The flagship Cubit `export vol` path feeds Cubit hex meshes into NGSolve at high polynomial
 order. validation_test/cubit/test_ngsolve_volume_hex_sphere.py checks the GEOMETRIC accuracy of the
 curved hex export (needs live Cubit). This test checks the complementary, more fundamental
 property -- that NGSolve actually SOLVES a PDE on high-order hex elements at the OPTIMAL rate --

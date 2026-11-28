@@ -68,7 +68,7 @@ The bibliography is managed separately (private). Adopted validation records cit
 STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver boundary is a checked `.vol` regardless of the creation route.
 - Cubit-generated `.vol` files belong to `radia-mcp` (`radia_mcp.cubit`) on a licensed Cubit machine; build123d + Netgen is the explicit alternative. radia CI consumes committed fixtures: a missing required fixture fails the test; only explicitly optional validation inputs may skip visibly.
 - Drive Cubit headless (APREPRO/Python CLI) and export through `radia_mcp.cubit`. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; only `radia_mcp.cubit.gui` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
-- `radia_mcp.cubit` owns Cubit MCP/APIs, the native `export netgen` plugin, GUI and installer; `radia` owns check-vol (`radia.vol_check`), which radia-mcp uses one-way. Cubit export stays in the C++ plugin backend.
+- `radia_mcp.cubit` owns Cubit MCP/APIs, the native `export vol` plugin, GUI and installer; `radia` owns check-vol (`radia.vol_check`), which radia-mcp uses one-way. Cubit export stays in the C++ plugin backend.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label contract before solver or Simulink initialization. Label checks validate topology/naming; DesignSpec validates physical data. Preserve canonical CAD, mesh, contracts and generation sources; remove only verified scratch or superseded output.
 
 ## Evidence And CI

@@ -9,7 +9,7 @@
 #include <limits>
 
 using namespace netgen;
-using namespace radia_cubit_export;
+using namespace cubit_to_vol_export;
 
 static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped = {8,7,6,5})
 {

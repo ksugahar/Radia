@@ -114,7 +114,7 @@ from netgen_mesh_import import netgen_mesh_to_radia
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("import geometry 'model.step'")
 cubit.cmd("mesh volume all")
-cubit.cmd('export netgen "model.vol" order 1 overwrite')
+cubit.cmd('export vol "model.vol" order 1 overwrite')
 mesh = Mesh("model.vol")
 cube = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]}, units='m')
 

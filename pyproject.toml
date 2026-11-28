@@ -141,7 +141,7 @@ check-vol = "radia.vol_check:main"
 # Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit
 # embedded Export Mesh toolbar remains package data; normal Radia Python uses
 # headless workflows and does not depend on PySide6.
-# The Cubit plugin (radia_cubit_export.dll) is built and deployed by radia-mcp,
+# The Cubit plugin (cubit_to_vol_export.dll) is built and deployed by radia-mcp,
 # never shipped in the radia wheel.  The "*.pyd" glob ships only
 # _radia_pybind.pyd / peec_matrices.pyd / sparsesolv_ngsolve.pyd.
 radia = [

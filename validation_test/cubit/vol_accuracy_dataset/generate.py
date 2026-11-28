@@ -123,7 +123,7 @@ def _write_driver(work_dir: Path, cases: list[dict], orders: list[int]) -> Path:
             target = _artifact_path(work_dir, case["case_id"], order)
             target.parent.mkdir(parents=True, exist_ok=True)
             lines.append(
-                f'export netgen "{target.as_posix()}" order {order} overwrite'
+                f'export vol "{target.as_posix()}" order {order} overwrite'
             )
     lines.append("exit 0")
     driver = work_dir / "generate_complex_volumes.jou"

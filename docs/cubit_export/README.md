@@ -1,7 +1,7 @@
 # Cubit: geometry, mesh and checked solver inputs
 
 Explore the Cubit mesh export of `radia-mcp` (`radia_mcp.cubit`, the
-`export netgen` plugin `radia_cubit_export.dll`) and the `check-vol` gate of
+`export vol` plugin `cubit_to_vol_export.dll`) and the `check-vol` gate of
 `radia` (`radia.vol_check`). This page introduces saved demonstrations and
 connects them to executable validation samples.
 
@@ -87,14 +87,14 @@ python validation_test/radia_mcp/validation_vol_boundary_tet_face_incidence.py
 ## Export Command (C++ command plugin)
 
 ```
-export netgen "file.vol" order {1..5} [overwrite]
+export vol "file.vol" order {1..5} [overwrite]
 ```
 
 The plugin is installed with `python -m radia_mcp.cubit.install`.
 
 ## See Also
 
-- [packages/radia-mcp/native/cubit_vol_export/](../../packages/radia-mcp/native/cubit_vol_export/) - C++ plugin source
+- [packages/radia-mcp/native/cubit_to_vol_export/](../../packages/radia-mcp/native/cubit_to_vol_export/) - C++ plugin source
 - [validation_test/cubit/](../../validation_test/cubit/) - Cubit validation cases; see each case's execution requirements and recorded evidence
 
 The solver-independent analytic examples now live in `validation_test/radia_mcp/`. Saved showcase records retain the source paths from their original revision; their adjacent historical JSON files remain unchanged.

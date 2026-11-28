@@ -25,7 +25,7 @@ duplicate a Simulink mask.
 ## Handoff Contract
 
 ```text
-Cubit / radia_mcp.cubit (export netgen)
+Cubit / radia_mcp.cubit (export vol)
   CAD (SAT or STEP)
   -> mesh and labels
   -> Netgen .vol

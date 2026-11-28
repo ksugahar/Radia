@@ -471,7 +471,7 @@ mesh volume 1
     assert changed["differences"]
 
 
-def test_cubit_vol_inventory_counts_surfaceelementsuv_from_stock_export_netgen():
+def test_cubit_vol_inventory_counts_surfaceelementsuv_from_stock_export_vol():
     inv = summarize_netgen_vol_inventory(SURFACE_UV_MIXED_VOL)
 
     assert inv["surface_section"] == "surfaceelementsuv"
@@ -1791,7 +1791,7 @@ def test_cubit_mixed_solver_ready_package_gate_binds_transition_export_bnd_and_q
                 "merge all",
                 "volume 1 scheme map",
                 "volume 2 scheme tetmesh",
-                "export netgen \"slot290_mixed.vol\" order 2 overwrite",
+                "export vol \"slot290_mixed.vol\" order 2 overwrite",
             ],
             "volume_schemes": {
                 "1": "map",
@@ -2096,7 +2096,7 @@ def test_cubit_mixed_solver_ready_package_gate_binds_transition_export_bnd_and_q
                 "merge all",
                 "volume 1 scheme tetmesh",
                 "volume 2 scheme tetmesh",
-                "export netgen \"slot290_mixed.vol\" order 2 overwrite",
+                "export vol \"slot290_mixed.vol\" order 2 overwrite",
             ],
             "volume_schemes": {
                 "1": "tetmesh",
@@ -2259,7 +2259,7 @@ def test_cubit_mixed_solver_ready_package_gate_binds_transition_export_bnd_and_q
                 "merge all",
                 "volume 1 scheme map",
                 "volume 2 scheme tetmesh",
-                "export netgen \"slot290_mixed.vol\" order 2 overwrite",
+                "export vol \"slot290_mixed.vol\" order 2 overwrite",
             ],
             "volume_schemes": {
                 "1": "map",

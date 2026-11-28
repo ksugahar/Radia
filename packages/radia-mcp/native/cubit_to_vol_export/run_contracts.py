@@ -50,8 +50,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("run from an MSVC 14.44 x64 developer environment (vcvars64.bat -vcvars_ver=14.44)")
     build = Path(args.build_dir).resolve()
     run(["cmake", "-S", str(HERE), "-B", str(build), "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
-         "-DCUBIT_VOL_EXPORT_PLUGIN=OFF", "-DNETGEN_CURVING_PYMODULE=ON",
-         "-DRADIA_CUBIT_EXPORT_CONTRACT_TESTS=ON",
+         "-DCUBIT_TO_VOL_EXPORT_PLUGIN=OFF", "-DNETGEN_CURVING_PYMODULE=ON",
+         "-DCUBIT_TO_VOL_EXPORT_CONTRACT_TESTS=ON",
          f"-DNetgen_DIR={netgen_cmake_dir().as_posix()}",
          f"-DPython3_EXECUTABLE={Path(sys.executable).as_posix()}"])
     run(["cmake", "--build", str(build), "-j", str(args.jobs)])

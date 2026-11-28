@@ -21,7 +21,7 @@ not curve anything; it only makes flat elements smaller near curvature.
 `ngsolve.Mesh("x.vol")` applies the `curvedelements` section stored in the file.
 The saved geometry order is in effect immediately; `GetCurveOrder()` reports it.
 A Netgen/OCC `.vol` also embeds its OCC geometry after the `endmesh` line; a
-Cubit `export netgen` file does not.
+Cubit `export vol` file does not.
 
 Calling `Curve(p)` on a loaded mesh rebuilds the curved nodes from the geometry
 Netgen associates with the mesh. Measured outcomes (sphere, `R = 10 mm`,
@@ -63,7 +63,7 @@ Curvature is a property of how the mesh was made, not something added later:
 | Netgen/OCC `GenerateMesh` in this process | yes: `Curve(p)` onto its own CAD |
 | Netgen/OCC `.vol` that embeds its CAD | yes, explicitly: `ensure_curve_order` (OCC only, with vertex, box and measure checks) |
 | Netgen CSG `.vol` | no: save it after `Curve(p)` in the producing process |
-| Cubit `export netgen ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
+| Cubit `export vol ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
 | structured or hand-built mesh (no CAD) | only a straight map, explicitly: `straight_curve_order(mesh, p)` |
 
 No Radia route curves a mesh. The routes that take a mesh object
@@ -104,7 +104,7 @@ current straight map, which is exact only for flat geometry.
 2. **Curve where the CAD lives.** Call `Curve(p)` right after
    `OCCGeometry(shape).GenerateMesh(...)` in the same process, inside
    `TaskManager`, then save. For Cubit, export the order:
-   `export netgen "<f>.vol" order <p>`.
+   `export vol "<f>.vol" order <p>`.
 3. **Mesh in final units.** Scale the shape, not the mesh:
    `shape = shape.Scale(Pnt(0, 0, 0), 1e-3)` before `GenerateMesh`.
    `ngmesh.Scale` after meshing leaves the embedded CAD in the old units

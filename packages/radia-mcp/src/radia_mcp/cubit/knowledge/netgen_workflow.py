@@ -73,7 +73,7 @@ from p=2 to p=3 and from p=4 to p=5.  This holds for Netgen 6.2.2606, 6.2.2607
 and the 2607 pre-release alike (OCC sphere, maxh=0.8: edge error 5.7e-4 at
 p=2, 6.0e-4 at p=3).  `cubit_export_vol` therefore refits Netgen's edge and face
 coefficients by minimising the distance to the CAD geometry
-(`native/cubit_vol_export/netgen_curving/geometric_refit.cpp`), keeping Netgen's basis and `.vol` layout.  A
+(`native/cubit_to_vol_export/netgen_curving/geometric_refit.cpp`), keeping Netgen's basis and `.vol` layout.  A
 refit is kept only when the sampled distance decreases and the element
 Jacobian does not degenerate; the export log reports accepted/tried counts and
 the maximum distance before and after.  For the unit sphere the radial
@@ -1331,8 +1331,8 @@ def get_netgen_documentation(workflow: str = "overview") -> str:
 ## Overview
 
 Kelvin open-boundary geometry is requested explicitly, before the plain
-`export netgen` command, which carries no Kelvin keywords. The MCP tool and the
-Netgen Export menu both run `radia_mcp.cubit.kelvin` inside Cubit; LLM
+`export vol` command, which carries no Kelvin keywords. The MCP tool and the
+Vol Export menu both run `radia_mcp.cubit.kelvin` inside Cubit; LLM
 automation uses APREPRO/journal playback and never depends on a solver GUI.
 
 ## How It Works (`cubit_export_vol`)
@@ -1343,7 +1343,7 @@ automation uses APREPRO/journal playback and never depends on a solver GUI.
    `kelvin_sym_x|y|z` (`off|bn|ht`).
 3. The export worker calls `radia_mcp.cubit.kelvin.apply_options` in Cubit,
    which adds Kelvin geometry unless the Kelvin block already exists.
-4. `export netgen` writes the `.vol` with Kelvin periodic identification.
+4. `export vol` writes the `.vol` with Kelvin periodic identification.
 5. Run `check-vol` before handing the artifact to any solver.
 
 ## Auto-Detection Logic

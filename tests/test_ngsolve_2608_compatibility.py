@@ -118,7 +118,7 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
         ), relative
 
     # Every CMake configure carries the one shared binding to the active interpreter;
-    # the Cubit plugin is configured by packages/radia-mcp/native/cubit_vol_export/build.py.
+    # the Cubit plugin is configured by packages/radia-mcp/native/cubit_to_vol_export/build.py.
     build_script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
     binding = next(line for line in build_script.splitlines() if line.startswith("$PythonCMakeArgs = "))
     assert '-DPython3_EXECUTABLE=`"$PythonExecutable`"' in binding, binding

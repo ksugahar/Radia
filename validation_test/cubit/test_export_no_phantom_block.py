@@ -2,7 +2,7 @@
 
 BUG (2026-05-30, reported by keiko on runtime host with a 6-turn loft coil
 journal at W:/31_Go-Tech/.../2026_05_21_6turn_coil_loft/):
-  Running `export netgen` against a journal with K user-defined
+  Running `export vol` against a journal with K user-defined
   blocks produces:
     * the error "ERROR: No block with ID K+1 was found", and
     * a phantom block (id K+1) gets created in the Cubit session and
@@ -103,7 +103,7 @@ def _snapshot_cubit_state():
     }
 
 
-def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path):
+def test_radia_export_vol_does_not_create_phantom_block(fresh_cubit, tmp_path):
     """Reproduces the keiko 2026-05-30 runtime host bug.
 
     A journal with exactly 1 user-defined block (the workpiece sphere)
@@ -123,7 +123,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
 
     vol_path = str(tmp_path / "out.vol")
     # The bug message: ERROR: No block with ID 2 was found.
-    cubit.cmd(f'export netgen "{vol_path}" order 1')
+    cubit.cmd(f'export vol "{vol_path}" order 1')
 
     snapshot_after = _snapshot_cubit_state()
 
@@ -132,7 +132,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
                for k in snapshot_before
                if snapshot_before[k] != snapshot_after[k]}
     assert not drifted, (
-        f"export netgen drifted Cubit state -- likely a phantom-block "
+        f"export vol drifted Cubit state -- likely a phantom-block "
         f"side effect.  Drifted entries: {drifted}"
     )
 
@@ -141,7 +141,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
     assert os.path.getsize(vol_path) > 0, f"empty .vol at {vol_path}"
 
 
-def test_radia_export_netgen_is_state_idempotent(fresh_cubit, tmp_path):
+def test_radia_export_vol_is_state_idempotent(fresh_cubit, tmp_path):
     """Calling export N times back-to-back must keep Cubit state
     pinned to the first snapshot.
 
@@ -156,12 +156,12 @@ def test_radia_export_netgen_is_state_idempotent(fresh_cubit, tmp_path):
     cubit.cmd("block 1 name 'workpiece'")
 
     # First export -- treat its post-state as the reference.
-    cubit.cmd(f'export netgen "{tmp_path / "out_0.vol"}" order 1')
+    cubit.cmd(f'export vol "{tmp_path / "out_0.vol"}" order 1')
     s0 = _snapshot_cubit_state()
 
     # Subsequent exports must not drift.
     for i in range(1, 3):
-        cubit.cmd(f'export netgen "{tmp_path / f"out_{i}.vol"}" order 1')
+        cubit.cmd(f'export vol "{tmp_path / f"out_{i}.vol"}" order 1')
         si = _snapshot_cubit_state()
         drifted = {k: (s0[k], si[k]) for k in s0 if s0[k] != si[k]}
         assert not drifted, (

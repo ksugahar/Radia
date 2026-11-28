@@ -11,15 +11,15 @@ Mesh components:
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> `export netgen` .vol -> NGSolve mesh -> Radia PEEC + HDiv-VIM/reduced FEM
+    Cubit geometry -> `export vol` .vol -> NGSolve mesh -> Radia PEEC + HDiv-VIM/reduced FEM
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      The Cubit `export netgen` command (radia_cubit_export.dll) writes the .vol.
+      The Cubit `export vol` command (cubit_to_vol_export.dll) writes the .vol.
 
 Requirements:
     - Coreform Cubit 2025.8+
-    - radia_cubit_export.dll deployed by `python -m radia_mcp.cubit.install`
+    - cubit_to_vol_export.dll deployed by `python -m radia_mcp.cubit.install`
 
 Author: Radia Development Team
 Date: 2026-01-16
@@ -45,12 +45,12 @@ except ImportError:
 
 
 def _export_vol_mesh(name, order=1):
-    """Export the current Cubit mesh with `export netgen` and load it in NGSolve."""
+    """Export the current Cubit mesh with `export vol` and load it in NGSolve."""
     import os
     import tempfile
     from ngsolve import Mesh
     path = os.path.join(tempfile.mkdtemp(prefix="wpt_"), name + ".vol").replace("\\", "/")
-    cubit.cmd(f'export netgen "{path}" order {order} overwrite')
+    cubit.cmd(f'export vol "{path}" order {order} overwrite')
     return Mesh(path)
 
 
@@ -60,7 +60,7 @@ def create_wpt_geometry_cubit():
 
     Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Exports each assembly with `export netgen` and loads the .vol in NGSolve.
+    Exports each assembly with `export vol` and loads the .vol in NGSolve.
     """
     if not CUBIT_AVAILABLE:
         return None
@@ -192,7 +192,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        mesh: NGSolve Mesh object (from an `export netgen` .vol)
+        mesh: NGSolve Mesh object (from an `export vol` .vol)
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -254,7 +254,7 @@ def analyze_wpt_system():
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Deploy radia_cubit_export.dll: python -m radia_mcp.cubit.install")
+        print("  2. Deploy cubit_to_vol_export.dll: python -m radia_mcp.cubit.install")
         return
 
     # Load meshes into Radia via Netgen
@@ -320,7 +320,7 @@ def main():
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.8+")
-        print("  2. Deploy radia_cubit_export.dll: python -m radia_mcp.cubit.install")
+        print("  2. Deploy cubit_to_vol_export.dll: python -m radia_mcp.cubit.install")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
     # Analyze system

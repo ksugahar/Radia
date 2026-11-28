@@ -220,7 +220,7 @@ jobs:
           # the locked Netgen fork on the native runner; a change to the fork
           # lock (tools/ci_fork_wheels.*) reruns them too.
           native_cubit_export=false
-          if [[ "$mode" == "full" ]] || grep -qE '^packages/radia-mcp/native/cubit_vol_export/|^validation_test/radia_mcp/test_netgen_curving\.py$|^tools/ci_fork_wheels\.(py|json)$|^\.github/workflows/radia-mcp-matrix\.yml$' <<<"$files"; then
+          if [[ "$mode" == "full" ]] || grep -qE '^packages/radia-mcp/native/cubit_to_vol_export/|^validation_test/radia_mcp/test_netgen_curving\.py$|^tools/ci_fork_wheels\.(py|json)$|^\.github/workflows/radia-mcp-matrix\.yml$' <<<"$files"; then
             native_cubit_export=true
           fi
           echo "native_cubit_export=$native_cubit_export" >> "$GITHUB_OUTPUT"
@@ -234,7 +234,7 @@ jobs:
           echo "Selected radia-mcp CI mode: $mode"
 
   cubit-export-native:
-    # License-free native contracts of packages/radia-mcp/native/cubit_vol_export
+    # License-free native contracts of packages/radia-mcp/native/cubit_to_vol_export
     # (curve identity through the callback geometry, named periodic matching and
     # .vol naming, periodic curved coefficients) and the strict netgen_curving
     # tests. No Cubit; a missing compiler, SDK or module fails the job.
@@ -273,7 +273,7 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           $scripts = Join-Path $env:RADIA_CI_VENV 'Scripts'
           $build = Join-Path $env:RUNNER_TEMP "cubit-export-native-build-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          & cmd.exe /d /c "call `"$vcvars`" -vcvars_ver=14.44 > nul && set `"PATH=$scripts;%PATH%`" && python -B packages/radia-mcp/native/cubit_vol_export/run_contracts.py --build-dir `"$build`" --jobs 6"
+          & cmd.exe /d /c "call `"$vcvars`" -vcvars_ver=14.44 > nul && set `"PATH=$scripts;%PATH%`" && python -B packages/radia-mcp/native/cubit_to_vol_export/run_contracts.py --build-dir `"$build`" --jobs 6"
           exit $LASTEXITCODE
 
   minimum-sdk:

@@ -40,7 +40,7 @@ Workflow once this script is played in Cubit (GUI or batch):
 
     # Step 1: play this script in Cubit: builds the model, adds the Kelvin
     # sphere and exports ih_fem_kelvin_demo.vol with its Kelvin pairs
-    # (export netgen ... kelvin_tx/ty/tz kelvin_match; fresh output path).
+    # (export vol ... kelvin_tx/ty/tz kelvin_match; fresh output path).
     play "ih_fem_kelvin_demo.py"
 
     # Step 3: outside Cubit -- PEEC coil L+R from the .step.
@@ -224,7 +224,7 @@ info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 # can consume directly.  Order 1 is enough for the demo (the panel
 # tests are at order 1; higher orders are for production p-convergence).
 out_vol = os.path.join(_out, "ih_fem_kelvin_demo.vol").replace("\\", "/")
-cubit.cmd('export netgen "%s" order 1 %s overwrite' % (out_vol, export_arguments(info)))
+cubit.cmd('export vol "%s" order 1 %s overwrite' % (out_vol, export_arguments(info)))
 
 print()
 print("ih_fem_kelvin_demo.py: done")

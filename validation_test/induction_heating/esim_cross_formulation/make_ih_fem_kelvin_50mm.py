@@ -119,9 +119,9 @@ info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 
 # === 11. Export ===
 # The plugin writes the Kelvin pairs and needs a fresh output path.
-cubit.cmd('export netgen "%s" order 1 %s overwrite' % (OUT_VOL, export_arguments(info)))
+cubit.cmd('export vol "%s" order 1 %s overwrite' % (OUT_VOL, export_arguments(info)))
 if not os.path.isfile(OUT_VOL):
-    raise RuntimeError("export netgen wrote no file: %s" % OUT_VOL)
+    raise RuntimeError("export vol wrote no file: %s" % OUT_VOL)
 
 print()
 print("make_ih_fem_kelvin_50mm.py: done")

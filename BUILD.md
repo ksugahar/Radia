@@ -37,8 +37,8 @@ for an intentional local installation test; editable development normally
 loads the extensions from this checkout.
 
 Radia consumes checked `.vol` files without requiring Cubit. The optional
-Cubit `export netgen` plugin is built from
-`packages/radia-mcp/native/cubit_vol_export` (`build.py`) and deployed with
+Cubit `export vol` plugin is built from
+`packages/radia-mcp/native/cubit_to_vol_export` (`build.py`) and deployed with
 `python -m radia_mcp.cubit.install`.
 The MATLAB Optuna gateway builds and releases from
 [radia-optuna](https://github.com/ksugahar/optuna/tree/main/radia-optuna).

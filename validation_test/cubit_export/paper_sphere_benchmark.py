@@ -79,7 +79,7 @@ def cubit_journal(kind: str, run_dir: Path) -> str:
     scheme = "tetmesh" if kind == "tet" else "sphere"
     size = "0.65" if kind == "tet" else "0.4"
     exports = "\n".join(
-        f'export netgen "{(run_dir / f"{kind}_o{order}.vol").as_posix()}" order {order} overwrite'
+        f'export vol "{(run_dir / f"{kind}_o{order}.vol").as_posix()}" order {order} overwrite'
         for order in ORDERS
     )
     return (
@@ -157,7 +157,7 @@ def run_label_case(exe: Path, run_dir: Path, timeout: int) -> dict:
     driver = run_dir / "driver.jou"
     driver.write_text(
         f'play "{sample.as_posix()}"\n'
-        f'export netgen "{vol.as_posix()}" order 2 overwrite\nexit 0\n',
+        f'export vol "{vol.as_posix()}" order 2 overwrite\nexit 0\n',
         encoding="utf-8",
     )
     proc = subprocess.run(

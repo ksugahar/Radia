@@ -1,6 +1,6 @@
 """Validation: curved .vol export through the native Cubit plugin, end to end.
 
-Guards: ``cubit_export_vol`` (isolated worker + ``radia_cubit_export.dll``)
+Guards: ``cubit_export_vol`` (isolated worker + ``cubit_to_vol_export.dll``)
 on a real Cubit unit cylinder (radius 1, height 1, exact volume pi) with a
 named vertex nodeset: the curved volume error must fall as the geometric order
 rises from 1 to 2 and 3, the nodeset must arrive as CD3 name 1, and the result
@@ -11,7 +11,7 @@ of ``kelvin_int`` (same node and triangle counts, a one-to-one point and
 triangle map, every point within 1e-12 R of its translated position).
 
 Assumes: a licensed Cubit (``RADIA_CUBIT_BIN``), the plugin directory
-(``RADIA_CUBIT_PLUGIN_DIR``, built from ``packages/radia-mcp/native/cubit_vol_export``)
+(``RADIA_CUBIT_PLUGIN_DIR``, built from ``packages/radia-mcp/native/cubit_to_vol_export``)
 and a worker Python with the fork NGSolve the plugin was built against
 (``RADIA_CUBIT_WORKER_PYTHON``).  Without them the tests skip visibly.  No
 acceptance threshold is introduced: the measured errors are reported.

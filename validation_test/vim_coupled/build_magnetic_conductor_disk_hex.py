@@ -99,7 +99,7 @@ def build_mesh(
         "block 1 add hex all",
         'block 1 name "conductor"',
         "volume all scale 0.001",
-        f'export netgen "{output.as_posix()}" order 1 overwrite',
+        f'export vol "{output.as_posix()}" order 1 overwrite',
     ):
         cubit.cmd(command)
 

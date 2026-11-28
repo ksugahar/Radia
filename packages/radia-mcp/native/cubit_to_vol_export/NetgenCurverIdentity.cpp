@@ -1,14 +1,14 @@
 // NetgenCurver::curve_identities: the Netgen edge -> Cubit curve mapping.
 // Kept free of Cubit headers so the license-free contract tests link the same
-// production code as radia_cubit_export.dll.
+// production code as cubit_to_vol_export.dll.
 #include "NetgenCurver.hpp"
 #include "netgen_meshing.hpp"
 #include "CurveIdentity.hpp"
 
-radia_cubit_export::CurveIdentity NetgenCurver::curve_identities(
+cubit_to_vol_export::CurveIdentity NetgenCurver::curve_identities(
     const netgen::Mesh & mesh, const std::unordered_map<int, int> & curve_descriptors)
 {
-  radia_cubit_export::CurveIdentity bindings;
+  cubit_to_vol_export::CurveIdentity bindings;
   for (const auto & entry : curve_descriptors) {
     const int descriptor = entry.second;
     if (descriptor < 1 || descriptor > mesh.EdgeDescriptors().Size())

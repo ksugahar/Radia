@@ -10,7 +10,7 @@ def test_removed_gmsh_to_vol_workflow_is_unavailable():
     result = server.generate_cubit_script("tet_gmsh")
     assert "Unknown workflow" in result, result
     script = server.generate_cubit_script("tet_netgen")
-    assert "cubit_export_vol" in script and "cubit.cmd('export netgen" not in script, script
+    assert "cubit_export_vol" in script and "cubit.cmd('export vol" not in script, script
 
 
 def test_exporter_has_no_gmsh_meshing_or_solver_conversion_calls():
@@ -34,7 +34,7 @@ def test_stage_rejects_msh_before_starting_cubit(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_cubit_session_or_error", unexpected_session)
     mesh = tmp_path / "input.msh"
     mesh.write_text("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n", encoding="ascii")
-    for kwargs in [{"path": str(mesh)}, {"extra_commands": [f'import mesh "{mesh}"', 'export netgen "bad.vol"']}]:
+    for kwargs in [{"path": str(mesh)}, {"extra_commands": [f'import mesh "{mesh}"', 'export vol "bad.vol"']}]:
         result = json.loads(server.cubit_stage(**kwargs))
         assert result["status"] == "error", result
         assert result["stage"] == "input", result

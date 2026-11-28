@@ -969,7 +969,7 @@ def main():
                 return {"error":
                         f"--require-kelvin: .vol has 'kelvin' material but "
                         f"no usable Kelvin pairs: {exc}. Export it with the "
-                        f"Kelvin pairs (export netgen ... kelvin_tx/ty/tz "
+                        f"Kelvin pairs (export vol ... kelvin_tx/ty/tz "
                         f"kelvin_match; radia_mcp.cubit.kelvin."
                         f"export_arguments(info))."}
         if args.impedance_model == "esim" and not args.bh_file:

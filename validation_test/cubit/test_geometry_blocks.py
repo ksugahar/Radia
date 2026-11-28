@@ -2,13 +2,13 @@
 
 The public contract is Cubit's APREPRO command:
 
-    cubit.cmd('export netgen "model.vol" order N overwrite')
+    cubit.cmd('export vol "model.vol" order N overwrite')
 """
 
 from __future__ import annotations
 
 from validation_test.cubit.cubit_202512_helpers import (
-    export_netgen,
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
@@ -33,7 +33,7 @@ def test_geometry_volume_and_surface_blocks_export_to_netgen():
     cubit.cmd("block 2 add surface all")
     cubit.cmd('block 2 name "boundary"')
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "geometry_blocks", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "geometry_blocks", order=1))
 
     assert mesh.ne == expected_tets
     assert "solid" in mesh.GetMaterials()
@@ -55,6 +55,6 @@ def test_mesh_element_blocks_do_not_cross_contaminate():
     assert len(cubit.get_block_tets(2)) == 0
     assert len(cubit.get_block_tris(2)) > 0
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "element_blocks", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "element_blocks", order=1))
     assert mesh.ne == cubit.get_tet_count()
 

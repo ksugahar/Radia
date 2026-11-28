@@ -80,7 +80,7 @@ def _require_curve_order(mesh, order, entry):
         f"this one is at {current}. Radia does not curve a mesh object, because its geometry may "
         f"be borrowed from another mesh of the process. Curve it where its CAD lives "
         f"(Curve({int(order)}) right after GenerateMesh, or radia.mesh_curve.ensure_curve_order for "
-        f"a Netgen/OCC .vol), export a Cubit mesh at that order (export netgen ... order "
+        f"a Netgen/OCC .vol), export a Cubit mesh at that order (export vol ... order "
         f"{int(order)}), or call radia.mesh_curve.straight_curve_order(mesh, {int(order)}) for flat "
         f"geometry.")
 

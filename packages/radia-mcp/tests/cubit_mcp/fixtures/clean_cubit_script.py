@@ -29,4 +29,4 @@ cubit.cmd("block 1 element type tetra4")
 # nodes = cubit.get_expanded_connectivity("tet", 1)
 
 # Correct: export after meshing and named blocks
-cubit.cmd('export netgen "output.vol" order 2 overwrite')
+cubit.cmd('export vol "output.vol" order 2 overwrite')

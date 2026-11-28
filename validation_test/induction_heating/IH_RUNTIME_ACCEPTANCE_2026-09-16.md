@@ -8,7 +8,7 @@ through PRs #280 and #281 respectively.
 
 The earlier persistent `cubit_exec` attempt used Cubit's bundled-Python daemon.
 That route accepts native meshing commands but does not load C++ command plugins.
-Consequently `export netgen` failed at parsing, before the exporter or solver ran.
+Consequently `export vol` failed at parsing, before the exporter or solver ran.
 The existing `run_headless_journal` implementation explicitly documents this
 distinction. The previous attempt selected the wrong execution route; it did
 not prove that the deployed exporter was broken.

@@ -261,7 +261,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-31",
-        "what": "After `export netgen`, Cubit shows a new "
+        "what": "After `export vol`, Cubit shows a new "
                 "phantom block (id K+1) that the user never created.  "
                 "Subsequent parse_cubit_list('volume', 'in block K+1') "
                 "errors with 'No block with ID K+1 was found'.  "
@@ -303,7 +303,7 @@ PATTERNS: list[dict] = [
                 "reported convergence.  The response matched the "
                 "mass-only result.",
         "root_cause": "`sculpt volume all` makes a FREE mesh not owned "
-                      "by geometric surfaces; `export netgen` collects "
+                      "by geometric surfaces; `export vol` collects "
                       "boundary faces from geometry-owned surfaces, so "
                       "the .vol got surfaceelements=0 (`gen_sidesets 2` "
                       "creates a mesh-only sideset the exporter also "

@@ -87,7 +87,7 @@ block 1 name "yoke"
 block 2 add volume 4 5
 block 2 name "air"
 
-# Kelvin (FEM only): tick "Add Kelvin" in the Export Netgen dialog
+# Kelvin (FEM only): tick "Add Kelvin" in the Export Vol dialog
 # with all three "Symmetry reduction" combos set to off (default).  Auto-Kelvin auto-detects symmetry=["z"] from the
 # z=0 webcut seam (multi-volume air, on z=0 plane, vertex range
 # straddles 0 symmetrically), offsets a Kelvin sphere by +3R along x

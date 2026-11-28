@@ -1,13 +1,13 @@
 ---
 name: cubit-toolbar-acceptance
-description: Accept the radia-mcp Cubit Netgen Export toolbar/menu using APREPRO/Python execution, the same GUI-handler dispatch path and validated .vol artifacts on the sole build target. Mouse-driven end-to-end GUI tests are optional diagnostics.
+description: Accept the radia-mcp Cubit Vol Export toolbar/menu using APREPRO/Python execution, the same GUI-handler dispatch path and validated .vol artifacts on the sole build target. Mouse-driven end-to-end GUI tests are optional diagnostics.
 ---
 
 # Cubit toolbar acceptance
 
 This repository file is the canonical contract for Codex and Claude. Local skill entrypoints reference it rather than maintain separate acceptance rules.
 
-Scope: the **Netgen Export** toolbar and menu of `radia_mcp.cubit.gui` (one action, `Export Netgen (.vol)...`), installed by `python -m radia_mcp.cubit.install` into Coreform Cubit 2026.8 on the sole build target. LLM/MCP Cubit execution stays batch/nographics and never runs this acceptance.
+Scope: the **Vol Export** toolbar and menu of `radia_mcp.cubit.gui` (one action, `Export .vol...`), installed by `python -m radia_mcp.cubit.install` into Coreform Cubit 2026.8 on the sole build target. LLM/MCP Cubit execution stays batch/nographics and never runs this acceptance.
 
 ## Acceptance policy (human decision, 2026-10-16)
 
@@ -22,7 +22,7 @@ Human scope update (2026-10-30): the build target is the only Cubit qualificatio
 1. Runtime identity: radia-mcp source SHA (or exact wheel SHA-256), interpreter and import paths, Cubit version, and the loaded native plugin path/hash. Disk-file equality alone does not prove the loaded path.
 2. Registration: `python -m radia_mcp.cubit.install --verify-only` checks that the deployed plugin matches the built one (size and SHA-256) and that the toolbar is registered. `python -m radia_mcp.cubit.toolbar_smoke` cold-starts the real Cubit GUI and records what Cubit's embedded PySide6 actually shows; run it when registration changed or its evidence is missing.
 3. Handler dispatch: `packages/radia-mcp/tests/cubit_mcp/test_cubit_export_menu.py` exercises the production menu helpers (`export_command`, `kelvin_options`, `verification_command`). A headless test may replace dialog inputs through a test seam, but it must execute the production handler and command builder; replacing the handler with a fake or inspecting its source alone is insufficient. Record whether this is programmatic dispatch or an observed GUI invocation; never claim mouse operation that did not occur.
-4. Backend: execute the resulting `export netgen "<path>" order <n> overwrite` command (with the Kelvin step when selected) through licensed Cubit APREPRO/Python on the sole build target, using independently authored small geometry and explicit settings. Verify the fresh `.vol` with `python -I -B -m radia.vol_check` and its versioned label contract. Reuse already passing evidence for the same bytes and contracts rather than repeat work.
+4. Backend: execute the resulting `export vol "<path>" order <n> overwrite` command (with the Kelvin step when selected) through licensed Cubit APREPRO/Python on the sole build target, using independently authored small geometry and explicit settings. Verify the fresh `.vol` with `python -I -B -m radia.vol_check` and its versioned label contract. Reuse already passing evidence for the same bytes and contracts rather than repeat work.
 
 ## Allowed test seams and explicit limits
 

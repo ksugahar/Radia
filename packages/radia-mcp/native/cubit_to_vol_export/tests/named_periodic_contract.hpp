@@ -8,7 +8,7 @@
 inline void named_periodic_contract_test()
 {
   using namespace netgen;
-  using namespace radia_cubit_export;
+  using namespace cubit_to_vol_export;
   auto fixture = [] {
     auto mesh = std::make_unique<Mesh>();
     mesh->SetDimension(3);
@@ -208,7 +208,7 @@ inline void named_periodic_contract_test()
 inline void kelvin_periodic_contract_test()
 {
   using namespace netgen;
-  using namespace radia_cubit_export;
+  using namespace cubit_to_vol_export;
   const std::array<double, 3> offset{0.0, 0.0, 5.0};
   // Points 1-6: kelvin_int grid x in {0,1,2}, y in {0,1}; 7-12: the same + offset.
   auto fixture = [&](const char *last_label) {

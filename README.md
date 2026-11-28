@@ -538,7 +538,7 @@ Python circuit-conversion and parser modules.
 | :--- | :--- | :--- |
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
 | `radia-simulink` (source version 0.1.5rc1) | `python -m pip install radia-simulink` | MATLAB mexcuda solvers, Simulink and LTspice integrations; external products installed separately |
-| `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge, including the Cubit MCP, `export netgen` plugin and Export Netgen menu (`radia_mcp.cubit`) |
+| `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge, including the Cubit MCP, `export vol` plugin and Export Vol menu (`radia_mcp.cubit`) |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
 | `eqnedit64` (3.1.7) | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
 | `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus pinned upstream Python `optuna==5.0.0`; MATLAB optimization requires the separate `radia-optuna` distribution |

@@ -35,7 +35,7 @@
 # octant of the radius-0.40 sphere.
 #
 # Tick "Add Kelvin" and set "Symmetry reduction" x=ht, y=ht, z=bn in
-# the Export Netgen dialog.  Just before export netgen the export
+# the Export Vol dialog.  Just before export vol the export
 # worker passes that reduction (keys 'x', 'y', 'z') to
 # radia_mcp.cubit.kelvin.auto_add_kelvin_from_current_model(), which
 # delegates to add_kelvin_cubit.  (APREPRO chokes
@@ -96,7 +96,7 @@ block 1 name "yoke"
 block 2 add volume 6
 block 2 name "air"
 
-# Kelvin (FEM only): tick "Add Kelvin" in the Export Netgen dialog
+# Kelvin (FEM only): tick "Add Kelvin" in the Export Vol dialog
 # with "Symmetry reduction" x=ht, y=ht, z=bn.
 # add_kelvin_cubit picks offset_dir = first reduction axis (= x by
 # default), offsets the Kelvin sphere to (3R, 0, 0) = (1.2 m, 0, 0),

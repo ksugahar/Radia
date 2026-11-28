@@ -1,7 +1,7 @@
 """Mixed element Netgen export through Cubit 2025.12."""
 
 from validation_test.cubit.cubit_202512_helpers import (
-    export_netgen,
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
@@ -30,6 +30,6 @@ def test_mixed_tet_hex_blocks_export_and_load():
     cubit.cmd('block 3 name "boundary"')
 
     expected = len(cubit.get_block_hexes(1)) + len(cubit.get_block_tets(2))
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "mixed", order=2))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "mixed", order=2))
     assert mesh.ne == expected
     assert set(mesh.GetMaterials()) == {"hex_region", "tet_region"}

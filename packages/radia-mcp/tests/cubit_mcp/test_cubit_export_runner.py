@@ -95,7 +95,7 @@ def test_worker_runs_isolated_with_plugin_periodic_and_kelvin(tmp_path, monkeypa
 
 def test_export_command_matches_the_plugin_syntax(tmp_path):
     command = vol_export.export_command(tmp_path / "a.vol", 3, PERIODIC)
-    assert command.startswith(f'export netgen "{(tmp_path / "a.vol").as_posix()}" order 3 ')
+    assert command.startswith(f'export vol "{(tmp_path / "a.vol").as_posix()}" order 3 ')
     assert ('periodic_name "kt" periodic_master "source" periodic_slave "target" periodic_unit "m" '
             'periodic_patches "6:7" periodic_tx 1 periodic_ty 0 periodic_tz 0 periodic_match 1e-6 overwrite') in command
     assert vol_export.export_command(tmp_path / "a.vol", 2, None).endswith(" order 2 overwrite")
@@ -177,7 +177,7 @@ def test_missing_plugin_runtime_and_cubit_fail_loudly(tmp_path, monkeypatch):
     monkeypatch.delenv("RADIA_CUBIT_PLUGIN_DIR", raising=False)
     with pytest.raises(runner.WorkerRuntimeError, match="plugin directory not set"):
         runner.run_export(journal, tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path), python=sys.executable)
-    with pytest.raises(runner.WorkerRuntimeError, match="radia_cubit_export.dll not found"):
+    with pytest.raises(runner.WorkerRuntimeError, match="cubit_to_vol_export.dll not found"):
         runner.run_export(journal, tmp_path / "m.vol", 2, cubit_bin=_cubit_bin(tmp_path), python=sys.executable,
                           plugin_dir=tmp_path)
     with pytest.raises(runner.WorkerRuntimeError, match="Cubit Python package not found"):

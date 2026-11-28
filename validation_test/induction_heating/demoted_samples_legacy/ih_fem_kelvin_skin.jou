@@ -108,4 +108,4 @@ volume {air_top} {air_bot} visibility off
 # Preserved under validation_test/induction_heating/demoted_samples_legacy/
 # on 2026-06-29. See README.md. Export with Kelvin through the MCP tool
 #   cubit_export_vol(<this .jou>, "ih_fem_kelvin_skin.vol", order=1, add_kelvin=True)
-# or the Kelvin option of the Netgen Export menu.
+# or the Kelvin option of the Vol Export menu.

@@ -11,6 +11,6 @@ if not os.path.isfile(os.path.join(_here, 'cubit_export_menu.py')):
     raise RuntimeError('Toolbar working directory is invalid; run python -m radia_mcp.cubit.install to repair the toolbar')
 if _here not in sys.path:
     sys.path.insert(0, _here)
-from cubit_export_menu import launch_netgen_export
+from cubit_export_menu import launch_vol_export
 
-launch_netgen_export()
+launch_vol_export()

@@ -32,7 +32,7 @@ The radia-mcp Cubit GUI packages its menu and toolbar assets under
 Check the installed distribution before claiming this capability is deployed.
 LLM production remains APREPRO/headless; launch the GUI only for the explicitly
 scoped GUI release test or a human workflow.
-The Export Netgen entry is one module-owned menu-bar QAction; never traverse
+The Export Vol entry is one module-owned menu-bar QAction; never traverse
 Cubit-owned menus from PySide, and remove the action before Python shutdown
 (aboutToQuit). See `cubit_toolbar_guide topic=menu_bar` for the recipe and
 `topic=external_jobs` for long-running work.

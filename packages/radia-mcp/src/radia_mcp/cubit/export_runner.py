@@ -11,7 +11,7 @@ the plugin was built against.  The worker modules are stdlib-only; the runner
 puts the server's own ``radia_mcp`` source root first on the isolated worker's
 ``sys.path`` (``-I`` ignores ``PYTHONPATH``), so worker and server code match.  Plugin: the
 ``plugin_dir`` argument, else ``$RADIA_CUBIT_PLUGIN_DIR``; it must hold
-``radia_cubit_export.dll`` (built from ``packages/radia-mcp/native/cubit_vol_export``).
+``cubit_to_vol_export.dll`` (built from ``packages/radia-mcp/native/cubit_to_vol_export``).
 """
 from __future__ import annotations
 
@@ -91,11 +91,11 @@ def resolve_cubit_bin(cubit_bin: str | os.PathLike[str] | None = None) -> Path:
 
 
 def resolve_plugin_dir(plugin_dir: str | os.PathLike[str] | None = None) -> Path:
-    """Return the directory holding radia_cubit_export.dll; fail loudly when absent."""
+    """Return the directory holding cubit_to_vol_export.dll; fail loudly when absent."""
     chosen = plugin_dir or os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
     if not chosen:
         raise WorkerRuntimeError("Native plugin directory not set; pass plugin_dir or set "
-                                 "RADIA_CUBIT_PLUGIN_DIR (build it with native/cubit_vol_export/build.py)")
+                                 "RADIA_CUBIT_PLUGIN_DIR (build it with native/cubit_to_vol_export/build.py)")
     path = Path(chosen).resolve()
     if not (path / PLUGIN_DLL).is_file():
         raise WorkerRuntimeError(f"{PLUGIN_DLL} not found in {path}")

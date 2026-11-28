@@ -81,7 +81,7 @@ Distribution owner: radia-mcp, Python namespace radia_mcp.cubit. The server
 does not import radia. Curved Netgen `.vol` export runs only through
 `cubit_export_vol`, which starts the export worker
 (radia_mcp.cubit.vol_export) with an explicit interpreter and -I -B; the
-worker loads the native `export netgen` command plugin (radia_cubit_export.dll).
+worker loads the native `export vol` command plugin (cubit_to_vol_export.dll).
 
 Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
@@ -853,8 +853,8 @@ def cubit_export_vol(journal_path: str,
 
 	Plays `journal_path` in a fresh batch/nographics Cubit inside an isolated
 	Python subprocess (`python -I -B -m radia_mcp.cubit.vol_export`) that has
-	loaded the fork NGSolve/Netgen and the `radia_cubit_export.dll` command
-	plugin, then runs `export netgen "<out_path>" order <order> ... overwrite`.
+	loaded the fork NGSolve/Netgen and the `cubit_to_vol_export.dll` command
+	plugin, then runs `export vol "<out_path>" order <order> ... overwrite`.
 	The plugin writes `out_path` plus `out_path.json`.  Fails loudly when Cubit,
 	the worker interpreter or the plugin DLL is missing.  Run `cubit_check_vol`
 	on the result before any solver use.
@@ -867,7 +867,7 @@ def cubit_export_vol(journal_path: str,
 	    worker_python: Absolute worker interpreter (default
 	        $RADIA_CUBIT_WORKER_PYTHON, then this server's interpreter).
 	    timeout_s: Worker wall-clock limit in seconds.
-	    plugin_dir: Directory holding radia_cubit_export.dll (default
+	    plugin_dir: Directory holding cubit_to_vol_export.dll (default
 	        $RADIA_CUBIT_PLUGIN_DIR).
 	    periodic: Optional named periodic request with all nine fields
 	        periodic_name/master/slave/unit/patches/tx/ty/tz/match.
@@ -2109,9 +2109,9 @@ def get_lint_rules() -> str:
 		{
 			'rule': 'curve-without-export-netgen',
 			'severity': 'MODERATE',
-			'description': 'Manual mesh.Curve() is not needed. export netgen embeds curving in .vol.',
-			'trigger': 'mesh.Curve(3) without export netgen',
-			'fix': 'cubit.cmd(\'export netgen "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
+			'description': 'Manual mesh.Curve() is not needed. export vol embeds curving in .vol.',
+			'trigger': 'mesh.Curve(3) without export vol',
+			'fix': 'cubit.cmd(\'export vol "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
 		},
 		{
 			'rule': 'missing-block-names',

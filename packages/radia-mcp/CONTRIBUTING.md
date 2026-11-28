@@ -33,7 +33,7 @@ first.
 - Cubit execution and its tests belong to `radia_mcp.cubit` and
   `tests/cubit_mcp`. Cubit runs batch/nographics only; curved export runs in the
   isolated worker subprocess (explicit interpreter, `-I -B`), never through the
-  retired `export netgen` plugin. CI stays Cubit-free; tests needing Cubit skip
+  retired `export vol` plugin. CI stays Cubit-free; tests needing Cubit skip
   visibly. Do not add a GUI/toolbar adapter.
 
 ## Consolidation before expansion

@@ -241,8 +241,8 @@ has already passed the bibliography audit.
 
 ## Cubit Export
 
-- [Function_Reference.md](cubit/Function_Reference.md) - `export netgen` command and `check-vol` reference
-- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why Cubit `export netgen` is the single chokepoint for labeled .vol.
+- [Function_Reference.md](cubit/Function_Reference.md) - `export vol` command and `check-vol` reference
+- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why Cubit `export vol` is the single chokepoint for labeled .vol.
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)

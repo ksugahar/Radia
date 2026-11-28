@@ -6,8 +6,8 @@ this file by path inside Cubit's embedded Python.
 
 * ``add_kelvin_cubit`` / ``auto_add_kelvin_from_current_model`` /
   ``apply_options``: Cubit Python, after the journal is played and before
-  ``export netgen``; called by the external curved-export worker and by the
-  Netgen Export menu (:mod:`radia_mcp.cubit.gui.cubit_export_menu`).
+  ``export vol``; called by the external curved-export worker and by the
+  Vol Export menu (:mod:`radia_mcp.cubit.gui.cubit_export_menu`).
 * ``add_kelvin_occ`` / ``add_kelvin_2d_axisym``: NGSolve/OCC geometry, before
   meshing, in a normal Python with ``netgen``.
 
@@ -1052,7 +1052,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
     """Detect air sphere + symmetry, then call add_kelvin_cubit().
 
     Called by the export worker after the journal and before
-    `export netgen`, in the worker's Cubit Python session.
+    `export vol`, in the worker's Cubit Python session.
 
     Steps (matching the 2026-04-14 c60a6007 implementation):
       1. If a `<kelvin_block>` block already exists, skip (idempotent).
@@ -1262,7 +1262,7 @@ def validate_options(options):
 
 
 def export_arguments(info, match=None):
-    """``export netgen`` arguments that make the plugin write the Kelvin pairs.
+    """``export vol`` arguments that make the plugin write the Kelvin pairs.
 
     ``info`` is the dict ``add_kelvin_cubit`` returns; its ``center`` is the
     Kelvin sphere offset, the translation from each ``kelvin_int`` point to its

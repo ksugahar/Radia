@@ -4,11 +4,11 @@ Tests the full Cubit pipeline:
   1. Cubit: create air sphere (solid) + torus coil (STEP only)
   2. Mesh the air; the coil filament lies inside it
   3. add_kelvin_cubit() → Kelvin sphere with copy mesh
-  4. export netgen (with the Kelvin pairs) → .vol, export step → coil.step
+  4. export vol (with the Kelvin pairs) → .vol, export step → coil.step
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
-Requires: Cubit license, NGSolve, the radia_cubit_export.dll plugin
+Requires: Cubit license, NGSolve, the cubit_to_vol_export.dll plugin
 (RADIA_CUBIT_PLUGIN_DIR; skipped visibly when unset).
 """
 
@@ -45,7 +45,7 @@ def _grover_L(R, a):
 
 
 def _setup_cubit():
-    """Start headless Cubit with the radia_cubit_export plugin.
+    """Start headless Cubit with the cubit_to_vol_export plugin.
 
     Same load order as the production export worker
     (radia_mcp.cubit.vol_export): the Netgen runtime first, then Cubit with
@@ -54,9 +54,9 @@ def _setup_cubit():
     plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
     if not plugin_dir:
         pytest.skip("RADIA_CUBIT_PLUGIN_DIR (directory holding "
-                    "radia_cubit_export.dll) is not set; needs licensed Cubit")
-    if not os.path.isfile(os.path.join(plugin_dir, "radia_cubit_export.dll")):
-        raise FileNotFoundError(f"radia_cubit_export.dll not found in {plugin_dir}")
+                    "cubit_to_vol_export.dll) is not set; needs licensed Cubit")
+    if not os.path.isfile(os.path.join(plugin_dir, "cubit_to_vol_export.dll")):
+        raise FileNotFoundError(f"cubit_to_vol_export.dll not found in {plugin_dir}")
     import ngsolve  # noqa: F401
     import netgen
     from radia.cubit_locator import find_cubit_bin
@@ -91,7 +91,7 @@ def peec_cubit_model():
     # --- 1. Solid air sphere; the coil torus is only the STEP source ---
     # calc_fem_kelvin's PEEC route integrates the filament line source over
     # the air elements, so the coil must lie inside the air mesh: no hole.
-    # The torus is not meshed and not in a block, so export netgen skips it.
+    # The torus is not meshed and not in a block, so export vol skips it.
     cubit.cmd(f"create sphere radius {R_AIR}")
     air = cubit.get_last_id("volume")
     cubit.cmd(f"create torus major radius {R_COIL} minor radius {A_COIL}")
@@ -124,7 +124,7 @@ def peec_cubit_model():
     vol_path = os.path.join(tmpdir, "model.vol")
     step_path = os.path.join(tmpdir, "coil.step")
 
-    cubit.cmd(f'export netgen "{vol_path}" order 1 {export_arguments(kelvin_info)} overwrite')
+    cubit.cmd(f'export vol "{vol_path}" order 1 {export_arguments(kelvin_info)} overwrite')
     cubit.cmd(f'export step "{step_path}" volume {coil} overwrite')
 
     return {

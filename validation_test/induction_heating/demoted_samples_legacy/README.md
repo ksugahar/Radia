@@ -33,5 +33,5 @@ longer automatically installed into the Cubit panel's Browse dialog. The
 journals build the physical domain only and do *not* add Kelvin. To export
 one with the Kelvin open boundary, pass it to the MCP tool
 `cubit_export_vol(<file.jou>, "model.vol", order=1, add_kelvin=True)` or use
-the Kelvin option of the Netgen Export menu; both run
-`radia_mcp.cubit.kelvin` before `export netgen`.
+the Kelvin option of the Vol Export menu; both run
+`radia_mcp.cubit.kelvin` before `export vol`.

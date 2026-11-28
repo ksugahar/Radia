@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
-project(radia_cubit_export CXX)
+project(cubit_to_vol_export CXX)
 set(CMAKE_CXX_STANDARD 17)
-# CUBIT_VOL_EXPORT_PLUGIN builds the Cubit command plugin (needs the Cubit SDK).
+# CUBIT_TO_VOL_EXPORT_PLUGIN builds the Cubit command plugin (needs the Cubit SDK).
 # NETGEN_CURVING_PYMODULE builds _netgen_curving, the Python test module for
 # netgen_curving/ (needs only the Netgen SDK, no Cubit).
-option(CUBIT_VOL_EXPORT_PLUGIN "Build radia_cubit_export.dll" ON)
+option(CUBIT_TO_VOL_EXPORT_PLUGIN "Build cubit_to_vol_export.dll" ON)
 option(NETGEN_CURVING_PYMODULE "Build the _netgen_curving test module" OFF)
-# RADIA_CUBIT_EXPORT_CONTRACT_TESTS builds the license-free native contracts in
+# CUBIT_TO_VOL_EXPORT_CONTRACT_TESTS builds the license-free native contracts in
 # tests/ (Netgen SDK and Python with netgen/ngsolve only, no Cubit) and
 # registers them with CTest.
-option(RADIA_CUBIT_EXPORT_CONTRACT_TESTS "Build the native contract tests" OFF)
+option(CUBIT_TO_VOL_EXPORT_CONTRACT_TESTS "Build the native contract tests" OFF)
 find_package(Netgen REQUIRED CONFIG)
 
 add_library(netgen_curving STATIC netgen_curving/geometric_refit.cpp netgen_curving/periodic_copy.cpp)
@@ -20,19 +20,19 @@ if(MSVC)
   target_compile_definitions(netgen_curving PUBLIC _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 endif()
 
-if(CUBIT_VOL_EXPORT_PLUGIN)
+if(CUBIT_TO_VOL_EXPORT_PLUGIN)
   find_package(Cubit REQUIRED CONFIG)
   if(NOT TARGET cubit_geom)
     find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
     add_library(cubit_geom ALIAS cubit_cgmcore)
   endif()
-  add_library(radia_cubit_export_plugin MODULE
-    CubitMeshExportPlugin.cpp MeshData.cpp NetgenCurver.cpp NetgenCurverIdentity.cpp
-    callbackgeom.cpp ExportNetgenCommand.cpp)
-  set_target_properties(radia_cubit_export_plugin PROPERTIES OUTPUT_NAME "radia_cubit_export" PREFIX "" SUFFIX ".dll")
-  target_link_libraries(radia_cubit_export_plugin cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
-  target_compile_definitions(radia_cubit_export_plugin PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-  target_compile_options(radia_cubit_export_plugin PRIVATE /bigobj /utf-8)
+  add_library(cubit_to_vol_export_plugin MODULE
+    CubitToVolExportPlugin.cpp MeshData.cpp NetgenCurver.cpp NetgenCurverIdentity.cpp
+    callbackgeom.cpp ExportVolCommand.cpp)
+  set_target_properties(cubit_to_vol_export_plugin PROPERTIES OUTPUT_NAME "cubit_to_vol_export" PREFIX "" SUFFIX ".dll")
+  target_link_libraries(cubit_to_vol_export_plugin cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
+  target_compile_definitions(cubit_to_vol_export_plugin PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+  target_compile_options(cubit_to_vol_export_plugin PRIVATE /bigobj /utf-8)
 endif()
 
 if(NETGEN_CURVING_PYMODULE)
@@ -46,7 +46,7 @@ if(NETGEN_CURVING_PYMODULE)
   endif()
 endif()
 
-if(RADIA_CUBIT_EXPORT_CONTRACT_TESTS)
+if(CUBIT_TO_VOL_EXPORT_CONTRACT_TESTS)
   # The verifiers read the written .vol with the Netgen/NGSolve that this build
   # links; a missing interpreter or package is a configure error, not a skip.
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -63,16 +63,16 @@ if(RADIA_CUBIT_EXPORT_CONTRACT_TESTS)
   # The contracts refuse to overwrite their outputs, so every CTest run starts
   # from an empty output directory.
   set(contract_out "${CMAKE_CURRENT_BINARY_DIR}/contract-output")
-  add_test(NAME radia_cubit_export_contract_output_clean
+  add_test(NAME cubit_to_vol_export_contract_output_clean
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${contract_out}")
-  add_test(NAME radia_cubit_export_contract_output_create
+  add_test(NAME cubit_to_vol_export_contract_output_create
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${contract_out}")
-  set_tests_properties(radia_cubit_export_contract_output_clean PROPERTIES
+  set_tests_properties(cubit_to_vol_export_contract_output_clean PROPERTIES
     FIXTURES_SETUP contract_output_clean)
-  set_tests_properties(radia_cubit_export_contract_output_create PROPERTIES
+  set_tests_properties(cubit_to_vol_export_contract_output_create PROPERTIES
     FIXTURES_REQUIRED contract_output_clean FIXTURES_SETUP contract_output)
 
-  function(radia_cubit_export_contract_target target)
+  function(cubit_to_vol_export_contract_target target)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(${target} PRIVATE netgen_curving nglib ngcore)
@@ -82,38 +82,38 @@ if(RADIA_CUBIT_EXPORT_CONTRACT_TESTS)
   endfunction()
 
   # The production matcher must compile on its own before any contract links.
-  add_library(radia_cubit_export_named_periodic_header_compile OBJECT
+  add_library(cubit_to_vol_export_named_periodic_header_compile OBJECT
     tests/named_periodic_header_compile.cpp)
-  radia_cubit_export_contract_target(radia_cubit_export_named_periodic_header_compile)
+  cubit_to_vol_export_contract_target(cubit_to_vol_export_named_periodic_header_compile)
 
-  # Same production mapping and callback geometry as radia_cubit_export.dll.
-  add_executable(radia_cubit_export_callback_contract
+  # Same production mapping and callback geometry as cubit_to_vol_export.dll.
+  add_executable(cubit_to_vol_export_callback_contract
     tests/callback_curve_identity.cpp callbackgeom.cpp NetgenCurverIdentity.cpp)
-  add_dependencies(radia_cubit_export_callback_contract radia_cubit_export_named_periodic_header_compile)
-  radia_cubit_export_contract_target(radia_cubit_export_callback_contract)
-  add_test(NAME radia_cubit_export_callback_curve_identity COMMAND radia_cubit_export_callback_contract)
-  set_tests_properties(radia_cubit_export_callback_curve_identity PROPERTIES
+  add_dependencies(cubit_to_vol_export_callback_contract cubit_to_vol_export_named_periodic_header_compile)
+  cubit_to_vol_export_contract_target(cubit_to_vol_export_callback_contract)
+  add_test(NAME cubit_to_vol_export_callback_curve_identity COMMAND cubit_to_vol_export_callback_contract)
+  set_tests_properties(cubit_to_vol_export_callback_curve_identity PROPERTIES
     FIXTURES_SETUP named_periodic_vol FIXTURES_REQUIRED contract_output)
-  add_test(NAME radia_cubit_export_named_periodic_vol_load COMMAND "${Python3_EXECUTABLE}" -I
+  add_test(NAME cubit_to_vol_export_named_periodic_vol_load COMMAND "${Python3_EXECUTABLE}" -I
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_named_periodic_vol.py"
     "${contract_out}/named-periodic-contract.vol")
-  set_tests_properties(radia_cubit_export_named_periodic_vol_load PROPERTIES
+  set_tests_properties(cubit_to_vol_export_named_periodic_vol_load PROPERTIES
     FIXTURES_REQUIRED "named_periodic_vol;contract_output")
 
-  add_executable(radia_cubit_export_periodic_curved_contract tests/periodic_curved_contract.cpp)
-  radia_cubit_export_contract_target(radia_cubit_export_periodic_curved_contract)
-  add_test(NAME radia_cubit_export_periodic_curved_coefficients COMMAND radia_cubit_export_periodic_curved_contract)
-  set_tests_properties(radia_cubit_export_periodic_curved_coefficients PROPERTIES
+  add_executable(cubit_to_vol_export_periodic_curved_contract tests/periodic_curved_contract.cpp)
+  cubit_to_vol_export_contract_target(cubit_to_vol_export_periodic_curved_contract)
+  add_test(NAME cubit_to_vol_export_periodic_curved_coefficients COMMAND cubit_to_vol_export_periodic_curved_contract)
+  set_tests_properties(cubit_to_vol_export_periodic_curved_coefficients PROPERTIES
     FIXTURES_SETUP periodic_curved_vol FIXTURES_REQUIRED contract_output
     FAIL_REGULAR_EXPRESSION "[Ii]llegal face")
-  add_test(NAME radia_cubit_export_periodic_curved_vol_load COMMAND "${Python3_EXECUTABLE}" -I
+  add_test(NAME cubit_to_vol_export_periodic_curved_vol_load COMMAND "${Python3_EXECUTABLE}" -I
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_periodic_curved.py" "${contract_out}")
-  set_tests_properties(radia_cubit_export_periodic_curved_vol_load PROPERTIES
+  set_tests_properties(cubit_to_vol_export_periodic_curved_vol_load PROPERTIES
     FIXTURES_REQUIRED "periodic_curved_vol;contract_output")
 
   set_tests_properties(
-    radia_cubit_export_callback_curve_identity radia_cubit_export_named_periodic_vol_load
-    radia_cubit_export_periodic_curved_coefficients radia_cubit_export_periodic_curved_vol_load
+    cubit_to_vol_export_callback_curve_identity cubit_to_vol_export_named_periodic_vol_load
+    cubit_to_vol_export_periodic_curved_coefficients cubit_to_vol_export_periodic_curved_vol_load
     PROPERTIES TIMEOUT 120 WORKING_DIRECTORY "${contract_out}"
     ENVIRONMENT "PATH=${contract_path};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()

@@ -4,7 +4,7 @@ End-to-end smoke test for the radia-mcp curved ``.vol`` export route.
 Exports the bundled ``gui/solver_ready_sample.jou`` through the same isolated
 worker the MCP server uses (:func:`radia_mcp.cubit.export_runner.run_export`:
 external CPython, fork NGSolve, Cubit's Python API in ``-nographics -batch``
-mode and the native ``export netgen`` plugin).  The result must then pass the
+mode and the native ``export vol`` plugin).  The result must then pass the
 production :mod:`radia.vol_check` gate used before solver initialization:
 strict labels, complete DomainIn/DomainOut ownership, NGSolve reload,
 curved-map Jacobian sampling, tetrahedral topology, CAD-sidecar metadata, and

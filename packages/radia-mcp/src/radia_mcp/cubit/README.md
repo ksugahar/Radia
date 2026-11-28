@@ -29,8 +29,8 @@ This server, the Cubit Python API/reference and the curved `.vol` worker
 belong to `radia_mcp.cubit`; the server does not import `radia`. Curved
 `.vol` export: `cubit_export_vol` plays the journal in an isolated external Python
 (`-I -B`) that loads the fork NGSolve, then Cubit with the native
-`export netgen` command plugin (`radia_cubit_export.dll`, built locally from
-`packages/radia-mcp/native/cubit_vol_export`; `plugin_dir` or
+`export vol` command plugin (`cubit_to_vol_export.dll`, built locally from
+`packages/radia-mcp/native/cubit_to_vol_export`; `plugin_dir` or
 `RADIA_CUBIT_PLUGIN_DIR`).
 `check-vol` is the `radia` console script (`radia.vol_check`).
 
@@ -249,7 +249,7 @@ build123d volume-crosscheck tools with mandatory units.
 - `server.py` - tool registration, instructions, annotation presets
 - `session.py` + `daemon.py` (batch stdio) - persistent session
 - `export_runner.py` + `vol_export.py` - isolated export worker; `kelvin.py` - Kelvin sphere
-- `native/cubit_vol_export/` (package root) - plugin sources, built locally
+- `native/cubit_to_vol_export/` (package root) - plugin sources, built locally
 - `probe_ops.py` - shared probe queries (summary/quality/per_volume/entities/labels)
 - `label_audit.py` - Cubit-free block/sideset convention audit
 - `knowledge/` - sub-modules (export, netgen_workflow, scripting, ...)

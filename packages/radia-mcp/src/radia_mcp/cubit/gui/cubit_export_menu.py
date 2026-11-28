@@ -1,11 +1,11 @@
 """
-Netgen Export menu — one-level menu-bar action + PySide6 dialogs.
+Vol Export menu — one-level menu-bar action + PySide6 dialogs.
 
-Clicking **Export Netgen** on Cubit's menu bar opens the Netgen dialog directly.
+Clicking **Export Vol** on Cubit's menu bar opens the Netgen dialog directly.
 The dialogs are PySide6 and run inside Cubit's embedded Python
 interpreter.  The Netgen action optionally adds the Kelvin open-boundary
 sphere (``kelvin.py`` of ``radia_mcp.cubit``, loaded by path), runs the
-native plugin's ``export netgen`` command and verifies the result with
+native plugin's ``export vol`` command and verifies the result with
 ``python -m radia.vol_check`` in the external interpreter named by
 ``RADIA_MCP_CUBIT_PYTHON``.  Dialogs are parented to the Cubit main window.
 
@@ -185,7 +185,7 @@ _SETTINGS_KEY = "netgen_vol"
 class ExportDialog(QDialog):
     """Netgen .vol export options dialog.
 
-    Emits the `export netgen` command and the Kelvin options.  Settings are
+    Emits the `export vol` command and the Kelvin options.  Settings are
     persisted to ``%APPDATA%/radia-mcp/export_settings.json`` under
     ``netgen_vol``.
     """
@@ -193,7 +193,7 @@ class ExportDialog(QDialog):
     def __init__(self, source_path_hint, cubit_mod, parent=None):
         super().__init__(parent)
         self._cubit = cubit_mod
-        self.setWindowTitle("Export Netgen Vol")
+        self.setWindowTitle("Export Vol")
         self.setMinimumWidth(500)
 
         layout = QVBoxLayout(self)
@@ -366,7 +366,7 @@ class ExportDialog(QDialog):
 
     # ------------------------------------------------------------------
     def cubit_command(self):
-        """Build the `export netgen` command string."""
+        """Build the `export vol` command string."""
         return export_command(self.file_path(), self.order())
 
     # ------------------------------------------------------------------
@@ -411,7 +411,7 @@ def export_command(path, order, kelvin_arguments=""):
     the plugin then writes the Kelvin pairs and needs a fresh output path.
     """
     extra = f"{kelvin_arguments} " if kelvin_arguments else ""
-    return f'export netgen "{path}" order {int(order)} {extra}overwrite'
+    return f'export vol "{path}" order {int(order)} {extra}overwrite'
 
 
 def kelvin_options(enabled, mesh_size, sym_x, sym_y, sym_z):
@@ -517,7 +517,7 @@ def verification_command(python, vol_path, report_path):
             "--format", "json", "--report-json", report_path]
 
 
-def _run_netgen_export(cubit_mod, parent):
+def _run_vol_export(cubit_mod, parent):
     """Optional Kelvin, native export, then radia.vol_check verification."""
     source_path_hint = ""
     if cubit_mod.get_volume_count() == 0:
@@ -580,7 +580,7 @@ def _run_netgen_export(cubit_mod, parent):
     if not os.path.isfile(vol_path):
         QMessageBox.warning(
             parent, "Export failed",
-            f"export netgen command did not produce:\n{vol_path}")
+            f"export vol command did not produce:\n{vol_path}")
         return
     print(f"Exported: {vol_path}")
 
@@ -735,7 +735,7 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
-def launch_netgen_export():
+def launch_vol_export():
     """Open the Netgen .vol export dialog from the menu or the toolbar.
 
     ``WorkflowToolbar`` buttons execute small Python scripts.  Those scripts
@@ -745,7 +745,7 @@ def launch_netgen_export():
     if parent is None:
         raise RuntimeError("Cubit main window is not available")
     import cubit as cubit_mod
-    return _run_netgen_export(cubit_mod, parent)
+    return _run_vol_export(cubit_mod, parent)
 
 
 # ----------------------------------------------------------------------
@@ -754,10 +754,10 @@ def launch_netgen_export():
 
 # The single top-level menu-bar action.  The toolbar template, its script
 # and the toolbar checks carry the same label.
-_MENU_LABEL = "Export Netgen (.vol)..."
-_MENU_BAR_TEXT = "&Export Netgen"
+_MENU_LABEL = "Export .vol..."
+_MENU_BAR_TEXT = "&Export Vol"
 _MENU_STATUS_TIP = "Export curved mesh with labels (.vol, order 1-5)"
-_MENU_OBJECT_NAME = "radia_mcp_export_netgen_action"
+_MENU_OBJECT_NAME = "radia_mcp_export_vol_action"
 
 # The QAction is created and owned by this module, so removing it never
 # touches Cubit-owned menu objects.
@@ -771,7 +771,7 @@ _attach_generation = 0
 def _on_export_triggered(_checked=False):
     import traceback
     try:
-        launch_netgen_export()
+        launch_vol_export()
     except Exception:
         traceback.print_exc()
 
@@ -818,9 +818,9 @@ def _deferred_attach(generation):
 
 
 def install_menu():
-    """Install a one-level "Export Netgen" entry on Cubit's menu bar.
+    """Install a one-level "Export Vol" entry on Cubit's menu bar.
 
-    Clicking **Export Netgen** opens the Netgen ``.vol`` dialog directly; there is
+    Clicking **Export Vol** opens the Netgen ``.vol`` dialog directly; there is
     no submenu.  Cubit's Claro API (``emclaro.add_to_menu``) can only add
     actions under a popup menu, so the entry is a module-owned ``QAction``
     added to the main window's ``QMenuBar``.  It is attached once now and

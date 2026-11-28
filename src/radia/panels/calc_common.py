@@ -79,7 +79,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
     Args:
         cub5_path: Optional .cub5 file to open after init.
         load_plugins: If True, set CUBIT_PLUGIN_DIR so the
-            `export netgen` command plugin is available.
+            `export vol` command plugin is available.
 
     Returns:
         cubit module (or None if Cubit unavailable)
@@ -127,7 +127,7 @@ def _clean_cubit_paths():
 
 
 def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
-    """Export Cubit mesh to NGSolve via C++ export netgen command.
+    """Export Cubit mesh to NGSolve via C++ export vol command.
 
     Args:
         cubit_mod: Cubit module (already initialized with model open)
@@ -142,7 +142,7 @@ def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
     setup_paths()
     from ngsolve import Mesh as NGMesh
     vol_path = tempfile.mktemp(suffix='.vol')
-    cubit_mod.cmd(f'export netgen "{vol_path}" order {order} overwrite')
+    cubit_mod.cmd(f'export vol "{vol_path}" order {order} overwrite')
     return NGMesh(vol_path)
 
 

@@ -22,7 +22,7 @@ Geometry (units: meters):
   GND vertex    Dirichlet (Omega = 0 at kelvin centre = "infinity")
 
 Run (Cubit Python API, batch, with the radia-mcp command plugin):
-  python mesh_and_export.py --plugin-dir <dir with radia_cubit_export.dll> [--out-dir DIR] [--orders 1,2,3]
+  python mesh_and_export.py --plugin-dir <dir with cubit_to_vol_export.dll> [--out-dir DIR] [--orders 1,2,3]
 """
 
 import argparse
@@ -37,7 +37,7 @@ cubit = None
 
 
 def init_cubit(plugin_dir, cubit_bin=None):
-    """Start headless Cubit with the radia_cubit_export plugin.
+    """Start headless Cubit with the cubit_to_vol_export plugin.
 
     Same load order as the production export worker
     (radia_mcp.cubit.vol_export): the Netgen runtime first, so the plugin
@@ -53,8 +53,8 @@ def init_cubit(plugin_dir, cubit_bin=None):
         if cubit_bin is None:
             raise SystemExit("Cubit not found: set CUBIT_BIN_DIR or pass --cubit-bin")
     plugin_dir = Path(plugin_dir).resolve()
-    if not (plugin_dir / "radia_cubit_export.dll").is_file():
-        raise SystemExit(f"radia_cubit_export.dll not found in {plugin_dir}")
+    if not (plugin_dir / "cubit_to_vol_export.dll").is_file():
+        raise SystemExit(f"cubit_to_vol_export.dll not found in {plugin_dir}")
     os.add_dll_directory(os.path.dirname(netgen.__file__))
     sys.path.append(str(cubit_bin))
     os.add_dll_directory(str(cubit_bin))
@@ -182,10 +182,10 @@ def build_and_export(out_dir, orders=(1, 2, 3),
         out_path = os.path.join(out_dir, f"sphere_1_4_p{order}.vol").replace(
             "\\", "/")
         # The plugin writes the Kelvin pairs; it needs a fresh output path.
-        cubit.cmd(f'export netgen "{out_path}" order {order} '
+        cubit.cmd(f'export vol "{out_path}" order {order} '
                   f'{export_arguments(kelvin_info)} overwrite')
         if not os.path.isfile(out_path):
-            raise RuntimeError(f"export netgen wrote no file: {out_path}")
+            raise RuntimeError(f"export vol wrote no file: {out_path}")
         saved.append(out_path)
         print(f"  Exported order={order}: {out_path}")
     return saved
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     p.add_argument("--orders", default="1,2,3")
     p.add_argument("--mesh-size", type=float, default=0.025)
     p.add_argument("--plugin-dir", default=os.environ.get("RADIA_CUBIT_PLUGIN_DIR"),
-                   help="directory holding radia_cubit_export.dll (default $RADIA_CUBIT_PLUGIN_DIR)")
+                   help="directory holding cubit_to_vol_export.dll (default $RADIA_CUBIT_PLUGIN_DIR)")
     p.add_argument("--cubit-bin", default=None)
     args = p.parse_args()
     if not args.plugin_dir:

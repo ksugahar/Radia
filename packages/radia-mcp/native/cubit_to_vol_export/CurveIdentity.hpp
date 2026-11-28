@@ -1,11 +1,11 @@
-#ifndef RADIA_CUBIT_EXPORT_CURVE_IDENTITY_HPP
-#define RADIA_CUBIT_EXPORT_CURVE_IDENTITY_HPP
+#ifndef CUBIT_TO_VOL_EXPORT_CURVE_IDENTITY_HPP
+#define CUBIT_TO_VOL_EXPORT_CURVE_IDENTITY_HPP
 
 #include <map>
 #include <stdexcept>
 #include <string>
 
-namespace radia_cubit_export {
+namespace cubit_to_vol_export {
 // The geometric EdgeNr is distinct from the 1-based descriptor table index.
 // Surface pairs are deliberately NOT keys: split smooth faces share >1 curve.
 struct CurveBinding {

@@ -33,4 +33,4 @@ nodes = cubit.get_connectivity("tet", 1)
 
 # missing-mesh-command + missing-boundary-block + missing-block-names:
 # export without a mesh command, volume block without surface block, no names
-cubit.cmd('export netgen "output.vol" order 2 overwrite')
+cubit.cmd('export vol "output.vol" order 2 overwrite')

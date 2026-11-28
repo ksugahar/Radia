@@ -2,7 +2,7 @@
 High-order volume convergence test for mixed element types.
 
 Tests:
-  1. p-convergence: export netgen .vol at order 1-5, volume must converge to CAD
+  1. p-convergence: export vol .vol at order 1-5, volume must converge to CAD
   2. mapping validity: every sampled high-order Jacobian must remain finite,
      orientation-consistent within its element, and above the production
      scaled-Jacobian floor
@@ -448,7 +448,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
     for order in range(1, 6):
         vol_path = os.path.join(OUT_DIR, f"{case_name}_o{order}.vol")
-        cmd = f'export netgen "{vol_path}" order {order} overwrite'
+        cmd = f'export vol "{vol_path}" order {order} overwrite'
         try:
             cubit.cmd(cmd)
             checked = _check_exported_vol(vol_path, order)

@@ -1,7 +1,7 @@
 """
 Cubit toolbar installer for Coreform Cubit 2026.8.
 
-Registers the Netgen Export toolbar and menu (:mod:`radia_mcp.cubit.gui`)
+Registers the Vol Export toolbar and menu (:mod:`radia_mcp.cubit.gui`)
 at Cubit startup.  Run through :mod:`radia_mcp.cubit.install`, or directly as
 ``python -m radia_mcp.cubit.toolbar_install [--all-users] [--verify-only |
 --uninstall | --build-toolbar-only]``.
@@ -37,7 +37,7 @@ _MARKER_BEGIN = "## BEGIN radia-mcp cubit toolbar"
 _MARKER_END = "## END radia-mcp cubit toolbar"
 
 _PRODUCT_DIR = "radia-mcp"
-_TOOLBAR_NAME = "netgen_export_toolbar"
+_TOOLBAR_NAME = "vol_export_toolbar"
 _TOOLBAR_FILE = _TOOLBAR_NAME + ".ttb"
 _OWNED_TOOLBAR_SUFFIXES = ("/" + _TOOLBAR_FILE,)
 
@@ -230,8 +230,8 @@ def _toolbar_expected_files(install_dir):
     source = panels_dir / "cubit_toolbar"
     pairs = []
     for relative in (
-        "scripts/export_netgen.py",
-        "icons/netgen_export.svg",
+        "scripts/export_vol.py",
+        "icons/vol_export.svg",
     ):
         pairs.append((source / relative, install_dir / relative))
     pairs.append((
@@ -666,7 +666,7 @@ def verify_panel_installation(all_users=False, verbose=True):
 
 
 def install_panels(all_users=False):
-    """Register the Netgen Export toolbar for Cubit 2026.8."""
+    """Register the Vol Export toolbar for Cubit 2026.8."""
     print("=== Coreform Cubit - Panel Installer ===\n")
 
     panels_dir = _get_panels_dir()
@@ -779,7 +779,7 @@ def install_panels(all_users=False):
 
 
 def uninstall_panels(all_users=False):
-    """Remove the Netgen Export toolbar registration."""
+    """Remove the Vol Export toolbar registration."""
     print("=== Coreform Cubit - Panel Uninstaller ===\n")
     for ini_path in _get_cubit_ini_paths(all_users=all_users):
         _unregister_official_toolbar(ini_path)
@@ -819,7 +819,7 @@ def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(
         prog="python -m radia_mcp.cubit.toolbar_install", allow_abbrev=False,
-        description="Register the Netgen Export toolbar and menu at Cubit startup.")
+        description="Register the Vol Export toolbar and menu at Cubit startup.")
     parser.add_argument("--all-users", action="store_true",
                         help="every existing profile plus Default (requires admin)")
     mode = parser.add_mutually_exclusive_group()

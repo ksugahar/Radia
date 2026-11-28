@@ -1130,7 +1130,7 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
     NGSolve 6.2.2607, see docs/ngsolve_integration/curve_order.md and
     tests/test_curve_order_contract.py):
 
-    * CAD-less .vol (Cubit ``export netgen ... order N``), fresh process:
+    * CAD-less .vol (Cubit ``export vol ... order N``), fresh process:
       every k gives the FLAT polytope while GetCurveOrder() reports k
       (a curved order-2 hex ball: DtN floor ~320x worse, NGSolve 6.2.2604).
     * CAD-less .vol after another geometry-bearing mesh was loaded in the same
@@ -1156,7 +1156,7 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
         ".Curve(); load with radia.mesh_curve.load_vol(path) and use "
         "radia.mesh_curve.ensure_curve_order(mesh, k) if a higher order is required "
         "(only a Netgen/OCC .vol with embedded CAD can be curved later), or bake the "
-        "order into the export (Cubit: export netgen ... order N). "
+        "order into the export (Cubit: export vol ... order N). "
         "See docs/ngsolve_integration/curve_order.md."
     )
     msg_chain = (
@@ -1225,7 +1225,7 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
 def check_vol_mesh_into_curved_route(filepath: str, lines: List[str]) -> List[Dict]:
     """HIGH: a plain ``Mesh(".vol")`` passed to a call that asks for ``curve_order``.
 
-    Netgen binds a ``.vol`` that stores no CAD (Cubit ``export netgen``) to the
+    Netgen binds a ``.vol`` that stores no CAD (Cubit ``export vol``) to the
     most recent geometry of the process, from ``GenerateMesh`` or any earlier
     geometry-bearing file; curving it then projects onto that foreign shape or
     crashes inside ``Curve``. A Cubit export cannot gain curvature after export
@@ -1239,7 +1239,7 @@ def check_vol_mesh_into_curved_route(filepath: str, lines: List[str]) -> List[Di
         "curve_order. A CAD-free .vol (Cubit export) borrows the process's last "
         "geometry, so curving it uses another shape or crashes; and a Cubit export "
         "cannot be curved after export. Load it with radia.mesh_curve.load_vol(path); "
-        "for a Cubit mesh export the order you need (export netgen ... order N). "
+        "for a Cubit mesh export the order you need (export vol ... order N). "
         "See docs/ngsolve_integration/curve_order.md."
     )
     pathvar_pat = re.compile(r'(\w+)\s*=\s*[rfb]*["\'][^"\']*\.vol(?:\.gz)?\b', re.IGNORECASE)

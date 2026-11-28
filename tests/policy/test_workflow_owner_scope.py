@@ -462,11 +462,11 @@ def test_fork_wheel_lock_changes_rerun_the_native_cubit_export_job():
     impact = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(impact)
     workflow = (ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8")
-    native = re.search(r"grep -qE '([^']*cubit_vol_export[^']*)' <<<\"\$files\"", workflow)
+    native = re.search(r"grep -qE '([^']*cubit_to_vol_export[^']*)' <<<\"\$files\"", workflow)
     assert native, "native_cubit_export scope regex not found in radia-mcp-matrix.yml"
     native_re = re.compile(native.group(1))
     inputs = ["tools/ci_fork_wheels.py", "tools/ci_fork_wheels.json",
-              "packages/radia-mcp/native/cubit_vol_export/CMakeLists.txt"]
+              "packages/radia-mcp/native/cubit_to_vol_export/CMakeLists.txt"]
     lane = {path: impact.lane_required("radia-mcp-matrix", {path}, None, MANIFEST) for path in inputs}
     scope = {path: bool(native_re.search(path)) for path in inputs}
     assert all(required for required, _ in lane.values()), lane

@@ -427,7 +427,7 @@ iron. The coil is therefore not a current explanation for the discrepancy.
 
 The corrected Cubit/ACIS solid measured 1,446,095.333333 mm3, equal to the
 analytic volume at the reported precision, with the intended bounding box and
-ten planar faces. `export netgen` preserved that volume to about 1.5e-12%, and
+ten planar faces. `export vol` preserved that volume to about 1.5e-12%, and
 `check-vol` reported no errors.
 
 The review also measured a 14-solid STEP for which
@@ -630,7 +630,7 @@ solution representation; it must not weaken the field gate.
    evaluating only the coil field. That result is invalid and must not be
    reused.
 6. The Cubit MCP disconnection was ultimately traced to an expired Cubit
-   license, not an `export netgen` crash.
+   license, not an `export vol` crash.
 
 ### 5.1 ESRF #3 material-operator PSD boundary (2026-09-04)
 

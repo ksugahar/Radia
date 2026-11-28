@@ -4867,7 +4867,7 @@ def cubit_boundary_layer_journal_recovery_gate(summary: Mapping[str, object]) ->
         "one_surface_volume_pair_per_command": bool(pair_flags) and all(pair_flags),
         "four_stage_timing_per_candidate": bool(timings_are_four_stage)
         and all(timings_are_four_stage),
-        "block_registered_netgen_export": summary.get("block_registered_netgen_export") is True,
+        "block_registered_vol_export": summary.get("block_registered_vol_export") is True,
         "all_live_processes_closed_with_fresh_artifacts": len(process_checks) == len(candidates)
         and bool(process_checks)
         and all(process_checks),

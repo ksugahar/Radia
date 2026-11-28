@@ -1,10 +1,10 @@
-"""High-order CURVED HEX mesh in NGSolve -- the Cubit `export netgen` capability.
+"""High-order CURVED HEX mesh in NGSolve -- the Cubit `export vol` capability.
 
 Coreform Cubit meshes a sphere with HEXES ('volume scheme sphere') and exports a
 high-order Netgen .vol (order 1/2/3) via the plugin command
 
     block 1 add hex all
-    export netgen "hexsph_oN.vol" order N overwrite
+    export vol "hexsph_oN.vol" order N overwrite
 
 NGSolve loads the .vol directly and integrates the volume; as the element order rises
 the curved hex boundary captures the sphere and the volume converges to 4/3 pi r^3:
@@ -14,7 +14,7 @@ the curved hex boundary captures the sphere and the volume converges to 4/3 pi r
     order 3 (curved hex)   :  ~ +0.1 %
 
 That is high-order *hexahedral* FEM geometry inside NGSolve -- which the Netgen mesher
-alone does not provide (it curves tetrahedra).  See packages/radia-mcp/native/cubit_vol_export.
+alone does not provide (it curves tetrahedra).  See packages/radia-mcp/native/cubit_to_vol_export.
 
 GOTCHA (important): a high-order .vol already carries its curved mid-side nodes.  Load
 it with plain ``Mesh(path)`` and DO NOT call ``mesh.Curve()`` -- ``mesh.Curve(p)``

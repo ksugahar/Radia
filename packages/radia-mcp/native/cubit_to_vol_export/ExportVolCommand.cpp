@@ -1,4 +1,4 @@
-#include "ExportNetgenCommand.hpp"
+#include "ExportVolCommand.hpp"
 #include "MeshData.hpp"
 #include "LearnEditionMessageFilter.hpp"
 #include "CubitInterface.hpp"
@@ -123,14 +123,14 @@ static double surface_descriptor_mesh_area(netgen::Mesh &mesh, int descriptor)
   return area;
 }
 
-ExportNetgenCommand::ExportNetgenCommand() {}
-ExportNetgenCommand::~ExportNetgenCommand() {}
+ExportVolCommand::ExportVolCommand() {}
+ExportVolCommand::~ExportVolCommand() {}
 
-std::vector<std::string> ExportNetgenCommand::get_syntax()
+std::vector<std::string> ExportVolCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "export netgen <string:label='filename',help='<filename>'> "
+    "export vol <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
     "[overwrite] "
     "[periodic_name <string:label='periodic_name'>] "
@@ -150,16 +150,16 @@ std::vector<std::string> ExportNetgenCommand::get_syntax()
   return syntax_list;
 }
 
-std::vector<std::string> ExportNetgenCommand::get_syntax_help()
+std::vector<std::string> ExportVolCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]\n"
+    "export vol \"filename.vol\" [order {1|2|3|4|5}] [overwrite]\n"
   );
   return help;
 }
 
-std::vector<std::string> ExportNetgenCommand::get_help()
+std::vector<std::string> ExportVolCommand::get_help()
 {
   std::vector<std::string> help;
   help.push_back(
@@ -181,12 +181,12 @@ std::vector<std::string> ExportNetgenCommand::get_help()
   return help;
 }
 
-bool ExportNetgenCommand::execute(CubitCommandData &data)
+bool ExportVolCommand::execute(CubitCommandData &data)
 {
   // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.
   // The exporter bypasses the cap and completes successfully, so
   // the ERROR line is misleading noise confusing users in logs.
-  radia_cubit_export::ScopedLearnEditionFilter _lef_guard;
+  cubit_to_vol_export::ScopedLearnEditionFilter _lef_guard;
 
   auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -204,7 +204,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     return false;
   }
 
-  radia_cubit_export::NamedPeriodicContract periodic;
+  cubit_to_vol_export::NamedPeriodicContract periodic;
   std::string periodic_patch_text;
   const bool periodic_fields[] = {
       data.get_string("periodic_name", periodic.name),
@@ -245,8 +245,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   const bool named_output = has_periodic || has_kelvin;
   if (has_kelvin) {
     try {
-      radia_cubit_export::require_fresh_named_periodic_output(
-          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename)));
+      cubit_to_vol_export::require_fresh_named_periodic_output(
+          cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename)));
     } catch (const std::exception &error) {
       PRINT_ERROR("Kelvin export rejected: %s\n", error.what());
       return false;
@@ -254,8 +254,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
   if (has_periodic) {
     try {
-      radia_cubit_export::require_fresh_named_periodic_output(
-          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename)));
+      cubit_to_vol_export::require_fresh_named_periodic_output(
+          cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename)));
       std::istringstream patches(periodic_patch_text);
       std::string patch;
       while (std::getline(patches, patch, ',')) {
@@ -276,7 +276,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       return false;
     }
   }
-  radia_cubit_export::NamedPeriodicResult periodic_result;
+  cubit_to_vol_export::NamedPeriodicResult periodic_result;
 
   // Extract linear mesh from Cubit (MeshData)
   MeshData md;
@@ -760,7 +760,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
   if (has_kelvin) {
     try {
-      periodic = radia_cubit_export::kelvin_periodic_contract(
+      periodic = cubit_to_vol_export::kelvin_periodic_contract(
           *ng_mesh, kelvin_translation, kelvin_match);
     } catch (const std::exception &error) {
       PRINT_ERROR("Kelvin pairing rejected: %s\n", error.what());
@@ -769,7 +769,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
   if (named_output) {
     try {
-      periodic_result = radia_cubit_export::apply_named_periodic_identification(*ng_mesh, periodic);
+      periodic_result = cubit_to_vol_export::apply_named_periodic_identification(*ng_mesh, periodic);
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic export rejected: %s\n", error.what());
       return false;
@@ -790,7 +790,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
   if (!named_output) {
-    radia_cubit_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
+    cubit_to_vol_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
   }
 
   int ne = ng_mesh->GetNE();
@@ -961,12 +961,12 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   };
   if (named_output) {
     try {
-      radia_cubit_export::save_named_periodic_bundle(
+      cubit_to_vol_export::save_named_periodic_bundle(
           *ng_mesh, u8_string_to_path(filename), write_companion);
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic bundle publication failed: %s\n", error.what());
-      PRINT_ERROR("%s\n", radia_cubit_export::named_periodic_retry_guidance(
-          radia_cubit_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
+      PRINT_ERROR("%s\n", cubit_to_vol_export::named_periodic_retry_guidance(
+          cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
       return false;
     }
   } else {

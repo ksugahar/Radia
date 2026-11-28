@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace radia_cubit_export {
+namespace cubit_to_vol_export {
 
 // Missing topology reports its identity instead of an opaque map::at failure.
 template <class Key, class Value>
@@ -104,5 +104,5 @@ inline std::vector<PeriodicCurvedTransfer> synchronize_periodic_curvature(
   return plan;
 }
 
-} // namespace radia_cubit_export
+} // namespace cubit_to_vol_export
 #endif

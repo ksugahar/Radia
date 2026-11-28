@@ -205,7 +205,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
 
 ## Cubit Workflow: Offset Spheres (3D with .vol export)
 
-For Cubit-based meshes exported via `export netgen`.
+For Cubit-based meshes exported via `export vol`.
 Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
 
 ### Step-by-step procedure
@@ -240,7 +240,7 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
    - sideset "kelvin_ext": exterior sphere surface (kelvin boundary)
    - These MUST be set explicitly in the .py -- offset spheres do not share
      a face, so DomainIn/DomainOut auto-detection does NOT work
-10. export netgen ... kelvin_tx/ty/tz <offset> kelvin_match <d>:
+10. export vol ... kelvin_tx/ty/tz <offset> kelvin_match <d>:
     - C++ reads bc names "kelvin_int" / "kelvin_ext" from sidesets
     - Each kelvin_int patch must have exactly one kelvin_ext patch that is
       its translated copy by the given offset (one-to-one, all used)
@@ -1542,7 +1542,7 @@ Then attach the scalar gauge with
 `radia.kelvin_geometry.ground_kelvin_scalar_mesh(mesh, info["center"])`.
 
 **Cubit**: `add_kelvin_cubit()` makes the Kelvin surface a translated mesh
-copy, and `export netgen ... kelvin_tx/ty/tz <offset> kelvin_match <d>`
+copy, and `export vol ... kelvin_tx/ty/tz <offset> kelvin_match <d>`
 (`radia_mcp.cubit.kelvin.export_arguments(info)`) labels the air|kelvin
 interface `kelvin_int`, the outer Kelvin boundary `kelvin_ext`, and writes
 every `kelvin_int` -> `kelvin_ext` point pair as the periodic group `kelvin`.
@@ -1577,7 +1577,7 @@ if n_coupled == 0:
         "Periodic BC NOT working! FreeDofs unchanged. "
         "Check: (1) Identify() before GenerateMesh/Glue, "
         "(2) sideset names kelvin_int/kelvin_ext in .jou, "
-        "(3) export netgen wrote identification pairs.")
+        "(3) export vol wrote identification pairs.")
 ```
 
 Typical: ~2-5% of DOFs are coupled (boundary DOFs on the Kelvin spheres).
@@ -3485,7 +3485,7 @@ checked artifacts through the existing tools; it does not implement a second
 mesher or coefficient repair pipeline.
 
 Consult `cubit_docs(topic="export_curved")` (named periodic export) and the
-deployed `radia_cubit_export.dll` provenance before selecting that producer route.
+deployed `cubit_to_vol_export.dll` provenance before selecting that producer route.
 The named-curved integration contract is one translation, name `kt`, group 1,
 type PERIODIC, for polynomial q1/q2/q3 tetrahedra with linear triangular/tetrahedral
 connectivity. This contract is not a claim that an older installed exporter has

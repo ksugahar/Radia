@@ -108,7 +108,7 @@ mesh curve order does NOT close it:
   in this path because the in-memory surface extraction
   (``_extract_surface_mesh_filtered``) strips the CAD/curvedelements
   association, so there is no geometry to project the mid-side nodes onto.
-  Raising geometry order would require a Cubit ``export netgen ... order N``
+  Raising geometry order would require a Cubit ``export vol ... order N``
   surface ``.vol`` loaded directly.
   UPDATE 2026-09-21: the coil path no longer extracts.  The volume ``.vol``
   is passed whole and ``compute_inductance_source_sink`` compresses the

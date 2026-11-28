@@ -2,7 +2,7 @@
 
 The generated order-2 Netgen ``.vol`` is temporary input for
 ``validate_curved_hex_bdm2_cubit.py``.  Cubit/ACIS owns the cylinder geometry
-and ``export netgen`` (``radia_mcp.cubit``) owns the high-order node placement.  No mesh artifact
+and ``export vol`` (``radia_mcp.cubit``) owns the high-order node placement.  No mesh artifact
 is tracked in Git.
 """
 
@@ -47,7 +47,7 @@ def build(output: Path) -> Path:
             "canonical curved-cylinder mesh must contain exactly 4 HEX cells "
             f"(got {cubit.get_hex_count()})"
         )
-    cubit.cmd(f'export netgen "{output}" order 2 overwrite')
+    cubit.cmd(f'export vol "{output}" order 2 overwrite')
     if not output.is_file():
         raise RuntimeError(f"Cubit did not create {output}")
     return output

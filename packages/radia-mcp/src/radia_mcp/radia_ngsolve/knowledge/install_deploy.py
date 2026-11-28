@@ -87,7 +87,7 @@ during every release. Never claim an unqueried client is live-verified.
 ## cubit
 
 radia-mcp owns Cubit MCP and the curved `.vol` worker (`cubit_export_vol`,
-the native `export netgen` plugin built locally from `native/cubit_vol_export`,
+the native `export vol` plugin built locally from `native/cubit_to_vol_export`,
 run in an isolated external Python); the `.ccm` toolbar is retired. Use `check-vol` after export. Normal Radia Python does
 not depend on PySide or Qt. SAT and STEP are CAD interchange inputs; checked
 `.vol` is the solver boundary.

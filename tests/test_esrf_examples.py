@@ -340,7 +340,7 @@ def test_manifest_preserves_physical_coil_source_without_meshing(number, tmp_pat
     journal = Path(manifest["journal"]).read_text(encoding="utf-8")
     if number == 2:
         assert "mesh volume" not in journal
-        assert "export netgen" not in journal
+        assert "export vol" not in journal
     else:
         assert "coil.step" not in journal
 
@@ -376,7 +376,7 @@ def test_example3_cubit_export_separates_response_and_fixed_pm_source_meshes(tmp
     ).read_text(encoding="utf-8")
     assert 'block 1 name "pm_000"' in source_journal
     assert 'block 24 name "pm_023"' in source_journal
-    assert 'export netgen "' in source_journal
+    assert 'export vol "' in source_journal
     assert "magnet_source.vol" in source_journal
 
 
@@ -405,7 +405,7 @@ def test_source_only_example2_has_no_solver_volume_mesh(tmp_path):
     assert manifest["solver_vol"] is None
     assert "coil.step" in journal
     assert "mesh volume" not in journal
-    assert "export netgen" not in journal
+    assert "export vol" not in journal
 
 
 @pytest.mark.parametrize("number", range(1, 8))

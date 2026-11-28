@@ -13,4 +13,4 @@ assert cubit.parse_cubit_list("tet", "all"), "missing tetrahedra"
 cmd("block 1 add volume 1")
 cmd('block 1 name "body"')
 cmd('save as "model.cub5"')
-cmd('export netgen "order2.vol" order 2')
+cmd('export vol "order2.vol" order 2')

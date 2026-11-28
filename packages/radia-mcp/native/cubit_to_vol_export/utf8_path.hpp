@@ -18,7 +18,7 @@
 // non-Windows builds the std::string path is passed through unchanged.
 //
 // Observed 2026-04-21 with a path holding Japanese characters
-// failing every `export netgen` call.
+// failing every `export vol` call.
 
 #include <filesystem>
 #include <string>

@@ -41,7 +41,7 @@ artifact: `validation_axisymmetric_to_3d_vol_force_summary.json` and
 `validation_axisymmetric_to_3d_vol_force_ready.json`.  It generates or reuses a
 Netgen `.vol`, reloads it with NGSolve, integrates `J x B` over the 3D target
 torus, and then runs the same axisymmetric-to-3D gate.  It also writes the
-equivalent Cubit journal so a Coreform Cubit `export netgen` mesh can replace
+equivalent Cubit journal so a Coreform Cubit `export vol` mesh can replace
 the default Netgen/OCC mesh when a Cubit license is available.
 
 For magnetic material acting on magnetic material, use

@@ -101,7 +101,7 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   // SNAPSHOT user-defined blocks BEFORE calling iface->get_block_list.
   //
   // BUG (2026-05-30, six-turn coil loft model):
-  //   `export netgen` errors with "ERROR: No block with ID 2 was
+  //   `export vol` errors with "ERROR: No block with ID 2 was
   //   found" AND leaves a phantom block 2 in the Cubit session.
   //
   // Cause: MeshExportInterface::get_block_list returns Cubit's internal
@@ -110,9 +110,9 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   // iface->id_from_handle(block) on that handle MATERIALISES the
   // phantom block in Cubit's database as a real block (id ~ N+1 where N
   // is the user's max block id).  So:
-  //   1. ExportNetgenCommand calls `parse_cubit_list("block", "all")`
+  //   1. ExportVolCommand calls `parse_cubit_list("block", "all")`
   //      AFTER extract_elements -- the phantom is already in the list.
-  //   2. The skip check at ExportNetgenCommand:866
+  //   2. The skip check at ExportVolCommand:866
   //      (`if (cubit_block_set.find(bid) == end)`) does NOT fire.
   //   3. parse_cubit_list("volume", "in block N+1") errors because the
   //      phantom block has no volume membership.

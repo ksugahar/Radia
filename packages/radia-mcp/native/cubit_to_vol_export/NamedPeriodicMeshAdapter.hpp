@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace radia_cubit_export {
+namespace cubit_to_vol_export {
 
 // External point and descriptor numbers use the VOL format's one-based scheme.
 inline netgen::PointIndex periodic_point_index(int number)
@@ -44,5 +44,5 @@ inline std::string periodic_boundary_label(const netgen::Mesh &mesh, int bc)
   return label;
 }
 
-} // namespace radia_cubit_export
+} // namespace cubit_to_vol_export
 #endif

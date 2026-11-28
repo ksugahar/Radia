@@ -323,7 +323,7 @@ def solve_fem(vol_file="", fes_order=1,
     if fes_order > curve_order:
         return {
             "error": f"fes_order ({fes_order}) > mesh curve_order ({curve_order}). "
-                     f"Re-export .vol with 'export netgen ... order {fes_order}' "
+                     f"Re-export .vol with 'export vol ... order {fes_order}' "
                      f"or use --fes-order {curve_order}."
         }
     _log(f"MESH:curve_order={curve_order}, fes_order={fes_order}")
@@ -368,7 +368,7 @@ def solve_fem(vol_file="", fes_order=1,
         except ValueError as exc:
             return {"error":
                     f"Mesh has 'kelvin' material but no usable Kelvin pairs: "
-                    f"{exc}. Export it with the Kelvin pairs: export netgen "
+                    f"{exc}. Export it with the Kelvin pairs: export vol "
                     f"... kelvin_tx/ty/tz <offset> kelvin_match <distance> "
                     f"(radia_mcp.cubit.kelvin.export_arguments(info) after "
                     f"add_kelvin_cubit)."}
@@ -1851,7 +1851,7 @@ def main():
                 return {"error":
                         f"--require-kelvin: .vol has 'kelvin' material but "
                         f"no usable Kelvin pairs: {exc}. Export it with the "
-                        f"Kelvin pairs (export netgen ... kelvin_tx/ty/tz "
+                        f"Kelvin pairs (export vol ... kelvin_tx/ty/tz "
                         f"kelvin_match)."}
         return solve_fem(
             vol_file=args.vol,

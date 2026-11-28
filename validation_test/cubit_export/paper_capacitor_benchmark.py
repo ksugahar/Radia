@@ -69,7 +69,7 @@ def solve(mesh: Mesh, order: int) -> dict:
 
 def journal(run_dir: Path) -> str:
     exports = "\n".join(
-        f'export netgen "{(run_dir / f"capacitor_o{p}.vol").as_posix()}" order {p} overwrite'
+        f'export vol "{(run_dir / f"capacitor_o{p}.vol").as_posix()}" order {p} overwrite'
         for p in ORDERS
     )
     return (

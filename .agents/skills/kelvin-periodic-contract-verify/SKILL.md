@@ -30,6 +30,6 @@ or a post-hoc helper to make a missing or inconsistent contract pass.
    differences fail. Preserve the evidence and fix the producer; never widen
    a matching distance or silently reconstruct identifications in the consumer.
 
-The native `export netgen` command requires all periodic fields explicitly.
+The native `export vol` command requires all periodic fields explicitly.
 Ordinary exports without that request do not imply periodic solver readiness.
 Native builds and licensed exports use their separately admitted resource frame.

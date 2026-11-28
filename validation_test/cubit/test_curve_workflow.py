@@ -1,17 +1,17 @@
-"""Cubit 2025.12 -> export netgen -> NGSolve high-order workflow."""
+"""Cubit 2025.12 -> export vol -> NGSolve high-order workflow."""
 
 import math
 
 from ngsolve import BND, CF, Integrate, TaskManager
 
 from validation_test.cubit.cubit_202512_helpers import (
-    export_netgen,
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
 
 
-def test_cylinder_export_netgen_orders_have_reasonable_geometry():
+def test_cylinder_export_vol_orders_have_reasonable_geometry():
     cubit = init_cubit()
     radius = 0.5
     height = 2.0
@@ -30,7 +30,7 @@ def test_cylinder_export_netgen_orders_have_reasonable_geometry():
 
     errors = {}
     for order in (1, 2, 3):
-        mesh = load_ngsolve_mesh(export_netgen(cubit, "cylinder", order=order))
+        mesh = load_ngsolve_mesh(export_vol(cubit, "cylinder", order=order))
         with TaskManager():
             area = Integrate(CF(1), mesh, VOL_or_BND=BND)
             volume = Integrate(CF(1), mesh)

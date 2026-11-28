@@ -22,4 +22,4 @@ for kind in ("hex", "tet", "pyramid"):
 cmd("block 1 add volume all")
 cmd('block 1 name "body"')
 cmd('save as "model.cub5"')
-cmd('export netgen "order2.vol" order 2')
+cmd('export vol "order2.vol" order 2')

@@ -8,12 +8,12 @@ Coreform engine and license checkout during pytest collection.
 Use Cubit's APREPRO export command for Netgen/NGSolve meshes:
 
 ```python
-cubit.cmd('export netgen "model.vol" order 2 overwrite')
+cubit.cmd('export vol "model.vol" order 2 overwrite')
 ```
 
 The old top-level Python helpers such as `extract_curved_mesh`,
 `extract_mesh_data`, and `export_netgen()` are retired from the public API.
-Curving happens inside the `radia_cubit_export.dll` command plugin; there is
+Curving happens inside the `cubit_to_vol_export.dll` command plugin; there is
 no Python curving module.
 
 ## Running Tests

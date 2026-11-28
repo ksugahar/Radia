@@ -383,14 +383,14 @@ Returns `(geometry, info)` where info contains `center`, `R_K`,
    block 2 add volume 2; block 2 name "kelvin"
    ```
 
-7. **Export** — `export netgen` automatically detects `air`+`kelvin`
+7. **Export** — `export vol` automatically detects `air`+`kelvin`
    blocks and creates periodic identification + `kelvin_int`/`kelvin_ext`
    boundary labels
    ```
-   export netgen "model.vol" order 3 overwrite
+   export vol "model.vol" order 3 overwrite
    ```
 
-### 5.2 Auto-Detection in export netgen
+### 5.2 Auto-Detection in export vol
 
 When blocks named `air` and `kelvin` are present, the C++ plugin:
 - Labels the shared air|kelvin interface as `kelvin_int`
@@ -409,7 +409,7 @@ or silent inaccuracy.
 
 ### 5.4 PEEC Coil Source (peec block)
 
-When a block named `peec` is present, `export netgen` automatically:
+When a block named `peec` is present, `export vol` automatically:
 - Exports the peec block's volumes as a STEP file (`model_peec.step`)
 - Records the path in the companion JSON (`"peec_step": "model_peec.step"`)
 - The peec volume is **not meshed** — it is excluded from the .vol
@@ -451,7 +451,7 @@ block 3 add volume 3
 block 3 name "peec"
 
 # Export → model.vol + model_peec.step
-export netgen "model.vol" order 2 overwrite
+export vol "model.vol" order 2 overwrite
 ```
 
 #### Python Solve

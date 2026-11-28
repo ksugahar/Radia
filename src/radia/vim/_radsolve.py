@@ -155,7 +155,7 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     """Build a soft-iron Radia container from a netgen ``.vol`` FILE -- the canonical, correctly
     oriented geometry interchange for the HDiv-VIM demag backend.
 
-    ``.vol`` is the SOLE Cubit<->NGSolve mesh interchange (Cubit ``export netgen`` / Netgen / OCC
+    ``.vol`` is the SOLE Cubit<->NGSolve mesh interchange (Cubit ``export vol`` / Netgen / OCC
     ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
     breaks the HDiv surface charge).  Pure TET / HEX / WEDGE irons solve on the registered mesh by

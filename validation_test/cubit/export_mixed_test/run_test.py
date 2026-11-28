@@ -1,4 +1,4 @@
-"""Sphere p-sweep: export netgen at orders 1-5 and check-vol every .vol.
+"""Sphere p-sweep: export vol at orders 1-5 and check-vol every .vol.
 
 Plays sphere_p_convergence.jou through Cubit's Python API (batch,
 nographics) with the Radia command plugin loaded the same way as the
@@ -8,7 +8,7 @@ companion .vol.json written by the same export). Exit 1 on any missing or
 stale file, failed check, unevaluated CAD measure or nonfinite error.
 
 Usage:
-    python run_test.py --command-plugin-dir <dir with radia_cubit_export.dll> [--cubit-bin <Cubit bin dir>]
+    python run_test.py --command-plugin-dir <dir with cubit_to_vol_export.dll> [--cubit-bin <Cubit bin dir>]
 """
 
 import argparse

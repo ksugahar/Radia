@@ -3,7 +3,7 @@
 Demonstrates the full near-field-source production pipeline:
 
   1. Cubit headless: create sphere mesh, mark "nfs_surface" sideset,
-     `export netgen` -> inner_mesh.vol
+     `export vol` -> inner_mesh.vol
   2. NGSolve: load inner_mesh.vol; sample analytic magnetic-dipole
      H field on its VectorH1 space; save as H_inner.sol
   3. Subprocess: invoke the CLI
@@ -116,7 +116,7 @@ def step1_cubit_mesh():
         print(f"  cubit Python module import failed: {e}  -- SKIP")
         return False
 
-    # Match the working test pattern from tests/cubit/test_export_netgen_cmd.py
+    # Match the working test pattern from tests/cubit/test_export_vol_cmd.py
     # (no -nographics; -commandplugindir + env var both set).
     try:
         cubit.init(["cubit", "-nojournal", "-batch",
@@ -126,7 +126,7 @@ def step1_cubit_mesh():
         return False
     print(f"  CUBIT_PLUGIN_DIR = {os.environ.get('CUBIT_PLUGIN_DIR')}")
     print(f"  plugin .ccm exists: "
-          f"{Path(plugin_dir, 'radia_cubit_export.dll').exists()}")
+          f"{Path(plugin_dir, 'cubit_to_vol_export.dll').exists()}")
 
     cubit.cmd("reset")
     cubit.cmd("create sphere radius 0.5")
@@ -146,7 +146,7 @@ def step1_cubit_mesh():
     if INNER_VOL.exists():
         INNER_VOL.unlink()
     try:
-        cubit.cmd(f'export netgen "{vol_path}" order 1')
+        cubit.cmd(f'export vol "{vol_path}" order 1')
     except SyntaxError:
         print("  NOTE: export keyword not registered on Cubit 2025.12")
         print("  (plugin .ccm loads but commands fail to register; needs")
@@ -154,7 +154,7 @@ def step1_cubit_mesh():
         print("  to OCC mesh path.")
         return False
     if not INNER_VOL.exists():
-        print(f"  ERROR: export netgen did not produce {INNER_VOL}")
+        print(f"  ERROR: export vol did not produce {INNER_VOL}")
         return False
     size_kb = INNER_VOL.stat().st_size // 1024
     print(f"  Exported {INNER_VOL.name}  ({size_kb} KB)")

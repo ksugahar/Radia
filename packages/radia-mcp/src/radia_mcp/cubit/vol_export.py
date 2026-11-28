@@ -1,4 +1,4 @@
-"""Curved Netgen ``.vol`` export worker: Cubit plus the native ``export netgen`` plugin.
+"""Curved Netgen ``.vol`` export worker: Cubit plus the native ``export vol`` plugin.
 
 Runs in an isolated external CPython (``python -I -B -m
 radia_mcp.cubit.vol_export``), never inside the MCP server or Cubit's embedded
@@ -7,11 +7,11 @@ Python.  Order of operations:
 1. ``import ngsolve`` first, so the fork nglib the plugin was built against is
    the one already loaded in the process;
 2. add the Netgen package and Cubit ``bin`` directories to the DLL search path;
-3. point ``CUBIT_PLUGIN_DIR`` at the directory holding ``radia_cubit_export.dll``;
+3. point ``CUBIT_PLUGIN_DIR`` at the directory holding ``cubit_to_vol_export.dll``;
 4. ``import cubit`` and ``cubit.init([... '-noinitfile'])``;
 5. play the journal line by line;
 6. optionally add the Kelvin open-boundary sphere (:mod:`radia_mcp.cubit.kelvin`);
-7. ``export netgen "<out>" order <p> [periodic or Kelvin args] overwrite``;
+7. ``export vol "<out>" order <p> [periodic or Kelvin args] overwrite``;
    after the Kelvin step the command carries ``kelvin.export_arguments(info)``
    and the plugin writes the ``kelvin`` periodic group (fresh output only).
 
@@ -30,14 +30,14 @@ import time
 import traceback
 from pathlib import Path
 
-PLUGIN_DLL = "radia_cubit_export.dll"  # same name as layout.COMMAND_PLUGIN
+PLUGIN_DLL = "cubit_to_vol_export.dll"  # same name as layout.COMMAND_PLUGIN
 PERIODIC_FIELDS = ("periodic_name", "periodic_master", "periodic_slave", "periodic_unit",
                    "periodic_patches", "periodic_tx", "periodic_ty", "periodic_tz", "periodic_match")
 _PERIODIC_TEXT = {"periodic_name", "periodic_master", "periodic_slave", "periodic_unit", "periodic_patches"}
 
 
 def periodic_arguments(periodic: dict | None) -> str:
-    """Render the named periodic request as ``export netgen`` arguments (all nine or none)."""
+    """Render the named periodic request as ``export vol`` arguments (all nine or none)."""
     if not periodic:
         return ""
     unknown = set(periodic) - set(PERIODIC_FIELDS)
@@ -58,7 +58,7 @@ def periodic_arguments(periodic: dict | None) -> str:
 def export_command(out: Path, order: int, periodic: dict | None, kelvin: str = "") -> str:
     """``kelvin`` is ``radia_mcp.cubit.kelvin.export_arguments(info)`` for a Kelvin mesh."""
     extra = " ".join(part for part in (periodic_arguments(periodic), kelvin) if part)
-    return f'export netgen "{out.as_posix()}" order {int(order)} ' + (extra + " " if extra else "") + "overwrite"
+    return f'export vol "{out.as_posix()}" order {int(order)} ' + (extra + " " if extra else "") + "overwrite"
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -105,11 +105,11 @@ def run(args: argparse.Namespace) -> dict:
         command = export_command(out, args.order, None, _kelvin.export_arguments(kelvin_info))
     cubit.cmd(command)
     if not out.is_file():
-        raise RuntimeError(f"export netgen wrote no file: {command}")
+        raise RuntimeError(f"export vol wrote no file: {command}")
     companion_path = Path(str(out) + ".json")
     companion = json.loads(companion_path.read_text(encoding="utf-8")) if companion_path.is_file() else None
     if companion is None:
-        raise RuntimeError(f"export netgen wrote no companion JSON: {companion_path}")
+        raise RuntimeError(f"export vol wrote no companion JSON: {companion_path}")
     return {"status": "ok", "vol": str(out), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
             "companion_json": str(companion_path), "companion": companion,
             "companion_sha256": hashlib.sha256(companion_path.read_bytes()).hexdigest(),

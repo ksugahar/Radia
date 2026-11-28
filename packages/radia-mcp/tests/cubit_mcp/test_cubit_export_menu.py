@@ -1,4 +1,4 @@
-"""Guards: the Netgen Export menu verifies with radia.vol_check, routes Kelvin through
+"""Guards: the Vol Export menu verifies with radia.vol_check, routes Kelvin through
 radia_mcp.cubit.kelvin, leaves the verdict in the console log and loads no radia_mcp code.
 
 Assumes: no Cubit and no Qt; PySide6 is replaced by empty stand-in classes, so
@@ -83,9 +83,9 @@ def test_verification_runs_radia_vol_check_isolated(menu):
 
 def test_export_command_carries_only_the_kelvin_pair_fields(menu):
     # Kelvin is built before export; the export only gets the pair fields.
-    assert menu.export_command("o:/m.vol", 3) == 'export netgen "o:/m.vol" order 3 overwrite'
+    assert menu.export_command("o:/m.vol", 3) == 'export vol "o:/m.vol" order 3 overwrite'
     fields = kelvin.export_arguments({"R": 0.3, "center": (0, 0, 0.6)})
-    assert menu.export_command("o:/m.vol", 2, fields) == f'export netgen "o:/m.vol" order 2 {fields} overwrite'
+    assert menu.export_command("o:/m.vol", 2, fields) == f'export vol "o:/m.vol" order 2 {fields} overwrite'
 
 
 @pytest.mark.parametrize("environment", [None, "python", "Z:/no/such/python.exe"])

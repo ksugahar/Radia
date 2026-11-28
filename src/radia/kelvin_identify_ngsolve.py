@@ -8,7 +8,7 @@ Why this exists
 ---------------
 There are three upstream paths that produce a Kelvin-ready `.vol`:
 
-1. **Cubit C++ exporter** (`export netgen ... kelvin_tx/ty/tz
+1. **Cubit C++ exporter** (`export vol ... kelvin_tx/ty/tz
    kelvin_match`): labels the air|kelvin interface `kelvin_int` and the
    outer Kelvin boundary `kelvin_ext` and writes every point pair as the
    periodic group `kelvin`.  Path 3 checks those pairs independently.
@@ -430,7 +430,7 @@ def ensure_kelvin_identification(mesh, *, inner_bnd: str = "kelvin_int",
             f"the curved mesh (curve order {curve_order}) has no Kelvin pairs; "
             "pairing after load would leave the paired faces' curved "
             "coefficients unsynchronised. Export it with the Kelvin pairs "
-            "(export netgen ... kelvin_tx/ty/tz kelvin_match)")
+            "(export vol ... kelvin_tx/ty/tz kelvin_match)")
     offset = detect_kelvin_offset(mesh)
     off_len = math.sqrt(sum(c * c for c in offset))
     if not (off_len > 0 and math.isfinite(off_len)):

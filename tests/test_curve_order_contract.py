@@ -380,7 +380,7 @@ def test_production_vol_entries_load_through_load_vol():
 def test_cubit_export_is_used_at_its_stored_order(tmp_path):
     """Guards: a committed Cubit order-2 export loads through load_vol at its stored order.
 
-    Assumes: the .vol is produced by Cubit `export netgen` (no CAD, order fixed at export);
+    Assumes: the .vol is produced by Cubit `export vol` (no CAD, order fixed at export);
     radia CI consumes it without Cubit. After an unrelated CSG mesh in the process a plain
     Mesh() borrows that CSG, load_vol does not, and the curved routes accept the stored order.
     """

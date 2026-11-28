@@ -49,10 +49,10 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
         (lambda data: data.update(toolbar_visible=False), "not visible"),
         (lambda data: data.update(toolbar_visible_region_nonempty=False),
          "no visible screen region"),
-        (lambda data: data["action_visible"].update({"Export Netgen (.vol)...": False}),
-         "action is not visible: Export Netgen"),
-        (lambda data: data["action_enabled"].update({"Export Netgen (.vol)...": False}),
-         "action is not enabled: Export Netgen"),
+        (lambda data: data["action_visible"].update({"Export .vol...": False}),
+         "action is not visible: Export .vol..."),
+        (lambda data: data["action_enabled"].update({"Export .vol...": False}),
+         "action is not enabled: Export .vol..."),
         (lambda data: data.update(toolbar_menu_has_entry=False),
          "absent from Cubit's toolbar menu"),
         (lambda data: data.update(toolbar_owner="QToolBar"), "not owned by Coreform"),
@@ -156,7 +156,7 @@ def test_timeout_terminates_only_owned_process(monkeypatch, tmp_path):
 
 
 def test_shipped_toolbar_identifiers_match_both_probe_consumers():
-    template = GUI / "cubit_toolbar/toolbars/netgen_export_toolbar.ttb.tmpl"
+    template = GUI / "cubit_toolbar/toolbars/vol_export_toolbar.ttb.tmpl"
     root = ET.parse(template).getroot()
     assert root.attrib["name"] == SMOKE.TOOLBAR_TITLE, root.attrib
     actions = [node.attrib["name"] for node in root.iter("WAction")]
@@ -166,10 +166,10 @@ def test_shipped_toolbar_identifiers_match_both_probe_consumers():
              for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
     assert [names["_MENU_LABEL"]] == actions, (names.get("_MENU_LABEL"), actions)
     scripts = [Path(node.text.split("/")[-1]) for node in root.iter("filename")]
-    assert scripts == [Path("export_netgen.py")], scripts
+    assert scripts == [Path("export_vol.py")], scripts
     tree = ast.parse((GUI / "cubit_toolbar/scripts" / scripts[0]).read_text(encoding="utf-8"))
     calls = [getattr(c.func, "id", "") for c in ast.walk(tree) if isinstance(c, ast.Call)]
-    assert "launch_netgen_export" in calls, calls
+    assert "launch_vol_export" in calls, calls
     installed = sorted(p.name for p in (GUI / "cubit_toolbar/scripts").glob("*.py"))
     assert installed == sorted(s.name for s in scripts), (installed, scripts)
     icons = [Path(node.text).name for node in root.iter("icon")]

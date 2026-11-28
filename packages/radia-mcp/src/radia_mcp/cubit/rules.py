@@ -9,14 +9,14 @@ import re
 import os
 from typing import List, Dict
 
-# The APREPRO export command the rules key on: cubit.cmd('export netgen "f.vol" ...').
-_NETGEN_EXPORT = re.compile(r'export\s+netgen\s')
+# The APREPRO export command the rules key on: cubit.cmd('export vol "f.vol" ...').
+_VOL_EXPORT = re.compile(r'export\s+vol\s')
 
 
 def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called without any block registration."""
 	findings = []
-	export_pattern = _NETGEN_EXPORT
+	export_pattern = _VOL_EXPORT
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 
 	export_line = None
@@ -240,12 +240,12 @@ def check_missing_boundary_block(filepath: str, lines: List[str]) -> List[Dict]:
 		for line in lines
 	)
 	# Only flag for Netgen/curved exports (boundary elements most important)
-	has_netgen_export = any(
-		re.search(r'export netgen', line)
+	has_vol_export = any(
+		re.search(r'export vol', line)
 		for line in lines
 	)
 
-	if has_3d_block and not has_2d_block and not has_surface_block and has_netgen_export:
+	if has_3d_block and not has_2d_block and not has_surface_block and has_vol_export:
 		findings.append({
 			'line': 1,
 			'severity': 'MODERATE',
@@ -303,7 +303,7 @@ def check_ambiguous_face_block(filepath: str, lines: List[str]) -> List[Dict]:
 def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called but no mesh command found."""
 	findings = []
-	export_pattern = _NETGEN_EXPORT
+	export_pattern = _VOL_EXPORT
 	mesh_pattern = re.compile(
 		r'cubit\.cmd\s*\(\s*["\'].*\b(?:mesh\s+(?:volume|surface|curve)|tetmesh|trimesh)\b',
 		re.IGNORECASE
@@ -335,7 +335,7 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Manual mesh.Curve() without export netgen (legacy pattern)."""
+	"""MODERATE: Manual mesh.Curve() without export vol (legacy pattern)."""
 	findings = []
 	has_curve = False
 	curve_line = None
@@ -351,19 +351,19 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 	if not has_curve:
 		return findings
 
-	# Check for export netgen (which handles Curve internally)
-	has_native_export_netgen = any('export netgen' in line for line in lines)
+	# Check for export vol (which handles Curve internally)
+	has_native_export_vol = any('export vol' in line for line in lines)
 	# Check for OCC native mesh (which has built-in geometry)
 	has_occ_mesh = any('GenerateMesh' in line for line in lines)
 
-	if not has_native_export_netgen and not has_occ_mesh:
+	if not has_native_export_vol and not has_occ_mesh:
 		findings.append({
 			'line': curve_line,
 			'severity': 'MODERATE',
 			'rule': 'curve-without-export-netgen',
 			'message': (
-				'mesh.Curve() called but no export netgen command found. '
-				'For Cubit meshes, use cubit.cmd(\'export netgen "f.vol" order N overwrite\'), '
+				'mesh.Curve() called but no export vol command found. '
+				'For Cubit meshes, use cubit.cmd(\'export vol "f.vol" order N overwrite\'), '
 				'which curves through ACIS CallbackGeometry. '
 				'See: netgen_workflow_guide("cubit_export_vol")'
 			),
@@ -375,7 +375,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	"""LOW: Blocks registered without names (best practice)."""
 	findings = []
 	# Only check files that have export calls
-	export_pattern = _NETGEN_EXPORT
+	export_pattern = _VOL_EXPORT
 	has_export = any(
 		export_pattern.search(line) for line in lines
 		if not line.strip().startswith('#')

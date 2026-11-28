@@ -327,7 +327,7 @@ def build_inside_cubit(
 
 
 def _kelvin_export_arguments(helper: Path, radius_m: float) -> str:
-    """Kelvin pair fields for ``export netgen``: same offset as add_kelvin_cubit(symmetry=["z"])."""
+    """Kelvin pair fields for ``export vol``: same offset as add_kelvin_cubit(symmetry=["z"])."""
     spec = importlib.util.spec_from_file_location("_kelvin_export_arguments", helper)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load Kelvin helper {helper}")
@@ -385,7 +385,7 @@ def write_journal(
     kelvin_fields = _kelvin_export_arguments(kelvin_helper, kelvin_radius_m)
     journal.write_text(
         f'play "{inside.as_posix()}"\n'
-        f'export netgen "{vol.as_posix()}" order {int(curve_order)} {kelvin_fields} overwrite\n'
+        f'export vol "{vol.as_posix()}" order {int(curve_order)} {kelvin_fields} overwrite\n'
         "exit\n",
         encoding="utf-8",
     )

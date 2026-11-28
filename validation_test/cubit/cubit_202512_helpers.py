@@ -2,9 +2,9 @@
 
 These tests exercise the current public Cubit path:
 
-    cubit.cmd('export netgen "model.vol" order N overwrite')
+    cubit.cmd('export vol "model.vol" order N overwrite')
 
-The plugin (``radia_cubit_export.dll``) curves the mesh in-process.
+The plugin (``cubit_to_vol_export.dll``) curves the mesh in-process.
 """
 
 from __future__ import annotations
@@ -89,14 +89,14 @@ def init_cubit():
     return cubit
 
 
-def export_netgen(cubit, stem: str, order: int = 1) -> Path:
+def export_vol(cubit, stem: str, order: int = 1) -> Path:
     """Run the public 2025.12 Netgen export command and return the .vol path."""
     out_dir = Path(tempfile.mkdtemp(prefix="cubit_export_test_"))
     out = out_dir / f"{stem}_o{order}.vol"
     cmd_path = str(out).replace("\\", "/")
-    cubit.cmd(f'export netgen "{cmd_path}" order {order} overwrite')
+    cubit.cmd(f'export vol "{cmd_path}" order {order} overwrite')
     if not out.is_file() or out.stat().st_size == 0:
-        raise AssertionError(f"export netgen did not create {out}")
+        raise AssertionError(f"export vol did not create {out}")
     return out
 
 

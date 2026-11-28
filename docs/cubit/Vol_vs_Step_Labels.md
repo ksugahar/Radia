@@ -2,7 +2,7 @@
 
 This document explains the two file formats that radia-* domain tools
 accept as input, why labels live in `.vol`, and why the Cubit
-`export netgen` command (`radia_cubit_export.dll`, owned by
+`export vol` command (`cubit_to_vol_export.dll`, owned by
 `radia_mcp.cubit`) is the single recommended chokepoint for producing
 labeled `.vol` files.
 
@@ -17,7 +17,7 @@ labeled `.vol` files.
   drop them on round-trip, and there is no `sideset` / `nodeset`
   hierarchy. Use it only for label-free workflows (PEEC filament
   centerline extraction).
-- `export netgen` (`radia_mcp.cubit`) is the **single chokepoint** for
+- `export vol` (`radia_mcp.cubit`) is the **single chokepoint** for
   producing labeled `.vol`. STEP-with-extra-tricks alternatives are
   uniformly worse than just routing through Cubit.
 
@@ -93,22 +93,22 @@ are intrinsically asymmetric:
 This split is forced by what each format can carry, not by a
 solver-side preference.
 
-## Why `export netgen` is the single chokepoint
+## Why `export vol` is the single chokepoint
 
 Producing a labeled `.vol` requires a meshing tool that lets the
 human (or an AI authoring `.jou`) attach **named blocks**, **named
 sidesets**, and **named nodesets** to mesh entities. The lab's
-production tool for this is Coreform Cubit with the `export netgen`
+production tool for this is Coreform Cubit with the `export vol`
 command plugin of `radia_mcp.cubit`:
 
 ```
-export netgen "model.vol" order N [overwrite] [periodic_* ...]
+export vol "model.vol" order N [overwrite] [periodic_* ...]
 ```
 
 Single command, single round trip: blocks → materials, sidesets →
 BND, nodesets → BBBND. Kelvin geometry and sidesets are added before
 the export by `radia_mcp.cubit.kelvin` (`cubit_export_vol(...,
-add_kelvin=True)` or the Export Netgen menu). Companion `.vol.json` is written next to
+add_kelvin=True)` or the Export Vol menu). Companion `.vol.json` is written next to
 the `.vol` with CAD-reference Volume / Area / Length so a downstream
 solver can sanity-check the mesh.
 
@@ -118,9 +118,9 @@ The labeling layer is the point of this route. Stripping it back to
 ## Why STEP-with-extra-tricks workarounds are not preferred
 
 Three theoretical paths to "STEP + labels", all worse than routing
-through `export netgen`:
+through `export vol`:
 
-| Workaround                                           | Why it loses to `export netgen`                                                                     |
+| Workaround                                           | Why it loses to `export vol`                                                                     |
 |------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | OCC face name regex (`dir_gnd__face_3` etc.)         | CAD tools drop names on round-trip; humans + AIs find regex names hard to read; no group support    |
 | STEP + sidecar JSON (`coil.step` + `coil.labels.json`) | Two-file pairing breaks if either is moved; no schema enforcement; reinvents `.vol` poorly         |
@@ -136,8 +136,8 @@ Need labels (material / BND / BBBND) ?
 ├── No   → .step is enough.
 │         Use it for PEEC, label-free CAD inspection, geometry sharing.
 └── Yes  → .vol is required.
-          Route through Cubit `export netgen`:
-              export netgen "model.vol" order N [overwrite]
+          Route through Cubit `export vol`:
+              export vol "model.vol" order N [overwrite]
           Then hand the .vol to the appropriate radia-* domain tool.
 ```
 
