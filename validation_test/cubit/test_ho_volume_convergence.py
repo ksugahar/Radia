@@ -435,6 +435,32 @@ def _check_exported_vol(vol_path, order):
     return checked
 
 
+def _volume_blocks(vid):
+    """Block ids holding the mesh elements of one Cubit volume."""
+    getters = {"hex": cubit.get_block_hexes, "tet": cubit.get_block_tets,
+               "wedge": cubit.get_block_wedges, "pyramid": cubit.get_block_pyramids}
+    blocks = set()
+    for bid in cubit.get_block_id_list():
+        if vid in cubit.get_block_volumes(bid):
+            blocks.add(bid)
+            continue
+        for etype, block_elements in getters.items():
+            mine = set(cubit.parse_cubit_list(etype, f"in volume {vid}"))
+            if mine and mine.intersection(block_elements(bid)):
+                blocks.add(bid)
+                break
+    return frozenset(blocks)
+
+
+def _same_block_seam(sid):
+    """True for a surface between two volumes of one block (export removes it)."""
+    vols = cubit.get_relatives("surface", sid, "volume")
+    if len(vols) != 2:
+        return False
+    a, b = (_volume_blocks(v) for v in vols)
+    return len(a) == 1 and a == b
+
+
 def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False):
     """Export .vol at orders 1-5, check volume and area convergence."""
     print(f"\n  p-convergence (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
@@ -572,6 +598,15 @@ def main():
             ["git", "-C", _repo_root, "rev-parse", "HEAD"],
             capture_output=True, text=True, check=True).stdout.strip(),
         "export_plugin": _plugin_record(),
+        "measurement": {
+            "volume_integration_order": "3 * curve_order (exact for an order-p map)",
+            "area_integration_order": "max(16, 3 * curve_order)",
+            "cad_area": "exterior surfaces plus block interfaces; export vol removes same-block seams",
+            "earlier_records": (
+                "Records before this field used the default quadrature order for volume and area, "
+                "which stalled the convergence from p = 3, and counted webcut seams in cad_area."
+            ),
+        },
         "quality_contract": {
             "minimum_scaled_jacobian": 1.0e-6,
             "integration_order": "max(4, 2 * curve_order + 2)",
@@ -593,8 +628,12 @@ def main():
 
         vol_ids = cubit.parse_cubit_list("volume", "all")
         cad_volume = sum(cubit.volume(vid).volume() for vid in vol_ids)
+        # export vol removes same-material seams (both neighbours in one
+        # block, e.g. a webcut plane) and keeps block interfaces, so count
+        # exterior surfaces and surfaces between volumes of different blocks.
         surf_ids = cubit.parse_cubit_list("surface", "all")
-        cad_area = sum(cubit.surface(sid).area() for sid in surf_ids)
+        cad_area = sum(cubit.surface(sid).area() for sid in surf_ids
+                       if not _same_block_seam(sid))
 
         n_hex = len(cubit.parse_cubit_list("hex", "all"))
         n_tet = len(cubit.parse_cubit_list("tet", "all"))
@@ -626,7 +665,7 @@ def main():
     if overall_pass:
         print("ALL TESTS PASSED")
     else:
-        print("SOME TESTS FAILED — see details above")
+        print("SOME TESTS FAILED - see details above")
     print(f"{'=' * 70}")
 
     dataset["passed"] = overall_pass

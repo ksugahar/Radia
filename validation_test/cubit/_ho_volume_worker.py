@@ -24,9 +24,14 @@ def main() -> int:
     args = parser.parse_args()
 
     mesh = Mesh(args.vol_file)
+    # The default quadrature order under-integrates curved elements from p = 3
+    # on and made the convergence stall there.  Order 3p integrates an order-p
+    # volume map exactly (radia.vol_check._measure_orders); areas integrate a
+    # square root and take at least order 16.
+    p = max(1, int(mesh.GetCurveOrder()))
     with TaskManager():
-        volume = float(Integrate(CF(1), mesh))
-        area = float(Integrate(CF(1), mesh, BND))
+        volume = float(Integrate(CF(1), mesh, order=3 * p))
+        area = float(Integrate(CF(1), mesh, BND, order=max(16, 3 * p)))
     quality = check_mesh_quality(
         mesh,
         min_scaled_jacobian=1.0e-6,
