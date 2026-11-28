@@ -129,7 +129,9 @@ def profile(tmp_path, monkeypatch):
 
 def test_startup_shim_resolves_the_gui_through_the_recorded_python(profile):
     path = Path(toolbar_install._generate_startup_script(toolbar_install._get_panels_dir()))
-    assert path.parent == profile / "AppData/Local/radia-mcp/Cubit", path
+    expected = (profile / "AppData/Local/radia-mcp/Cubit" if sys.platform == "win32"
+                else profile / ".radia-mcp/cubit")
+    assert path.parent == expected, (path, expected)
     text = path.read_text(encoding="utf-8")
     assert "RADIA_MCP_CUBIT_PYTHON" in text
     register = (CUBIT / "gui" / "register_toolbar.py").as_posix()
