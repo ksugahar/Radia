@@ -103,10 +103,8 @@ def step1_cubit_mesh():
     if cubit_bin is None:
         print("  Cubit not found -- SKIP (will use OCC fallback)")
         return False
-    plugin_dir = str(Path(cubit_bin).parent / "bin" / "plugins")
-    if not Path(plugin_dir).is_dir():
-        # Sometimes plugins live under a different path
-        plugin_dir = str(Path(cubit_bin) / "plugins")
+    from radia_mcp.cubit.layout import export_plugin_directory
+    plugin_dir = str(export_plugin_directory(Path(cubit_bin)))
     os.environ["CUBIT_PLUGIN_DIR"] = plugin_dir
     sys.path.insert(0, cubit_bin)
 

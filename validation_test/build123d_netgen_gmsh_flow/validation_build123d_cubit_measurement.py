@@ -130,7 +130,8 @@ def measure_steps_with_cubit(step_paths: dict[str, Path], cubit_bin: Path) -> di
 
     import cubit  # noqa: PLC0415
 
-    plugin_dir = cubit_bin / "plugins"
+    from radia_mcp.cubit.layout import export_plugin_directory
+    plugin_dir = export_plugin_directory(cubit_bin)
     cubit.init([
         "cubit",
         "-nojournal",

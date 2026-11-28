@@ -35,9 +35,10 @@ _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
 
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
+from radia_mcp.cubit.layout import export_plugin_directory
+# $RADIA_CUBIT_PLUGIN_DIR (a build.py output) or the installed plugin directory.
+_plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
+if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
@@ -540,6 +541,17 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 # ================================================================
 # Main
 # ================================================================
+def _plugin_record():
+    """The export vol plugin that wrote these meshes: its directory and SHA-256."""
+    import hashlib
+    from radia_mcp.cubit.layout import COMMAND_PLUGIN
+    dll = os.path.join(_plugin_dir, COMMAND_PLUGIN)
+    with open(dll, "rb") as stream:
+        digest = hashlib.sha256(stream.read()).hexdigest()
+    return {"file": COMMAND_PLUGIN, "sha256": digest,
+            "built": bool(os.environ.get("RADIA_CUBIT_PLUGIN_DIR"))}
+
+
 def main():
     print("=" * 70)
     print("High-Order Volume Convergence Test")
@@ -555,6 +567,10 @@ def main():
             "independent curved-map Jacobian validation"
         ),
         "versions": {"cubit": cubit.get_version()},
+        "source_sha": subprocess.run(
+            ["git", "-C", _repo_root, "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip(),
+        "export_plugin": _plugin_record(),
         "quality_contract": {
             "minimum_scaled_jacobian": 1.0e-6,
             "integration_order": "max(4, 2 * curve_order + 2)",

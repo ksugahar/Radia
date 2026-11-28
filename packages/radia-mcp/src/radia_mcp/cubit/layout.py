@@ -76,6 +76,20 @@ def command_plugin_path(install_dir: Path) -> Path:
     return plugin_directory(install_dir) / COMMAND_PLUGIN
 
 
+def export_plugin_directory(install_dir: Path) -> Path:
+    """The directory to pass as ``-commandplugindir`` for ``export vol``.
+
+    ``$RADIA_CUBIT_PLUGIN_DIR`` (a ``build.py`` output) when set, else the
+    installed plugin directory; either must hold the command plugin.
+    """
+    chosen = os.environ.get('RADIA_CUBIT_PLUGIN_DIR')
+    directory = Path(chosen).resolve() if chosen else plugin_directory(install_dir)
+    if not (directory / COMMAND_PLUGIN).is_file():
+        raise FileNotFoundError(f'{COMMAND_PLUGIN} not found in {directory}; install it or set '
+                                'RADIA_CUBIT_PLUGIN_DIR to a native/cubit_to_vol_export/build.py output')
+    return directory
+
+
 def runtime_environment(bin_dir: Path) -> dict[str, str]:
     """Process environment for Cubit's bundled Python (ACIS DLLs on PATH)."""
     env = os.environ.copy()

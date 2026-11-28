@@ -20,9 +20,10 @@ from radia_mcp.cubit.toolbar_install import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
 
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
+from radia_mcp.cubit.layout import export_plugin_directory
+# $RADIA_CUBIT_PLUGIN_DIR (a build.py output) or the installed plugin directory.
+_plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
+if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 # NGSolve FIRST, then scipy BEFORE cubit.init() (Cubit pollutes sys.path)

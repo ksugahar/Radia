@@ -25,6 +25,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from radia_mcp.cubit.layout import export_plugin_directory
+
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
@@ -141,7 +143,8 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
     cubit_exe = _find_cubit_exe()
     driver = _write_driver(work_dir, cases, orders)
     command = [
-        str(cubit_exe), "-batch", "-nographics", "-nojournal", str(driver)
+        str(cubit_exe), "-batch", "-nographics", "-nojournal",
+        "-commandplugindir", str(export_plugin_directory(cubit_exe.parent)), str(driver)
     ]
     started = time.perf_counter()
     proc = subprocess.run(

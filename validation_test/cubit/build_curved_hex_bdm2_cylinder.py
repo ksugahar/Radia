@@ -13,6 +13,7 @@ import os
 import sys
 from pathlib import Path
 
+from radia_mcp.cubit.layout import export_plugin_directory
 from radia_mcp.cubit.toolbar_install import find_cubit_bin
 
 DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
@@ -22,9 +23,7 @@ def build(output: Path) -> Path:
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
         raise RuntimeError("Coreform Cubit 2025.12 is required")
-    plugin_dir = Path(cubit_bin).parent / "bin" / "plugins"
-    if not plugin_dir.is_dir():
-        raise RuntimeError(f"Cubit plugin directory does not exist: {plugin_dir}")
+    plugin_dir = export_plugin_directory(Path(cubit_bin))
     sys.path.append(str(cubit_bin))
     os.environ["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
 

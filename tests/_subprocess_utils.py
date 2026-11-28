@@ -126,9 +126,8 @@ try:
     _cb = _find_cubit_bin()
     if _cb:
         sys.path.insert(0, _cb)
-        os.environ.setdefault(
-            "CUBIT_PLUGIN_DIR",
-            os.path.join(os.path.dirname(_cb), "bin", "plugins"))
+        from radia_mcp.cubit.layout import export_plugin_directory as _plugins
+        os.environ.setdefault("CUBIT_PLUGIN_DIR", str(_plugins(_cb)))
 except Exception:
     pass
 # --------- END AUTO-INJECTED PRELUDE -------------------------------

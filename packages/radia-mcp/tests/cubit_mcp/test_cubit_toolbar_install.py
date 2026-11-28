@@ -174,3 +174,27 @@ def test_unknown_or_conflicting_flags_never_install(monkeypatch, argv):
     with pytest.raises(SystemExit):
         toolbar_install.main(argv)
     assert calls == [], calls
+
+
+def test_export_plugin_directory_prefers_the_build_and_needs_the_plugin(tmp_path, monkeypatch):
+    """Scripts pass this directory to -commandplugindir: a build.py output when
+    RADIA_CUBIT_PLUGIN_DIR is set, else the installed <root>/plugins (not bin/plugins)."""
+    root = tmp_path / "cubit"
+    (root / "bin" / "plugins").mkdir(parents=True)
+    (root / "plugins").mkdir()
+    (root / "bin" / "cubitx.exe").touch()
+    built = tmp_path / "built"
+    built.mkdir()
+    monkeypatch.delenv("RADIA_CUBIT_PLUGIN_DIR", raising=False)
+    with pytest.raises(FileNotFoundError, match="cubit_to_vol_export.dll"):
+        layout.export_plugin_directory(root / "bin")
+    (root / "bin" / "plugins" / layout.COMMAND_PLUGIN).touch()   # the wrong place
+    with pytest.raises(FileNotFoundError):
+        layout.export_plugin_directory(root / "bin")
+    (root / "plugins" / layout.COMMAND_PLUGIN).touch()
+    assert layout.export_plugin_directory(root / "bin") == root / "plugins"
+    monkeypatch.setenv("RADIA_CUBIT_PLUGIN_DIR", str(built))
+    with pytest.raises(FileNotFoundError):
+        layout.export_plugin_directory(root / "bin")
+    (built / layout.COMMAND_PLUGIN).touch()
+    assert layout.export_plugin_directory(root / "bin") == built.resolve()

@@ -76,7 +76,8 @@ def init_cubit():
 
     import cubit
 
-    plugin_dir = cubit_bin / "plugins"
+    from radia_mcp.cubit.layout import export_plugin_directory
+    plugin_dir = export_plugin_directory(cubit_bin)
     cubit.init([
         "cubit",
         "-nojournal",
