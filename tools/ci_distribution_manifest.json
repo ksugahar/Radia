@@ -646,12 +646,6 @@
       ]
     },
     {
-      "pattern": "tests/matlab/test_optuna*.m",
-      "owners": [
-        "radia-mcp"
-      ]
-    },
-    {
       "pattern": "validation_test/radia_optuna/**",
       "owners": [
         "radia"
@@ -3397,7 +3391,6 @@
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
             "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
-            "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
             "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
@@ -3436,7 +3429,6 @@
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
             "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
-            "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
             "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",

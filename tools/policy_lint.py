@@ -177,7 +177,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tests/matlab/test_ih_python_selection.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/matlab/test_ltspice_hysteresis_coupling.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/matlab/test_ltspice_rlc_resonance_optimization.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
-    'tests/matlab/test_optuna_table.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/matlab/test_peec_coil_geometry_resonance.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/matlab/test_rlc_resonance_optimization_demo.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/matlab/test_setup_python_selection.m': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
