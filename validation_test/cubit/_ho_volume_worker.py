@@ -25,8 +25,8 @@ def main() -> int:
 
     mesh = Mesh(args.vol_file)
     # The default quadrature order under-integrates curved elements from p = 3
-    # on and made the convergence stall there.  Order 3p integrates an order-p
-    # volume map exactly (radia.vol_check._measure_orders); areas integrate a
+    # on and made the convergence stall there.  Order 3p integrates the volume of
+    # a polynomial order-p map with a one-signed Jacobian exactly (radia.vol_check._measure_orders); areas integrate a
     # square root and take at least order 16.
     p = max(1, int(mesh.GetCurveOrder()))
     with TaskManager():

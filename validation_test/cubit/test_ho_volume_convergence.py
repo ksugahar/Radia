@@ -599,7 +599,7 @@ def main():
             capture_output=True, text=True, check=True).stdout.strip(),
         "export_plugin": _plugin_record(),
         "measurement": {
-            "volume_integration_order": "3 * curve_order (exact for an order-p map)",
+            "volume_integration_order": "3 * curve_order (exact for a polynomial order-p map with a one-signed Jacobian)",
             "area_integration_order": "max(16, 3 * curve_order)",
             "cad_area": "exterior surfaces plus block interfaces; export vol removes same-block seams",
             "earlier_records": (
