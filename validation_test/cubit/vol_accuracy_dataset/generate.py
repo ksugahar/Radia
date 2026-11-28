@@ -127,10 +127,25 @@ def _write_driver(work_dir: Path, cases: list[dict], orders: list[int]) -> Path:
             lines.append(
                 f'export vol "{target.as_posix()}" order {order} overwrite'
             )
-    lines.append("exit 0")
     driver = work_dir / "generate_complex_volumes.jou"
     driver.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return driver
+
+
+_CUBIT_CHILD = """
+import os, sys
+import ngsolve  # noqa: F401
+import netgen
+os.add_dll_directory(os.path.dirname(netgen.__file__))
+cubit_bin, plugin_dir, driver = sys.argv[1:4]
+sys.path.append(cubit_bin)
+os.add_dll_directory(cubit_bin)
+os.environ["CUBIT_PLUGIN_DIR"] = plugin_dir
+import cubit
+cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
+ok = cubit.cmd('playback "' + driver.replace(os.sep, "/") + '"')
+sys.exit(0 if ok else 1)
+"""
 
 
 def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
@@ -142,9 +157,12 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
         )
     cubit_exe = _find_cubit_exe()
     driver = _write_driver(work_dir, cases, orders)
+    # Cubit 2026.8 loads command plugins from CUBIT_PLUGIN_DIR; the export
+    # plugin links the fork nglib, so ngsolve is imported before cubit, as in
+    # radia_mcp.cubit.vol_export.
     command = [
-        str(cubit_exe), "-batch", "-nographics", "-nojournal",
-        "-commandplugindir", str(export_plugin_directory(cubit_exe.parent)), str(driver)
+        sys.executable, "-I", "-c", _CUBIT_CHILD, str(cubit_exe.parent),
+        str(export_plugin_directory(cubit_exe.parent)), str(driver),
     ]
     started = time.perf_counter()
     proc = subprocess.run(
@@ -177,7 +195,9 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
             + ", ".join(missing)
             + f". Work directory retained: {work_dir}"
         )
+    plugin = export_plugin_directory(cubit_exe.parent) / "cubit_to_vol_export.dll"
     return {
+        "plugin_sha256": hashlib.sha256(plugin.read_bytes()).hexdigest(),
         "executable": str(cubit_exe),
         "returncode": proc.returncode,
         "elapsed_s": elapsed,
@@ -358,6 +378,10 @@ def _write_dataset(
             "ngsolve": _package_version("ngsolve"),
             "radia_mcp": _package_version("radia-mcp"),
             "cubit_executable": run["executable"],
+            "source_sha": subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+                capture_output=True, text=True, check=True).stdout.strip(),
+            "export_plugin_sha256": run["plugin_sha256"],
         },
         "run": {
             "cubit_returncode": run["returncode"],
