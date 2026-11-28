@@ -123,14 +123,9 @@ where = ["src"]
 "radia_mcp.cubit" = [
     "README.md",
     "samples/*.py",
+    "samples/*.jou",
     "skills/cubit-command-plugin/SKILL.md",
     "skills/cubit-command-plugin/templates/*",
-]
-"radia_mcp.cubit.gui" = [
-    "solver_ready_sample.jou",
-    "cubit_toolbar/icons/*.svg",
-    "cubit_toolbar/scripts/*.py",
-    "cubit_toolbar/toolbars/*.ttb.tmpl",
 ]
 "radia_mcp.matlab" = [
     "skill.md",

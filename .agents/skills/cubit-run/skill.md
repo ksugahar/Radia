@@ -7,8 +7,8 @@ allowed-tools: Bash(python *), Bash(*coreform_cubit*), Bash(ssh *), Bash(cp *), 
 # Cubit .jou Runner & Tester
 
 > **CURRENT POLICY**: the only export command is `export vol` from
-> `cubit_to_vol_export.dll` (`radia_mcp.cubit`, deployed by
-> `python -m radia_mcp.cubit.install`). Prefer `C:\temp` for temporary
+> `cubit_to_vol_export.dll` (`radia_mcp.cubit`), loaded only by the external
+> export worker through `CUBIT_PLUGIN_DIR`, never installed into Cubit. Prefer `C:\temp` for temporary
 > journals and outputs.
 
 Run Cubit journal (.jou) files and test the `.vol` export orders.

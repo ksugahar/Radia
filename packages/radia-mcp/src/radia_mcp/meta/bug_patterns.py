@@ -676,9 +676,8 @@ PATTERNS: list[dict] = [
                      "the smoke temp dir; --verify-only is green.",
         "prevention": "Treat an Administrator-profile license failure as "
                       "different from package deployment evidence. Use the "
-                      "radia_mcp.cubit.install --verify-only plugin/hash "
-                      "contract; run licensed GUI smoke only "
-                      "under a licensed user. Do not weaken radia-mcp gates.",
+                      "radia_mcp.cubit.smoke_test export contract; run "
+                      "licensed Cubit only under a licensed user. Do not weaken radia-mcp gates.",
         "related": [".claude/skills/cubit-license/SKILL.md",
                     ],
     },

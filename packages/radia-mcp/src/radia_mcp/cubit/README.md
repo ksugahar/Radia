@@ -176,7 +176,7 @@ Guess", "Mesh Export Consistency Check Policy"):
 - **Cubit Discourse forum tips** (`cubit_forum_tips`)
 - **Coreform webinars** (`knowledge/coreform_webinars.py`)
 - **Cubit Python API reference** (600+ functions, `api_reference.py`)
-- **Bundled solver-ready example** at `cubit_gui/solver_ready_sample.jou`
+- **Bundled solver-ready example** at `samples/solver_ready_sample.jou`
 
 ## Driving policy: LLM execution is always headless
 

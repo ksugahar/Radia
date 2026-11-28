@@ -686,3 +686,13 @@ class CubitSession:
                 report = _SINGLETON.shutdown()
                 _SINGLETON = None
         return report
+
+
+def find_cubit_bin() -> str | None:
+    """Coreform Cubit 2026.8 ``bin/`` directory as a string, or None.
+
+    Thin wrapper of :func:`find_cubit_install` for scripts that put the
+    directory on ``sys.path``.
+    """
+    found = find_cubit_install()
+    return str(found) if found is not None else None

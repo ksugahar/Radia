@@ -7,10 +7,10 @@ operation surface over the same headless application contracts.
 
 ## Supported Cubit Extension
 
-`python -m radia_mcp.cubit.install` installs one Cubit-owned toolbar for
-mesh export and diagnostics (`radia_mcp.cubit.gui`). Its PySide6 dependency is supplied by Cubit's private Python
-runtime and must not leak into the `radia` package or an external solver
-process.
+Radia installs no Cubit toolbar, menu or plugin. Export runs headless in the
+external worker (`radia_mcp.cubit.export_runner`), which loads the built
+`export vol` plugin through `RADIA_CUBIT_PLUGIN_DIR`. PySide6 must not leak
+into the `radia` package or an external solver process.
 
 The toolbar may:
 

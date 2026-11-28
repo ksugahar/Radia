@@ -150,7 +150,7 @@ def run_label_case(exe: Path, run_dir: Path, timeout: int) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
     sample = (Path(__file__).resolve().parents[2] / "packages" /
               "radia-mcp" / "src" / "radia_mcp" / "cubit" /
-              "gui" / "solver_ready_sample.jou")
+              "samples" / "solver_ready_sample.jou")
     if not sample.is_file():
         raise FileNotFoundError(sample)
     vol = run_dir / "em_sample_o2.vol"

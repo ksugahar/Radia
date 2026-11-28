@@ -26,7 +26,7 @@ def find_cubit_bin() -> Path:
     """Return the supported Coreform Cubit 2025.12+ bin directory."""
     if str(RADIA_SRC) not in sys.path:
         sys.path.insert(0, str(RADIA_SRC))
-    from radia_mcp.cubit.toolbar_install import find_cubit_bin as _find_cubit_bin
+    from radia_mcp.cubit.session import find_cubit_bin as _find_cubit_bin
 
     cubit_bin = _find_cubit_bin()
     if not cubit_bin:

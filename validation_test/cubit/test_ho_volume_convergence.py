@@ -29,7 +29,7 @@ import numpy as np
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
-from radia_mcp.cubit.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.session import find_cubit_bin
 
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:

@@ -70,6 +70,6 @@ with the agent-facing guidance in `AGENTS.md` / `CLAUDE.md`.
   timing across small, medium, and high-order/curved meshes.
 - PEEC plus HDiv-VIM conductor-core coupling examples with reproducible JSON.
 - Panel migration cleanup: keep notebook workbenches as the current operating
-  surface, with Cubit-only menu/toolbars handled by `radia_mcp.cubit.gui`.
+  surface; Cubit has no Radia menu or toolbar.
 - `examples/` retirement sweep: promote useful material to `src/`, `tests/`,
   `validation_test/`, or result-bearing `docs/*.ipynb`.

@@ -15,7 +15,7 @@ from radia_mcp.cubit import export_runner, smoke_test
 
 def test_bundled_sample_is_the_default_journal():
     sample = smoke_test._find_sample_jou()
-    assert sample.name == "solver_ready_sample.jou" and sample.parent.name == "gui", sample
+    assert sample.name == "solver_ready_sample.jou" and sample.parent.name == "samples", sample
     assert sample.is_file()
     with pytest.raises(RuntimeError, match="does not exist"):
         smoke_test._find_sample_jou(str(Path(sample).with_name("missing.jou")))

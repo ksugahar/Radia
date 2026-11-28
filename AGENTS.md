@@ -34,7 +34,7 @@ Prefer established public abstractions over proprietary plumbing.
 - CPU FE work follows caller-owned `ngsolve.TaskManager()`. CPU exceptions: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned. GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback. GPU-route CPU work retains CPU rules.
 - Fail loudly on unsupported geometry, labels, ABI, convergence or backend state. Never silently substitute a numerically different route.
 ## Interfaces
-Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `radia_mcp.cubit.gui` exporter menu/toolbar, and normal Radia Python must not depend on Qt.
+Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Radia installs no Cubit plugin, menu or toolbar, and normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
 - radia-mcp releases independently of Radia (deployment below), never to JMAG or retired targets; isolated CI is not deployment.
@@ -67,7 +67,7 @@ The bibliography is managed separately (private). Adopted validation records cit
 ## Mesh And CAD
 STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver boundary is a checked `.vol` regardless of the creation route.
 - Cubit-generated `.vol` files belong to `radia-mcp` (`radia_mcp.cubit`) on a licensed Cubit machine; build123d + Netgen is the explicit alternative. radia CI consumes committed fixtures: a missing required fixture fails the test; only explicitly optional validation inputs may skip visibly.
-- Drive Cubit headless (APREPRO/Python CLI) and export through `radia_mcp.cubit`. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; only `radia_mcp.cubit.gui` owns the human-facing GUI release test, and journal/checkpoint handoff is artifact-only.
+- Drive Cubit headless (APREPRO/Python CLI) and export through `radia_mcp.cubit`. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; `export vol` runs only in the external worker, and journal/checkpoint handoff is artifact-only.
 - `radia_mcp.cubit` owns Cubit MCP/APIs, the native `export vol` plugin, GUI and installer; `radia` owns check-vol (`radia.vol_check`), which radia-mcp uses one-way. Cubit export stays in the C++ plugin backend.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label contract before solver or Simulink initialization. Label checks validate topology/naming; DesignSpec validates physical data. Preserve canonical CAD, mesh, contracts and generation sources; remove only verified scratch or superseded output.
 
