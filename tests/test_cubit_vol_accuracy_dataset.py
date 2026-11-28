@@ -156,11 +156,14 @@ def test_periodic_seam_loft_is_valid_not_merely_volume_accurate():
     assert all(row["absolute_error_pct"] < 0.05 for row in loft)
 
 
-def test_gapped_torus_order3_map_is_valid_with_the_geometric_refit():
-    """Guards: the geometric refit of export vol (order >= 3) keeps the coarse
-    355-degree sweep free of cubic-map folds. The cubit-mesh-export curving
-    folded it at order 3 (13 flipped samples at 0.0349 % volume error), so a
-    refit regression shows here first."""
+def test_gapped_torus_order3_map_stays_unfolded():
+    """Guards: the coarse and refined 355-degree sweeps keep valid order-2 and
+    order-3 maps in the dataset (no invalid or flipped Jacobian samples) and
+    their volume errors stay within the dataset bounds.
+    Assumes: the current Cubit mesh of these twins. The fold once recorded
+    for them came from an older Cubit mesh; an on/off A/B on the current mesh
+    showed no fold with or without the geometric refit, so this is a
+    structural guard on the dataset, not a refit test."""
     _, dataset, _ = _load()
     rows = dataset["rows"]
     twins = {
