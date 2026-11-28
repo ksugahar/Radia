@@ -98,8 +98,7 @@ def verify_wheel_contents(wheel_path: str | pathlib.Path) -> dict:
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
         unwanted = {name for name in names if name.startswith((
-            "radia_mcp/cubit/",
-            "cubit_mesh_export/", "cae_mcp_core/",
+            "cae_mcp_core/",
         ))}
         # setuptools' reusable build/lib tree can retain deleted Python modules
         # and silently put them back into a later wheel. Every packaged Python

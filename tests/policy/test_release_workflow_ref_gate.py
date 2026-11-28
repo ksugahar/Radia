@@ -47,7 +47,6 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     trigger = native[:native.index("workflow_dispatch:")]
     assert "paths-ignore:" not in trigger
     assert "radia-mcp-wheel" not in native
-    assert "cubit-mesh-export-wheel" not in native
     assert "radia-optuna-wheel" not in native
     assert "tools/run_test_tier.py --profile native-smoke" in native
     assert '-m pip install "setuptools>=77" build wheel pytest mcp' in native

@@ -632,7 +632,7 @@ from netgen.occ import OCCGeometry, WorkPlane, Glue, MoveTo
 from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
-from radia.panels.add_kelvin import add_kelvin_2d_axisym
+from radia_mcp.cubit.kelvin import add_kelvin_2d_axisym
 from radia.kelvin_source import (
     kelvin_mu_factor_axisym_cf, build_material_cf,
 )

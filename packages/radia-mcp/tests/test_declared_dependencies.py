@@ -25,7 +25,12 @@ PROVIDED_BY = {
     "torch": "radia[urn]",
     "youtube_transcript_api": "youtube-transcript-api",
     "edge_tts": "edge-tts",
-    "cubit_mesh_export": "cubit-mesh-export",
+    # Cubit-embedded runtime: the daemon runs under Cubit's bundled Python and
+    # imports its sibling files by path, so these are not distributions.
+    "cubit": None, "probe_ops": None, "label_audit": None,
+    # The Cubit menu runs in Cubit's embedded Python, which ships PySide6;
+    # register_toolbar imports its sibling cubit_export_menu by path.
+    "PySide6": None, "cubit_export_menu": None,
 }
 
 
@@ -71,6 +76,8 @@ def test_every_imported_distribution_is_declared():
     declared = _requirements()
     missing = {}
     for module, where in sorted(_third_party_imports().items()):
+        if module in PROVIDED_BY and PROVIDED_BY[module] is None:
+            continue
         requirement = PROVIDED_BY.get(module, module).lower().replace("_", "-")
         if requirement not in declared:
             missing[module] = f"{requirement} (first import: {where})"

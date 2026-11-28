@@ -205,7 +205,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
 
 ## Cubit Workflow: Offset Spheres (3D with .vol export)
 
-For Cubit-based meshes exported via `export netgen`.
+For Cubit-based meshes exported via `export vol`.
 Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
 
 ### Step-by-step procedure
@@ -240,11 +240,12 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
    - sideset "kelvin_ext": exterior sphere surface (kelvin boundary)
    - These MUST be set explicitly in the .py -- offset spheres do not share
      a face, so DomainIn/DomainOut auto-detection does NOT work
-10. export netgen: writes periodic identification as TRANSLATION
+10. export vol ... kelvin_tx/ty/tz <offset> kelvin_match <d>:
     - C++ reads bc names "kelvin_int" / "kelvin_ext" from sidesets
-    - Computes offset = mean(kelvin_ext vertices) - mean(kelvin_int vertices)
-    - Bijective nearest-neighbor matching (no duplicate targets)
-    - Writes ident.Add() pairs to .vol (NGSolve Periodic() reads them)
+    - Each kelvin_int patch must have exactly one kelvin_ext patch that is
+      its translated copy by the given offset (one-to-one, all used)
+    - Unique-candidate point matching within kelvin_match; else it fails
+    - Writes the pairs as periodic group "kelvin" to the .vol
 ```
 
 ### Copy mesh: dynamic surface identification (Cubit Python)
@@ -534,12 +535,11 @@ centroid mu sampling, Curve(2) trade-off).
 confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
 correct.
 
-**Helper function** (canonical:
-`cubit_mesh_export.cubit_helpers.add_kelvin (standalone exporter)`;
-back-compat shim at `src/radia/panels/add_kelvin.py`):
+**Helper function** (`radia_mcp.cubit.kelvin`, the single home of the
+Kelvin helpers):
 
 ```python
-from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_2d_axisym
+from radia_mcp.cubit.kelvin import add_kelvin_2d_axisym
 # interior_shape: your 2D OCC face on x>=0 with outer arc named "kelvin_int"
 shape, info = add_kelvin_2d_axisym(interior_shape, R=0.10, z_offset=0.25)
 # info['axis_labels']  -> "axis|axis_ext" (pass to H1 dirichlet=...)
@@ -1529,20 +1529,33 @@ The periodic identification pairs must be embedded in the .vol file.
 Without it, the Kelvin sphere is just a disconnected air domain with
 Neumann BC (silently wrong, looks like a small Dirichlet truncation).
 
-**OCC**: Call `Identify()` before `GenerateMesh()`:
+**OCC**: `radia_mcp.cubit.kelvin.add_kelvin_occ(air, R, symmetry=[...])`
+builds the Kelvin sphere as the translated copy of the cut air sphere
+(positive side of each symmetry plane, at most two planes), pairs every
+sphere face and calls `Identify()` before `GenerateMesh()`:
 ```python
 int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 ```
+Netgen meshes WITHOUT any identification when the faces are not translated
+copies, so check `len(mesh.ngmesh.GetIdentifications()) > 0` after meshing.
+Then attach the scalar gauge with
+`radia.kelvin_geometry.ground_kelvin_scalar_mesh(mesh, info["center"])`.
 
-**Cubit**: The C++ exporter (`export netgen`) reads sideset names
-"kelvin_int" and "kelvin_ext", computes the translation offset, and writes
-`ident.Add()` pairs to the .vol automatically.
+**Cubit**: `add_kelvin_cubit()` makes the Kelvin surface a translated mesh
+copy, and `export vol ... kelvin_tx/ty/tz <offset> kelvin_match <d>`
+(`radia_mcp.cubit.kelvin.export_arguments(info)`) labels the air|kelvin
+interface `kelvin_int`, the outer Kelvin boundary `kelvin_ext`, and writes
+every `kelvin_int` -> `kelvin_ext` point pair as the periodic group `kelvin`.
+The solvers use those pairs; a flat `.vol` with the labels and no
+identification at all is paired after load (see `kelvin_identify_post_hoc`).
 
-**Detection in calc_fem_kelvin.py**:
+**Detection in calc_fem_kelvin.py / calc_fem_coilmesh.py**:
 ```python
-n_ident = mesh.ngmesh.GetNrIdentifications()
-if n_ident == 0:
-    raise RuntimeError("Kelvin without periodic identification!")
+from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+pairs = ensure_kelvin_identification(mesh)   # ValueError -> {"error": ...}
+# pairs["source"]: "vol" (exported pairs) or "post_hoc" (flat mesh paired
+# after load, every vertex within 1e-6*|offset|; then Mesh(mesh.ngmesh)).
+# Refused: other or incomplete identifications, curve order > 1.
 ```
 
 ### 5. FreeDofs Decrease After Periodic()
@@ -1564,7 +1577,7 @@ if n_coupled == 0:
         "Periodic BC NOT working! FreeDofs unchanged. "
         "Check: (1) Identify() before GenerateMesh/Glue, "
         "(2) sideset names kelvin_int/kelvin_ext in .jou, "
-        "(3) export netgen wrote identification pairs.")
+        "(3) export vol wrote identification pairs.")
 ```
 
 Typical: ~2-5% of DOFs are coupled (boundary DOFs on the Kelvin spheres).
@@ -2484,33 +2497,24 @@ The `.vol` must declare:
 - **sidesets**: `sphere` (mag-air interface), `kelvin_int`, `kelvin_ext`
 - **bbnodeset**: `GND` (Kelvin sphere centre, Dirichlet anchor)
 
-## Bundled samples (verified 2026-04-26)
+## Samples: generated, not shipped
 
-Two `.vol` samples ship with the wheel for block configuration:
+No `kelvin_benchmark_sphere_*.vol` is bundled in the wheel or the tree.
+Generate the 1/4 case on a licensed Cubit machine with
+`validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py`
+(radia_mcp.cubit.kelvin.add_kelvin_cubit + the Radia Cubit plugin, which
+writes the Kelvin pairs; mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m
+along z, reduction {"x":"bn=0","y":"bn=0"}; `--orders 1,2,3`).
+No maintained script builds the 1/2 case.
 
-  | sample (frac) | reduction                                | offset_dir | error @ p=2 |
-  |---------------|------------------------------------------|------------|------------:|
-  | `kelvin_benchmark_sphere_1_2.vol` | {"y":"bn=0"}                             | z          | +1.07%      |
-  | `kelvin_benchmark_sphere_1_4.vol` | {"x":"bn=0","y":"bn=0"}                  | z          | +0.71%      |
+Earlier results (2026-04-26, error at p=2): 1/2 +1.07 %, 1/4 +0.71 %.
 
 The 1/8 variant (`{"x":"bn=0","y":"bn=0","z":"ht=0"}`, offset along
-x) is intentionally NOT shipped: the kelvin_far Dirichlet plane
-passes through r' = 0 (Kelvin centre), where the reluctivity
-Mu = mu0*(R/r')^2 is singular, and the linear solve gives Hz ~ 0
-(~-101% error) instead of analytical.  The build script
-`panels/samples/kelvin_benchmark_sphere_1_8_build.py` is kept for
-research; the .vol is omitted until the singularity is fixed.
+x) is unsupported: the kelvin_far Dirichlet plane passes through r' = 0
+(Kelvin centre), where the reluctivity Mu = mu0*(R/r')^2 is singular, and
+the linear solve gives Hz ~ 0 (~-101% error) instead of analytical.
 
-Build scripts:
-- `panels/samples/kelvin_benchmark_sphere_1_2_build.py` (thin wrapper)
-- `panels/samples/kelvin_benchmark_sphere_1_4_build.py` (thin wrapper)
-- `panels/samples/kelvin_benchmark_sphere_1_8_build.py` (research-only)
-- `panels/samples/kelvin_benchmark_sphere_build.py` (parameterised core,
-  `--frac 1_2|1_4|1_8`)
-
-All four scripts mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m.
-
-## Two non-obvious Cubit fixes embedded in the build core
+## Two non-obvious Cubit fixes found while building these samples
 
 1. `subtract A from B keep` does NOT carve B in Cubit 2025.3.
    Workaround: drop `keep`, then re-create A as a fresh primitive.
@@ -2554,7 +2558,7 @@ mirror plane reverses the source vector `H0 z_hat -> -H0 z_hat`,
 so the problem is **not 1/8-symmetric**.  No amount of BC tuning on
 the z=0 cut can recover the analytical solution -- the source itself
 breaks the third symmetry.  1/2 (split y) and 1/4 (split x and y) are
-the maximum reductions for this BVP and are the only samples shipped.
+the maximum reductions for this BVP.
 
 Do NOT conflate this with the **EM panel (C-type magnet) 1/8 case**:
 that BVP has no source vector; the iron yoke + coil ampere-turns are
@@ -3476,12 +3480,12 @@ KELVIN_CURVED_GEOMETRY = """
 Keep the pinned Netgen/NGSolve runtime unchanged. Do not rebuild or monkeypatch
 Netgen to compensate for an unqualified artifact or persistence route. Netgen/
 NGSolve owns spaces, Piola maps, orientations, quadrature and assembly;
-cubit-mesh-export owns Cubit export and its high-order geometry. MCP consumes
+`radia_mcp.cubit` owns Cubit export and its high-order geometry. MCP consumes
 checked artifacts through the existing tools; it does not implement a second
 mesher or coefficient repair pipeline.
 
-Consult the owning cubit-mesh-export README, "Explicit named periodic export",
-and its installed artifact provenance before selecting that producer route.
+Consult `cubit_docs(topic="export_curved")` (named periodic export) and the
+deployed `cubit_to_vol_export.dll` provenance before selecting that producer route.
 The named-curved integration contract is one translation, name `kt`, group 1,
 type PERIODIC, for polynomial q1/q2/q3 tetrahedra with linear triangular/tetrahedral
 connectivity. This contract is not a claim that an older installed exporter has

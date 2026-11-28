@@ -66,7 +66,7 @@ def build_mesh(case, h, work, air_radius=AIR_RADIUS):
         mesh.Curve(2)
         vol = work / f"air_{h:g}_{air_radius:g}.vol"
         mesh.ngmesh.Save(str(vol))
-    from cubit_mesh_export.check import check_consistency
+    from radia.vol_check import check_consistency
     contract = {"schema": "radia.vol-label-contract.v1", "application": "bored_workpiece", "required": {"materials": ["air"], "boundaries": ["sibc", "outer"]}}
     checked = check_consistency(str(vol), contract=contract)
     if not checked["passed"]:

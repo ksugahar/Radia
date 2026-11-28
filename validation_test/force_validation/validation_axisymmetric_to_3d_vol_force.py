@@ -118,7 +118,7 @@ block 1 add tet all
 block 1 name "target"
 block 2 add tri all
 block 2 name "boundary"
-export netgen "{_rel(vol_path)}" order 1 overwrite
+export vol "{_rel(vol_path)}" order 1 overwrite
 exit
 """
     path.write_text(text, encoding="ascii")

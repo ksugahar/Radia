@@ -187,7 +187,7 @@ def _run_builder(args):
 
 def run_validation(args):
     import ngsolve as ng
-    from cubit_mesh_export.check import check_consistency
+    from radia.vol_check import check_consistency
 
     import radia as rad
     from radia import vim

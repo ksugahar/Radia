@@ -1,8 +1,8 @@
-"""Build the canonical Cubit 2025.12 curved-HEX BDM2 validation mesh.
+"""Build the canonical Cubit curved-HEX BDM2 validation mesh.
 
 The generated order-2 Netgen ``.vol`` is temporary input for
 ``validate_curved_hex_bdm2_cubit.py``.  Cubit/ACIS owns the cylinder geometry
-and ``cubit-mesh-export`` owns the high-order node placement.  No mesh artifact
+and ``export vol`` (``radia_mcp.cubit``) owns the high-order node placement.  No mesh artifact
 is tracked in Git.
 """
 
@@ -13,7 +13,8 @@ import os
 import sys
 from pathlib import Path
 
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.layout import export_plugin_directory
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 
 DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
 
@@ -21,16 +22,15 @@ DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
 def build(output: Path) -> Path:
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
-        raise RuntimeError("Coreform Cubit 2025.12 is required")
-    plugin_dir = Path(cubit_bin).parent / "bin" / "plugins"
-    if not plugin_dir.is_dir():
-        raise RuntimeError(f"Cubit plugin directory does not exist: {plugin_dir}")
+        raise RuntimeError("Coreform Cubit is required")
+    plugin_dir = export_plugin_directory(Path(cubit_bin))
     sys.path.append(str(cubit_bin))
     os.environ["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
 
+    import ngsolve  # noqa: F401  -- the fork nglib the export plugin links, loaded before Cubit
     import cubit
 
-    cubit.init(["cubit", "-nojournal", "-batch", "-commandplugindir", str(plugin_dir)])
+    cubit.init(["cubit", "-nojournal", "-batch", "-noinitfile"])
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     for command in (
@@ -47,7 +47,7 @@ def build(output: Path) -> Path:
             "canonical curved-cylinder mesh must contain exactly 4 HEX cells "
             f"(got {cubit.get_hex_count()})"
         )
-    cubit.cmd(f'export netgen "{output}" order 2 overwrite')
+    cubit.cmd(f'export vol "{output}" order 2 overwrite')
     if not output.is_file():
         raise RuntimeError(f"Cubit did not create {output}")
     return output

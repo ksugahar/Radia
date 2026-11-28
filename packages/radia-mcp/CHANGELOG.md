@@ -19,6 +19,21 @@ crystallized as its own package.
     with the same `radia_acoustic_usage`, `radia_acoustic_capabilities`,
     `radia_acoustic_fsi_preflight` and `radia_acoustic_cq_grid` tools.
   Use the destination's status and reload tools or its capability-pack status.
+- Rename the Cubit `.vol` exporter after what it does. The Cubit command is
+  `export vol` (was `export netgen`), the plugin is `cubit_to_vol_export.dll`
+  (was `radia_cubit_export.dll`), its source is `native/cubit_to_vol_export`,
+  and the menu, toolbar and action are `Export Vol` / `Vol Export` /
+  `Export .vol...`. Journals using `export netgen` must be updated; the old
+  names are not kept.
+- Add `radia_mcp.cubit.vol_mesh`: build the `export vol` mesh of the current
+  Cubit model in memory (`mesh_from_cubit`) and curve it again at another
+  order (`curve`) while the Cubit session lives. `build.py` also builds the
+  `_cubit_to_vol_mesh` module next to the plugin DLL.
+- The Cubit lint flags `mesh.Curve()` on a `mesh_from_cubit` mesh
+  (`curve-on-live-cubit-mesh`, HIGH; use `vol_mesh.curve`), and the rule
+  `curve-without-export-netgen` is renamed `curve-without-export-vol`. The
+  Cubit knowledge and `docs/ngsolve_integration/curve_order.md` no longer say a
+  Cubit mesh keeps its export order: only a saved `.vol` does.
 
 ## [2.0.3] - 2026-11-21
 

@@ -480,13 +480,13 @@ def _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes, expected_sha
             raise ValueError("Checked-mesh approved provenance mismatch: " + key)
     checker = value["checker"]
     if (not isinstance(checker, dict) or set(checker) != {"distribution", "version", "record_sha256"}
-            or checker["distribution"] != "cubit-mesh-export"
+            or checker["distribution"] != "radia"
             or not isinstance(checker["version"], str) or checker["version"].lower() in ("", "unknown")
             or not re.fullmatch(r"[0-9a-f]{64}", checker["record_sha256"])):
         raise ValueError("Checked-mesh distribution identity is incomplete")
     argv = value["argv"]
     if (not isinstance(argv, list) or len(argv) != 9 or not all(isinstance(x, str) for x in argv)
-            or argv[1:3] != ["-m", "cubit_mesh_export.check"]
+            or argv[1:3] != ["-m", "radia.vol_check"]
             or argv[4:6] != ["--strict-labels", "--contract"] or argv[7:] != ["--format", "json"]
             or PureWindowsPath(argv[3]).name not in ("mesh.vol", "mesh.vol.gz")
             or PureWindowsPath(argv[6]).name != "labels.json"
@@ -504,7 +504,7 @@ def _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes, expected_sha
     if value.get("report_sha256") != hashlib.sha256(raw_report).hexdigest():
         raise ValueError("Checked-mesh raw report SHA256 mismatch")
     report = _strict_json(raw_report)
-    if (report.get("schema") != "cubit-mesh-export.vol-check.v1" or report.get("passed") is not True
+    if (report.get("schema") != "radia.vol-check.v1" or report.get("passed") is not True
             or report.get("warnings") != [] or report.get("vol_file") != argv[3]):
         raise ValueError("Checked-mesh authoritative report did not pass")
     cad = report.get("cad_reference", {})
@@ -532,7 +532,7 @@ def _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes, expected_sha
     runtime_ngsolve = metadata.version("ngsolve")  # Metadata only, no FE/native import.
     if (value["ngsolve_version"] != runtime_ngsolve
             or report.get("versions", {}).get("ngsolve") != runtime_ngsolve
-            or report.get("versions", {}).get("cubit_mesh_export") != checker["version"]):
+            or report.get("versions", {}).get("radia") != checker["version"]):
         raise ValueError("Checked-mesh checker/runtime ABI mismatch")
     return value
 

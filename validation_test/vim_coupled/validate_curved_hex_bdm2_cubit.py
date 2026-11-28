@@ -14,13 +14,14 @@ import argparse
 import hashlib
 import json
 import platform
+import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
 import ngsolve as ng
 import numpy as np
-from cubit_mesh_export.check import check_consistency
+from radia.vol_check import check_consistency
 
 import radia
 from radia.vim import FieldFromSolution, MagnetizationSource, Solve
@@ -163,8 +164,10 @@ def run(mesh_path: Path) -> dict:
             "radia": getattr(radia, "__version__", "unknown"),
             "ngsolve": getattr(ng, "__version__", "unknown"),
             "python": platform.python_version(),
-            "cubit_mesh_export": mesh_check["versions"]["cubit_mesh_export"],
         },
+        "source_sha": subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parents[2]), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip(),
         "mesh": {
             "path": str(mesh_path),
             "sha256": _sha256(mesh_path),

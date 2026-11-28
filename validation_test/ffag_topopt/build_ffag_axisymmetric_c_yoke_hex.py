@@ -113,7 +113,7 @@ def build_mesh(cubit, *, output: Path, step_output: Path | None,
             # contract explicit to the Netgen exporter.
             "skin block 1 make sideset 20",
             'sideset 20 name "yoke_boundary"',
-            f'export netgen "{scaled_output.as_posix()}" order 1 overwrite'):
+            f'export vol "{scaled_output.as_posix()}" order 1 overwrite'):
         cubit.cmd(command)
     hexes = int(cubit.get_hex_count())
     sidesets = []

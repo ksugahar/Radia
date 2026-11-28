@@ -376,10 +376,14 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     if "kelvin" not in mats:
         raise ValueError(f"--iron-vol has no 'kelvin' material (open-boundary "
                          f"ball); available: {sorted(mats)}")
-    if mesh.ngmesh.GetNrIdentifications() == 0:
-        raise ValueError("--iron-vol has 'kelvin' material but no periodic "
-                         "identification (kelvin_int<->kelvin_ext). Re-export "
-                         "with the Kelvin pipeline.")
+    from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+    try:
+        pairs = ensure_kelvin_identification(mesh)
+    except ValueError as exc:
+        raise ValueError(f"--iron-vol has 'kelvin' material but no usable Kelvin "
+                         f"pairs: {exc}") from None
+    if pairs["source"] == "post_hoc":
+        mesh = Mesh(mesh.ngmesh)  # new point pairs: rebuild the topology
 
     # Kelvin ball geometry from the mesh: centre via detect_kelvin_offset,
     # radius = max kelvin-vertex distance from that centre (same as calc_fem_kelvin).

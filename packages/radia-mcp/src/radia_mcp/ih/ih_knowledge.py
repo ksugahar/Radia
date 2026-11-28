@@ -177,9 +177,9 @@ physical groups when the exporter supports the selected scope.
 | coil_surface | coil_surface | Coil surface |
 | outer | outer | Far-field (A=0) |
 
-### Mesh from Cubit (export netgen)
+### Mesh from Cubit (export vol)
 
-The recommended path is `export netgen` (Cubit plugin command),
+The recommended path is `export vol` (Cubit plugin command),
 which writes the .vol directly with proper FaceDescriptors, materials,
 and (optionally) Kelvin Periodic identifications. The legacy
 `Cubit2gmsh.py` workflow is obsolete.
@@ -242,7 +242,7 @@ cubit.cmd('sideset 2 name "sink"')
 
 # Export
 out = os.path.abspath("model.vol")
-cubit.cmd(f'export netgen "{out}" order 2 overwrite')
+cubit.cmd(f'export vol "{out}" order 2 overwrite')
 ```
 
 Then on the NGSolve side: `mesh = Mesh("model.vol")`.

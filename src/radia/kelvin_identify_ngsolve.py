@@ -8,11 +8,10 @@ Why this exists
 ---------------
 There are three upstream paths that produce a Kelvin-ready `.vol`:
 
-1. **Cubit C++ exporter** (`ExportNetgenCommand.cpp`): writes point-pair
-   identifications during `export netgen` if every kelvin_int
-   vertex matches a kelvin_ext vertex within tolerance after the rigid
-   Kelvin translation.  All-or-nothing: a single unmatched vertex
-   skips the C++ identification entirely.
+1. **Cubit C++ exporter** (`export vol ... kelvin_tx/ty/tz
+   kelvin_match`): labels the air|kelvin interface `kelvin_int` and the
+   outer Kelvin boundary `kelvin_ext` and writes every point pair as the
+   periodic group `kelvin`.  Path 3 checks those pairs independently.
 
 2. **NGSolve OCC** + `Identify(IdentificationType.PERIODIC)`: must be
    called AFTER `Glue` and BEFORE `Mesh()`.  Bakes both point pairs
@@ -21,8 +20,7 @@ There are three upstream paths that produce a Kelvin-ready `.vol`:
 3. **This module** (`add_kelvin_identification`): works on an
    ALREADY-LOADED `ngsolve.Mesh` -- no Cubit, no OCC, no re-export.
    Useful when:
-     - the Cubit exporter skipped due to a single tolerance miss
-       (typical 1/8-octant geometry, copy-mesh sub-pixel imprecision)
+     - you check the pairs path 1 wrote (pair a stripped copy, compare)
      - you received a `.vol` from elsewhere without identifications
      - you want to compare a "with-Kelvin" and a "without-Kelvin" run
        on the same mesh without re-running Cubit
@@ -91,6 +89,7 @@ import numpy as np
 __all__ = [
     "add_kelvin_identification",
     "detect_kelvin_offset",
+    "ensure_kelvin_identification",
     "has_kelvin_identification",
 ]
 
@@ -204,8 +203,12 @@ def add_kelvin_identification(
     idnr: int | None = None,
     point_tolerance: Optional[float] = None,
     skip_if_existing: bool = True,
+    require_complete: bool = False,
 ) -> dict:
     """Add Kelvin Periodic point-pair identification to an existing mesh.
+
+    With ``require_complete`` an unmatched vertex raises ``ValueError``
+    before any pair is registered, so a refused mesh is left unchanged.
 
     Walks the BND surface elements, collects vertices on `inner_bnd`
     and `outer_bnd`, translates the inner set by `kelvin_offset` (auto-
@@ -379,6 +382,13 @@ def add_kelvin_identification(
             else:
                 n_unmatched += 1
 
+    if require_complete and (n_unmatched or len(pairs) != len(outer_pids)):
+        raise ValueError(
+            f"pairing after load left {n_unmatched} unmatched {inner_bnd} "
+            f"vertices ({len(pairs)} pairs for {len(inner_pids)} {inner_bnd} / "
+            f"{len(outer_pids)} {outer_bnd} vertices, tolerance "
+            f"{point_tolerance:.3e} m); no pair was registered")
+
     # --- Register identifications -------------------------------------------
     ngmesh = mesh.ngmesh
     for p1, p2 in pairs:
@@ -393,3 +403,108 @@ def add_kelvin_identification(
         "point_tolerance": float(point_tolerance),
         "was_pre_existing": False,
     }
+
+
+def ensure_kelvin_identification(mesh, *, inner_bnd: str = "kelvin_int",
+                                 outer_bnd: str = "kelvin_ext") -> dict:
+    """Use the Kelvin pairs of the ``.vol``, or pair a mesh that has none.
+
+    The Cubit export writes the pairs (``source == "vol"``).  A mesh with the
+    Kelvin labels and no identification at all is paired after load
+    (``source == "post_hoc"``), with every vertex matched within
+    ``1e-6 * |offset|``.  Refused, never repaired: a mesh with some other or
+    incomplete identification, a curved mesh (``GetCurveOrder() > 1``; only
+    the export synchronises the curved coefficients of the paired faces),
+    and any unmatched vertex.
+    """
+    if has_kelvin_identification(mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd):
+        return {"source": "vol", **_kelvin_group(mesh, inner_bnd, outer_bnd)}
+    if tuple(mesh.ngmesh.GetIdentifications()):
+        raise ValueError(
+            f"the mesh has identifications that do not pair every {inner_bnd} "
+            f"vertex with a {outer_bnd} vertex; re-export it with the Kelvin "
+            "pairs instead of adding more")
+    curve_order = int(mesh.ngmesh.GetCurveOrder())
+    if curve_order > 1:
+        raise ValueError(
+            f"the curved mesh (curve order {curve_order}) has no Kelvin pairs; "
+            "pairing after load would leave the paired faces' curved "
+            "coefficients unsynchronised. Export it with the Kelvin pairs "
+            "(export vol ... kelvin_tx/ty/tz kelvin_match)")
+    offset = detect_kelvin_offset(mesh)
+    off_len = math.sqrt(sum(c * c for c in offset))
+    if not (off_len > 0 and math.isfinite(off_len)):
+        raise ValueError(f"no Kelvin offset could be detected from {inner_bnd}/"
+                         f"{outer_bnd} (got {offset})")
+    info = add_kelvin_identification(
+        mesh, kelvin_offset=offset, inner_bnd=inner_bnd, outer_bnd=outer_bnd,
+        point_tolerance=1e-6 * off_len, skip_if_existing=False,
+        require_complete=True)
+    # The pairs were added to the Netgen mesh; a fresh Mesh exposes them as
+    # the solver sees them.
+    import ngsolve
+    rebuilt = ngsolve.Mesh(mesh.ngmesh)
+    return {"source": "post_hoc", **info, **_kelvin_group(rebuilt, inner_bnd, outer_bnd)}
+
+
+def _kelvin_group(mesh, inner_bnd: str, outer_bnd: str) -> dict:
+    """Check the Kelvin pairs as the solver sees them: one periodic group.
+
+    Uses the periodic vertex pairs of the NGSolve mesh (what ``Periodic``
+    spaces use), not the raw identification entries: a pair stored with a
+    non-periodic identification type is invisible to the solver.  The
+    Kelvin group must hold only ``inner_bnd`` -> ``outer_bnd`` pairs, be one
+    identification number, be one-to-one over all vertices of both
+    boundaries, and share one translation (within 1e-6 of its length).
+    """
+    import ngsolve
+
+    inner = _boundary_vertex_ids(mesh, inner_bnd)
+    outer = _boundary_vertex_ids(mesh, outer_bnd)
+    kelvin = inner | outer
+    raw = [pair for pair in _identified_point_pairs(mesh.ngmesh.GetIdentifications())
+           if set(pair) & kelvin]
+    periodic = [((int(a) + 1, int(b) + 1), int(idnr))
+                for (a, b), idnr in mesh.GetPeriodicNodePairs(ngsolve.VERTEX)]
+    groups = {idnr for (a, b), idnr in periodic if {a, b} & kelvin}
+    if len(groups) != 1:
+        raise ValueError(
+            f"the solver sees {len(groups)} periodic groups on {inner_bnd}/{outer_bnd} "
+            f"({len(raw)} stored pairs touch them); expected one Kelvin group. "
+            "A pair stored with a non-periodic identification type is not used")
+    idnr = next(iter(groups))
+    seen_in: set[int] = set()
+    seen_out: set[int] = set()
+    shifts = []
+    for (a, b), group in periodic:
+        if group != idnr:
+            if {a, b} & kelvin:
+                raise ValueError(f"points {a}, {b} on {inner_bnd}/{outer_bnd} are in "
+                                 f"periodic group {group}, not the Kelvin group {idnr}")
+            continue
+        if a in outer and b in inner:
+            a, b = b, a
+        if not (a in inner and b in outer):
+            raise ValueError(f"the Kelvin group {idnr} pairs points {a}, {b}, which "
+                             f"are not a {inner_bnd} -> {outer_bnd} pair")
+        if a in seen_in or b in seen_out:
+            raise ValueError(f"a {inner_bnd} or {outer_bnd} vertex is paired twice "
+                             f"(points {a}, {b}); the Kelvin pairs are not one-to-one")
+        seen_in.add(a)
+        seen_out.add(b)
+        pa, pb = mesh.vertices[a - 1].point, mesh.vertices[b - 1].point
+        shifts.append(tuple(pb[k] - pa[k] for k in range(3)))
+    if seen_in != inner or seen_out != outer:
+        raise ValueError(f"the Kelvin group covers {len(seen_in)}/{len(inner)} {inner_bnd} and "
+                         f"{len(seen_out)}/{len(outer)} {outer_bnd} vertices; expected all")
+    if len(raw) != len(shifts):
+        raise ValueError(f"{len(raw)} stored pairs touch {inner_bnd}/{outer_bnd} but the "
+                         f"solver sees {len(shifts)}; some are not periodic")
+    mean = tuple(sum(s[k] for s in shifts) / len(shifts) for k in range(3))
+    length = math.sqrt(sum(c * c for c in mean))
+    spread = max(math.sqrt(sum((s[k] - mean[k]) ** 2 for k in range(3))) for s in shifts)
+    if not (length > 0 and spread <= 1e-6 * length):
+        raise ValueError(f"the Kelvin pairs do not share one translation (mean {mean}, "
+                         f"spread {spread:.3e} m); {outer_bnd} is not a translated copy")
+    return {"n_pairs": len(shifts), "idnr": idnr, "translation": mean,
+            "translation_spread": spread}

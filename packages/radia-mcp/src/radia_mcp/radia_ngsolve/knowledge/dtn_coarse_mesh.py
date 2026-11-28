@@ -2805,7 +2805,7 @@ identical.
 ## 2. Hex Kelvin ball -- works, and is equivalent to tet ("hex-vs-tet wash")
 
 Cubit O-grid sphere (`volume <id> scheme sphere`) -> high-order netgen export
-(`export netgen "<f>" order N`) -> `ngsolve.Mesh(...)` -> Kelvin DtN reproduces the
+(`export vol "<f>" order N`) -> `ngsolve.Mesh(...)` -> Kelvin DtN reproduces the
 floor end-to-end. Full hex ball (256 hex, geometry order 2):
     n=1 order1 (>=n)                hex 1.9e-3    (tet 7.0e-4)
     n=1 order3                      hex 1.6e-5    (tet 4.6e-6)   <- same ~1e-5 floor
@@ -2843,7 +2843,7 @@ shot, so a single coarse closure at p>=n beats any graded multi-layer shell.
 ## 4. Curving MUST come from the external mesher -- never .Curve() an imported .vol
 
 NGSolve never builds hex from geometry, so hex curving HAS to be baked in by the
-mesher (Cubit `export netgen ... order N`). An imported .vol carries no CAD
+mesher (Cubit `export vol ... order N`). An imported .vol carries no CAD
 geometry, so `mesh.Curve(k)` rebuilds the curved nodes FLAT and collapses Γ to the
 inscribed polytope. Verified (NGSolve 6.2.2604, the order-2 hex ball):
 `Curve(1)==Curve(2)==Curve(3)` all degrade the DtN floor 1.6e-5 -> 5.3e-3 (~320x)

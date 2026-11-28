@@ -79,7 +79,7 @@ Zsの不連続面でも面ごとの重みを使います。非線形ESIMのgenus
 モデルはジョブ用ディレクトリに生成します。新しいソルバーや追跡対象の SLX を
 追加する例ではありません。
 
-固定した Radia wheel/native runtime、互換 MEX、`cubit_mesh_export`、MATLAB、
+固定した Radia wheel/native runtime、互換 MEX、MATLAB、
 公式 MCP/Toolkit、Python MCP SDK と pytest がある validation host で実行します。
 既存 MATLAB がある場合は追加起動せず、明示したセッションを再利用する必要があります。
 この実行例は MATLAB が存在しない場合だけ、公式 MCP が所有する1セッションを起動します。

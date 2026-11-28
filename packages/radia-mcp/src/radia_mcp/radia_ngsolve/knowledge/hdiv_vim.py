@@ -512,14 +512,12 @@ production sizes the far cost is the kernel double sum alone.
 
 Body-only meshes are the native input of this solver: the demag operator
 is an integral equation, so no air mesh, Kelvin-transformation domain, or PML exists to
-re-mesh when the body changes.  The MCP chain: `radia.topopt_cad
-.write_vfrac_exodus` (density -> Sculpt-native volume fractions) -> the
-cubit server's `cubit_vfrac_to_vol` (standalone `sculpt.exe
---input_vfrac`, gated all-hex `.vol`; `cubit_stl_to_vol` is the STL
-fallback) -> this server's `hdiv_vim_demag_eval` (uniform-field demag
-factor + iterations + timings on the body-only `.vol`).  The vfrac-route
-validation lane locks the whole chain against the sphere's closed-form
-demag factor 1/3.
+re-mesh when the body changes.  `radia.topopt_cad.write_vfrac_exodus`
+writes a density as Sculpt-native volume fractions (`sculpt
+--input_vfrac`).  The caller meshes the body with Sculpt and supplies the
+resulting all-hex mesh as a checked body-only `.vol` (closure, inversion
+and a complete boundary skin); this server's `hdiv_vim_demag_eval`
+returns the uniform-field demag factor, iterations and timings on it.
 
 ### Multi-material
 
@@ -527,10 +525,9 @@ demag factor 1/3.
 sub-sample goes to the largest field that clears the level, so the
 fractions PARTITION the body and Sculpt builds a CONFORMAL hex interface
 between the regions (shared nodes -- an STL route would have to boolean
-two surfaces).  `cubit_vfrac_to_vol(material_names="core,shell")` carries
-the labels into the `.vol` materials, and `hdiv_vim_demag_eval(
-mu_r="core=1000,shell=50")` feeds the per-region mapping that
-`vim.Solve` already understands.
+two surfaces).  When the supplied `.vol` carries those region names as
+its materials, `hdiv_vim_demag_eval(mu_r="core=1000,shell=50")` feeds the
+per-region mapping that `vim.Solve` already understands.
 
 Two measurement facts for interpreting multi-material results
 (2026-08-10):
@@ -547,7 +544,7 @@ Two measurement facts for interpreting multi-material results
 
 ### Periodic cells and what IMA can (and cannot) reduce
 
-`cubit_vfrac_to_vol(periodic=True)` builds a periodic RVE: the node set
+Sculpt `--periodic` on the volume-fraction input builds a periodic RVE: the node set
 becomes invariant under the period, so one cell TILES conformally
 (measured seam fill rate 1.000 against 0.061 for the same input without
 `--periodic`).  On the Cartesian volume-fraction route the periodicity is

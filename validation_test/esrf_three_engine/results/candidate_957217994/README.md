@@ -9,8 +9,9 @@ do not certify field agreement, quadrature convergence, or performance.
 - CI run: `34703027075`, successful build/import/native smoke/wheel production.
 - Wheel SHA256: `a4c64938ac814fc12b6631d7ae1e2bddf5da01efd25238ddda052ea080ccafe7`.
 - Native SHA256: `f99ec26e15d880431ed560c3f5cac7a537056e66f1bea0872186cfe32c2158a0`.
-- The isolated compute host venv passed `pip check`. `preflight.json` records the
-  installed Python/native files checked against the actual wheel bytes.
+- The isolated compute host venv passed `pip check`. Its preflight checked the
+  installed Python/native files against the actual wheel bytes; `preflight.json`
+  was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated.
 - No native binary was copied into an existing installation.
 
 ## Which mesh was used?
@@ -37,7 +38,8 @@ bytes were originally generated or that their resolution is sufficient.
 - The **constant** trace squared-integral ratios differ from one by at most
   `3.6e-15`. This sanity check is not a proof for all nonconstant trace modes.
 
-`fem_check.json` and `iron_check.json` are strict structural/label checks.
+The FEM and iron mesh checks were strict structural/label checks
+(`fem_check.json` and `iron_check.json` was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated).
 Topology, volume and area agreement do not prove geometric fidelity or field
 convergence. The C-type N=6/12/24 gap family is a different geometry and must
 not be substituted for this ESRF6 quadrupole.

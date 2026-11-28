@@ -1,5 +1,4 @@
-"""Guards: native failure propagation and scoped build cleanup; signed Cubit
-payload bytes and mtimes cannot be replaced by an ordinary build.
+"""Guards: native failure propagation and scoped build cleanup.
 
 Assumes: production Build.ps1 AST/guards execute on isolated fixture paths;
 Windows PowerShell 7/cmd.exe, native calls and deletion stubbed, no compilation.
@@ -60,46 +59,6 @@ def test_rebuild_cleans_only_selected_build_directories(tmp_path, radia_only, ax
     assert result["removed"] == expected, (result, expected)
 
 
-@pytest.mark.parametrize("radia_only", [False, True])
-def test_ordinary_build_preserves_signed_cubit_payload_bytes_and_mtimes(tmp_path, radia_only):
-    import os
-    import shutil
-    project = tmp_path / "project"
-    package = project / "packages/cubit-mesh-export/src/cubit_mesh_export"
-    raw = project / "src/cubit_plugin"
-    package.mkdir(parents=True)
-    # Satisfy the unchanged required Radia-output checks; the ABI invocation
-    # is stubbed below, so these sentinels are never loaded as native code.
-    (project / "build-msvc").mkdir()
-    (project / "src/radia").mkdir(parents=True)
-    for name in ("_radia_pybind.cp312-win_amd64.pyd", "peec_matrices.cp312-win_amd64.pyd"):
-        (project / "build-msvc" / name).write_bytes(b"required Radia build-output sentinel")
-    for directory in (raw / "build-pyd", raw / "build-ccm"):
-        directory.mkdir(parents=True)
-    files = [package / name for name in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd", "native_payloads.json")]
-    for path in files:
-        path.write_bytes(b"signed release sentinel -- never load as native")
-        os.utime(path, (1_600_000_000, 1_600_000_000))
-    (raw / "build-pyd/cubit_mesh_curver.cp312-win_amd64.pyd").write_bytes(b"raw candidate")
-    (raw / "build-ccm/cubit_mesh_export.ccm").write_bytes(b"raw candidate")
-    (raw / "geometry.cpp").write_bytes(b"// source mtime sentinel\n")
-    os.utime(raw / "geometry.cpp", (1_700_000_000, 1_700_000_000))
-    before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
-    # A tiny independent index makes tracked-byte preservation observable.
-    git = shutil.which("git")
-    assert git, "Git is required for tracked-payload contracts"
-    def git_run(*args):
-        return subprocess.run([git, *args], cwd=project, capture_output=True,
-                              encoding="utf-8", errors="replace", timeout=15)
-    assert git_run("init", "-q").returncode == 0
-    assert git_run("add", "-f", "--", *[str(p.relative_to(project)) for p in files]).returncode == 0
-    result = _execute_build_scope(tmp_path, "payload", radia_only, False, True)
-    after = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
-    assert after == before, (result, before, after)
-    diff = git_run("diff", "--exit-code", "--")
-    assert diff.returncode == 0, diff.stdout + diff.stderr
-
-
 def _execute_build_scope(tmp_path, action, radia_only, axi_only, sdk):
     """Execute the production AST block; replace only native calls/deletion."""
     import json
@@ -130,19 +89,6 @@ if ($Action -eq 'cleanup') {
     function Remove-Item { param([string]$LiteralPath,[switch]$Recurse,[switch]$Force)
         $removed.Add([IO.Path]::GetFullPath($LiteralPath))
     }
-} elseif ($Action -eq 'payload') {
-    $nodes=@($ast.FindAll({param($n)
-        $n -is [System.Management.Automation.Language.IfStatementAst] -and
-        $n.Extent.Text -match '^if\s*\(-not\s+\$AxiFemOnly\)' -and
-        $n.Extent.Text.Contains('$modules = @(') -and
-        $n.Extent.Text.Contains('check_native_module_abi.py')
-    },$true))
-    if ($nodes.Count -ne 1) { throw "Expected one payload block, got $($nodes.Count)" }
-    # The production copy/touch logic executes on isolated fake files. Never
-    # invoke a compiler, Python ABI loader, Cubit, installation or deployment.
-    $PythonExecutable='Invoke-PythonStub'
-    function Invoke-PythonStub { $global:LASTEXITCODE=0 }
-    function Write-NativeBuildProvenance { }
 } else { throw 'Unknown action' }
 & ([scriptblock]::Create($nodes[0].Extent.Text))
 $record=@{action=$Action; removed=@($removed.ToArray()); radia=$RadiaOnly; axi=$AxiFemOnly; sdk=$BuildCubitPlugin}

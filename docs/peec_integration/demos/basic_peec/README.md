@@ -31,8 +31,8 @@ The mesh must originate in Cubit or Netgen. These demos never read or convert
 Gmsh output. Material properties, cross-sections, excitation and solve settings
 remain defined by each demo. No bundled display mesh is used as solver input.
 
-The canonical label-contract check requires `cubit-mesh-export` (available via
-`radia[cubit]`); it does not invoke licensed Cubit. Mesh access uses Netgen/NGSolve.
+The canonical label-contract check is `radia.vol_check` (`check-vol`); it
+does not invoke licensed Cubit. Mesh access uses Netgen/NGSolve.
 
 The versioned label contract must declare SI units `m` (top-level `units`
 for a surface mesh, or `centerline.units` for a centerline). Other units

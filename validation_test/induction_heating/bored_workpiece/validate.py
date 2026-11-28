@@ -146,7 +146,7 @@ def fem(h,paths,currents,work,air_radius=.18):
         volume2=float(ng.Integrate(1,mesh))
         area2=float(ng.Integrate(1,mesh,ng.BND,definedon=mesh.Boundaries('sibc')))
         vol=work/f'air_{h:g}_{air_radius:g}.vol';mesh.ngmesh.Save(str(vol))
-    from cubit_mesh_export.check import check_consistency
+    from radia.vol_check import check_consistency
     contract={'schema':'radia.vol-label-contract.v1','application':'bored_workpiece',
               'required':{'materials':['air'],'boundaries':['sibc','outer']}}
     checked=check_consistency(str(vol),contract=contract)
@@ -192,7 +192,7 @@ def provenance():
         source_dirty=bool(subprocess.check_output(['git','-c','safe.directory=*','status','--porcelain','--','src'],cwd=ROOT,text=True).strip()),
         utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         installed_native_distribution=importlib.metadata.version('radia'),
-        mesh_checker_version=importlib.metadata.version('cubit-mesh-export'),
+        mesh_checker_version=importlib.metadata.version('radia'),
         python=platform.python_version(),ngsolve=ng.__version__,numpy=np.__version__,
         scipy=scipy.__version__,platform_class=platform.system(),threads=2,
         radia_import='src/radia/__init__.py')

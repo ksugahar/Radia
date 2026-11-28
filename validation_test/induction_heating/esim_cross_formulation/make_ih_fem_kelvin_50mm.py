@@ -11,7 +11,7 @@ comparison between them isolates the outer-field formulation.
 
 Same coil (gapped torus R=30mm / r=3mm / 355deg sweep), same air
 sphere R=60mm, and the same `add_kelvin_cubit` construction as
-`samples/ih_fem_kelvin_demo.py`; ONLY the workpiece cylinder differs
+`radia_mcp/cubit/samples/ih_fem_kelvin_demo.py`; ONLY the workpiece cylinder differs
 (demo is 20mm x 20mm, this is 50mm dia x 25mm).  The wp cavity
 surface is sized at 3 mm to match the BIE mesh density.
 
@@ -25,26 +25,14 @@ Output: <lane>/ih_fem_kelvin_50mm.vol  (gitignored; regenerated on
 demand).  Coil STEP is NOT re-exported -- the shared
 `samples/ih_fem_kelvin_demo_coil.step` is the identical coil.
 
-The Kelvin helper is imported from the DEPLOYED Cubit plugin
-(`<Cubit>/bin/plugins/cubit_helpers/add_kelvin.py`), which is the
-self-contained, Cubit-embedded-Python version.  Set
+The Kelvin helper is radia_mcp.cubit.kelvin.add_kelvin_cubit.  Set
 `RADIA_50MM_VOL_OUT` to override the output path.
 """
 import os
-import sys
 
 import cubit
 
-_HELPERS = os.path.join(
-    os.environ.get("CUBIT_PLUGIN_DIR",
-                   r"C:\Program Files\Coreform Cubit 2025.12\bin\plugins"),
-    "cubit_helpers")
-if os.path.isdir(_HELPERS) and _HELPERS not in sys.path:
-    sys.path.insert(0, _HELPERS)
-try:
-    from add_kelvin import add_kelvin_cubit
-except ImportError:
-    from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_cubit
+from radia_mcp.cubit.kelvin import add_kelvin_cubit, export_arguments
 
 # `__file__` is undefined when this script is exec()'d by make_meshes.py
 # inside a single cubit.init session; RADIA_50MM_VOL_OUT then supplies
@@ -130,7 +118,10 @@ cubit.cmd('sideset 3 name "sibc"')
 info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 
 # === 11. Export ===
-cubit.cmd('export netgen "%s" order 1 overwrite' % OUT_VOL)
+# The plugin writes the Kelvin pairs and needs a fresh output path.
+cubit.cmd('export vol "%s" order 1 %s overwrite' % (OUT_VOL, export_arguments(info)))
+if not os.path.isfile(OUT_VOL):
+    raise RuntimeError("export vol wrote no file: %s" % OUT_VOL)
 
 print()
 print("make_ih_fem_kelvin_50mm.py: done")

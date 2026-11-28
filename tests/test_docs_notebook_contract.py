@@ -162,8 +162,8 @@ def test_docs_do_not_restore_completed_migration_ledgers():
 def test_docs_do_not_restore_retired_result_bookkeeping():
     retired = {
         ROOT / "docs" / "axifem" / "axifem_element_evidence.json",
-        ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
-        ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
+        ROOT / "docs" / "cubit_export" / "cubit_export_showcase_results.json",
+        ROOT / "docs" / "cubit_export" / "netgen" / "p_convergence_demo_results.json",
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo_results.json",
         ROOT / "docs" / "clebsch_hodograph" / "excitation_invariant_field.json",
         ROOT / "docs" / "clebsch_hodograph" / "hodograph_bending_sy.json",
@@ -390,8 +390,6 @@ def test_migrated_docs_use_installed_dependencies():
         ROOT / "docs" / "gmsh_animation" / "moving_body_demo.py",
         ROOT / "docs" / "kelvin" / "dtn_spectrum_coarse_mesh_demo.py",
         ROOT / "docs" / "kelvin" / "Supplement" / "experiment_cg_smoother_equilibration.py",
-        ROOT / "docs" / "cubit_mesh_export" / "gmsh" / "gmsh_export_example.py",
-        ROOT / "docs" / "cubit_mesh_export" / "nastran" / "nastran_export_example.py",
     ]
     forbidden = ("build-msvc", "install_ngsolve", "packages/radia-mcp/src", "src/radia")
     offenders = []
@@ -417,3 +415,87 @@ def test_clebsch_docs_do_not_inject_radia_source():
         "Clebsch docs must import installed/editable radia: "
         + ", ".join(sorted(offenders))
     )
+
+
+_REPO_TOP = {"validation_test", "validation_records", "docs", "src", "packages", "tests", "tools"}
+
+
+def _path_parts(node):
+    """String parts of a ``root / 'a' / 'b/c'`` chain or a single literal, else None."""
+    import ast
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _path_parts(node.left)
+        right = _path_parts(node.right)
+        if right is None:
+            return None
+        return (left or []) + right
+    return None
+
+
+def _repo_json_reads(source):
+    """Repository-relative ``.json`` paths spelled in one notebook code cell."""
+    import ast
+
+    lines = [line for line in source.splitlines() if not line.lstrip().startswith(("%", "!"))]
+    try:
+        tree = ast.parse("\n".join(lines))
+    except SyntaxError:
+        return []
+    found = set()
+    for node in ast.walk(tree):
+        parts = _path_parts(node)
+        if not parts:
+            continue
+        rel = "/".join(p.strip("/") for p in parts).replace("\\", "/")
+        if rel.split("/", 1)[0] in _REPO_TOP and rel.endswith(".json"):
+            found.add(rel)
+    return sorted(found)
+
+
+def test_repo_json_reads_follow_path_joins():
+    cell = ("results_path = repo / 'validation_test' / 'cubit_export' / 'r.json'\n"
+            "other = 'validation_test/showcase/results/motor.json'\n"
+            "%matplotlib inline\n")
+    assert _repo_json_reads(cell) == ["validation_test/cubit_export/r.json",
+                                      "validation_test/showcase/results/motor.json"]
+
+
+def _unreadable_json(rels, tracked, root):
+    """Paths that are not both tracked by Git and present in the working tree."""
+    bad = []
+    for rel in rels:
+        if rel not in tracked:
+            bad.append(f"{rel} (not tracked)")
+        elif not (root / rel).is_file():
+            bad.append(f"{rel} (tracked but missing)")
+    return bad
+
+
+def test_unreadable_json_needs_tracked_and_present(tmp_path):
+    (tmp_path / "validation_test").mkdir()
+    (tmp_path / "validation_test" / "ok.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "validation_test" / "untracked.json").write_text("{}", encoding="utf-8")
+    tracked = {"validation_test/ok.json", "validation_test/gone.json"}
+    rels = ["validation_test/ok.json", "validation_test/gone.json",
+            "validation_test/untracked.json"]
+    assert _unreadable_json(rels, tracked, tmp_path) == [
+        "validation_test/gone.json (tracked but missing)",
+        "validation_test/untracked.json (not tracked)"]
+
+
+def test_docs_notebooks_read_tracked_result_json_that_exists():
+    tracked = set(subprocess.check_output(
+        ["git", "ls-files", "-z"], cwd=ROOT).decode("utf-8").split("\0"))
+    missing = []
+    for path in sorted((ROOT / "docs").rglob("*.ipynb")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for cell in data["cells"]:
+            if cell.get("cell_type") != "code":
+                continue
+            rels = _repo_json_reads("".join(cell.get("source", "")))
+            for bad in _unreadable_json(rels, tracked, ROOT):
+                missing.append(f"{path.relative_to(ROOT).as_posix()}: {bad}")
+    assert not missing, "notebook code reads JSON it cannot open: " + "; ".join(missing)

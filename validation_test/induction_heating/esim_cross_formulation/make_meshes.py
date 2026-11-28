@@ -6,7 +6,7 @@ All three are regenerated from TRACKED generators (the .vol files
 themselves are gitignored):
 
   1. samples/ih_fem_kelvin_demo.vol   (dia 20 x 20 small cylinder,
-     + ih_fem_kelvin_demo_coil.step)  -- from samples/ih_fem_kelvin_demo.py
+     + ih_fem_kelvin_demo_coil.step)  -- from radia_mcp/cubit/samples/ih_fem_kelvin_demo.py
   2. samples/ih_bem_sample_p1.vol     (dia 50 x 25 BIE surface mesh)
      -- from samples/ih_bem_sample.jou
   3. <lane>/ih_fem_kelvin_50mm.vol    (dia 50 x 25 FEM-Kelvin mesh)
@@ -17,11 +17,8 @@ surface).  Meshes (2) and (3) are INDEPENDENT surface discretisations
 of the same 50 mm cylinder -- comparing P_wp across them isolates the
 outer-field formulation from the mesh.
 
-NOTE (validation runtime / runtime host): `coreform_cubit -batch <script>` fails here with
-an RLM license error (-102) in headless batch, but the in-process
-Cubit Python API (`cubit.init([... , '-commandplugindir', plugins])`)
-authenticates correctly.  This script therefore drives everything in a
-single cubit.init() session rather than spawning batch subprocesses.
+Cubit runs in-process through its Python API (one cubit.init() session)
+with the radia-mcp command plugin from RADIA_CUBIT_PLUGIN_DIR.
 
 Usage:
     python make_meshes.py                # regenerate all that are missing
@@ -36,24 +33,35 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 SAMPLES = os.path.join(REPO, "src", "radia", "panels", "samples")
 
-DEMO_PY = os.path.join(SAMPLES, "ih_fem_kelvin_demo.py")
+MCP_SRC = os.path.join(REPO, "packages", "radia-mcp", "src")
+DEMO_PY = os.path.join(MCP_SRC, "radia_mcp", "cubit", "samples", "ih_fem_kelvin_demo.py")
 DEMO_VOL = os.path.join(SAMPLES, "ih_fem_kelvin_demo.vol")
 BEM_JOU = os.path.join(SAMPLES, "ih_bem_sample.jou")
 BEM_VOL = os.path.join(SAMPLES, "ih_bem_sample_p1.vol")
 FEM50_PY = os.path.join(HERE, "make_ih_fem_kelvin_50mm.py")
 FEM50_VOL = os.path.join(HERE, "ih_fem_kelvin_50mm.vol")
 
-CUBIT_BIN = os.environ.get(
-    "CUBIT_BIN", r"C:\Program Files\Coreform Cubit 2025.12\bin")
-CUBIT_PLUGINS = os.path.join(CUBIT_BIN, "plugins")
-
-
 def _init_cubit():
-    if CUBIT_BIN not in sys.path:
-        sys.path.insert(0, CUBIT_BIN)
+    """Headless Cubit with the cubit_to_vol_export plugin, in the production
+    worker's load order (radia_mcp.cubit.vol_export): Netgen runtime first,
+    then Cubit with CUBIT_PLUGIN_DIR = $RADIA_CUBIT_PLUGIN_DIR."""
+    plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
+    if not plugin_dir or not os.path.isfile(os.path.join(plugin_dir, "cubit_to_vol_export.dll")):
+        raise SystemExit("set RADIA_CUBIT_PLUGIN_DIR to the directory holding cubit_to_vol_export.dll")
+    import ngsolve  # noqa: F401
+    import netgen
+    from radia.cubit_locator import find_cubit_bin
+
+    cubit_bin = find_cubit_bin()
+    if cubit_bin is None:
+        raise SystemExit("Cubit not found: set CUBIT_BIN_DIR")
+    os.add_dll_directory(os.path.dirname(netgen.__file__))
+    if cubit_bin not in sys.path:
+        sys.path.insert(0, cubit_bin)
+    os.add_dll_directory(cubit_bin)
+    os.environ["CUBIT_PLUGIN_DIR"] = os.path.abspath(plugin_dir)
     import cubit
-    cubit.init(["cubit", "-nojournal", "-batch", "-nographics",
-                "-commandplugindir", CUBIT_PLUGINS])
+    cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
     return cubit
 
 
@@ -69,10 +77,12 @@ def _exec_generator(path, extra_globals=None):
 
 
 def gen_demo(cubit):
-    """samples/ih_fem_kelvin_demo.py writes its outputs next to getcwd()
-    when __file__ is absent; chdir to samples so the .vol + coil .step
-    land in the samples dir."""
+    """radia_mcp/cubit/samples/ih_fem_kelvin_demo.py writes its outputs to
+    getcwd(); chdir to samples so the .vol + coil .step land in the samples
+    dir. The script imports radia_mcp.cubit.kelvin from this checkout."""
     cubit.cmd("reset")
+    if MCP_SRC not in sys.path:
+        sys.path.insert(0, MCP_SRC)
     prev = os.getcwd()
     os.chdir(SAMPLES)
     try:
@@ -85,7 +95,7 @@ def gen_demo(cubit):
 def gen_bem(cubit):
     cubit.cmd("reset")
     cubit.cmd('play "%s"' % BEM_JOU.replace("\\", "/"))
-    cubit.cmd('export netgen "%s" order 1 overwrite'
+    cubit.cmd('export vol "%s" order 1 overwrite'
               % BEM_VOL.replace("\\", "/"))
     _require(BEM_VOL, "BEM (dia 50 BIE surface mesh)")
 

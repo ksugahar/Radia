@@ -478,7 +478,7 @@ def _publication_attempt():
 
 @pytest.mark.parametrize("key,value", [("GITHUB_EVENT_NAME", "workflow_run"),
     ("GITHUB_REF_TYPE", "branch"), ("GITHUB_REF", "refs/heads/main"),
-    ("GITHUB_REF", "refs/tags/cubit-mesh-export-v2.2.7"),
+    ("GITHUB_REF", "refs/tags/radia-mcp-v2.2.7"),
     ("GITHUB_SHA", "b" * 40), ("GITHUB_REPOSITORY", "fork/repo"),
     ("GITHUB_RUN_ID", ""), ("GITHUB_RUN_ATTEMPT", "")])
 def test_actual_publication_identity_rejects_non_tag_or_missing_identity(key, value):

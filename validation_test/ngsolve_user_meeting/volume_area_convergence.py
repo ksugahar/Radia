@@ -1,8 +1,7 @@
 """OCC sphere volume/area p-convergence validation driver.
 
-This is the Cubit-free numerical lane. The full Cubit ACIS-trampoline
-presentation context lives beside it in ``acis_volume_area_convergence_demo.py``.
-The durable result is ``volume_area_convergence_results.json``.
+This is the Cubit-free numerical lane. The durable result is
+``volume_area_convergence_results.json``.
 """
 
 from __future__ import annotations

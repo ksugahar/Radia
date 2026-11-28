@@ -3,7 +3,7 @@
 
 Loading a .vol already applies its stored curved elements. Calling mesh.Curve()
 after ngsolve.Mesh(".vol") rebuilds them from whatever geometry Netgen associates
-with the mesh: a CAD-less export (e.g. Cubit `export netgen ... order N`) flattens,
+with the mesh: a CAD-less export (e.g. Cubit `export vol ... order N`) flattens,
 another loaded mesh's geometry may be used, and a mesh rescaled after meshing is
 projected onto its unscaled CAD (docs/ngsolve_integration/curve_order.md). The rule flags
 that footgun WITHOUT flagging the legitimate OCC/GenerateMesh().Curve() case.

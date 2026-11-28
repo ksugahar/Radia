@@ -50,8 +50,9 @@ All 344 installed Radia package files and 11 CME package files matched their
 respective wheels. The standalone Cubit sphere export (curved order 2) passed
 the structural/label checker and was consumed by HDiv `Solve(order=1,
 mu_r=100, H_ext=(0,0,1000), gram_eps=1e-7, tol=1e-8)` with finite magnetization.
-See `lab/cme-radia-combination.json`. This is interoperability evidence, not
-a separate accuracy or nonlinear qualification.
+This was interoperability evidence, not a separate accuracy or nonlinear
+qualification. `validation/cme-radia-combination.json` was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated
+(it checked a distribution that no longer exists).
 
 CME 1.0.1 deliberately reuses the existing manifest-pinned native payloads;
 no newly rebuilt payload is being published. Source-and-payload provenance

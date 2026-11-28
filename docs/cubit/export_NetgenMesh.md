@@ -5,13 +5,13 @@ Export mesh to Netgen `.vol` format with high-order curved elements (order 1-5).
 ## Syntax
 
 ```
-export netgen "filename.vol" [order <1-5>] [overwrite]
+export vol "filename.vol" [order <1-5>] [overwrite]
 ```
 
 No block assignment required — all meshed elements are exported automatically.
 Sidesets become boundary labels. Block names become material labels.
 
-> **NOTE**: `export netgen` is provided by the Cubit Mesh Export plugin.
+> **NOTE**: `export vol` is provided by the `cubit_to_vol_export.dll` command plugin of `radia_mcp.cubit`.
 > Cubit has no built-in Netgen exporter, so there is no command conflict.
 
 ### Options
@@ -34,7 +34,7 @@ Sidesets become boundary labels. Block names become material labels.
 
 ## How It Works
 
-The C++ plugin (`cubit_mesh_export.ccm`) performs the entire export without Python:
+The C++ plugin (`cubit_to_vol_export.dll`) performs the entire export without Python:
 
 1. **Extract** — `MeshData::extract(order)` reads linear mesh from Cubit's `MeshExportInterface`
 2. **Curve** — `NetgenCurver` builds a `netgen.meshing.Mesh` and calls `BuildCurvedElements(order)` using an ACIS `CallbackGeometry` that projects nodes onto the exact CAD surfaces
@@ -57,7 +57,7 @@ cubit.cmd("volume all size 0.1")
 cubit.cmd("mesh volume all")
 
 # Export with order 3 curving
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export vol "mesh.vol" order 3 overwrite')
 
 # Load in NGSolve — no STEP file needed
 mesh = Mesh("mesh.vol")
@@ -142,7 +142,7 @@ cubit.cmd('block 1 name "iron"')
 cubit.cmd("block 2 add tet all in volume 2")
 cubit.cmd('block 2 name "air"')
 
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export vol "mesh.vol" order 3 overwrite')
 # mesh.GetMaterials() -> ('iron', 'air')
 ```
 
@@ -208,14 +208,10 @@ The plugin resolves `FaceDescriptor.DomainIn`/`DomainOut` from Cubit's surface-v
 
 ## In-Memory Curving
 
-The old top-level `cubit_mesh_export.extract_curved_mesh` helper is retired
-from the public API.  Use `export netgen` for production workflows; it handles
-curving, labels, Kelvin detection, and companion JSON in one Cubit command.
-
-The low-level `cubit_mesh_curver.build_curved_mesh` pybind module remains an
-internal implementation detail of the `.ccm` plugin.  It expects already
-extracted mesh arrays plus geometry callbacks and is not the user-facing
-entry point.
+Use `export vol`; it handles curving, labels, Kelvin detection, and the
+companion JSON in one Cubit command.  The plugin curves in-process from the
+extracted mesh arrays and Cubit geometry callbacks; there is no separate
+Python curving entry point.
 
 ## Troubleshooting
 
@@ -231,12 +227,6 @@ ABI mismatch between the plugin's Netgen and a separately installed Netgen DLL. 
 
 Check that sidesets are defined before export. Surfaces not in any sideset get auto-generated names (`surface_N`).
 
-### Hex Boundary Layer Failure
-
-If `export netgen` fails on hex boundary layers, export as Gmsh order 1 (`export gmsh "mesh.msh"`) as a fallback.
-
 ## See Also
 
-- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.2 export (order 1-3)
-- [export_Nastran.md](export_Nastran.md) — Nastran BDF export (order 1-2)
-- [Function_Reference.md](Function_Reference.md) — All plugin commands
+- [Function_Reference.md](Function_Reference.md) — Export command and checker reference

@@ -14,7 +14,7 @@ import ngsolve as ng
 
 
 def probe(mesh_path, contract_path):
-    checked=subprocess.run([sys.executable,"-m","cubit_mesh_export.check",str(mesh_path),
+    checked=subprocess.run([sys.executable,"-m","radia.vol_check",str(mesh_path),
         "--strict-labels","--contract",str(contract_path),"--format","json"],capture_output=True,text=True)
     if checked.returncode:
         raise RuntimeError("Mesh check failed: "+checked.stderr+checked.stdout)

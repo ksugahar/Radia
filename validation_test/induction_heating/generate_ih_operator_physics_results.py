@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import importlib.metadata
-from cubit_mesh_export import check as mesh_checker
+from radia import vol_check as mesh_checker
 import os
 import platform
 import socket
@@ -136,8 +136,8 @@ def main() -> int:
                 )
             },
             "mesh_checker": {
-                "distribution": "cubit-mesh-export",
-                "version": importlib.metadata.version("cubit-mesh-export"),
+                "distribution": "radia",
+                "version": importlib.metadata.version("radia"),
                 "module_sha256": _sha256(Path(mesh_checker.__file__)),
             },
             "native_runtime": {

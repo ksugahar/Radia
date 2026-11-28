@@ -30,7 +30,7 @@ def test_simulink_library_registration_and_ltspice_scope():
     preflight = contract["applications"]["mesh_preflight"]
     assert preflight["checker"] == "check-vol"
     assert preflight["label_contract_schema"] == "radia.vol-label-contract.v1"
-    assert preflight["report_schema"] == "cubit-mesh-export.vol-check.v1"
+    assert preflight["report_schema"] == "radia.vol-check.v1"
     assert contract["ltspice"]["executable"] == "LTspice.exe"
     assert contract["ltspice"]["simulink_runtime"].startswith("Level-2 MATLAB")
     assert "Standalone MEX function ABI" in contract["ltspice"]["native_boundary"]

@@ -15,12 +15,12 @@ inventory or a past status response into a second procedural manual.
 
 | Purpose | Existing entry point | Read-only discovery |
 |---|---|---|
-| Cubit CAD, neutral capture and mesh export | `mcp-server-cubit` from `cubit-mesh-export` | `tools/list`, `cubit_status`, `cubit_docs(topic="all")` |
+| Cubit CAD and mesh export | `radia-mcp serve cubit-mcp` (`radia_mcp.cubit`) | `tools/list`, `cubit_status`, `cubit_docs(topic="all")` |
 | Kelvin formulation and solver-artifact guidance | `radia-ngsolve` from `radia-mcp` | `tools/list`, the registered status tool, `kelvin_transformation` and `kelvin_identify_post_hoc` |
 
-These are independent distributions. Cubit-only operation does not require
-`radia-mcp`. No additional server, wrapper package or version bump is needed to
-make an inventory. Use the actual selected interpreter and client configuration;
+Both servers ship in `radia-mcp`; the Cubit server does not import `radia`.
+No additional server, wrapper package or version bump is needed to make an
+inventory. Use the actual selected interpreter and client configuration;
 an entry point found on a different PATH does not identify a running client.
 Follow the [maintenance procedure](maintenance.md) for client setup and source
 identity checks. Reconnect only the owned client if its loaded source is stale;
@@ -28,8 +28,8 @@ preserve other clients, CAD sessions and jobs.
 
 ## Find the producer and consumer contracts
 
-Start with the exporter's [MCP guide](../../cubit-mesh-export/src/cubit_mesh_export/mcp/README.md)
-and [named periodic export contract](../../cubit-mesh-export/README.md#explicit-named-periodic-export).
+Start with the exporter's [MCP guide](../src/radia_mcp/cubit/README.md)
+and its named periodic export contract, `cubit_docs(topic="export_curved")`.
 The supported named-curved route uses one translational `kt` PERIODIC group and
 polynomial q1/q2/q3 tetrahedra with linear connectivity. It does not qualify
 arbitrary orders, rotations, independent high-order-node meshes or chained
@@ -61,13 +61,11 @@ lie on the exact analytical inversion sphere. Geometry validity, HCurl trace
 continuity, field accuracy, p-convergence and release qualification are distinct.
 The live knowledge response owns the detailed checks and applicability limits.
 
-## Keep neutral capture separate from external adapters
+## Keep external adapters separate
 
-The public [model-capture contract](../../cubit-mesh-export/docs/model_capture.md)
-records source CAD and explicit units/identities without meshing. It is not
-arbitrary exact CAD translation, and materials or physical boundary conditions
-are not guessed from names. A separately owned external adapter must qualify its
-supported reconstruction and saved/reopened output. Exporter publication does
+Materials and physical boundary conditions are not guessed from CAD or label
+names. A separately owned external adapter must qualify its supported
+reconstruction and saved/reopened output. Exporter publication does
 not certify that adapter or make its private runtime part of this public server.
 Private engineering models and comparison evidence do not belong in this guide.
 

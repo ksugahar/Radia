@@ -78,17 +78,14 @@ def setup_cubit(cub5_path=None, load_plugins=False):
 
     Args:
         cub5_path: Optional .cub5 file to open after init.
-        load_plugins: If True, set CUBIT_PLUGIN_DIR so radia .ccm
-            plugin commands (export gmsh/nastran/vtk) are available.
+        load_plugins: If True, set CUBIT_PLUGIN_DIR so the
+            `export vol` command plugin is available.
 
     Returns:
         cubit module (or None if Cubit unavailable)
     """
     setup_paths()
-    try:
-        from cubit_mesh_export.toolbar_install import find_cubit_bin
-    except ImportError:
-        return None
+    from radia.cubit_locator import find_cubit_bin
 
     cubit_path = find_cubit_bin()
     if not cubit_path:
@@ -97,7 +94,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
     if cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
-    # Set CUBIT_PLUGIN_DIR before cubit.init() so .ccm plugins are loaded
+    # Set CUBIT_PLUGIN_DIR before cubit.init() so command plugins are loaded
     if load_plugins:
         plugin_dir = os.path.join(cubit_path, "plugins")
         if os.path.isdir(plugin_dir):
@@ -130,7 +127,7 @@ def _clean_cubit_paths():
 
 
 def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
-    """Export Cubit mesh to NGSolve via C++ export netgen command.
+    """Export Cubit mesh to NGSolve via C++ export vol command.
 
     Args:
         cubit_mod: Cubit module (already initialized with model open)
@@ -145,7 +142,7 @@ def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
     setup_paths()
     from ngsolve import Mesh as NGMesh
     vol_path = tempfile.mktemp(suffix='.vol')
-    cubit_mod.cmd(f'export netgen "{vol_path}" order {order} overwrite')
+    cubit_mod.cmd(f'export vol "{vol_path}" order {order} overwrite')
     return NGMesh(vol_path)
 
 

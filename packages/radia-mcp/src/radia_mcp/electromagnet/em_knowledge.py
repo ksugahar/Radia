@@ -71,7 +71,7 @@ CoilBuilder (Radia)
        v
 Cubit (hex mesh)
   Iron yoke + air + Kelvin domain -> hex sweep mesh
-  export netgen "model.vol" order N -> arbitrary-order hex mesh
+  export vol "model.vol" order N -> arbitrary-order hex mesh
   CallbackGeometry -> ACIS direct curving (NO STEP/OCC)
        |
        | curved hex mesh (.vol)
@@ -453,7 +453,7 @@ sideset 2 add surface {kelvin_outer}
 sideset 2 name "kelvin_ext"
 
 # 6. Export
-export netgen "magnet.vol" order 2 overwrite
+export vol "magnet.vol" order 2 overwrite
 ```
 
 ## NGSolve FEM Solve (Omega-Reduced Scalar Potential)
@@ -799,7 +799,7 @@ mean the EM panel path, not the benchmark path.
 | Panel mode | Sample location | Purpose | Reductions |
 |------------|----------------|---------|------------|
 | **EM panel FEM/HDiv-VIM** | `panels/samples/em/em_1-{1,2,4,8}.jou` | Production C-yoke dipole / quad analysis | 1/1, 1/2, 1/4, **1/8** |
-| **EM panel "Kelvin Benchmark"** | `panels/samples/kelvin_benchmark_sphere_1_{2,4}.vol` | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/2, 1/4 only |
+| **EM panel "Kelvin Benchmark"** | generated: `validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py` (no .vol shipped) | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/4 (no maintained 1/2 build) |
 
 The Kelvin Benchmark mode does **NOT** ship a 1/8 reduction because
 the magnetic-sphere-in-uniform-Hz BVP is fundamentally not
@@ -871,10 +871,8 @@ multi-hour debug trail (rho_min sweep + h-refinement both
 disproved numerical-issue hypotheses) before the BVP-symmetry
 realisation landed.
 
-The build script `panels/samples/kelvin_benchmark_sphere_1_8_build.py`
-exists for parameterised-core completeness (`--frac 1_2|1_4|1_8`)
-but the resulting `.vol` is intentionally NOT in the wheel and
-NOT in `panels/samples/`.
+No 1/8 `.vol` is shipped in the wheel or in `panels/samples/`.
+`radia_mcp.cubit.kelvin.add_kelvin_occ` refuses 1/8 for the same reason.
 """
 
 

@@ -40,9 +40,6 @@
           "optuna": [
             "radia"
           ],
-          "cubit": [
-            "radia"
-          ],
           "topopt-cad": [
             "radia"
           ],
@@ -415,7 +412,7 @@
       ]
     },
     {
-      "pattern": "docs/cubit_mesh_export/**",
+      "pattern": "docs/cubit_export/**",
       "owners": [
         "radia"
       ]
@@ -433,7 +430,7 @@
       ]
     },
     {
-      "pattern": "validation_test/cubit_mesh_export/**",
+      "pattern": "validation_test/cubit_export/**",
       "owners": [
         "radia"
       ]
@@ -819,8 +816,14 @@
     {
       "pattern": "tools/ci_fork_wheels.json",
       "owners": [
-        "radia"
-      ]
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "The radia-mcp native Cubit export job installs and verifies the locked Netgen fork wheels with it."
+      },
+      "selection": "all_owners"
     },
     {
       "pattern": "tools/verify_public_fe_sdk.py",
@@ -837,8 +840,14 @@
     {
       "pattern": "tools/ci_fork_wheels.py",
       "owners": [
-        "radia"
-      ]
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "The radia-mcp native Cubit export job installs and verifies the locked Netgen fork wheels with it."
+      },
+      "selection": "all_owners"
     },
     {
       "pattern": "tools/patches/**",
@@ -3410,7 +3419,9 @@
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
-            "src/radia/hdiv_gpu.py"
+            "src/radia/hdiv_gpu.py",
+            "tools/ci_fork_wheels.py",
+            "tools/ci_fork_wheels.json"
           ]
         },
         "pull_request": {
@@ -3447,7 +3458,9 @@
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
-            "src/radia/hdiv_gpu.py"
+            "src/radia/hdiv_gpu.py",
+            "tools/ci_fork_wheels.py",
+            "tools/ci_fork_wheels.json"
           ]
         },
         "workflow_dispatch": {}

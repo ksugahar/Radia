@@ -89,7 +89,7 @@ def test_mesh_journal_is_conforming_and_id_free(qmag, tmp_path):
     qmag.write_mesh_journal(journal, tmp_path / "qmag.vol", size_m=0.01, order=2)
     text = journal.read_text(encoding="ascii")
     assert text.index("import step") < text.index("imprint volume all") < text.index("merge volume all") \
-        < text.index("mesh volume all") < text.index("export netgen")
+        < text.index("mesh volume all") < text.index("export vol")
     assert "#{Loop(_n)}" in text and "#{EndLoop}" in text
     sweep = [line for line in text.splitlines() if "scheme sweep" in line]
     assert len(sweep) == 1 and "z_coord < -0.02994" in sweep[0] and "z_coord > 0.02994" in sweep[0]

@@ -3,17 +3,13 @@ Test Netgen mesh construction patterns with NGSolve integration.
 
 This test requires NGSolve to be installed in the system Python.
 It covers the NGSolve-side mesh behavior used after Cubit's 2025.12
-`export netgen` command writes a .vol file.
+`export vol` command writes a .vol file.
 
 Run with system Python (not Cubit Python):
   python tests/test_netgen_with_ngsolve.py
 """
 
 import sys
-import os
-
-# Add parent directory to path for cubit_mesh_curver
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 
 # Check NGSolve first
 try:
@@ -264,7 +260,7 @@ if __name__ == "__main__":
 	print("Netgen / NGSolve Integration Tests")
 	print("=" * 60)
 	print("These tests verify Netgen mesh creation patterns")
-	print("used after Cubit 2025.12 export netgen writes .vol files")
+	print("used after Cubit 2025.12 export vol writes .vol files")
 	print("=" * 60)
 
 	all_passed = True

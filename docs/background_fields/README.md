@@ -13,15 +13,6 @@ Radia's `ObjBckg` function allows you to define arbitrary background magnetic fi
 
 ## Files
 
-### Mesh Generation
-
-#### **cubit_to_nastran.py**
-   - Generates high-quality tetrahedral mesh of sphere using Cubit
-   - Exports to Nastran .bdf format
-   - Sphere radius: 10 mm, element size: ~1 mm
-   - Uses tetrahedral mesh (always convex, required for Radia)
-   - Requires Coreform Cubit installation
-
 ### Example Scripts
 
 #### 1. **quadrupole_analytical.py**
@@ -201,7 +192,6 @@ def sextupole_field(pos):
 - Python 3.8+
 - Radia and its supported NGSolve runtime
 - NumPy
-- Cubit (optional, for mesh generation)
 
 ## References
 

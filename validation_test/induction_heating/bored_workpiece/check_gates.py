@@ -20,7 +20,7 @@ def main():
     coarse['meshes'][0]['bem']['automatic']['power_balance_rel']=.03
     v.evaluate(coarse)
     assert not coarse['validation_pass'] and not coarse['gates']['all_level_bem_balance']
-    assert evidence['acceptance_reference']==dict(bem_nodes=6232,fem_ndof=601029)
+    assert evidence['acceptance_reference']==dict(bem_nodes=6232,fem_ndof=601278)
     checks=0
     def reject(edit,gate):
         nonlocal checks

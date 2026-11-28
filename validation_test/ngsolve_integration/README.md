@@ -108,15 +108,14 @@ Import external meshes to Radia:
 ```python
 # Hexahedral mesh (via Cubit -> Netgen direct export)
 import cubit
-import cubit_mesh_export
 from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("import geometry 'model.step'")
 cubit.cmd("mesh volume all")
-ngmesh = cubit_mesh_export.extract_curved_mesh()
-mesh = Mesh(ngmesh)
+cubit.cmd('export vol "model.vol" order 1 overwrite')
+mesh = Mesh("model.vol")
 cube = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]}, units='m')
 
 # Tetrahedral mesh (NGSolve)

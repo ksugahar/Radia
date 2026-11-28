@@ -111,7 +111,6 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
 
     for independent_path in (
         "packages/radia-mcp/**",
-        "packages/cubit-mesh-export/**",
         "packages/radia-optuna/**",
     ):
         assert independent_path not in fast
@@ -283,8 +282,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert "scp" in helper
     assert "tools/ci_preflight.py --since $base" in helper
     assert "'mcp>=1.0,<2'" in helper
-    assert "numpy scipy pytest pyyaml setuptools wheel 'mcp>=1.0,<2'" in helper
-    assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
+    assert "numpy scipy pytest pyyaml psutil setuptools wheel 'mcp>=1.0,<2'" in helper
+    assert 'import mcp, numpy, psutil, pytest, scipy, setuptools, wheel, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
     assert "candidate preflight helper is missing" in dispatcher
     assert '&& [ -f tools/ci_preflight_remote.py ]' not in hook
@@ -309,11 +308,11 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert ("Deployment follows release: radia and radia-mcp use editable development installs on the build role "
             "and verified wheels on the validation role, never an editable install there") in normalized
     assert "isolated exact-wheel QA" not in normalized
-    assert "cubit-mesh-export is build-only" in normalized
+    assert "the Cubit plugin and GUI are build-only" in normalized
     assert "The build host is a CPU machine: no CUDA compile, NVIDIA/cuDSS libraries or GPU execution" in normalized
     assert "`gpu-a100` runs Python GPU and MATLAB builds plus CI; GPU acceptance never gates PRs" in normalized
     assert "retired targets stay excluded" in normalized
-    assert "validation has no Cubit/cme" in normalized
+    assert "validation has no Cubit." in normalized
     assert "NGSolve starts from checked exported .vol files" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
@@ -351,7 +350,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
     assert "Develop CPU on build (pybind11), Python GPU on Flow2 (PBS, outside CI), MATLAB/MEX on validation" in normalized
     assert "Build owns CI/formal artifacts" not in normalized
-    assert "Validation isolates jobs from QA/runtime; no Cubit/cme" in normalized
+    assert "Validation isolates jobs from QA/runtime; no Cubit." in normalized
     assert "JMAG runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
     assert "Timings are diagnostic" in normalized
@@ -491,20 +490,6 @@ def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch,
     assert command[-1] == 'tests'
     assert not any(selector in command for selector in selectors)
     assert json.loads(kwargs['env']['RADIA_MCP_CI_SELECTION_JSON']) == selectors
-
-
-def test_host_roles_agree_across_deployment_skills():
-    root = ROOT
-    cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
-    guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
-    assert "https://github.com/ksugahar/cubit-mesh-export" in cubit
-    assert not (root / "tools/release_cubit_dual.py").exists()
-    # Both release agents use the same portable acceptance/cleanup contract.
-    import re
-    links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))
-    assert any((guide.parent / link).resolve() ==
-               (root / ".agents/skills/cubit-toolbar-acceptance/SKILL.md").resolve()
-               and (guide.parent / link).is_file() for link in links)
 
 
 def _text_eol_module():

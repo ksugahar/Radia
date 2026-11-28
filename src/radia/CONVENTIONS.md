@@ -23,15 +23,15 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   run reaches those stages.
 - Every solver-bound `.vol` is checked after export and before application
   initialization. Production application/mode meshes use a versioned strict
-  label contract, and the `cubit-mesh-export.vol-check.v1` report stays in the
+  label contract, and the `radia.vol-check.v1` report stays in the
   run artifact directory. Mesh labels identify regions; material constants are
   validated by the DesignSpec/configuration and are never guessed from names.
 - A run that computes a spatial field writes a runner-owned GMSH `.msh v4.2`
   post-processing artifact in its run directory and records it in
   `result.json`. A scalar/circuit-only mode records GMSH as not applicable; it
   does not create a dummy field.
-- `cubit-mesh-export` is the only supported VTK producer. Radia application,
-  validation, docs, and MCP field outputs use GMSH `.msh v4.2`; they do not call
+- Radia produces no VTK. Radia application, validation, docs, and MCP field
+  outputs use GMSH `.msh v4.2`; they do not call
   `ngsolve.VTKOutput` or write `.vtk`, `.vtu`, or `.vts` files. NGSolve's own
   `VTKOutput` remains a valid upstream feature; this is a Radia artifact-policy
   choice, not a restriction on NGSolve.
@@ -126,8 +126,7 @@ Mesh p-convergence is a documentation/validation workflow, not a Cubit toolbar
 action or application block. Cubit batch export produces the files and
 `src/radia/panels/calc_mesh_eval.py` evaluates them.
 
-- Cubit GMSH/BDF/VTK format QA checks Jacobians, volume, and area. VTK remains
-  confined to the `cubit-mesh-export` component.
+- Cubit `.vol` export QA checks Jacobians, volume, and area.
 - NGSolve `.vol` p-convergence checks order 1-5 geometry integrals.
 - Cubit export owns file correctness; NGSolve owns interpretation of `.vol`.
 

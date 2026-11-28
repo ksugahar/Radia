@@ -72,6 +72,11 @@
       "target": "github-hosted",
       "legacy_100": false
     },
+    "radia-mcp-matrix.yml:cubit-export-native": {
+      "owner": "radia-mcp",
+      "target": "ci-native",
+      "legacy_100": true
+    },
     "radia-mcp-matrix.yml:minimum-sdk": {
       "owner": "radia-mcp",
       "target": "github-hosted",
@@ -215,7 +220,7 @@
         "tools/check_ninja_msvc_deps.py",
         "tools/check_native_module_abi.py"
       ],
-      "audit_sha256": "8973ada0109e8a48cf3990393e0ecbdf0dd05f7a7c75329285b55907ed2b1186",
+      "audit_sha256": "8e1add7d7715d0f750e80352f769a721766cc3856ccc0564068e2de4cc6e37ae",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

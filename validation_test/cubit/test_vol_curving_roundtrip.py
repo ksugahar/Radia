@@ -3,7 +3,7 @@ Test: .vol curving round-trip (Save + Load curvedelements).
 
 Workflow:
   1. Cubit: sphere -> tet mesh
-  2. export netgen .vol with order=2,3 curving
+  2. export vol .vol with order=2,3 curving
   3. Load .vol -> NGSolve Mesh
   4. Check volume accuracy and curvedelements section presence
 
@@ -20,7 +20,7 @@ import math
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
@@ -32,21 +32,22 @@ from ngsolve import Mesh, Integrate, CF
 from ngsolve import TaskManager
 
 # Then Cubit
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
+from radia_mcp.cubit.layout import export_plugin_directory
+# $RADIA_CUBIT_PLUGIN_DIR (a build.py output) or the installed plugin directory.
+_plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
+if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 # ============================================================
 # Parameters
 # ============================================================
 RADIUS = 0.05  # meters
 V_EXACT = (4.0 / 3.0) * math.pi * RADIUS ** 3
-OUT_DIR = os.path.join(_test_dir, 'export_netgen_test')
+OUT_DIR = os.path.join(_test_dir, 'export_vol_test')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 print("=" * 60)
@@ -68,7 +69,7 @@ cubit.cmd('block 1 name "sphere"')
 print(f"Cubit mesh: {cubit.get_tet_count()} tets")
 
 # ============================================================
-# Step 2: export netgen .vol for each order, load and check
+# Step 2: export vol .vol for each order, load and check
 # ============================================================
 results = {}
 
@@ -77,7 +78,7 @@ for order in [2, 3]:
 
     # Export .vol via C++ plugin
     vol_path = os.path.join(OUT_DIR, f"sphere_roundtrip_o{order}.vol")
-    cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
+    cubit.cmd(f'export vol "{vol_path}" order {order} overwrite')
     sz = os.path.getsize(vol_path)
     print(f"  Exported: {vol_path} ({sz:,} bytes)")
 

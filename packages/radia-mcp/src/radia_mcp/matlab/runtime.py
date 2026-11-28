@@ -938,7 +938,7 @@ def matlab_simulink_library_contract():
                 "timing": "after export and before solver initialization",
                 "required_when": "the selected mode consumes a .vol mesh",
                 "label_contract_schema": "radia.vol-label-contract.v1",
-                "report_schema": "cubit-mesh-export.vol-check.v1",
+                "report_schema": "radia.vol-check.v1",
                 "material_constants": (
                     "validated by DesignSpec/configuration and never inferred "
                     "from labels"

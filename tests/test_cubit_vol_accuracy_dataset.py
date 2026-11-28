@@ -156,33 +156,26 @@ def test_periodic_seam_loft_is_valid_not_merely_volume_accurate():
     assert all(row["absolute_error_pct"] < 0.05 for row in loft)
 
 
-def test_gapped_torus_records_the_order3_resolution_boundary():
+def test_gapped_torus_order3_map_is_valid_with_the_geometric_refit():
+    """Guards: the geometric refit of export vol (order >= 3) keeps the coarse
+    355-degree sweep free of cubic-map folds. The cubit-mesh-export curving
+    folded it at order 3 (13 flipped samples at 0.0349 % volume error), so a
+    refit regression shows here first."""
     _, dataset, _ = _load()
     rows = dataset["rows"]
-    coarse = {
-        row["curve_order"]: row for row in rows
-        if row["case_id"] == "gapped_torus_order3_coarse"
+    twins = {
+        name: {row["curve_order"]: row for row in rows if row["case_id"] == name}
+        for name in ("gapped_torus_order3_coarse", "gapped_torus_order3_refined")
     }
-    refined = {
-        row["curve_order"]: row for row in rows
-        if row["case_id"] == "gapped_torus_order3_refined"
-    }
-    assert set(coarse) == {1, 2, 3}
-    assert set(refined) == {1, 2, 3}
-
-    # At the production order-2 resolution, order 3 looks accurate by volume
-    # but is not solver-ready because the cubic map changes orientation.
-    assert coarse[3]["absolute_error_pct"] < 0.05
-    assert coarse[3]["invalid_jacobian_sample_count"] > 0
-    assert coarse[3]["orientation_flip_sample_count"] > 0
-    assert coarse[3]["structural_gate_passed"] is False
-
-    # One refinement step removes the fold at both supported high orders.
-    for order in (2, 3):
-        assert refined[order]["structural_gate_passed"] is True
-        assert refined[order]["invalid_jacobian_sample_count"] == 0
-        assert refined[order]["orientation_flip_sample_count"] == 0
-    assert refined[2]["absolute_error_pct"] < 0.11
-    assert refined[3]["absolute_error_pct"] < 0.02
-    assert refined[3]["minimum_scaled_jacobian"] > 0.01
-    assert dataset["summary"]["diagnostic_structural_failure_count"] >= 1
+    for name, by_order in twins.items():
+        assert set(by_order) == {1, 2, 3}, name
+        for order in (2, 3):
+            row = by_order[order]
+            facts = (row["structural_gate_passed"], row["invalid_jacobian_sample_count"],
+                     row["orientation_flip_sample_count"])
+            assert facts == (True, 0, 0), (name, order, facts)
+    coarse, refined = (twins[n] for n in twins)
+    assert coarse[3]["absolute_error_pct"] < 0.05, coarse[3]["absolute_error_pct"]
+    assert refined[2]["absolute_error_pct"] < 0.11, refined[2]["absolute_error_pct"]
+    assert refined[3]["absolute_error_pct"] < 0.02, refined[3]["absolute_error_pct"]
+    assert refined[3]["minimum_scaled_jacobian"] > 0.01, refined[3]["minimum_scaled_jacobian"]

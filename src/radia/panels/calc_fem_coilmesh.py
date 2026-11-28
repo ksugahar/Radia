@@ -309,7 +309,13 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
         dists = np.linalg.norm(coords - kelvin_center[None, :], axis=1)
         a_kelvin = float(np.max(dists))
-        has_kelvin_periodic = mesh.ngmesh.GetNrIdentifications() > 0
+        # The .vol pairs, or a flat mesh paired after load; anything else
+        # is refused instead of solving without the Kelvin closure.
+        from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+        kelvin_pairs = ensure_kelvin_identification(mesh)
+        if kelvin_pairs["source"] == "post_hoc":
+            mesh = Mesh(mesh.ngmesh)  # new point pairs: rebuild the topology
+        has_kelvin_periodic = True
         progress("FEM",
                  f"Kelvin R={a_kelvin*1e3:.1f}mm periodic={has_kelvin_periodic}")
 
@@ -954,12 +960,18 @@ def main():
                         f"(materials = {mats}). The IH panel's FEM-full "
                         f"method requires a Kelvin-extended mesh: re-run "
                         f"the Cubit .jou with add_kelvin enabled."}
-            if probe_mesh.ngmesh.GetNrIdentifications() == 0:
+            # The solver uses the .vol pairs or pairs a flat mesh after
+            # load; probe the same rule here (in memory only).
+            from radia.kelvin_identify_ngsolve import ensure_kelvin_identification
+            try:
+                ensure_kelvin_identification(probe_mesh)
+            except ValueError as exc:
                 return {"error":
                         f"--require-kelvin: .vol has 'kelvin' material but "
-                        f"no periodic identifications. Ensure the .jou "
-                        f"sidesets kelvin_int / kelvin_ext are paired via "
-                        f"'copy mesh surface' in the Cubit script."}
+                        f"no usable Kelvin pairs: {exc}. Export it with the "
+                        f"Kelvin pairs (export vol ... kelvin_tx/ty/tz "
+                        f"kelvin_match; radia_mcp.cubit.kelvin."
+                        f"export_arguments(info))."}
         if args.impedance_model == "esim" and not args.bh_file:
             return {
                 "error": "--impedance-model esim requires --bh-file "

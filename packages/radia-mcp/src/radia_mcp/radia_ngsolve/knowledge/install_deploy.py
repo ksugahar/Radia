@@ -73,7 +73,7 @@ radia-mcp publishes independently through `radia-mcp-v<VERSION>` and its package
 CI/PyPI workflow. Its release-dual deploys a verified wheel to the validation host
 and updates the editable development install on the build host only. Do not run
 the solver's four-lane release gate.
-Mixed omega remains in radia-mcp; Cubit MCP belongs to cubit-mesh-export.
+Mixed omega and Cubit MCP (`radia-mcp serve cubit-mcp`) both belong to radia-mcp.
 
 Completion requires passing package checks, verified publication, a verified
 wheel and fresh import on the validation host, the editable development install
@@ -86,9 +86,9 @@ during every release. Never claim an unqueried client is live-verified.
 
 ## cubit
 
-`cubit-mesh-export` independently owns the Cubit `.ccm` backend and the toolbar
-that runs inside Cubit's bundled PySide runtime. Install or verify it with
-`cubit-plugin-install`; use `check-vol` after export. Normal Radia Python does
+radia-mcp owns Cubit MCP and the curved `.vol` worker (`cubit_export_vol`,
+the native `export vol` plugin built locally from `native/cubit_to_vol_export`,
+run in an isolated external Python); the `.ccm` toolbar is retired. Use `check-vol` after export. Normal Radia Python does
 not depend on PySide or Qt. SAT and STEP are CAD interchange inputs; checked
 `.vol` is the solver boundary.
 

@@ -13,13 +13,14 @@ import math
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
 
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
+from radia_mcp.cubit.layout import export_plugin_directory
+# $RADIA_CUBIT_PLUGIN_DIR (a build.py output) or the installed plugin directory.
+_plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
+if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import netgen.meshing
@@ -28,7 +29,7 @@ from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 OUT_DIR = os.path.join(_test_dir, 'racetrack_test')
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -121,7 +122,7 @@ for method_name, commands in racetrack_methods:
         vol_path = os.path.join(OUT_DIR, f"{method_name}_order{order}.vol")
 
         try:
-            cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
+            cubit.cmd(f'export vol "{vol_path}" order {order} overwrite')
             mesh = Mesh(vol_path)
             with TaskManager():
                 V_ng = Integrate(CF(1), mesh)

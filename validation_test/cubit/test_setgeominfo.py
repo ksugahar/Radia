@@ -1,13 +1,13 @@
 """Current Cubit 2025.12 export path for former SetGeomInfo coverage."""
 
-from tests.cubit.cubit_202512_helpers import (
-    export_netgen,
+from validation_test.cubit.cubit_202512_helpers import (
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
 
 
-def test_hex_mesh_curves_through_export_netgen():
+def test_hex_mesh_curves_through_export_vol():
     cubit = init_cubit()
     cubit.cmd("reset")
     cubit.cmd("brick x 1 y 1 z 1")
@@ -19,6 +19,6 @@ def test_hex_mesh_curves_through_export_netgen():
     cubit.cmd("block 2 add quad all in surface all")
     cubit.cmd('block 2 name "boundary"')
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "hex", order=2))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "hex", order=2))
     assert mesh.ne == cubit.get_hex_count()
     assert mesh.nv > 0

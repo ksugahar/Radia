@@ -76,9 +76,9 @@ def test_pwsh_output_decodes_unicode_independently_of_windows_locale():
 
 
 @pytest.mark.parametrize("log,exit_code,artifact_exists,expected", [
-    ("ninja: error: unknown target 'cubit_mesh_curver'", 0, True, 1),
-    ("ERROR: cubit_mesh_curver build failed", 0, True, 1),
-    ("ERROR: cubit_mesh_curver configuration failed", 0, True, 1),
+    ("ninja: error: unknown target 'sparsesolv_ngsolve'", 0, True, 1),
+    ("ERROR: sparsesolv_ngsolve build failed", 0, True, 1),
+    ("ERROR: sparsesolv_ngsolve configuration failed", 0, True, 1),
     ("ERROR: MATLAB MEX target build failed", 0, True, 1),
     ("ninja: build stopped: subcommand failed", 0, True, 1),
     ("CMake Error at CMakeLists.txt:1", 0, True, 1),

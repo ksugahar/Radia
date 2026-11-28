@@ -224,13 +224,13 @@ BEM inductance requires **dim=2 surface mesh**, NOT dim=3 volume mesh.
 ```python
 # CORRECT: dim=2 surface mesh (all HDivSurface DOFs are boundary edges)
 # Created by: OCCGeometry(surface_shape).GenerateMesh()
-# Or: export netgen "mesh.vol" (surface-only via sideset)
+# Or: export vol "mesh.vol" (surface-only via sideset)
 mesh = Mesh(ngmesh)  # mesh.dim == 2
 fes = HDivSurface(mesh, order=0)
 # fes.ndof = number of surface edges only (all active in BEM)
 
 # WRONG: dim=3 volume mesh (HDivSurface includes interior edges)
-# Created by: export netgen "mesh.vol" with tet volume mesh
+# Created by: export vol "mesh.vol" with tet volume mesh
 mesh = Mesh(ngmesh)  # mesh.dim == 3
 fes = HDivSurface(mesh, order=0)
 # fes.ndof = ALL edges (interior + boundary)
@@ -238,7 +238,7 @@ fes = HDivSurface(mesh, order=0)
 # -> rank-deficient L matrix -> wrong inductance (3000%+ error)
 ```
 
-**For Cubit meshes**: Use `export netgen "mesh.vol" (surface-only via sideset)` which
+**For Cubit meshes**: Use `export vol "mesh.vol" (surface-only via sideset)` which
 creates a dim=2 surface mesh from Cubit surface blocks (triangles/quads only).
 
 **For OCC (netgen.occ) meshes**: Use `Glue(shape.faces)` to extract surface:
@@ -256,7 +256,7 @@ triangles. For 1mm wire: `maxh=0.5e-3`. Larger gives cond ~1e17 (singular).
 
 ## PITFALL: ds(label) Boundary Name Mismatch
 
-When using `export netgen "mesh.vol" order N`, boundary labels come from
+When using `export vol "mesh.vol" order N`, boundary labels come from
 Cubit block names. Using `ds('conductor')` when the boundary block has
 a different name causes LaplaceSL to **hang indefinitely** (no error, no timeout).
 
@@ -272,16 +272,16 @@ If labels don't match, use `ds` (no label) for all boundaries.
 ## CRITICAL: CalcSurfacesOfNode() After Manual Element2D Addition
 
 When building a Netgen mesh manually, you MUST call `CalcSurfacesOfNode()`
-after adding all Element2D elements. The `export netgen` command handles this internally.
+after adding all Element2D elements. The `export vol` command handles this internally.
 
 Without this call, internal topology tables are not built, causing HDivSurface
 edge orientation to be inconsistent.
 
 ```python
-# export netgen handles this automatically:
+# export vol handles this automatically:
 import tempfile
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export vol "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # For manual mesh construction (rare), call explicitly:
@@ -512,11 +512,11 @@ NGBEM_CUBIT_WORKFLOW = """
 1. Cubit: Create geometry (torus, cylinder, helix, ...)
 2. Cubit: Tet or hex mesh
 3. Cubit: Define blocks (domain, conductor surface)
-4. Python: mesh = export netgen "mesh.vol" order 3
+4. Python: mesh = export vol "mesh.vol" order 3
 5. Python: ngsolve.bem LaplaceSL -> inductance extraction
 ```
 
-No STEP files, no OCC geometry, no SetGeomInfo needed. export netgen
+No STEP files, no OCC geometry, no SetGeomInfo needed. export vol
 handles everything via Cubit's ACIS kernel + CallbackGeometry.
 
 ## Step-by-Step Code
@@ -551,7 +551,7 @@ cubit.cmd('block 1 add volume 1')
 
 # --- Step 4: Export with curving ---
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
+cubit.cmd(f'export vol "{vol_path}" order 2 overwrite')
 mesh = Mesh(vol_path)
 
 # --- Step 5: BEM inductance (energy method) ---
@@ -589,13 +589,13 @@ but BEM inductance accuracy is dominated by **DOF density** (mesh refinement):
 significantly. HDivSurface order=0 (RT0) current resolution is the bottleneck.
 Mesh refinement (more DOFs) is more effective for L accuracy.
 
-`export netgen "mesh.vol" order 2` provides quadratic-accurate surfaces
+`export vol "mesh.vol" order 2` provides quadratic-accurate surfaces
 via ACIS CallbackGeometry. order=2 is the recommended default for BEM.
 
 ## Tri and Quad Surface Meshes
 
 BEM supports both tri (from tet mesh) and quad (from hex mesh) surfaces.
-`export netgen` exports volume mesh; BEM solver auto-extracts surface elements.
+`export vol` exports volume mesh; BEM solver auto-extracts surface elements.
 
 ```python
 # Tet mesh
@@ -606,7 +606,7 @@ cubit.cmd("block 1 add volume all")
 # Export volume mesh (BEM solver extracts BND surface automatically)
 import tempfile
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
+cubit.cmd(f'export vol "{vol_path}" order 2 overwrite')
 mesh = Mesh(vol_path)
 ```
 
@@ -614,7 +614,7 @@ mesh = Mesh(vol_path)
 
 The old workflow using `export_NetgenMesh()`, `set_*_geominfo()`,
 STEP reimport, and OCCGeometry has been completely removed.
-Use `export netgen` for all Cubit-to-NGSolve mesh transfers.
+Use `export vol` for all Cubit-to-NGSolve mesh transfers.
 """
 
 NGBEM_CURVE_ORDER_STUDY = """
@@ -634,7 +634,7 @@ Both tri (tet mesh) and quad (hex sweep mesh) surfaces are tested.
 | R/a ratio | 10 |
 | Analytical L | Neumann: L = mu_0*R*(ln(8R/a) - 2) = 149.7 nH |
 
-## Measured Results (Cubit mesh -> export netgen -> LaplaceSL)
+## Measured Results (Cubit mesh -> export vol -> LaplaceSL)
 
 ### Tri surface (tet mesh, gap torus)
 
@@ -694,7 +694,7 @@ The former standalone driver has been retired. Its workflow was:
 
 1. Creates a torus in Cubit
 2. Tet meshes, defines blocks
-3. Uses export netgen "mesh.vol" order N for each order
+3. Uses export vol "mesh.vol" order N for each order
 4. Compares order=1, order=2, order=3:
    - Surface area vs analytical
    - Volume vs analytical
@@ -851,7 +851,7 @@ cubit.cmd('sideset 2 add surface {sink_sid};   sideset 2 name "sink"')
 # Export with curving
 import tempfile
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
+cubit.cmd(f'export vol "{vol_path}" order 2 overwrite')
 mesh = Mesh(vol_path)
 
 # Energy method
@@ -881,7 +881,7 @@ NGBEM_BEST_PRACTICES = """
    - Curve(2) = quadratic -> ~0.5% error
    - Curve(3) = cubic -> ~0.05% error (usually sufficient)
 
-5. **Use export netgen** for Cubit meshes
+5. **Use export vol** for Cubit meshes
    - Handles curving automatically via ACIS CallbackGeometry
    - No SetGeomInfo, no STEP files, no OCC geometry needed
 
@@ -926,18 +926,6 @@ print(mesh.GetBoundaries())  # e.g., ('conductor', 'conductor', ...)
 
 # Use the correct label
 L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
-```
-
-### Using Old API Instead of export netgen
-```python
-# OLD (DELETED): Do not use export_NetgenMesh or set_*_geominfo
-# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)  # DELETED
-
-# NEW: Single APREPRO command handles everything
-import tempfile
-vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
-mesh = Mesh(vol_path)
 ```
 
 ## use_fmm: FMM vs Dense (No H-matrix in ngsolve.bem)
@@ -1293,7 +1281,7 @@ L = MU_0 * eigvals[1] * R / a
 ## Practical Notes
 
 1. **Closed surface required**: The mesh must be a closed surface (no boundary
-   edges). Use `surface_only=True` in `export netgen` or OCC `Glue()`.
+   edges). Use `surface_only=True` in `export vol` or OCC `Glue()`.
 
 2. **Euler characteristic**: For genus-g: V - E + F = 2 - 2g. Torus: Euler = 0.
 

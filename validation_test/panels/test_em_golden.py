@@ -3,7 +3,7 @@
 Locks the C-type dipole EM panel end-to-end path:
 
     em_sample.jou  (ELF CEFC 2020 C-Type geometry, half-z model)
-       --> export netgen   (via Cubit + Auto-Kelvin)
+       --> export vol   (via Cubit + Auto-Kelvin)
           --> em_sample.vol      (with cd3names "GND" from nodeset propagation)
 
     em_sample_coil.{step|py}
@@ -20,7 +20,7 @@ linearity (B proportional to current) and the absolute numbers for
 the given mesh discretization.  A regression in any of the following
 will trip the test:
 
-  - ExportNetgenCommand.cpp  (CD3 propagation / nodeset -> BBBND)
+  - ExportVolCommand.cpp  (CD3 propagation / nodeset -> BBBND)
   - add_kelvin_cubit.py      (air + kelvin periodic pair)
   - add_periodic_kelvin      (graceful skip on Cubit-written ident)
   - coil_from_step.to_coil_builder  (tuple unpack + planar coil extract)
@@ -166,7 +166,7 @@ def test_em_quarter_xz_coil_py_NI_2000():
     Regression guard for the whole reduction-mode plumbing (2026-04-25):
 
         add_kelvin.add_kelvin_cubit(reduction={x: bn=0, z: ht=0})
-         -> ExportNetgenCommand sideset-vs-auto-detect priority fix
+         -> ExportVolCommand sideset-vs-auto-detect priority fix
             -> NGSolve .vol load (was broken before the fix)
                -> calc_accel_magnet sym_ht=0_z -> Dirichlet pick
 
@@ -284,7 +284,7 @@ def test_em_eighth_coil_py_NI_2000():
         - 3-plane webcut: 2 sym planes coincide with air, 1 is the
           new "kelvin_far" infinity plane through the Kelvin centre
         - calc_accel_magnet treats kelvin_far as always-Dirichlet
-        - ExportNetgenCommand all-or-nothing identification policy
+        - ExportVolCommand all-or-nothing identification policy
           (when copy-mesh leaves a few unmatched corner vertices for
           large geometry scales, skip C++ identification entirely;
           NGSolve's add_periodic_kelvin recovers at solve time, and

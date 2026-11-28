@@ -17,7 +17,7 @@ in the [solver handoff](SOLVER_DEVELOPMENT_HANDOFF.md).
 | Reproduce fin-volume PEEC and PRIMA on a finned conductor | [Fin PEEC and PRIMA](FIN_PEEC_PRIMA_REPRODUCE.md) |
 | Inspect temperature and conservative source transfer | [Thermal feature notebook](axisymmetric_p2_thermal.ipynb) |
 | Operate the supported analysis with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
-| Prepare geometry and labeled mesh | [Cubit workflow](../cubit_mesh_export/README.md) |
+| Prepare geometry and labeled mesh | [Cubit workflow](../cubit_export/README.md) |
 | Collaborate on an application model | [Radia Simulink library](../../packages/radia-gpu/matlab/README.md) |
 | Read executable field-transfer examples | [Thermal transfer tests](../../tests/test_ih_thermal_transfer.py) |
 | Inspect electromagnetic/thermal operator checks | [IH physics validation](../../validation_test/induction_heating/README.md#simulink-operator-physics-golden) |

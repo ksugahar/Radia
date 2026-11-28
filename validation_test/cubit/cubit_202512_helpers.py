@@ -2,11 +2,9 @@
 
 These tests exercise the current public Cubit path:
 
-    cubit.cmd('export netgen "model.vol" order N overwrite')
+    cubit.cmd('export vol "model.vol" order N overwrite')
 
-The old top-level ``extract_curved_mesh`` Python helper is retired from the
-public API.  ``cubit_mesh_curver`` remains a low-level pybind module used by
-the .ccm plugin.
+The plugin (``cubit_to_vol_export.dll``) curves the mesh in-process.
 """
 
 from __future__ import annotations
@@ -28,7 +26,7 @@ def find_cubit_bin() -> Path:
     """Return the supported Coreform Cubit 2025.12+ bin directory."""
     if str(RADIA_SRC) not in sys.path:
         sys.path.insert(0, str(RADIA_SRC))
-    from cubit_mesh_export.toolbar_install import find_cubit_bin as _find_cubit_bin
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin as _find_cubit_bin
 
     cubit_bin = _find_cubit_bin()
     if not cubit_bin:
@@ -78,7 +76,8 @@ def init_cubit():
 
     import cubit
 
-    plugin_dir = cubit_bin / "plugins"
+    from radia_mcp.cubit.layout import export_plugin_directory
+    plugin_dir = export_plugin_directory(cubit_bin)
     cubit.init([
         "cubit",
         "-nojournal",
@@ -91,22 +90,14 @@ def init_cubit():
     return cubit
 
 
-def add_cubit_mesh_curver_to_path() -> None:
-    """Expose the low-level pybind module for module-shape tests only."""
-    import cubit_mesh_export
-    package_dir = str(Path(cubit_mesh_export.__file__).parent)
-    if package_dir not in sys.path:
-        sys.path.insert(0, package_dir)
-
-
-def export_netgen(cubit, stem: str, order: int = 1) -> Path:
+def export_vol(cubit, stem: str, order: int = 1) -> Path:
     """Run the public 2025.12 Netgen export command and return the .vol path."""
-    out_dir = Path(tempfile.mkdtemp(prefix="cubit_mesh_export_test_"))
+    out_dir = Path(tempfile.mkdtemp(prefix="cubit_export_test_"))
     out = out_dir / f"{stem}_o{order}.vol"
     cmd_path = str(out).replace("\\", "/")
-    cubit.cmd(f'export netgen "{cmd_path}" order {order} overwrite')
+    cubit.cmd(f'export vol "{cmd_path}" order {order} overwrite')
     if not out.is_file() or out.stat().st_size == 0:
-        raise AssertionError(f"export netgen did not create {out}")
+        raise AssertionError(f"export vol did not create {out}")
     return out
 
 

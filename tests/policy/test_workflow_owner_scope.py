@@ -120,6 +120,8 @@ MCP_LANE_READS = {
     "docs/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"docs"'),
     "validation_test/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"validation_test"'),
     "src/radia/panels/samples/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"src/radia/panels/samples"'),
+    "tools/ci_fork_wheels.py": (".github/workflows/radia-mcp-matrix.yml", "tools/ci_fork_wheels.py install"),
+    "tools/ci_fork_wheels.json": ("tools/ci_fork_wheels.py", "ci_fork_wheels.json"),
 }
 
 
@@ -257,7 +259,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         assert "from radia_simulink.simulink" in (ROOT / path).read_text(encoding="utf-8")
     adapter = (ROOT / "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
     assert "radia.panels" in adapter
-    assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
+    assert "radia.vol_check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
     # radia-simulink LTspice tests no longer import radia-mcp; the LTspice MCP lives outside this repo.
     gpu_ltspice_tests = list((ROOT / "packages/radia-simulink/tests/ltspice").glob("test_*.py"))
     assert gpu_ltspice_tests
@@ -286,7 +288,7 @@ def test_solver_triggers_only_cpu_inputs_and_declared_consumers():
         assert "paths-ignore" not in projection
         for path in ("src/radia/__init__.py", "Build.ps1", "tests/test_wheel_package_policy.py", "tools/run_test_tier.py"):
             assert CONTRACT.selected(path, projection), path
-        for path in ("packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
+        for path in ("packages/radia-mcp/src/radia_mcp/cubit/__init__.py",
                       "README.md"):
             assert not CONTRACT.selected(path, projection), path
 
@@ -447,3 +449,26 @@ def test_removed_cpu_contracts_keep_an_executable_repository_home():
     assert "tools/run_test_tier.py --profile repo-contracts" in workflow
     assert not set(transferred) & set(tiers["profiles"]["fast-contracts"]["paths"])
     assert all((ROOT / path).is_file() for path in transferred)
+
+
+def test_fork_wheel_lock_changes_rerun_the_native_cubit_export_job():
+    """A change to the Netgen fork lock alone must reach cubit-export-native.
+
+    Both selectors are checked: the lane-impact classifier (workflow path
+    filters, mirrored in the manifest) and the native scope regex inside the
+    radia-mcp-matrix scope step.
+    """
+    spec = importlib.util.spec_from_file_location("ci_impact", ROOT / "tools/sparsesolv_ci_impact.py")
+    impact = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(impact)
+    workflow = (ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8")
+    native = re.search(r"grep -qE '([^']*cubit_to_vol_export[^']*)' <<<\"\$files\"", workflow)
+    assert native, "native_cubit_export scope regex not found in radia-mcp-matrix.yml"
+    native_re = re.compile(native.group(1))
+    inputs = ["tools/ci_fork_wheels.py", "tools/ci_fork_wheels.json",
+              "packages/radia-mcp/native/cubit_to_vol_export/CMakeLists.txt"]
+    lane = {path: impact.lane_required("radia-mcp-matrix", {path}, None, MANIFEST) for path in inputs}
+    scope = {path: bool(native_re.search(path)) for path in inputs}
+    assert all(required for required, _ in lane.values()), lane
+    assert all(scope.values()), (native.group(1), scope)
+    assert not native_re.search("tools/ci_fork_wheels_extra.py"), native.group(1)

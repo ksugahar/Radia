@@ -1,19 +1,19 @@
 {
   "checker": {
-    "distribution": "cubit-mesh-export",
-    "version": "2.6.0",
-    "record_sha256": "7294d50d601fa18da8ff1ba021e033e6f2119872b90e22ea6ed814f6cd322195"
+    "distribution": "radia",
+    "version": "5.4.6",
+    "record_sha256": "e39dd879eed2f0308483e547c55e072c126a70955366bf2e61f1dc5be58d254d"
   },
   "argv": [
-    "C:\\checker-pr643\\venv\\Scripts\\python.exe",
+    "C:\\checker-rv1-fork\\venv\\Scripts\\python.exe",
     "-m",
-    "cubit_mesh_export.check",
-    "C:\\checker-pr643\\tmp\\radia-check-vol-qorqqgwe\\mesh.vol",
+    "radia.vol_check",
+    "C:\\checker-rv1-fork\\tmp\\radia-check-vol-jyvaui7k\\mesh.vol",
     "--strict-labels",
     "--contract",
-    "C:\\checker-pr643\\tmp\\radia-check-vol-qorqqgwe\\labels.json",
+    "C:\\checker-rv1-fork\\tmp\\radia-check-vol-jyvaui7k\\labels.json",
     "--format",
     "json"
   ],
-  "ngsolve_version": "6.2.2608+radia.5a3ae730b.cpu"
+  "ngsolve_version": "6.2.2608+radia.df1d60e42.cpu"
 }

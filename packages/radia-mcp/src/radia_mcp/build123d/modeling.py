@@ -2518,7 +2518,7 @@ def shape_cubit_meshing_scheme_intent_gate(
     scheme_trace_gate=None,
     required_roles=("hex_region", "mesh_transition", "tet_region"),
     expected_scheme_by_role=None,
-    required_command_fragments=("imprint all", "merge all", "export netgen"),
+    required_command_fragments=("imprint all", "merge all", "export vol"),
     expected_export_order=None,
     expected_trace_id=None,
     expected_export_output_artifact_id=None,

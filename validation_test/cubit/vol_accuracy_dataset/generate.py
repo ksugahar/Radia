@@ -25,6 +25,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from radia_mcp.cubit.layout import export_plugin_directory
+
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
@@ -66,26 +68,14 @@ def _load_cases(path: Path = CASES_PATH) -> dict:
 
 
 def _find_cubit_exe() -> Path:
-    explicit = os.environ.get("CUBIT_EXE")
-    if explicit and Path(explicit).is_file():
-        return Path(explicit)
-    cubit_path = os.environ.get("CUBIT_PATH")
-    if cubit_path:
-        root = Path(cubit_path)
-        candidate = root / "coreform_cubit.exe"
-        if candidate.is_file():
-            return candidate
-        candidate = root / "bin" / "coreform_cubit.exe"
-        if candidate.is_file():
-            return candidate
-    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-    candidates = sorted(
-        program_files.glob("Coreform Cubit */bin/coreform_cubit.exe"),
-        reverse=True,
-    )
-    if not candidates:
+    """Cubit's console executable, found as radia_mcp's session finds Cubit."""
+    from radia_mcp.cubit.layout import console_executable
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin
+    bin_dir = find_cubit_bin()
+    exe = console_executable(Path(bin_dir)) if bin_dir else None
+    if exe is None:
         raise FileNotFoundError("Coreform Cubit executable not found")
-    return candidates[0]
+    return exe
 
 
 def _running_cubit_processes() -> list[str]:
@@ -123,12 +113,27 @@ def _write_driver(work_dir: Path, cases: list[dict], orders: list[int]) -> Path:
             target = _artifact_path(work_dir, case["case_id"], order)
             target.parent.mkdir(parents=True, exist_ok=True)
             lines.append(
-                f'export netgen "{target.as_posix()}" order {order} overwrite'
+                f'export vol "{target.as_posix()}" order {order} overwrite'
             )
-    lines.append("exit 0")
     driver = work_dir / "generate_complex_volumes.jou"
     driver.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return driver
+
+
+_CUBIT_CHILD = """
+import os, sys
+import ngsolve  # noqa: F401
+import netgen
+os.add_dll_directory(os.path.dirname(netgen.__file__))
+cubit_bin, plugin_dir, driver = sys.argv[1:4]
+sys.path.append(cubit_bin)
+os.add_dll_directory(cubit_bin)
+os.environ["CUBIT_PLUGIN_DIR"] = plugin_dir
+import cubit
+cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
+ok = cubit.cmd('playback "' + driver.replace(os.sep, "/") + '"')
+sys.exit(0 if ok else 1)
+"""
 
 
 def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
@@ -140,8 +145,12 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
         )
     cubit_exe = _find_cubit_exe()
     driver = _write_driver(work_dir, cases, orders)
+    # Cubit 2026.8 loads command plugins from CUBIT_PLUGIN_DIR; the export
+    # plugin links the fork nglib, so ngsolve is imported before cubit, as in
+    # radia_mcp.cubit.vol_export.
     command = [
-        str(cubit_exe), "-batch", "-nographics", "-nojournal", str(driver)
+        sys.executable, "-I", "-c", _CUBIT_CHILD, str(cubit_exe.parent),
+        str(export_plugin_directory(cubit_exe.parent)), str(driver),
     ]
     started = time.perf_counter()
     proc = subprocess.run(
@@ -174,7 +183,9 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
             + ", ".join(missing)
             + f". Work directory retained: {work_dir}"
         )
+    plugin = export_plugin_directory(cubit_exe.parent) / "cubit_to_vol_export.dll"
     return {
+        "plugin_sha256": hashlib.sha256(plugin.read_bytes()).hexdigest(),
         "executable": str(cubit_exe),
         "returncode": proc.returncode,
         "elapsed_s": elapsed,
@@ -190,7 +201,7 @@ def _package_version(distribution: str) -> str:
 
 
 def _collect_rows(work_dir: Path, cases: list[dict], orders: list[int]) -> list[dict]:
-    from cubit_mesh_export.check import REPORT_SCHEMA, check_consistency
+    from radia.vol_check import REPORT_SCHEMA, check_consistency
 
     rows = []
     for case in cases:
@@ -353,8 +364,12 @@ def _write_dataset(
             "platform": platform.platform(),
             "python": platform.python_version(),
             "ngsolve": _package_version("ngsolve"),
-            "cubit_mesh_export": _package_version("cubit-mesh-export"),
+            "radia_mcp": _package_version("radia-mcp"),
             "cubit_executable": run["executable"],
+            "source_sha": subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+                capture_output=True, text=True, check=True).stdout.strip(),
+            "export_plugin_sha256": run["plugin_sha256"],
         },
         "run": {
             "cubit_returncode": run["returncode"],

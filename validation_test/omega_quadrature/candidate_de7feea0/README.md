@@ -13,10 +13,11 @@ included. The JSON contains laboratory paths and host/runtime provenance.
 - Unpublished wheel: `radia-4.95.91-cp312-cp312-win_amd64.whl`.
 - Wheel SHA-256: `4952ba92cc0502e81949c35745108f6da499d6c6eb5bf1055a46de1be3a9ad4a`.
 - Native SHA-256: `5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8`.
-- Original diagnostic lane: `6d3af08f3`; original file hashes are in preflight/result JSON.
+- Original diagnostic lane: `6d3af08f3`; original file hashes are in the result JSON.
 - Mesh SHA-256: `dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac`.
-- Mesh: 134686 curved order-2 tetrahedra. `check_vol.json` passed the strict
+- Mesh: 134686 curved order-2 tetrahedra. It passed the strict
   sibling `../esrf6_labels.json` contract. The mesh itself is not included.
+  `check_vol.json` and `preflight.json` was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated.
 
 `threads8/telemetry.json` records the exact command. It uses the isolated
 compute-host candidate venv, wheel mode, p=1, assembly bonuses 4/8, evaluation order

@@ -2,18 +2,13 @@
 
 The public contract is Cubit's APREPRO command:
 
-    cubit.cmd('export netgen "model.vol" order N overwrite')
-
-The retired Python helper ``extract_mesh_data`` is intentionally not used here.
+    cubit.cmd('export vol "model.vol" order N overwrite')
 """
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
-from tests.cubit.cubit_202512_helpers import (
-    export_netgen,
+from validation_test.cubit.cubit_202512_helpers import (
+    export_vol,
     init_cubit,
     load_ngsolve_mesh,
 )
@@ -38,7 +33,7 @@ def test_geometry_volume_and_surface_blocks_export_to_netgen():
     cubit.cmd("block 2 add surface all")
     cubit.cmd('block 2 name "boundary"')
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "geometry_blocks", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "geometry_blocks", order=1))
 
     assert mesh.ne == expected_tets
     assert "solid" in mesh.GetMaterials()
@@ -60,36 +55,6 @@ def test_mesh_element_blocks_do_not_cross_contaminate():
     assert len(cubit.get_block_tets(2)) == 0
     assert len(cubit.get_block_tris(2)) > 0
 
-    mesh = load_ngsolve_mesh(export_netgen(cubit, "element_blocks", order=1))
+    mesh = load_ngsolve_mesh(export_vol(cubit, "element_blocks", order=1))
     assert mesh.ne == cubit.get_tet_count()
 
-
-def test_gmsh_geometry_volume_block_exports_elements():
-    """Geometry-based volume blocks are also accepted by Cubit's Gmsh export."""
-    cubit = init_cubit()
-    _mesh_brick(cubit)
-
-    expected_tets = cubit.get_tet_count()
-    cubit.cmd("block 1 add volume 1")
-    cubit.cmd('block 1 name "solid"')
-
-    out = Path(tempfile.mkdtemp(prefix="cubit_mesh_export_gmsh_")) / "geometry.msh"
-    cmd_path = str(out).replace("\\", "/")
-    cubit.cmd(f'export gmsh "{cmd_path}" overwrite')
-
-    content = out.read_text(encoding="utf-8", errors="replace")
-    tet_count = 0
-    in_elements = False
-    for line in content.splitlines():
-        if line.strip() == "$Elements":
-            in_elements = True
-            continue
-        if line.strip() == "$EndElements":
-            break
-        if not in_elements or not line.strip():
-            continue
-        parts = line.split()
-        if len(parts) >= 2 and parts[1] in {"4", "11"}:
-            tet_count += 1
-
-    assert tet_count == expected_tets

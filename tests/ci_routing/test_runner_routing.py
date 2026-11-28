@@ -112,7 +112,7 @@ def test_source_only_conftest_does_not_probe_and_rejects_native():
     code = '''import builtins,runpy,sys
 original=builtins.__import__
 def checked(name,*a,**kw):
- if name.split('.')[0] in {'ngsolve','netgen','cubit','cubit_mesh_export','matlab'}:
+ if name.split('.')[0] in {'ngsolve','netgen','cubit','matlab'}:
   raise AssertionError('native probe attempted:'+name)
  return original(name,*a,**kw)
 builtins.__import__=checked

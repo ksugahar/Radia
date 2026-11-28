@@ -11,7 +11,7 @@ that file embeds its own CAD in the same units as the mesh:
 * ``.vol`` meshed in millimetres and rescaled with ``ngmesh.Scale(1e-3)``:
   the embedded CAD stays in millimetres and ``Curve(p >= 2)`` projects the
   nodes onto it (surface area grows by ~1e6..1e8).
-* ``.vol`` without CAD (e.g. Cubit ``export netgen``): in a fresh process
+* ``.vol`` without CAD (e.g. Cubit ``export vol``): in a fresh process
   ``Curve(p)`` flattens the stored curving while ``GetCurveOrder()`` reports
   ``p``; after another geometry-bearing mesh was loaded in the same process,
   ``GetGeometry()`` returns that other geometry and ``Curve`` uses it.
@@ -180,7 +180,7 @@ def straight_curve_order(mesh, order):
     analytic ``SetDeformation`` will move) and wrong for a curved one: a mesh
     with curved boundaries gets its curvature from its CAD (``Curve`` right after
     ``GenerateMesh``, ``ensure_curve_order``) or from its export order (Cubit
-    ``export netgen ... order p``).  A stored order of ``order`` or higher is
+    ``export vol ... order p``).  A stored order of ``order`` or higher is
     kept.  The caller owns ``TaskManager``.
     """
     if int(mesh.GetCurveOrder()) >= int(order):
@@ -259,7 +259,7 @@ def ensure_curve_order(mesh, order, *, vol_path, extent_ratio=2.0, measure_ratio
         raise CurveOrderError(
             f"{what}: stored geometry order {current} < required {order}, and the "
             f".vol stores no CAD to curve against. Re-export it at order {order} "
-            f"(Cubit: export netgen ... order {order}) or regenerate it from the CAD; "
+            f"(Cubit: export vol ... order {order}) or regenerate it from the CAD; "
             f"Mesh.Curve would flatten it or use another mesh's geometry.")
     if kind != "occ":
         raise CurveOrderError(

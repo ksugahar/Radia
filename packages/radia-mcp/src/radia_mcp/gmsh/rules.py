@@ -76,7 +76,7 @@ def check_solver_msh_import(filepath: str, lines: List[str]) -> List[Dict]:
                 "message": (
                     "Gmsh-to-solver input is forbidden. Use checked .vol files: "
                     "Mesh('model.vol'). Export from Cubit with "
-                    "'export netgen \"model.vol\" order N'."
+                    "'export vol \"model.vol\" order N'."
                 ),
             })
     return findings
@@ -149,7 +149,7 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
                     "Do not use the gmsh Python API in Radia computation or "
                     "mesh-generation scripts. The canonical viewer launcher is "
                     "`gmsh` on PATH (Python wrapper is OK for launch/inspection). "
-                    "For mesh input to NGSolve, use .vol files (export netgen); "
+                    "For mesh input to NGSolve, use .vol files (export vol); "
                     "for post-processing, emit .msh v4.2 plus a .geo launch file."
                 ),
             })

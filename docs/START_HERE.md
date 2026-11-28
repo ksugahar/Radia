@@ -45,7 +45,7 @@ For detailed numerical work, continue to the
 
 | You want to… | Begin with | First useful result |
 | :--- | :--- | :--- |
-| Collaborate on CAD and mesh in Cubit | [Cubit mesh workflow](cubit_mesh_export/README.md) | Geometry, mesh controls, labels and checked solver inputs |
+| Collaborate on CAD and mesh in Cubit | [Cubit mesh workflow](cubit_export/README.md) | Geometry, mesh controls, labels and checked solver inputs |
 | Study small executable samples | [tests/](../tests/README.md) | API calls, fixtures, assertions and expected behavior |
 | Study physics and application samples | [validation_test/](../validation_test/README.md) | Model setup, numerical checks and scoped evidence |
 | Inspect results before installing | [Visual application gallery](APPLICATION_GUIDE.md#browse-results) | A geometry or response plot, its conditions and the saved notebook |
@@ -79,7 +79,7 @@ MATLAB Runtime application.
    dependencies. Saved outputs show what the example computed;
    interactive views may require a compatible notebook frontend.
 2. **Choose an operating route.** Use [MCP](../README.md#python-and-mcp), or
-   collaborate with AI using [Cubit](cubit_mesh_export/README.md) and
+   collaborate with AI using [Cubit](cubit_export/README.md) and
    [Simulink](../packages/radia-gpu/matlab/README.md). Notebook execution serves the demonstration;
    it is not a required step in operating your model. AI Cubit execution is
    headless; geometry, journals, meshes and checks support the handoff to human work.

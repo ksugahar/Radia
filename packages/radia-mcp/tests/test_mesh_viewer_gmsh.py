@@ -107,7 +107,7 @@ def post_inputs(tmp_path):
     outdir = tmp_path / 'outputs'; outdir.mkdir()
     source = srcdir / '日本語 space.vol'; source.write_bytes(b'checked fixture')
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    report = {'schema': 'cubit-mesh-export.vol-check.v1', 'passed': True,
+    report = {'schema': 'radia.vol-check.v1', 'passed': True,
               'mesh': {'dimension': 3, 'curve_order': 1, 'n_elements': 6, 'n_points': 8},
               'labels': {'schema': 'radia.vol-label-contract.v1', 'passed': True,
                          'materials': ['iron'], 'boundaries': ['wall']}}

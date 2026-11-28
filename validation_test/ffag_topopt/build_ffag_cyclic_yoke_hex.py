@@ -134,7 +134,7 @@ def _mesh_and_export(cubit, *, output, fold, intervals, inner_radius,
         cubit.cmd('sideset 22 name "skin"')
         periodic_surfaces = (minimum, maximum)
     output.parent.mkdir(parents=True, exist_ok=True)
-    cubit.cmd(f'export netgen "{output.as_posix()}" order 2 overwrite')
+    cubit.cmd(f'export vol "{output.as_posix()}" order 2 overwrite')
     cubit.cmd(
         f'save cub5 "{output.with_suffix(".cub5").as_posix()}" overwrite')
     if (cubit.get_hex_count() <= 0 or not output.is_file()
@@ -172,7 +172,7 @@ def _child(args):
 
 def _postprocess(args, child_report):
     import ngsolve as ng
-    from cubit_mesh_export.check import check_consistency
+    from radia.vol_check import check_consistency
     from radia.ffag_topopt import (
         build_ffag_cyclic_density_map,
         identify_ffag_cyclic_sector_vertices,

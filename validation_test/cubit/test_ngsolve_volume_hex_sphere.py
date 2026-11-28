@@ -1,11 +1,11 @@
 """
 Test Radia-NGSolve volume panel pipeline with hex sphere mesh.
 
-Creates a hex-meshed sphere in Cubit, exports via cubit_mesh_export
+Creates a hex-meshed sphere in Cubit, exports via `export vol`
 at order=1,2,3, integrates volume in NGSolve, compares with analytical.
 
 This tests the FULL panel pipeline:
-  Cubit hex mesh -> export netgen order=N -> NGSolve Integrate
+  Cubit hex mesh -> export vol order=N -> NGSolve Integrate
 
 Usage:
   python validation_test/cubit/test_ngsolve_volume_hex_sphere.py
@@ -23,21 +23,22 @@ from ngsolve import Mesh as NGMesh
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
-from cubit_mesh_export.toolbar_install import find_cubit_bin
+from radia_mcp.cubit.toolbar_install import find_cubit_bin
 
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
 
-_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
-    if _cubit_path else None
-if _plugin_dir and os.path.isdir(_plugin_dir):
+from radia_mcp.cubit.layout import export_plugin_directory
+# $RADIA_CUBIT_PLUGIN_DIR (a build.py output) or the installed plugin directory.
+_plugin_dir = str(export_plugin_directory(_cubit_path)) if _cubit_path else None
+if _plugin_dir:
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
 
 cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
-            '-commandplugindir', _plugin_dir or ''])
+            '-noinitfile'])
 
 OUT_DIR = os.path.join(_test_dir, "ngsolve_hex_sphere_test")
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -104,7 +105,7 @@ def _evaluate_volume(mesh_type, build_func, mesh_size, orders):
     for order in orders:
         out = os.path.join(OUT_DIR, f"{mesh_type.lower()}_sphere_o{order}.vol")
         try:
-            cubit.cmd(f'export netgen "{out.replace(os.sep, "/")}" order {order} overwrite')
+            cubit.cmd(f'export vol "{out.replace(os.sep, "/")}" order {order} overwrite')
             mesh = NGMesh(out)
             vol = Integrate(CF(1), mesh)
             err = (vol - V_EXACT) / V_EXACT * 100

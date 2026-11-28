@@ -25,11 +25,11 @@ DEFAULT_CUBIT = Path(
 DEFAULT_KELVIN_HELPER = (
     REPOSITORY_ROOT
     / "packages"
-    / "cubit-mesh-export"
+    / "radia-mcp"
     / "src"
-    / "cubit_mesh_export"
-    / "cubit_helpers"
-    / "add_kelvin.py"
+    / "radia_mcp"
+    / "cubit"
+    / "kelvin.py"
 )
 
 
@@ -326,6 +326,18 @@ def build_inside_cubit(
     }
 
 
+def _kelvin_export_arguments(helper: Path, radius_m: float) -> str:
+    """Kelvin pair fields for ``export vol``: same offset as add_kelvin_cubit(symmetry=["z"])."""
+    spec = importlib.util.spec_from_file_location("_kelvin_export_arguments", helper)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load Kelvin helper {helper}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    radius = float(radius_m)
+    return module.export_arguments(
+        {"R": radius, "center": module.compute_offset_vector(radius, ["z"])})
+
+
 def write_journal(
     output_dir: Path,
     *,
@@ -370,9 +382,10 @@ def write_journal(
     )
     vol = output_dir / "coil_yoke_kelvin.vol"
     journal = output_dir / "build_coil_yoke_kelvin.jou"
+    kelvin_fields = _kelvin_export_arguments(kelvin_helper, kelvin_radius_m)
     journal.write_text(
         f'play "{inside.as_posix()}"\n'
-        f'export netgen "{vol.as_posix()}" order {int(curve_order)} overwrite\n'
+        f'export vol "{vol.as_posix()}" order {int(curve_order)} {kelvin_fields} overwrite\n'
         "exit\n",
         encoding="utf-8",
     )

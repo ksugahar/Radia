@@ -40,7 +40,7 @@ def checked_vol(tmp_path_factory):
     mesh = ng.Mesh(str(source))
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     # The handoff is caller-asserted (documented contract): counts come from NGSolve itself.
-    report = {"schema": "cubit-mesh-export.vol-check.v1", "passed": True,
+    report = {"schema": "radia.vol-check.v1", "passed": True,
               "mesh": {"dimension": mesh.dim, "curve_order": 1, "n_elements": mesh.ne, "n_points": mesh.nv},
               "labels": {"schema": "radia.vol-label-contract.v1", "passed": True,
                          "materials": sorted(set(mesh.GetMaterials())),

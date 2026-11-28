@@ -69,7 +69,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
 from radia_mcp.build123d.build123d_knowledge import get_build123d_documentation
-from cubit_mesh_export.mcp.vol_inventory import (
+from radia_mcp.cubit.vol_inventory import (
     cubit_export_package_identity_gate,
     cubit_headless_installation_route_gate,
     cubit_mass_property_sidecar_gate,
@@ -262,7 +262,7 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "shape_cubit_meshing_scheme_intent_gate" in doc
     assert "cubit_meshing_scheme_trace_gate" in doc
     assert "hex_region -> map" in doc
-    assert "export netgen" in doc
+    assert "export vol" in doc
     assert "Slot363 carries the Slot362 export-artifact rule into build123d" in doc
     assert "require_downstream_export_output_artifact=True" in doc
     assert "export_output_artifact_id" in doc
@@ -754,7 +754,7 @@ def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
     row["role"] = "hex_region"
     row["expected_cubit_scheme"] = "map"
     row["downstream_meshing_trace_id"] = "slot363_terminal_block_scheme_trace"
-    row["expected_cubit_command_fragments"] = ["create brick", "volume 1 scheme map", "export netgen"]
+    row["expected_cubit_command_fragments"] = ["create brick", "volume 1 scheme map", "export vol"]
     row["expected_cubit_export_order"] = 2
     row["units"] = {"length": "mm", "area": "mm^2", "volume": "mm^3"}
     row["cad_measurement_convention"] = "occt_closed_solid_mass_properties"
@@ -878,7 +878,7 @@ def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
             "commands": [
                 "create brick x 1 y 2 z 3",
                 "volume 1 scheme map",
-                'export netgen "artifacts/cubit/slot363_terminal_block.vol" order 2 overwrite',
+                'export vol "artifacts/cubit/slot363_terminal_block.vol" order 2 overwrite',
             ],
             "volume_schemes": {"1": "map"},
             "export_order": 2,
@@ -889,7 +889,7 @@ def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
         expected_trace_id="slot363_terminal_block_scheme_trace",
         expected_command_digest="sha256:slot363-terminal-block-map-export",
         expected_volume_schemes={"1": "map"},
-        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        required_command_fragments=("create brick", "volume 1 scheme map", "export vol"),
         expected_export_order=2,
         expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
         expected_export_output_digest="sha256:slot363-terminal-block-vol",
@@ -901,7 +901,7 @@ def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
         scheme_trace_gate=scheme_trace,
         required_roles=("hex_region",),
         expected_scheme_by_role={"hex_region": "map"},
-        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        required_command_fragments=("create brick", "volume 1 scheme map", "export vol"),
         expected_trace_id="slot363_terminal_block_scheme_trace",
         expected_export_order=2,
         expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
@@ -1471,7 +1471,7 @@ def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
         scheme_trace_gate=stale_scheme_trace,
         required_roles=("hex_region",),
         expected_scheme_by_role={"hex_region": "map"},
-        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        required_command_fragments=("create brick", "volume 1 scheme map", "export vol"),
         expected_trace_id="slot363_terminal_block_scheme_trace",
         expected_export_order=2,
         expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
@@ -3217,7 +3217,7 @@ def test_shape_cubit_meshing_scheme_intent_gate_binds_cad_roles_to_downstream_tr
             "mesh_route": "cubit_hex_or_mixed_path",
             "expected_cubit_scheme": "map",
             "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
-            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export vol"],
             "expected_cubit_export_order": 2,
             "volume": 1.0,
         },
@@ -3228,7 +3228,7 @@ def test_shape_cubit_meshing_scheme_intent_gate_binds_cad_roles_to_downstream_tr
             "mesh_route": "cubit_hex_or_mixed_path",
             "expected_cubit_scheme": "tetmesh",
             "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
-            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export vol"],
             "expected_cubit_export_order": 2,
             "volume": 0.25,
         },
@@ -3239,7 +3239,7 @@ def test_shape_cubit_meshing_scheme_intent_gate_binds_cad_roles_to_downstream_tr
             "mesh_route": "cubit_hex_or_mixed_path",
             "expected_cubit_scheme": "tetmesh",
             "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
-            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export vol"],
             "expected_cubit_export_order": 2,
             "volume": 1.0,
         },
@@ -3254,7 +3254,7 @@ def test_shape_cubit_meshing_scheme_intent_gate_binds_cad_roles_to_downstream_tr
                 "volume 1 scheme map",
                 "volume 2 scheme tetmesh",
                 "volume 3 scheme tetmesh",
-                "export netgen \"slot291_mixed.vol\" order 2 overwrite",
+                "export vol \"slot291_mixed.vol\" order 2 overwrite",
             ],
             "volume_schemes": {"1": "map", "2": "tetmesh", "3": "tetmesh"},
             "export_order": 2,

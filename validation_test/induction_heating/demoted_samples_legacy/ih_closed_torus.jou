@@ -91,8 +91,6 @@ volume {air_top} {air_bot} visibility off
 
 # === Next step: add Kelvin yourself, then export =============================
 # Preserved under validation_test/induction_heating/demoted_samples_legacy/
-# on 2026-06-29. See README.md. Play ih_closed_torus.py for one-shot
-# Kelvin + export, or run manually in Cubit after this .jou finishes:
-#   python "from add_kelvin import add_kelvin_cubit"
-#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   export netgen "ih_closed_torus.vol" order 1 overwrite
+# on 2026-06-29. See README.md. Export with Kelvin through the MCP tool
+#   cubit_export_vol(<this .jou>, "ih_closed_torus.vol", order=1, add_kelvin=True)
+# or the Kelvin option of the Vol Export menu.

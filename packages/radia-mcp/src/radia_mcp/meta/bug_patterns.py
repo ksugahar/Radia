@@ -1,6 +1,6 @@
 """
 bug_patterns.py -- learned catalog of bug patterns observed in real
-Radia / radia-mcp / cubit-mesh-export incidents.
+Radia / radia-mcp incidents.
 
 Entries record historical incidents; their ``prevention`` field is the current
 rule. Historical ``what`` and ``root_cause`` text is evidence, not an active
@@ -261,7 +261,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-31",
-        "what": "After `export netgen`, Cubit shows a new "
+        "what": "After `export vol`, Cubit shows a new "
                 "phantom block (id K+1) that the user never created.  "
                 "Subsequent parse_cubit_list('volume', 'in block K+1') "
                 "errors with 'No block with ID K+1 was found'.  "
@@ -303,7 +303,7 @@ PATTERNS: list[dict] = [
                 "reported convergence.  The response matched the "
                 "mass-only result.",
         "root_cause": "`sculpt volume all` makes a FREE mesh not owned "
-                      "by geometric surfaces; `export netgen` collects "
+                      "by geometric surfaces; `export vol` collects "
                       "boundary faces from geometry-owned surfaces, so "
                       "the .vol got surfaceelements=0 (`gen_sidesets 2` "
                       "creates a mesh-only sideset the exporter also "
@@ -314,20 +314,15 @@ PATTERNS: list[dict] = [
         "detection": "DemagFactor==0 plus an objective equal to the "
                      "mass-only response; count `surfaceelements` in "
                      "the .vol text.  Locked by "
-                     "tests/test_hdiv_vim_boundary_faces.py, the "
-                     "cubit_stl_to_vol `boundary_faces_ok` gate, and "
-                     "the shape-regen lane's demag_factor_z lock.",
+                     "tests/test_hdiv_vim_boundary_faces.py.",
         "prevention": "Bind mesh-based geometry BEFORE export: "
                       "`create mesh geometry hex all feature_angle 135` "
-                      "+ `delete volume with not is_meshed` (what "
-                      "cubit_stl_to_vol scheme=hex now does).  "
+                      "+ `delete volume with not is_meshed`, then check "
+                      "the .vol for a complete boundary skin.  "
                       "vim.build_charge_gram raises on any 3D mesh "
                       "with 0 BND elements.",
-        "related": ["packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py",
-                    "src/radia/vim/_vim.py",
-                    "tests/test_hdiv_vim_boundary_faces.py",
-                    "validation_test/isochronous_topopt/"
-                    "test_shape_regen_lane.py"],
+        "related": ["src/radia/vim/_vim.py",
+                    "tests/test_hdiv_vim_boundary_faces.py"],
     },
     {
         "id": "facet-tet-charge-gram-indefinite-cg-stall",
@@ -441,9 +436,7 @@ PATTERNS: list[dict] = [
                       "test_design_loop_lane.py (golden bands).",
         "related": ["src/radia/isochronous_topopt.py",
                     "validation_test/isochronous_topopt/"
-                    "test_design_loop_lane.py",
-                    "validation_test/isochronous_topopt/"
-                    "test_hex_native_design_lane.py"],
+                    "test_design_loop_lane.py"],
     },
 
     # =====================================================
@@ -555,8 +548,7 @@ PATTERNS: list[dict] = [
         "root_cause": "Bumped pyproject.toml but forgot to bump "
                       "src/<pkg>/__init__.py's __version__ in the "
                       "same commit.  Both are read by different tools.",
-        "detection": "release.yml / release-cubit-mesh-export.yml / "
-                     "release-radia-mcp.yml all check version "
+        "detection": "release.yml / release-radia-mcp.yml both check version "
                      "consistency in the 'Verify wheel' step.  "
                      "Catches at PUBLISH time, not at commit time.",
         "prevention": "Bump both files in the owning distribution's "
@@ -636,19 +628,19 @@ PATTERNS: list[dict] = [
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
         "what": "First push after Tier-2 (Cubit plugin .pyd/.ccm moved "
-                "OUT of src/radia into the cubit-mesh-export package) + "
+                "OUT of src/radia into the Cubit export package) + "
                 "the de-radia rename turned build-test CI RED at the "
-                "'fetch cubit_mesh_curver.pyd from binaries' step (6 "
+                "'fetch the curver .pyd from binaries' step (6 "
                 "download attempts, exit 1).  Job died before tests -> "
                 "no junit XML.  Build + tests themselves were fine.",
         "root_cause": "build-test.yml fetched the .pyd to src/radia and "
                       "the wheel-build step copied .pyd/.ccm FROM "
                       "src/radia -- but Build.ps1 now propagates them "
-                      "into packages/cubit-mesh-export/src/cubit_mesh_"
-                      "export.  The renamed curver asset was also not yet "
+                      "into the Cubit export package.  The renamed curver "
+                      "asset was also not yet "
                       "in the binaries release.",
         "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
-                     "download cubit_mesh_curver.pyd after 6 attempts'.",
+                     "download <curver>.pyd after 6 attempts'.",
         "prevention": "When relocating OR renaming a bundled binary, "
                       "grep ALL .github/workflows/*.yml (build-test + "
                       "release-*) for the old path/name and fix: fetch "
@@ -684,8 +676,8 @@ PATTERNS: list[dict] = [
                      "the smoke temp dir; --verify-only is green.",
         "prevention": "Treat an Administrator-profile license failure as "
                       "different from package deployment evidence. Use the "
-                      "independent cubit-mesh-export release-dual and verify "
-                      "the plugin/hash contract; run licensed GUI smoke only "
+                      "radia_mcp.cubit.install --verify-only plugin/hash "
+                      "contract; run licensed GUI smoke only "
                       "under a licensed user. Do not weaken radia-mcp gates.",
         "related": [".claude/skills/cubit-license/SKILL.md",
                     ],
@@ -699,7 +691,7 @@ PATTERNS: list[dict] = [
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
         "what": "After renaming the Cubit plugin "
-                "(radia_cubit.*->cubit_mesh_export.*/cubit_mesh_curver) + "
+                "(radia_cubit.* -> a new plugin/curver name) + "
                 "the command verb (radia_export->export, nastran-> "
                 "jmag_nastran), the deploy/release-quad/build skills "
                 "still listed the OLD cmake targets (radia_cubit_ccm), "
@@ -1478,9 +1470,7 @@ PATTERNS: list[dict] = [
                      "and leaves curl/div essentially untouched (0.658 "
                      "-> 0.657 and 0.973 -> 0.967 across the rotation). "
                      "An L2 advantage with no matching seminorm "
-                     "advantage is the signature. "
-                     "validation_test/radia_mcp/mesh_quality_study/"
-                     "run_rotation_control.py is the standing control.",
+                     "advantage is the signature.",
         "prevention": "Never verify or benchmark a structured mesh with "
                       "an axis-aligned separable exact solution. Rotate "
                       "the field (cheaper and cleaner than rotating the "
@@ -1488,9 +1478,133 @@ PATTERNS: list[dict] = [
                       "identity), or headline the derivative seminorm. "
                       "Treat any order-of-magnitude mesh-comparison gap "
                       "as an artifact until a control says otherwise.",
-        "related": ["validation_test/radia_mcp/mesh_quality_study/run_rotation_control.py",
-                    "validation_test/radia_mcp/mesh_quality_study/run_vector_elements.py",
-                    ],
+        "related": [],
+    },
+    {
+        "id": "single-worst-element-sample-ranks-meshers",
+        "title": "One worst-element quality number per mesher is a random "
+                 "sample, not a mesher property, and does not predict the "
+                 "solve.",
+        "topics": ["mesh", "verification", "benchmark"],
+        "severity": "medium",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "Two meshers are ranked on one minSICN `min` value each, "
+                "or refinement is expected to improve the worst element "
+                "monotonically.",
+        "root_cause": "At a fixed size target a mesher is bit-exactly "
+                      "reproducible, but moving the target by ~0.1 % moved "
+                      "the worst element by ~0.1 in minSICN for both a "
+                      "Delaunay and an advancing-front tet mesher; about a "
+                      "third of refinement steps made it worse.  At these "
+                      "levels a 0.2 deficit in `min` left CG iterations and "
+                      "the L2/H1 error unchanged.",
+        "detection": "Sweep several nearby size targets and compare the "
+                     "BAND of `min` values; check whether the observable the "
+                     "analysis needs (error, iterations) moves with it.",
+        "prevention": "Gate meshes on inverted elements (negative Jacobian "
+                      "count > 0), not on one `min`.  Compare `min` only as "
+                      "bands over sizes, never as a single call per mesher.",
+        "related": ["axis-aligned-manufactured-solution-fake-superconvergence",
+                    "element-count-taken-as-mesh-cost"],
+    },
+    {
+        "id": "block-relative-residual-on-near-zero-rhs",
+        "title": "A per-block relative residual gate fails on a block whose "
+                 "right-hand side is roundoff-sized.",
+        "topics": ["solver", "verification", "gates"],
+        "severity": "medium",
+        "first_seen": "2026-09-11",
+        "last_seen": "2026-09-11",
+        "what": "A block-wise true-residual gate (residual / block RHS) "
+                "reports 0.23 on an iron block although the global solve "
+                "converged and energy checks pass.",
+        "root_cause": "The block RHS norm was 1.0e-15 and its residual "
+                      "2.4e-16: both are roundoff, so their ratio carries "
+                      "no convergence information.",
+        "detection": "Print the block RHS norm next to every block "
+                     "relative residual; a ratio of O(0.1) with an RHS "
+                     "near machine epsilon times the global RHS is this "
+                     "pattern, not divergence.",
+        "prevention": "Normalize block residuals by the global RHS (or "
+                      "add an explicit absolute floor) as a reviewed gate "
+                      "change. Until then record the failed gate and hold "
+                      "the run; never mark it passed quietly.",
+        "related": [],
+    },
+    {
+        "id": "element-count-taken-as-mesh-cost",
+        "title": "Comparing meshes at equal element count hides the dof "
+                 "they cost; boundary-heavy meshes look economical.",
+        "topics": ["mesh", "benchmark", "fem"],
+        "severity": "medium",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "A mesher with half the elements at equal h, or a hex mesh "
+                "with 5-8x fewer elements, looks more accurate or cheaper "
+                "than it is.",
+        "root_cause": "The linear system is sized by dof, not elements.  At "
+                      "matched dof the convergence RATES agreed; the mesher "
+                      "with more boundary nodes (interior-node fraction "
+                      "2-49 % against 19-77 %) had a 1.1-1.9x larger L2 "
+                      "error, and an equal-element pair quietly used 1.5x "
+                      "the dof of its partner.",
+        "detection": "Report dof and the interior-node fraction beside every "
+                     "mesh comparison (mesh_quality's mesh_stats carries "
+                     "both) and interpolate errors to matched dof.",
+        "prevention": "Rank meshes on error versus dof.  Report the energy "
+                      "seminorm and iteration count separately from L2: a "
+                      "mesh can win conditioning and the energy norm while "
+                      "L2 is a tie.",
+        "related": ["single-worst-element-sample-ranks-meshers",
+                    "zero-free-dof-flat-convergence-curve"],
+    },
+    {
+        "id": "zero-free-dof-flat-convergence-curve",
+        "title": "A convergence study whose every node lies on a Dirichlet "
+                 "boundary solves nothing and prints a flat error curve.",
+        "topics": ["verification", "fem", "benchmark"],
+        "severity": "high",
+        "first_seen": "2026-08-06",
+        "last_seen": "2026-08-06",
+        "what": "Several meshers appear to tie with a constant error across "
+                "refinements, or a fitted convergence rate is off.",
+        "root_cause": "On a thin plate meshed with one element through the "
+                      "thickness every node sat on a Dirichlet face: zero "
+                      "free dofs, so the 'error' was pure interpolation "
+                      "error of the boundary data.  Coarse points with few "
+                      "interior nodes silently bent a fitted slope the same "
+                      "way.",
+        "detection": "Count free dofs and the interior-node fraction for "
+                     "every point of the study before fitting.",
+        "prevention": "Raise when free dofs are zero.  Exclude points below "
+                      "a stated interior-node fraction (20 % was used) from "
+                      "rate fits and say so in the result.",
+        "related": ["element-count-taken-as-mesh-cost"],
+    },
+    {
+        "id": "cubit-plugin-directory-silently-substituted",
+        "title": "A relative or second Cubit plugin directory makes Cubit "
+                 "run a different exporter than the candidate under test.",
+        "topics": ["cubit", "mesh-export", "validation"],
+        "severity": "high",
+        "first_seen": "2026-10-15",
+        "last_seen": "2026-10-15",
+        "what": "A benchmark of a candidate command plugin reports results "
+                "that actually came from the installed plugin, or the "
+                "export commands register twice.",
+        "root_cause": "Cubit rejects a relative plugin directory ('Invalid "
+                      "Plugin Directory') and silently loads the installed "
+                      "plugin instead; a host with an installed plugin "
+                      "loads it in addition to an explicit directory, so "
+                      "the same command names register twice.",
+        "detection": "Require a log line or version string that only the "
+                     "candidate emits, and hash the loaded plugin path, "
+                     "before accepting any exported file.",
+        "prevention": "Pass the plugin directory as an absolute path; never "
+                      "infer which binary ran from disk-file equality or a "
+                      "successful export.",
+        "related": [],
     },
 ]
 

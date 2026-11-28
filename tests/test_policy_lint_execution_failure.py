@@ -87,10 +87,10 @@ def test_git_trust_is_scoped_to_the_active_checkout(monkeypatch):
     'C:' + '/Users/SyntheticOperator/scratch',
     chr(92) * 2 + 'synthetic-server' + chr(92) + 'share',
 ])
-def test_exporter_release_skill_is_scanned_for_runtime_identity(monkeypatch, tmp_path, private_text):
+def test_release_skill_is_scanned_for_runtime_identity(monkeypatch, tmp_path, private_text):
     """The release guide must not regain a blanket operational exemption."""
     lint = _load()
-    relative = '.agents/skills/release-cubit-mesh-export/SKILL.md'
+    relative = '.agents/skills/linux-build/SKILL.md'
     source = tmp_path / relative
     source.parent.mkdir(parents=True)
     source.write_text('Run on ' + private_text, encoding='utf-8')

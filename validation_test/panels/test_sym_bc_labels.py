@@ -14,8 +14,8 @@ Locks the formulation-agnostic symmetry naming introduced 2026-04-25:
 These tests are fast (<1s total), Cubit-free, and cover the three
 Python touch-points:
 
-  1. `add_kelvin.sym_sideset_name` / `parse_sym_label`
-  2. `add_kelvin.add_kelvin_cubit(reduction=...)` validation branches
+  1. `radia_mcp.cubit.kelvin.sym_sideset_name` / `parse_sym_label`
+  2. `radia_mcp.cubit.kelvin.add_kelvin_cubit(reduction=...)` validation branches
      (1/8 NotImplementedError, invalid bc, invalid axis, offset_dir
      conflict).
   3. `calc_accel_hdiv.ima_from_mesh_labels` auto-assembly.
@@ -39,24 +39,24 @@ if PANELS not in sys.path:
 
 
 # ==========================================================
-# add_kelvin.sym_sideset_name / parse_sym_label
+# radia_mcp.cubit.kelvin.sym_sideset_name / parse_sym_label
 # ==========================================================
 
 def test_sym_sideset_name_canonical():
-    from add_kelvin import sym_sideset_name
+    from radia_mcp.cubit.kelvin import sym_sideset_name
     assert sym_sideset_name("x", "bn=0") == "sym_bn=0_x"
     assert sym_sideset_name("y", "ht=0") == "sym_ht=0_y"
     assert sym_sideset_name("Z", "bn=0") == "sym_bn=0_z"   # lowercased
 
 
 def test_sym_sideset_name_rejects_bad_axis():
-    from add_kelvin import sym_sideset_name
+    from radia_mcp.cubit.kelvin import sym_sideset_name
     with pytest.raises(ValueError, match="axis"):
         sym_sideset_name("w", "bn=0")
 
 
 def test_sym_sideset_name_rejects_bad_bc():
-    from add_kelvin import sym_sideset_name
+    from radia_mcp.cubit.kelvin import sym_sideset_name
     with pytest.raises(ValueError, match="bc"):
         sym_sideset_name("x", "sym_tangential")
     with pytest.raises(ValueError, match="bc"):
@@ -64,7 +64,7 @@ def test_sym_sideset_name_rejects_bad_bc():
 
 
 def test_parse_sym_label_canonical_roundtrip():
-    from add_kelvin import sym_sideset_name, parse_sym_label
+    from radia_mcp.cubit.kelvin import sym_sideset_name, parse_sym_label
     for axis in ("x", "y", "z"):
         for bc in ("bn=0", "ht=0"):
             label = sym_sideset_name(axis, bc)
@@ -73,25 +73,25 @@ def test_parse_sym_label_canonical_roundtrip():
 
 def test_parse_sym_label_legacy():
     """Legacy axis-less labels survive for pre-2026-04-25 samples."""
-    from add_kelvin import parse_sym_label
+    from radia_mcp.cubit.kelvin import parse_sym_label
     assert parse_sym_label("sym_tangential") == ("", "bn=0")
     assert parse_sym_label("sym_normal") == ("", "ht=0")
 
 
 def test_parse_sym_label_non_sym():
-    from add_kelvin import parse_sym_label
+    from radia_mcp.cubit.kelvin import parse_sym_label
     for label in ("", "air", "kelvin_int", "GND", "iron",
                   "sym_bogus_x", "sym_bn=0_w", None, 42):
         assert parse_sym_label(label) is None, label
 
 
 # ==========================================================
-# add_kelvin.add_kelvin_cubit(reduction=...) validation
+# radia_mcp.cubit.kelvin.add_kelvin_cubit(reduction=...) validation
 # ==========================================================
 
 def test_reduction_and_symmetry_are_mutually_exclusive():
     """Passing both symmetry= and reduction= must raise early."""
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="mutually exclusive"):
         add_kelvin_cubit(R=0.1, symmetry=["z"],
                          reduction={"x": "bn=0"})
@@ -101,61 +101,55 @@ def test_reduction_eighth_all_bn_rejected():
     """1/8 reduction with all 3 planes set to bn=0 means B parallel to
     three mutually perpendicular planes, which forces B = 0 everywhere.
     Must fail loud with a physics-aware message."""
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="physically impossible"):
         add_kelvin_cubit(
             R=0.1,
             reduction={"x": "bn=0", "y": "bn=0", "z": "bn=0"})
 
 
-def test_reduction_eighth_with_ht_axis_validates():
-    """1/8 with at least one ht=0 axis must pass argument validation
-    (no more NotImplementedError -- supported as of 2026-04-25).
+def test_reduction_eighth_with_ht_axis_validates(monkeypatch):
+    """1/8 with at least one ht=0 axis passes argument validation and
+    reaches the Cubit work.
 
-    Cubit is importable on the validation runtime machine so the helper proceeds
-    past validation into the actual Cubit work, which then fails
-    because no air block exists in the empty Cubit session.  We
-    accept any RuntimeError / NotImplementedError NOT containing
-    the obsolete 'reduction supports 1 or 2 axes' / '1/8 reduction
-    (x+y+z) is not yet supported' messages.
+    A stub ``cubit`` module stands in for the Cubit session so the check
+    does not depend on which ``cubit`` the import path finds; its first
+    model query raises, proving validation let the call through.
     """
-    from add_kelvin import add_kelvin_cubit
-    # Catch broadly -- the goal is just to assert that the
-    # *validation* block doesn't raise.  If validation rejected this
-    # case, we'd get a ValueError saying "reduction supports 1 or 2"
-    # or NotImplementedError saying "1/8 ... not yet supported"; both
-    # would be caught here, so we additionally check the message.
-    try:
+    import types
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
+
+    class _Reached(RuntimeError):
+        pass
+
+    def _query(*args, **kwargs):
+        raise _Reached("validation passed; Cubit model queried")
+
+    stub = types.ModuleType("cubit")
+    stub.parse_cubit_list = _query
+    stub.cmd = _query
+    stub.get_entities = _query
+    monkeypatch.setitem(sys.modules, "cubit", stub)
+    with pytest.raises(_Reached):
         add_kelvin_cubit(
             R=0.1,
             reduction={"x": "ht=0", "y": "ht=0", "z": "bn=0"})
-    except (RuntimeError, ImportError, ModuleNotFoundError):
-        # Expected: cubit not in a valid state (no air block).
-        return
-    except (ValueError, NotImplementedError) as e:
-        msg = str(e).lower()
-        assert "1 or 2 axes" not in msg, \
-            f"validation still rejecting 1/8: {e}"
-        assert "not yet supported" not in msg, \
-            f"validation still has obsolete 'not yet supported': {e}"
-        # Any OTHER ValueError is also unexpected for this valid input.
-        raise
 
 
 def test_reduction_empty_rejected():
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="reduction dict is empty"):
         add_kelvin_cubit(R=0.1, reduction={})
 
 
 def test_reduction_invalid_bc_rejected():
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="bn=0|ht=0"):
         add_kelvin_cubit(R=0.1, reduction={"x": "sym_normal"})
 
 
 def test_reduction_invalid_axis_rejected():
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="axis"):
         add_kelvin_cubit(R=0.1, reduction={"w": "bn=0"})
 
@@ -163,7 +157,7 @@ def test_reduction_invalid_axis_rejected():
 def test_reduction_offset_dir_conflict_rejected():
     """If the user sets offset_dir along a reduction axis, the Kelvin
     sphere would poke through the symmetry plane -- must fail loud."""
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(ValueError, match="conflicts with reduction"):
         add_kelvin_cubit(
             R=0.1,
@@ -172,7 +166,7 @@ def test_reduction_offset_dir_conflict_rejected():
 
 
 def test_reduction_type_rejected():
-    from add_kelvin import add_kelvin_cubit
+    from radia_mcp.cubit.kelvin import add_kelvin_cubit
     with pytest.raises(TypeError, match="must be a dict"):
         add_kelvin_cubit(R=0.1, reduction=["x"])
 

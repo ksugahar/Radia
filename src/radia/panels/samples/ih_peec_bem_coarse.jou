@@ -90,5 +90,5 @@ sideset 4 name "coil_surface"
 
 volume {air_top} {air_bot} visibility off
 
-# === 11. Export Netgen .vol =================================================
-export netgen "ih_peec_bem_coarse.vol" order 1 overwrite
+# === 11. Export Vol .vol =================================================
+export vol "ih_peec_bem_coarse.vol" order 1 overwrite

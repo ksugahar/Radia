@@ -15,7 +15,7 @@ def test_fem_force_and_motor_servers_import_without_solver_dependencies() -> Non
         sys.path.insert(0, sys.argv[1])
         blocked = {
             "build123d", "gmsh", "matplotlib", "netgen", "ngsolve",
-            "numpy", "pandas", "radia", "scipy", "cubit_mesh_export", "cae_mcp_core",
+            "numpy", "pandas", "radia", "scipy", "cae_mcp_core",
         }
 
         class OptionalDependencyBlocker(importlib.abc.MetaPathFinder):

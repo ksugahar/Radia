@@ -11,7 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 import ngsolve as ng
-from cubit_mesh_export import smoke_test
+from radia_mcp.cubit import smoke_test
 from netgen.meshing import (
     Element2D,
     Element3D,

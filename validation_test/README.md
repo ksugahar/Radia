@@ -16,7 +16,7 @@ apply. A saved result supports only its recorded configuration and criteria.
 [docs/](../docs/README.md) introduces features through saved demonstrations;
 the [validation guide](../docs/VALIDATION_GUIDE.md) maps questions to evidence.
 For operational work, use [MCP](../packages/radia-mcp/README.md) or human–AI
-collaboration through [Cubit](../docs/cubit_mesh_export/README.md) and
+collaboration through [Cubit](../docs/cubit_export/README.md) and
 [Simulink](../matlab/README.md).
 
 For detailed formulation comparisons, convergence and paper-supporting work,

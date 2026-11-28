@@ -16,7 +16,7 @@ def test_explicit_source_units_produce_the_same_si_cube(units, side, route, tmp_
 
     build123d = pytest.importorskip('build123d')
     ng = pytest.importorskip('ngsolve')
-    pytest.importorskip('cubit_mesh_export.check')
+    pytest.importorskip('radia.vol_check')
     from radia_mcp.build123d import pipeline
 
     part = build123d.Box(side, side, side).solid()

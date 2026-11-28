@@ -378,14 +378,18 @@ def _get_gmsh_ref_points(et_name, order, orient="neg"):
 
     try:
         import gmsh
-        need_init = not gmsh.isInitialized()
-        if need_init:
-            gmsh.initialize()
+    except ImportError as exc:
+        raise RuntimeError(
+            f"order-{order} Gmsh export of {et_name} elements needs the gmsh "
+            "module for the reference node positions; install gmsh") from exc
+    need_init = not gmsh.isInitialized()
+    if need_init:
+        gmsh.initialize()
+    try:
         _, dimension, _, nn, ref_pts, _ = gmsh.model.mesh.getElementProperties(gmsh_type)
+    finally:
         if need_init:
             gmsh.finalize()
-    except Exception:
-        return None, None
 
     # Convert GMSH ref -> NGSolve ref
     ng_pts = []
@@ -1196,94 +1200,6 @@ _PRISM_EDGES_GMSH = [
 ]
 
 
-def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
-    """Build 2nd order connectivity for a volume element.
-
-    Uses mesh.GetTrafo(el) to evaluate mid-edge positions in physical space.
-    Caches mid-edge nodes by vertex pair to avoid duplicates on shared edges.
-
-    Args:
-        mesh: NGSolve Mesh
-        el: Element (VOL)
-        reordered: 1st order vertex indices (GMSH node order)
-        et_name: Element type name ('TET', 'HEX', 'PRISM')
-        nodes: mutable list of (x,y,z) tuples (new nodes appended)
-        cache: dict mapping edge_key -> mid-node index
-
-    Returns:
-        Extended connectivity list (vertices + mid-edge nodes).
-    """
-    if et_name == 'TET':
-        edge_table = _TET_EDGES_GMSH
-    elif et_name == 'HEX':
-        edge_table = _HEX_EDGES_GMSH
-    elif et_name == 'PRISM':
-        edge_table = _PRISM_EDGES_GMSH
-    else:
-        return reordered  # unsupported type, return 1st order
-
-    conn = list(reordered)  # start with vertices
-
-    # Reference space mid-edge points for TET: (0,0,0)-(1,0,0)-(0,1,0)-(0,0,1)
-    # We compute each mid-edge point via GetTrafo
-    trafo = mesh.GetTrafo(el)
-
-    # NGSolve reference coordinates for standard element types.
-    # IMPORTANT: NGSolve trafo maps reference coords to physical coords,
-    # but the vertex ordering in el.vertices does NOT match the reference
-    # vertex ordering. For TET:
-    #   ref(0,0,0) -> el.vertices[3]
-    #   ref(1,0,0) -> el.vertices[0]
-    #   ref(0,1,0) -> el.vertices[1]
-    #   ref(0,0,1) -> el.vertices[2]
-    # So ref_verts[i] gives the reference coord of el.vertices[i].
-    if et_name == 'TET':
-        # el.vertices order -> reference coords
-        ref_verts = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 0)]
-    elif et_name == 'HEX':
-        ref_verts = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
-                     (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
-    elif et_name == 'PRISM':
-        ref_verts = [(1, 0, 0), (0, 1, 0), (0, 0, 0),
-                     (1, 0, 1), (0, 1, 1), (0, 0, 1)]
-
-    # Map GMSH corner index -> NGSolve el.vertices index -> ref coord.
-    # reordered[g] = verts[perm[g]], so GMSH local g corresponds to
-    # NGSolve local perm[g].  (The pre-2026-08 code indexed the INVERSE
-    # permutation here; every permutation in the table happened to be an
-    # involution back then, which made the mix-up unobservable.  The TET
-    # fix [3,0,1,2] is not an involution, so the direction matters.)
-    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
-        et_name, list(range(len(reordered))))
-
-    for e0_gmsh, e1_gmsh in edge_table:
-        # Global node IDs for this edge
-        gn0 = reordered[e0_gmsh]
-        gn1 = reordered[e1_gmsh]
-        edge_key = (min(gn0, gn1), max(gn0, gn1))
-
-        if edge_key in cache:
-            conn.append(cache[edge_key])
-        else:
-            # Map GMSH local index -> NGSolve local index -> ref coord
-            ng0 = perm[e0_gmsh]
-            ng1 = perm[e1_gmsh]
-            ref_mid = tuple(0.5 * (ref_verts[ng0][k] + ref_verts[ng1][k])
-                            for k in range(3))
-
-            # Evaluate trafo at mid-point to get physical coordinates
-            from ngsolve import IntegrationRule
-            ir = IntegrationRule([ref_mid], [1.0])
-            mip = trafo(ir[0])
-            phys = _point3(mip.point)
-            mid_node_idx = len(nodes)
-            nodes.append(phys)
-            cache[edge_key] = mid_node_idx
-            conn.append(mid_node_idx)
-
-    return conn
-
-
 def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
                           nodes, cache, ref_cache, orient="neg"):
     """Build arbitrary-order connectivity for a volume element.
@@ -1313,10 +1229,7 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
     gmsh_type, ng_ref_pts = ref_cache[ref_key]
 
     if ng_ref_pts is None:
-        # Fallback to order-2 path
-        return _build_vol_highorder_conn(
-            mesh, el, reordered, et_name, nodes,
-            cache.setdefault("_order2", {}))
+        raise ValueError(f"Gmsh has no order-{order} {et_name} element")
 
     n_verts = len(reordered)
     n_total = len(ng_ref_pts)

@@ -84,19 +84,10 @@ Each JSON includes the exact runner/native/Python hashes used. After these runs
 the runner additionally gained a mesh/dependent-source hash recheck at saves;
 those checks do not retroactively appear in these older result schemas.
 
-* `omega_quadrature_small_20260911.json`: actual p=1 solves at bonuses 4 and 8.
-  Solve times were 2.49 and 5.94 s, including neither projection nor subsequent
-  audits. W-J-C was 5.73e-14 and 3.40e-14. The bonus-4 iron-block gate FAILS:
-  RHS norm 1.02e-15, residual norm 2.37e-16, relative 0.233. This is recorded
-  without relaxing the gate; a near-zero block RHS is a normalization issue
-  to inspect, not grounds for quietly marking the run passed.
-* `omega_quadrature_embedding_p12_20260911.json`: bonus 8, p=1 and 2 re-solved;
-  all algebraic/energy gates passed. Cross-order value error <=8.36e-16,
-  interface trace error <=1.19e-15, gradient error <=9.09e-13 (relative).
-  Nonfree coefficients <=7.24e-15. Interface constraint relative violation
-  remains 3.3562e-4; self controls are 1.85e-16 and 4.10e-16. This supports a
-  non-nested assembled constraint set in this C-type control; it is not #6
-  acceptance or a variational-bound proof.
+* The 2026-09-11 small and p=1/2 embedding results (`omega_quadrature_small_20260911.json`,
+  `omega_quadrature_embedding_p12_20260911.json`) were removed on 2026-11-27: they embedded
+  reports of the retired mesh-export checker and ran on a staging build and private mesh
+  that are not kept, so they cannot be regenerated.
 
 The original lane had 8 passing gate tests. This describes the scope of the
 2026-09-11 small runs only, not the status of subsequent remote campaigns.

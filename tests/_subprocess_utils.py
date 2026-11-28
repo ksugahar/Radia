@@ -2,7 +2,7 @@
 
 Encapsulates the three lessons learned while building the Cubit
 p-convergence / mesh-evaluation subprocess path used by validation tests
-and docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb, so other tests
+and docs/cubit_export/netgen/p_convergence_demo.ipynb, so other tests
 do not re-discover them painfully.
 
 Lesson 1 -- PySide6 (Qt6) ⊗ Cubit ``_cubit3.pyd`` (Qt6) DLL conflict.
@@ -122,13 +122,12 @@ except ImportError:
 
 # Help the user script locate Cubit's bin (idempotent).
 try:
-    from cubit_mesh_export.toolbar_install import find_cubit_bin as _find_cubit_bin
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin as _find_cubit_bin
     _cb = _find_cubit_bin()
     if _cb:
         sys.path.insert(0, _cb)
-        os.environ.setdefault(
-            "CUBIT_PLUGIN_DIR",
-            os.path.join(os.path.dirname(_cb), "bin", "plugins"))
+        from radia_mcp.cubit.layout import export_plugin_directory as _plugins
+        os.environ.setdefault("CUBIT_PLUGIN_DIR", str(_plugins(_cb)))
 except Exception:
     pass
 # --------- END AUTO-INJECTED PRELUDE -------------------------------

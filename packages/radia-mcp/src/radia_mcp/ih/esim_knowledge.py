@@ -162,7 +162,7 @@ potential; SIBC enters as a complex Robin coefficient.
 
 | Flag             | Required? | Meaning |
 |------------------|-----------|---------|
-| --vol            | yes       | Workpiece .vol from Cubit `export netgen` |
+| --vol            | yes       | Workpiece .vol from Cubit `export vol` |
 | --wp-label sibc  | yes       | Workpiece boundary label (sideset) |
 | --sigma          | yes       | Workpiece conductivity [S/m] |
 | --mu-r           | yes       | Workpiece relative permeability (linear regime value) |

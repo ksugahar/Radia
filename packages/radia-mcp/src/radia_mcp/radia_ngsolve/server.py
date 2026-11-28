@@ -11,7 +11,7 @@ Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
 
 App-specific knowledge is in separate servers:
 - ih: Induction heating (SIBC, ESIM, Karl iteration)
-- mcp-server-cubit: external Cubit scripting/mesh export from cubit-mesh-export
+- cubit-mcp: Cubit scripting/mesh export (radia_mcp.cubit)
 - gmsh-mcp: GMSH post-processing
 
 Usage:
@@ -1010,10 +1010,9 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: str = "1000.0",
     """Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`.
 
     This is the SOLVER half of the Sculpt x HDiv-MMM combination: the
-    cubit server's `cubit_vfrac_to_vol` / `cubit_stl_to_vol` turn a
-    topology-optimization density (or any body) into a gated all-hex (or
-    tet) `.vol` of the MATERIAL REGION ONLY -- no air mesh, no Kelvin
-    shell, no PML -- and this tool solves the open-boundary
+    caller supplies a checked all-hex (Sculpt) or tet `.vol` of the
+    MATERIAL REGION ONLY -- no air mesh, no Kelvin shell, no PML -- and
+    this tool solves the open-boundary
     demagnetization problem on it with the charge-Gram H-matrix
     (`radia.vim.Solve`).  Because the operator is an integral equation,
     changing the body only re-meshes the body: the optimization loop
@@ -1021,13 +1020,13 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: str = "1000.0",
 
     Returns JSON with the demagnetizing factor along the excitation
     (uniform-field contract: a sphere gives ~1/3, a flat sector ~0.5,
-    a broken export reads 0 -- the shape-regen lane's DemagFactor gate),
+    a broken export with no boundary faces reads 0),
     solver iterations, ne / ndof, per-material volumes, and wall time.
     Set RADIA_HDIV_HEX_CACHE_STATS=1 before starting the server to also
     get the hex fill branch profile via `radia.vim` gram stats.
 
-    MULTI-MATERIAL: the mesh side (`cubit_vfrac_to_vol` on a multi-material
-    volume-fraction Exodus) writes one named material region per Sculpt
+    MULTI-MATERIAL: a `.vol` meshed by Sculpt from a multi-material
+    volume-fraction Exodus carries one named material region per Sculpt
     block with a conformal interface; pass `mu_r` as
     "core=1000,shell=50" to give each its own permeability (the underlying
     `vim.Solve` takes the same `{material: mu_r}` mapping).  A scalar
@@ -1159,10 +1158,8 @@ def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
 
     Use this when you have a `.vol` file with `kelvin_int` /
     `kelvin_ext` boundary labels but no `Identifications` section yet
-    -- typical when the Cubit C++ exporter's all-or-nothing vertex
-    matching skipped due to a single tolerance miss (1/8-octant
-    geometry), or when the mesh came from outside the Cubit panel
-    pipeline.
+    -- every Cubit Kelvin mesh (`export vol` writes the labels but no
+    Kelvin identifications), or a mesh from outside the Cubit route.
 
     Read topic="curved_geometry" before applying this to a curved archive.
     In-memory vertex pairing is not geometry/persistence or HCurl qualification;
@@ -1574,12 +1571,12 @@ def ngsbem_inductance(topic: str = "all") -> str:
     on high-order curved surface elements.
 
     Key workflow:
-      Cubit mesh -> export netgen "mesh.vol" order N -> LaplaceSL BEM -> L extraction
+      Cubit mesh -> export vol "mesh.vol" order N -> LaplaceSL BEM -> L extraction
 
     Sources:
       - https://docu.ngsolve.org/latest/how_to/ngsbem.html
       - https://github.com/Weggler/docu-ngsbem/ (stabilized BEM)
-      - https://github.com/ksugahar/Radia (cubit_mesh_export / export plugin)
+      - https://github.com/ksugahar/Radia (radia_mcp.cubit / export plugin)
 
     Args:
         topic: Documentation topic. Options:

@@ -1,13 +1,13 @@
 {
-  "schema": "cubit-mesh-export.vol-check.v1",
-  "generated_at_utc": "2026-09-11T04:48:02.251862+00:00",
+  "schema": "radia.vol-check.v1",
+  "generated_at_utc": "2026-11-27T11:38:33.391829+00:00",
   "versions": {
-    "cubit_mesh_export": "0.14.17",
-    "ngsolve": "6.2.2606",
+    "radia": "5.4.6",
+    "ngsolve": "6.2.2608",
     "python": "3.12.10"
   },
   "passed": true,
-  "vol_file": "validation_test\\sparsesolv\\hiruma\\meshes\\mesh1_2.5T.vol",
+  "vol_file": "validation_test/sparsesolv/hiruma/meshes/mesh1_2.5T.vol",
   "json_file": null,
   "threshold_pct": 1.0,
   "cad_reference": {
@@ -159,7 +159,17 @@
         "vacuum"
       ]
     },
+    "curved_pyramid_map": {
+      "pyramid_count": 0,
+      "max_relative_deviation": 0.0,
+      "tolerance": 1e-08
+    },
     "warnings": []
+  },
+  "curved_pyramid_map": {
+    "pyramid_count": 0,
+    "max_relative_deviation": 0.0,
+    "tolerance": 1e-08
   },
   "boundary_domain_ownership": {
     "passed": true,
@@ -208,7 +218,7 @@
   "materials": [
     {
       "name": "air",
-      "ng_volume": 0.20250570110095928
+      "ng_volume": 0.2025057011009593
     },
     {
       "name": "cond",

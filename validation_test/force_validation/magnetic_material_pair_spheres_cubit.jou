@@ -12,5 +12,5 @@ block 2 add volume 2
 block 2 name "target_magnetic"
 block 3 add tri all
 block 3 name "boundary"
-export netgen "validation_test/force_validation/magnetic_material_pair_spheres.vol" order 1 overwrite
+export vol "validation_test/force_validation/magnetic_material_pair_spheres.vol" order 1 overwrite
 exit

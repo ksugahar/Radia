@@ -9,7 +9,7 @@ version = "2.0.3"
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
 # short and stable; release-specific notes go in CHANGELOG.md.
-description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating and optimization. Cubit MCP is distributed separately in cubit-mesh-export."
+description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating and optimization. Cubit MCP, the curved .vol worker and check-vol."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
@@ -23,20 +23,23 @@ dependencies = [
 
 [project.optional-dependencies]
 maintenance = ["tomlkit>=0.13,<1"]
-# build123d analysis uses the standalone checker (no Cubit licence), Netgen,
-# and the post-migration Radia serializer. Publish that Radia release before
-# distributing this extra: the published 5.3.3 writer has no PayloadV42.
+# build123d analysis uses check-vol (radia.vol_check, first released after
+# 5.4.6; no Cubit licence), Netgen and the post-migration Radia serializer.
 build123d = [
     "build123d>=0.6",
     "Pillow>=10.0",
-    "cubit-mesh-export>=2.2.6; python_version == '3.12' and sys_platform == 'win32'",
     "ngsolve==6.2.2608",
     "netgen-mesher==6.2.2608",
-    "radia>5.3.3",
+    "radia>5.4.6",
 ]
-# Licensed Cubit execution is owned by the separate exporter (Windows/Python 3.12).
+# Cubit MCP. Licensed Cubit is found at run time; check-vol comes from radia
+# (radia.vol_check, first released after 5.4.6); the curved .vol export
+# additionally needs the locally built plugin (native/cubit_to_vol_export).
 cubit = [
-    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
+    "numpy>=1.24",
+    "ngsolve==6.2.2608",
+    "netgen-mesher==6.2.2608",
+    "radia>5.4.6",
 ]
 # CadQuery interop: `execute_cadquery` + `cadquery_to_cubit_hex` let
 # users author geometry in either sibling OCCT CAD library and route
@@ -72,7 +75,7 @@ numeric = [
 # Cubit consumes the surface.
 # The STL/marching-cubes stack belongs to radia's own `topopt-cad` extra.
 shape-regeneration = [
-    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
+    "numpy>=1.24",
     "radia[topopt-cad]>=4.95.51",
     "scipy>=1.10",
     "gmsh>=5.0.0.dev0",
@@ -98,7 +101,7 @@ urn = [
 ]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[blender,build123d,cadquery,gmsh,numeric,shape-regeneration,youtube,radia,urn]",
+    "radia-mcp[blender,build123d,cadquery,cubit,gmsh,numeric,shape-regeneration,youtube,radia,urn]",
 ]
 
 [project.urls]
@@ -117,6 +120,18 @@ where = ["src"]
 "radia_mcp.ih" = ["prompts/*.md"]
 "radia_mcp.peec" = ["prompts/*.md"]
 "radia_mcp.onshape" = ["knowledge/*.md"]
+"radia_mcp.cubit" = [
+    "README.md",
+    "samples/*.py",
+    "skills/cubit-command-plugin/SKILL.md",
+    "skills/cubit-command-plugin/templates/*",
+]
+"radia_mcp.cubit.gui" = [
+    "solver_ready_sample.jou",
+    "cubit_toolbar/icons/*.svg",
+    "cubit_toolbar/scripts/*.py",
+    "cubit_toolbar/toolbars/*.ttb.tmpl",
+]
 "radia_mcp.matlab" = [
     "skill.md",
     "extensions/*.json",

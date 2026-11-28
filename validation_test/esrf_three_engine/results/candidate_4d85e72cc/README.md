@@ -117,9 +117,9 @@ The full build also regenerated the separate Cubit plugin binary. That local
 generated change was restored to HEAD; it is not part of this solver repair.
 No global/editable environment was redirected and no native binary was manually
 copied into an installation. compute host installed the wheel in the dedicated venv
-`private-runtime-path`. `preflight.json` checks installed package
-bytes against the wheel, and records the explicit non-CI build identity.
-`pip check` passed. The version number matches the previous candidate, so
+`private-runtime-path`. Its preflight checked installed package bytes against
+the wheel and recorded the explicit non-CI build identity; `preflight.json`
+was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated. `pip check` passed. The version number matches the previous candidate, so
 source and wheel hashes, not the version string alone, distinguish this run.
 
 ## Actual native tests
@@ -155,11 +155,13 @@ case must fail because it stopped near the current threshold.
 
 ## Mesh audit handoff
 
-Fresh `fem_check.json`, `iron_check.json` and `input_identity.json` passed
+Fresh FEM and iron mesh checks and `input_identity.json` passed
 against the same selected iron/FEM bytes as the preceding candidate. They
 establish structural, label and sampled-map checks, not all possible surface
 overlaps or relative coil/CAD placement. The iron SHA remains `fdd13872...`
 and the FEM SHA `dfc12b84...`; the full values are in the identity report.
+`fem_check.json` and `iron_check.json` was removed on 2026-11-27: it embedded reports of the retired mesh-export checker and cannot be regenerated
+(the meshes are private and not kept on the compute host).
 
 The actual compute host iron mesh was recovered to
 `private-runtime-path`. The validation host asset mesh has

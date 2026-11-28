@@ -59,14 +59,14 @@ def fixture(tmp_path,compressed=False):
     labels=dict(schema="radia.vol-label-contract.v1",required=dict(materials=["body"],boundaries=["exterior"]),allowed=dict(materials=["body"],boundaries=["exterior"]))
     contract.write_text(json.dumps(labels))
     producer="C:/producer/input/mesh.vol"+(".gz" if compressed else "")
-    report=dict(schema="cubit-mesh-export.vol-check.v1",passed=True,warnings=[],vol_file=producer,json_file=None,
+    report=dict(schema="radia.vol-check.v1",passed=True,warnings=[],vol_file=producer,json_file=None,
         cad_reference=dict(available=False,auto_discovered=False),
         labels=dict(schema=labels['schema'],passed=True,strict_labels=True,warnings=[],required=labels['required'],allowed=labels['allowed']),
         quality=dict(passed=True,warnings=[]),boundary_domain_ownership=dict(issues=[]),
-        versions=dict(cubit_mesh_export="2.2.6",ngsolve="6.2.2608"))
-    checker=dict(distribution="cubit-mesh-export",version="2.2.6",record_sha256="b"*64)
+        versions=dict(radia="5.4.7",ngsolve="6.2.2608"))
+    checker=dict(distribution="radia",version="5.4.7",record_sha256="b"*64)
     value=dict(schema="radia.checked-vol-receipt.v1",checker=checker,ngsolve_version="6.2.2608",python_version="recorded-only",
-        argv=["C:/producer/python.exe","-m","cubit_mesh_export.check",producer,"--strict-labels","--contract","C:/producer/input/labels.json","--format","json"],
+        argv=["C:/producer/python.exe","-m","radia.vol_check",producer,"--strict-labels","--contract","C:/producer/input/labels.json","--format","json"],
         returncode=0,mesh_sha256=hashlib.sha256(data).hexdigest(),contract_sha256=hashlib.sha256(contract.read_bytes()).hexdigest())
     receipt=tmp_path/"check.receipt.json"
     return mesh,contract,receipt,value,report

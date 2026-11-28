@@ -7,8 +7,8 @@ operation surface over the same headless application contracts.
 
 ## Supported Cubit Extension
 
-`cubit-mesh-export` installs one Cubit-owned toolbar for mesh export and
-diagnostics. Its PySide6 dependency is supplied by Cubit's private Python
+`python -m radia_mcp.cubit.install` installs one Cubit-owned toolbar for
+mesh export and diagnostics (`radia_mcp.cubit.gui`). Its PySide6 dependency is supplied by Cubit's private Python
 runtime and must not leak into the `radia` package or an external solver
 process.
 
@@ -18,7 +18,6 @@ The toolbar may:
 - create and inspect Cubit blocks, sidesets, and nodesets;
 - export a high-order Netgen `.vol` file;
 - run `check-vol` and display its diagnostic report;
-- export VTK only as a Cubit mesh-export capability.
 
 It must not become another solver GUI, launch a Radia application dialog, or
 duplicate a Simulink mask.
@@ -26,7 +25,7 @@ duplicate a Simulink mask.
 ## Handoff Contract
 
 ```text
-Cubit / cubit-mesh-export
+Cubit / radia_mcp.cubit (export vol)
   CAD (SAT or STEP)
   -> mesh and labels
   -> Netgen .vol
@@ -45,7 +44,7 @@ configuration, not to Cubit UI state.
 
 Every solver-bound `.vol` must satisfy its versioned
 `radia.vol-label-contract.v1` contract before initialization. Keep the
-`cubit-mesh-export.vol-check.v1` report with the run artifacts and reference it
+`radia.vol-check.v1` report with the run artifacts and reference it
 from `result.json`.
 
 ## Labeling Rules
@@ -70,7 +69,7 @@ solver mode determines which are required.
 - A Cubit toolbar callback must not contain electromagnetic or thermal solver
   logic.
 - Production spatial results are GMSH `.msh v4.2`; VTK remains available only
-  inside `cubit-mesh-export` and NGSolve's upstream API.
+  through NGSolve's upstream API.
 
 ## Verification
 

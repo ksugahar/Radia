@@ -13,6 +13,12 @@
 - Check the actual set of unvisited vertices in the coil-mesh tree-gauge
   reachability test.
 - Require Gmsh 5 in the Radia Gmsh launchers and reject failed version probes.
+- Add `radia.nastran_export`: write a `.vol` or an in-memory mesh as a first-
+  or second-order Nastran BDF, keeping the curved geometry. It replaces the
+  retired Cubit `export nastran_bdf` command.
+- Raise in `GmshPostExport` when a curved export cannot import `gmsh`.
+  It previously fell back to a node layout that wrote inverted Tet10 and
+  unreadable Tet20 files.
 - Integrate the source field in reduced-A `solve_nonlinear_newton` with the
   same quadrature as `solve_linear` on every element type, and accept
   `bonus_intorder` with the same meaning. Per-element iron B from the Newton path previously differed

@@ -5,7 +5,7 @@ The self-hosted runner executes on development/build host and shares its service
 In a job on that runner, any of:
 
   * ``pip install -e .``            (radia editable)
-  * ``pip install -e packages/...`` (radia-mcp / cubit-mesh-export editable)
+  * ``pip install -e packages/...`` (radia-mcp editable)
   * ``pip install --force-reinstall <our-wheel>.whl``
 
 rewrites the host's installed package state to the CI checkout (or replaces it

@@ -177,10 +177,14 @@ class CubitHexRemeshBackend:
 class CubitSculptShapeRemeshBackend:
     """Anisotropic Sculpt checkpoint backend for long topology-fixed magnets.
 
-    ``sculpt`` is normally ``cubit_mesh_export.mcp.server.cubit_stl_to_vol``.  It is
-    injected so the numerical Radia package keeps the Cubit execution layer
-    optional and testable.  The accepted GetTrafo exterior is compressed by
-    ``coordinate_scale`` before isotropic Sculpt and expanded afterwards.
+    ``sculpt`` is a caller-supplied callable that meshes an STL with Cubit
+    Sculpt and writes a gated ``.vol``/``.msh``; it receives ``stl_path``,
+    ``scheme``, ``size``, ``closure_tolerance``, ``out_vol``, ``out_msh``,
+    ``timeout_s``, ``gq_iters`` and ``gq_threshold`` and returns a JSON report
+    with ``status`` and ``gates``.  It is injected so the numerical Radia
+    package keeps the Cubit execution layer optional and testable.  The
+    accepted GetTrafo exterior is compressed by ``coordinate_scale`` before
+    isotropic Sculpt and expanded afterwards.
     """
     sculpt: object
     boundary_classifier: object

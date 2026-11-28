@@ -49,7 +49,15 @@ and BEM nodes <=7,000 are required. BEM balance must be <=2% at every level.
 The cross-method gate compares the finest BEM and independently finest FEM; all-level residual, FEM and quality
 gates remain required. Carrier checks apply to the finest BEM.
 
-## Results (2026-10-08)
+## Results (2026-10-08; rerun 2026-11-27)
+
+Rerun 2026-11-27 with the same validate.py and unchanged thresholds on public NGSolve
+6.2.2608: **PASS**, same gates. The FEM air meshes changed with the Netgen version
+(6.2.2607 -> 6.2.2608; the same geometry code reproduces the previous element
+counts on 6.2.2607), and the BEM single-layer operator is now assembled by the
+automatic Galerkin FMM backend instead of a dense matrix (BEM power within
+1.5e-11 relative; surface meshes identical). The table holds the rerun; the
+previous run's records are kept verbatim in `previous_run_records`.
 
 Overall validation: **PASS** after correcting the acceptance definition at the
 user's direction. This corrects the distinction between execution planning and
@@ -59,17 +67,17 @@ cross-method, carrier and all other numerical thresholds remain unchanged.
 
 Balance is 0.065102%, 0.069803%, 0.054971%; it is not strictly monotonic.
 That remains an observation rather than a failure criterion. The earlier
-verdict and gates are retained in `acceptance_definition_correction`.
+verdict and gates are retained in `previous_run_records.acceptance_definition_correction`.
 The middle computation was stopped after 1,200 seconds; completed BEM was
 retained and FEM retried separately. The finest diagnostic run finished beyond
 that planning target. Original execution return codes and retry time are
-preserved in `execution_events`; no computation was rerun for this correction.
+preserved in `previous_run_records.execution_events`; no computation was rerun for this correction.
 
 | BEM maxh mm | Nodes | BEM W | Balance % | FEM maxh mm | FEM DOFs | FEM W | Difference to finest FEM % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 | 2470 | 73.482534 | 0.065102 | 1.8 | 601029 | 72.620293 | 1.187328 |
-| 2.5 | 3778 | 73.576531 | 0.069803 | 2.5 | 486921 | 72.615487 | 1.316763 |
-| 1.7 | 6232 | 73.634332 | 0.054971 | 3 | 517256 | 72.613378 | 1.396357 |
+| 6 | 2470 | 73.482534 | 0.065102 | 1.8 | 601278 | 72.615397 | 1.194150 |
+| 2.5 | 3778 | 73.576531 | 0.069803 | 2.5 | 485882 | 72.616371 | 1.323595 |
+| 1.7 | 6232 | 73.634332 | 0.054971 | 3 | 480235 | 72.616445 | 1.403194 |
 
 Finest-solution comparison with the previous recorded cut-line closure:
 
@@ -79,7 +87,7 @@ Finest-solution comparison with the previous recorded cut-line closure:
 | Balance % | 0.029599 | 0.054971 | +0.025373 |
 | L2 carrier width % | 0.124630 | 0.118411 | -0.006219 |
 | Point carrier width % | 0.790301 | 1.340039 | +0.549738 |
-| Difference to finest FEM % | 1.397970 | 1.396357 | -0.001612 |
+| Difference to finest FEM % | 1.397970 | 1.403194 | +0.005224 |
 | Frozen circulation power W | 91.100654 | 91.100654 | 0.000000 |
 | Frozen circulation error % | 25.447929 | 25.447929 | 0.000000 |
 
@@ -113,14 +121,14 @@ skin depths, but do not imply equal circulation sensitivity. Outer-boundary,
 filament and quadrature refinement, nonlinear material, off-axis/multiple holes
 and thermal evolution are outside this study.
 
-Solver-run times: 1029.7 s, 1654.0 s, 3497.8 s; sum 6181.4 s.
+Solver-run times (2026-11-27 rerun): 1027.2 s, 811.6 s, 1753.9 s; total 3592.7 s.
+The previous run's times are kept in `previous_run_records`.
 Source hashes identify the exact executed script and loop-work implementation.
 
-`source_dirty` concerns the library `src` directory. The recorded validator
-hash identifies the executed, uncommitted diagnostic additions before this
-evidence commit. Native kernels came from the installed 5.2.3 distribution;
-the copied native binaries and executed Python source hashes are recorded.
+`source_dirty` concerns the library `src` directory; the rerun used a clean
+tree. Native kernels were built from the recorded commit against the public
+NGSolve 6.2.2608 SDK; native binary and Python source hashes are recorded.
 
-Resource information (excluded from acceptance): P0 assembly times 405.220730 s, 962.583328 s, 2714.799743 s; matrix sizes 195228800 bytes, 456745088 bytes, 1242810368 bytes.
+Previous-run resource information (excluded from acceptance; not re-measured): P0 assembly times 405.220730 s, 962.583328 s, 2714.799743 s; matrix sizes 195228800 bytes, 456745088 bytes, 1242810368 bytes.
 Observed fine-run peak working set: 14,164,746,240 bytes, from a Windows peak
 counter sampled before exit; this is not a certified final-process peak.

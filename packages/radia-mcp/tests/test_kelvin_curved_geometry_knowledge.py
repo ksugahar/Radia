@@ -87,10 +87,10 @@ def test_documentation_is_linked_to_existing_lookup_and_publication_limits():
     guide = package / 'docs/kelvin-periodic-geometry.md'
     text = guide.read_text(encoding='utf-8')
     assert 'docs/kelvin-periodic-geometry.md' in (package / 'README.md').read_text(encoding='utf-8')
-    for token in ('mcp-server-cubit', 'radia-ngsolve',
+    for token in ('radia-mcp serve cubit-mcp', 'radia-ngsolve',
                   'kelvin_transformation(topic="curved_geometry")',
                   'kelvin_identify_post_hoc(topic="curved_geometry")',
-                  'model_capture.md', 'actual client', 'Static source tests',
+                  'actual client', 'Static source tests',
                   'Private engineering models'):
         assert token in text, token
     knowledge = get_kelvin_documentation('curved_geometry')

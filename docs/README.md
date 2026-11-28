@@ -30,7 +30,6 @@ For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
 - [Analytical formula examples (IEE Japan Part 1-9)](analytical_formulas/analytical_formulas.ipynb)
 - [AXIFEM notebooks](axifem/README.ipynb)
 - [Background fields: the `ObjBckg` callback API](background_fields/background_fields.ipynb)
-- [Cubit Mesh Export Showcase](cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
 - [GMSH Displacement Animation Artifact](gmsh_animation/gmsh_animation.ipynb) (historical output)
 - [Gmsh Animation Export](gmsh_animation/gmsh_animation_export.ipynb)
 - [EM field-line and isosurface post-processing (gmsh lane)](gmsh_post/em_fieldlines.ipynb)
@@ -43,7 +42,7 @@ For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
 - [BEM inductance on closed surfaces: a limitation (and what to use instead)](bem_extractor/bem_inductance_limitations.ipynb)
 - [Genus-1 loop DOF: how the cohomology cut is selected](cohomology/loop_dof_cut_selection.ipynb)
 - [T-Omega magnetostatics with a gmsh-free cohomology cut](cohomology/tomega_wire.ipynb)
-- [Cubit Mesh Evaluation p-Convergence Demo](cubit_mesh_export/netgen/p_convergence_demo.ipynb)
+- [Cubit Mesh Evaluation p-Convergence Demo](cubit_export/netgen/p_convergence_demo.ipynb)
 - [EM reference audit — the diagnostics that exonerate (or convict) a FEM cross-validation reference](electric_machine/em_reference_audit.ipynb)
 - [Electrostatics validation suite](electrostatics/electrostatics.ipynb)
 - [Equivalence source (NearFieldSource): demos](equivalence_source/demos.ipynb)
@@ -81,7 +80,6 @@ For validation scope, see the [validation guide](VALIDATION_GUIDE.md).
 - [Frequency-dependent induction-heating power](esim_spatial/esim_spatial_demo.ipynb)
 - [Bend electron trajectories with a saddle coil](gmsh_post/em_particle_orbits.ipynb)
 - [Isochronous topology optimization on HDiv-MMM: density adjoint, constrained design loop, exact-void verification](hdiv_vim/isochronous_topopt.ipynb)
-- [Isochronous topopt II -- Sculpt + HDiv-MMM shape regeneration](hdiv_vim/isochronous_topopt_shape_regen.ipynb)
 - [Frequency-dependent magnetic lift on a conducting sphere](maglev/maglev_showcase.ipynb)
 - [Constrained CAE optimization with Optuna (RF waveguide design)](optimization/optimization.ipynb)
 - [Section-optics inverse design](section_optics/section_optics_design.ipynb)
@@ -115,7 +113,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 | :--- | :--- |
 | Understand a capability and its demonstrated scope | This documentation and its saved notebooks |
 | Ask AI to carry out analysis operations | [MCP tools and setup](../packages/radia-mcp/README.md) |
-| Work with AI on geometry and mesh | [Cubit mesh workflow](cubit_mesh_export/README.md) |
+| Work with AI on geometry and mesh | [Cubit mesh workflow](cubit_export/README.md) |
 | Work with AI on an application model | [Radia Simulink library](../packages/radia-simulink/README.md) |
 | Inspect small executable usage and contract examples | [tests/](../tests/README.md) |
 | Inspect physics, numerical and application examples with evidence | [validation_test/](../validation_test/README.md) |
@@ -241,17 +239,12 @@ has already passed the bibliography audit.
 
 - [electric_machine/cogging_skew_demo.ipynb](electric_machine/cogging_skew_demo.ipynb) - Result-bearing PM rotor cogging/skew demo; validation-class scripts and JSON evidence live in `validation_test/electric_machine/`.
 
-## Cubit Mesh Export
+## Cubit Export
 
-- [Function_Reference.md](cubit/Function_Reference.md) - All plugin commands and Python API reference
-- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why cubit-mesh-export is the single chokepoint for labeled .vol.
+- [Function_Reference.md](cubit/Function_Reference.md) - `export vol` command and `check-vol` reference
+- [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why Cubit `export vol` is the single chokepoint for labeled .vol.
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
-- [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.2 export (order 1-3)
-- [export_vtk.md](cubit/export_vtk.md) - VTK Legacy export (order 1-2)
-- [export_Nastran.md](cubit/export_Nastran.md) - Nastran BDF export (order 1-2)
-- [export_meg.md](cubit/export_meg.md) - MEG export (Gifu Univ. FEM mesh format)
-- [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
 - [NGSolve User Meeting convergence validation](../validation_test/ngsolve_user_meeting/) - Result-bearing OCC `mesh.Curve(p)` sphere volume/area p-convergence evidence.
 
@@ -259,7 +252,7 @@ has already passed the bibliography audit.
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use checked Netgen `.vol` as the solver mesh input; Gmsh 5 / MSH 4.2 is the post-processing output. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships. Retired exporter aliases are rejected by the compiled-plugin wheel gate.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use checked Netgen `.vol` as the solver mesh input; Gmsh 5 / MSH 4.2 is the post-processing output.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable enough for production coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.

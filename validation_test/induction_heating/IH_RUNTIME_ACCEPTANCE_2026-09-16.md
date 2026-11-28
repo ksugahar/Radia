@@ -8,7 +8,7 @@ through PRs #280 and #281 respectively.
 
 The earlier persistent `cubit_exec` attempt used Cubit's bundled-Python daemon.
 That route accepts native meshing commands but does not load C++ command plugins.
-Consequently `export netgen` failed at parsing, before the exporter or solver ran.
+Consequently `export vol` failed at parsing, before the exporter or solver ran.
 The existing `run_headless_journal` implementation explicitly documents this
 distinction. The previous attempt selected the wrong execution route; it did
 not prove that the deployed exporter was broken.
@@ -37,7 +37,7 @@ was not relaxed. Curvature was applied by the exporter while CAD was live,
 not by calling `Curve()` after loading a `.vol`.
 
 The legacy MCP `cubit_check_vol` call timed out after 300 seconds. The canonical
-`python -m cubit_mesh_export.check` CLI completed and produced the accepted
+`python -m radia.vol_check` CLI completed and produced the accepted
 report with the production label contract. This is CLI checker acceptance,
 not a claim that the legacy MCP transport was repaired.
 

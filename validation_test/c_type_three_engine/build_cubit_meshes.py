@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import platform
@@ -98,16 +99,16 @@ def _write_journal(
     )
     lines = [positive_cad, "", f'play "{physical_script.as_posix()}"']
     if air_size_m is None:
-        export = f'export netgen "{output.as_posix()}" order 1 overwrite'
+        export = f'export vol "{output.as_posix()}" order 1 overwrite'
     else:
         helper = (
             HERE.parents[1]
             / "packages"
-            / "cubit-mesh-export"
+            / "radia-mcp"
             / "src"
-            / "cubit_mesh_export"
-            / "cubit_helpers"
-            / "add_kelvin.py"
+            / "radia_mcp"
+            / "cubit"
+            / "kelvin.py"
         )
         kelvin_script = path.with_suffix(".kelvin.py")
         kelvin_script.write_text(
@@ -120,7 +121,15 @@ def _write_journal(
             encoding="utf-8",
         )
         lines.append(f'play "{kelvin_script.as_posix()}"')
-        export = f'export netgen "{output.as_posix()}" order {int(curve_order)} overwrite'
+        # Same offset as add_kelvin_cubit(symmetry=["z"]): the plugin writes the pairs.
+        spec = importlib.util.spec_from_file_location("_radia_c_type_kelvin_args", helper)
+        kelvin_args = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(kelvin_args)
+        radius = float(kelvin_radius_m)
+        kelvin_fields = kelvin_args.export_arguments(
+            {"R": radius, "center": kelvin_args.compute_offset_vector(radius, ["z"])})
+        export = (f'export vol "{output.as_posix()}" order {int(curve_order)} '
+                  f'{kelvin_fields} overwrite')
     lines.extend([export, "exit"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -612,7 +621,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         else None
     )
     if command_plugin_dir is not None:
-        command_plugin = command_plugin_dir / "cubit_mesh_export.ccm"
+        command_plugin = command_plugin_dir / "cubit_to_vol_export.dll"
         if not command_plugin.is_file():
             raise FileNotFoundError(command_plugin)
 
@@ -783,7 +792,7 @@ def main() -> None:
     parser.add_argument(
         "--command-plugin-dir",
         type=Path,
-        help="Cubit command-plugin directory containing cubit_mesh_export.ccm",
+        help="Cubit command-plugin directory containing cubit_to_vol_export.dll",
     )
     parser.add_argument("--iron-size", type=float, default=0.010)
     parser.add_argument("--air-size", type=float, default=0.015)

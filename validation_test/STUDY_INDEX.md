@@ -26,7 +26,7 @@ driver and evidence; do not treat all entries as independent executable gates.
 | `clebsch_hodograph/public_demo.ipynb` | [Notebook](../docs/clebsch_hodograph/public_demo.ipynb) | Presentation retained; dependency review precedes relocation |
 | `cohomology/loop_dof_cut_selection.ipynb` | [Notebook](../docs/cohomology/loop_dof_cut_selection.ipynb) | Presentation retained; dependency review precedes relocation |
 | `cohomology/tomega_wire.ipynb` | [Notebook](../docs/cohomology/tomega_wire.ipynb) | Presentation retained; dependency review precedes relocation |
-| `cubit_mesh_export/netgen/p_convergence_demo.ipynb` | [Notebook](../docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb) | Presentation retained; dependency review precedes relocation |
+| `cubit_export/netgen/p_convergence_demo.ipynb` | [Notebook](../docs/cubit_export/netgen/p_convergence_demo.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electric_machine/em_reference_audit.ipynb` | [Notebook](../docs/electric_machine/em_reference_audit.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electric_machine/planar_vim_motor.ipynb` | [Notebook](../docs/electric_machine/planar_vim_motor.ipynb) | Presentation retained; dependency review precedes relocation |
 | `electrostatics/electrostatics.ipynb` | [Notebook](../docs/electrostatics/electrostatics.ipynb) | Presentation retained; dependency review precedes relocation |
@@ -34,7 +34,6 @@ driver and evidence; do not treat all entries as independent executable gates.
 | `hdiv_vim/c_type_three_formulation_mixed_omega.ipynb` | [Notebook](../docs/hdiv_vim/c_type_three_formulation_mixed_omega.ipynb) | Presentation retained; dependency review precedes relocation |
 | `hdiv_vim/hdiv_curved_showcase.ipynb` | [Notebook](../docs/hdiv_vim/hdiv_curved_showcase.ipynb) | Presentation retained; dependency review precedes relocation |
 | `hdiv_vim/isochronous_topopt.ipynb` | [Notebook](../docs/hdiv_vim/isochronous_topopt.ipynb) | Presentation retained; dependency review precedes relocation |
-| `hdiv_vim/isochronous_topopt_shape_regen.ipynb` | [Notebook](../docs/hdiv_vim/isochronous_topopt_shape_regen.ipynb) | Presentation retained; dependency review precedes relocation |
 | `hysteresis/hysteresis_validation.ipynb` | [Notebook](../docs/hysteresis/hysteresis_validation.ipynb) | Presentation retained; dependency review precedes relocation |
 | `induction_heating/axisymmetric_p2_thermal.ipynb` | [Notebook](../docs/induction_heating/axisymmetric_p2_thermal.ipynb) | Presentation retained; dependency review precedes relocation |
 | `induction_heating/induction_heating_demo_showcase.ipynb` | [Notebook](../docs/induction_heating/induction_heating_demo_showcase.ipynb) | Presentation retained; dependency review precedes relocation |

@@ -7,20 +7,21 @@ examples -> validation_test promotion target.  Runs:
 
   1. `mesh_and_export.py` -- builds a 1/4 sector magnetic-sphere mesh
      (mu_r = 100, R = 0.20 m, Kelvin offset 0.60 m) and exports
-     `.vol` at orders 1, 2, 3.  Asserts:
-       - 265 / 265 vertex pairs match at machine precision (max_dist < 1e-10 m)
-       - kelvin_offset detected as (0, 0, 0.6 +/- 1e-8 m)
+     `.vol` at orders 1, 2, 3 into a temporary directory, with the
+     radia-mcp Cubit plugin (RADIA_CUBIT_PLUGIN_DIR; skipped visibly
+     when unset).
 
   2. `solve_p_convergence.py` -- loads each .vol, runs the
      Omega-Reduced Omega + Kelvin solver, probes Hz at the origin.
      Asserts:
+       - each exported .vol carries the Kelvin pairs, equal to an independent
+         post-hoc pairing of its bare copy (unmatched = 0, max_dist < 1e-10 m)
+       - Hz at p=1 within +/-10% of analytical
        - Hz at p=2 within +/-1.5% of analytical 3 / (mu_r + 2) * H0
        - Hz at p=3 within +/-1.0% of analytical
-       - Periodic FES at p=2 slaves > 100 high-order DOFs
-         (sanity that high-order coupling is in effect)
 
 This test is the regression guard for the ANCHOR-DETERMINISTIC fix in
-`_add_kelvin_cubit_reduction` (`src/radia/panels/add_kelvin.py`,
+`_add_kelvin_cubit_reduction` (`radia_mcp.cubit.kelvin`,
 2026-04-25) and the `subtract WITHOUT keep + recreate` workaround for
 Cubit 2025.3's `subtract ... keep` bug.
 """
@@ -29,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -59,39 +61,51 @@ def _run(script, args):
     return out.stdout
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import kelvin_pair_oracle  # noqa: E402
+
+
 class TestCubitKelvin14PConvergence(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Generate meshes at p=1, 2, 3 once.
+        plugin_dir = os.environ.get("RADIA_CUBIT_PLUGIN_DIR")
+        if not plugin_dir:
+            raise unittest.SkipTest(
+                "RADIA_CUBIT_PLUGIN_DIR (directory holding cubit_to_vol_export.dll) "
+                "is not set; this validation needs licensed Cubit and the plugin")
+        cls.tmp = tempfile.TemporaryDirectory()
+        out = cls.tmp.name
         cls.mesh_log = _run("mesh_and_export.py",
-                            ["--orders", "1,2,3", "--mesh-size", "0.025"])
+                            ["--orders", "1,2,3", "--mesh-size", "0.025",
+                             "--plugin-dir", plugin_dir, "--out-dir", out])
+        cls.json_path = os.path.join(out, "p_convergence.json")
+        cls.solve_log = _run("solve_p_convergence.py",
+                             ["--orders", "1,2,3", "--in-dir", out,
+                              "--out-json", cls.json_path])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
 
     def test_mesh_machine_precision_pairing(self):
-        """Vertex pairs on the Kelvin cap match at machine precision."""
-        # The mesh log prints `Kelvin periodic: N/N pairs (max_dist=...,
-        # 0 unmatched)` once per export order.
-        log = self.mesh_log
-        # Expect "265/265 pairs" (1/4 mesh size 0.025 produces 265
-        # vertex pairs on each cap with current mesh density).
-        # Tolerance: max_dist < 1e-10 m (machine precision).
-        for line in log.splitlines():
-            if "Kelvin periodic:" in line and "/" in line and "pairs" in line:
-                # e.g. "Kelvin periodic: 265/265 pairs (max_dist=5.59e-16, ...)"
-                parts = line.split("max_dist=")
-                if len(parts) < 2:
-                    continue
-                num = parts[1].split(",")[0].strip()
-                max_dist = float(num)
-                self.assertLess(max_dist, 1e-10,
-                    f"Kelvin pairing not at machine precision: {line}")
-        # Also assert "0 unmatched"
-        self.assertIn("0 unmatched", log,
-            "Some Kelvin vertex pairs were unmatched by the C++ exporter")
+        """Every order's .vol carries the Kelvin pairs the post-hoc oracle finds."""
+        for order in (1, 2, 3):
+            vol = os.path.join(self.tmp.name, f"sphere_1_4_p{order}.vol")
+            info = kelvin_pair_oracle.compare(vol, self.tmp.name)
+            self.assertEqual(info["groups"], 1, info)
+            self.assertTrue(info["covers_kelvin"], info)
+            self.assertEqual(info["bare_groups_before_pairing"], 0, info)
+            self.assertEqual(info["posthoc_unmatched"], 0, info)
+            self.assertLess(info["posthoc_max_dist"], 1e-10, info)
+            self.assertGreater(info["exported_pairs"], 0, info)
+            self.assertEqual(info["exported_pairs"], info["posthoc_pairs"], info)
+            self.assertEqual(info["differing_pairs"], 0, info)
+            self.assertLess(max(abs(a - b) for a, b in zip(info["posthoc_offset"], (0.0, 0.0, 0.6))),
+                            1e-9, info)
 
     def test_solver_p_convergence_within_tolerance(self):
-        """Hz at origin matches analytical within tolerance at p=2 and p=3."""
-        _run("solve_p_convergence.py", ["--orders", "1,2,3"])
-        with open(os.path.join(SAMPLE_DIR, "p_convergence.json")) as f:
+        """Hz at origin matches analytical within tolerance at p=1, 2 and 3."""
+        with open(self.json_path) as f:
             data = json.load(f)
         results = {r["order"]: r for r in data["results"]}
         self.assertIn(1, results); self.assertIn(2, results); self.assertIn(3, results)

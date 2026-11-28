@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from cubit_mesh_export.mcp.server import cubit_check_vol
+from radia_mcp.cubit.server import cubit_check_vol
 
 
 def _write_unit_cube_vol(vol_path):
@@ -22,7 +22,7 @@ def _write_unit_cube_vol(vol_path):
 
 def test_explicit_missing_json_reference_is_error(tmp_path):
     pytest.importorskip("ngsolve")
-    pytest.importorskip("cubit_mesh_export")
+    pytest.importorskip("radia.vol_check")
     vol = tmp_path / "cube.vol"
     _write_unit_cube_vol(vol)
     out = json.loads(
@@ -34,7 +34,7 @@ def test_explicit_missing_json_reference_is_error(tmp_path):
 
 def test_unit_cube_passes_gate(tmp_path):
     pytest.importorskip("ngsolve")
-    pytest.importorskip("cubit_mesh_export")
+    pytest.importorskip("radia.vol_check")
     vol = tmp_path / "cube.vol"
     _write_unit_cube_vol(vol)
 

@@ -11,14 +11,9 @@ and fresh-process checks do not establish what existing clients have loaded.
 The maintained baseline is `radia-mcp-meta`, `build123d-mcp`,
 `gmsh-mcp`, `radia-mcp-analysis`, and `radia-mcp-maglev`.
 Additional servers are retained. Gmsh is for post-processing, not solver meshing.
-Cubit MCP is owned by `cubit-mesh-export`, not this baseline. Its owner installs
-and configures `python -s -m cubit_mesh_export.mcp.server`. Existing external
-entries and their permissions are preserved. Retired `radia_mcp.cubit.server`
-or `maintenance serve cubit` launchers cause a read-only conflict report with
-the replacement module; migrate them through the owning package before retrying.
-Do not delete a client's Cubit entry or silently re-enable it during migration.
-The baseline includes tools that can execute code; existing client approval
-policies still apply. Installation does not grant permission for arbitrary runs.
+Cubit MCP is served by `radia-mcp serve cubit-mcp`; it is registered on
+request, not added by default. Existing external entries and their permissions
+are preserved.
 
 Install the small optional TOML editor with `radia-mcp[maintenance]`.
 Run with the intended absolute Python executable and `-s` to isolate user-site
@@ -125,8 +120,9 @@ python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py --j
 ```
 
 Install maintenance extras as appropriate. A missing-dependency skip
-is **not** evidence for that feature. Check JUnit counts. Cubit MCP tests and
-licensed meshing acceptance belong to cubit-mesh-export, not this lane. For changed
+is **not** evidence for that feature. Check JUnit counts. Cubit MCP tests run
+Cubit-free in `tests/cubit_mcp`; licensed meshing acceptance runs in
+`validation_test/radia_mcp` with `RADIA_CUBIT_BIN`. For changed
 Gmsh execution, run `tests/test_gmsh_post_guards.py` with the Gmsh extra. Real
 solver/CAD/license acceptance stays in the corresponding validation lane.
 Normal PR CI remains impact-scoped; this operator lane is not an all-server

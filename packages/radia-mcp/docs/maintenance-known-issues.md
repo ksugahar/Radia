@@ -22,7 +22,7 @@ client verification are not automatically open code defects.
 | M07 / high | paper: external review follow-up | Full report mapped in reconciliation P01–P76; groups may contain related findings | Inventory complete, not fixes complete. Gate/composite execution-status fixes have scoped evidence. Publisher landing/PDF failure stages and resource closure now have 27 offline cases in the 795-test lane. Missing pattern producers, semantic rules, other external-input/PDF consumers and live publisher acceptance remain open |
 | M08 / high | packaging: wheel missing skills/canonical bibliography | Existing wheel-content verifier and installed-wheel lane; editable-only pass is insufficient | Required release gate; not replaced by doctor |
 | M09 / medium | publication: JA/EN/grant have distinct review objectives | `test_capability_packs.py` checks distinct routes and unsupported English grant scoring | Covered route contract; no unified quality score claimed |
-| M10 / medium | CAD: actual meshing vs available MCP tools | Cubit execution/meshing tests are owned by `cubit-mesh-export`; Radia MCP checks its artifact handoff and optional dependency boundary | Transferred, not a Radia MCP release blocker; connectivity is not numerical acceptance |
+| M10 / medium | CAD: actual meshing vs available MCP tools | Cubit execution/meshing tests are owned by `radia_mcp.cubit` and run only on a licensed Cubit machine; CI checks the artifact handoff and optional dependency boundary | Transferred, not a Radia MCP release blocker; connectivity is not numerical acceptance |
 
 Release-operation follow-up (2026-09-16): removed the obsolete four-host solver
 release requirement and live-Cubit GUI/IPC guidance from CONTRIBUTING. The

@@ -11,13 +11,14 @@ acoustics and `--profile education` for the educational FEM/BEM workflows.
 The planned VOL exporter will use `radia-mcp.mesh`.
 
 
-Cubit MCP is independently distributed with `cubit-mesh-export`, under
-`cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
-and launch the cubit-mesh-export Cubit MCP server for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD
-workflows may call the Cubit package; Cubit itself requires neither Radia package.
+Cubit MCP belongs to radia-mcp: `radia-mcp serve cubit-mcp` (`radia_mcp.cubit`).
+It does not import `radia`. Curved Netgen `.vol` export runs through the MCP tool
+`cubit_export_vol`, which runs the native `export vol` plugin
+(`native/cubit_to_vol_export`, built locally, not in the wheel) in an isolated
+external Python (`-I -B`).
+`check-vol` is a radia-mcp console script.
 The former `cae-mcp-core` foundation is retired: it is not a dependency or
-shared runtime. radia-mcp owns `radia_mcp.common`/`radia_mcp._shared`, while
-cubit-mesh-export owns its independent runtime support.
+shared runtime. radia-mcp owns `radia_mcp.common`/`radia_mcp._shared`.
 
 Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the `radia-mcp-optimize` pack (`search` profile).
 
@@ -265,9 +266,10 @@ the pinned direct-Python and real-stdio-MCP evidence behind that health gate.
 Unseeded constructors use fresh private entropy; exact proposal parity uses an
 explicit seed.
 
-Requires Python ≥ 3.10. The optional `cubit` extra installs the separately
-owned `cubit-mesh-export` on Windows/Python 3.12 only; it does not install or
-license Coreform Cubit. On other platforms use build123d + Netgen for `.vol`
+Requires Python ≥ 3.10. The optional `cubit` extra installs the check-vol
+runtime (NGSolve/Netgen); it does not install or license Coreform Cubit. The
+export plugin is built locally against the fork Netgen (`native/cubit_to_vol_export/build.py`). On
+platforms without Cubit use build123d + Netgen for `.vol` generation.
 generation. Cubit setup and discovery are documented by the exporter.
 
 ---
@@ -410,15 +412,14 @@ command for any served key and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 
-Optional external Cubit configuration, after installing `cubit-mesh-export`
-and a licensed Coreform Cubit (not provided by `radia-mcp`):
+Cubit configuration (licensed Coreform Cubit is not provided by `radia-mcp`):
 
 ```json
 {
   "mcpServers": {
     "cubit-mcp": {
-      "command": "python",
-      "args": ["-m", "cubit_mesh_export.mcp.server"]
+      "command": "radia-mcp",
+      "args": ["serve", "cubit-mcp"]
     }
   }
 }
@@ -476,63 +477,15 @@ flags FreeCAD as `friendly`, others as `compat`.
 
 ---
 
-## External Cubit execution contract
+## Cubit execution contract
 
 Cubit execution, journals, meshing and process lifetime are owned by
-[cubit-mesh-export's bundled MCP](../cubit-mesh-export/src/cubit_mesh_export/mcp/README.md).
-Radia consumes checked `.vol` artifacts; it does not own Cubit execution or its
-test/CI lane. The interop examples below require that separately installed MCP.
-Mixed omega and other Radia analysis workflows remain in radia-mcp.
-
----
-
-## Quickstart
-
-### build123d → Cubit hex mesh, one call
-
-```python
-build123d_to_cubit_hex(
-    script=generate_build123d_script("helix_coil")["script"],
-    target_size=1.0,
-    prefer="hex",
-    apply_to_session=True,
-)
-# ⇒ STEP exported → batch ladder picks scheme auto → persistent headless
-#   session reports 1668 hex / 0 tet / 3780 nodes
-```
-
-### Safe persistent-session edit
-
-```python
-cubit_exec_safely(commands=[
-    "volume all size 1.0",
-    "volume all scheme tetmesh",
-    "mesh volume all",
-])
-# ⇒ auto-checkpoint → batch dry-run → only on pass: persistent-session mesh
-#   if dry-run fails, persistent state is untouched + rollback label returned
-```
-
-### Search any layer of knowledge
-
-```python
-cubit_ask("hex meshing tutorial")
-# ⇒ unioned ranked hits across bundled KB + lab archive (787 files)
-#   + Coreform forum + YouTube transcripts
-```
-
-### Audit GMSH visualization policy
-
-```python
-gmsh_audit_summary("docs")                  # machine-readable policy audit
-gmsh_usage("workflow")                          # MSH 4.2 result -> display/extraction/movie
-gmsh_reference("python_api_postproc")           # native view / plugin API
-```
-
+[`radia_mcp.cubit`](src/radia_mcp/cubit/README.md). Cubit runs headless
+(batch/nographics); solver consumers take checked `.vol` artifacts.
 The build123d analysis pipeline connects to Netgen and returns a checked
 `.vol` with its versioned label contract and `check-vol` report. Its MSH 4.2
 file is a derived post-processing result, never an analysis input. This path
-uses the standalone `cubit-mesh-export` checker API without running or
+uses the `check-vol` checker API (`radia.vol_check`) without running or
 licensing Cubit, and the current Radia `GmshPostExport` writer. A writer that
 does not produce valid MSH 4.2 fails explicitly. Coordinates and mesh sizes
 for analysis are supplied in meters; physical boundary conditions are not

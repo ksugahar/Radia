@@ -82,7 +82,7 @@ try:
     if _SOURCE_ONLY:
         _cubit_path = None
     else:
-        from cubit_mesh_export.toolbar_install import find_cubit_bin
+        from radia.cubit_locator import find_cubit_bin
         _cubit_path = find_cubit_bin()
 except BaseException:
     _cubit_path = None

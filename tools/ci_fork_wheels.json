@@ -1,25 +1,25 @@
 {
   "sources": {
-    "ngsolve": "5a3ae730bf4ba52dac2226e0ee75932789d32156",
-    "netgen": "b2894d9f05b16175a3c361aaba53387b6e0a73f6"
+    "ngsolve": "df1d60e429a5b6db4b8d3d2db9956d102a42e420",
+    "netgen": "354d9bccfe66da72b39eb13beb09bdb39e653216"
   },
   "wheels": {
     "netgen-mesher": {
-      "filename": "netgen_mesher-6.2.2608+radia.b2894d9f-cp312-cp312-win_amd64.whl",
-      "version": "6.2.2608+radia.b2894d9f",
-      "url": "https://github.com/ksugahar/netgen/releases/download/radia-win-b2894d9f/netgen_mesher-6.2.2608%2Bradia.b2894d9f-cp312-cp312-win_amd64.whl",
-      "sha256": "4edd8c7a14d76bc862b9f97f5f5aaccade60cb05d5d71bdc22fb7e43dbcacf00"
+      "filename": "netgen_mesher-6.2.2608+radia.354d9bcc-cp312-cp312-win_amd64.whl",
+      "version": "6.2.2608+radia.354d9bcc",
+      "url": "https://github.com/ksugahar/netgen/releases/download/radia-win-354d9bcc/netgen_mesher-6.2.2608%2Bradia.354d9bcc-cp312-cp312-win_amd64.whl",
+      "sha256": "111942c6df5f14a8e2fa9b57fd1dbef755c7fb66be51d282e1c41abb85171e29"
     },
     "ngsolve": {
-      "filename": "ngsolve-6.2.2608+radia.5a3ae730b.cpu-cp312-cp312-win_amd64.whl",
-      "version": "6.2.2608+radia.5a3ae730b.cpu",
-      "url": "https://github.com/ksugahar/ngsolve/releases/download/radia-win-5a3ae730/ngsolve-6.2.2608%2Bradia.5a3ae730b.cpu-cp312-cp312-win_amd64.whl",
-      "sha256": "e9cd0c0af623420d220f5ff54acf9c4ef3ffe625bf14c70ef2400c5150b37538"
+      "filename": "ngsolve-6.2.2608+radia.df1d60e42.cpu-cp312-cp312-win_amd64.whl",
+      "version": "6.2.2608+radia.df1d60e42.cpu",
+      "url": "https://github.com/ksugahar/ngsolve/releases/download/radia-win-df1d60e4/ngsolve-6.2.2608%2Bradia.df1d60e42.cpu-cp312-cp312-win_amd64.whl",
+      "sha256": "2dc6e7a0eb159ea73672fdcd77f82bc10a097018243f2adfea45e0348c6c3a63"
     }
   },
   "dlls": {
-    "ngcore.dll": "b76dffb7ba856a8c8c4bb46fb99c4c36ab476552e6e6118a819b72ab6b304dc2",
-    "nglib.dll": "ccfeb9a5c0e81fd97e27fb84841616f94557482980be57fe21e5971f0ec024a2",
-    "libngsolve.dll": "062e60fe8111aa12fca7932895dd3c7f1117eba3b85e2a0fbaf6c051d37de487"
+    "ngcore.dll": "108c9147871eeaf05c5f99d1e559afb3b0baef8f09a8d2277c3bc429fd7a5dac",
+    "nglib.dll": "95dd19e8236d348d8686f353a296741baa30a464966b93384b10714f9cd8876e",
+    "libngsolve.dll": "7d8ffaebde268fcad0bebb13e15a0e69aa870d7936159d7c46d5e26cd7b2c8bd"
   }
 }

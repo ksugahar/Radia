@@ -40,7 +40,7 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     original_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
-        assert name != 'cubit_mesh_export', 'compute probe must not load Cubit package'
+        assert not name.startswith('radia_mcp'), 'compute probe must not load the Cubit package'
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, '__import__', guarded_import)
@@ -52,5 +52,5 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     assert set(rows) == set(tool._PHASE9_FIELDS)
     assert all(value != 'N/A' for value in rows.values())
     assert compute_rows[0].endswith('= 1.0')
-    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE
+    assert 'radia_mcp' not in tool.CROSS_MACHINE_PROBE
     assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE

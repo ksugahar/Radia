@@ -39,7 +39,7 @@ def test_application_manifest_has_no_notebook_workbenches():
     assert spatial["scalar_only"] == "not-applicable"
     assert mesh_preflight["checker"] == "check-vol"
     assert mesh_preflight["label_contract_schema"] == "radia.vol-label-contract.v1"
-    assert mesh_preflight["report_schema"] == "cubit-mesh-export.vol-check.v1"
+    assert mesh_preflight["report_schema"] == "radia.vol-check.v1"
     assert "never inferred" in mesh_preflight["material_constants"]
 
     expected_blocks = {

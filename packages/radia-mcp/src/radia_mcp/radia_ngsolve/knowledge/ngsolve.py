@@ -862,7 +862,7 @@ NGSOLVE_BEM_VOL_50 = """
 `.vol` is Radia's solver-facing Netgen/NGSolve mesh format, not the public
 post-processing format. Do not install a Radia desktop viewer or a Windows
 double-click association for `.vol` or `.sol`. Before a solve, run `check-vol`
-and retain its `cubit-mesh-export.vol-check.v1` JSON report with the run. The
+and retain its `radia.vol-check.v1` JSON report with the run. The
 headless preflight owns element counts, labels, bounding box, orientation, and
 source digest.
 
@@ -4671,7 +4671,7 @@ Complete pipeline for accelerator electromagnet analysis.
 
 ```
 CoilBuilder → Biot-Savart Hs (no coil mesh)
-Cubit → hex mesh + export netgen "mesh.vol" order N
+Cubit → hex mesh + export vol "mesh.vol" order N
 NGSolve → Omega-reduced Omega + Kelvin + Energy-based B-input Play
 ```
 
@@ -4699,7 +4699,7 @@ radia_objects = coil.to_radia() # Biot-Savart source (NO mesh)
 import tempfile
 from ngsolve import Mesh
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export vol "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 # ACIS CallbackGeometry: no STEP, no OCC, no seam problems
 ```
@@ -5096,7 +5096,7 @@ geo = Glue(OCCGeometry("cubit_export.step").solids)
 
 Cubit's `imprint+merge` creates ACIS-kernel sharing, but OCCT's STEP
 reader does not propagate that sharing into BRep identity.  For ACIS
-origins, the **correct pipeline is Cubit -> export netgen -> .vol**
+origins, the **correct pipeline is Cubit -> export vol -> .vol**
 (no STEP round-trip, no OCC load, `.vol` text preserves sharing natively).
 
 ## Correspondence with Cubit
@@ -5199,7 +5199,7 @@ serialisation format that carries it (Christopher's recommendation).
 interfaces, either:
 - Use `.brep` (Python side only; Cubit cannot write BREP)
 - Rebuild the carve logic after `OCCGeometry(step).solids`
-- Use the Cubit -> `export netgen` -> `.vol` pipeline entirely
+- Use the Cubit -> `export vol` -> `.vol` pipeline entirely
   (skips OCC on the Python side)
 
 ## See also
@@ -6810,7 +6810,7 @@ repo.
 | Low-frequency Helmholtz kernel | `validation_low_frequency_helmholtz_kernel_summary.json` | stable singular-plus-regular BEM kernel split |
 | Spherical/planar DtN | `validation_spherical_dtn_modes_summary.json`, `validation_planar_dtn_symbol_summary.json` | exact radiation Robin/DtN sign gates |
 | Baffled piston and boundary power | `validation_baffled_piston_radiation_summary.json`, `validation_acoustic_boundary_power_summary.json` | acoustic power and impedance conventions |
-| Netgen `.vol` tri/tet mesh | `validation_test/cubit_mesh_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
+| Netgen `.vol` tri/tet mesh | `validation_test/cubit_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
 | build123d to mesh/CAD checks | `validation_test/build123d_netgen_gmsh_flow/validation_*_summary.json` | CAD face pressure/traction rows, area/volume consistency |
 | Electromagnetic force and torque | `validation_test/electric_machine/validation_*_summary.json` | `force_validation("method_map")`, `force_validation("cross_validation")` |
 | RF/waveguide momentum | `validation_test/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |

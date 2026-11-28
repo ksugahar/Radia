@@ -201,7 +201,7 @@ def test_mesh_builder_keeps_hdiv_air_mesh_free():
     assert "create sphere radius" in helper
     assert "add_kelvin_cubit" in builder
     assert "outer_boundary" not in builder
-    assert 'export netgen "{output.as_posix()}" order 1 overwrite' in builder
+    assert 'export vol "{output.as_posix()}" order 1 overwrite' in builder
     assert "_reflection_inventory" in builder
     assert "missing_reflected_volume_elements" in builder
     assert "_kelvin_identification_inventory" in builder

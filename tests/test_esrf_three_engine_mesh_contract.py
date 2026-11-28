@@ -123,7 +123,7 @@ def test_hybrid_undulator_journal_preserves_cubit_and_kelvin_contract(tmp_path):
     assert vol.name == "hybrid_undulator_kelvin.vol"
     text = journal.read_text(encoding="utf-8")
     assert "build_hybrid_undulator_inside_cubit.py" in text
-    assert "export netgen" in text
+    assert "export vol" in text
     assert "order 2" in text
     inside = journal.with_name("build_hybrid_undulator_inside_cubit.py")
     inside_text = inside.read_text(encoding="utf-8")
@@ -201,7 +201,7 @@ def test_coil_yoke_journal_uses_kelvin_not_a_finite_outer_air_box(tmp_path):
     )
     assert contract["finite_outer_air_box_forbidden"] is True
     assert vol.name == "coil_yoke_kelvin.vol"
-    assert 'export netgen' in journal.read_text(encoding="utf-8")
+    assert 'export vol' in journal.read_text(encoding="utf-8")
     inside = journal.with_name("build_esrf_coil_yoke_inside_cubit.py")
     text = inside.read_text(encoding="utf-8")
     assert "build_inside_cubit" in text

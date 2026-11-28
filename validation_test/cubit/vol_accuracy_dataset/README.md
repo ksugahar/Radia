@@ -1,7 +1,7 @@
 # Complex Cubit `.vol` volume-accuracy dataset
 
 This validation lane measures whether moderately complex Cubit CAD survives
-`export netgen` as the same geometric volume in NGSolve. It is not an analytic
+`export vol` as the same geometric volume in NGSolve. It is not an analytic
 primitive test. The eight cases deliberately exercise failure-prone CAD and
 meshing operations:
 
@@ -21,12 +21,15 @@ invalid or orientation-flipped samples; their measured volume errors are
 0.0351% and 0.0229%. This case ensures that volume agreement can never hide a
 folded high-order map again.
 
-The coarse 355-degree sweep is intentionally diagnostic. At 12 profile and 48
-sweep intervals it is valid at order 2, but order 3 has 13 orientation-flipped
-samples even though its CAD-volume error is only 0.0349%. The otherwise
-identical 16/64 refined twin has zero flips at orders 2 and 3. This records a
-mesh-resolution boundary rather than an exporter seam bug: order elevation
-alone cannot replace geometric refinement on a tightly curved swept tube.
+The coarse 355-degree sweep stays a diagnostic case. At 12 profile and 48
+sweep intervals, the cubit-mesh-export curving (0.14.x) gave 13
+orientation-flipped order-3 samples although the CAD-volume error was only
+0.0349%; the 16/64 refined twin had none. With the geometric refit of
+`export vol` (order >= 3), the coarse sweep has no invalid or flipped sample
+at orders 2 and 3, with a minimum scaled Jacobian of 0.17 and an order-3
+volume error of 3.4e-6%. The test now requires both twins to pass the
+structural gate. Should the refit regress, the coarse case is where the fold
+returns first.
 
 The collector deliberately disables the CAD-error threshold while measuring so
 that poor low-order results remain useful observations. Rows therefore report
@@ -66,5 +69,5 @@ Tracked outputs:
   model/order/material.
 
 These values are empirical observations, not handwritten truth. Regenerate
-them after changing Cubit, `cubit-mesh-export`, Netgen, NGSolve, CAD projection,
+them after changing Cubit, the `export vol` plugin, Netgen, NGSolve, CAD projection,
 or the case definitions.

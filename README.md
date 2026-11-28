@@ -232,8 +232,8 @@ python -m pip install radia radia-mcp
 Then register the required servers in your MCP client; installation alone does
 not connect them. See [client configuration](packages/radia-mcp/README.md) and
 [capability packs](packages/radia-mcp/docs/design/capability_packs.md). Connect
-only the domains needed for the task. Cubit operation uses the independently
-installed `cubit-mesh-export` server and a licensed Cubit installation.
+only the domains needed for the task. Cubit operation uses the `cubit-mcp`
+server of `radia-mcp` (`radia_mcp.cubit`) and a licensed Cubit installation.
 
 For example, you can ask an assistant:
 
@@ -525,12 +525,12 @@ explicit configuration.
 | NGSolve / Netgen | 6.2.2608 |
 | radia-simulink / radia-optuna MATLAB | R2026a (yearly a release only), Windows x64; separate package requirements apply |
 | Coreform Cubit | 2026.8, optional |
-| cubit-mesh-export Python | >=3.12,<3.13 |
+| radia-mcp Cubit export worker | Python 3.12 |
 | Native build | Visual Studio Build Tools 2022 / MSVC 14.44, CMake/Ninja, pip `mkl-devel` oneMKL |
 
 ### Python packages
 
-This monorepo contains six independently versioned distributions. MATLAB,
+This monorepo contains five independently versioned distributions. MATLAB,
 Simulink and LTspice integration belongs to `radia-simulink`, including its
 Python circuit-conversion and parser modules.
 
@@ -538,8 +538,7 @@ Python circuit-conversion and parser modules.
 | :--- | :--- | :--- |
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
 | `radia-simulink` (source version 0.1.5rc1) | `python -m pip install radia-simulink` | MATLAB mexcuda solvers, Simulink and LTspice integrations; external products installed separately |
-| `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
-| `cubit-mesh-export` (2.2.3) | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export, `check-vol`, plugin, and independently owned Cubit MCP |
+| `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge, including the Cubit MCP, `export vol` plugin and Export Vol menu (`radia_mcp.cubit`) |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
 | `eqnedit64` (3.1.7) | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
 | `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus pinned upstream Python `optuna==5.0.0`; MATLAB optimization requires the separate `radia-optuna` distribution |
@@ -598,7 +597,7 @@ Start with the path closest to your task:
 - [Gmsh post-processing](docs/gmsh_post/README.md)
 - [MATLAB and Simulink](packages/radia-simulink/matlab/README.md)
 - [MCP servers and tools](packages/radia-mcp/README.md)
-- [Cubit mesh export](docs/cubit_mesh_export/README.md)
+- [Cubit mesh export](docs/cubit_export/README.md)
 
 ## Contributing
 

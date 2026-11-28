@@ -138,7 +138,7 @@ def write_mesh_journal(journal: Path, vol: Path, *, size_m: float, order: int, s
         f"volume all size {float(size_m):.12g}",
         "mesh volume all",
         "list volume with not is_meshed",
-        f'export netgen "{Path(vol).resolve().as_posix()}" order {int(order)} overwrite',
+        f'export vol "{Path(vol).resolve().as_posix()}" order {int(order)} overwrite',
         "exit",
     ]
     Path(journal).write_text("\n".join(lines) + "\n", encoding="ascii")

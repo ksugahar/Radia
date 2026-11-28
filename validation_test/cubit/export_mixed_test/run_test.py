@@ -1,177 +1,136 @@
-"""Test Cubit mesh export: mixed elements, hex cylinder, p-convergence.
+"""Sphere p-sweep: export vol at orders 1-5 and check-vol every .vol.
 
-Runs journal files in Cubit batch mode and verifies output files.
-Requires Coreform Cubit with the Cubit Mesh Export plugin installed.
+Plays sphere_p_convergence.jou through Cubit's Python API (batch,
+nographics) with the Radia command plugin loaded the same way as the
+production export worker, in a child process, then checks each exported
+.vol with radia.vol_check (labels, curved-map quality, CAD gate against the
+companion .vol.json written by the same export). Exit 1 on any missing or
+stale file, failed check, unevaluated CAD measure or nonfinite error.
 
 Usage:
-    python run_test.py
+    python run_test.py --command-plugin-dir <dir with cubit_to_vol_export.dll> [--cubit-bin <Cubit bin dir>]
 """
 
+import argparse
+import json
+import math
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-from cubit_mesh_export.mcp.gmsh_v42 import (
-    gmsh_v42_mixed_order_series_gate,
-    summarize_gmsh_v42_ascii,
-)
-from cubit_mesh_export.mcp.vol_inventory import summarize_netgen_vol_inventory
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-def find_cubit():
-    """Find Cubit executable."""
-    candidates = [
-        r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe",
-        r"C:\Program Files\Coreform Cubit 2025.12\coreform_cubit.exe",
-    ]
-    for c in candidates:
-        if os.path.isfile(c):
-            return c
-    return None
+SCRIPT_DIR = Path(__file__).resolve().parent
+SPHERE_VOLUME = 4.0 / 3.0 * math.pi * 0.05 ** 3
+# Flat facets at h/R = 0.4 lose about 6 % of the sphere volume, so order 1 is
+# checked against a 10 % CAD gate; curved orders must meet the default 1 %.
+LINEAR_THRESHOLD_PCT = 10.0
+CURVED_THRESHOLD_PCT = 1.0
 
 
-def run_jou(cubit_exe, jou_template, out_dir, expected_files):
-    """Run a .jou template and verify output files. Returns (passed, failed)."""
-    os.makedirs(out_dir, exist_ok=True)
+def find_cubit_bin():
+    from radia.cubit_locator import find_cubit_bin as locate
 
-    with open(jou_template, "r") as f:
-        content = f.read()
-    content = content.replace("{DIR}", out_dir.replace("\\", "/"))
-
-    tmp_jou = os.path.join(out_dir, "_test.jou")
-    with open(tmp_jou, "w") as f:
-        f.write(content)
-
-    result = subprocess.run(
-        [cubit_exe, "-batch", "-nographics", "-nojournal", tmp_jou],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300
-    )
-
-    # Print important lines
-    if result.stdout:
-        for line in result.stdout.split("\n"):
-            line = line.strip()
-            if any(k in line.lower() for k in
-                   ["error", "netgencurver", "exported", "build_high",
-                    "interrupt"]):
-                print(f"  {line.encode('ascii', errors='replace').decode('ascii')}")
-
-    if result.returncode != 0:
-        print(f"  NOTE: Cubit exited with code {result.returncode}")
-
-    # Verify output files
-    passed = 0
-    failed = 0
-    for fname, min_size in expected_files:
-        fpath = os.path.join(out_dir, fname)
-        if not os.path.isfile(fpath):
-            print(f"  FAIL: {fname} not created")
-            failed += 1
-        elif os.path.getsize(fpath) < min_size:
-            print(f"  FAIL: {fname} too small ({os.path.getsize(fpath)} bytes)")
-            failed += 1
-        else:
-            size = os.path.getsize(fpath)
-            print(f"  OK:   {fname} ({size:,} bytes)")
-            passed += 1
-
-    try:
-        os.remove(tmp_jou)
-    except OSError:
-        pass
-
-    return passed, failed
+    bin_dir = locate()
+    if bin_dir is None:
+        raise SystemExit("Cubit not found: set CUBIT_BIN_DIR or pass --cubit-bin")
+    return Path(bin_dir)
 
 
-def main():
-    cubit_exe = find_cubit()
-    if not cubit_exe:
-        print("SKIP: Cubit not found")
-        return 0
+def play_journal(cubit_bin, plugin_dir, journal):
+    """Child-process body: load the fork nglib, then Cubit, then play the journal."""
+    import ngsolve  # noqa: F401  -- the plugin binds to the already loaded nglib
+    import netgen
 
-    out_dir = os.path.join(SCRIPT_DIR, "output")
-    total_passed = 0
-    total_failed = 0
+    os.add_dll_directory(os.path.dirname(netgen.__file__))
+    sys.path.append(str(cubit_bin))
+    os.add_dll_directory(str(cubit_bin))
+    os.environ["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
+    import cubit
 
-    # --- Test 1: Mixed hex+tet+pyramid (order 1 and 2) ---
-    print("=== Test 1: Mixed hex+tet+pyramid ===")
-    p, f = run_jou(cubit_exe,
-        os.path.join(SCRIPT_DIR, "mixed_hex_tet_pyramid.jou"),
-        out_dir,
-        [
-            ("mixed_o1.msh", 1000),
-            ("mixed_o1.bdf", 500),
-            ("mixed_o1.vol", 500),
-            ("mixed_o2.msh", 1000),
-            ("mixed_o2.bdf", 500),
-            ("mixed_o2.vol", 500),
-        ])
-    total_passed += p
-    total_failed += f
+    cubit.init(["cubit", "-nographics", "-nojournal", "-batch", "-noinitfile"])
+    if not cubit.cmd(f'playback "{Path(journal).as_posix()}"'):
+        raise SystemExit(f"Cubit journal playback failed: {journal}")
+    return 0
 
-    mixed_rows = []
-    for order in (1, 2):
-        path = os.path.join(out_dir, f"mixed_o{order}.msh")
-        with open(path, encoding="utf-8") as stream:
-            mixed_rows.append({
-                "order": order,
-                "inventory": summarize_gmsh_v42_ascii(stream.read(), source=path),
-            })
-    with open(os.path.join(out_dir, "mixed_o2.vol"), encoding="utf-8") as stream:
-        vol_inventory = summarize_netgen_vol_inventory(stream.read(), source="mixed_o2.vol")
-    mixed_gate = gmsh_v42_mixed_order_series_gate(
-        mixed_rows,
-        authoritative_vol_inventory=vol_inventory,
-    )
-    if mixed_gate["success"]:
-        print(f"  OK:   Gmsh v4.2 mixed order series ({mixed_gate['status']})")
-        total_passed += 1
-    else:
-        print(f"  FAIL: Gmsh v4.2 mixed order series: {mixed_gate}")
-        total_failed += 1
 
-    # --- Test 2: Hex cylinder (order 2, HEX20 connectivity) ---
-    print("=== Test 2: Hex cylinder order 2 ===")
-    p, f = run_jou(cubit_exe,
-        os.path.join(SCRIPT_DIR, "hex_cylinder.jou"),
-        out_dir,
-        [
-            ("hex_cyl_o2.msh", 1000),
-            ("hex_cyl_o2.bdf", 1000),
-        ])
-    total_passed += p
-    total_failed += f
+def _finite(value):
+    return isinstance(value, (int, float)) and math.isfinite(value)
 
-    # Verify HEX20 from the Gmsh 4.2 element block, not with a v2 row parser.
-    msh_path = os.path.join(out_dir, "hex_cyl_o2.msh")
-    if os.path.isfile(msh_path):
-        with open(msh_path, encoding="utf-8") as fh:
-            inventory = summarize_gmsh_v42_ascii(fh.read(), source=msh_path)
-        hex20_count = int(inventory["element_type_counts"].get("17", 0))
-        if hex20_count > 0 and not inventory["connectivity_mismatches"]:
-            print(f"  OK:   {hex20_count} HEX20 elements with 20-node connectivity")
-            total_passed += 1
-        else:
-            print(f"  FAIL: invalid HEX20 Gmsh v4.2 inventory: {inventory}")
-            total_failed += 1
 
-    # --- Test 3: p-convergence (sphere, order 1-5 via export netgen) ---
-    print("=== Test 3: p-convergence (sphere order 1-5) ===")
-    p_conv_jou = os.path.join(SCRIPT_DIR, "sphere_p_convergence.jou")
-    if os.path.isfile(p_conv_jou):
-        expected = []
-        for order in range(1, 6):
-            expected.append((f"sphere_o{order}.vol", 500))
-        p, f = run_jou(cubit_exe, p_conv_jou, out_dir, expected)
-        total_passed += p
-        total_failed += f
-    else:
-        print("  SKIP: sphere_p_convergence.jou not found")
+def exact_volume_error(vol, order):
+    """Relative sphere-volume error with quadrature exact for the order-p map.
 
-    print(f"\n=== TOTAL: {total_passed} passed, {total_failed} failed ===")
-    return 1 if total_failed > 0 else 0
+    The geometry Jacobian of a polynomial order-p tetrahedron has degree 3(p-1),
+    so order 3p integrates it exactly; measured here independently of check-vol.
+    """
+    from ngsolve import CF, Integrate, Mesh, TaskManager
+
+    with TaskManager():
+        volume = Integrate(CF(1), Mesh(str(vol)), order=3 * order)
+    return volume / SPHERE_VOLUME - 1.0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--cubit-bin", type=Path)
+    parser.add_argument("--command-plugin-dir", type=Path, required=True)
+    parser.add_argument("--out", type=Path, default=SCRIPT_DIR / "output")
+    parser.add_argument("--play", type=Path, help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    cubit_bin = (args.cubit_bin or find_cubit_bin()).resolve()
+    plugin_dir = args.command_plugin_dir.resolve()
+    if args.play:
+        return play_journal(cubit_bin, plugin_dir, args.play)
+    args.out.mkdir(parents=True, exist_ok=True)
+    journal = (SCRIPT_DIR / "sphere_p_convergence.jou").read_text(encoding="utf-8")
+    run_jou = args.out / "_sphere_p_convergence.jou"
+    run_jou.write_text(journal.replace("{DIR}", args.out.as_posix()), encoding="utf-8")
+    for order in range(1, 6):
+        (args.out / f"sphere_o{order}.vol").unlink(missing_ok=True)
+        (args.out / f"sphere_o{order}.vol.json").unlink(missing_ok=True)
+    # Both outputs of every order were deleted above (unlink raises if it cannot),
+    # so a file present after playback was written by this run.
+    run = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--cubit-bin", str(cubit_bin),
+         "--command-plugin-dir", str(plugin_dir), "--out", str(args.out), "--play", str(run_jou)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+    (args.out / "cubit.log").write_text(run.stdout + run.stderr, encoding="utf-8")
+    rows = []
+    for order in range(1, 6):
+        vol = args.out / f"sphere_o{order}.vol"
+        companion = Path(str(vol) + ".json")
+        missing = [p.name for p in (vol, companion) if not p.is_file()]
+        if missing:
+            rows.append({"order": order, "passed": False, "error": f"not written by this run: {missing}"})
+            continue
+        check = subprocess.run(
+            [sys.executable, "-m", "radia.vol_check", str(vol), "--json", str(companion), "--strict-labels",
+             "--required-materials", "sphere", "--required-boundaries", "surface",
+             "--integration-order", str(max(4, 2 * order + 2)),
+             "--threshold", str(LINEAR_THRESHOLD_PCT if order == 1 else CURVED_THRESHOLD_PCT),
+             "--format", "json"],
+            capture_output=True, text=True)
+        report = json.loads(check.stdout) if check.stdout.strip().startswith("{") else {}
+        material = next((m for m in report.get("materials", []) if m.get("name") == "sphere"), {})
+        surface = next((b for b in report.get("boundaries", []) if b.get("name") == "surface"), {})
+        cad_errors = [material.get("error_pct"), surface.get("error_pct")]
+        cad_evaluated = (report.get("cad_reference", {}).get("available") is True
+                         and all(_finite(e) for e in cad_errors))
+        volume_error = exact_volume_error(vol, order)
+        rows.append({"order": order,
+                     "passed": (check.returncode == 0 and report.get("passed") is True
+                                and cad_evaluated and _finite(volume_error)),
+                     "n_elements": report.get("n_elements"), "ng_volume": material.get("ng_volume"),
+                     "cad_volume_error_pct": cad_errors[0], "cad_area_error_pct": cad_errors[1],
+                     "volume_error": volume_error})
+    for row in rows:
+        print(json.dumps(row))
+    failed = [row["order"] for row in rows if not row["passed"]]
+    errors = [abs(row["volume_error"]) for row in rows if _finite(row.get("volume_error"))]
+    if len(errors) != 5 or any(later >= earlier for earlier, later in zip(errors, errors[1:])):
+        failed.append("volume error not strictly decreasing with order")
+    print(f"cubit exit {run.returncode}; failed orders: {failed or 'none'}")
+    return 1 if failed or run.returncode else 0
 
 
 if __name__ == "__main__":
