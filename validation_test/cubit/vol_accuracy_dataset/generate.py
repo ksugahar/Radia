@@ -144,6 +144,13 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
             "session before generating the dataset: " + "; ".join(running)
         )
     cubit_exe = _find_cubit_exe()
+    # A reused work directory may hold artifacts of an earlier run: remove the
+    # ones this run will write, so only fresh exports can be collected.
+    for case in cases:
+        for order in orders:
+            vol = _artifact_path(work_dir, case["case_id"], order)
+            for stale in (vol, Path(str(vol) + ".json")):
+                stale.unlink(missing_ok=True)
     driver = _write_driver(work_dir, cases, orders)
     # Cubit 2026.8 loads command plugins from CUBIT_PLUGIN_DIR; the export
     # plugin links the fork nglib, so ngsolve is imported before cubit, as in
@@ -170,6 +177,10 @@ def _run_cubit(work_dir: Path, cases: list[dict], orders: list[int]) -> dict:
         + "\n=== STDERR ===\n" + (proc.stderr or ""),
         encoding="utf-8",
     )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Cubit exited {proc.returncode}; see {work_dir / 'cubit.log'}"
+        )
     missing = []
     for case in cases:
         for order in orders:

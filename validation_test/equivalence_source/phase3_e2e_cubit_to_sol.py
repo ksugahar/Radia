@@ -109,16 +109,15 @@ def step1_cubit_mesh():
     sys.path.insert(0, cubit_bin)
 
     try:
+        import ngsolve  # noqa: F401  -- the fork nglib the plugin links, before Cubit
         import cubit
     except ImportError as e:
         print(f"  cubit Python module import failed: {e}  -- SKIP")
         return False
 
-    # Match the working test pattern from tests/cubit/test_export_vol_cmd.py
-    # (no -nographics; -commandplugindir + env var both set).
+    # Cubit 2026.8 reads CUBIT_PLUGIN_DIR (set above); it has no -commandplugindir.
     try:
-        cubit.init(["cubit", "-nojournal", "-batch",
-                     "-commandplugindir", plugin_dir])
+        cubit.init(["cubit", "-nojournal", "-batch", "-noinitfile"])
     except Exception as e:
         print(f"  cubit.init failed: {e}  -- SKIP")
         return False

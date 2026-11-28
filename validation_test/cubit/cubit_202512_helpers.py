@@ -74,18 +74,14 @@ def init_cubit():
             "with Cubit's bundled python3/python.exe"
         )
 
+    # Cubit 2026.8 reads CUBIT_PLUGIN_DIR at startup (it has no
+    # -commandplugindir); the plugin links the fork nglib, loaded first.
+    from radia_mcp.cubit.layout import export_plugin_directory
+    os.environ["CUBIT_PLUGIN_DIR"] = str(export_plugin_directory(cubit_bin))
+    import ngsolve  # noqa: F401
     import cubit
 
-    from radia_mcp.cubit.layout import export_plugin_directory
-    plugin_dir = export_plugin_directory(cubit_bin)
-    cubit.init([
-        "cubit",
-        "-nojournal",
-        "-batch",
-        "-nographics",
-        "-commandplugindir",
-        str(plugin_dir),
-    ])
+    cubit.init(["cubit", "-nojournal", "-batch", "-nographics", "-noinitfile"])
     _CUBIT_MODULE = cubit
     return cubit
 
