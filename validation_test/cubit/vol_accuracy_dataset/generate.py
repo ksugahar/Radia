@@ -68,26 +68,14 @@ def _load_cases(path: Path = CASES_PATH) -> dict:
 
 
 def _find_cubit_exe() -> Path:
-    explicit = os.environ.get("CUBIT_EXE")
-    if explicit and Path(explicit).is_file():
-        return Path(explicit)
-    cubit_path = os.environ.get("CUBIT_PATH")
-    if cubit_path:
-        root = Path(cubit_path)
-        candidate = root / "coreform_cubit.exe"
-        if candidate.is_file():
-            return candidate
-        candidate = root / "bin" / "coreform_cubit.exe"
-        if candidate.is_file():
-            return candidate
-    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-    candidates = sorted(
-        program_files.glob("Coreform Cubit */bin/coreform_cubit.exe"),
-        reverse=True,
-    )
-    if not candidates:
+    """Cubit's console executable, found as radia_mcp's session finds Cubit."""
+    from radia_mcp.cubit.layout import console_executable
+    from radia_mcp.cubit.toolbar_install import find_cubit_bin
+    bin_dir = find_cubit_bin()
+    exe = console_executable(Path(bin_dir)) if bin_dir else None
+    if exe is None:
         raise FileNotFoundError("Coreform Cubit executable not found")
-    return candidates[0]
+    return exe
 
 
 def _running_cubit_processes() -> list[str]:

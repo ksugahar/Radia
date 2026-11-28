@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import platform
+import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -164,6 +165,9 @@ def run(mesh_path: Path) -> dict:
             "ngsolve": getattr(ng, "__version__", "unknown"),
             "python": platform.python_version(),
         },
+        "source_sha": subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parents[2]), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip(),
         "mesh": {
             "path": str(mesh_path),
             "sha256": _sha256(mesh_path),
