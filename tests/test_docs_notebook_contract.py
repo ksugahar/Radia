@@ -456,10 +456,10 @@ def _repo_json_reads(source):
 
 
 def test_repo_json_reads_follow_path_joins():
-    cell = ("results_path = repo / 'validation_test' / 'cubit_mesh_export' / 'r.json'\n"
+    cell = ("results_path = repo / 'validation_test' / 'cubit_export' / 'r.json'\n"
             "other = 'validation_test/showcase/results/motor.json'\n"
             "%matplotlib inline\n")
-    assert _repo_json_reads(cell) == ["validation_test/cubit_mesh_export/r.json",
+    assert _repo_json_reads(cell) == ["validation_test/cubit_export/r.json",
                                       "validation_test/showcase/results/motor.json"]
 
 
