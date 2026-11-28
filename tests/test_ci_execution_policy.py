@@ -416,7 +416,7 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert "Log TaskManager/OpenMP/MKL limits" in policy
     assert "GPU uses NGSolve device/NVRTC, no TaskManager extension/fallback" in policy
     assert "Text: UTF-8/LF" in policy
-    assert "Keep management, sequential RNG" in policy
+    assert "is CPU-only and MATLAB-only" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
 
