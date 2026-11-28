@@ -55,6 +55,10 @@ public:
   // Access the internal netgen::Mesh (for the .vol writer)
   std::shared_ptr<netgen::Mesh> get_ng_mesh() const { return ng_mesh_; }
 
+  // Hand the mesh over to its LiveCubitGeometry: the geometry then owns this
+  // curver, so the curver must not keep owning the mesh (no reference cycle).
+  void release_mesh() { ng_mesh_.reset(); }
+
   // Cubit node ID -> Netgen PointIndex (1-based).  Needed by the
   // exporter to turn Cubit nodesets (GND, etc.) into Netgen CD3
   // (BBBND vertex) names that round-trip through .vol load.

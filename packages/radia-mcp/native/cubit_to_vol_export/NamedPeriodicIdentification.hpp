@@ -49,6 +49,8 @@ struct NamedPeriodicResult {
   std::map<int, int> descriptor_to_boundary;
   double maximum_distance = 0;
   std::vector<PeriodicCurvedTransfer> curved_transfers;
+  // Master/slave triangle plan; re-applied after every re-curving.
+  std::vector<PeriodicTrianglePair> triangles;
 };
 
 inline std::string periodic_geometry_serialization(const netgen::Mesh &mesh)
@@ -204,8 +206,8 @@ inline NamedPeriodicResult apply_named_periodic_identification(
                                std::to_string(patch.first));
   }
 
-  const auto triangles = periodic_triangle_plan(mesh, master_to_slave, mapping);
-  result.curved_transfers = synchronize_periodic_curvature(mesh, triangles);
+  result.triangles = periodic_triangle_plan(mesh, master_to_slave, mapping);
+  result.curved_transfers = synchronize_periodic_curvature(mesh, result.triangles);
   // Curvature synchronization is intentional. ID insertion itself must still
   // preserve the already synchronized geometric serialization exactly.
   const std::string geometry_before = periodic_geometry_serialization(mesh);

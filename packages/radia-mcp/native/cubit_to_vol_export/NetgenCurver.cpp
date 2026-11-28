@@ -8,6 +8,7 @@
 
 #include "MeshData.hpp"
 #include "callbackgeom.hpp"
+#include "LiveVolMesh.hpp"
 #include "netgen_curving/geometric_refit.hpp"
 #include "netgen_curving/curved_access.hpp"
 
@@ -1153,7 +1154,7 @@ bool NetgenCurver::attach_callback_geometry()
   // Using between_edge consistently gives Netgen segment-bounded curve
   // projections, which is what its uniform-t LSQ curving expects on
   // per-segment curving.
-  auto geom = std::make_shared<ng::CallbackGeometry>(
+  auto geom = std::make_shared<cubit_to_vol_export::LiveCubitGeometry>(
       project, normal, num_surfaces, tangent, edge_project, between_edge);
   ng_mesh_->SetGeometry(geom);
 
@@ -1165,16 +1166,15 @@ bool NetgenCurver::attach_callback_geometry()
 // ============================================================
 bool NetgenCurver::curve_and_extract(int order)
 {
-  // Curve the mesh
-  ng_mesh_->BuildCurvedElements(order);
-
-  auto & curved = ng_mesh_->GetCurvedElements();
-  if (!curved.IsHighOrder()) {
-    PRINT_WARNING("NetgenCurver: BuildCurvedElements did not produce high-order data.\n");
+  // Curve the mesh: the same pipeline as a later re-curving of the in-memory mesh
+  radia_netgen_curving::RefitStats rs;
+  try {
+    rs = cubit_to_vol_export::curve_mesh(*ng_mesh_, order);
+  } catch (const std::runtime_error &error) {
+    PRINT_WARNING("NetgenCurver: %s.\n", error.what());
     return false;
   }
-
-  radia_netgen_curving::RefitStats rs = radia_netgen_curving::geometric_refit(*ng_mesh_);
+  auto & curved = ng_mesh_->GetCurvedElements();
   PRINT_INFO("NetgenCurver: geometric refit - edges %d/%d accepted "
              "(%d failed, %d kept to avoid distortion), max distance %.3e -> %.3e; "
              "faces %d/%d accepted (%d failed, %d kept to avoid distortion), "

@@ -1,4 +1,4 @@
-"""Build the Cubit ``export vol`` command plugin (cubit_to_vol_export.dll).
+"""Build the Cubit ``export vol`` command plugin (cubit_to_vol_export.dll) and _cubit_to_vol_mesh.
 
 The plugin is not part of the radia-mcp wheel.  Build it on the licensed Cubit
 machine from an MSVC 14.44 x64 developer environment (``vcvars64.bat
@@ -10,6 +10,9 @@ machine from an MSVC 14.44 x64 developer environment (``vcvars64.bat
 loads (``import ngsolve``) at run time; the plugin binds to that same DLL.
 The built ``cubit_to_vol_export.dll`` is copied to ``--out``; pass that directory
 as ``plugin_dir`` (or ``RADIA_CUBIT_PLUGIN_DIR``) to ``cubit_export_vol``.
+The in-memory mesh module ``_cubit_to_vol_mesh`` (:mod:`radia_mcp.cubit.vol_mesh`)
+is built for the Python that runs this script, which must therefore be the
+worker Python, and is copied next to the plugin.
 """
 from __future__ import annotations
 
@@ -41,7 +44,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("run from an MSVC 14.44 x64 developer environment (vcvars64.bat -vcvars_ver=14.44)")
     out.mkdir(parents=True, exist_ok=True)
     configure = ["cmake", "-S", str(HERE), "-B", str(build), "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
-                 f"-DCubit_DIR={Path(args.cubit_sdk).as_posix()}", f"-DNetgen_DIR={Path(args.netgen_dir).as_posix()}"]
+                 f"-DCubit_DIR={Path(args.cubit_sdk).as_posix()}", f"-DNetgen_DIR={Path(args.netgen_dir).as_posix()}",
+                 f"-DPython3_EXECUTABLE={Path(sys.executable).as_posix()}"]
     subprocess.run(configure, check=True)
     subprocess.run(["cmake", "--build", str(build), "-j", str(args.jobs)], check=True)
     built = build / DLL
@@ -49,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"build finished without {built}")
     shutil.copyfile(built, out / DLL)
     print(out / DLL)
+    modules = sorted(build.glob("_cubit_to_vol_mesh*.pyd"))
+    if len(modules) != 1:
+        raise SystemExit(f"build finished with {len(modules)} _cubit_to_vol_mesh modules in {build}")
+    shutil.copyfile(modules[0], out / modules[0].name)
+    print(out / modules[0].name)
     return 0
 
 

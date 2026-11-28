@@ -1270,6 +1270,13 @@ def export_arguments(info, match=None):
     ``1e-6 * R``).  The plugin rejects a Kelvin mesh exported without these
     fields, so the ``.vol`` always carries its ``kelvin`` periodic group.
     """
+    offset, tol = pair_fields(info, match)
+    return ("kelvin_tx %.17g kelvin_ty %.17g kelvin_tz %.17g kelvin_match %.17g"
+            % (offset[0], offset[1], offset[2], tol))
+
+
+def pair_fields(info, match=None):
+    """The Kelvin pairing of :func:`export_arguments` as ``(translation, match)``."""
     if not info or "center" not in info or "R" not in info:
         raise ValueError("Kelvin export arguments need the add_kelvin_cubit info (R, center)")
     R = float(info["R"])
@@ -1279,8 +1286,7 @@ def export_arguments(info, match=None):
             and len(offset) == 3 and all(math.isfinite(c) for c in offset)):
         raise ValueError(f"invalid Kelvin export geometry: R={info['R']!r}, "
                          f"center={info['center']!r}, match={match!r}")
-    return ("kelvin_tx %.17g kelvin_ty %.17g kelvin_tz %.17g kelvin_match %.17g"
-            % (offset[0], offset[1], offset[2], tol))
+    return offset, tol
 
 
 def apply_options(options):

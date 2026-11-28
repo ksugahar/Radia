@@ -25,6 +25,10 @@ crystallized as its own package.
   and the menu, toolbar and action are `Export Vol` / `Vol Export` /
   `Export .vol...`. Journals using `export netgen` must be updated; the old
   names are not kept.
+- Add `radia_mcp.cubit.vol_mesh`: build the `export vol` mesh of the current
+  Cubit model in memory (`mesh_from_cubit`) and curve it again at another
+  order (`curve`) while the Cubit session lives. `build.py` also builds the
+  `_cubit_to_vol_mesh` module next to the plugin DLL.
 
 ## [2.0.3] - 2026-11-21
 

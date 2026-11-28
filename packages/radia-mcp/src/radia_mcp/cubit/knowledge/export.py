@@ -88,6 +88,21 @@ The plugin writes only `.vol`. Other formats are converted from the checked
 # then call the MCP tool cubit_export_vol(journal_path, "mesh.vol", order=5).
 ```
 
+## In-memory mesh, curved again at another order
+
+In an external CPython that imported `cubit` (the export worker's
+environment, never the MCP server or Cubit's embedded Python),
+`radia_mcp.cubit.vol_mesh.mesh_from_cubit(order, kelvin=..., periodic=...)`
+runs the same export as `export vol` and returns the `netgen.meshing.Mesh`
+instead of writing it. The mesh keeps the Cubit geometry, so
+`vol_mesh.curve(mesh, p)` curves it again (with the geometric refit and the
+periodic coefficient copy) for a p-convergence study without exporting again.
+It refuses a mesh whose Cubit model changed since it was built; use
+`vol_mesh.curve`, not NGSolve's `mesh.Curve(p)`, which skips the refit.
+On a model with a same-material webcut seam, the export curves before it
+removes the seam triangles, so the seam faces of the file and of a re-curved
+mesh differ at the 1e-12 level; elsewhere they agree to rounding.
+
 ## Companion JSON (.vol.json)
 
 `cubit_export_vol` writes a companion JSON with CAD reference values:

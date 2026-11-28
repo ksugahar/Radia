@@ -7,9 +7,11 @@
 #include <cmath>
 #include <iomanip>
 #include <filesystem>
+#include <sstream>
 
 #include "NetgenCurver.hpp"
 #include "NamedPeriodicIdentification.hpp"
+#include "LiveVolMesh.hpp"
 #include "netgen_meshing.hpp"
 
 // Cubit geometry for CAD reference values (companion JSON)
@@ -181,7 +183,69 @@ std::vector<std::string> ExportVolCommand::get_help()
   return help;
 }
 
+// What the callbacks of an in-memory mesh query: re-curving refuses a changed model.
+static std::string cubit_model_fingerprint()
+{
+  std::ostringstream text;
+  for (const char *kind : {"volume", "surface", "curve"}) {
+    const auto ids = CubitInterface::get_entities(kind);
+    long long sum = 0;
+    for (int id : ids) sum += id;
+    text << kind << ' ' << ids.size() << ':' << sum << ' ';
+  }
+  text << "nodes " << CubitInterface::get_node_count()
+       << " tets " << CubitInterface::get_tet_count()
+       << " hexes " << CubitInterface::get_hex_count()
+       << " wedges " << CubitInterface::get_wedge_count()
+       << " pyramids " << CubitInterface::get_pyramid_count()
+       << " tris " << CubitInterface::get_tri_count()
+       << " quads " << CubitInterface::get_quad_count();
+  return text.str();
+}
+
 bool ExportVolCommand::execute(CubitCommandData &data)
+{
+  VolExportRequest request;
+  data.get_string("filename", request.filename);
+  if (request.filename.empty()) {
+    PRINT_ERROR("Filename required.\n");
+    return false;
+  }
+  data.get_value("order", request.order);
+
+  const bool periodic_fields[] = {
+      data.get_string("periodic_name", request.periodic.name),
+      data.get_string("periodic_master", request.periodic.master_label),
+      data.get_string("periodic_slave", request.periodic.slave_label),
+      data.get_string("periodic_unit", request.periodic.coordinate_unit),
+      data.get_string("periodic_patches", request.periodic_patch_text),
+      data.get_value("periodic_tx", request.periodic.translation[0]),
+      data.get_value("periodic_ty", request.periodic.translation[1]),
+      data.get_value("periodic_tz", request.periodic.translation[2]),
+      data.get_value("periodic_match", request.periodic.matching_distance)};
+  int periodic_present = 0;
+  for (bool present : periodic_fields) periodic_present += present ? 1 : 0;
+  request.has_periodic = periodic_present != 0;
+  if (request.has_periodic && periodic_present != 9) {
+    PRINT_ERROR("Named periodic export requires all nine explicit periodic fields.\n");
+    return false;
+  }
+  const bool kelvin_fields[] = {
+      data.get_value("kelvin_tx", request.kelvin_translation[0]),
+      data.get_value("kelvin_ty", request.kelvin_translation[1]),
+      data.get_value("kelvin_tz", request.kelvin_translation[2]),
+      data.get_value("kelvin_match", request.kelvin_match)};
+  int kelvin_present = 0;
+  for (bool present : kelvin_fields) kelvin_present += present ? 1 : 0;
+  request.has_kelvin = kelvin_present != 0;
+  if (request.has_kelvin && kelvin_present != 4) {
+    PRINT_ERROR("Kelvin export requires all four fields: kelvin_tx, kelvin_ty, kelvin_tz, kelvin_match.\n");
+    return false;
+  }
+  return run(request, nullptr);
+}
+
+bool ExportVolCommand::run(const VolExportRequest &request, std::shared_ptr<netgen::Mesh> *live)
 {
   // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.
   // The exporter bypasses the cap and completes successfully, so
@@ -190,60 +254,26 @@ bool ExportVolCommand::execute(CubitCommandData &data)
 
   auto t_start = std::chrono::high_resolution_clock::now();
 
-  std::string filename;
-  data.get_string("filename", filename);
-  if (filename.empty()) {
-    PRINT_ERROR("Filename required.\n");
-    return false;
-  }
-
-  int order = 2;
-  data.get_value("order", order);
+  const std::string &filename = request.filename;
+  const int order = request.order;
   if (order < 1 || order > 5) {
     PRINT_ERROR("Order must be 1-5.\n");
     return false;
   }
 
-  cubit_to_vol_export::NamedPeriodicContract periodic;
-  std::string periodic_patch_text;
-  const bool periodic_fields[] = {
-      data.get_string("periodic_name", periodic.name),
-      data.get_string("periodic_master", periodic.master_label),
-      data.get_string("periodic_slave", periodic.slave_label),
-      data.get_string("periodic_unit", periodic.coordinate_unit),
-      data.get_string("periodic_patches", periodic_patch_text),
-      data.get_value("periodic_tx", periodic.translation[0]),
-      data.get_value("periodic_ty", periodic.translation[1]),
-      data.get_value("periodic_tz", periodic.translation[2]),
-      data.get_value("periodic_match", periodic.matching_distance)};
-  int periodic_present = 0;
-  for (bool present : periodic_fields) periodic_present += present ? 1 : 0;
-  const bool has_periodic = periodic_present != 0;
-  if (has_periodic && periodic_present != 9) {
-    PRINT_ERROR("Named periodic export requires all nine explicit periodic fields.\n");
-    return false;
-  }
-  std::array<double, 3> kelvin_translation{};
-  double kelvin_match = 0;
-  const bool kelvin_fields[] = {
-      data.get_value("kelvin_tx", kelvin_translation[0]),
-      data.get_value("kelvin_ty", kelvin_translation[1]),
-      data.get_value("kelvin_tz", kelvin_translation[2]),
-      data.get_value("kelvin_match", kelvin_match)};
-  int kelvin_present = 0;
-  for (bool present : kelvin_fields) kelvin_present += present ? 1 : 0;
-  const bool has_kelvin = kelvin_present != 0;
-  if (has_kelvin && kelvin_present != 4) {
-    PRINT_ERROR("Kelvin export requires all four fields: kelvin_tx, kelvin_ty, kelvin_tz, kelvin_match.\n");
-    return false;
-  }
+  cubit_to_vol_export::NamedPeriodicContract periodic = request.periodic;
+  const std::string &periodic_patch_text = request.periodic_patch_text;
+  const bool has_periodic = request.has_periodic;
+  const std::array<double, 3> kelvin_translation = request.kelvin_translation;
+  const double kelvin_match = request.kelvin_match;
+  const bool has_kelvin = request.has_kelvin;
   if (has_kelvin && has_periodic) {
     PRINT_ERROR("One named periodic group per export: kt and kelvin pairs cannot be combined.\n");
     return false;
   }
   // Both named groups publish through the same fresh-output bundle.
   const bool named_output = has_periodic || has_kelvin;
-  if (has_kelvin) {
+  if (has_kelvin && !live) {
     try {
       cubit_to_vol_export::require_fresh_named_periodic_output(
           cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename)));
@@ -254,8 +284,9 @@ bool ExportVolCommand::execute(CubitCommandData &data)
   }
   if (has_periodic) {
     try {
-      cubit_to_vol_export::require_fresh_named_periodic_output(
-          cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename)));
+      if (!live)
+        cubit_to_vol_export::require_fresh_named_periodic_output(
+            cubit_to_vol_export::named_periodic_output_paths(u8_string_to_path(filename)));
       std::istringstream patches(periodic_patch_text);
       std::string patch;
       while (std::getline(patches, patch, ',')) {
@@ -276,6 +307,7 @@ bool ExportVolCommand::execute(CubitCommandData &data)
       return false;
     }
   }
+
   cubit_to_vol_export::NamedPeriodicResult periodic_result;
 
   // Extract linear mesh from Cubit (MeshData)
@@ -285,7 +317,7 @@ bool ExportVolCommand::execute(CubitCommandData &data)
   if (!md.extract(build_order)) {
     PRINT_ERROR("Mesh extraction failed.\n");
     auto failed = md.get_netgen_curver();
-    if (failed && !named_output) {
+    if (failed && !named_output && !live) {
       std::ofstream failure(u8_string_to_path(filename + ".json"));
       if (failure) failure << "{\"export_passed\":false,\"curving\":"
                            << failed->edge_diagnostics_json() << "}\n";
@@ -777,6 +809,26 @@ bool ExportVolCommand::execute(CubitCommandData &data)
     PRINT_INFO("Periodic group '%s': %d point pairs, max distance %.3e m\n",
                periodic.name.c_str(), (int)periodic_result.point_pairs.size(),
                periodic_result.maximum_distance);
+  }
+
+  // In-memory mesh: keep the live geometry, owning the curver its callbacks
+  // read, and write nothing.
+  if (live) {
+    auto geometry = std::dynamic_pointer_cast<cubit_to_vol_export::LiveCubitGeometry>(
+        ng_mesh->GetGeometry());
+    if (!geometry) {
+      PRINT_ERROR("The curved mesh carries no live Cubit geometry.\n");
+      return false;
+    }
+    geometry->owner = nc;
+    geometry->periodic_triangles = periodic_result.triangles;
+    geometry->model_fingerprint = cubit_model_fingerprint;
+    geometry->built_fingerprint = cubit_model_fingerprint();
+    nc->release_mesh();
+    *live = ng_mesh;
+    PRINT_INFO("Built in-memory Netgen mesh (order %d): %d nodes, %d elements\n",
+               order, (int)ng_mesh->GetNP(), (int)ng_mesh->GetNE());
+    return true;
   }
 
   // Detach CallbackGeometry — it has function pointers, not serializable.

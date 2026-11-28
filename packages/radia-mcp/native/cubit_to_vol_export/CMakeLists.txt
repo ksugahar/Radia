@@ -26,13 +26,22 @@ if(CUBIT_TO_VOL_EXPORT_PLUGIN)
     find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
     add_library(cubit_geom ALIAS cubit_cgmcore)
   endif()
-  add_library(cubit_to_vol_export_plugin MODULE
-    CubitToVolExportPlugin.cpp MeshData.cpp NetgenCurver.cpp NetgenCurverIdentity.cpp
-    callbackgeom.cpp ExportVolCommand.cpp)
+  # The export itself, shared by the command plugin and the in-memory mesh module.
+  add_library(cubit_to_vol_export_core OBJECT
+    MeshData.cpp NetgenCurver.cpp NetgenCurverIdentity.cpp callbackgeom.cpp
+    ExportVolCommand.cpp LiveVolMesh.cpp)
+  target_link_libraries(cubit_to_vol_export_core PUBLIC cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
+  target_compile_definitions(cubit_to_vol_export_core PUBLIC _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+  target_compile_options(cubit_to_vol_export_core PUBLIC /bigobj /utf-8)
+  add_library(cubit_to_vol_export_plugin MODULE CubitToVolExportPlugin.cpp)
   set_target_properties(cubit_to_vol_export_plugin PROPERTIES OUTPUT_NAME "cubit_to_vol_export" PREFIX "" SUFFIX ".dll")
-  target_link_libraries(cubit_to_vol_export_plugin cubiti cubit_util cubit_geom netgen_curving nglib ngcore)
-  target_compile_definitions(cubit_to_vol_export_plugin PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-  target_compile_options(cubit_to_vol_export_plugin PRIVATE /bigobj /utf-8)
+  target_link_libraries(cubit_to_vol_export_plugin PRIVATE cubit_to_vol_export_core)
+  # _cubit_to_vol_mesh: the same export kept in memory as a netgen.meshing.Mesh,
+  # for an external Python that imported cubit.  Uses the pybind11 headers the
+  # Netgen SDK ships, as netgen.libngpy does, so the Mesh casts across modules.
+  find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+  Python3_add_library(_cubit_to_vol_mesh MODULE WITH_SOABI python_live_mesh.cpp)
+  target_link_libraries(_cubit_to_vol_mesh PRIVATE cubit_to_vol_export_core)
 endif()
 
 if(NETGEN_CURVING_PYMODULE)
