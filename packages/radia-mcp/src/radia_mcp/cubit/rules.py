@@ -346,9 +346,28 @@ def check_manual_curve(filepath: str, lines: List[str]) -> List[Dict]:
 	        if not line.strip().startswith('#')]
 	def first(pattern):
 		return next((i for i, text in code if re.search(pattern, text)), None)
-	live = any('mesh_from_cubit' in text for _, text in code)
-	if live:
-		line = first(r'\.Curve\s*\(')
+	# Names bound to a live mesh: assigned from mesh_from_cubit(...), or a Mesh(...)
+	# wrapper of such a name.  Only a .Curve() on one of them, or on the call itself,
+	# is the live-mesh misuse; another mesh in the same file is not.
+	live = set()
+	for _ in range(len(code) + 1):
+		before = len(live)
+		for _, text in code:
+			bound = re.match(r'(\w+)\s*=\s*(.+)$', text)
+			if not bound:
+				continue
+			name, value = bound.groups()
+			wrapped = re.fullmatch(r'(?:\w+\.)*Mesh\(\s*(\w+)\s*\)', value.strip())
+			if 'mesh_from_cubit(' in value or (wrapped and wrapped.group(1) in live):
+				live.add(name)
+		if len(live) == before:
+			break
+	receivers = '|'.join(re.escape(name) for name in sorted(live))
+	pattern = r'mesh_from_cubit\([^#]*\)\s*\)?\.Curve\s*\('
+	if receivers:
+		pattern += rf'|\b(?:{receivers})\.Curve\s*\('
+	if any('mesh_from_cubit' in text for _, text in code):
+		line = first(pattern)
 		if line is not None:
 			return [{
 				'line': line,

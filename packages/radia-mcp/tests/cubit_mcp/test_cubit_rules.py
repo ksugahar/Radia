@@ -246,6 +246,24 @@ class TestManualCurve:
         assert [(f["rule"], f["severity"], f["line"]) for f in findings] == [
             ("curve-on-live-cubit-mesh", "HIGH", 3)], findings
 
+    def test_flags_curve_through_a_mesh_wrapper(self):
+        code = (
+            'live = vol_mesh.mesh_from_cubit(2)\n'
+            'mesh = ngsolve.Mesh(live)\n'
+            'mesh.Curve(3)\n'
+        )
+        findings = _run(check_manual_curve, code)
+        assert [(f["rule"], f["line"]) for f in findings] == [
+            ("curve-on-live-cubit-mesh", 3)], findings
+
+    def test_another_mesh_in_the_same_file_is_not_live(self):
+        code = (
+            'live = vol_mesh.mesh_from_cubit(2)\n'
+            'occ_mesh = Mesh(geo.GenerateMesh(maxh=0.1))\n'
+            'occ_mesh.Curve(3)\n'
+        )
+        assert _run(check_manual_curve, code) == []
+
     def test_allows_vol_mesh_curve(self):
         code = (
             'mesh = Mesh(vol_mesh.mesh_from_cubit(2))\n'
