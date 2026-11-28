@@ -127,8 +127,8 @@ Remote compute jobs finish only after verified recovery and cleanup of their job
 - `release-quad` gate: four lane receipts (exact-source CI, artifact hashes, native/machine gates); deploys nothing; legacy `release_quad.py done` is not it; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 
 ## Optuna
-`radia-optuna` shares nvcc-built CUDA kernels through pybind11 and plain MEX. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.
-Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
+`radia-optuna` (ksugahar/optuna) is CPU-only and MATLAB-only: one C++/OpenMP kernel library linked into a plain MEX, shipped as one Windows wheel; Python users run upstream Optuna. No CUDA, GPU route or Python extension.
+The pinned upstream Optuna release (`upstream.json`) is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,
 defaults, extension points, and random consumption match upstream-generated fixtures.
 Handwritten MATLAB output is not compatibility truth.

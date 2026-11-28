@@ -47,8 +47,7 @@ hardware identity and concrete paths remain in the private operator record.
 | `ltspice-data-safety.yml / matlab-data-contracts` | MATLAB/GPU | 8 threads, 32 GiB, existing 5 min |
 | `radia.yml / fast-contracts` | light | 2 threads, 8 GiB, existing 20 min |
 
-Optuna `build-test` actually calls mexcuda: its generic name does not make it
-lightweight. Existing GitHub-hosted jobs remain GitHub-hosted, including impact
+Existing GitHub-hosted jobs remain GitHub-hosted, including impact
 selectors, policy, MCP minimal/selftests, Cubit native packaging,
 Windows/Web jobs and publication jobs. They do not need another local runner.
 See the complete baseline job inventory below; unknown/new jobs require a
@@ -60,7 +59,7 @@ Assert that each local job has exactly one capability, all seven listed jobs
 have their declared owner, and no workflow selects only generic `100`. Mark
 MATLAB/Engine/CUDA/Simulink requirements explicitly per job; test those
 requirements against commands and called wrappers. Negative mutations must
-reject Optuna mexcuda on light, Engine on light, missing classification, and
+reject Engine on light, missing classification, and
 conflicting capability labels. Light jobs must not install MATLAB/CUDA or
 invoke native compilation. Do not equate a simple word scan with transitive
 dependency verification; unknown script entry points fail closed for review.

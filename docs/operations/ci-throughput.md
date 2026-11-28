@@ -42,9 +42,7 @@ the full numerical gate.
 The GPU lane retains the native quote-include closure already checked by
 `tests/policy/test_workflow_owner_scope.py`, package sources and shared build
 files. CUDA validation directories select executable helpers, binary fixtures and
-JSON inputs, including GPU release qualification JSON. Optuna consumes its independent package,
-oracle/test fixtures, CUDA validation drivers and root build configuration;
-it does not consume unrelated application packages. Redundant package-subtree
+JSON inputs, including GPU release qualification JSON. Redundant package-subtree
 patterns are unnecessary underneath the package wildcard.
 
 ## Numerical audits and publication
@@ -59,8 +57,8 @@ matches what main would run. No numerical test is deleted.
 
 Tree reuse is queue optimization, not artifact promotion. Before release,
 dispatch the relevant distribution workflow on the exact main release SHA.
-Manual dispatch always runs the full lane without tree reuse. Optuna and GPU
-publication accept successful main push or main manual runs, while retaining
+Manual dispatch always runs the full lane without tree reuse. GPU
+publication accepts successful main push or main manual runs, while retaining
 exact commit, successful heavy-job, wheel hash and installed-wheel acceptance
 checks. A receipt-only main run has no acceptable release wheel/heavy jobs.
 Never substitute the PR wheel for an exact-main artifact.
