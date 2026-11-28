@@ -399,8 +399,13 @@ NetgenCurver cannot process.
 On a swept wedge cylinder (r 0.5, h 1, size 0.2, 240 wedges) exported at
 order 2, 80 of the 720 element vertical edges are bent by 6.6e-5 in one
 element while the neighbour keeps the same edge straight, so the curved
-mesh has a small gap. The cause (plugin curving or Netgen prism curving) is
-not identified. `write_nastran_bdf` refuses such a mesh; order 1 is unaffected.
+mesh has a small gap. The cause is in Netgen, not the plugin: the bubble of
+a prism quad face in `CalcScaledQuadShapeLambda` (`curvedelems.cpp`) ignores
+the face scaling, so it does not vanish on the vertical edge opposite the
+face, and the face coefficient leaks onto that edge. The same gap appears in
+Netgen's own boundary-layer prisms after `Curve(2)`, without Cubit. The
+face coefficients themselves are correct. Until the Netgen runtime carries
+the fix, `write_nastran_bdf` refuses such a mesh; order 1 is unaffected.
 
 ## BND Integrate Area Mismatch
 
