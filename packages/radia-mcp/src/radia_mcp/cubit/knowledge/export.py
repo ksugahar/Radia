@@ -98,7 +98,8 @@ instead of writing it. The mesh keeps the Cubit geometry, so
 `vol_mesh.curve(mesh, p)` curves it again (with the geometric refit and the
 periodic coefficient copy) for a p-convergence study without exporting again.
 It refuses a mesh whose Cubit model changed since it was built; use
-`vol_mesh.curve`, not NGSolve's `mesh.Curve(p)`, which skips the refit.
+`vol_mesh.curve`, never NGSolve's `mesh.Curve(p)`, which skips the model
+check, the refit and the periodic copy.
 On a model with a same-material webcut seam, the export curves before it
 removes the seam triangles, so the seam faces of the file and of a re-curved
 mesh differ at the 1e-12 level; elsewhere they agree to rounding.

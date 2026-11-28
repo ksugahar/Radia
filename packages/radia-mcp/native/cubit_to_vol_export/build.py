@@ -17,6 +17,7 @@ worker Python, and is copied next to the plugin.
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
 import os
 import shutil
 import subprocess
@@ -25,6 +26,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DLL = "cubit_to_vol_export.dll"
+MODULE = "_cubit_to_vol_mesh"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -49,15 +51,20 @@ def main(argv: list[str] | None = None) -> int:
     subprocess.run(configure, check=True)
     subprocess.run(["cmake", "--build", str(build), "-j", str(args.jobs)], check=True)
     built = build / DLL
-    if not built.is_file():
-        raise SystemExit(f"build finished without {built}")
+    # The module this interpreter (the one CMake built for) imports; a module of
+    # another Python left in a reused build or output directory is never taken.
+    module = build / (MODULE + importlib.machinery.EXTENSION_SUFFIXES[0])
+    for artifact in (built, module):
+        if not artifact.is_file():
+            raise SystemExit(f"build finished without {artifact}")
+    for stale in out.glob(MODULE + "*"):
+        if stale.name != module.name and stale.suffix in (".pyd", ".so"):
+            stale.unlink()
+            print(f"removed {stale} (built for another Python)")
     shutil.copyfile(built, out / DLL)
     print(out / DLL)
-    modules = sorted(build.glob("_cubit_to_vol_mesh*.pyd"))
-    if len(modules) != 1:
-        raise SystemExit(f"build finished with {len(modules)} _cubit_to_vol_mesh modules in {build}")
-    shutil.copyfile(modules[0], out / modules[0].name)
-    print(out / modules[0].name)
+    shutil.copyfile(module, out / module.name)
+    print(out / module.name)
     return 0
 
 

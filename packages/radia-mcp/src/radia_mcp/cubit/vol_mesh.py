@@ -20,10 +20,11 @@ another order, for a p-convergence study without exporting again:
 Runs only in an external CPython that imported ``cubit`` (the export worker's
 environment), never inside the MCP server or Cubit's embedded Python.  The
 geometry lives as long as that Cubit session: :func:`curve` refuses a mesh
-whose Cubit model has changed since it was built.  ``mesh.Curve(p)`` from
-NGSolve also uses the Cubit geometry but skips the geometric refit (order >= 3)
-and the periodic coefficient copy; use :func:`curve`.  A saved ``.vol`` keeps
-the order it was saved at.
+whose Cubit model has changed since it was built (entity ids, vertex positions,
+curve lengths, surface areas, volumes and node coordinates, compared bit for
+bit).  Do not call NGSolve's ``mesh.Curve(p)`` on it: that also queries the
+Cubit geometry but skips the model check, the geometric refit (order >= 3) and
+the periodic coefficient copy.  A saved ``.vol`` keeps the order it was saved at.
 
 The compiled module ``_cubit_to_vol_mesh`` is built by
 ``native/cubit_to_vol_export/build.py`` next to ``cubit_to_vol_export.dll``;
@@ -31,6 +32,7 @@ The compiled module ``_cubit_to_vol_mesh`` is built by
 """
 from __future__ import annotations
 
+import importlib.machinery
 import importlib.util
 import os
 import sys
@@ -47,12 +49,14 @@ def _native(plugin_dir: str | os.PathLike[str] | None = None):
         raise RuntimeError("import cubit and call cubit.init(...) before building a mesh from Cubit")
     from radia_mcp.cubit.export_runner import resolve_plugin_dir
     directory = resolve_plugin_dir(plugin_dir)
-    found = sorted(directory.glob(MODULE + "*.pyd")) + sorted(directory.glob(MODULE + "*.so"))
-    if len(found) != 1:
-        raise RuntimeError(f"expected one {MODULE} module in {directory}, found {[p.name for p in found]}; "
+    # Only the module built for this interpreter; one of another Python is ignored.
+    path = directory / (MODULE + importlib.machinery.EXTENSION_SUFFIXES[0])
+    if not path.is_file():
+        others = sorted(p.name for p in directory.glob(MODULE + "*"))
+        raise RuntimeError(f"no {path.name} for this Python in {directory} (found {others}); "
                            "build it with native/cubit_to_vol_export/build.py")
     import netgen.meshing  # noqa: F401  -- the Mesh type the module returns
-    spec = importlib.util.spec_from_file_location(MODULE, found[0])
+    spec = importlib.util.spec_from_file_location(MODULE, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     sys.modules[MODULE] = module
@@ -71,6 +75,8 @@ def mesh_from_cubit(order: int = 2, *, kelvin: dict | None = None, kelvin_match:
     """
     from radia_mcp.cubit import kelvin as _kelvin
     from radia_mcp.cubit.vol_export import periodic_arguments
+    if not periodic:
+        periodic = None      # as for export vol: an empty request is no periodic group
     if kelvin is not None and periodic is not None:
         raise ValueError("one named periodic group per mesh: Kelvin and periodic cannot be combined")
     if kelvin is None and kelvin_match is not None:

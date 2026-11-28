@@ -5,6 +5,7 @@
 #include "CubitMessage.hpp"
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
 #include <filesystem>
 #include <sstream>
@@ -184,15 +185,47 @@ std::vector<std::string> ExportVolCommand::get_help()
 }
 
 // What the callbacks of an in-memory mesh query: re-curving refuses a changed model.
+// The state a live mesh was built from: the entity ids, the exact geometry
+// (vertex positions, curve lengths, surface areas, volume sizes) and the exact
+// node coordinates and element counts.  Any move, transform, geometry edit or
+// remesh changes it; the doubles are hashed bit for bit.
 static std::string cubit_model_fingerprint()
 {
+  std::uint64_t hash = 1469598103934665603ull;            // FNV-1a
+  auto mix = [&hash](const void *data, std::size_t size) {
+    const auto *bytes = static_cast<const unsigned char *>(data);
+    for (std::size_t i = 0; i < size; ++i) {
+      hash ^= bytes[i];
+      hash *= 1099511628211ull;
+    }
+  };
+  auto mix_double = [&mix](double value) { mix(&value, sizeof value); };
   std::ostringstream text;
-  for (const char *kind : {"volume", "surface", "curve"}) {
+  for (const char *kind : {"volume", "surface", "curve", "vertex"}) {
     const auto ids = CubitInterface::get_entities(kind);
     long long sum = 0;
-    for (int id : ids) sum += id;
+    for (int id : ids) {
+      sum += id;
+      mix(&id, sizeof id);
+      const std::string type(kind);
+      if (type == "vertex") {
+        for (double c : CubitInterface::get_center_point("vertex", id)) mix_double(c);
+      } else if (type == "curve") {
+        mix_double(CubitInterface::get_curve_length(id));
+      } else if (type == "surface") {
+        mix_double(CubitInterface::get_surface_area(id));
+      } else {
+        mix_double(CubitInterface::get_volume_volume(id));
+        for (double c : CubitInterface::get_center_point("volume", id)) mix_double(c);
+      }
+    }
     text << kind << ' ' << ids.size() << ':' << sum << ' ';
   }
+  for (int id : CubitInterface::parse_cubit_list("node", "all")) {
+    mix(&id, sizeof id);
+    for (double c : CubitInterface::get_nodal_coordinates(id)) mix_double(c);
+  }
+  text << "state " << std::hex << hash << std::dec << ' ';
   text << "nodes " << CubitInterface::get_node_count()
        << " tets " << CubitInterface::get_tet_count()
        << " hexes " << CubitInterface::get_hex_count()

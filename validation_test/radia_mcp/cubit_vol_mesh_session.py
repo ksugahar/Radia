@@ -50,9 +50,10 @@ try:
 
     def summary(mesh):
         pairs = mesh.GetPeriodicNodePairs(ng.VERTEX) if kelvin_info else []
+        pair_set = sorted([int(a), int(b), int(group)] for (a, b), group in pairs)
         return {"np": mesh.nv, "ne": mesh.ne, "nse": len(mesh.ngmesh.Elements2D()),
                 "boundaries": list(mesh.GetBoundaries()), "materials": list(mesh.GetMaterials()),
-                "periodic_pairs": len(pairs)}
+                "periodic_pairs": len(pairs), "periodic_pair_set": pair_set}
 
     live = vol_mesh.mesh_from_cubit(2, kelvin=kelvin_info, plugin_dir=plugin_dir)
     mesh = ng.Mesh(live)
@@ -86,7 +87,17 @@ try:
     result["recurve_back_to_2_on_z0"] = float(back[on_z0].max(initial=0.0))
     result["coordinate_scale"] = float(abs(first_two).max())
 
-    # A changed Cubit model must be refused, not curved on stale geometry.
+    # A moved or changed Cubit model must be refused, not curved on stale geometry.
+    def refused(command):
+        if not cubit.cmd(command):
+            raise RuntimeError(f"Cubit refused {command!r}")
+        try:
+            vol_mesh.curve(mesh, 3)
+            return False, ""
+        except RuntimeError as error:
+            return "changed" in str(error), str(error)
+    result["moved_model_refused"], result["moved_model_message"] = refused("volume all move x 0.001")
+    cubit.cmd("volume all move x -0.001")
     cubit.cmd("create brick x 0.01")
     try:
         vol_mesh.curve(mesh, 3)
