@@ -346,28 +346,37 @@ def check_manual_curve(filepath: str, lines: List[str]) -> List[Dict]:
 	        if not line.strip().startswith('#')]
 	def first(pattern):
 		return next((i for i, text in code if re.search(pattern, text)), None)
-	# Names bound to a live mesh: assigned from mesh_from_cubit(...), or a Mesh(...)
-	# wrapper of such a name.  Only a .Curve() on one of them, or on the call itself,
-	# is the live-mesh misuse; another mesh in the same file is not.
-	live = set()
-	for _ in range(len(code) + 1):
-		before = len(live)
-		for _, text in code:
-			bound = re.match(r'(\w+)\s*=\s*(.+)$', text)
-			if not bound:
-				continue
-			name, value = bound.groups()
-			wrapped = re.fullmatch(r'(?:\w+\.)*Mesh\(\s*(\w+)\s*\)', value.strip())
-			if 'mesh_from_cubit(' in value or (wrapped and wrapped.group(1) in live):
-				live.add(name)
-		if len(live) == before:
-			break
-	receivers = '|'.join(re.escape(name) for name in sorted(live))
-	pattern = r'mesh_from_cubit\([^#]*\)\s*\)?\.Curve\s*\('
-	if receivers:
-		pattern += rf'|\b(?:{receivers})\.Curve\s*\('
+	# Walk the statements in order.  A name is live while its latest binding is
+	# the live mesh itself: mesh_from_cubit(...), Mesh(mesh_from_cubit(...)),
+	# Mesh(<live name>) or a plain alias of a live name.  Any other rebinding
+	# ends it.  Only a .Curve() on a live bare name (not an attribute such as
+	# other.mesh), or on the call itself, is the live-mesh misuse.
+	live_call = r'(?:\w+\.)*mesh_from_cubit\(.*\)'
+	direct_curve = r'mesh_from_cubit\([^#]*\)\s*\)?\.Curve\s*\('
+	def binds_live(value, live):
+		if re.fullmatch(live_call, value) or value in live:
+			return True
+		wrapped = re.fullmatch(r'(?:\w+\.)*Mesh\(\s*(.+?)\s*\)', value)
+		return bool(wrapped) and (re.fullmatch(live_call, wrapped.group(1)) is not None
+		                          or wrapped.group(1) in live)
+	def live_curve_line():
+		live = set()
+		for i, text in code:
+			if re.search(direct_curve, text):
+				return i
+			if any(m.group(1) in live
+			       for m in re.finditer(r'(?<![\w.])(\w+)\.Curve\s*\(', text)):
+				return i
+			bound = re.match(r'(\w+)\s*=(?!=)\s*(.+)$', text)
+			if bound:
+				name, value = bound.group(1), bound.group(2).strip()
+				if binds_live(value, live):
+					live.add(name)
+				else:
+					live.discard(name)
+		return None
 	if any('mesh_from_cubit' in text for _, text in code):
-		line = first(pattern)
+		line = live_curve_line()
 		if line is not None:
 			return [{
 				'line': line,

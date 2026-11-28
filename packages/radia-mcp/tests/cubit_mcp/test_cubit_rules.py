@@ -264,6 +264,38 @@ class TestManualCurve:
         )
         assert _run(check_manual_curve, code) == []
 
+    def test_a_rebound_name_is_no_longer_live(self):
+        code = (
+            'mesh = vol_mesh.mesh_from_cubit(2)\n'
+            'mesh = Mesh(geo.GenerateMesh(maxh=0.1))\n'
+            'mesh.Curve(3)\n'
+        )
+        assert _run(check_manual_curve, code) == []
+
+    def test_a_value_derived_from_the_live_mesh_is_not_live(self):
+        code = (
+            'x = describe(vol_mesh.mesh_from_cubit(2))\n'
+            'x.Curve(3)\n'
+        )
+        assert _run(check_manual_curve, code) == []
+
+    def test_an_attribute_with_a_live_name_is_not_live(self):
+        code = (
+            'mesh = vol_mesh.mesh_from_cubit(2)\n'
+            'other.mesh.Curve(3)\n'
+        )
+        assert _run(check_manual_curve, code) == []
+
+    def test_curve_before_the_rebinding_is_flagged(self):
+        code = (
+            'mesh = Mesh(vol_mesh.mesh_from_cubit(2))\n'
+            'mesh.Curve(3)\n'
+            'mesh = Mesh(geo.GenerateMesh(maxh=0.1))\n'
+        )
+        findings = _run(check_manual_curve, code)
+        assert [(f["rule"], f["line"]) for f in findings] == [
+            ("curve-on-live-cubit-mesh", 2)], findings
+
     def test_allows_vol_mesh_curve(self):
         code = (
             'mesh = Mesh(vol_mesh.mesh_from_cubit(2))\n'
