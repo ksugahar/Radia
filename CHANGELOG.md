@@ -19,6 +19,10 @@
 - Raise in `GmshPostExport` when a curved export cannot import `gmsh`.
   It previously fell back to a node layout that wrote inverted Tet10 and
   unreadable Tet20 files.
+- Integrate the source field in reduced-A `solve_nonlinear_newton` with the
+  same quadrature as `solve_linear` on every element type, and accept
+  `bonus_intorder` with the same meaning. Per-element iron B from the Newton path previously differed
+  from the linear path in high-permeability iron; the iron mean agreed.
 
 
 ## 5.4.5 - 2026-11-13

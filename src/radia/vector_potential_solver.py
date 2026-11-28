@@ -122,6 +122,27 @@ def _build_nu_of_b_interpolator(bh_data):
     return nu_of_b, b_max
 
 
+def _match_linear_form_quadrature(energy, fes, bonus_intorder):
+    """Give a curl(A) SymbolicEnergy the quadrature of solve_linear's forms.
+
+    NGSolve integrates a symbolic linear form, and a SymbolicEnergy, at order
+    2*p + bonus_intorder for an element of order p. On triangles and
+    tetrahedra only, the energy lowers that by 2*difforder of its trial
+    proxies, i.e. by 2 for curl(A). Restoring exactly that reduction on the
+    simplex types keeps every other element type on the shared rule.
+    """
+    from ngsolve import ET, VOL, ElementId, IntegrationRule
+
+    simplex_orders = {}
+    for el in fes.mesh.Elements(VOL):
+        if el.type in (ET.TRIG, ET.TET) and el.type not in simplex_orders:
+            simplex_orders[el.type] = fes.GetFE(ElementId(el)).order
+    for et, order in simplex_orders.items():
+        energy.SetIntegrationRule(
+            et, IntegrationRule(et, 2 * order + bonus_intorder))
+    return energy
+
+
 def _coercive_bh_law(B_values, H_values):
     """Return NGSolve H(B) and coenergy laws with a vacuum high-field tail.
 
@@ -729,7 +750,8 @@ class VectorPotentialSolver:
 
     def solve_nonlinear_newton(self, bh_data, tol=1e-4, maxiter=50,
                                dirichlet='default', verbose=True,
-                               solver='auto', eps=DEFAULT_GAUGE_EPSILON):
+                               solver='auto', eps=DEFAULT_GAUGE_EPSILON,
+                               *, bonus_intorder=0):
         """Newton iteration with SymbolicEnergy for nonlinear B-H curve.
 
         Uses magnetic coenergy w*(B) = integral_0^B H(B') dB' and NGSolve
@@ -752,7 +774,18 @@ class VectorPotentialSolver:
             'auto', 'ams', 'bddc', 'sparsecholesky', or 'direct'.
         eps : float
             Dimensionless gauge regularization strength.
+        bonus_intorder : int
+            Additional quadrature order for the source field B_s, with the
+            same meaning as in ``solve_linear``: in the linear B-H range both
+            paths then give the same field. B_s is usually not polynomial,
+            and in iron its quadrature error is balanced by nu * curl(A_r)
+            with a small nu, so per-element iron B is sensitive to it in
+            proportion to mu_r while the iron mean is not. Raise it when
+            per-element iron B matters and B_s varies within an element.
         """
+        bonus_intorder = int(bonus_intorder)
+        if bonus_intorder < 0:
+            raise ValueError(f"bonus_intorder must be >= 0, got {bonus_intorder}")
         from ngsolve import (HCurl, GridFunction, BilinearForm, BSpline,
                              SymbolicEnergy, InnerProduct, curl, dx,
                              sqrt, Preconditioner, TaskManager)
@@ -816,15 +849,17 @@ class VectorPotentialSolver:
 
         # Air: w*(B) = B^2 / (2*mu_0)
         for mat in air_mats:
-            a += SymbolicEnergy(
+            a += _match_linear_form_quadrature(SymbolicEnergy(
                 (1.0 / (2.0 * MU_0)) * InnerProduct(B_total, B_total),
-                definedon=self.mesh.Materials(mat))
+                definedon=self.mesh.Materials(mat),
+                bonus_intorder=bonus_intorder), fes, bonus_intorder)
 
         # Iron: w*(|B|) from BSpline
         for mat in iron_mats:
-            a += SymbolicEnergy(
+            a += _match_linear_form_quadrature(SymbolicEnergy(
                 w_star(B_mag_safe),
-                definedon=self.mesh.Materials(mat))
+                definedon=self.mesh.Materials(mat),
+                bonus_intorder=bonus_intorder), fes, bonus_intorder)
 
         # Source coupling: -nu_0 * B_s . curl(A_r)
         # Without this, the energy stationarity gives curl(H) = 0 (wrong).
@@ -832,8 +867,9 @@ class VectorPotentialSolver:
         # Derivation: E_total = int w*(|curl A|) - J.A;  A = A_s + A_r;
         #   J.A_r = (1/mu_0)*curl(B_s).A_r = (1/mu_0)*B_s.curl(A_r) + boundary
         nu_0 = 1.0 / MU_0
-        a += SymbolicEnergy(
-            -nu_0 * InnerProduct(self._B_source_cf, curl(A)))
+        a += _match_linear_form_quadrature(SymbolicEnergy(
+            -nu_0 * InnerProduct(self._B_source_cf, curl(A)),
+            bonus_intorder=bonus_intorder), fes, bonus_intorder)
 
         # Gauge regularization: eps * |A|^2 / 2
         eps, _ = self._resolve_gauge_epsilons(eps, None)
