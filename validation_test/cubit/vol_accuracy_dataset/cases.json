@@ -149,7 +149,7 @@
     {
       "case_id": "gapped_torus_order3_coarse",
       "role": "diagnostic_challenge",
-      "description": "A 355-degree swept torus at the production order-2 surface resolution; volume remains accurate while the order-3 map folds locally.",
+      "description": "A 355-degree swept torus at the production order-2 surface resolution; the order-3 map folded locally before the geometric refit and is valid with it.",
       "geometry_family": "under_resolved_near_periodic_sweep",
       "mesh_family": "tet",
       "features": ["circular_profile", "355_degree_sweep", "trimmed_terminal_faces", "order3_resolution_challenge"],
@@ -177,7 +177,7 @@
     {
       "case_id": "gapped_torus_order3_refined",
       "role": "acceptance",
-      "description": "The same 355-degree swept torus refined to remove the cubic-map folds.",
+      "description": "The same 355-degree swept torus, refined; it was the fold-free twin before the geometric refit.",
       "geometry_family": "refined_near_periodic_sweep",
       "mesh_family": "tet",
       "features": ["circular_profile", "355_degree_sweep", "trimmed_terminal_faces", "order3_refinement"],
