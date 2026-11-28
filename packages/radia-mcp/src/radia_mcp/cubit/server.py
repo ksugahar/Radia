@@ -121,7 +121,7 @@ the user rather than looping.
 """
 
 # Create MCP server
-mcp = FastMCP("cubit-export", instructions=_SERVER_INSTRUCTIONS)
+mcp = FastMCP("cubit-mcp", instructions=_SERVER_INSTRUCTIONS)
 _validation = CoarseToolRegistry(mcp, namespace="cubit")
 
 # Project root (current working directory for pip-installed package)
