@@ -62,7 +62,10 @@ each `.vol` directly and integrate `CF(1)` with high-order quadrature.  Typical
 2026-06-29 live results were order-1 rel err 0.2336, order-2 rel err 0.00211,
 and order-3 rel err 0.00131 (Netgen's own curving coefficients, before the
 geometric refit below).  Do not call `mesh.Curve()` after reading this
-high-order `.vol`; the curving is already baked into the file.
+high-order `.vol`; the curving is already baked into the file.  To change the
+order without exporting again, build the mesh in the Cubit session with
+`radia_mcp.cubit.vol_mesh.mesh_from_cubit` and curve it with
+`vol_mesh.curve(mesh, p)` (topic `export`, "In-memory mesh").
 
 ### Geometric refit of the curving coefficients
 

@@ -16,7 +16,7 @@ from radia_mcp.cubit.rules import (
     check_hardcoded_absolute_paths,
     check_missing_boundary_block,
     check_ambiguous_face_block,
-    check_curve_without_setgeominfo,
+    check_manual_curve,
     check_missing_block_names,
     check_no_pyqt5_imports,
 )
@@ -214,27 +214,44 @@ class TestAmbiguousFaceBlock:
         assert _run(check_ambiguous_face_block, code) == []
 
 
-class TestCurveWithoutSetGeomInfo:
+class TestManualCurve:
     def test_detects_manual_curve_without_native_export_vol(self):
         code = (
             'mesh = Mesh("output.vol")\n'
             'mesh.Curve(3)\n'
         )
-        findings = _run(check_curve_without_setgeominfo, code)
-        assert len(findings) == 1
+        findings = _run(check_manual_curve, code)
+        assert [f["rule"] for f in findings] == ["curve-without-export-vol"], findings
 
     def test_allows_native_export_vol(self):
         code = (
             'cubit.cmd("export vol output.vol order 3")\n'
         )
-        assert _run(check_curve_without_setgeominfo, code) == []
+        assert _run(check_manual_curve, code) == []
 
     def test_allows_occ_generate_mesh(self):
         code = (
             'mesh = geo.GenerateMesh(maxh=0.1)\n'
             'mesh.Curve(3)\n'
         )
-        assert _run(check_curve_without_setgeominfo, code) == []
+        assert _run(check_manual_curve, code) == []
+
+    def test_flags_mesh_curve_on_live_cubit_mesh(self):
+        code = (
+            'cubit.cmd("export vol output.vol order 2")\n'
+            'mesh = Mesh(vol_mesh.mesh_from_cubit(2))\n'
+            'mesh.Curve(3)\n'
+        )
+        findings = _run(check_manual_curve, code)
+        assert [(f["rule"], f["severity"], f["line"]) for f in findings] == [
+            ("curve-on-live-cubit-mesh", "HIGH", 3)], findings
+
+    def test_allows_vol_mesh_curve(self):
+        code = (
+            'mesh = Mesh(vol_mesh.mesh_from_cubit(2))\n'
+            'vol_mesh.curve(mesh, 3)\n'
+        )
+        assert _run(check_manual_curve, code) == []
 
 
 class TestMissingBlockNames:

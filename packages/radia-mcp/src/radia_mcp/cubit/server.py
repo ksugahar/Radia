@@ -1669,6 +1669,7 @@ def lint_cubit_script(filepath: str) -> str:
 	- Hardcoded absolute paths (MODERATE)
 	- Missing boundary element block for Netgen (MODERATE)
 	- Wrong file extension for export format (MODERATE)
+	- mesh.Curve() on a vol_mesh.mesh_from_cubit mesh (HIGH)
 	- mesh.Curve() without cubit_export_vol (MODERATE)
 	- Blocks registered without names (LOW)
 
@@ -2107,11 +2108,18 @@ def get_lint_rules() -> str:
 			'fix': 'Use tri for tet boundaries, quad for hex boundaries, or add an explicit mixed tri/quad comment.',
 		},
 		{
-			'rule': 'curve-without-export-netgen',
+			'rule': 'curve-on-live-cubit-mesh',
+			'severity': 'HIGH',
+			'description': 'mesh.Curve() on a mesh from vol_mesh.mesh_from_cubit skips the model check, the refit and the periodic copy.',
+			'trigger': 'mesh = Mesh(vol_mesh.mesh_from_cubit(2)); mesh.Curve(3)',
+			'fix': 'vol_mesh.curve(mesh, 3)',
+		},
+		{
+			'rule': 'curve-without-export-vol',
 			'severity': 'MODERATE',
-			'description': 'Manual mesh.Curve() is not needed. export vol embeds curving in .vol.',
+			'description': 'Manual mesh.Curve() is not needed. export vol embeds curving in .vol; an in-memory Cubit mesh changes order with vol_mesh.curve.',
 			'trigger': 'mesh.Curve(3) without export vol',
-			'fix': 'cubit.cmd(\'export vol "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
+			'fix': 'cubit.cmd(\'export vol "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol"), or vol_mesh.curve(mesh, 3) on a mesh from vol_mesh.mesh_from_cubit',
 		},
 		{
 			'rule': 'missing-block-names',
@@ -5239,6 +5247,7 @@ def cubit_to_ngsolve(mesh_file: str) -> str:
 		"1. Create geometry and mesh in Cubit\n"
 		"2. Save the journal, then call cubit_export_vol(journal_path, 'mesh.vol', order=N)\n"
 		"3. mesh = Mesh('mesh.vol')  # already curved, no mesh.Curve() needed\n"
+		"   Another order in the same Cubit session: vol_mesh.mesh_from_cubit, then vol_mesh.curve(mesh, p)\n"
 	)
 
 

@@ -29,6 +29,11 @@ crystallized as its own package.
   Cubit model in memory (`mesh_from_cubit`) and curve it again at another
   order (`curve`) while the Cubit session lives. `build.py` also builds the
   `_cubit_to_vol_mesh` module next to the plugin DLL.
+- The Cubit lint flags `mesh.Curve()` on a `mesh_from_cubit` mesh
+  (`curve-on-live-cubit-mesh`, HIGH; use `vol_mesh.curve`), and the rule
+  `curve-without-export-netgen` is renamed `curve-without-export-vol`. The
+  Cubit knowledge and `docs/ngsolve_integration/curve_order.md` no longer say a
+  Cubit mesh keeps its export order: only a saved `.vol` does.
 
 ## [2.0.3] - 2026-11-21
 

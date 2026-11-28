@@ -334,41 +334,51 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
-def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Manual mesh.Curve() without export vol (legacy pattern)."""
-	findings = []
-	has_curve = False
-	curve_line = None
-	for i, line in enumerate(lines, 1):
-		stripped = line.strip()
-		if stripped.startswith('#'):
-			continue
-		if re.search(r'\.Curve\s*\(\s*[2-9]', stripped):
-			has_curve = True
-			if curve_line is None:
-				curve_line = i
+def check_manual_curve(filepath: str, lines: List[str]) -> List[Dict]:
+	"""HIGH/MODERATE: NGSolve ``mesh.Curve(p)`` where the Cubit route curves the mesh.
 
-	if not has_curve:
-		return findings
-
-	# Check for export vol (which handles Curve internally)
-	has_native_export_vol = any('export vol' in line for line in lines)
-	# Check for OCC native mesh (which has built-in geometry)
-	has_occ_mesh = any('GenerateMesh' in line for line in lines)
-
-	if not has_native_export_vol and not has_occ_mesh:
-		findings.append({
-			'line': curve_line,
-			'severity': 'MODERATE',
-			'rule': 'curve-without-export-netgen',
-			'message': (
-				'mesh.Curve() called but no export vol command found. '
-				'For Cubit meshes, use cubit.cmd(\'export vol "f.vol" order N overwrite\'), '
-				'which curves through ACIS CallbackGeometry. '
-				'See: netgen_workflow_guide("cubit_export_vol")'
-			),
-		})
-	return findings
+	A mesh from ``vol_mesh.mesh_from_cubit`` is curved again with
+	``vol_mesh.curve(mesh, p)``; ``mesh.Curve(p)`` skips the model check, the
+	geometric refit and the periodic copy (HIGH).  Otherwise ``.Curve(p >= 2)``
+	without ``export vol`` or an OCC ``GenerateMesh`` is the legacy pattern (MODERATE).
+	"""
+	code = [(i, line.strip()) for i, line in enumerate(lines, 1)
+	        if not line.strip().startswith('#')]
+	def first(pattern):
+		return next((i for i, text in code if re.search(pattern, text)), None)
+	live = any('mesh_from_cubit' in text for _, text in code)
+	if live:
+		line = first(r'\.Curve\s*\(')
+		if line is not None:
+			return [{
+				'line': line,
+				'severity': 'HIGH',
+				'rule': 'curve-on-live-cubit-mesh',
+				'message': (
+					'mesh.Curve() called on a mesh from vol_mesh.mesh_from_cubit. '
+					'Use vol_mesh.curve(mesh, p): it checks that the Cubit model is unchanged '
+					'and applies the geometric refit and the periodic copy. '
+					'See: knowledge topic "export", In-memory mesh'
+				),
+			}]
+		return []
+	line = first(r'\.Curve\s*\(\s*[2-9]')
+	if line is None:
+		return []
+	if any('export vol' in text or 'GenerateMesh' in text for _, text in code):
+		return []
+	return [{
+		'line': line,
+		'severity': 'MODERATE',
+		'rule': 'curve-without-export-vol',
+		'message': (
+			'mesh.Curve() called but no export vol command found. '
+			'For Cubit meshes, export at the order needed with '
+			'cubit.cmd(\'export vol "f.vol" order N overwrite\'), or, in the Cubit session, '
+			'build the mesh with vol_mesh.mesh_from_cubit and change its order with '
+			'vol_mesh.curve(mesh, p). See: netgen_workflow_guide("cubit_export_vol")'
+		),
+	}]
 
 
 def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
@@ -703,7 +713,7 @@ ALL_RULES = [
 	check_hardcoded_absolute_paths,
 	check_missing_boundary_block,
 	check_ambiguous_face_block,
-	check_curve_without_setgeominfo,
+	check_manual_curve,
 	check_missing_block_names,
 	check_non_ascii_bytes,
 	check_no_pyqt5_imports,

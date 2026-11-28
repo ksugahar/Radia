@@ -3411,7 +3411,9 @@ checking volumes, mesh quality, or final solution accuracy.
 `cubit_export_vol(journal, "x.vol", order=4)` or higher:
 
 - `.vol` writer: succeeds (curvedelements section emitted)
-- NGSolve reader: `mesh.Curve(4)` also works
+- NGSolve reader: loads the stored order; never call `mesh.Curve(p)` on the
+  loaded file (it has no Cubit geometry).  Other orders come from another
+  export or from `vol_mesh.curve(mesh, p)` on the in-memory mesh
 - BUT: NetgenCurver's face-interior / volume-interior HO node extraction
   is experimental for order >= 4.  Edge midpoints and face-boundary
   nodes are solid, but interior nodes of triangles (order 4 -> 1 face

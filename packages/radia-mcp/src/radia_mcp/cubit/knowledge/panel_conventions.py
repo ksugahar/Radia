@@ -69,7 +69,9 @@ Research history belongs under `validation_test/`.
 ## Export boundary
 
 The Cubit toolbar exports; it does not launch a non-IH notebook or run the
-solver. Curve order and labels are fixed at export time. Application config
+solver. A saved `.vol` keeps the curve order and labels it was exported with;
+to compare orders in one Cubit session, curve the in-memory mesh again with
+`radia_mcp.cubit.vol_mesh.curve` (topic `export`). Application config
 then references the durable files and the Simulink block executes explicitly.
 
 Every solver-bound `.vol` runs through `python -m radia.vol_check` after export and before

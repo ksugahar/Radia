@@ -63,7 +63,8 @@ Curvature is a property of how the mesh was made, not something added later:
 | Netgen/OCC `GenerateMesh` in this process | yes: `Curve(p)` onto its own CAD |
 | Netgen/OCC `.vol` that embeds its CAD | yes, explicitly: `ensure_curve_order` (OCC only, with vertex, box and measure checks) |
 | Netgen CSG `.vol` | no: save it after `Curve(p)` in the producing process |
-| Cubit `export vol ... order p` (no CAD in the file) | no: it keeps order `p`; re-export at the order needed |
+| Cubit model, in the Cubit session that meshed it | yes: `radia_mcp.cubit.vol_mesh.mesh_from_cubit` builds the mesh in memory and `vol_mesh.curve(mesh, p)` curves it again at any order 1-5 (model check, geometric refit, periodic copy); never `mesh.Curve(p)` |
+| Cubit `export vol ... order p` file (no CAD in the file) | no: the loaded file keeps order `p`; curve the in-memory mesh or export again at the order needed |
 | structured or hand-built mesh (no CAD) | only a straight map, explicitly: `straight_curve_order(mesh, p)` |
 
 No Radia route curves a mesh. The routes that take a mesh object
@@ -75,7 +76,7 @@ than the requested one (`ValueError`) and never curves. A mesh carries no
 reliable provenance (`GetGeometry()` returns the same object for an embedded
 CAD and for one borrowed from another mesh of the process), so curving happens
 where the CAD lives: `Curve(p)` right after `GenerateMesh`, `ensure_curve_order`
-for a Netgen/OCC `.vol`, or the export order for Cubit. A stored order that is
+for a Netgen/OCC `.vol`, and for Cubit the export order or `vol_mesh.curve` in the Cubit session. A stored order that is
 high enough is used as it is. `load_vol` also refuses a file that changed
 between its provenance read and the load.
 
@@ -150,7 +151,8 @@ mesh's element maps; this is not implemented for the P1 loop extension.
 | `radia-vol-mesh-into-curved-route` | HIGH | a mesh from a plain `Mesh(".vol")`, `Mesh(path)` or `.Load` passed to a call with `curve_order` of 2 or more |
 | `netgen-scale-after-generate` | HIGH | `.Scale()` anywhere in a scope on a name that is ever bound to a `GenerateMesh` result (or its alias); flow-insensitive, so a name reused for a shape is reported too |
 | `ngsbem-missing-curvaturesafety` | MODERATE | ngsbem meshes without `curvaturesafety` |
-| `curve-without-export-netgen` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export |
+| `curve-on-live-cubit-mesh` (cubit lint) | HIGH | `.Curve(p>=1)` in a script that builds a mesh with `vol_mesh.mesh_from_cubit`; use `vol_mesh.curve(mesh, p)` |
+| `curve-without-export-vol` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export or an in-memory Cubit mesh |
 
 The `.vol` rule cannot see `Mesh(vol_file)` with a variable whose value comes
 from a function argument; route such code through `ensure_curve_order`.
