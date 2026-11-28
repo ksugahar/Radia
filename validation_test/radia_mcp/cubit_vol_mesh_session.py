@@ -102,6 +102,18 @@ try:
         except RuntimeError as error:
             return {"refused": "changed" in str(error) and probe.GetCurveOrder() == 2,
                     "message": str(error), "order_after": probe.GetCurveOrder()}
+    # A bad order is refused before the mesh is touched and leaves it usable.
+    probe = ng.Mesh(vol_mesh.mesh_from_cubit(2, kelvin=kelvin_info, plugin_dir=plugin_dir))
+    bad = {}
+    try:
+        vol_mesh.curve(probe, 6)
+        bad["refused"] = False
+    except Exception as error:
+        bad["refused"] = "1-5" in str(error) and probe.GetCurveOrder() == 2
+        bad["message"] = str(error)
+    vol_mesh.curve(probe, 3)
+    bad["curved_after"] = probe.GetCurveOrder()
+    result["bad_order"] = bad
     surface = min(cubit.get_entities("surface"))
     curve = min(cubit.get_entities("curve"))
     block = min(cubit.get_block_id_list())

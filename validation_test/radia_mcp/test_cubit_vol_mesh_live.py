@@ -84,6 +84,7 @@ def test_live_mesh_matches_export_vol_at_every_order(tmp_path, case, journal):
     assert all(edit["refused"] for edit in result["edits"].values()), result["edits"]
     assert {"move", "surface_normal", "curve_sense", "block_name", "new_volume"} <= set(result["edits"])
     assert result["changed_model_refused"], result.get("changed_model_message")
+    assert result["bad_order"] == {**result["bad_order"], "refused": True, "curved_after": 3}, result["bad_order"]
 
 
 def test_seam_model_matches_export_vol_off_the_removed_seam(tmp_path):
@@ -99,3 +100,4 @@ def test_seam_model_matches_export_vol_off_the_removed_seam(tmp_path):
     assert all(edit["refused"] for edit in result["edits"].values()), result["edits"]
     assert {"move", "surface_normal", "curve_sense", "block_name", "new_volume"} <= set(result["edits"])
     assert result["changed_model_refused"], result.get("changed_model_message")
+    assert result["bad_order"] == {**result["bad_order"], "refused": True, "curved_after": 3}, result["bad_order"]

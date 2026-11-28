@@ -24,6 +24,9 @@ void recurve(netgen::Mesh &mesh, int order)
                              "mesh_from_cubit can be curved again");
   if (!geometry->model_fingerprint)
     throw std::runtime_error("the live Cubit geometry has no model fingerprint");
+  // A bad order is refused before the mesh is touched, so it does not mark the mesh failed.
+  if (order < 1 || order > 5)
+    throw std::invalid_argument("curve order must be 1-5, got " + std::to_string(order));
   if (!geometry->failure.empty())
     throw std::runtime_error("an earlier curving of this mesh failed (" + geometry->failure +
                              "); build the mesh again");
